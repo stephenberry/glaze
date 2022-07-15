@@ -34,8 +34,6 @@ Output/Input:
 }
 ```
 
-
-
 ## Dependencies
 
 - [fmt](https://github.com/fmtlib/fmt)
@@ -44,6 +42,10 @@ Output/Input:
 ## Header Only
 
 Glaze can be used in a header only mode by using fmt's `FMT_HEADER_ONLY` macro.
+
+## Glaze Interfaces
+
+Glaze has been designed to work as a generic interface for libraries.
 
 ## Caveats
 
