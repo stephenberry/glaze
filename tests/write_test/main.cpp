@@ -83,7 +83,7 @@ struct EmptyObject
 template <>
 struct glaze::meta<EmptyObject>
 {
-   //static constexpr auto value = vireo::make_object();
+   static constexpr auto value = glaze::object();
 };
 
 void Write_tests() {
@@ -214,9 +214,9 @@ void Write_tests() {
 
 //* Empty object not allowed
    "Write empty object structure"_test = [] {
-      [[maybe_unused]] EmptyObject e;
+      EmptyObject e;
       std::string buf;
-      //vireo::write_json(e, buf);
+      glaze::write_json(e, buf);
       //expect(buf == R"({})");
    };
 
@@ -320,9 +320,9 @@ void Write_tests() {
       Named n{"Hello, world!", {{{21, 15, 13}, 0}, {0}}};
 
       std::string s;
-      //s.reserve(1000);
-      //auto i = std::back_inserter(s);
-      //vireo::write_json(n, s);
+      s.reserve(1000);
+      auto i = std::back_inserter(s);
+      //glaze::write_json(n, s);
 
       //expect(
          //s ==

@@ -374,7 +374,7 @@ namespace glaze
       template <class M>
       inline constexpr void check_member()
       {
-         static_assert(std::tuple_size_v<M> > 1,
+         static_assert(std::tuple_size_v<M> == 0 || std::tuple_size_v<M> > 1,
                        "members need at least a name and a member pointer");
          static_assert(
             std::tuple_size_v<M> < 4,
@@ -395,9 +395,10 @@ namespace glaze
       inline constexpr auto group_members(Tuple &&tuple, Members &&members = {},
                                           Member &&member = {})
       {
-         static_assert(std::tuple_size_v<Tuple> > 0, "no members supplied");
-
-         if constexpr (I >= std::tuple_size_v<Tuple>) {
+         if constexpr (std::tuple_size_v<Tuple> == 0) {
+            return std::make_tuple();
+         }
+         else if constexpr (I >= std::tuple_size_v<Tuple>) {
             check_member<Member>();
             return std::tuple_cat(members, std::make_tuple(member));
          }
