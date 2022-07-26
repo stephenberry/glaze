@@ -214,7 +214,7 @@ void Write_tests() {
 
 //* Empty object not allowed
    "Write empty object structure"_test = [] {
-      EmptyObject e;
+      [[maybe_unused]] EmptyObject e;
       std::string buf;
       //vireo::write_json(e, buf);
       //expect(buf == R"({})");

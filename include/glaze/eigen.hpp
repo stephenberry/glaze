@@ -41,7 +41,7 @@ namespace glaze
 
             match<'['>(it, end);
             skip_ws(it, end);
-            double rows, cols;
+            int rows, cols;
             glaze::detail::from_iter(rows, it, end);
             skip_ws(it, end);
             match<','>(it, end);
@@ -80,7 +80,7 @@ namespace glaze
             const auto size = value.size();
             const auto data = value.data();
             if (size >= 1) glaze::detail::to_buffer(*(data), b);
-            for (size_t i = 1; i < size; ++i) {
+            for (decltype(value.size()) i = 1; i < size; ++i) {
                write<','>(b);
                glaze::detail::to_buffer(*(data + i), b);
             }
