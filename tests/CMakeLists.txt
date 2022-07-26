@@ -12,6 +12,7 @@ if (ut_ADDED)
   target_compile_definitions(ut INTERFACE BOOST_UT_DISABLE_MODULE)
 endif()
 
+add_subdirectory(api_test)
 add_subdirectory(csv_test)
 add_subdirectory(eigen_test)
 add_subdirectory(json_test)
