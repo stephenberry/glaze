@@ -4,9 +4,9 @@
 #pragma once
 
 #include "glaze/common.hpp"
-#include "glaze/json_ptr.hpp"
-#include "glaze/read.hpp"
-#include "glaze/write.hpp"
+#include "glaze/json/json_ptr.hpp"
+#include "glaze/json/read.hpp"
+#include "glaze/json/write.hpp"
 
 namespace glaze
 {

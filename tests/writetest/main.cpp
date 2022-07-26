@@ -11,7 +11,7 @@
 #define BOOST_UT_DISABLE_MODULE
 #endif
 #include "boost/ut.hpp"
-#include "glaze/write.hpp"
+#include "glaze/json/write.hpp"
 
 struct v3
 {

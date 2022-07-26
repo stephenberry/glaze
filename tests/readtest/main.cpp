@@ -14,7 +14,7 @@
 #define CAN_USE_CHARCONV
 #endif
 #include "boost/ut.hpp"
-#include "glaze/read.hpp"
+#include "glaze/json/read.hpp"
 
 struct v3
 {
