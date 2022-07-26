@@ -8,55 +8,6 @@
 #include <iostream>
 #include <tuple>
 
-
-
-// https://stackoverflow.com/questions/47882827/type-trait-for-aggregate-initializability-in-the-standard-library
-
-namespace detail {
-    template <class Struct, class = void, class... T>
-    struct is_direct_list_initializable_impl : std::false_type {};
-
-    template <class Struct, class... T>
-    struct is_direct_list_initializable_impl<Struct, std::void_t<decltype(Struct{ std::declval<T>()... })>, T...> : std::true_type {};
-}
-
-template <class Struct, class... T>
-using is_direct_list_initializable = detail::is_direct_list_initializable_impl<Struct, void, T...>;
-
-template <class Struct, class... T>
-constexpr bool is_direct_list_initializable_v = is_direct_list_initializable<Struct, T...>::value;
-
-template <class Struct, class... T>
-using is_aggregate_initializable = std::conjunction<std::is_aggregate<Struct>, is_direct_list_initializable<Struct, T...>, std::negation<std::conjunction<std::bool_constant<sizeof...(T) == 1>, std::is_same<std::decay_t<std::tuple_element_t<0, std::tuple<T...>>>, Struct>>>>;
-
-template <class Struct, class... T>
-constexpr bool is_aggregate_initializable_v = is_aggregate_initializable<Struct, T...>::value;
-
-
-
-//----------
-
-template<class T>
-concept aggregate = std::is_aggregate_v<T>;
-
-struct any_type {
-    template <class T> operator T() {}
-};
-
-// Count the number of members in an aggregate by (ab-)using
-// aggregate initialization
-template <aggregate T>
-consteval std::size_t count_members(auto... members) {
-   if constexpr (!requires { T{ members... }; }) {
-      return sizeof...(members) - 1;
-   }
-   else {
-      return count_members<T>(members..., any_type{});
-   }
-}
-
-//--------
-
 struct my_api
 {
    int x = 7;
