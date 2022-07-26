@@ -29,7 +29,7 @@ namespace glaze
    inline constexpr version_type version = version_t<T>::value;
 
    template <class T>
-   struct meta
+   struct trait
    {
       using sv = std::string_view;
       static constexpr sv type_name_unhashed = name<T>;
@@ -136,6 +136,6 @@ namespace glaze
    
    template <class T>
    consteval auto hash() {
-      return meta<T>::hash;
+      return trait<T>::hash;
    }
 }

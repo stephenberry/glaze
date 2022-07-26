@@ -10,87 +10,61 @@
 #include "glaze/api/type_support.hpp"
 #include "glaze/api/api.hpp"
 
+#include "glaze/glaze.hpp"
+
 namespace glaze
 {
-   namespace helper
-   {
-      template <class T>
-      inline std::pair<std::string_view, void*> hide(T* x) {
-         return { glaze::hash<T*>(), x };
-      }
-   }
-   
    template <class Interface>
    struct impl : api
    {
       Interface interface{};
-      
+
+      // Get a pointer to a value at the location of a json_ptr. Will return
+      // nullptr if value doesnt exist or is wrong type
       template <class T>
-      void set(const std::string_view sv, T& x) {
-         using V = std::add_pointer_t<std::decay_t<T>>;
-         const auto p = helper::hide(&x);
-         inter.emplace(sv, p);
-         if (!hash_names.contains(p.first)) {
-            hash_names.emplace(p.first, glaze::name<T>);
+      void* get_void(T&& root_value, std::string_view json_ptr,
+                     const std::string_view type_hash)
+      {
+         void* result{};
+         detail::seek_impl(
+            [&](auto&& val) {
+               using T = std::decay_t<decltype(val)>;
+               static constexpr auto h = glaze::hash<T>();
+               if (h == type_hash) [[likely]] {
+                  result = &val;
+               }
+               else [[unlikely]] {
+                  error = "mismatching types";
+                  error += ", expected: " + std::string(glaze::name<T>);
+               }
+            },
+            std::forward<T>(root_value), json_ptr);
+         if (result == nullptr) {
+            error = "invalid path";
          }
+         return result;
       }
       
       void* get(const std::string_view path, const std::string_view type_hash) noexcept override
       {
-         // compare input hash with hash associated with path
-         if (auto it = inter.find(path); it != inter.end()) [[likely]] {
-            const auto[h, ptr] = it->second;
-            if (h == type_hash) [[likely]] {
-               return ptr;
-            }
-            else [[unlikely]] {
-               error = "mismatching types";
-               if (auto it = hash_names.find(h); it != hash_names.end()) {
-                  error += ", expected: " + std::string(it->second);
-               }
-               else {
-                  error += ", nonexistant type";
-               }
-            }
-         }
-         else [[unlikely]] {
-            error = "identifier not found '" + std::string(path) + "'";
-         }
-         return nullptr;
-      }
-      
-      bool to(const uint32_t format, const sv path, sv& /*out*/) noexcept override
-      {
-         error = "glaze::to | no formats supported";
-         return false;
-      }
-      
-      bool from(const uint32_t format, const sv path, const sv /*in*/) noexcept override
-      {
-         error = "glaze::from | no formats supported";
-         return false;
+         return get_void(interface, path, type_hash);
       }
       
       virtual constexpr const version_type version() const noexcept override {
-         return glaze::meta<Interface>::version;
+         return glaze::trait<Interface>::version;
       }
       
       constexpr const std::string_view version_sv() const noexcept override {
-         return glaze::meta<Interface>::version_sv;
+         return glaze::trait<Interface>::version_sv;
       }
       
       constexpr const std::string_view hash() const noexcept override {
          return glaze::hash<Interface>();
       }
-      
-   private:
-      std::unordered_map<std::string_view, std::pair<std::string_view, void*>> inter;
-      std::unordered_map<std::string_view, std::string_view> hash_names;
    };
    
    template <class T>
-   inline constexpr std::pair<T&, std::shared_ptr<impl<T>>> make_impl() {
-      auto io = std::make_shared<impl<T>>();
-      return { io->interface, io };
+   inline constexpr std::shared_ptr<impl<T>> make_impl() {
+      return std::make_shared<impl<T>>();
    }
 }

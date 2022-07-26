@@ -67,18 +67,22 @@ struct my_api
    std::function<void()> init = []{ std::cout << "init!\n"; };
 };
 
+template <>
+struct glaze::meta<my_api>
+{
+   using T = my_api;
+   static constexpr auto value = glaze::object(
+      "x", &T::x, //
+      "y", &T::y, //
+      "z", &T::z, //
+      "s", &T::s);
+};
+
 GLAZE_SPECIALIZE(my_api, 0, 0, 1)
 
 std::shared_ptr<glaze::api> glaze::create_api(const std::string_view) noexcept
 {
-   auto[api, io] = glaze::make_impl<my_api>();
-   io->set("x", api.x);
-   io->set("y", api.y);
-   io->set("z", api.z);
-   io->set("s", api.s);
-   io->set("f", api.f);
-   io->set("init", api.init);
-   return io;
+   return glaze::make_impl<my_api>();
 }
 
 void tests()
@@ -100,9 +104,9 @@ void tests()
       std::cout << glaze::name<const double&> << '\n';
       std::cout << glaze::name<std::span<double>> << '\n';
       
-      std::cout << io->get<int>("x") << '\n';
-      std::cout << io->get<double>("y") << '\n';
-      auto& v = io->get<std::vector<double>>("z");
+      std::cout << io->get<int>("/x") << '\n';
+      std::cout << io->get<double>("/y") << '\n';
+      auto& v = io->get<std::vector<double>>("/z");
       std::cout << '{' << v[0] << ',' << v[1] << "}\n";
       
       std::cout << glaze::name<std::function<double(const int&, const double&)>> << '\n';

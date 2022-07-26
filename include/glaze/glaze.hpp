@@ -33,8 +33,8 @@
 #pragma once
 
 #include "glaze/common.hpp"
-#include "glaze/read.hpp"
-#include "glaze/write.hpp"
-#include "glaze/json_ptr.hpp"
-#include "glaze/overwrite.hpp"
-#include "glaze/prettify.hpp"
+#include "glaze/json/read.hpp"
+#include "glaze/json/write.hpp"
+#include "glaze/json/json_ptr.hpp"
+#include "glaze/json/overwrite.hpp"
+#include "glaze/json/prettify.hpp"
