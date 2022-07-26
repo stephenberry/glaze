@@ -1,4 +1,4 @@
-project(vireo_eigen_tests)
+project(eigen_test)
 
 add_executable(${PROJECT_NAME} main.cpp)
 

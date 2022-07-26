@@ -1,4 +1,4 @@
-project(readtest)
+project(json_tests)
 
 add_executable(${PROJECT_NAME} main.cpp)
 

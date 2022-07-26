@@ -1,4 +1,4 @@
-project(writetest)
+project(write_test)
 
 add_executable(${PROJECT_NAME} main.cpp)
 
