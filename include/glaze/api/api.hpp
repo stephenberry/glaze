@@ -12,6 +12,12 @@ namespace glaze
 {
    inline namespace v0_0_1
    {
+      namespace format
+      {
+         static constexpr uint32_t binary = 0;
+         static constexpr uint32_t json = 10;
+      }
+
       struct api
       {
          using sv = std::string_view;
@@ -23,13 +29,21 @@ namespace glaze
          api& operator=(api&&) noexcept = default;
          virtual ~api() noexcept {}
          
-         virtual void* get(const sv path, const sv type_hash) noexcept = 0;
-         
          template <class T>
          [[nodiscard]]  T& get(const sv path);
          
          template <class T>
          [[nodiscard]] T* get_if(const sv path) noexcept;
+
+         virtual bool write(const uint32_t /*format*/, const sv /*path*/,
+                    const sv /*data*/) noexcept
+         { return false; }
+
+          virtual bool read(const uint32_t /*format*/, const sv /*path*/,
+                            std::string& /*data*/) noexcept
+         {
+            return false;
+         }
          
          virtual const sv last_error() const noexcept {
             return error;
@@ -40,6 +54,8 @@ namespace glaze
          virtual constexpr const sv hash() const noexcept = 0;
          
       protected:
+         virtual void* get(const sv path, const sv type_hash) noexcept = 0;
+
          std::string error{};
       };
       
