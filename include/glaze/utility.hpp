@@ -3,7 +3,7 @@
 #include <tuple>
 #include <variant>
 
-namespace csv
+namespace glaze
 {
 	template <class, template<class...> class>
 	inline constexpr bool is_specialization_v = false;

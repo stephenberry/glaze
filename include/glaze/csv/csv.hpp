@@ -13,21 +13,17 @@
 
 #include "fmt/format.h"
 
-#include "recorder.h"
+#include "glaze/record/recorder.hpp"
 
-#include "utility.hpp"
+#include "glaze/utility.hpp"
 
-namespace csv
+namespace glaze
 {
     template<class ...T>
     size_t container_size(const std::variant<T...>& v)
     {
         return std::visit([](auto&& x) {return x.size(); }, v);
     }
-
-
-
-
 
    template <class = void, std::size_t... Is>
    constexpr auto indexer(std::index_sequence<Is...>) {
@@ -64,17 +60,21 @@ namespace csv
    }
    
    template <class Buffer>
-   inline void write(Buffer& buffer, const std::string_view sv) {
+   inline void write_csv(Buffer& buffer, const std::string_view sv) {
       buffer.append(sv);
    }
    
    template <class Buffer, class T>
-   inline void write(Buffer& buffer, const T x) requires std::is_floating_point_v<T> {
+   inline void write_csv(Buffer& buffer,
+                         const T x) requires std::is_floating_point_v<T>
+   {
       fmt::format_to(std::back_inserter(buffer), "{}", x);
    }
    
    template <class Buffer, class T>
-   inline void write(Buffer& buffer, const T x) requires std::is_integral_v<T> {
+   inline void write_csv(Buffer& buffer,
+                         const T x) requires std::is_integral_v<T>
+   {
       if constexpr (std::is_same_v<T, bool>) {
          if (x) {
             buffer.append("1");
@@ -89,7 +89,7 @@ namespace csv
    }
    
    template <bool RowWise = true, class Buffer, class Tuple>
-   inline void write(Buffer& buffer, Tuple&& tuple) requires is_tuple<Tuple>
+   inline void write_csv(Buffer& buffer, Tuple&& tuple) requires is_tuple<Tuple>
    {
       const auto tuples = tuple_splitter(std::forward<Tuple>(tuple));
       static constexpr auto N = std::tuple_size_v<Tuple> / 2;
@@ -107,22 +107,22 @@ namespace csv
       const auto& titles = std::get<0>(tuples);
       if constexpr (RowWise) {
          for_each<N>([&](auto I) {
-            write(buffer, std::get<I>(titles));
-            write(buffer, ",");
+            write_csv(buffer, std::get<I>(titles));
+            write_csv(buffer, ",");
             
             const auto& x = std::get<I>(data);
             for (size_t i = 0; i < n; ++i) {
-               write(buffer, x[i]);
-               write(buffer, ",");
+               write_csv(buffer, x[i]);
+               write_csv(buffer, ",");
             }
             buffer.append("\n");
          });
       }
       else {
          for_each<N>([&](auto I) {
-            write(buffer, std::get<I>(titles));
+            write_csv(buffer, std::get<I>(titles));
             if constexpr (I != N - 1) {
-               write(buffer, ",");
+               write_csv(buffer, ",");
             }
          });
          buffer.append("\n");
@@ -130,9 +130,9 @@ namespace csv
          // write out columns of data
          for (size_t i = 0; i < n; ++i) {
             for_each<N>([&](auto I) {
-               write(buffer, std::get<I>(data)[i]);
+               write_csv(buffer, std::get<I>(data)[i]);
                if constexpr (I != N - 1) {
-                  write(buffer, ",");
+                  write_csv(buffer, ",");
                }
             });
             buffer.append("\n");
@@ -144,7 +144,7 @@ namespace csv
    concept is_map = std::same_as<typename Map::value_type, std::pair<const typename Map::key_type, typename Map::mapped_type>>;
    
    template <bool RowWise = true, class Buffer, class Map>
-   inline void write(Buffer& buffer, Map&& map) requires is_map<std::decay_t<Map>>
+   inline void write_csv(Buffer& buffer, Map&& map) requires is_map<std::decay_t<Map>>
    {
       const auto N = map.size();
 
@@ -160,12 +160,12 @@ namespace csv
 
       if constexpr (RowWise) {
          for (auto& [title, data] : map) {
-            write(buffer, title);
-            write(buffer, ",");
+            write_csv(buffer, title);
+            write_csv(buffer, ",");
 
             for (size_t i = 0; i < n; ++i) {
-               write(buffer, data[i]);
-               write(buffer, ",");
+               write_csv(buffer, data[i]);
+               write_csv(buffer, ",");
             }
             buffer.append("\n");
          }
@@ -173,9 +173,9 @@ namespace csv
       else {
          size_t I = 0;
          for (auto& [title, data] : map) {
-            write(buffer, title);
+            write_csv(buffer, title);
             if (I != N - 1) {
-               write(buffer, ",");
+               write_csv(buffer, ",");
             }
             ++I;
          }
@@ -185,9 +185,9 @@ namespace csv
          for (size_t i = 0; i < n; ++i) {
             I = 0;
             for (auto& [title, data] : map) {
-               write(buffer, data[i]);
+               write_csv(buffer, data[i]);
                if (I != N - 1) {
-                  write(buffer, ",");
+                  write_csv(buffer, ",");
                }
                ++I;
             }
@@ -197,13 +197,13 @@ namespace csv
    }
    
    template <bool RowWise = true, class Buffer, class... Args> requires (sizeof...(Args) > 1)
-   inline void write(Buffer& buffer, Args&&... args)
+     inline void write_csv(Buffer& buffer, Args&&... args)
    {
-      write<RowWise>(buffer, std::make_tuple(std::forward<Args>(args)...));
+      write_csv<RowWise>(buffer, std::make_tuple(std::forward<Args>(args)...));
    }
    
    template <bool RowWise = true, class Buffer, class Variant>
-   inline void write(Buffer& buffer, recorder<Variant>& rec)
+   inline void write_csv(Buffer& buffer, recorder<Variant>& rec)
    {
        auto& map = rec.data;
 
@@ -221,13 +221,13 @@ namespace csv
 
        if constexpr (RowWise) {
            for (auto& [title, data] : map) {
-               write(buffer, title);
-               write(buffer, ",");
+             write_csv(buffer, title);
+              write_csv(buffer, ",");
 
                std::visit([&](auto&& arg) {
                for (size_t i = 0; i < n; ++i) {
-                   write(buffer, arg[i]); 
-                   write(buffer, ",");
+                       write_csv(buffer, arg[i]); 
+                   write_csv(buffer, ",");
                }
                }, data.first);
                buffer.append("\n");
@@ -236,9 +236,9 @@ namespace csv
        else {
            size_t I = 0;
            for (auto& [title, data] : map) {
-               write(buffer, title);
+              write_csv(buffer, title);
                if (I != N - 1) {
-                   write(buffer, ",");
+                 write_csv(buffer, ",");
                }
                ++I;
            }
@@ -250,7 +250,7 @@ namespace csv
                for (auto& [title, data] : map) {
                    std::visit([&](auto&& arg) { write(buffer, arg[i]); }, data.first);
                    if (I != N - 1) {
-                       write(buffer, ",");
+                      write_csv(buffer, ",");
                    }
                    ++I;
                }
@@ -260,10 +260,10 @@ namespace csv
    }
    
    template <bool RowWise = true, class... Args>
-   inline void to_file(const std::string_view file_name, Args&&... args)
+   inline void to_csv_file(const std::string_view file_name, Args&&... args)
    {
       std::string buffer;
-      write<RowWise>(buffer, std::forward<Args>(args)...);
+      write_csv<RowWise>(buffer, std::forward<Args>(args)...);
       
       std::ios_base::sync_with_stdio(false);
       std::fstream file(std::string{file_name} + ".csv", std::ios::out);
@@ -307,7 +307,7 @@ namespace csv
 
    
    template<class T>
-   inline void read(const std::string& buffer, T& container)
+   inline void read_csv(const std::string& buffer, T& container)
    {
        std::stringstream convert(buffer);
        typename T::value_type temp;
@@ -322,7 +322,7 @@ namespace csv
    }
 
    template<bool RowWise = true, class Tuple>
-   inline void read(std::fstream& file, Tuple& items) requires is_tuple<Tuple>
+   inline void read_csv(std::fstream& file, Tuple& items) requires is_tuple<Tuple>
    {
        static constexpr auto N = std::tuple_size_v<Tuple>;
 
@@ -345,7 +345,7 @@ namespace csv
 
                for (std::string value; std::getline(line, value, ',');)
                {
-                   read(value, item);
+                   read_csv(value, item);
                }
 
            });
@@ -366,7 +366,7 @@ namespace csv
                    std::string value;
                    if (std::getline(line, value, ','))
                    {
-                       read(value, item);
+                       read_csv(value, item);
                    }
                    });
            }
@@ -376,7 +376,7 @@ namespace csv
    // TODO: change fstream to generic buffer? will that be useful?
 
    template <bool RowWise = true, class... Args>
-   inline void from_file(const std::string_view file_name, Args&&... args)
+   inline void from_csv_file(const std::string_view file_name, Args&&... args)
    {
        std::string buffer;
 
@@ -384,7 +384,7 @@ namespace csv
 
        auto parameters = std::tie(std::forward<Args>(args)...);
 
-       read<RowWise>(file, parameters);
+       read_csv<RowWise>(file, parameters);
    }
 }
 

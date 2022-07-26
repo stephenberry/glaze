@@ -2,7 +2,7 @@
 // Developed by Anyar Inc.
 
 #include "glaze/csv/csv.hpp"
-#include "glaze/csv/recorder.h"
+#include "glaze/record/recorder.hpp"
 
 #define BOOST_UT_DISABLE_MODULE 1
 
@@ -21,6 +21,7 @@
 #include <sstream>
 
 using namespace boost::ut;
+using namespace glaze;
 
 int main()
 {
@@ -37,7 +38,7 @@ int main()
                 z.emplace_back(i % 2 == 0);
             }
 
-            csv::to_file("rowwise_to_file_test", "x", x, "y", y, "z", z);
+            to_csv_file("rowwise_to_file_test", "x", x, "y", y, "z", z);
         };
 
         "colwise_to_file"_test = [] {
@@ -50,7 +51,7 @@ int main()
                 z.emplace_back(i % 2 == 0);
             }
 
-            csv::to_file<false>("colwise_to_file_test", "z", z, "y", y, "x", x);
+            to_csv_file<false>("colwise_to_file_test", "z", z, "y", y, "x", x);
         };
 
         "vector_to_buffer"_test = [] {
@@ -58,7 +59,7 @@ int main()
             std::iota(data.begin(), data.end(), 1);
 
             std::string buffer;
-            csv::write(buffer, "data", data);
+            write_csv(buffer, "data", data);
         };
 
         "deque_to_buffer"_test = [] {
@@ -66,7 +67,7 @@ int main()
             std::iota(data.begin(), data.end(), 1);
 
             std::string buffer;
-            csv::write(buffer, "data", data);
+           write_csv(buffer, "data", data);
         };
 
         "array_to_buffer"_test = [] {
@@ -74,7 +75,7 @@ int main()
             std::iota(data.begin(), data.end(), 1);
 
             std::string buffer;
-            csv::write(buffer, "data", data);
+           write_csv(buffer, "data", data);
         };
 
         "rowwise_map_to_buffer"_test = [] {
@@ -90,7 +91,7 @@ int main()
             data["y"] = y;
 
             std::string buffer;
-            csv::write(buffer, data);
+           write_csv(buffer, data);
         };
 
         "colwise_map_to_buffer"_test = [] {
@@ -106,7 +107,7 @@ int main()
             data["y"] = y;
 
             std::string buffer;
-            csv::write<false>(buffer, data);
+           write_csv<false>(buffer, data);
         };
 
         "map_mismatch"_test = [] {
@@ -122,7 +123,7 @@ int main()
             try
             {
                 std::string buffer;
-                csv::write(buffer, data);
+               write_csv(buffer, data);
 
                 expect(false);
             }
@@ -139,7 +140,7 @@ int main()
             std::vector<double> x, y;
             std::deque<bool> z;
 
-            csv::from_file("rowwise_to_file_test", x, y, z);
+            from_csv_file("rowwise_to_file_test", x, y, z);
 
         };
 
@@ -147,7 +148,7 @@ int main()
             std::vector<double> x, y;
             std::deque<bool> z;
 
-            csv::from_file<false>("colwise_to_file_test", z, y, x);
+            from_csv_file<false>("colwise_to_file_test", z, y, x);
 
         };
 
@@ -158,7 +159,7 @@ int main()
 
         "partial_data"_test = [] {
             std::vector<double> z;
-            csv::from_file<false>("colwise_to_file_test", z);
+           from_csv_file<false>("colwise_to_file_test", z);
         };
 
         "wrong_type"_test = [] {
@@ -166,13 +167,13 @@ int main()
                                                    "f", "g", "h", "i", "j", 
                                                    "k", "l", "m", "n", "o"};
 
-            csv::to_file("letters_file", "letters", letters);
+            to_csv_file("letters_file", "letters", letters);
 
             std::vector<double> not_letters;
 
             try
             {
-                csv::from_file("letters_file", not_letters);
+               from_csv_file("letters_file", not_letters);
 
                 expect(false);
             }
@@ -200,7 +201,7 @@ int main()
                 rec.update();
             }
 
-            csv::to_file("recorder_out", rec);
+            to_csv_file("recorder_out", rec);
         };
 
     };
