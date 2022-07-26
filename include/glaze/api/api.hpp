@@ -31,7 +31,7 @@ namespace glaze
          template <class T>
          [[nodiscard]] T* get_if(const sv path) noexcept;
          
-         virtual const std::string_view last_error() const noexcept {
+         virtual const sv last_error() const noexcept {
             return error;
          }
          

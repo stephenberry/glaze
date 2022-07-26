@@ -19,11 +19,30 @@ namespace glaze
    {
       Interface interface{};
 
+      using sv = std::string_view;
+      
+      void* get(const sv path, const sv type_hash) noexcept override
+      {
+         return get_void(interface, path, type_hash);
+      }
+      
+      virtual constexpr const version_type version() const noexcept override {
+         return glaze::trait<Interface>::version;
+      }
+      
+      constexpr const sv version_sv() const noexcept override {
+         return glaze::trait<Interface>::version_sv;
+      }
+      
+      constexpr const sv hash() const noexcept override {
+         return glaze::hash<Interface>();
+      }
+
+      protected:
       // Get a pointer to a value at the location of a json_ptr. Will return
       // nullptr if value doesnt exist or is wrong type
       template <class T>
-      void* get_void(T&& root_value, std::string_view json_ptr,
-                     const std::string_view type_hash)
+      void* get_void(T&& root_value, const sv json_ptr, const sv type_hash)
       {
          void* result{};
          detail::seek_impl(
@@ -44,27 +63,10 @@ namespace glaze
          }
          return result;
       }
-      
-      void* get(const std::string_view path, const std::string_view type_hash) noexcept override
-      {
-         return get_void(interface, path, type_hash);
-      }
-      
-      virtual constexpr const version_type version() const noexcept override {
-         return glaze::trait<Interface>::version;
-      }
-      
-      constexpr const std::string_view version_sv() const noexcept override {
-         return glaze::trait<Interface>::version_sv;
-      }
-      
-      constexpr const std::string_view hash() const noexcept override {
-         return glaze::hash<Interface>();
-      }
    };
    
    template <class T>
-   inline constexpr std::shared_ptr<impl<T>> make_impl() {
+   inline constexpr auto make_api() {
       return std::make_shared<impl<T>>();
    }
 }

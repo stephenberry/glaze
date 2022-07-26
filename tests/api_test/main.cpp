@@ -1,4 +1,5 @@
-
+// Glaze Library
+// For the license information refer to glaze.hpp
 
 #include "glaze/api/impl.hpp"
 
@@ -26,14 +27,16 @@ struct glaze::meta<my_api>
       "x", &T::x, //
       "y", &T::y, //
       "z", &T::z, //
-      "s", &T::s);
+      "s", &T::s, //
+      "f", &T::f, //
+      "init", &T::init);
 };
 
 GLAZE_SPECIALIZE(my_api, 0, 0, 1)
 
 std::shared_ptr<glaze::api> glaze::create_api(const std::string_view) noexcept
 {
-   return glaze::make_impl<my_api>();
+   return glaze::make_api<my_api>();
 }
 
 void tests()
@@ -62,10 +65,10 @@ void tests()
       
       std::cout << glaze::name<std::function<double(const int&, const double&)>> << '\n';
       
-      /*int x = 7;
+      int x = 7;
       double y = 5.5;
-      std::cout << io->call<double>("f", x, y) << '\n';
-      io->call("init");*/
+      auto& f = io->get<std::function<double(const int&, const double&)>>("/f");
+      std::cout << f(x, y) << '\n';
    }
    catch (const std::exception& e) {
       std::cout << e.what() << '\n';
