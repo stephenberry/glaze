@@ -1,0 +1,455 @@
+// Glaze Library
+// For the license information refer to glaze.hpp
+
+#pragma once
+
+#include <array>
+#include <deque>
+#include <list>
+#include <map>
+#include <memory>
+#include <optional>
+#include <string>
+#include <type_traits>
+#include <unordered_map>
+#include <variant>
+#include <vector>
+
+#include "fmt/compile.h"
+#include "fmt/format.h"
+#include "frozen/string.h"
+#include "frozen/unordered_map.h"
+
+namespace glaze
+{
+   namespace detail
+   {
+      template <int... I>
+      using is = std::integer_sequence<int, I...>;
+      template <int N>
+      using make_is = std::make_integer_sequence<int, N>;
+
+      constexpr auto size(const char *s)
+      {
+         int i = 0;
+         while (*s != 0) {
+            ++i;
+            ++s;
+         }
+         return i;
+      }
+
+      template <const char *, typename, const char *, typename>
+      struct concat_impl;
+
+      template <const char *S1, int... I1, const char *S2, int... I2>
+      struct concat_impl<S1, is<I1...>, S2, is<I2...>>
+      {
+         static constexpr const char value[]{S1[I1]..., S2[I2]..., 0};
+      };
+
+      template <const char *S1, const char *S2>
+      constexpr auto concat_char()
+      {
+         return concat_impl<S1, make_is<size(S1)>, S2,
+                            make_is<size(S2)>>::value;
+      };
+
+      template <size_t... Is>
+      struct seq
+      {};
+      template <size_t N, size_t... Is>
+      struct gen_seq : gen_seq<N - 1, N - 1, Is...>
+      {};
+      template <size_t... Is>
+      struct gen_seq<0, Is...> : seq<Is...>
+      {};
+
+      template <size_t N1, size_t... I1, size_t N2, size_t... I2>
+      constexpr std::array<char const, N1 + N2 - 1> concat(char const (&a1)[N1],
+                                                           char const (&a2)[N2],
+                                                           seq<I1...>,
+                                                           seq<I2...>)
+      {
+         return {{a1[I1]..., a2[I2]...}};
+      }
+
+      template <size_t N1, size_t N2>
+      constexpr std::array<char const, N1 + N2 - 1> concat_arrays(
+         char const (&a1)[N1], char const (&a2)[N2])
+      {
+         return concat(a1, a2, gen_seq<N1 - 1>{}, gen_seq<N2>{});
+      }
+
+      template <size_t N>
+      struct string_literal
+      {
+         static constexpr size_t size = (N > 0) ? (N - 1) : 0;
+         constexpr string_literal(const char (&str)[N])
+         {
+            std::copy_n(str, N, value);
+         }
+         char value[N];
+         constexpr const char *end() const noexcept { return value + size; }
+
+         constexpr const std::string_view sv() const noexcept
+         {
+            return {value, size};
+         }
+      };
+
+      template <size_t N>
+      constexpr size_t length(char const (&)[N])
+      {
+         return N;
+      }
+
+      template <string_literal Str>
+      struct chars_impl
+      {
+         static constexpr std::string_view value{Str.value,
+                                                 length(Str.value) - 1};
+      };
+
+      template <string_literal Str>
+      inline constexpr std::string_view chars = chars_impl<Str>::value;
+
+      template <class T>
+      struct custom
+      {
+         // template <class T, class It>
+         // static void from_iter(T &value, It &it, const It &end);
+         //
+         // template <bool C = false, class T, class B>
+         // static void to_buffer(T &&value, B &&b);
+         //
+         // template <class F, class T>
+         // static bool seek_impl(F &&func, T &&value, std::string_view
+         // json_ptr);
+      };
+
+      template <class T>
+      concept custom_t = requires
+      {
+         custom<T>::from_iter;
+         custom<T>::to_buffer;
+         custom<T>::seek_impl;
+      };
+   }  // namespace detail
+
+   template <class T>
+   struct meta
+   {};
+
+   template <class T>
+   using meta_t = std::decay_t<decltype(meta<T>::value)>;
+
+   template <class T>
+   inline constexpr auto &meta_v = meta<T>::value;
+
+   struct comment_t
+   {
+      std::string_view str;
+   };
+
+   constexpr comment_t operator"" _c(const char *s, std::size_t n)
+   {
+      return comment_t{{s, n}};
+   }
+
+   struct raw_json
+   {
+      std::string str;
+   };
+
+   using basic =
+      std::variant<bool, char, char8_t, unsigned char, signed char, char16_t,
+                   short, unsigned short, wchar_t, char32_t, float, int,
+                   unsigned int, long, unsigned long, double, long double,
+                   long long, unsigned long long, std::string>;
+
+   using basic_ptr =
+      std::variant<bool *, char *, char8_t *, unsigned char *, signed char *,
+                   char16_t *, short *, unsigned short *, wchar_t *, char32_t *,
+                   float *, int *, unsigned int *, long *, unsigned long *,
+                   double *, long double *, long long *, unsigned long long *,
+                   std::string *>;
+
+   namespace detail
+   {
+      template <class T>
+      concept char_t = std::same_as<T, char> || std::same_as<T, char16_t> ||
+         std::same_as<T, char32_t> || std::same_as<T, wchar_t>;
+
+      template <class T>
+      concept bool_t =
+         std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference>;
+
+      template <class T>
+      concept int_t = std::integral<T> && !char_t<T> && !bool_t<T>;
+
+      template <class T>
+      concept num_t = std::floating_point<T> || int_t<T>;
+
+      template <class T>
+      concept vireo_t = requires
+      {
+         meta<T>::value;
+      };
+
+      template <class T>
+      concept complex_t = vireo_t<T> || custom_t<T>;
+
+      template <class T>
+      concept str_t = !complex_t<T> && std::convertible_to<T, std::string_view>;
+
+      template <class T>
+      concept pair_t = requires(T pair)
+      {
+         {
+            pair.first
+            } -> std::same_as<typename T::first_type &>;
+         {
+            pair.second
+            } -> std::same_as<typename T::second_type &>;
+      };
+
+      template <class T>
+      concept map_subscriptable = requires(T container)
+      {
+         {
+            container[std::declval<typename T::key_type>()]
+            } -> std::same_as<typename T::mapped_type &>;
+      };
+
+      template <class T>
+      concept map_t =
+         !complex_t<T> && !str_t<T> && std::ranges::range<T> &&
+         pair_t<std::ranges::range_value_t<T>> && map_subscriptable<T>;
+
+      template <class T>
+      concept array_t =
+         !complex_t<T> && !str_t<T> && !map_t<T> && std::ranges::range<T>;
+
+      template <class T>
+      concept emplace_backable = requires(T container)
+      {
+         {
+            container.emplace_back()
+            } -> std::same_as<typename T::reference>;
+      };
+
+      template <class T>
+      concept resizeable = requires(T container)
+      {
+         container.resize(0);
+      };
+
+      template <class T>
+      concept tuple_t = requires(T t)
+      {
+         std::tuple_size<T>::value;
+         std::get<0>(t);
+      }
+      &&!complex_t<T> && !std::ranges::range<T>;
+
+      template <class T>
+      concept nullable_t = !complex_t<T> && !str_t<T> && requires(T t)
+      {
+         bool(t);
+         {*t};
+      };
+
+      template <class... T>
+      constexpr bool all_member_ptr(std::tuple<T...>)
+      {
+         return std::conjunction_v<std::is_member_pointer<std::decay_t<T>>...>;
+      }
+
+      template <class T>
+      concept vireo_array_t = vireo_t<T> && all_member_ptr(meta_v<T>);
+
+      template <class T>
+      concept vireo_object_t = vireo_t<T> && !vireo_array_t<T>;
+
+      template <typename From, typename To>
+      concept non_narrowing_convertable = requires(From from, To to)
+      {
+         To{from};
+      };
+
+      // from
+      // https://stackoverflow.com/questions/55941964/how-to-filter-duplicate-types-from-tuple-c
+      template <class T, class... Ts>
+      struct unique
+      {
+         using type = T;
+      };
+
+      template <template <class...> class T, class... Ts, class U, class... Us>
+      struct unique<T<Ts...>, U, Us...>
+         : std::conditional_t<(std::is_same_v<U, Ts> || ...),
+                              unique<T<Ts...>, Us...>,
+                              unique<T<Ts..., U>, Us...>>
+      {};
+
+      template <class T>
+      struct tuple_variant;
+
+      template <class... Ts>
+      struct tuple_variant<std::tuple<Ts...>> : unique<std::variant<>, Ts...>
+      {};
+
+      template <class T>
+      struct tuple_ptr_variant;
+
+      template <class... Ts>
+      struct tuple_ptr_variant<std::tuple<Ts...>>
+         : unique<std::variant<>, std::add_pointer_t<Ts>...>
+      {};
+
+      template <class Tuple,
+                class = std::make_index_sequence<std::tuple_size<Tuple>::value>>
+      struct value_tuple_variant;
+
+      template <class Tuple, size_t... I>
+      struct value_tuple_variant<Tuple, std::index_sequence<I...>>
+      {
+         using type = typename tuple_variant<decltype(std::tuple_cat(
+            std::declval<std::tuple<std::tuple_element_t<
+               1, std::tuple_element_t<I, Tuple>>>>()...))>::type;
+      };
+
+      template <class Tuple>
+      using value_tuple_variant_t = typename value_tuple_variant<Tuple>::type;
+
+      // from
+      // https://stackoverflow.com/questions/16337610/how-to-know-if-a-type-is-a-specialization-of-stdvector
+      template <typename Test, template <typename...> class Ref>
+      struct is_specialization : std::false_type
+      {};
+
+      template <template <typename...> class Ref, typename... Args>
+      struct is_specialization<Ref<Args...>, Ref> : std::true_type
+      {};
+
+      template <class T, size_t... I>
+      inline constexpr auto _make_array(std::index_sequence<I...>)
+      {
+         using value_t = typename tuple_variant<meta_t<T>>::type;
+         return std::array<value_t, std::tuple_size_v<meta_t<T>>>{
+            std::get<I>(meta_v<T>)...};
+      }
+
+      template <class T>
+      inline constexpr auto make_array()
+      {
+         constexpr auto indices =
+            std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
+         return _make_array<T>(indices);
+      }
+
+      template <class Tuple, std::size_t... Is>
+      inline constexpr auto tuple_runtime_getter(std::index_sequence<Is...>)
+      {
+         using value_t = typename tuple_ptr_variant<Tuple>::type;
+         using tuple_ref = std::add_lvalue_reference_t<Tuple>;
+         using getter_t = value_t (*)(tuple_ref);
+         return std::array<getter_t, std::tuple_size_v<Tuple>>{
+            +[](tuple_ref tuple) -> value_t {
+               return &std::get<Is>(tuple);
+            }...};
+      }
+
+      template <class Tuple>
+      inline auto get_runtime(Tuple &&tuple, size_t index)
+      {
+         static constexpr auto indices =
+            std::make_index_sequence<std::tuple_size_v<std::decay_t<Tuple>>>{};
+         static constexpr auto runtime_getter =
+            tuple_runtime_getter<std::decay_t<Tuple>>(indices);
+         return runtime_getter[index](tuple);
+      }
+
+      template <class M>
+      inline constexpr void check_member()
+      {
+         static_assert(std::tuple_size_v<M> > 1,
+                       "members need at least a name and a member pointer");
+         static_assert(
+            std::tuple_size_v<M> < 4,
+            "only member_ptr, name, and comment are supported at the momment");
+         if constexpr (std::tuple_size_v < M >> 0)
+            static_assert(str_t<std::tuple_element_t<0, M>>,
+                          "first element should be the name");
+         if constexpr (std::tuple_size_v < M >> 1)
+            static_assert(std::is_member_pointer_v<std::tuple_element_t<1, M>>,
+                          "second element should be the member pointer");
+         if constexpr (std::tuple_size_v < M >> 2)
+            static_assert(std::is_same_v<std::tuple_element_t<2, M>, comment_t>,
+                          "third element should be a comment_t");
+      };
+
+      template <size_t I = 0, class Tuple, class Members = std::tuple<>,
+                class Member = std::tuple<>>
+      inline constexpr auto group_members(Tuple &&tuple, Members &&members = {},
+                                          Member &&member = {})
+      {
+         static_assert(std::tuple_size_v<Tuple> > 0, "no members supplied");
+
+         if constexpr (I >= std::tuple_size_v<Tuple>) {
+            check_member<Member>();
+            return std::tuple_cat(members, std::make_tuple(member));
+         }
+         else if constexpr (I == 0) {
+            return group_members<I + 1>(std::forward<Tuple>(tuple),
+                                        std::forward<Members>(members),
+                                        std::make_tuple(std::get<I>(tuple)));
+         }
+         else if constexpr (str_t<std::tuple_element_t<I, Tuple>>) {
+            check_member<Member>();
+            return group_members<I + 1>(
+               std::forward<Tuple>(tuple),
+               std::tuple_cat(members, std::make_tuple(member)),
+               std::make_tuple(std::get<I>(tuple)));
+         }
+         else {
+            return group_members<I + 1>(
+               std::forward<Tuple>(tuple), std::forward<Members>(members),
+               std::tuple_cat(member, std::make_tuple(std::get<I>(tuple))));
+         }
+      }
+
+      template <class T, size_t... I>
+      inline constexpr auto make_map_impl(std::index_sequence<I...>)
+      {
+         using value_t = value_tuple_variant_t<meta_t<T>>;
+         return frozen::make_unordered_map<frozen::string, value_t,
+                                           std::tuple_size_v<meta_t<T>>>(
+            {std::make_pair<frozen::string, value_t>(
+               frozen::string(std::get<0>(std::get<I>(meta_v<T>))),
+               std::get<1>(std::get<I>(meta_v<T>)))...});
+      }
+
+      template <class T>
+      inline constexpr auto make_map()
+      {
+         constexpr auto indices =
+            std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
+         return make_map_impl<T>(indices);
+      }
+   }  // namespace detail
+
+   template <class... Args>
+   inline constexpr auto array(Args &&...args)
+   {
+      return std::make_tuple(std::forward<Args>(args)...);
+   }
+
+   template <class... Args>
+   inline constexpr auto object(Args &&...args)
+   {
+      return detail::group_members(
+         std::make_tuple(std::forward<Args>(args)...));
+   }
+}  // namespace vireo

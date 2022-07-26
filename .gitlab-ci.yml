@@ -1,0 +1,33 @@
+.default:
+  tags:
+    - docker
+    - linux
+  image: alpine:edge # Stable doesnt have gcc 11 yet
+
+stages:
+  - build
+  - test
+
+# Boost ut is set up to run on build
+build_and_test:
+  extends:
+    - .default
+  stage: build
+  before_script:
+  - apk add make cmake clang g++ git
+  - git config --global url."http://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab/".insteadOf "http://gitlab.ad.anyarinc.com/"
+  script:
+    - cmake -S . -B gcc-build -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ -DCMAKE_CXX_FLAGS="-fprofile-arcs -ftest-coverage -fPIC -O0"
+    - cd gcc-build
+    - make -j3
+    - cd ..
+    - cmake -S . -B clang-build -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+    - cd clang-build
+    - make -j3
+    - cd ..
+  artifacts:
+    paths:
+      - gcc-build/
+      - clang-build/
+      - include
+    expire_in: 2 hour
