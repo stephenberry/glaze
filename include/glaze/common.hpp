@@ -269,10 +269,10 @@ namespace glaze
       }
 
       template <class T>
-      concept vireo_array_t = glaze_t<T> && all_member_ptr(meta_v<T>);
+      concept glaze_array_t = glaze_t<T> && all_member_ptr(meta_v<T>);
 
       template <class T>
-      concept vireo_object_t = glaze_t<T> && !vireo_array_t<T>;
+      concept glaze_object_t = glaze_t<T> && !glaze_array_t<T>;
 
       template <typename From, typename To>
       concept non_narrowing_convertable = requires(From from, To to)

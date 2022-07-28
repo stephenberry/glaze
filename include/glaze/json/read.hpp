@@ -361,11 +361,11 @@ namespace glaze
           resizeable<T>)void from_iter(T& value, auto&& it, auto&& end);
 
       template <size_t I = 0, class T>
-      requires vireo_array_t<T> || tuple_t<T>
+      requires glaze_array_t<T> || tuple_t<T>
       void from_iter(T& value, auto&& it, auto&& end);
 
       template <class T>
-      requires map_t<T> || vireo_object_t<T>
+      requires map_t<T> || glaze_object_t<T>
       void from_iter(T& value, auto&& it, auto&& end);
 
       template <nullable_t T>
@@ -443,12 +443,12 @@ namespace glaze
       }
 
       template <size_t I, class T>
-      requires vireo_array_t<T> || tuple_t<T>
+      requires glaze_array_t<T> || tuple_t<T>
       void from_iter(T& value, auto&& it, auto&& end)
       {
          constexpr auto n = []() constexpr
          {
-            if constexpr (vireo_array_t<T>) {
+            if constexpr (glaze_array_t<T>) {
                return std::tuple_size_v<meta_t<T>>;
             }
             else {
@@ -466,7 +466,7 @@ namespace glaze
             if constexpr (I != 0) {
                match<','>(it, end);
             }
-            if constexpr (vireo_array_t<T>) {
+            if constexpr (glaze_array_t<T>) {
                from_iter(value.*std::get<I>(meta_v<T>), it, end);
             }
             else {
@@ -484,7 +484,7 @@ namespace glaze
       }
 
       template <class T>
-      requires map_t<T> || vireo_object_t<T>
+      requires map_t<T> || glaze_object_t<T>
       void from_iter(T& value, auto&& it, auto&& end)
       {
          skip_ws(it, end);
@@ -505,7 +505,7 @@ namespace glaze
             from_iter(key, it, end);
             skip_ws(it, end);
             match<':'>(it, end);
-            if constexpr (vireo_object_t<T>) {
+            if constexpr (glaze_object_t<T>) {
                static constexpr auto frozen_map = detail::make_map<T>();
                const auto& member_it = frozen_map.find(frozen::string(key));
                if (member_it != frozen_map.end()) {

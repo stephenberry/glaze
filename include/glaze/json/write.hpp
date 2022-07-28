@@ -143,11 +143,11 @@ namespace glaze
       inline void to_buffer(T&& value, B&& b) noexcept;
 
       template <bool C = false, size_t I = 0, class T, class B>
-      requires vireo_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
+      requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
       inline void to_buffer(T&& value, B&& b) noexcept;
 
       template <bool C = false, size_t I = 0, class T, class B>
-      requires vireo_object_t<std::decay_t<T>>
+      requires glaze_object_t<std::decay_t<T>>
       inline void to_buffer(T&& value, B&& b) noexcept;
 
       template <bool C = false, class T, class B>
@@ -213,12 +213,12 @@ namespace glaze
       }
 
       template <bool C, size_t I, class T, class B>
-      requires vireo_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
+      requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
       inline void to_buffer(T&& value, B&& b) noexcept
       {
          constexpr auto n = []() constexpr
          {
-            if constexpr (vireo_array_t<std::decay_t<T>>) {
+            if constexpr (glaze_array_t<std::decay_t<T>>) {
                return std::tuple_size_v<meta_t<std::decay_t<T>>>;
             }
             else {
@@ -232,7 +232,7 @@ namespace glaze
          }
          using value_t = std::decay_t<T>;
          if constexpr (I < n) {
-            if constexpr (vireo_array_t<std::decay_t<T>>) {
+            if constexpr (glaze_array_t<std::decay_t<T>>) {
                to_buffer<C>(value.*std::get<I>(meta_v<value_t>), b);
             }
             else {
@@ -249,7 +249,7 @@ namespace glaze
       }
 
       template <bool C, size_t I, class T, class B>
-      requires vireo_object_t<std::decay_t<T>>
+      requires glaze_object_t<std::decay_t<T>>
       inline void to_buffer(T&& value, B&& b) noexcept
       {
          if constexpr (I == 0) {

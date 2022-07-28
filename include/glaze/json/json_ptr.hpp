@@ -14,7 +14,7 @@ namespace glaze
    namespace detail
    {
       template <class F, class T>
-      requires array_t<std::decay_t<T>> || vireo_array_t<std::decay_t<T>> ||
+      requires array_t<std::decay_t<T>> || glaze_array_t<std::decay_t<T>> ||
          tuple_t<std::decay_t<T>>
       bool seek_impl(F&& func, T&& value, std::string_view json_ptr);
 
@@ -23,7 +23,7 @@ namespace glaze
       bool seek_impl(F&& func, T&& value, std::string_view json_ptr);
 
       template <class F, class T>
-      requires map_t<std::decay_t<T>> || vireo_object_t<std::decay_t<T>>
+      requires map_t<std::decay_t<T>> || glaze_object_t<std::decay_t<T>>
       bool seek_impl(F&& func, T&& value, std::string_view json_ptr);
 
       template <class F, class T>
@@ -37,7 +37,7 @@ namespace glaze
       }
 
       template <class F, class T>
-      requires map_t<std::decay_t<T>> || vireo_object_t<std::decay_t<T>>
+      requires map_t<std::decay_t<T>> || glaze_object_t<std::decay_t<T>>
       bool seek_impl(F&& func, T&& value, std::string_view json_ptr)
       {
          if (json_ptr.empty()) {
@@ -91,7 +91,7 @@ namespace glaze
             json_ptr = json_ptr.substr(p - json_ptr.data());
          }
 
-         if constexpr (vireo_object_t<std::decay_t<T>>) {
+         if constexpr (glaze_object_t<std::decay_t<T>>) {
             static constexpr auto frozen_map =
                glaze::detail::make_map<std::decay_t<T>>();
             const auto& member_it = frozen_map.find(frozen::string(key));
@@ -112,7 +112,7 @@ namespace glaze
       }
 
       template <class F, class T>
-      requires array_t<std::decay_t<T>> || vireo_array_t<std::decay_t<T>> ||
+      requires array_t<std::decay_t<T>> || glaze_array_t<std::decay_t<T>> ||
          tuple_t<std::decay_t<T>>
       bool seek_impl(F&& func, T&& value, std::string_view json_ptr)
       {
@@ -128,7 +128,7 @@ namespace glaze
          if (ec != std::errc{}) return false;
          json_ptr = json_ptr.substr(p - json_ptr.data());
 
-         if constexpr (vireo_array_t<std::decay_t<T>>) {
+         if constexpr (glaze_array_t<std::decay_t<T>>) {
             static constexpr auto member_array =
                glaze::detail::make_array<std::decay_t<T>>();
             if (index >= member_array.size()) return false;
