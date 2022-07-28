@@ -105,28 +105,6 @@ namespace glaze
 
       template <string_literal Str>
       inline constexpr std::string_view chars = chars_impl<Str>::value;
-
-      template <class T>
-      struct custom
-      {
-         // template <class T, class It>
-         // static void read_json(T &value, It &it, const It &end);
-         //
-         // template <bool C = false, class T, class B>
-         // static void to_buffer(T &&value, B &&b);
-         //
-         // template <class F, class T>
-         // static bool seek_impl(F &&func, T &&value, std::string_view
-         // json_ptr);
-      };
-
-      template <class T>
-      concept custom_t = requires
-      {
-         custom<T>::read_json;
-         custom<T>::to_buffer;
-         custom<T>::seek_impl;
-      };
       
       template <uint32_t Format>
       struct read {};
@@ -193,7 +171,7 @@ namespace glaze
       };
 
       template <class T>
-      concept complex_t = glaze_t<std::decay_t<T>> || custom_t<std::decay_t<T>>;
+      concept complex_t = glaze_t<std::decay_t<T>>;
 
       template <class T>
       concept str_t = !complex_t<T> && std::convertible_to<T, std::string_view>;
@@ -445,6 +423,9 @@ namespace glaze
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_map_impl<T>(indices);
       }
+      
+      template <class T = void>
+      struct from_json {};
    }  // namespace detail
 
    consteval auto array(auto&&... args)

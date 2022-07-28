@@ -125,14 +125,6 @@ namespace glaze
       requires glaze_object_t<std::decay_t<T>>
       inline void to_buffer(T&& value, B&& b) noexcept;
 
-      template <bool C = false, class T, class B>
-      requires custom_t<std::decay_t<T>>
-      inline void to_buffer(T&& value, B&& b)
-      {
-         custom<std::decay_t<T>>::template to_buffer<C>(std::forward<T>(value),
-                                               std::forward<B>(b));
-      }
-
       template <bool C, class T, class B>
       requires array_t<std::decay_t<T>>
       inline void to_buffer(T&& value, B&& b) noexcept

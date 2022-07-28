@@ -30,12 +30,11 @@ namespace glaze
             } -> std::convertible_to<size_t>;
       }
       &&!nano::ranges::range<T>;
-
-      template <matrix_t Matrix>
-      struct custom<Matrix>
+      
+      template <matrix_t T>
+      struct from_json<T>
       {
-         template <class T>
-         static void read_json(T &value, auto&& it, auto&& end)
+         static void op(T &value, auto&& it, auto&& end)
          {
             skip_ws(it, end);
             match<'['>(it, end);
@@ -44,11 +43,11 @@ namespace glaze
             match<'['>(it, end);
             skip_ws(it, end);
             int rows, cols;
-            detail::read_json(rows, it, end);
+            detail::read<json>::op(rows, it, end);
             skip_ws(it, end);
             match<','>(it, end);
             skip_ws(it, end);
-            detail::read_json(cols, it, end);
+            detail::read<json>::op(cols, it, end);
             skip_ws(it, end);
             match<']'>(it, end);
             skip_ws(it, end);
@@ -58,7 +57,41 @@ namespace glaze
 
             value.resize(rows, cols);
             std::span view(value.data(), value.size());
-            glaze::detail::read_json(view, it, end);
+            detail::read<json>::op(view, it, end);
+            skip_ws(it, end);
+
+            match<']'>(it, end);
+         }
+      };
+
+      /*template <matrix_t Matrix>
+      struct custom<Matrix>
+      {
+         template <class T>
+         static void from_json(T &value, auto&& it, auto&& end)
+         {
+            skip_ws(it, end);
+            match<'['>(it, end);
+            skip_ws(it, end);
+
+            match<'['>(it, end);
+            skip_ws(it, end);
+            int rows, cols;
+            detail::read<json>::op(rows, it, end);
+            skip_ws(it, end);
+            match<','>(it, end);
+            skip_ws(it, end);
+            detail::read<json>::op(cols, it, end);
+            skip_ws(it, end);
+            match<']'>(it, end);
+            skip_ws(it, end);
+            
+            match<','>(it, end);
+            skip_ws(it, end);
+
+            value.resize(rows, cols);
+            std::span view(value.data(), value.size());
+            detail::read<json>::op(view, it, end);
             skip_ws(it, end);
 
             match<']'>(it, end);
@@ -99,6 +132,6 @@ namespace glaze
             }
             return false;
          }
-      };
+      };*/
    }  // namespace detail
 }  // namespace glaze
