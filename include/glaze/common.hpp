@@ -29,7 +29,7 @@ namespace glaze
       template <int N>
       using make_is = std::make_integer_sequence<int, N>;
 
-      constexpr auto size(const char *s)
+      constexpr auto size(const char *s) noexcept
       {
          int i = 0;
          while (*s != 0) {
@@ -99,7 +99,7 @@ namespace glaze
       };
 
       template <size_t N>
-      constexpr size_t length(char const (&)[N])
+      constexpr size_t length(char const (&)[N]) noexcept
       {
          return N;
       }
@@ -152,7 +152,7 @@ namespace glaze
       std::string_view str;
    };
 
-   constexpr comment_t operator"" _c(const char *s, std::size_t n)
+   constexpr comment_t operator"" _c(const char *s, std::size_t n) noexcept
    {
       return comment_t{{s, n}};
    }
@@ -362,7 +362,7 @@ namespace glaze
       }
 
       template <class Tuple>
-      inline auto get_runtime(Tuple &&tuple, size_t index)
+      inline auto get_runtime(Tuple &&tuple, const size_t index)
       {
          static constexpr auto indices =
             std::make_index_sequence<std::tuple_size_v<std::decay_t<Tuple>>>{};
