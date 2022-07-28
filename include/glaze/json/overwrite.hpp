@@ -12,7 +12,7 @@
 namespace glaze
 {
   template <class T, class B>
-  bool overwrite(T&& root_value, std::string_view json_ptr, B&& buffer) {
+  bool overwrite(T&& root_value, const std::string_view json_ptr, B&& buffer) {
     return detail::seek_impl(
         [&](auto&& val) {
           read_json(val, buffer);
@@ -22,7 +22,7 @@ namespace glaze
   }
 
   template <class T, class B>
-  bool read_out(T&& root_value, std::string_view json_ptr, B& buffer)
+  bool read_out(T&& root_value, const std::string_view json_ptr, B& buffer)
   {
      return detail::seek_impl([&](auto&& val) { write_json(val, buffer); },
                        std::forward<T>(root_value), json_ptr);
