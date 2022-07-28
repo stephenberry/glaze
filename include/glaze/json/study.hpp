@@ -52,16 +52,16 @@ namespace glaze
    }  // namespace study
 
    template <>
-   struct glaze::meta<glaze::study::param_distribution>
+   struct glaze::meta<study::param_distribution>
    {
-      using T = glaze::study::param_distribution;
+      using T = study::param_distribution;
       static constexpr auto value = glaze::object("id", &T::ptr, "*", &T::ptr, "dist", &T::distribution, "values", &T::range);
    };
 
    template <>
-   struct glaze::meta<glaze::study::design>
+   struct glaze::meta<study::design>
    {
-      using T = glaze::study::design;
+      using T = study::design;
       static constexpr auto value =
          glaze::object("params", &T::params, "states", &T::states, "overwrite", &T::overwrite,
          "seed", &T::seed, "random_samples", &T::random_samples);
@@ -117,7 +117,7 @@ namespace glaze
                std::visit(
                   [&](auto &&param_ptr) {
                      using param_type =
-                        std::remove_pointer_t<::decay_t<decltype(param_ptr)>>;
+                        std::remove_pointer_t<std::decay_t<decltype(param_ptr)>>;
                      *param_ptr =
                         std::get<param_type>(param_set.elements[this_index]);
                   },

@@ -3,11 +3,11 @@
 
 #pragma once
 
-// TODO this only handles /**/ style comments
+// TODO: this only handles /**/ style comments
 
 namespace glaze
 {
-   enum class GeneralState {
+   enum class GeneralState : uint32_t {
       NORMAL,
       ESCAPED,
       STRING,
@@ -16,9 +16,8 @@ namespace glaze
       BEFORE_FSLASH
    };
 
-   template <class Buffer, class NLF>
-   void prettify_normal_state(char c, Buffer& out, int& indent, NLF nl,
-                              GeneralState& state)
+   inline void prettify_normal_state(char c, auto& out, int& indent, auto nl,
+                              GeneralState& state) noexcept
    {
       switch (c) {
       case ',':
@@ -71,7 +70,7 @@ namespace glaze
       }
    }
 
-   inline void prettify_other_states(char c, GeneralState& state)
+   inline void prettify_other_states(char c, GeneralState& state) noexcept
    {
       switch (state) {
       case GeneralState::ESCAPED:
@@ -106,8 +105,7 @@ namespace glaze
    /// <summary>
    /// pretty print a JSON string
    /// </summary>
-   template <class Buffer>
-   void prettify(Buffer const& in, Buffer& out, const bool tabs = false,
+   inline void prettify(const auto& in, auto& out, const bool tabs = false,
                  const int indent_size = 3) noexcept
    {
       out.reserve(in.size());
@@ -135,8 +133,7 @@ namespace glaze
       }
    }
    
-   template <class Buffer>
-   std::string prettify(Buffer const& in, const bool tabs = false,
+   inline std::string prettify(const auto& in, const bool tabs = false,
                  const int indent_size = 3) noexcept
    {
       std::string out{};

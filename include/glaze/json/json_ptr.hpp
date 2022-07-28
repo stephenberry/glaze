@@ -35,7 +35,8 @@ namespace glaze
          }
          return false;
       }
-
+      
+      // TODO: compile time search for `~` and optimize if escape does not exist
       template <class F, class T>
       requires map_t<std::decay_t<T>> || glaze_object_t<std::decay_t<T>>
       bool seek_impl(F&& func, T&& value, std::string_view json_ptr)

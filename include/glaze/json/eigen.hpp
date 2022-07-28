@@ -44,15 +44,14 @@ namespace glaze
             match<'['>(it, end);
             skip_ws(it, end);
             int rows, cols;
-            glaze::detail::from_iter(rows, it, end);
+            detail::from_iter(rows, it, end);
             skip_ws(it, end);
             match<','>(it, end);
             skip_ws(it, end);
-            glaze::detail::from_iter(cols, it, end);
+            detail::from_iter(cols, it, end);
             skip_ws(it, end);
             match<']'>(it, end);
             skip_ws(it, end);
-
             
             match<','>(it, end);
             skip_ws(it, end);
@@ -72,9 +71,9 @@ namespace glaze
 
             // Write shape
             write<'['>(b);
-            glaze::detail::to_buffer(value.rows(), b);
+            detail::to_buffer(value.rows(), b);
             write<','>(b);
-            glaze::detail::to_buffer(value.cols(), b);
+            detail::to_buffer(value.cols(), b);
             write<"],">(b);
 
             // Write data
@@ -84,7 +83,7 @@ namespace glaze
             if (size >= 1) glaze::detail::to_buffer(*(data), b);
             for (decltype(value.size()) i = 1; i < size; ++i) {
                write<','>(b);
-               glaze::detail::to_buffer(*(data + i), b);
+               detail::to_buffer(*(data + i), b);
             }
             write<']'>(b);
 
@@ -94,6 +93,10 @@ namespace glaze
          template <class F, class T>
          static bool seek_impl(F &&func, T &&value, std::string_view json_ptr)
          {
+            if (json_ptr.empty()) {
+               func(value);
+               return true;
+            }
             return false;
          }
       };
