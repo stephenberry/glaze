@@ -1,9 +1,9 @@
 # Glaze
-An extremely fast, direct to memory, JSON and interface library for modern C++.
+An extremely fast, in memory, JSON and interface library for modern C++.
 
 Glaze reads into C++ memory, simplifying interfaces and offering incredible performance.
 
-Glaze requires C++20 due to heavy use of concepts and compile time programming.
+Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 ### Example
 
@@ -87,7 +87,7 @@ Glaze has been designed to work as a generic interface for shared libraries and 
 ### Integers
 
 - Integer types cannot begin with a positive `+` symbol, for efficiency.
-- Integer types do not support exponential values (e.g. `1e10`). This is to enable vectorization of integer reading. Submit an issue if you desire a wrapper to enable this behavior, e.g. `exponential(&T::i)`.
+- Integer types do not support exponential values (e.g. `1e10`). Submit an issue if you desire a wrapper to enable this behavior, e.g. `exponential(&T::i)`.
 
 ## License
 
