@@ -7,6 +7,8 @@
 #include <any>
 #include <variant>
 #include <forward_list>
+#include <unordered_map>
+#include <map>
 
 #ifndef BOOST_UT_DISABLE_MODULE
 #define BOOST_UT_DISABLE_MODULE

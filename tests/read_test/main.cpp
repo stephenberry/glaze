@@ -6,6 +6,7 @@
 #include <random>
 #include <any>
 #include <forward_list>
+#include <map>
 
 #ifndef BOOST_UT_DISABLE_MODULE
 #define BOOST_UT_DISABLE_MODULE

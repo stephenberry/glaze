@@ -76,7 +76,7 @@ namespace glaze
       }
 
       template <bool C = false, class B>
-      inline void to_buffer(bool value, B&& b) noexcept
+      inline void to_buffer(const bool value, B&& b) noexcept
       {
          if (value) {
             write<"true">(b);
@@ -94,7 +94,6 @@ namespace glaze
          /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {
             // more efficient strings in C++23:
           https://en.cppreference.com/w/cpp/string/basic_string/resize_and_overwrite
-            // We can directly write to the string and avoid a memcopy
           }*/
          fmt::format_to(std::back_inserter(b), FMT_COMPILE("{}"), value);
       }
