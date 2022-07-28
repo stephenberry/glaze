@@ -64,10 +64,8 @@ namespace glaze
          }
       }
 
-      template <bool C = false, class T, class B>
-      requires int_t<std::decay_t<T>> ||
-         std::is_floating_point_v<std::decay_t<T>>
-      inline void to_buffer(T&& value, B&& b) noexcept
+      template <bool C = false>
+      inline void to_buffer(num_t auto&& value, auto&& b) noexcept
       {
          /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {
             // more efficient strings in C++23:

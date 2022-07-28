@@ -178,18 +178,18 @@ namespace glaze
    namespace detail
    {
       template <class T>
-      concept char_t = std::same_as<T, char> || std::same_as<T, char16_t> ||
-         std::same_as<T, char32_t> || std::same_as<T, wchar_t>;
+      concept char_t = std::same_as<std::decay_t<T>, char> || std::same_as<std::decay_t<T>, char16_t> ||
+         std::same_as<std::decay_t<T>, char32_t> || std::same_as<std::decay_t<T>, wchar_t>;
 
       template <class T>
       concept bool_t =
          std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>;
 
       template <class T>
-      concept int_t = std::integral<T> && !char_t<T> && !bool_t<T>;
+      concept int_t = std::integral<std::decay_t<T>> && !char_t<std::decay_t<T>> && !bool_t<T>;
 
       template <class T>
-      concept num_t = std::floating_point<T> || int_t<T>;
+      concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
 
       template <class T>
       concept glaze_t = requires
