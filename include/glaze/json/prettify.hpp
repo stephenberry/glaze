@@ -134,4 +134,13 @@ namespace glaze
          }
       }
    }
+   
+   template <class Buffer>
+   std::string prettify(Buffer const& in, const bool tabs = false,
+                 const int indent_size = 3) noexcept
+   {
+      std::string out{};
+      prettify(in, out, tabs, indent_size);
+      return out;
+   }
 }  // namespace test

@@ -5,10 +5,10 @@ Glaze reads into C++ memory, simplifying interfaces and offering incredible perf
 
 Glaze requires C++20 due to heavy use of concepts and compile time programming.
 
-Example:
+### Example
 
 ```c++
-struct thing
+struct my_struct
 {
   int i = 287;
   double d = 3.14;
@@ -17,36 +17,68 @@ struct thing
 };
 
 template <>
-struct glaze::meta<thing>
-{
-  
+struct glaze::meta<my_struct> {
+   using T = my_struct;
+   static constexpr auto value = glaze::object(
+      "i", &T::i, //
+      "d", &T::d, //
+      "hello", &T::hello, //
+      "arr", &T::arr //
+   );
 };
 ```
 
-Output/Input:
+**JSON Output/Input**
 
 ```json
 {
-  "i": 287,
-  "d": 3.14,
-  "hello": "Hello World",
-  "arr": [1, 2, 3]
+   "i": 287,
+   "d": 3.14,
+   "hello": "Hello World",
+   "arr": [
+      1,
+      2,
+      3
+   ]
 }
 ```
 
+**Write JSON**
+
+```c++
+my_struct s{};
+std::string buffer{};
+glaze::write_json(s, buffer);
+// buffer is now: {"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}
+```
+
+**Read JSON**
+
+```c++
+std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
+my_struct s{};
+glaze::read_json(s, buffer);
+// populates 's' from JSON
+```
+
+## Header Only
+
+Glaze is designed to be used in a header only manner. The macro `FMT_HEADER_ONLY` is used for the [fmt](https://github.com/fmtlib/fmt) library.
+
 ## Dependencies
+
+Dependencies are automatically included when running CMake.
 
 - [fmt](https://github.com/fmtlib/fmt)
 - [fast_float](https://github.com/fastfloat/fast_float)
 - [frozen](https://github.com/serge-sans-paille/frozen.git)
+- [NanoRange](https://github.com/tcbrindle/NanoRange)
 
-## Header Only
-
-Glaze can be used in a header only mode by using fmt's `FMT_HEADER_ONLY` macro.
+> NanoRange is directly included until C++20 range support is across all compilers.
 
 ## Glaze Interfaces
 
-Glaze has been designed to work as a generic interface for libraries.
+Glaze has been designed to work as a generic interface for shared libraries and more. This is achieved through JSON pointer syntax access to memory.
 
 ---
 

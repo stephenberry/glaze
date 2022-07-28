@@ -12,22 +12,55 @@
 #include "glaze/json/overwrite.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
+#include "glaze/json/prettify.hpp"
 
-struct SubThing
+using namespace boost::ut;
+
+struct my_struct
+{
+  int i = 287;
+  double d = 3.14;
+  std::string hello = "Hello World";
+  std::array<uint64_t, 3> arr = { 1, 2, 3 };
+};
+
+template <>
+struct glaze::meta<my_struct> {
+   using T = my_struct;
+   static constexpr auto value = glaze::object(
+      "i", &T::i, //
+      "d", &T::d, //
+      "hello", &T::hello, //
+      "arr", &T::arr //
+   );
+};
+
+suite starter = [] {
+
+    "example"_test = [] {
+       my_struct s{};
+       std::string buffer{};
+       glaze::write_json(s, buffer);
+       expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
+       //std::cout << glaze::prettify(buffer) << '\n';
+    };
+};
+
+struct sub_thing
 {
    double a{3.14};
    std::string b{"stuff"};
 };
 
 template <>
-struct glaze::meta<SubThing> {
+struct glaze::meta<sub_thing> {
    static constexpr auto value = glaze::object(
-      "a", &SubThing::a, "Test comment 1"_c,  //
-      "b", &SubThing::b, "Test comment 2"_c   //
+      "a", &sub_thing::a, "Test comment 1"_c,  //
+      "b", &sub_thing::b, "Test comment 2"_c   //
    );
 };
 
-struct SubThing2
+struct sub_thing2
 {
    double a{3.14};
    std::string b{"stuff"};
@@ -40,8 +73,8 @@ struct SubThing2
 };
 
 template <>
-struct glaze::meta<SubThing2> {
-   using T = SubThing2;
+struct glaze::meta<sub_thing2> {
+   using T = sub_thing2;
    static constexpr auto value = glaze::object(
       "a", &T::a, "Test comment 1"_c,  //
       "b", &T::b, "Test comment 2"_c,  //
@@ -68,8 +101,8 @@ struct glaze::meta<V3> {
 
 struct Thing
 {
-   SubThing thing{};
-   std::array<SubThing2, 1> thing2array{};
+   sub_thing thing{};
+   std::array<sub_thing2, 1> thing2array{};
    V3 vec3{};
    std::list<int> list{6, 7, 8, 2};
    std::array<std::string, 4> array = {"as\"df\\ghjkl", "pie", "42", "foo"};
@@ -79,12 +112,12 @@ struct Thing
    bool b{};
    char c{'W'};
    std::vector<bool> vb = {true, false, false, true, true, true, true};
-   std::shared_ptr<SubThing> sptr = std::make_shared<SubThing>();
+   std::shared_ptr<sub_thing> sptr = std::make_shared<sub_thing>();
    std::optional<V3> optional{};
    std::deque<double> deque = {9.0, 6.7, 3.1};
    std::map<std::string, int> map = {{"a", 4}, {"f", 7}, {"b", 12}};
    std::map<int, double> mapi{{5, 3.14}, {7, 7.42}, {2, 9.63}};
-   SubThing* thing_ptr{};
+   sub_thing* thing_ptr{};
 
    Thing() : thing_ptr(&thing) {};
 };
@@ -388,7 +421,7 @@ void user_types() {
    };
 
    "simple user obect"_test = [] {
-      SubThing obj{.a = 77.2, .b = "not a lizard"};
+      sub_thing obj{.a = 77.2, .b = "not a lizard"};
       std::string buffer{};
       glaze::write_json(obj, buffer);
       expect(buffer == "{\"a\":77.2,\"b\":\"not a lizard\"}");
@@ -438,7 +471,7 @@ void json_pointer() {
       expect(&thing.vector == glaze::get_if<std::vector<V3>>(thing, "/vector"));
       expect(&thing.vector[1] == glaze::get_if<V3>(thing, "/vector/1"));
       expect(thing.vector[1].x == glaze::get<double>(thing, "/vector/1/0"));
-      expect(thing.thing_ptr == glaze::get<SubThing*>(thing, "/thing_ptr"));
+      expect(thing.thing_ptr == glaze::get<sub_thing*>(thing, "/thing_ptr"));
 
       //Invalid lookup
       expect(throws([&] { glaze::get<char>(thing, "/thing_ptr/a"); }));
