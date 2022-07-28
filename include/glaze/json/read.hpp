@@ -39,8 +39,7 @@ namespace glaze
             throw std::runtime_error(error);
          }
          size_t i{};
-         // clang and gcc will vectorize this loop and gain up to 16x
-         // performance
+         // clang and gcc will vectorize this loop
          for (auto* c = str.value; c < str.end(); ++it, ++c) {
             i += *it != *c;
          }
@@ -56,7 +55,7 @@ namespace glaze
       {
          match<'/'>(it, end);
          if (it == end) [[unlikely]]
-            throw std::runtime_error("Unexpected end expected comment");
+            throw std::runtime_error("Unexpected end, expected comment");
          else if (*it == '/') {
             while (++it < end && *it != '\n')
                ;
@@ -182,7 +181,7 @@ namespace glaze
          }
       }
 
-      inline bool is_numeric(const auto c) noexcept
+      inline constexpr bool is_numeric(const auto c) noexcept
       {
          switch (c) {
          case '0':
@@ -276,11 +275,10 @@ namespace glaze
          }
       }
 
-      template <str_t T>
-      void from_iter(T& value, auto&& it, auto&& end)
+      void from_iter(str_t auto& value, auto&& it, auto&& end)
       {
-         // TODO overwrite then resize instead of clearing
-         // TODO this does not handle control chars like \t and \n
+         // TODO: overwrite then resize instead of clearing
+         // TODO: this does not handle control chars like \t and \n
          value.clear();
          skip_ws(it, end);
          match<'"'>(it, end);
@@ -310,7 +308,7 @@ namespace glaze
       template <char_t T>
       void from_iter(T& value, auto&& it, auto&& end)
       {
-         // TODO this does not handle escaped chars
+         // TODO: this does not handle escaped chars
          match<'"'>(it, end);
          if (it == end) [[unlikely]]
             throw std::runtime_error("Unxpected end of buffer");
