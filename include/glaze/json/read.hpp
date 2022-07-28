@@ -10,6 +10,7 @@
 #include "fast_float/fast_float.h"
 #include "glaze/common.hpp"
 #include "glaze/json/validate.hpp"
+#include "glaze/format.hpp"
 
 namespace glaze
 {
@@ -204,7 +205,7 @@ namespace glaze
          return false;
       }
       
-      void from_iter(bool_t auto&& value, auto&& it, auto&& end)
+      void read_json(bool_t auto&& value, auto&& it, auto&& end)
       {
          skip_ws(it, end);
          if (it < end) [[likely]] {
@@ -231,7 +232,7 @@ namespace glaze
       }
 
       template <num_t T, class It>
-      void from_iter(T& value, It&& it, auto&& end)
+      void read_json(T& value, It&& it, auto&& end)
       {
          skip_ws(it, end);
          if (it == end) [[unlikely]]
@@ -275,7 +276,7 @@ namespace glaze
          }
       }
       
-      void from_iter(str_t auto& value, auto&& it, auto&& end)
+      void read_json(str_t auto& value, auto&& it, auto&& end)
       {
          // TODO: this does not handle control chars like \t and \n
          
@@ -327,7 +328,7 @@ namespace glaze
          throw std::runtime_error("Expected \"");
       }
 
-      void from_iter(char_t auto& value, auto&& it, auto&& end)
+      void read_json(char_t auto& value, auto&& it, auto&& end)
       {
          // TODO: this does not handle escaped chars
          match<'"'>(it, end);
@@ -340,7 +341,7 @@ namespace glaze
          match<'"'>(it, end);
       }
 
-      void from_iter(raw_json& value, auto&& it, auto&& end)
+      void read_json(raw_json& value, auto&& it, auto&& end)
       {
          // TODO this will not work for streams where we cant move backward
          auto it_start = it;
@@ -352,34 +353,34 @@ namespace glaze
       template <class T>
       requires array_t<T> &&
          (emplace_backable<T> ||
-          !resizeable<T>)void from_iter(T& value, auto&& it, auto&& end);
+          !resizeable<T>)void read_json(T& value, auto&& it, auto&& end);
 
       template <class T, class It>
       requires array_t<T> &&
          (!emplace_backable<T> &&
-          resizeable<T>)void from_iter(T& value, auto&& it, auto&& end);
+          resizeable<T>)void read_json(T& value, auto&& it, auto&& end);
 
       template <size_t I = 0, class T>
       requires glaze_array_t<T> || tuple_t<T>
-      void from_iter(T& value, auto&& it, auto&& end);
+      void read_json(T& value, auto&& it, auto&& end);
 
       template <class T>
       requires map_t<T> || glaze_object_t<T>
-      void from_iter(T& value, auto&& it, auto&& end);
+      void read_json(T& value, auto&& it, auto&& end);
 
       template <nullable_t T>
-      void from_iter(T& value, auto&& it, auto&& end);
+      void read_json(T& value, auto&& it, auto&& end);
 
       template <custom_t T>
-      void from_iter(T& value, auto&& it, auto&& end)
+      void read_json(T& value, auto&& it, auto&& end)
       {
-         custom<T>::from_iter(value, it, end);
+         custom<T>::read_json(value, it, end);
       }
 
       template <class T>
       requires array_t<T> &&
          (emplace_backable<T> ||
-          !resizeable<T>)void from_iter(T& value, auto&& it, auto&& end)
+          !resizeable<T>)void read_json(T& value, auto&& it, auto&& end)
       {
          skip_ws(it, end);
          auto value_it = value.begin();
@@ -395,11 +396,11 @@ namespace glaze
                match<','>(it, end);
             }
             if (i < static_cast<size_t>(value.size())) {
-               from_iter(*value_it++, it, end);
+               read_json(*value_it++, it, end);
             }
             else {
                if constexpr (emplace_backable<T>) {
-                  from_iter(value.emplace_back(), it, end);
+                  read_json(value.emplace_back(), it, end);
                }
                else {
                   throw std::runtime_error("Exceeded static array size.");
@@ -413,7 +414,7 @@ namespace glaze
       template <class T>
       requires array_t<T> &&
          (!emplace_backable<T> &&
-          resizeable<T>)void from_iter(T& value, auto&& it, auto&& end)
+          resizeable<T>)void read_json(T& value, auto&& it, auto&& end)
       {
          using value_t = nano::ranges::range_value_t<T>;
          static thread_local std::vector<value_t> buffer{};
@@ -435,7 +436,7 @@ namespace glaze
             if (i > 0) [[likely]] {
                match<','>(it, end);
             }
-            from_iter(buffer.emplace_back(), it, end);
+            read_json(buffer.emplace_back(), it, end);
             skip_ws(it, end);
          }
          throw std::runtime_error("Expected ]");
@@ -443,7 +444,7 @@ namespace glaze
 
       template <size_t I, class T>
       requires glaze_array_t<T> || tuple_t<T>
-      void from_iter(T& value, auto&& it, auto&& end)
+      void read_json(T& value, auto&& it, auto&& end)
       {
          constexpr auto n = []() constexpr
          {
@@ -466,13 +467,13 @@ namespace glaze
                match<','>(it, end);
             }
             if constexpr (glaze_array_t<T>) {
-               from_iter(value.*std::get<I>(meta_v<T>), it, end);
+               read_json(value.*std::get<I>(meta_v<T>), it, end);
             }
             else {
-               from_iter(std::get<I>(value), it, end);
+               read_json(std::get<I>(value), it, end);
             }
             skip_ws(it, end);
-            from_iter<I + 1>(value, it, end);
+            read_json<I + 1>(value, it, end);
          }
          if constexpr (I == 0) {
             if constexpr (n == 0) {
@@ -484,7 +485,7 @@ namespace glaze
 
       template <class T>
       requires map_t<T> || glaze_object_t<T>
-      void from_iter(T& value, auto&& it, auto&& end)
+      void read_json(T& value, auto&& it, auto&& end)
       {
          skip_ws(it, end);
          match<'{'>(it, end);
@@ -501,7 +502,7 @@ namespace glaze
                match<','>(it, end);
             }
             static thread_local std::string key{};
-            from_iter(key, it, end);
+            read_json(key, it, end);
             skip_ws(it, end);
             match<':'>(it, end);
             if constexpr (glaze_object_t<T>) {
@@ -510,7 +511,7 @@ namespace glaze
                if (member_it != frozen_map.end()) {
                   std::visit(
                      [&](auto&& member_ptr) {
-                        from_iter(value.*member_ptr, it, end);
+                        read_json(value.*member_ptr, it, end);
                      },
                      member_it->second);
                }
@@ -521,12 +522,12 @@ namespace glaze
             else {
                if constexpr (std::is_same_v<typename T::key_type,
                                             std::string>) {
-                  from_iter(value[key], it, end);
+                  read_json(value[key], it, end);
                }
                else {
                   static thread_local typename T::key_type key_value{};
-                  from_iter(key_value, key.begin(), key.end());
-                  from_iter(value[key_value], it, end);
+                  read_json(key_value, key.begin(), key.end());
+                  read_json(value[key_value], it, end);
                }
             }
             skip_ws(it, end);
@@ -535,7 +536,7 @@ namespace glaze
       }
 
       template <nullable_t T>
-      void from_iter(T& value, auto&& it, auto&& end)
+      void read_json(T& value, auto&& it, auto&& end)
       {
          skip_ws(it, end);
          if (it == end) {
@@ -561,16 +562,25 @@ namespace glaze
                      "Cannot read into unset nullable that is not "
                      "std::optional, std::unique_ptr, or std::shared_ptr");
             }
-            from_iter(*value, it, end);
+            read_json(*value, it, end);
          }
       }
+      
+      template <>
+      struct read<json>
+      {
+         template <class... Args>
+         void operator()(Args&&... args) {
+            read_json(std::forward<Args>(args)...);
+         }
+      };
    }  // namespace detail
 
    // For reading json from a std::vector<char>, std::deque<char> and the like
-   template <class T, class Buffer>
+   template <uint32_t Format, class T, class Buffer>
    requires nano::ranges::input_range<std::decay_t<Buffer>> &&
       std::same_as<char, nano::ranges::range_value_t<std::decay_t<Buffer>>>
-   inline void read_json(T& value, Buffer&& buffer)
+   inline void read(T& value, Buffer&& buffer)
    {
       auto b = std::ranges::begin(buffer);
       auto e = std::ranges::end(buffer);
@@ -578,7 +588,7 @@ namespace glaze
          throw std::runtime_error("No input provided to read_json");
       }
       try {
-         detail::from_iter(value, b, e);
+         detail::read<Format>{}(value, b, e);
       }
       catch (const std::exception& e) {
          auto index = std::distance(std::ranges::begin(buffer), b);
@@ -590,28 +600,33 @@ namespace glaze
    }
 
    // For reading json from std::ofstream, std::cout, or other streams
-   template <class T>
-   inline void read_json(T& value, detail::stream_t auto& is)
+   template <uint32_t Format, class T>
+   inline void read(T& value, detail::stream_t auto& is)
    {
       std::istreambuf_iterator<char> b{is}, e{};
       if (b == e) {
          throw std::runtime_error("No input provided to read_json");
       }
-      detail::from_iter(value, b, e);
+      detail::read<Format>{}(value, b, e);
    }
 
    // For reading json from stuff convertable to a std::string_view
-   template <class T, class Buffer>
+   template <uint32_t Format, class T, class Buffer>
    requires(std::convertible_to<std::decay_t<Buffer>, std::string_view> &&
             !nano::ranges::input_range<
-               std::decay_t<Buffer>>) inline void read_json(T& value,
+               std::decay_t<Buffer>>) inline void read(T& value,
                                                             Buffer&& buffer)
    {
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
       if (str.empty()) {
          throw std::runtime_error("No input provided to read_json");
       }
-      read_json(value, str);
+      read<Format>(value, str);
+   }
+   
+   template <class T, class Buffer>
+   inline void read_json(T&& value, Buffer&& buffer) {
+      read<json>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
 }  // namespace glaze

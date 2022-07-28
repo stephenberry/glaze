@@ -13,7 +13,7 @@
 #include "NanoRange/nanorange.hpp"
 
 namespace glaze
-{   
+{
    namespace detail
    {
       template <int... I>
@@ -110,7 +110,7 @@ namespace glaze
       struct custom
       {
          // template <class T, class It>
-         // static void from_iter(T &value, It &it, const It &end);
+         // static void read_json(T &value, It &it, const It &end);
          //
          // template <bool C = false, class T, class B>
          // static void to_buffer(T &&value, B &&b);
@@ -123,10 +123,13 @@ namespace glaze
       template <class T>
       concept custom_t = requires
       {
-         custom<T>::from_iter;
+         custom<T>::read_json;
          custom<T>::to_buffer;
          custom<T>::seek_impl;
       };
+      
+      template <uint32_t Format>
+      struct read {};
    }  // namespace detail
 
    template <class T>

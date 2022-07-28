@@ -35,7 +35,7 @@ namespace glaze
       struct custom<Matrix>
       {
          template <class T>
-         static void from_iter(T &value, auto&& it, auto&& end)
+         static void read_json(T &value, auto&& it, auto&& end)
          {
             skip_ws(it, end);
             match<'['>(it, end);
@@ -44,11 +44,11 @@ namespace glaze
             match<'['>(it, end);
             skip_ws(it, end);
             int rows, cols;
-            detail::from_iter(rows, it, end);
+            detail::read_json(rows, it, end);
             skip_ws(it, end);
             match<','>(it, end);
             skip_ws(it, end);
-            detail::from_iter(cols, it, end);
+            detail::read_json(cols, it, end);
             skip_ws(it, end);
             match<']'>(it, end);
             skip_ws(it, end);
@@ -58,7 +58,7 @@ namespace glaze
 
             value.resize(rows, cols);
             std::span view(value.data(), value.size());
-            glaze::detail::from_iter(view, it, end);
+            glaze::detail::read_json(view, it, end);
             skip_ws(it, end);
 
             match<']'>(it, end);
