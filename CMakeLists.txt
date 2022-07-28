@@ -34,7 +34,7 @@ add_library(${PROJECT_NAME} INTERFACE)
 
 target_include_directories(${PROJECT_NAME} INTERFACE include)
 
-target_link_libraries(${PROJECT_NAME} INTERFACE fast_float fmt frozen)
+target_link_libraries(${PROJECT_NAME} INTERFACE fast_float fmt-header-only frozen)
 
 target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_20)
 
@@ -46,7 +46,9 @@ if(${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
    # create dummy target since some editors will not display interface targets
    file(GLOB_RECURSE headers CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/glaze/*.hpp"
    "${CMAKE_CURRENT_SOURCE_DIR}/include/NanoRange/*.hpp")
+   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include" PREFIX "headers" FILES ${headers})
    file(GLOB_RECURSE sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "sources" FILES ${sources})
    add_executable(_${PROJECT_NAME} ${headers} ${sources})
    target_link_libraries(_${PROJECT_NAME} PRIVATE ${PROJECT_NAME})
    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")

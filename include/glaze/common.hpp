@@ -272,7 +272,7 @@ namespace glaze
       template <class T>
       concept glaze_object_t = glaze_t<T> && !glaze_array_t<T>;
 
-      template <typename From, typename To>
+      template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to)
       {
          To{from};
@@ -392,7 +392,7 @@ namespace glaze
 
       template <size_t I = 0, class Tuple, class Members = std::tuple<>,
                 class Member = std::tuple<>>
-      inline constexpr auto group_members(Tuple &&tuple, Members &&members = {},
+      consteval auto group_members(Tuple &&tuple, Members &&members = {},
                                           Member &&member = {})
       {
          if constexpr (std::tuple_size_v<Tuple> == 0) {
@@ -422,7 +422,7 @@ namespace glaze
       }
 
       template <class T, size_t... I>
-      inline constexpr auto make_map_impl(std::index_sequence<I...>)
+      consteval auto make_map_impl(std::index_sequence<I...>)
       {
          using value_t = value_tuple_variant_t<meta_t<T>>;
          return frozen::make_unordered_map<frozen::string, value_t,
@@ -433,7 +433,7 @@ namespace glaze
       }
 
       template <class T>
-      inline constexpr auto make_map()
+      consteval auto make_map()
       {
          constexpr auto indices =
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
@@ -441,16 +441,14 @@ namespace glaze
       }
    }  // namespace detail
 
-   template <class... Args>
-   inline constexpr auto array(Args &&...args)
+   consteval auto array(auto&&... args)
    {
-      return std::make_tuple(std::forward<Args>(args)...);
+      return std::make_tuple(args...);
    }
 
-   template <class... Args>
-   inline constexpr auto object(Args &&...args)
+   consteval auto object(auto&&... args)
    {
       return detail::group_members(
-         std::make_tuple(std::forward<Args>(args)...));
+         std::make_tuple(args...));
    }
 }  // namespace glaze
