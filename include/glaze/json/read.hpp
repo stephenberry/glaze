@@ -593,8 +593,7 @@ namespace glaze
    template <class T>
    inline void read_json(T& value, detail::stream_t auto& is)
    {
-      std::istreambuf_iterator<char> b{is};
-      std::istreambuf_iterator<char> e{};
+      std::istreambuf_iterator<char> b{is}, e{};
       if (b == e) {
          throw std::runtime_error("No input provided to read_json");
       }

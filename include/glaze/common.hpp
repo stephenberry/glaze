@@ -7,8 +7,6 @@
 #include <type_traits>
 #include <variant>
 
-#include "fmt/compile.h"
-#include "fmt/format.h"
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
 
