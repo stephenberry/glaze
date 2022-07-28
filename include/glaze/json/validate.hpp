@@ -9,16 +9,15 @@ namespace glaze
 {
    namespace detail
    {
-      struct SourceInfo
+      struct source_info
       {
          size_t line{};
          size_t column{};
          std::string context;
       };
 
-      template <class Buffer>
-      std::optional<SourceInfo> get_source_info(Buffer const& buffer,
-                                                const std::size_t index)
+      inline std::optional<source_info> get_source_info(const auto& buffer,
+                                                        const std::size_t index)
       {
          if (index >= buffer.size()) {
             return std::nullopt;
@@ -36,12 +35,12 @@ namespace glaze
             std::begin(buffer) +
                (pnl == std::rend(buffer) ? 0 : index - dist + 1),
             nnl};
-         return SourceInfo{static_cast<std::size_t>(count + 1),
+         return source_info{static_cast<std::size_t>(count + 1),
                            static_cast<std::size_t>(dist), context};
       }
 
       inline std::string generate_error_string(std::string const& error,
-                                               SourceInfo const& info,
+                                               source_info const& info,
                                                std::string const& filename = "")
       {
          std::stringstream ss{};
