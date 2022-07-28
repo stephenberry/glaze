@@ -338,4 +338,4 @@ namespace glaze
       detail::to_buffer<true>(std::forward<T>(value),
                               std::ostreambuf_iterator<char>(os));
    }
-}  // namespace vireo
+}  // namespace glaze

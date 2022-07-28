@@ -75,14 +75,14 @@ void Read_tests() {
          const auto a_num = static_cast<int>('15\u00f8C');
          std::string s = std::to_string(a_num);
          char v{};
-         vireo::read_json(v, s);
+         glaze::read_json(v, s);
          expect(v == a_num);
       }
       {
          const auto a_num = static_cast<int>('15\u00f8C');
          std::string s = std::to_string(a_num);
          wchar_t v{};
-         vireo::read_json(v, s);
+         glaze::read_json(v, s);
          expect(v == a_num);
       }*/
       {
@@ -192,7 +192,7 @@ void Read_tests() {
       {
          std::string in = "    [ 3.25 , 3.125 ]   ";
          [[maybe_unused]] v3 v{};
-         //vireo::read_json(v, in);
+         //glaze::read_json(v, in);
 
          //expect(v.x == 3.25);
          //expect(v.y == 3.125);
@@ -469,7 +469,7 @@ void Read_tests() {
 #ifdef CAN_USE_CHARCONV
          expect(nothrow([&] {glaze::read_json(d, res); }));
 #else
-         expect(throws([&] {vireo::read_json(d, res); }));
+         expect(throws([&] {glaze::read_json(d, res); }));
 #endif
       }
       {
@@ -489,7 +489,7 @@ void Read_tests() {
 #ifdef CAN_USE_CHARCONV
          expect(nothrow([&] { glaze::read_json(d, res); }));
 #else
-         expect(throws([&] { vireo::read_json(d, res); }));
+         expect(throws([&] { glaze::read_json(d, res); }));
 #endif
       }
       {
@@ -499,7 +499,7 @@ void Read_tests() {
 #ifdef CAN_USE_CHARCONV
          expect(nothrow([&] { glaze::read_json(d, res); }));
 #else
-         expect(throws([&] { vireo::read_json(d, res); }));
+         expect(throws([&] { glaze::read_json(d, res); }));
 #endif
       }
       {
@@ -509,7 +509,7 @@ void Read_tests() {
 #ifdef CAN_USE_CHARCONV
          expect(nothrow([&] { glaze::read_json(d, res); }));
 #else
-         expect(throws([&] { vireo::read_json(d, res); }));
+         expect(throws([&] { glaze::read_json(d, res); }));
 #endif
       }
    };
@@ -551,7 +551,7 @@ void Read_tests() {
       std::string buf =
          R"({"1":[4.000000,0.000000,0.000000],"2":[5.000000,0.000000,0.000000,4.000000]})";
 
-      vireo::read_json(m, buf);
+      glaze::read_json(m, buf);
       expect(m["1"][0] == 4.0);
       expect(m["2"][0] == 5.0);
       expect(m["2"][3] == 4.0);
@@ -567,7 +567,7 @@ void Read_tests() {
       expect(m[2][0] == 5.0);
       expect(m[2][3] == 4.0);
    };
-//*  vireo does not support this type 
+//*  glaze does not support this type
    "Invalid integer keyed map"_test = [] {
       std::map<int, std::vector<double>> m;
       // Numeric keys are not valid json but there is no harm in supporting them
@@ -575,7 +575,7 @@ void Read_tests() {
       std::string buf =
          R"({1:[4.000000,0.000000,0.000000],2:[5.000000,0.000000,0.000000,4.000000]})";
 
-      //vireo::read_json(m, buf);
+      //glaze::read_json(m, buf);
       //expect(m[1][0] == 4.0);
       //expect(m[2][0] == 5.0);
       //expect(m[2][3] == 4.0);

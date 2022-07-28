@@ -431,7 +431,7 @@ void user_types() {
 
       //Should skip invalid keys
       expect(nothrow([&] {
-         //vireo::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
+         //glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
          glaze::read_json(obj,
                           R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
    /**/, "a":322})");
@@ -592,7 +592,6 @@ int main()
    // *Stream tests.
    // *Test other buffer types.
    // *More tests in general.
-   // *Look at the current vireo since its got a million good tests.
 
    basic_types();
    container_types();

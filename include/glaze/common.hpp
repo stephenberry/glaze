@@ -194,13 +194,13 @@ namespace glaze
       concept num_t = std::floating_point<T> || int_t<T>;
 
       template <class T>
-      concept vireo_t = requires
+      concept glaze_t = requires
       {
          meta<T>::value;
       };
 
       template <class T>
-      concept complex_t = vireo_t<T> || custom_t<T>;
+      concept complex_t = glaze_t<T> || custom_t<T>;
 
       template <class T>
       concept str_t = !complex_t<T> && std::convertible_to<T, std::string_view>;
@@ -269,10 +269,10 @@ namespace glaze
       }
 
       template <class T>
-      concept vireo_array_t = vireo_t<T> && all_member_ptr(meta_v<T>);
+      concept vireo_array_t = glaze_t<T> && all_member_ptr(meta_v<T>);
 
       template <class T>
-      concept vireo_object_t = vireo_t<T> && !vireo_array_t<T>;
+      concept vireo_object_t = glaze_t<T> && !vireo_array_t<T>;
 
       template <typename From, typename To>
       concept non_narrowing_convertable = requires(From from, To to)
@@ -455,4 +455,4 @@ namespace glaze
       return detail::group_members(
          std::make_tuple(std::forward<Args>(args)...));
    }
-}  // namespace vireo
+}  // namespace glaze

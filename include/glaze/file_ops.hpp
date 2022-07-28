@@ -15,7 +15,7 @@ namespace glaze
       std::ifstream file(file_name);
 
       if (!file) {
-         throw std::runtime_error("vireo::file_to_buffer: File with path (" +
+         throw std::runtime_error("glaze::file_to_buffer: File with path (" +
                                   file_name +
                                   ") could not be loaded. Ensure that file "
                                   "exists at the given path.");
@@ -47,4 +47,4 @@ namespace glaze
 
       return working_directory / filepath;
    }
-}  // namespace vireo
+}  // namespace glaze

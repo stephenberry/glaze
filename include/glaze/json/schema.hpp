@@ -85,4 +85,4 @@ namespace glaze
          parsing_files.erase(path_str);
       }
    };
-}  // namespace vireo
+}  // namespace glaze

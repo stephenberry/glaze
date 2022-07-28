@@ -98,4 +98,4 @@ namespace glaze
          }
       };
    }  // namespace detail
-}  // namespace vireo
+}  // namespace glaze

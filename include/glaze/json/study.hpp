@@ -166,7 +166,7 @@ namespace glaze
             else if (dist.distribution == "linspace") {
                if (dist.range.size() != 3) {
                   throw std::runtime_error(
-                     "vireo::study::full_factorial::param_set_from_dist: Linspace "
+                     "glaze::study::full_factorial::param_set_from_dist: Linspace "
                      "distribution's range must have 3 elements!");
                }
 
@@ -188,7 +188,7 @@ namespace glaze
             }
             else {
                throw std::runtime_error(
-                  "vireo::study::full_factorial::param_set_from_dist: Unknown "
+                  "glaze::study::full_factorial::param_set_from_dist: Unknown "
                   "distribution for non random study '"
                   + dist.distribution + "' passed!");
             }
@@ -327,7 +327,7 @@ namespace glaze
             if (dist.distribution == "elements") {
                if (dist.range.size() == 0) {
                   throw std::runtime_error(
-                     "vireo::study::random_doe::param_from_dist: Elements "
+                     "glaze::study::random_doe::param_from_dist: Elements "
                      "distribution's cannot be empty!");
                }
                std::vector<basic> elements{};
@@ -351,7 +351,7 @@ namespace glaze
             else if (dist.distribution == "linspace") {
                if (dist.range.size() != 3) {
                   throw std::runtime_error(
-                     "vireo::study::random_doe::param_from_dist: Linspace "
+                     "glaze::study::random_doe::param_from_dist: Linspace "
                      "distribution's range does not have 3 elements!");
                }
 
@@ -373,7 +373,7 @@ namespace glaze
             else if (dist.distribution == "uniform") {
                if (dist.range.size() != 2) {
                   throw std::runtime_error(
-                     "vireo::study::random_doe::param_from_dist: Uniform "
+                     "glaze::study::random_doe::param_from_dist: Uniform "
                      "distribution's range must have 2 elements!");
                }
 
@@ -396,7 +396,7 @@ namespace glaze
             else if (dist.distribution == "normal") {
                if (dist.range.size() != 2) {
                   throw std::runtime_error(
-                     "vireo::study::random_doe::param_from_dist: Normal "
+                     "glaze::study::random_doe::param_from_dist: Normal "
                      "distribution's range must have 2 elements!");
                }
 
@@ -414,7 +414,7 @@ namespace glaze
             }
             else {
                throw std::runtime_error(
-                  "vireo::study::random_doe::param_from_dist: Unknown "
+                  "glaze::study::random_doe::param_from_dist: Unknown "
                   "distribution");
             }
          }
@@ -466,4 +466,4 @@ namespace glaze
          return o;
       }
    }  // namespace study
-}  // namespace vireo
+}  // namespace glaze
