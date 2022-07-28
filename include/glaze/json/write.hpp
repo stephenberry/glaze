@@ -163,7 +163,7 @@ namespace glaze
                first = false;
             else
                write<','>(b);
-            if constexpr (str_t<std::decay_t<decltype(item.first)>> ||
+            if constexpr (str_t<decltype(item.first)> ||
                           char_t<std::decay_t<decltype(item.first)>>) {
                to_buffer(item.first, b);
             }

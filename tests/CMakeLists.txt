@@ -5,6 +5,8 @@ CPMAddPackage(
   DOWNLOAD_ONLY YES # They use Werror.
 )
 
+set(BOOST_UT_ENABLE_RUN_AFTER_BUILD off)
+
 if (ut_ADDED)
   add_library(ut INTERFACE)
   add_library(Boost::ut ALIAS ut)
