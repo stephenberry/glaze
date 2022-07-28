@@ -277,11 +277,33 @@ namespace glaze
 
       void from_iter(str_t auto& value, auto&& it, auto&& end)
       {
-         // TODO: overwrite then resize instead of clearing
          // TODO: this does not handle control chars like \t and \n
-         value.clear();
+         
          skip_ws(it, end);
          match<'"'>(it, end);
+         const auto cend = value.cend();
+         for (auto c = value.begin(); c < cend; ++c, ++it)
+         {
+            switch (*it) {
+               [[unlikely]] case '\\':
+               {
+                  if (++it == end) [[unlikely]]
+                     throw std::runtime_error("Expected \"");
+                  else [[likely]] {
+                     *c = *it;
+                  }
+                  break;
+               }
+               [[unlikely]] case '"':
+               {
+                  ++it;
+                  value.resize(std::distance(value.begin(), c));
+                  return;
+               }
+               [[likely]] default : *c = *it;
+            }
+         }
+         
          while (it < end) {
             switch (*it) {
                [[unlikely]] case '\\':
