@@ -11,6 +11,7 @@
 #include "glaze/common.hpp"
 #include "glaze/json/validate.hpp"
 #include "glaze/format.hpp"
+#include "glaze/type_traits.hpp"
 
 namespace glaze
 {
@@ -551,11 +552,11 @@ namespace glaze
          }
          else {
             if (!value) {
-               if constexpr (is_specialization<T, std::optional>::value)
+               if constexpr (is_specialization_v<T, std::optional>)
                   value = std::make_optional<typename T::value_type>();
-               else if constexpr (is_specialization<T, std::unique_ptr>::value)
+               else if constexpr (is_specialization_v<T, std::unique_ptr>)
                   value = std::make_unique<typename T::element_type>();
-               else if constexpr (is_specialization<T, std::shared_ptr>::value)
+               else if constexpr (is_specialization_v<T, std::shared_ptr>)
                   value = std::make_shared<typename T::element_type>();
                else
                   throw std::runtime_error(
