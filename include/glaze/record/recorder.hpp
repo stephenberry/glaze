@@ -5,7 +5,7 @@
 #include <vector>
 #include <variant>
 
-#include "glaze/utility.hpp"
+#include "glaze/type_traits.hpp"
 
 namespace glaze
 {

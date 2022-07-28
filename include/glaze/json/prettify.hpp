@@ -7,7 +7,7 @@
 
 namespace glaze
 {
-   enum class GeneralState : uint32_t {
+   enum class general_state : uint32_t {
       NORMAL,
       ESCAPED,
       STRING,
@@ -17,7 +17,7 @@ namespace glaze
    };
 
    inline void prettify_normal_state(char c, auto& out, int& indent, auto nl,
-                              GeneralState& state) noexcept
+                              general_state& state) noexcept
    {
       switch (c) {
       case ',':
@@ -46,15 +46,15 @@ namespace glaze
          break;
       case '\\':
          out += c;
-         state = GeneralState::ESCAPED;
+         state = general_state::ESCAPED;
          break;
       case '\"':
          out += c;
-         state = GeneralState::STRING;
+         state = general_state::STRING;
          break;
       case '/':
          out += " /";
-         state = GeneralState::BEFORE_ASTERISK;
+         state = general_state::BEFORE_ASTERISK;
          break;
       case ':':
          out += ": ";
@@ -70,31 +70,31 @@ namespace glaze
       }
    }
 
-   inline void prettify_other_states(char c, GeneralState& state) noexcept
+   inline void prettify_other_states(char c, general_state& state) noexcept
    {
       switch (state) {
-      case GeneralState::ESCAPED:
-         state = GeneralState::NORMAL;
+      case general_state::ESCAPED:
+         state = general_state::NORMAL;
          break;
-      case GeneralState::STRING:
+      case general_state::STRING:
          if (c == '"') {
-            state = GeneralState::NORMAL;
+            state = general_state::NORMAL;
          }
          break;
-      case GeneralState::BEFORE_ASTERISK:
-         state = GeneralState::COMMENT;
+      case general_state::BEFORE_ASTERISK:
+         state = general_state::COMMENT;
          break;
-      case GeneralState::COMMENT:
+      case general_state::COMMENT:
          if (c == '*') {
-            state = GeneralState::BEFORE_FSLASH;
+            state = general_state::BEFORE_FSLASH;
          }
          break;
-      case GeneralState::BEFORE_FSLASH:
+      case general_state::BEFORE_FSLASH:
          if (c == '/') {
-            state = GeneralState::NORMAL;
+            state = general_state::NORMAL;
          }
          else {
-            state = GeneralState::COMMENT;
+            state = general_state::COMMENT;
          }
          break;
       default:
@@ -119,10 +119,10 @@ namespace glaze
          }
       };
 
-      GeneralState state{GeneralState::NORMAL};
+      general_state state{general_state::NORMAL};
 
       for (auto c : in) {
-         if (state == GeneralState::NORMAL) {
+         if (state == general_state::NORMAL) {
             prettify_normal_state(c, out, indent, nl, state);
             continue;
          }

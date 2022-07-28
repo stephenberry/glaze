@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <string_view>
 
+#include "glaze/type_traits.hpp"
+
 namespace glaze
 {
    namespace detail
@@ -38,11 +40,6 @@ namespace glaze
    concept has_glaze_name = requires {
        T::glaze_name;
    };
-   
-   template <class, template<class...> class>
-   inline constexpr bool is_specialization_v = false;
-   template <template<class...> class T, class... Args>
-   inline constexpr bool is_specialization_v<T<Args...>, T> = true;
    
    template <size_t N>
    struct string_literal {

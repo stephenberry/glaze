@@ -15,7 +15,7 @@
 
 #include "glaze/record/recorder.hpp"
 
-#include "glaze/utility.hpp"
+#include "glaze/type_traits.hpp"
 
 namespace glaze
 {

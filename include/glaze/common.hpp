@@ -334,7 +334,7 @@ namespace glaze
       {};
 
       template <class T, size_t... I>
-      inline constexpr auto _make_array(std::index_sequence<I...>)
+      inline constexpr auto make_array_impl(std::index_sequence<I...>)
       {
          using value_t = typename tuple_variant<meta_t<T>>::type;
          return std::array<value_t, std::tuple_size_v<meta_t<T>>>{
@@ -346,7 +346,7 @@ namespace glaze
       {
          constexpr auto indices =
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return _make_array<T>(indices);
+         return make_array_impl<T>(indices);
       }
 
       template <class Tuple, std::size_t... Is>
