@@ -13,7 +13,7 @@
 #include "NanoRange/nanorange.hpp"
 
 namespace glaze
-{
+{   
    namespace detail
    {
       template <int... I>

@@ -5,6 +5,7 @@
 
 #include "glaze/api/std/string.hpp"
 #include "glaze/api/meta.hpp"
+#include "glaze/format.hpp"
 
 #include <stdexcept>
 
@@ -12,12 +13,6 @@ namespace glaze
 {
    inline namespace v0_0_1
    {
-      namespace format
-      {
-         static constexpr uint32_t binary = 0;
-         static constexpr uint32_t json = 10;
-      }
-
       struct api
       {
          using sv = std::string_view;
