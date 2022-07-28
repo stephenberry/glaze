@@ -19,50 +19,37 @@ namespace glaze
 {
    namespace detail
    {
-      template <class B>
-      inline void write(char c, B&& b) noexcept requires
-         std::same_as<std::decay_t<B>, std::string>
-      {
-         std::forward<B>(b).push_back(c);
+      inline void write(char c, std::string& b) noexcept {
+         b.push_back(c);
+      }
+      
+      template <char c>
+      inline void write(std::string& b) noexcept {
+         b.push_back(c);
       }
 
-      template <char c, class It>
-         inline void write(
-            It&&it) noexcept requires std::output_iterator < std::decay_t<It>,
-      char >
+      template <char c>
+      inline void write(std::output_iterator<char> auto&&it) noexcept
       {
          *it = c;
          ++it;
       }
 
-      template <string_literal str, class It>
-         inline void write(
-            It&&it) noexcept requires std::output_iterator < std::decay_t<It>,
-      char > { std::copy(str.value, str.value + str.size, it); }
-
-      template <char c, class B>
-      inline void write(
-         B&& b) noexcept requires std::same_as<std::string, std::decay_t<B>>
-      {
-         b.push_back(c);
+      template <string_literal str>
+      inline void write(std::output_iterator<char> auto&& it) noexcept {
+         std::copy(str.value, str.value + str.size, it);
       }
 
-      template <string_literal str, class B>
-      inline void write(
-         B&& b) noexcept requires std::same_as<std::string, std::decay_t<B>>
-      {
+      template <string_literal str>
+      inline void write(std::string& b) noexcept {
          b.append(str.value, str.size);
       }
 
-      template <class It>
-         inline void write(const std::string_view str, It&&it) noexcept requires
-         std::output_iterator < std::decay_t<It>,
-      char > { std::copy(str.data(), str.data() + str.size(), it); }
+      inline void write(const std::string_view str, std::output_iterator<char> auto&& it) noexcept {
+         std::copy(str.data(), str.data() + str.size(), it);
+      }
 
-      template <class B>
-      inline void write(const std::string_view str, B&& b) noexcept requires
-         std::same_as<std::string, std::decay_t<B>>
-      {
+      inline void write(const std::string_view str, std::string& b) noexcept {
          b.append(str.data(), str.size());
       }
 
@@ -90,7 +77,7 @@ namespace glaze
       }
 
       template <bool C = false, class T, class B>
-      requires str_t<std::decay_t<T>> || char_t<std::decay_t<T>>
+      requires str_t<T> || char_t<std::decay_t<T>>
       inline void to_buffer(T&& value, B&& b) noexcept
       {
          write<'"'>(b);

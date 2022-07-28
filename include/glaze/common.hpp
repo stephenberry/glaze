@@ -198,7 +198,7 @@ namespace glaze
       };
 
       template <class T>
-      concept complex_t = glaze_t<T> || custom_t<T>;
+      concept complex_t = glaze_t<std::decay_t<T>> || custom_t<std::decay_t<T>>;
 
       template <class T>
       concept str_t = !complex_t<T> && std::convertible_to<T, std::string_view>;
