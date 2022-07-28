@@ -4,7 +4,6 @@
 #pragma once
 
 #include <iterator>
-#include <ostream>
 #include <ranges>
 #include <charconv>
 
@@ -58,11 +57,11 @@ namespace glaze
          if (it == end) [[unlikely]]
             throw std::runtime_error("Unexpected end, expected comment");
          else if (*it == '/') {
-            while (++it < end && *it != '\n')
+            while (++it != end && *it != '\n')
                ;
          }
          else if (*it == '*') {
-            while (++it < end) {
+            while (++it != end) {
                if (*it == '*') [[unlikely]] {
                   if (++it == end) [[unlikely]]
                      break;
@@ -79,7 +78,7 @@ namespace glaze
 
       inline void skip_ws(auto&& it, auto&& end)
       {
-         while (it < end) {
+         while (it != end) {
             switch (*it) {
             case ' ':
             case '\f':
@@ -263,7 +262,7 @@ namespace glaze
             double num;
             char buffer[256];
             size_t i{};
-            while (it < end && is_numeric(*it)) {
+            while (it != end && is_numeric(*it)) {
                if (i > 254) [[unlikely]]
                   throw std::runtime_error("Number is too long");
                buffer[i] = *it++;
@@ -592,7 +591,7 @@ namespace glaze
 
    // For reading json from std::ofstream, std::cout, or other streams
    template <class T>
-   inline void read_json(T& value, std::istream& is)
+   inline void read_json(T& value, detail::stream_t auto& is)
    {
       std::istreambuf_iterator<char> b{is};
       std::istreambuf_iterator<char> e{};

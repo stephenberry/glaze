@@ -7,6 +7,8 @@
 #include <any>
 #include <forward_list>
 #include <map>
+#include <list>
+#include <deque>
 
 #ifndef BOOST_UT_DISABLE_MODULE
 #define BOOST_UT_DISABLE_MODULE
@@ -43,6 +45,15 @@ struct glaze::meta<oob>
 
 void Read_tests() {
    using namespace boost::ut;
+   
+   "cout"_test = [] {
+      std::stringstream ss{};
+      ss << "3958713";
+      int i{};
+      glaze::read_json(i, ss);
+      expect(i == 3958713);
+   };
+   
    "Read floating point types"_test = [] {
       {
          std::string s = "0.96875";

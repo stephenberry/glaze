@@ -9,6 +9,8 @@
 #include <forward_list>
 #include <unordered_map>
 #include <map>
+#include <list>
+#include <deque>
 
 #ifndef BOOST_UT_DISABLE_MODULE
 #define BOOST_UT_DISABLE_MODULE

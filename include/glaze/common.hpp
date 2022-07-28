@@ -3,15 +3,9 @@
 
 #pragma once
 
-#include <array>
-#include <deque>
-#include <list>
-#include <memory>
-#include <optional>
 #include <string>
 #include <type_traits>
 #include <variant>
-#include <vector>
 
 #include "fmt/compile.h"
 #include "fmt/format.h"
@@ -276,6 +270,17 @@ namespace glaze
       concept non_narrowing_convertable = requires(From from, To to)
       {
          To{from};
+      };
+      
+      template <class T>
+      concept stream_t = requires(T t) {
+         typename T::char_type;
+         typename T::traits_type;
+         typename T::int_type;
+         t.get();
+         t.peek();
+         t.unget();
+         t.gcount();
       };
 
       // from

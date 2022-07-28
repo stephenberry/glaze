@@ -8,6 +8,8 @@
 #include <forward_list>
 #include <unordered_map>
 #include <map>
+#include <list>
+#include <deque>
 
 #include "boost/ut.hpp"
 #include "glaze/json/json_ptr.hpp"
