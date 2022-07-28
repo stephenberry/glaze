@@ -154,7 +154,7 @@ namespace glaze
       requires custom_t<std::decay_t<T>>
       inline void to_buffer(T&& value, B&& b)
       {
-         custom<std::decay_t<T>>::to_buffer<C>(std::forward<T>(value),
+         custom<std::decay_t<T>>::template to_buffer<C>(std::forward<T>(value),
                                                std::forward<B>(b));
       }
 
@@ -165,7 +165,9 @@ namespace glaze
          write<'['>(b);
          if (!value.empty()) {
             to_buffer<C>(*value.begin(), b);
-            for (auto it = ++value.cbegin(); it != value.cend(); ++it) {
+            auto it = value.cbegin();
+            ++it;
+            for (; it != value.cend(); ++it) {
                write<','>(b);
                to_buffer<C>(*it, b);
             }
@@ -293,8 +295,8 @@ namespace glaze
    // For writing json to a std::string, std::vector<char>, std::deque<char> and
    // the like
    template <class T, class Buffer>
-   requires std::ranges::input_range<Buffer> &&
-      std::same_as<char, std::ranges::range_value_t<Buffer>>
+   requires nano::ranges::input_range<Buffer> &&
+      std::same_as<char, nano::ranges::range_value_t<Buffer>>
    inline void write_json(T&& value, Buffer& buffer) noexcept
    {
       if constexpr (std::same_as<Buffer, std::string>) {
@@ -316,8 +318,8 @@ namespace glaze
    // For writing json to a std::string, std::vector<char>, std::deque<char> and
    // the like
    template <class T, class Buffer>
-   requires std::ranges::input_range<Buffer> &&
-      std::same_as<char, std::ranges::range_value_t<Buffer>>
+   requires nano::ranges::input_range<Buffer> &&
+      std::same_as<char, nano::ranges::range_value_t<Buffer>>
    inline void write_jsonc(T&& value, Buffer& buffer) noexcept
    {
       if constexpr (std::same_as<Buffer, std::string>) {

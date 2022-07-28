@@ -14,4 +14,4 @@ include("${ut_SOURCE_DIR}/cmake/AddCustomCommandOrTest.cmake")
 
 target_link_libraries(${PROJECT_NAME} PRIVATE glaze Boost::ut)
 
-ut_add_custom_command_or_test(TARGET ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+#ut_add_custom_command_or_test(TARGET ${PROJECT_NAME} COMMAND ${PROJECT_NAME})

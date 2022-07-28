@@ -396,7 +396,7 @@ namespace glaze
          (!emplace_backable<T> &&
           resizeable<T>)void from_iter(T& value, auto&& it, auto&& end)
       {
-         using value_t = std::ranges::range_value_t<T>;
+         using value_t = nano::ranges::range_value_t<T>;
          static thread_local std::vector<value_t> buffer{};
          buffer.clear();
 
@@ -549,8 +549,8 @@ namespace glaze
 
    // For reading json from a std::vector<char>, std::deque<char> and the like
    template <class T, class Buffer>
-   requires std::ranges::input_range<std::decay_t<Buffer>> &&
-      std::same_as<char, std::ranges::range_value_t<std::decay_t<Buffer>>>
+   requires nano::ranges::input_range<std::decay_t<Buffer>> &&
+      std::same_as<char, nano::ranges::range_value_t<std::decay_t<Buffer>>>
    inline void read_json(T& value, Buffer&& buffer)
    {
       auto b = std::ranges::begin(buffer);
@@ -585,7 +585,7 @@ namespace glaze
    // For reading json from stuff convertable to a std::string_view
    template <class T, class Buffer>
    requires(std::convertible_to<std::decay_t<Buffer>, std::string_view> &&
-            !std::ranges::input_range<
+            !nano::ranges::input_range<
                std::decay_t<Buffer>>) inline void read_json(T& value,
                                                             Buffer&& buffer)
    {

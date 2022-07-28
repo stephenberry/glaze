@@ -5,6 +5,7 @@
 #include <iostream>
 #include <random>
 #include <any>
+#include <forward_list>
 
 #include "boost/ut.hpp"
 #include "glaze/json/json_ptr.hpp"
@@ -265,7 +266,7 @@ void container_types() {
       std::string str {"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"};
       std::mt19937 g{};
       for (auto i = 0; i < 20; ++i) {
-         std::ranges::shuffle(str, g);
+         nano::ranges::shuffle(str, g);
          map[str] = rand();
       }
       std::string buffer{};

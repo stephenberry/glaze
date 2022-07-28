@@ -20,6 +20,8 @@
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
 
+#include "NanoRange/nanorange.hpp"
+
 namespace glaze
 {
    namespace detail
@@ -224,12 +226,12 @@ namespace glaze
 
       template <class T>
       concept map_t =
-         !complex_t<T> && !str_t<T> && std::ranges::range<T> &&
-         pair_t<std::ranges::range_value_t<T>> && map_subscriptable<T>;
+         !complex_t<T> && !str_t<T> && nano::ranges::range<T> &&
+         pair_t<nano::ranges::range_value_t<T>> && map_subscriptable<T>;
 
       template <class T>
       concept array_t =
-         !complex_t<T> && !str_t<T> && !map_t<T> && std::ranges::range<T>;
+         !complex_t<T> && !str_t<T> && !map_t<T> && nano::ranges::range<T>;
 
       template <class T>
       concept emplace_backable = requires(T container)
@@ -251,7 +253,7 @@ namespace glaze
          std::tuple_size<T>::value;
          std::get<0>(t);
       }
-      &&!complex_t<T> && !std::ranges::range<T>;
+      &&!complex_t<T> && !nano::ranges::range<T>;
 
       template <class T>
       concept nullable_t = !complex_t<T> && !str_t<T> && requires(T t)

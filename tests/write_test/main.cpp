@@ -6,6 +6,7 @@
 #include <random>
 #include <any>
 #include <variant>
+#include <forward_list>
 
 #ifndef BOOST_UT_DISABLE_MODULE
 #define BOOST_UT_DISABLE_MODULE
@@ -321,7 +322,7 @@ void Write_tests() {
 
       std::string s;
       s.reserve(1000);
-      auto i = std::back_inserter(s);
+      [[maybe_unused]] auto i = std::back_inserter(s);
       //glaze::write_json(n, s);
 
       //expect(

@@ -8,6 +8,8 @@
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 
+#include <span>
+
 namespace glaze
 {
    namespace detail
@@ -27,7 +29,7 @@ namespace glaze
             matrix.size()
             } -> std::convertible_to<size_t>;
       }
-      &&!std::ranges::range<T>;
+      &&!nano::ranges::range<T>;
 
       template <matrix_t Matrix>
       struct custom<Matrix>

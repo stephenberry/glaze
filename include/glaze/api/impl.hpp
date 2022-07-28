@@ -47,8 +47,8 @@ namespace glaze
          void* result{};
          detail::seek_impl(
             [&](auto&& val) {
-               using T = std::decay_t<decltype(val)>;
-               static constexpr auto h = glaze::hash<T>();
+               using V = std::decay_t<decltype(val)>;
+               static constexpr auto h = glaze::hash<V>();
                if (h == type_hash) [[likely]] {
                   result = &val;
                }

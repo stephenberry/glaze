@@ -45,11 +45,12 @@ namespace glaze
       void update()
       {
          for (auto& [name, value] : data) {
+            auto* ptr = value.second;
             std::visit(
                [&](auto&& container) {
-                  using T = std::decay_t<decltype(container)>::value_type;
+                  using T = typename std::decay_t<decltype(container)>::value_type;
 
-                  container.emplace_back(*static_cast<T*>(value.second));
+                  container.emplace_back(*static_cast<T*>(ptr));
                },
                value.first);
          }

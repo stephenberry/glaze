@@ -5,6 +5,7 @@
 #include <iostream>
 #include <random>
 #include <any>
+#include <forward_list>
 
 #ifndef BOOST_UT_DISABLE_MODULE
 #define BOOST_UT_DISABLE_MODULE
@@ -190,7 +191,7 @@ void Read_tests() {
  //*  // missing charictar bug?
       {
          std::string in = "    [ 3.25 , 3.125 ]   ";
-         v3 v{};
+         [[maybe_unused]] v3 v{};
          //vireo::read_json(v, in);
 
          //expect(v.x == 3.25);
@@ -518,7 +519,7 @@ void Read_tests() {
          R"("asljl{}121231212441[]123::,,;,;,,::,Q~123\a13dqwdwqwq")";
       std::string res{};
       glaze::read_json(res, in);
-//*   function fails, does not recognize \ 
+//*   function fails, does not recognize '\'
       //expect(res == "asljl{}121231212441[]123::,,;,;,,::,Q~123\\a13dqwdwqwq");
    };
 
