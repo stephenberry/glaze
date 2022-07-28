@@ -6,6 +6,7 @@
 #include <iterator>
 #include <ostream>
 #include <ranges>
+#include <charconv>
 
 #include "fast_float/fast_float.h"
 #include "glaze/common.hpp"
@@ -204,9 +205,7 @@ namespace glaze
          return false;
       }
 
-      template <class T>
-      requires bool_t<std::decay_t<T>>
-      void from_iter(T&& value, auto&& it, auto&& end)
+      void from_iter(bool_t auto&& value, auto&& it, auto&& end)
       {
          skip_ws(it, end);
          if (it < end) [[likely]] {
@@ -238,43 +237,45 @@ namespace glaze
          skip_ws(it, end);
          if (it == end) [[unlikely]]
             throw std::runtime_error("Unexpected end of buffer");
-
-         if constexpr (std::is_floating_point_v<T> &&
-                       std::contiguous_iterator<It>) {
-            const auto size = std::distance(it, end);
-            const auto start = &*it;
-            auto [p, ec] = fast_float::from_chars(start, start + size, value);
-            if (ec != std::errc{}) [[unlikely]]
-               throw std::runtime_error("Failed to parse number");
-            it += (p - &*it);
-         }
-         else {
-            double num;  // To support reading in stuff like 1e6 for ints
-            if constexpr (std::contiguous_iterator<It>) {
+         
+         if constexpr (std::contiguous_iterator<It>)
+         {
+            if constexpr (std::is_floating_point_v<T>)
+            {
                const auto size = std::distance(it, end);
                const auto start = &*it;
-               auto [p, ec] = fast_float::from_chars(start, start + size, num);
+               auto [p, ec] = fast_float::from_chars(start, start + size, value);
                if (ec != std::errc{}) [[unlikely]]
                   throw std::runtime_error("Failed to parse number");
                it += (p - &*it);
             }
-            else {
-               char buffer[256];
-               size_t i{};
-               while (it < end && is_numeric(*it)) {
-                  if (i > 254) [[unlikely]]
-                     throw std::runtime_error("Number is too long");
-                  buffer[i] = *it++;
-                  ++i;
-               }
-               auto [p, ec] = fast_float::from_chars(buffer, buffer + i, num);
+            else
+            {
+               const auto size = std::distance(it, end);
+               const auto start = &*it;
+               auto [p, ec] = std::from_chars(start, start + size, value);
                if (ec != std::errc{}) [[unlikely]]
                   throw std::runtime_error("Failed to parse number");
+               it += (p - &*it);
             }
+         }
+         else {
+            double num;
+            char buffer[256];
+            size_t i{};
+            while (it < end && is_numeric(*it)) {
+               if (i > 254) [[unlikely]]
+                  throw std::runtime_error("Number is too long");
+               buffer[i] = *it++;
+               ++i;
+            }
+            auto [p, ec] = fast_float::from_chars(buffer, buffer + i, num);
+            if (ec != std::errc{}) [[unlikely]]
+               throw std::runtime_error("Failed to parse number");
             value = static_cast<T>(num);
          }
       }
-
+      
       void from_iter(str_t auto& value, auto&& it, auto&& end)
       {
          // TODO: this does not handle control chars like \t and \n
@@ -327,8 +328,7 @@ namespace glaze
          throw std::runtime_error("Expected \"");
       }
 
-      template <char_t T>
-      void from_iter(T& value, auto&& it, auto&& end)
+      void from_iter(char_t auto& value, auto&& it, auto&& end)
       {
          // TODO: this does not handle escaped chars
          match<'"'>(it, end);

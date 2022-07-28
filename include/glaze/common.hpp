@@ -185,7 +185,7 @@ namespace glaze
 
       template <class T>
       concept bool_t =
-         std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference>;
+         std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>;
 
       template <class T>
       concept int_t = std::integral<T> && !char_t<T> && !bool_t<T>;
