@@ -19,15 +19,6 @@ namespace glaze
 {
    namespace detail
    {
-      template <class It>
-         inline void write(char c, It&&it) noexcept requires
-         std::output_iterator < std::decay_t<It>,
-      char >
-      {
-         *it = c;
-         ++it;
-      }
-
       template <class B>
       inline void write(char c, B&& b) noexcept requires
          std::same_as<std::decay_t<B>, std::string>
