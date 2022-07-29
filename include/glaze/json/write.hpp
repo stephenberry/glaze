@@ -141,10 +141,11 @@ namespace glaze
          {
             dump<'['>(b);
             if (!value.empty()) {
-               write<json>::op<C>(*value.begin(), b);
                auto it = value.cbegin();
+               write<json>::op<C>(*it, b);
                ++it;
-               for (; it != value.cend(); ++it) {
+               const auto end = value.cend();
+               for (; it != end; ++it) {
                   dump<','>(b);
                   write<json>::op<C>(*it, b);
                }
@@ -153,31 +154,34 @@ namespace glaze
          }
       };
 
-      template <class T>
-      requires map_t<std::decay_t<T>>
+      template <map_t T>
       struct to_json<T>
       {
          template <bool C>
          static void op(auto&& value, auto&& b) noexcept
          {
             dump<'{'>(b);
-            bool first = true;
-            for (auto&& item : value) {
-               if (first)
-                  first = false;
-               else
-                  dump<','>(b);
-               if constexpr (str_t<decltype(item.first)> ||
-                             char_t<std::decay_t<decltype(item.first)>>) {
-                  write<json>::op<C>(item.first, b);
+            auto it = value.cbegin();
+            auto lambda = [&] {
+               using Key = decltype(it->first);
+               if constexpr (str_t<Key> || char_t<Key>) {
+                  write<json>::op<C>(it->first, b);
                }
                else {
                   dump<'"'>(b);
-                  write<json>::op<C>(item.first, b);
+                  write<json>::op<C>(it->first, b);
                   dump<'"'>(b);
                }
                dump<':'>(b);
-               write<json>::op<C>(item.second, b);
+               write<json>::op<C>(it->second, b);
+            };
+            lambda();
+            ++it;
+            
+            const auto end = value.cend();
+            for (; it != end; ++it) {
+               dump<','>(b);
+               lambda();
             }
             dump<'}'>(b);
          }
