@@ -113,9 +113,8 @@ namespace glaze
       requires map_t<std::decay_t<T>>
       inline void to_buffer(T&& value, B&& b) noexcept;
 
-      template <bool C = false, class T, class B>
-      requires nullable_t<std::decay_t<T>>
-      inline void to_buffer(T&& value, B&& b) noexcept;
+      template <bool C = false, class B>
+      inline void to_buffer(nullable_t auto&& value, B&& b) noexcept;
 
       template <bool C = false, size_t I = 0, class T, class B>
       requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
@@ -168,9 +167,8 @@ namespace glaze
          write<'}'>(b);
       }
 
-      template <bool C, class T, class B>
-      requires nullable_t<std::decay_t<T>>
-      inline void to_buffer(T&& value, B&& b) noexcept
+      template <bool C, class B>
+      inline void to_buffer(nullable_t auto&& value, B&& b) noexcept
       {
          if (value)
             to_buffer<C>(*value, std::forward<B>(b));
