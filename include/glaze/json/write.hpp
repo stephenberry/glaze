@@ -204,7 +204,7 @@ namespace glaze
          template <bool C, size_t I = 0>
          static void op(auto&& value, auto&& b) noexcept
          {
-            constexpr auto n = []() constexpr
+            static constexpr auto n = []() constexpr
             {
                if constexpr (glaze_array_t<std::decay_t<T>>) {
                   return std::tuple_size_v<meta_t<std::decay_t<T>>>;
@@ -262,7 +262,8 @@ namespace glaze
                   write<json>::op<C>(quoted, b);
                }
                write<json>::op<C>(value.*std::get<1>(item), b);
-               if constexpr (C && std::tuple_size_v < decltype(item) >> 2) {
+               constexpr auto N = std::tuple_size_v<decltype(item)>;
+               if constexpr (C && N > 2) {
                   static_assert(
                      std::is_same_v<std::decay_t<decltype(std::get<2>(item))>,
                                     comment_t>);
