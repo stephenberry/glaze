@@ -12,6 +12,7 @@
 #include "glaze/core/format.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/parse.hpp"
+#include "glaze/util/for_each.hpp"
 
 namespace glaze
 {
@@ -303,10 +304,9 @@ namespace glaze
       template <class T> requires glaze_array_t<T> || tuple_t<T>
       struct from_json<T>
       {
-         template <size_t I = 0>
          static void op(T& value, auto&& it, auto&& end)
          {
-            constexpr auto n = []() constexpr
+            static constexpr auto N = []() constexpr
             {
                if constexpr (glaze_array_t<T>) {
                   return std::tuple_size_v<meta_t<T>>;
@@ -316,13 +316,12 @@ namespace glaze
                }
             }
             ();
-
-            if constexpr (I == 0) {
-               skip_ws(it, end);
-               match<'['>(it, end);
-               skip_ws(it, end);
-            }
-            if constexpr (I < n) {
+            
+            skip_ws(it, end);
+            match<'['>(it, end);
+            skip_ws(it, end);
+            
+            for_each<N>([&](auto I) {
                if constexpr (I != 0) {
                   match<','>(it, end);
                }
@@ -333,14 +332,12 @@ namespace glaze
                   read<json>::op(std::get<I>(value), it, end);
                }
                skip_ws(it, end);
-               op<I + 1>(value, it, end);
+            });
+            
+            if constexpr (N == 0) {
+               skip_ws(it, end);
             }
-            if constexpr (I == 0) {
-               if constexpr (n == 0) {
-                  skip_ws(it, end);
-               }
-               match<']'>(it, end);
-            }
+            match<']'>(it, end);
          }
       };
       
