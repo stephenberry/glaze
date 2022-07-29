@@ -25,7 +25,7 @@ namespace glaze
    template <size_t N, class Func>
    constexpr auto for_each(Func&& f) {
       return indexer<N>()([&](auto&&...i){
-         (f(i), ...);
+         (std::forward<Func>(f)(i), ...);
       });
    }
 }

@@ -206,7 +206,7 @@ namespace glaze
       requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
       struct to_json<T>
       {
-         template <bool C, size_t I = 0>
+         template <bool C>
          static void op(auto&& value, auto&& b) noexcept
          {
             static constexpr auto N = []() constexpr
@@ -219,12 +219,10 @@ namespace glaze
                }
             }
             ();
-
-            if constexpr (I == 0) {
-               dump<'['>(b);
-            }
+            
+            dump<'['>(b);
             using V = std::decay_t<T>;
-            if constexpr (I < N) {
+            for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
                   write<json>::op<C>(value.*std::get<I>(meta_v<V>), b);
                }
@@ -233,12 +231,9 @@ namespace glaze
                }
                if constexpr (I < N - 1) {
                   dump<','>(b);
-                  op<C, I + 1>(value, b);
                }
-            }
-            if constexpr (I == 0) {
-               dump<']'>(b);
-            }
+            });
+            dump<']'>(b);
          }
       };
       
