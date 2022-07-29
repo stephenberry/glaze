@@ -5,35 +5,12 @@
 
 #include "glaze/core/format.hpp"
 #include "glaze/util/dump.hpp"
+#include "glaze/binary/header.hpp"
 
 namespace glaze
 {
    namespace detail
-   {
-      struct header8 {
-         uint8_t config : 2;
-         uint8_t size : 6;
-      };
-      static_assert(sizeof(header8) == 1);
-      
-      struct header16 {
-         uint8_t config : 2;
-         uint16_t size : 14;
-      };
-      static_assert(sizeof(header16) == 2);
-      
-      struct header32 {
-         uint8_t config : 2;
-         uint32_t size : 30;
-      };
-      static_assert(sizeof(header32) == 4);
-      
-      struct header64 {
-         uint8_t config : 2;
-         uint64_t size : 62;
-      };
-      static_assert(sizeof(header64) == 8);
-      
+   {      
       template <class T = void>
       struct to_binary {};
       
@@ -93,20 +70,16 @@ namespace glaze
             if (!value.empty()) {
                const auto n = value.size();
                if (n < 64) {
-                  static constexpr auto h8 = header8{};
-                  dump_type(&h8, b);
+                  dump_type(header8{ 0, static_cast<uint8_t>(n) }, b);
                }
                else if (n < 16384) {
-                  static constexpr auto h16 = header16{};
-                  dump_type(&h16, b);
+                  dump_type(header16{ 1, static_cast<uint16_t>(n) }, b);
                }
                else if (n < 1073741824) {
-                  static constexpr auto h32 = header32{};
-                  dump_type(&h32, b);
+                  dump_type(header32{ 2, static_cast<uint32_t>(n) }, b);
                }
                else if (n < 4611686018427387904) {
-                  static constexpr auto h64 = header64{};
-                  dump_type(&h64, b);
+                  dump_type(header64{ 3, n }, b);
                }
                for (auto&& x : value) {
                   write<binary>::op(x, b);

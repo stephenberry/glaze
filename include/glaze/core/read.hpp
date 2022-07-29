@@ -8,6 +8,25 @@
 
 namespace glaze
 {
+   template <uint32_t Format, class Buffer>
+   requires nano::ranges::input_range<std::decay_t<Buffer>> &&
+      std::same_as<std::byte, nano::ranges::range_value_t<std::decay_t<Buffer>>>
+   inline void read(auto& value, Buffer&& buffer)
+   {
+      auto b = std::ranges::begin(buffer);
+      auto e = std::ranges::end(buffer);
+      if (b == e) {
+         throw std::runtime_error("No input provided to read");
+      }
+      try {
+         detail::read<Format>::op(value, b, e);
+      }
+      catch (const std::exception& e) {
+         // TODO: Implement good error message
+         throw std::runtime_error("binary read error");
+      }
+   }
+   
    // For reading json from a std::vector<char>, std::deque<char> and the like
    template <uint32_t Format, class Buffer>
    requires nano::ranges::input_range<std::decay_t<Buffer>> &&
