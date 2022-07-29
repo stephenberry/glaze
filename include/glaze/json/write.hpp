@@ -114,7 +114,7 @@ namespace glaze
                write_char(value);
             }
             else {
-               std::string_view str = value;
+               const std::string_view str = value;
                for (auto&& c : str) {
                   write_char(c);
                }
@@ -208,7 +208,7 @@ namespace glaze
          template <bool C, size_t I = 0>
          static void op(auto&& value, auto&& b) noexcept
          {
-            static constexpr auto n = []() constexpr
+            static constexpr auto N = []() constexpr
             {
                if constexpr (glaze_array_t<std::decay_t<T>>) {
                   return std::tuple_size_v<meta_t<std::decay_t<T>>>;
@@ -222,15 +222,15 @@ namespace glaze
             if constexpr (I == 0) {
                dump<'['>(b);
             }
-            using value_t = std::decay_t<T>;
-            if constexpr (I < n) {
-               if constexpr (glaze_array_t<std::decay_t<T>>) {
-                  write<json>::op<C>(value.*std::get<I>(meta_v<value_t>), b);
+            using V = std::decay_t<T>;
+            if constexpr (I < N) {
+               if constexpr (glaze_array_t<V>) {
+                  write<json>::op<C>(value.*std::get<I>(meta_v<V>), b);
                }
                else {
                   write<json>::op<C>(std::get<I>(value), b);
                }
-               if constexpr (I < n - 1) {
+               if constexpr (I < N - 1) {
                   dump<','>(b);
                   op<C, I + 1>(value, b);
                }
@@ -251,9 +251,9 @@ namespace glaze
             if constexpr (I == 0) {
                dump<'{'>(b);
             }
-            using Value = std::decay_t<T>;
-            if constexpr (I < std::tuple_size_v<meta_t<Value>>) {
-               static constexpr auto item = std::get<I>(meta_v<Value>);
+            using V = std::decay_t<T>;
+            if constexpr (I < std::tuple_size_v<meta_t<V>>) {
+               static constexpr auto item = std::get<I>(meta_v<V>);
                using Key =
                   typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
                if constexpr (str_t<Key> || char_t<Key>) {
@@ -278,7 +278,7 @@ namespace glaze
                      dump<"*/">(b);
                   }
                }
-               if constexpr (I < std::tuple_size_v<meta_t<Value>> - 1) {
+               if constexpr (I < std::tuple_size_v<meta_t<V>> - 1) {
                   dump<','>(b);
                   op<C, I + 1>(value, b);
                }
