@@ -15,6 +15,7 @@
 
 #include "glaze/core/common.hpp"
 #include "glaze/core/format.hpp"
+#include "glaze/util/for_each.hpp"
 
 namespace glaze
 {
@@ -245,14 +246,13 @@ namespace glaze
       requires glaze_object_t<std::decay_t<T>>
       struct to_json<T>
       {
-         template <bool C, size_t I = 0>
+         template <bool C>
          static void op(auto&& value, auto&& b) noexcept
          {
-            if constexpr (I == 0) {
-               dump<'{'>(b);
-            }
             using V = std::decay_t<T>;
-            if constexpr (I < std::tuple_size_v<meta_t<V>>) {
+            static constexpr auto N = std::tuple_size_v<meta_t<V>>;
+            dump<'{'>(b);
+            for_each<N>([&](auto I) {
                static constexpr auto item = std::get<I>(meta_v<V>);
                using Key =
                   typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
@@ -266,8 +266,8 @@ namespace glaze
                   write<json>::op<C>(quoted, b);
                }
                write<json>::op<C>(value.*std::get<1>(item), b);
-               constexpr auto N = std::tuple_size_v<decltype(item)>;
-               if constexpr (C && N > 2) {
+               constexpr auto S = std::tuple_size_v<decltype(item)>;
+               if constexpr (C && S > 2) {
                   static_assert(
                      std::is_same_v<std::decay_t<decltype(std::get<2>(item))>,
                                     comment_t>);
@@ -278,14 +278,11 @@ namespace glaze
                      dump<"*/">(b);
                   }
                }
-               if constexpr (I < std::tuple_size_v<meta_t<V>> - 1) {
+               if constexpr (I < N - 1) {
                   dump<','>(b);
-                  op<C, I + 1>(value, b);
                }
-            }
-            if constexpr (I == 0) {
-               dump<'}'>(b);
-            }
+            });
+            dump<'}'>(b);
          }
       };
    }  // namespace detail
