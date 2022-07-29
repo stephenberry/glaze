@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "glaze/common.hpp"
-#include "glaze/validate.hpp"
+#include "glaze/core/common.hpp"
+#include "glaze/util/validate.hpp"
 
 namespace glaze
 {

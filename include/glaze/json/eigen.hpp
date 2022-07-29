@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "glaze/common.hpp"
+#include "glaze/core/common.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"

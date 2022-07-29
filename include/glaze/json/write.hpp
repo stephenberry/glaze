@@ -13,8 +13,8 @@
 #include <iterator>
 #include <ostream>
 
-#include "glaze/common.hpp"
-#include "glaze/format.hpp"
+#include "glaze/core/common.hpp"
+#include "glaze/core/format.hpp"
 
 namespace glaze
 {

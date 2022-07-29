@@ -5,7 +5,7 @@
 
 #include "glaze/api/std/string.hpp"
 #include "glaze/api/meta.hpp"
-#include "glaze/format.hpp"
+#include "glaze/core/format.hpp"
 
 #include <stdexcept>
 

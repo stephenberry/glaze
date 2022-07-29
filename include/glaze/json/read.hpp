@@ -8,10 +8,10 @@
 #include <charconv>
 
 #include "fast_float/fast_float.h"
-#include "glaze/read.hpp"
-#include "glaze/format.hpp"
-#include "glaze/type_traits.hpp"
-#include "glaze/parse.hpp"
+#include "glaze/core/read.hpp"
+#include "glaze/core/format.hpp"
+#include "glaze/util/type_traits.hpp"
+#include "glaze/util/parse.hpp"
 
 namespace glaze
 {

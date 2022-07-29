@@ -7,7 +7,7 @@
 #include <charconv>
 
 #include "fast_float/fast_float.h"
-#include "glaze/common.hpp"
+#include "glaze/core/common.hpp"
 
 namespace glaze
 {

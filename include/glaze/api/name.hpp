@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <string_view>
 
-#include "glaze/type_traits.hpp"
+#include "glaze/util/type_traits.hpp"
 
 namespace glaze
 {
