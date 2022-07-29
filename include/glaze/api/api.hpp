@@ -4,7 +4,7 @@
 #pragma once
 
 #include "glaze/api/std/string.hpp"
-#include "glaze/api/meta.hpp"
+#include "glaze/api/trait.hpp"
 #include "glaze/core/format.hpp"
 
 #include <stdexcept>
