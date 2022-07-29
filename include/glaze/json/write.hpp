@@ -20,7 +20,7 @@ namespace glaze
 {
    namespace detail
    {
-      inline void dump(char c, std::string& b) noexcept {
+      inline void dump(const char c, std::string& b) noexcept {
          b.push_back(c);
       }
       
@@ -30,7 +30,7 @@ namespace glaze
       }
 
       template <char c>
-      inline void dump(std::output_iterator<char> auto&&it) noexcept
+      inline void dump(std::output_iterator<char> auto&& it) noexcept
       {
          *it = c;
          ++it;
@@ -111,7 +111,7 @@ namespace glaze
                dump(c, b);
             };
             if constexpr (char_t<std::decay_t<T>>) {
-               write_char(std::forward<T>(value));
+               write_char(value);
             }
             else {
                std::string_view str = value;
@@ -162,7 +162,7 @@ namespace glaze
          {
             dump<'{'>(b);
             bool first = true;
-            for (auto&& item : std::forward<T>(value)) {
+            for (auto&& item : value) {
                if (first)
                   first = false;
                else
