@@ -8,33 +8,80 @@
 
 #include <bit>
 
-namespace glaze
-{
-   /*template <class T, class Buffer>
-   requires std::ranges::input_range<Buffer> &&
-      std::same_as<char, std::ranges::range_value_t<Buffer>>
-   inline void write_binary(T&& value, Buffer& buffer) noexcept
-   {
-      if constexpr (std::same_as<Buffer, std::string>) {
-         detail::to_buffer(std::forward<T>(value), buffer);
-      }
-      else {
-         detail::to_buffer(std::forward<T>(value), std::back_inserter(buffer));
-      }
-   }*/
-}
+#include "glaze/binary/write.hpp"
+
+using namespace glaze;
 
 void write_tests()
 {
    using namespace boost::ut;
 
-   "binary"_test = [] {
+   "round_trip"_test = [] {
       {
-         std::string s;
+         std::vector<std::byte> s;
          float f{0.96875f};
+         auto start = f;
          s.resize(sizeof(float));
          std::memcpy(s.data(), &f, sizeof(float));
-         //expect(s == "0.96875");
+         std::memcpy(&f, s.data(), sizeof(float));
+         expect(start == f);
+      }
+   };
+   
+   "bool"_test = [] {
+      {
+         std::vector<std::byte> s;
+         bool b = true;
+         s.resize(sizeof(bool));
+         std::memcpy(s.data(), &b, sizeof(bool));
+         
+         std::vector<std::byte> out;
+         write_binary(b, out);
+         const bool success = out == s;
+         expect(success);
+      }
+   };
+   
+   "float"_test = [] {
+      {
+         std::vector<std::byte> s;
+         float f = 1.5f;
+         s.resize(sizeof(float));
+         std::memcpy(s.data(), &f, sizeof(float));
+         
+         std::vector<std::byte> out;
+         write_binary(f, out);
+         const bool success = out == s;
+         expect(success);
+      }
+   };
+   
+   "string"_test = [] {
+      {
+         std::vector<std::byte> in;
+         std::string s = "Hello World";
+         in.resize(sizeof(char) * s.size());
+         std::memcpy(in.data(), s.data(), sizeof(char) * s.size());
+         
+         std::vector<std::byte> out;
+         write_binary(s, out);
+         const bool success = out == in;
+         expect(success);
+      }
+   };
+   
+   "array"_test = [] {
+      {
+         std::array<float, 3> s = { 1.2f, 3434.343f, 0.f };
+         std::vector<std::byte> out;
+         write_binary(s, out);      }
+   };
+   
+   "vector"_test = [] {
+      {
+         std::vector<float> s = { 1.2f, 3434.343f, 0.f };
+         std::vector<std::byte> out;
+         write_binary(s, out);
       }
    };
 }

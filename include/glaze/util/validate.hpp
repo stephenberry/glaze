@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#pragma once
+
 #include <string>
 #include <optional>
 #include <sstream>

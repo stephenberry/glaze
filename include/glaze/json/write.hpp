@@ -13,48 +13,14 @@
 #include <iterator>
 #include <ostream>
 
-#include "glaze/core/common.hpp"
 #include "glaze/core/format.hpp"
 #include "glaze/util/for_each.hpp"
+#include "glaze/util/dump.hpp"
 
 namespace glaze
 {
    namespace detail
    {
-      inline void dump(const char c, std::string& b) noexcept {
-         b.push_back(c);
-      }
-      
-      template <char c>
-      inline void dump(std::string& b) noexcept {
-         b.push_back(c);
-      }
-
-      template <char c>
-      inline void dump(std::output_iterator<char> auto&& it) noexcept
-      {
-         *it = c;
-         ++it;
-      }
-
-      template <string_literal str>
-      inline void dump(std::output_iterator<char> auto&& it) noexcept {
-         std::copy(str.value, str.value + str.size, it);
-      }
-
-      template <string_literal str>
-      inline void dump(std::string& b) noexcept {
-         b.append(str.value, str.size);
-      }
-
-      inline void dump(const std::string_view str, std::output_iterator<char> auto&& it) noexcept {
-         std::copy(str.data(), str.data() + str.size(), it);
-      }
-
-      inline void dump(const std::string_view str, std::string& b) noexcept {
-         b.append(str.data(), str.size());
-      }
-      
       template <>
       struct write<json>
       {
@@ -281,37 +247,14 @@ namespace glaze
          }
       };
    }  // namespace detail
-
-   // For writing json to a std::string, std::vector<char>, std::deque<char> and
-   // the like
-   template <uint32_t Format, bool C, class T, class Buffer>
-   requires nano::ranges::input_range<Buffer> &&
-      std::same_as<char, nano::ranges::range_value_t<Buffer>>
-   inline void write(T&& value, Buffer& buffer) noexcept
-   {
-      if constexpr (std::same_as<Buffer, std::string>) {
-         detail::write<Format>::template op<C>(std::forward<T>(value), buffer);
-      }
-      else {
-         detail::write<Format>::template op<C>(std::forward<T>(value), std::back_inserter(buffer));
-      }
-   }
-
-   // For writing json to std::ofstream, std::cout, or other streams
-   template <uint32_t Format, bool C, class T>
-   inline void write(T&& value, std::ostream& os) noexcept
-   {
-      detail::write<Format>::template op<C>(std::forward<T>(value),
-                        std::ostreambuf_iterator<char>(os));
-   }
    
    template <class T, class Buffer>
    inline void write_json(T&& value, Buffer&& buffer) {
-      write<json, false>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      write_c<json, false>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
    
    template <class T, class Buffer>
    inline void write_jsonc(T&& value, Buffer&& buffer) {
-      write<json, true>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      write_c<json, true>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 }  // namespace glaze
