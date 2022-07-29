@@ -11,7 +11,11 @@
 
 #include <sstream>
 
+#ifndef FMT_HEADER_ONLY
+#define FMT_HEADER_ONLY
+#endif  // !FMT_HEADER_ONLY
 #include "fmt/format.h"
+#include "fmt/compile.h"
 
 #include "glaze/record/recorder.hpp"
 
@@ -68,7 +72,7 @@ namespace glaze
    inline void write_csv(Buffer& buffer,
                          const T x) requires std::is_floating_point_v<T>
    {
-      fmt::format_to(std::back_inserter(buffer), "{}", x);
+      fmt::format_to(std::back_inserter(buffer), FMT_COMPILE("{}"), x);
    }
    
    template <class Buffer, class T>
@@ -84,7 +88,7 @@ namespace glaze
          }
       }
       else {
-         fmt::format_to(std::back_inserter(buffer), "{}", x);
+         fmt::format_to(std::back_inserter(buffer), FMT_COMPILE("{}"), x);
       }
    }
    

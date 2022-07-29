@@ -94,7 +94,7 @@ namespace glaze
       };
 
       template <class T>
-      requires str_t<T> || char_t<std::decay_t<T>>
+      requires str_t<T> || char_t<T>
       struct to_json<T>
       {
          template <bool C>
@@ -105,12 +105,12 @@ namespace glaze
                switch (c) {
                case '\\':
                case '"':
-                     dump<'\\'>(b);
+                  dump<'\\'>(b);
                   break;
                }
                dump(c, b);
             };
-            if constexpr (char_t<std::decay_t<T>>) {
+            if constexpr (char_t<T>) {
                write_char(value);
             }
             else {
@@ -162,7 +162,7 @@ namespace glaze
          {
             dump<'{'>(b);
             auto it = value.cbegin();
-            auto lambda = [&] {
+            auto write_pair = [&] {
                using Key = decltype(it->first);
                if constexpr (str_t<Key> || char_t<Key>) {
                   write<json>::op<C>(it->first, b);
@@ -175,13 +175,13 @@ namespace glaze
                dump<':'>(b);
                write<json>::op<C>(it->second, b);
             };
-            lambda();
+            write_pair();
             ++it;
             
             const auto end = value.cend();
             for (; it != end; ++it) {
                dump<','>(b);
-               lambda();
+               write_pair();
             }
             dump<'}'>(b);
          }
@@ -251,12 +251,12 @@ namespace glaze
             if constexpr (I == 0) {
                dump<'{'>(b);
             }
-            using value_t = std::decay_t<T>;
-            if constexpr (I < std::tuple_size_v<meta_t<value_t>>) {
-               static constexpr auto item = std::get<I>(meta_v<value_t>);
-               using key_t =
+            using Value = std::decay_t<T>;
+            if constexpr (I < std::tuple_size_v<meta_t<Value>>) {
+               static constexpr auto item = std::get<I>(meta_v<Value>);
+               using Key =
                   typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
-               if constexpr (str_t<key_t> || char_t<key_t>) {
+               if constexpr (str_t<Key> || char_t<Key>) {
                   write<json>::op<C>(std::get<0>(item), b);
                   dump<':'>(b);
                }
@@ -278,7 +278,7 @@ namespace glaze
                      dump<"*/">(b);
                   }
                }
-               if constexpr (I < std::tuple_size_v<meta_t<value_t>> - 1) {
+               if constexpr (I < std::tuple_size_v<meta_t<Value>> - 1) {
                   dump<','>(b);
                   op<C, I + 1>(value, b);
                }
