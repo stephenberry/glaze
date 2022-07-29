@@ -18,8 +18,8 @@
 #include "fmt/compile.h"
 
 #include "glaze/record/recorder.hpp"
-
 #include "glaze/util/type_traits.hpp"
+#include "glaze/util/for_each.hpp"
 
 namespace glaze
 {
@@ -28,28 +28,6 @@ namespace glaze
     {
         return std::visit([](auto&& x) {return x.size(); }, v);
     }
-
-   template <class = void, std::size_t... Is>
-   constexpr auto indexer(std::index_sequence<Is...>) {
-     return [](auto&& f) -> decltype(auto) {
-       return decltype(f)(f)( std::integral_constant<std::size_t, Is>{}... );
-     };
-   }
-   
-   // takes a number N
-   // returns a function object that, when passed a function object f
-   // passes it compile-time values from 0 to N-1 inclusive.
-   template<size_t N>
-   constexpr auto indexer() {
-     return indexer(std::make_index_sequence<N>{});
-   }
-   
-   template <size_t N, class Func>
-   constexpr auto for_each(Func&& f) {
-      indexer<N>()([&](auto&&...i){
-         (f(i), ...);
-      });
-   }
    
    template <size_t Offset, class Tuple, std::size_t...Is>
    auto tuple_splitter_impl(Tuple&& tuple, std::index_sequence<Is...>) {
