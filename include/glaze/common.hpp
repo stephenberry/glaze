@@ -13,7 +13,7 @@
 #include "NanoRange/nanorange.hpp"
 
 namespace glaze
-{
+{   
    namespace detail
    {
       template <int... I>
@@ -108,6 +108,9 @@ namespace glaze
       
       template <uint32_t Format>
       struct read {};
+      
+      template <uint32_t Format>
+      struct write {};
    }  // namespace detail
 
    template <class T>
@@ -426,6 +429,9 @@ namespace glaze
       
       template <class T = void>
       struct from_json {};
+      
+      template <class T = void>
+      struct to_json {};
    }  // namespace detail
 
    consteval auto array(auto&&... args)
