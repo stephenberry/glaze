@@ -78,6 +78,7 @@ namespace glaze
       {
          static void op(auto&& value, auto&& b) noexcept
          {
+            dump_size(value, b);
             dump(std::as_bytes(std::span{ value.data(), value.size() }), b);
          }
       };

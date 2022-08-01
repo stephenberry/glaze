@@ -67,15 +67,12 @@ void write_tests()
    
    "string"_test = [] {
       {
-         std::vector<std::byte> in;
          std::string s = "Hello World";
-         in.resize(sizeof(char) * s.size());
-         std::memcpy(in.data(), s.data(), sizeof(char) * s.size());
-         
          std::vector<std::byte> out;
          write_binary(s, out);
-         const bool success = out == in;
-         expect(success);
+         std::string s2{};
+         read_binary(s2, out);
+         expect(s == s2);
       }
    };
    

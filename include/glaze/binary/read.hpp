@@ -77,6 +77,19 @@ namespace glaze
          }
       }
       
+      template <str_t T>
+      struct from_binary<T>
+      {
+         static void op(auto&& value, auto&& it, auto&& end)
+         {
+            const auto n = size_from_header(it, end);
+            using V = typename std::decay_t<T>::value_type;
+            const auto n_bytes = sizeof(V) * n;
+            value.resize(value.size() + n);
+            std::memcpy(value.data(), &(*it), n_bytes);
+         }
+      };
+      
       template <array_t T>
       struct from_binary<T>
       {
