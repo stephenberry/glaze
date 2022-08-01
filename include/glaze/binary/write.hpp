@@ -103,7 +103,9 @@ namespace glaze
       {
          static void op(auto&& value, auto&& b)
          {
-            dump_int(value.size(), b);
+            if constexpr (resizeable<T>) {
+               dump_int(value.size(), b);
+            }
             for (auto&& x : value) {
                write<binary>::op(x, b);
             }

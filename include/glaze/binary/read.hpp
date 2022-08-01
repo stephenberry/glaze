@@ -124,18 +124,21 @@ namespace glaze
       {
          static void op(auto&& value, auto&& it, auto&& end)
          {
-            const auto n = int_from_header(it, end);
             using V = typename std::decay_t<T>::value_type;
-            const auto n_bytes = sizeof(V) * n;
-            
             if constexpr (resizeable<T>) {
+               const auto n = int_from_header(it, end);
+               const auto n_bytes = sizeof(V) * n;
+               
                value.resize(value.size() + n);
                std::memcpy(value.data(), &(*it), n_bytes);
+               std::advance(it, n_bytes);
             }
             else {
+               static constexpr auto N = std::tuple_size_v<std::decay_t<T>>;
+               const auto n_bytes = sizeof(V) * N;
                std::memcpy(value.data(), &(*it), n_bytes);
+               std::advance(it, n_bytes);
             }
-            std::advance(it, n_bytes);
          }
       };
       
