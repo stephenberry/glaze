@@ -71,7 +71,7 @@ struct sub_thing2
    double c{999.342494903};
    double d{0.000000000001};
    double e{203082348402.1};
-   float f{89.089};
+   float f{89.089f};
    double g{12380.00000013};
    double h{1000000.000001};
 };
