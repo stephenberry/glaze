@@ -156,6 +156,8 @@ namespace glaze
             const auto cend = value.cend();
             for (auto c = value.begin(); c < cend; ++c, ++it)
             {
+               if (it == end) [[unlikely]]
+                  throw std::runtime_error("Expected \"");
                switch (*it) {
                   [[unlikely]] case '\\':
                   {
@@ -399,7 +401,7 @@ namespace glaze
       template <nullable_t T>
       struct from_json<T>
       {
-         static void op(T& value, auto&& it, auto&& end)
+         static void op(auto& value, auto&& it, auto&& end)
          {
             skip_ws(it, end);
             if (it == end) {

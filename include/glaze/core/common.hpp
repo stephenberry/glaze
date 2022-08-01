@@ -379,7 +379,7 @@ namespace glaze
 
       template <size_t I = 0, class Tuple, class Members = std::tuple<>,
                 class Member = std::tuple<>>
-      consteval auto group_members(Tuple &&tuple, Members &&members = {},
+      constexpr auto group_members(Tuple &&tuple, Members &&members = {},
                                           Member &&member = {})
       {
          if constexpr (std::tuple_size_v<Tuple> == 0) {
@@ -409,7 +409,7 @@ namespace glaze
       }
 
       template <class T, size_t... I>
-      consteval auto make_map_impl(std::index_sequence<I...>)
+      constexpr auto make_map_impl(std::index_sequence<I...>)
       {
          using value_t = value_tuple_variant_t<meta_t<T>>;
          return frozen::make_unordered_map<frozen::string, value_t,
@@ -420,7 +420,7 @@ namespace glaze
       }
 
       template <class T>
-      consteval auto make_map()
+      constexpr auto make_map()
       {
          constexpr auto indices =
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
@@ -428,7 +428,7 @@ namespace glaze
       }
       
       template <class T, size_t... I>
-      consteval auto make_int_map_impl(std::index_sequence<I...>)
+      constexpr auto make_int_map_impl(std::index_sequence<I...>)
       {
          using value_t = value_tuple_variant_t<meta_t<T>>;
          return frozen::make_unordered_map<size_t, value_t,
@@ -439,7 +439,7 @@ namespace glaze
       }
       
       template <class T>
-      consteval auto make_int_map()
+      constexpr auto make_int_map()
       {
          constexpr auto indices =
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
@@ -453,12 +453,12 @@ namespace glaze
       struct to_json {};
    }  // namespace detail
 
-   consteval auto array(auto&&... args)
+   constexpr auto array(auto &&...args)
    {
       return std::make_tuple(args...);
    }
 
-   consteval auto object(auto&&... args)
+   constexpr auto object(auto&&... args)
    {
       return detail::group_members(
          std::make_tuple(args...));
