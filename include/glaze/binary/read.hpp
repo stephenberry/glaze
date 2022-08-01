@@ -41,6 +41,7 @@ namespace glaze
          }
       };
       
+      // TODO: Handle errors
       inline constexpr size_t size_from_header(auto&& it, auto&& end)
       {
          header8 h8;

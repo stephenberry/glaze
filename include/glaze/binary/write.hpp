@@ -43,6 +43,26 @@ namespace glaze
          dump(std::as_bytes(std::span{ &value, 1 }), b);
       }
       
+      void dump_size(auto&& value, auto&& b)
+      {
+         const auto n = value.size();
+         if (n < 64) {
+            dump_type(header8{ 0, static_cast<uint8_t>(n) }, b);
+         }
+         else if (n < 16384) {
+            dump_type(header16{ 1, static_cast<uint16_t>(n) }, b);
+         }
+         else if (n < 1073741824) {
+            dump_type(header32{ 2, static_cast<uint32_t>(n) }, b);
+         }
+         else if (n < 4611686018427387904) {
+            dump_type(header64{ 3, n }, b);
+         }
+         else {
+            throw std::runtime_error("size not supported");
+         }
+      }
+      
       template <class T>
       requires num_t<T> || char_t<T>
       struct to_binary<T>
@@ -65,25 +85,39 @@ namespace glaze
       template <array_t T>
       struct to_binary<T>
       {
+         static void op(auto&& value, auto&& b)
+         {
+            dump_size(value, b);
+            for (auto&& x : value) {
+               write<binary>::op(x, b);
+            }
+         }
+      };
+      
+      template <map_t T>
+      struct to_binary<T>
+      {
          static void op(auto&& value, auto&& b) noexcept
          {
-            if (!value.empty()) {
-               const auto n = value.size();
-               if (n < 64) {
-                  dump_type(header8{ 0, static_cast<uint8_t>(n) }, b);
-               }
-               else if (n < 16384) {
-                  dump_type(header16{ 1, static_cast<uint16_t>(n) }, b);
-               }
-               else if (n < 1073741824) {
-                  dump_type(header32{ 2, static_cast<uint32_t>(n) }, b);
-               }
-               else if (n < 4611686018427387904) {
-                  dump_type(header64{ 3, n }, b);
-               }
-               for (auto&& x : value) {
-                  write<binary>::op(x, b);
-               }
+            dump_size(value, b);
+            for (auto&& [k, v] : value) {
+               write<binary>::op(k, b);
+               write<binary>::op(v, b);
+            }
+         }
+      };
+      
+      template <nullable_t T>
+      struct to_binary<T>
+      {
+         static void op(auto&& value, auto&& b) noexcept
+         {
+            if (value) {
+               dump<static_cast<std::byte>(1)>(b);
+               write<binary>::op(*value, b);
+            }
+            else {
+               dump<static_cast<std::byte>(0)>(b);
             }
          }
       };
