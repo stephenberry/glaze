@@ -42,7 +42,7 @@ namespace glaze
       };
       
       // TODO: Handle errors
-      inline constexpr size_t size_from_header(auto&& it, auto&& end)
+      inline constexpr size_t int_from_header(auto&& it, auto&& end)
       {
          header8 h8;
          std::memcpy(&h8, &(*it), 1);
@@ -82,7 +82,7 @@ namespace glaze
       {
          static void op(auto&& value, auto&& it, auto&& end)
          {
-            const auto n = size_from_header(it, end);
+            const auto n = int_from_header(it, end);
             using V = typename std::decay_t<T>::value_type;
             const auto n_bytes = sizeof(V) * n;
             value.resize(value.size() + n);
@@ -95,7 +95,7 @@ namespace glaze
       {
          static void op(auto&& value, auto&& it, auto&& end)
          {
-            const auto n = size_from_header(it, end);
+            const auto n = int_from_header(it, end);
             using V = typename std::decay_t<T>::value_type;
             const auto n_bytes = sizeof(V) * n;
             
@@ -107,6 +107,28 @@ namespace glaze
                std::memcpy(value.data(), &(*it), n_bytes);
             }
             std::advance(it, n_bytes);
+         }
+      };
+      
+      template <class T>
+      requires glaze_object_t<std::decay_t<T>>
+      struct from_binary<T>
+      {
+         static void op(auto&& value, auto&& it, auto&& end)
+         {
+            const auto n_keys = int_from_header(it, end);
+            for (size_t i = 0; i < n_keys; ++i) {
+               const auto key = int_from_header(it, end);
+               static constexpr auto frozen_map = detail::make_int_map<T>();
+               const auto& member_it = frozen_map.find(key);
+               if (member_it != frozen_map.end()) {
+                  std::visit(
+                     [&](auto&& member_ptr) {
+                        read<binary>::op(value.*member_ptr, it, end);
+                     },
+                     member_it->second);
+               }
+            }
          }
       };
    }

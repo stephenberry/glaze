@@ -43,20 +43,19 @@ namespace glaze
          dump(std::as_bytes(std::span{ &value, 1 }), b);
       }
       
-      void dump_size(auto&& value, auto&& b)
+      void dump_int(size_t i, auto&& b)
       {
-         const auto n = value.size();
-         if (n < 64) {
-            dump_type(header8{ 0, static_cast<uint8_t>(n) }, b);
+         if (i < 64) {
+            dump_type(header8{ 0, static_cast<uint8_t>(i) }, b);
          }
-         else if (n < 16384) {
-            dump_type(header16{ 1, static_cast<uint16_t>(n) }, b);
+         else if (i < 16384) {
+            dump_type(header16{ 1, static_cast<uint16_t>(i) }, b);
          }
-         else if (n < 1073741824) {
-            dump_type(header32{ 2, static_cast<uint32_t>(n) }, b);
+         else if (i < 1073741824) {
+            dump_type(header32{ 2, static_cast<uint32_t>(i) }, b);
          }
-         else if (n < 4611686018427387904) {
-            dump_type(header64{ 3, n }, b);
+         else if (i < 4611686018427387904) {
+            dump_type(header64{ 3, i }, b);
          }
          else {
             throw std::runtime_error("size not supported");
@@ -78,7 +77,7 @@ namespace glaze
       {
          static void op(auto&& value, auto&& b) noexcept
          {
-            dump_size(value, b);
+            dump_int(value.size(), b);
             dump(std::as_bytes(std::span{ value.data(), value.size() }), b);
          }
       };
@@ -88,7 +87,7 @@ namespace glaze
       {
          static void op(auto&& value, auto&& b)
          {
-            dump_size(value, b);
+            dump_int(value.size(), b);
             for (auto&& x : value) {
                write<binary>::op(x, b);
             }
@@ -100,7 +99,7 @@ namespace glaze
       {
          static void op(auto&& value, auto&& b) noexcept
          {
-            dump_size(value, b);
+            dump_int(value.size(), b);
             for (auto&& [k, v] : value) {
                write<binary>::op(k, b);
                write<binary>::op(v, b);
@@ -120,6 +119,24 @@ namespace glaze
             else {
                dump<static_cast<std::byte>(0)>(b);
             }
+         }
+      };
+      
+      template <class T>
+      requires glaze_object_t<std::decay_t<T>>
+      struct to_binary<T>
+      {
+         static void op(auto&& value, auto&& b) noexcept
+         {
+            using V = std::decay_t<T>;
+            static constexpr auto N = std::tuple_size_v<meta_t<V>>;
+            dump_size(N, b);
+            
+            for_each<N>([&](auto I) {
+               static constexpr auto item = std::get<I>(meta_v<V>);
+               dump_int(I, b); // dump the known key as an integer
+               write<binary>::op(value.*std::get<1>(item), b);
+            });
          }
       };
    }

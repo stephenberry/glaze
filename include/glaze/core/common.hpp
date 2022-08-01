@@ -427,6 +427,25 @@ namespace glaze
          return make_map_impl<T>(indices);
       }
       
+      template <class T, size_t... I>
+      consteval auto make_int_map_impl(std::index_sequence<I...>)
+      {
+         using value_t = value_tuple_variant_t<meta_t<T>>;
+         return frozen::make_unordered_map<size_t, value_t,
+                                           std::tuple_size_v<meta_t<T>>>(
+            {std::make_pair<size_t, value_t>(
+               I,
+               std::get<1>(std::get<I>(meta_v<T>)))...});
+      }
+      
+      template <class T>
+      consteval auto make_int_map()
+      {
+         constexpr auto indices =
+            std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
+         return make_map_impl<T>(indices);
+      }
+      
       template <class T = void>
       struct from_json {};
       
