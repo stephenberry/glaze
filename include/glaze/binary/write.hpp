@@ -62,6 +62,22 @@ namespace glaze
          }
       }
       
+      void dump_reduce(size_t i, auto&& b)
+      {
+         if (i < 256) {
+            dump_type(static_cast<uint8_t>(i), b);
+         }
+         else if (i < 65536) {
+            dump_type(static_cast<uint16_t>(i), b);
+         }
+         else if (i < 4294967296) {
+            dump_type(static_cast<uint32_t>(i), b);
+         }
+         else {
+            dump_type(i, b);
+         }
+      }
+      
       template <class T>
       requires num_t<T> || char_t<T>
       struct to_binary<T>
@@ -130,7 +146,7 @@ namespace glaze
          {
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
-            dump_size(N, b);
+            dump_reduce(N, b); // do not compress, N is known at compile time
             
             for_each<N>([&](auto I) {
                static constexpr auto item = std::get<I>(meta_v<V>);

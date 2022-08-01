@@ -77,6 +77,35 @@ namespace glaze
          }
       }
       
+      template <size_t N>
+      inline constexpr size_t int_from_reduced(auto&& it, auto&& end)
+      {
+         if constexpr (N < 256) {
+            uint8_t i;
+            std::memcpy(&i, &(*it), 1);
+            ++it;
+            return i;
+         }
+         else if constexpr (N < 65536) {
+            uint16_t i;
+            std::memcpy(&i, &(*it), 2);
+            ++it;
+            return i;
+         }
+         else if constexpr (N < 4294967296) {
+            uint32_t i;
+            std::memcpy(&i, &(*it), 4);
+            ++it;
+            return i;
+         }
+         else {
+            uint64_t i;
+            std::memcpy(&i, &(*it), 8);
+            ++it;
+            return i;
+         }
+      }
+      
       template <str_t T>
       struct from_binary<T>
       {
@@ -116,7 +145,9 @@ namespace glaze
       {
          static void op(auto&& value, auto&& it, auto&& end)
          {
-            const auto n_keys = int_from_header(it, end);
+            using V = std::decay_t<T>;
+            static constexpr auto N = std::tuple_size_v<meta_t<V>>;
+            const auto n_keys = int_from_reduced<N>(it, end);
             for (size_t i = 0; i < n_keys; ++i) {
                const auto key = int_from_header(it, end);
                static constexpr auto frozen_map = detail::make_int_map<T>();
