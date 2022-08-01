@@ -61,7 +61,7 @@ namespace glaze
       {
          template <class T, class It0, class It1>
          static void op(T&& value, It0&& it, It1&& end) {
-            from_json<std::decay_t<T>>::op(value, std::forward<It0>(it), std::forward<It1>(end));
+            from_json<std::decay_t<T>>::op(std::forward<T>(value), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
       
