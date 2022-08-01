@@ -99,7 +99,7 @@ namespace glaze
       struct from_json<T>
       {
          template <class It>
-         static void op(T& value, It&& it, auto&& end)
+         static void op(auto& value, It&& it, auto&& end)
          {
             skip_ws(it, end);
             if (it == end) [[unlikely]]
@@ -147,7 +147,7 @@ namespace glaze
       template <str_t T>
       struct from_json<T>
       {
-         static void op(T& value, auto&& it, auto&& end)
+         static void op(auto& value, auto&& it, auto&& end)
          {
             // TODO: this does not handle control chars like \t and \n
             
@@ -203,7 +203,7 @@ namespace glaze
       template <char_t T>
       struct from_json<T>
       {
-         static void op(T& value, auto&& it, auto&& end)
+         static void op(auto& value, auto&& it, auto&& end)
          {
             // TODO: this does not handle escaped chars
             match<'"'>(it, end);
@@ -235,7 +235,7 @@ namespace glaze
        !resizeable<T>)
       struct from_json<T>
       {
-         static void op(T& value, auto&& it, auto&& end)
+         static void op(auto& value, auto&& it, auto&& end)
          {
             skip_ws(it, end);
             auto value_it = value.begin();
@@ -272,7 +272,7 @@ namespace glaze
        resizeable<T>)
       struct from_json<T>
       {
-         static void op(T& value, auto&& it, auto&& end)
+         static void op(auto& value, auto&& it, auto&& end)
          {
             using value_t = nano::ranges::range_value_t<T>;
             static thread_local std::vector<value_t> buffer{};
@@ -304,7 +304,7 @@ namespace glaze
       template <class T> requires glaze_array_t<T> || tuple_t<T>
       struct from_json<T>
       {
-         static void op(T& value, auto&& it, auto&& end)
+         static void op(auto& value, auto&& it, auto&& end)
          {
             static constexpr auto N = []() constexpr
             {
@@ -345,7 +345,7 @@ namespace glaze
       requires map_t<T> || glaze_object_t<T>
       struct from_json<T>
       {
-         static void op(T& value, auto&& it, auto&& end)
+         static void op(auto& value, auto&& it, auto&& end)
          {
             skip_ws(it, end);
             match<'{'>(it, end);

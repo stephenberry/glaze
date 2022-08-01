@@ -22,9 +22,25 @@ struct glaze::meta<my_struct>
                                                "hello", &T::hello,  //
                                                "arr", &T::arr       //
    );
+
+   //static constexpr auto value = glaze::array(&T::i);
 };
+
+#include <iostream>
 
 int main() {
    my_struct s{};
-   glaze::read_json(s, R"({"i":2})");
+   std::string buffer = R"({"i":2})";
+   auto b = std::ranges::begin(buffer);
+   auto e = std::ranges::end(buffer);
+   //std::array s = {1};
+   //static_assert(glaze::detail::array_t<std::decay_t<decltype(s)>>);
+    try {
+      //glaze::detail::from_json<std::decay_t<decltype(s)>>::op(s, b, e);
+       glaze::read_json(s, buffer);
+   }
+   catch (const std::exception& e) {
+      std::cout << e.what() << '\n';
+   }
+   
    return 0; }
