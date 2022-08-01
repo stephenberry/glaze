@@ -60,15 +60,15 @@ namespace glaze
       struct read<json>
       {
          template <class T, class It0, class It1>
-         static void op(T&& value, It0&& it, It1&& end) {
-            from_json<std::decay_t<T>>::op(std::forward<T>(value), std::forward<It0>(it), std::forward<It1>(end));
+         static void op(T& value, It0&& it, It1&& end) {
+            from_json<std::decay_t<T>>::op(value, std::forward<It0>(it), std::forward<It1>(end));
          }
       };
       
       template <bool_t T>
       struct from_json<T>
       {
-         static void op(bool_t auto&& value, auto&& it, auto&& end)
+         static void op(bool_t auto& value, auto&& it, auto&& end)
          {
             skip_ws(it, end);
             if (it < end) [[likely]] {
@@ -432,7 +432,7 @@ namespace glaze
    }  // namespace detail
    
    template <class T, class Buffer>
-   inline void read_json(T&& value, Buffer&& buffer) {
-      read<json>(std::forward<T>(value), std::forward<Buffer>(buffer));
+   inline void read_json(T& value, Buffer&& buffer) {
+      read<json>(value, std::forward<Buffer>(buffer));
    }
 }  // namespace glaze
