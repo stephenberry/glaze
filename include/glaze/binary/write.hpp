@@ -6,6 +6,7 @@
 #include "glaze/core/format.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/binary/header.hpp"
+#include "glaze/util/for_each.hpp"
 
 namespace glaze
 {

@@ -116,6 +116,18 @@ void write_tests()
          expect(v == v2);
       }
    };
+   
+   "my_struct"_test = [] {
+      my_struct s{};
+      s.i = 5;
+      s.hello = "Wow!";
+      std::vector<std::byte> out;
+      write_binary(s, out);
+      my_struct s2{};
+      read_binary(s2, out);
+      expect(s.i == s2.i);
+      expect(s.hello == s2.hello);
+   };
 }
 
 int main()

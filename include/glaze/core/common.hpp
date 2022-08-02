@@ -443,7 +443,7 @@ namespace glaze
       {
          constexpr auto indices =
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_map_impl<T>(indices);
+         return make_int_map_impl<T>(indices);
       }
       
       template <class T = void>
