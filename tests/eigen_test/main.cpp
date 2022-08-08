@@ -20,20 +20,19 @@ int main()
 {
   using namespace boost::ut;
   "write"_test = [] {
-     Eigen::Matrix<double, -1, -1> m{};
-     m.resize(2, 2);
+     Eigen::Matrix<double, 2, 2> m{};
      m << 5, 1, 1, 7;
      std::string json{};
      glaze::write_json(m, json);
-     //expect(json == "[[2,2],[5,1,1,7]]");
+     expect(json == "[5,1,1,7] ");  
   };
 
   "read"_test = [] {
-     Eigen::Matrix<double, -1, -1> m{};
-     glaze::read_json(m, "[[2,1],[7,4]]");
+     Eigen::Matrix<double, 2 , 2> m{};
+     glaze::read_json(m, "[2,1,7,4]");
      expect(m.rows() == 2);
-     expect(m.cols() == 1);
-     expect(m(0,0) == 7);
-     expect(m(1,0) == 4);
+     expect(m.cols() == 2);
+     expect(m(0,1) == 7);
+     expect(m(1,1) == 4);
   };
 }
