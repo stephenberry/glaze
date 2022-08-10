@@ -37,7 +37,7 @@ namespace glaze
             else {
                throw std::runtime_error("Missing binary data");
             }
-            ++it;
+            std::advance(it, sizeof(V));
          }
       };
       
@@ -114,7 +114,7 @@ namespace glaze
             const auto n = int_from_header(it, end);
             using V = typename std::decay_t<T>::value_type;
             const auto n_bytes = sizeof(V) * n;
-            value.resize(value.size() + n);
+            value.resize(n);
             std::memcpy(value.data(), &(*it), n_bytes);
          }
       };
