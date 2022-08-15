@@ -13,9 +13,35 @@
 #include "NanoRange/nanorange.hpp"
 
 namespace glaze
-{   
+{
    namespace detail
    {
+      // from
+      // https://stackoverflow.com/questions/16337610/how-to-know-if-a-type-is-a-specialization-of-stdvector
+      template <typename Test, template <typename...> class Ref>
+      struct is_specialization : std::false_type
+      {};
+
+      template <template <typename...> class Ref, typename... Args>
+      struct is_specialization<Ref<Args...>, Ref> : std::true_type
+      {};
+      
+      template <class T>
+      struct Array {
+         T value;
+      };
+      
+      template <class T>
+      Array(T) -> Array<T>;
+      
+      template <class T>
+      struct Object {
+         T value;
+      };
+      
+      template <class T>
+      Object(T) -> Object<T>;
+      
       template <int... I>
       using is = std::integer_sequence<int, I...>;
       template <int N>
@@ -116,12 +142,12 @@ namespace glaze
    template <class T>
    struct meta
    {};
+   
+   template <class T>
+   inline constexpr auto &meta_v = meta<T>::value.value;
 
    template <class T>
-   using meta_t = std::decay_t<decltype(meta<T>::value)>;
-
-   template <class T>
-   inline constexpr auto &meta_v = meta<T>::value;
+   using meta_t = std::decay_t<decltype(meta_v<T>)>;
 
    struct comment_t
    {
@@ -205,7 +231,7 @@ namespace glaze
 
       template <class T>
       concept array_t =
-         !complex_t<T> && !str_t<T> && !map_t<T> && nano::ranges::range<T>;
+         (!complex_t<T> && !str_t<T> && !map_t<T> && nano::ranges::range<T>);
 
       template <class T>
       concept emplace_backable = requires(T container)
@@ -236,17 +262,11 @@ namespace glaze
          {*t};
       };
 
-      template <class... T>
-      constexpr bool all_member_ptr(std::tuple<T...>)
-      {
-         return std::conjunction_v<std::is_member_pointer<std::decay_t<T>>...>;
-      }
+      template <class T>
+      concept glaze_array_t = glaze_t<T> && is_specialization<std::decay_t<decltype(meta<T>::value)>, Array>::value;
 
       template <class T>
-      concept glaze_array_t = glaze_t<T> && all_member_ptr(meta_v<T>);
-
-      template <class T>
-      concept glaze_object_t = glaze_t<T> && !glaze_array_t<T>;
+      concept glaze_object_t = glaze_t<T> && is_specialization<std::decay_t<decltype(meta<T>::value)>, Object>::value;
 
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to)
@@ -309,16 +329,6 @@ namespace glaze
 
       template <class Tuple>
       using value_tuple_variant_t = typename value_tuple_variant<Tuple>::type;
-
-      // from
-      // https://stackoverflow.com/questions/16337610/how-to-know-if-a-type-is-a-specialization-of-stdvector
-      template <typename Test, template <typename...> class Ref>
-      struct is_specialization : std::false_type
-      {};
-
-      template <template <typename...> class Ref, typename... Args>
-      struct is_specialization<Ref<Args...>, Ref> : std::true_type
-      {};
 
       template <class T, size_t... I>
       inline constexpr auto make_array_impl(std::index_sequence<I...>)
@@ -453,14 +463,13 @@ namespace glaze
       struct to_json {};
    }  // namespace detail
 
-   constexpr auto array(auto &&...args)
+   constexpr auto array(auto&&... args)
    {
-      return std::make_tuple(args...);
+      return detail::Array{ std::make_tuple(args...) };
    }
 
    constexpr auto object(auto&&... args)
    {
-      return detail::group_members(
-         std::make_tuple(args...));
+      return detail::Object{ detail::group_members(std::make_tuple(args...)) };
    }
 }  // namespace glaze

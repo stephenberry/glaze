@@ -37,6 +37,8 @@ struct glaze::meta<v3>
    static constexpr auto value = glaze::array(&v3::x, &v3::y, &v3::z);
 };
 
+static_assert(glaze::detail::is_specialization<std::decay_t<decltype(glaze::meta<v3>::value)>, glaze::detail::Array>::value, "");
+
 template <>
 struct glaze::meta<oob>
 {
