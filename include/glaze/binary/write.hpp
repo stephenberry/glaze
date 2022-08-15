@@ -142,7 +142,7 @@ namespace glaze
       };
       
       template <class T>
-      requires glaze_object_t<std::decay_t<T>>
+      requires glaze_object_t<T>
       struct to_binary<T>
       {
          static void op(auto&& value, auto&& b) noexcept

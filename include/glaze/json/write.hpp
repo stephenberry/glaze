@@ -204,7 +204,7 @@ namespace glaze
       };
       
       template <class T>
-      requires glaze_object_t<std::decay_t<T>>
+      requires glaze_object_t<T>
       struct to_json<T>
       {
          template <bool C>

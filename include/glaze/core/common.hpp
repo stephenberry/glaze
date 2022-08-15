@@ -144,7 +144,7 @@ namespace glaze
    {};
    
    template <class T>
-   inline constexpr auto &meta_v = meta<T>::value.value;
+   inline constexpr auto &meta_v = meta<std::decay_t<T>>::value.value;
 
    template <class T>
    using meta_t = std::decay_t<decltype(meta_v<T>)>;
@@ -196,7 +196,7 @@ namespace glaze
       template <class T>
       concept glaze_t = requires
       {
-         meta<T>::value;
+         meta<std::decay_t<T>>::value;
       };
 
       template <class T>
@@ -263,10 +263,10 @@ namespace glaze
       };
 
       template <class T>
-      concept glaze_array_t = glaze_t<T> && is_specialization<std::decay_t<decltype(meta<T>::value)>, Array>::value;
+      concept glaze_array_t = glaze_t<T> && is_specialization<std::decay_t<decltype(meta<std::decay_t<T>>::value)>, Array>::value;
 
       template <class T>
-      concept glaze_object_t = glaze_t<T> && is_specialization<std::decay_t<decltype(meta<T>::value)>, Object>::value;
+      concept glaze_object_t = glaze_t<T> && is_specialization<std::decay_t<decltype(meta<std::decay_t<T>>::value)>, Object>::value;
 
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to)
