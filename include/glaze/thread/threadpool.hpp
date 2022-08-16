@@ -50,7 +50,7 @@ namespace glaze
 #endif
       }
 
-      unsigned int concurrency()
+      auto concurrency()
       {
 #ifdef _WIN32
          auto num_groups = GetActiveProcessorGroupCount();
@@ -152,4 +152,4 @@ namespace glaze
          }
       }
    };
-}  // namespace test
+}
