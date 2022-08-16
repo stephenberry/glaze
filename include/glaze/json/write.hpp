@@ -90,12 +90,11 @@ namespace glaze
          }
       };
 
-      template <class T>
-      requires std::same_as<std::decay_t<T>, raw_json>
-      struct to_json<T>
+      template <>
+      struct to_json<raw_json>
       {
          template <bool C>
-         static void op(T&& value, auto&& b) noexcept {
+         static void op(auto&& value, auto&& b) noexcept {
             dump(value.str, b);
          }
       };
