@@ -645,10 +645,18 @@ void Read_tests() {
          expect(f == 0.96875);
       }
       {
-         std::string s = "0.96875";
-         long double f{};
+         std::string str = "0.96875";
+         std::deque<char> s(str.begin(), str.end());
+         double f{};
          glaze::read_json(f, s);
-         expect(f == 0.96875L);
+         expect(f == 0.96875);
+      }
+      {
+         // TODO: Maybe support long doubles at some point
+         //std::string s = "0.96875";
+         //long double f{};
+         //glaze::read_json(f, s);
+         //expect(f == 0.96875L);
       }
    };
 
@@ -1054,12 +1062,8 @@ void Read_tests() {
       {
          std::string res = R"(1.a)";
          double d;
-
-#ifdef CAN_USE_CHARCONV
+         
          expect(nothrow([&] {glaze::read_json(d, res); }));
-#else
-         expect(throws([&] {glaze::read_json(d, res); }));
-#endif
       }
       {
          std::string res = R"()";
@@ -1075,31 +1079,19 @@ void Read_tests() {
          std::string res = R"(1.)";
          double d;
 
-#ifdef CAN_USE_CHARCONV
          expect(nothrow([&] { glaze::read_json(d, res); }));
-#else
-         expect(throws([&] { glaze::read_json(d, res); }));
-#endif
       }
       {
          std::string res = R"(1.0e)";
          double d;
 
-#ifdef CAN_USE_CHARCONV
          expect(nothrow([&] { glaze::read_json(d, res); }));
-#else
-         expect(throws([&] { glaze::read_json(d, res); }));
-#endif
       }
       {
          std::string res = R"(1.0e-)";
          double d;
 
-#ifdef CAN_USE_CHARCONV
          expect(nothrow([&] { glaze::read_json(d, res); }));
-#else
-         expect(throws([&] { glaze::read_json(d, res); }));
-#endif
       }
    };
 
