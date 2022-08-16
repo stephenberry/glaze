@@ -28,21 +28,21 @@ namespace glaze
             break;
          case '[':
             out += c;
-            indent++;
+            ++indent;
             nl();
             break;
          case ']':
-            indent--;
+            --indent;
             nl();
             out += c;
             break;
          case '{':
             out += c;
-            indent++;
+            ++indent;
             nl();
             break;
          case '}':
-            indent--;
+            --indent;
             nl();
             out += c;
             break;
@@ -72,7 +72,7 @@ namespace glaze
          }
       }
 
-      inline void prettify_other_states(char c, general_state& state) noexcept
+      inline void prettify_other_states(const char c, general_state& state) noexcept
       {
          switch (state) {
          case general_state::ESCAPED:
@@ -137,6 +137,9 @@ namespace glaze
       }
    }
    
+   /// <summary>
+   /// allocating version of prettify
+   /// </summary>
    inline std::string prettify(const auto& in, const bool tabs = false,
                  const int indent_size = 3) noexcept
    {
@@ -144,4 +147,4 @@ namespace glaze
       prettify(in, out, tabs, indent_size);
       return out;
    }
-}  // namespace test
+}
