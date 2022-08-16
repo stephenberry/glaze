@@ -6,6 +6,7 @@
 #include <functional>
 
 #include "glaze/api/name.hpp"
+#include "glaze/core/common.hpp"
 
 namespace glaze
 {
@@ -46,7 +47,7 @@ namespace glaze
    }
    
    template <class T>
-   concept function = is_specialization_v<T, std::function>;
+   concept function = detail::is_specialization_v<T, std::function>;
    
    template <function T>
    struct name_t<T> {

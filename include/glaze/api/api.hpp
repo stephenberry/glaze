@@ -34,9 +34,7 @@ namespace glaze
                     const sv /*data*/) noexcept
          { return false; }
 
-          virtual bool read(const uint32_t /*format*/, const sv /*path*/,
-                            std::string& /*data*/) noexcept
-         {
+         virtual bool read(const uint32_t /*format*/, const sv /*path*/, const sv& /*data*/) noexcept {
             return false;
          }
          

@@ -10,7 +10,7 @@
 namespace glaze
 {
    template <class T>
-   concept deque = is_specialization_v<T, std::deque>;
+   concept deque = detail::is_specialization_v<T, std::deque>;
    
    template <deque T>
    struct name_t<T> {
