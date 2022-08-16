@@ -46,7 +46,16 @@ suite starter = [] {
        std::string buffer{};
        glaze::write_json(s, buffer);
        expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
-       //std::cout << glaze::prettify(buffer) << '\n';
+       expect(glaze::prettify(buffer) == R"({
+   "i": 287,
+   "d": 3.14,
+   "hello": "Hello World",
+   "arr": [
+      1,
+      2,
+      3
+   ]
+})");
     };
 };
 
