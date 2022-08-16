@@ -18,13 +18,11 @@ namespace glaze
    {
       // from
       // https://stackoverflow.com/questions/16337610/how-to-know-if-a-type-is-a-specialization-of-stdvector
-      template <typename Test, template <typename...> class Ref>
-      struct is_specialization : std::false_type
-      {};
-
-      template <template <typename...> class Ref, typename... Args>
-      struct is_specialization<Ref<Args...>, Ref> : std::true_type
-      {};
+      template <class, template<class...> class>
+      inline constexpr bool is_specialization_v = false;
+      
+      template <template<class...> class T, class... Args>
+      inline constexpr bool is_specialization_v<T<Args...>, T> = true;
       
       template <class T>
       struct Array {
@@ -263,10 +261,10 @@ namespace glaze
       };
 
       template <class T>
-      concept glaze_array_t = glaze_t<T> && is_specialization<std::decay_t<decltype(meta<std::decay_t<T>>::value)>, Array>::value;
+      concept glaze_array_t = glaze_t<T> && is_specialization_v<std::decay_t<decltype(meta<std::decay_t<T>>::value)>, Array>;
 
       template <class T>
-      concept glaze_object_t = glaze_t<T> && is_specialization<std::decay_t<decltype(meta<std::decay_t<T>>::value)>, Object>::value;
+      concept glaze_object_t = glaze_t<T> && is_specialization_v<std::decay_t<decltype(meta<std::decay_t<T>>::value)>, Object>;
 
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to)
