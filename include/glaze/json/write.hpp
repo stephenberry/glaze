@@ -90,6 +90,14 @@ namespace glaze
          }
       };
 
+      template <func_t T>
+      struct to_json<T>
+      {
+         template <bool C>
+         static void op(auto&& value, auto&& b) noexcept
+         {}
+      };
+
       template <class T>
       requires std::same_as<std::decay_t<T>, raw_json>
       struct to_json<T>
@@ -108,10 +116,10 @@ namespace glaze
          {
             dump<'['>(b);
             if (!value.empty()) {
-               auto it = value.cbegin();
+               auto it = value.begin();
                write<json>::op<C>(*it, b);
                ++it;
-               const auto end = value.cend();
+               const auto end = value.end();
                for (; it != end; ++it) {
                   dump<','>(b);
                   write<json>::op<C>(*it, b);

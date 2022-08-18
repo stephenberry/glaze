@@ -38,6 +38,12 @@ namespace glaze
             }
          }
       };
+
+      template <func_t T>
+      struct to_binary<T>
+      {
+         static void op(auto&& value, auto&& b) noexcept {}
+      };
       
       void dump_type(auto&& value, auto&& b) noexcept
       {

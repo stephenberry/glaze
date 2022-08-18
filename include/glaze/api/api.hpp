@@ -30,11 +30,11 @@ namespace glaze
          template <class T>
          [[nodiscard]] T* get_if(const sv path) noexcept;
 
-         virtual bool write(const uint32_t /*format*/, const sv /*path*/,
+         virtual bool read(const uint32_t /*format*/, const sv /*path*/,
                     const sv /*data*/) noexcept
          { return false; }
 
-          virtual bool read(const uint32_t /*format*/, const sv /*path*/,
+          virtual bool write(const uint32_t /*format*/, const sv /*path*/,
                             std::string& /*data*/) noexcept
          {
             return false;
