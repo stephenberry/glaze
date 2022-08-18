@@ -258,11 +258,11 @@ namespace glaze
    
    template <class T, class Buffer>
    inline void write_json(T&& value, Buffer&& buffer) {
-      write_c<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
    
    template <class T, class Buffer>
    inline void write_jsonc(T&& value, Buffer&& buffer) {
-      write_c<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      write<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 }  // namespace glaze

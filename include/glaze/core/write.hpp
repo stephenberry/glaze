@@ -37,7 +37,7 @@ namespace glaze
    template <opts Opts, class T, class Buffer>
    requires nano::ranges::input_range<Buffer> &&
       std::same_as<char, nano::ranges::range_value_t<Buffer>>
-   inline void write_c(T&& value, Buffer& buffer) noexcept
+   inline void write(T&& value, Buffer& buffer) noexcept
    {
       if constexpr (std::same_as<Buffer, std::string>) {
          detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), buffer);
@@ -49,7 +49,7 @@ namespace glaze
 
    // For writing json to std::ofstream, std::cout, or other streams
    template <opts Opts, class T>
-   inline void write_c(T&& value, std::ostream& os) noexcept
+   inline void write(T&& value, std::ostream& os) noexcept
    {
       detail::write<Opts.format>::template op<Opts>(std::forward<T>(value),
                         std::ostreambuf_iterator<char>(os));
