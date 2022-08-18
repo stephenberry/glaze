@@ -76,6 +76,14 @@ Dependencies are automatically included when running CMake. [CPM.cmake](https://
 
 > NanoRange is directly included until C++20 ranges are supported across all major compilers.
 
+## JSON Pointer Syntax
+
+```c++
+my_struct s{};
+auto& x = glaze::get<double>(x, "/d");
+// x is a reference to d in the structure s
+```
+
 # Additional Features
 
 - Binary messaging for maximum performance
@@ -91,6 +99,8 @@ Dependencies are automatically included when running CMake. [CPM.cmake](https://
 Glaze has been designed to work as a generic interface for shared libraries and more. This is achieved through JSON pointer syntax access to memory.
 
 Glaze allows a single header API (`api.hpp`) to be used for every shared library interface, greatly simplifying shared library handling.
+
+> A valid concern is binary compatibility between types. Glaze uses compile time hashing of types that can catch changes to classes or types that would cause binary incompatibility. These compile time hashes are checked when accessing across the interface and provide a safeguard, much like a `std::any_cast`, but working across code and compiler changes.
 
 # JSON Caveats
 
