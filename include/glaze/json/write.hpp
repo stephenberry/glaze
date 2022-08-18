@@ -24,7 +24,7 @@ namespace glaze
       template <>
       struct write<json>
       {
-         template <class Opts, class T, class B>
+         template <auto& Opts, class T, class B>
          static void op(T&& value, B&& b) {
             to_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<B>(b));
          }
@@ -34,7 +34,7 @@ namespace glaze
       requires (std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> || std::same_as<T, std::vector<bool>::const_reference>)
       struct to_json<T>
       {
-         template <class Opts>
+         template <auto& Opts>
          static void op(const bool value, auto&& b) noexcept
          {
             if (value) {
@@ -49,7 +49,7 @@ namespace glaze
       template <num_t T>
       struct to_json<T>
       {
-         template <class Opts>
+         template <auto& Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {
@@ -64,7 +64,7 @@ namespace glaze
       requires str_t<T> || char_t<T>
       struct to_json<T>
       {
-         template <class Opts>
+         template <auto& Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             dump<'"'>(b);
@@ -93,7 +93,7 @@ namespace glaze
       template <func_t T>
       struct to_json<T>
       {
-         template <class Opts>
+         template <auto& Opts>
          static void op(auto&& value, auto&& b) noexcept
          {}
       };
@@ -102,7 +102,7 @@ namespace glaze
       requires std::same_as<std::decay_t<T>, raw_json>
       struct to_json<T>
       {
-         template <class Opts>
+         template <auto& Opts>
          static void op(auto&& value, auto&& b) noexcept {
             dump(value.str, b);
          }
@@ -111,7 +111,7 @@ namespace glaze
       template <array_t T>
       struct to_json<T>
       {
-         template <class Opts>
+         template <auto& Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             dump<'['>(b);
@@ -132,7 +132,7 @@ namespace glaze
       template <map_t T>
       struct to_json<T>
       {
-         template <class Opts>
+         template <auto& Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             dump<'{'>(b);
@@ -165,7 +165,7 @@ namespace glaze
       template <nullable_t T>
       struct to_json<T>
       {
-         template <class Opts, class B>
+         template <auto& Opts, class B>
          static void op(auto&& value, B&& b) noexcept
          {
             if (value)
@@ -180,7 +180,7 @@ namespace glaze
       requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
       struct to_json<T>
       {
-         template <class Opts>
+         template <auto& Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             static constexpr auto N = []() constexpr
@@ -215,7 +215,7 @@ namespace glaze
       requires glaze_object_t<T>
       struct to_json<T>
       {
-         template <class Opts>
+         template <auto& Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             using V = std::decay_t<T>;
@@ -236,7 +236,7 @@ namespace glaze
                }
                write<json>::op<Opts>(value.*std::get<1>(item), b);
                constexpr auto S = std::tuple_size_v<decltype(item)>;
-               if constexpr (Opts::comments && S > 2) {
+               if constexpr (Opts.comments && S > 2) {
                   static_assert(
                      std::is_same_v<std::decay_t<decltype(std::get<2>(item))>,
                                     comment_t>);
@@ -256,25 +256,13 @@ namespace glaze
       };
    }  // namespace detail
    
-   struct DefaultJSON
-   {
-      static constexpr auto format = json;
-      static constexpr bool comments = false;
-   };
-   
-   struct UseCommentsJSON
-   {
-      static constexpr auto format = json;
-      static constexpr bool comments = true;
-   };
-   
    template <class T, class Buffer>
    inline void write_json(T&& value, Buffer&& buffer) {
-      write_c<DefaultJSON>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      write_c<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
    
    template <class T, class Buffer>
    inline void write_jsonc(T&& value, Buffer&& buffer) {
-      write_c<UseCommentsJSON>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      write_c<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 }  // namespace glaze

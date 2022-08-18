@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "glaze/core/opts.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/util/validate.hpp"
 
@@ -33,24 +34,24 @@ namespace glaze
    
    // For writing to a std::string, std::vector<char>, std::deque<char> and
    // the like
-   template <class Opts, class T, class Buffer>
+   template <opts Opts, class T, class Buffer>
    requires nano::ranges::input_range<Buffer> &&
       std::same_as<char, nano::ranges::range_value_t<Buffer>>
    inline void write_c(T&& value, Buffer& buffer) noexcept
    {
       if constexpr (std::same_as<Buffer, std::string>) {
-         detail::write<Opts::format>::template op<Opts>(std::forward<T>(value), buffer);
+         detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), buffer);
       }
       else {
-         detail::write<Opts::format>::template op<Opts>(std::forward<T>(value), std::back_inserter(buffer));
+         detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), std::back_inserter(buffer));
       }
    }
 
    // For writing json to std::ofstream, std::cout, or other streams
-   template <class Opts, class T>
+   template <opts Opts, class T>
    inline void write_c(T&& value, std::ostream& os) noexcept
    {
-      detail::write<Opts::format>::template op<Opts>(std::forward<T>(value),
+      detail::write<Opts.format>::template op<Opts>(std::forward<T>(value),
                         std::ostreambuf_iterator<char>(os));
    }
 }
