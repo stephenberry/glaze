@@ -40,6 +40,14 @@ namespace glaze
             std::advance(it, sizeof(V));
          }
       };
+
+      template <func_t T>
+      struct from_binary<T>
+      {
+         static void op(auto&& value, auto&& it, auto&& end)
+         {
+         }
+      };
       
       // TODO: Handle errors
       inline constexpr size_t int_from_header(auto&& it, auto&& end)
@@ -124,18 +132,27 @@ namespace glaze
       {
          static void op(auto&& value, auto&& it, auto&& end)
          {
+            // TODO: this doesnt handle non contiguous containers like deque
+            static_assert(nano::ranges::contiguous_range<T>);
+
             using V = typename std::decay_t<T>::value_type;
-            if constexpr (resizeable<T>) {
-               const auto n = int_from_header(it, end);
-               const auto n_bytes = sizeof(V) * n;
-               
-               value.resize(value.size() + n);
+            if constexpr (has_static_size<T>) {
+               static constexpr auto n_bytes =
+                  sizeof(V) * std::decay_t<T>{}.size();
                std::memcpy(value.data(), &(*it), n_bytes);
                std::advance(it, n_bytes);
             }
             else {
-               static constexpr auto N = std::tuple_size_v<std::decay_t<T>>;
-               const auto n_bytes = sizeof(V) * N;
+               const auto n = int_from_header(it, end);
+               const auto n_bytes = sizeof(V) * n;
+
+               if constexpr (resizeable<T>) {
+                  value.resize(n);
+               }
+               else if (n != value.size()) {
+                  throw std::runtime_error("Attempted to read into non resizable container with the wrong number of items.");
+               }
+
                std::memcpy(value.data(), &(*it), n_bytes);
                std::advance(it, n_bytes);
             }

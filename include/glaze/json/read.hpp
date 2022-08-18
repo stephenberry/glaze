@@ -220,6 +220,14 @@ namespace glaze
             match<'"'>(it, end);
          }
       };
+
+      template <func_t T>
+      struct from_json<T>
+      {
+         static void op(auto& value, auto&& it, auto&& end)
+         {
+         }
+      };
       
       template <>
       struct from_json<raw_json>

@@ -9,8 +9,14 @@
 #include "glaze/api/std/vector.hpp"
 #include "glaze/api/type_support.hpp"
 #include "glaze/api/api.hpp"
+#include "glaze/core/format.hpp"
 
 #include "glaze/glaze.hpp"
+
+#include "glaze/binary/read.hpp"
+#include "glaze/binary/write.hpp"
+#include "glaze/json/read.hpp"
+#include "glaze/json/write.hpp"
 
 namespace glaze
 {
@@ -24,6 +30,44 @@ namespace glaze
       void* get(const sv path, const sv type_hash) noexcept override
       {
          return get_void(interface, path, type_hash);
+      }
+
+      bool read(const uint32_t format, const sv path,
+                 const sv data) noexcept override
+      {
+         if (format == json) {
+            return detail::seek_impl(
+               [&](auto&& val) { glaze::read<json>(val, data);
+               },
+               interface, path);
+         }
+         else {
+            return detail::seek_impl(
+               [&](auto&& val) { glaze::read<binary>(val, data);
+               },
+               interface, path);
+         }
+      }
+
+      bool write(const uint32_t format, const sv path,
+                std::string& data) noexcept override
+      {
+         if (format == json) {
+            return detail::seek_impl(
+               [&](auto&& val) {
+                  glaze::write_json(val, data); }, interface,
+               path);
+         }
+         else {
+            //TODO: avoid copy
+            static thread_local std::vector<std::byte> buffer{};
+            return detail::seek_impl(
+               [&](auto&& val) { glaze::write_binary(val, buffer);
+               },
+               interface, path);
+            data.resize(buffer.size());
+            std::memcpy(data.data(), buffer.data(), buffer.size());
+         }
       }
 
       protected:

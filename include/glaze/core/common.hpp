@@ -246,6 +246,14 @@ namespace glaze
       };
 
       template <class T>
+      concept has_static_size = requires(T container)
+      {
+         {
+            std::bool_constant<(std::decay_t<T>{}.size(), true)>()
+         } -> std::same_as<std::true_type>;
+      };
+
+      template <class T>
       concept tuple_t = requires(T t)
       {
          std::tuple_size<T>::value;
@@ -259,6 +267,19 @@ namespace glaze
          bool(t);
          {*t};
       };
+
+      template <class T>
+      concept func_t = requires(T t)
+      {
+         typename T::result_type;
+         std::function(t);
+      } && !glaze_t<T>;
+
+      template <class... T>
+      constexpr bool all_member_ptr(std::tuple<T...>)
+      {
+         return std::conjunction_v<std::is_member_pointer<std::decay_t<T>>...>;
+      }
 
       template <class T>
       concept glaze_array_t = glaze_t<T> && is_specialization_v<std::decay_t<decltype(meta<std::decay_t<T>>::value)>, Array>;
