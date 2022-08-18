@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "glaze/binary/read.hpp"
+#include "glaze/binary/write.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/read.hpp"
@@ -29,6 +31,32 @@ namespace glaze
             matrix.size()
             } -> std::convertible_to<size_t>;
       } &&!nano::ranges::range<T>;
+      
+      template <matrix_t T>
+      struct from_binary<T>
+      {
+         static_assert(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0,
+                       "Does not handle dynamic matrices");
+
+         static void op(auto &value, auto&& it, auto&& end)
+         {
+            std::span view(value.data(), value.size());
+            detail::read<binary>::op(view, it, end);
+         }
+      };
+      
+      template <matrix_t T>
+      struct to_binary<T>
+      {
+         static_assert(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0,
+                       "Does not handle dynamic matrices");
+
+         static void op(auto &&value, auto &&b) noexcept
+         {
+            std::span view(value.data(), value.size());
+            detail::write<binary>::op(view, b);
+         }
+      };
       
       template <matrix_t T>
       struct from_json<T>
