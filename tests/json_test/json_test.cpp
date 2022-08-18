@@ -1553,7 +1553,7 @@ void study_tests()
       glaze::study::design design;
       design.params = { { "/x", "linspace", { "0", "1", "10" } } };
       
-      glaze::study::full_factorial<study_obj> generator{ study_obj{}, design };
+      glaze::study::full_factorial generator{ study_obj{}, design };
       
       std::vector<size_t> results;
       glaze::study::run_study(generator, [&](const auto& point, [[maybe_unused]] const auto job_num){

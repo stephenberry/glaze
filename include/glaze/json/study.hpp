@@ -200,14 +200,14 @@ namespace glaze
          }
       };
 
-      template <class Generator, class Func>
-      void run_study(Generator &g, Func &&f)
+      template <class Generator>
+      void run_study(Generator& g, auto&& f)
       {
          glaze::pool tpool{};
-         int job_num = 0;
+         size_t job_num = 0;
          while (!g.empty()) {
-            auto state = g.generate();
-            tpool.emplace_back([=, state = std::move(state)]() {
+            // generate mutates
+            tpool.emplace_back([=, state = g.generate()] {
                f(std::move(state), job_num);
             });
             ++job_num;
@@ -223,9 +223,9 @@ namespace glaze
          void apply()
          {
             std::visit(
-               [&](auto &&param) {
-                  *param = std::get<
-                     std::remove_pointer_t<std::decay_t<decltype(param)>>>(
+               [&](auto&& p) {
+                  *p = std::get<
+                     std::remove_pointer_t<std::decay_t<decltype(p)>>>(
                      value);
                },
                param_ptr);
@@ -428,7 +428,7 @@ namespace glaze
          std::size_t width;
          std::size_t completed;
          std::size_t total;
-         float time_taken;
+         double time_taken;
       };
 
       inline std::ostream &operator<<(std::ostream &o, ProgressBar const &bar)
@@ -436,9 +436,8 @@ namespace glaze
          const std::size_t one = 1;
          const std::size_t total = std::max(bar.total, one);
          const std::size_t completed = std::min(bar.completed, total);
-         const float progress = static_cast<float>(completed) / total;
-         const unsigned int percentage =
-            static_cast<unsigned int>(std::round(progress * 100));
+         const auto progress = static_cast<double>(completed) / total;
+         const auto percentage = static_cast<size_t>(std::round(progress * 100));
 
          if (bar.width > 2) {
             const std::size_t len = bar.width - 2;
@@ -459,7 +458,7 @@ namespace glaze
          }
 
          const std::size_t eta_s = static_cast<std::size_t>(
-            std::round(static_cast<float>(total - completed) * bar.time_taken /
+            std::round(static_cast<double>(total - completed) * bar.time_taken /
                        std::max(completed, one)));
          const std::size_t minutes = eta_s / 60;
          const std::size_t seconds_remaining = eta_s - minutes * 60;
