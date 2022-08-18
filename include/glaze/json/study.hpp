@@ -62,8 +62,8 @@ namespace glaze
       template <class State>
       void overwrite_state(State &state, std::unordered_map<std::string, raw_json> &overwrites)
       {
-         for (auto &&pair : overwrites) {
-            glaze::overwrite(state, pair.first, pair.second.data);
+         for (auto&& pair : overwrites) {
+            glaze::overwrite(state, pair.first, pair.second);
          }
       }
 

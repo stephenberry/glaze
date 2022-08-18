@@ -17,9 +17,8 @@
 namespace glaze
 {
    // A simple threadpool
-   class pool
+   struct pool
    {
-     public:
       pool() : pool(concurrency()) {}
 
       pool(const unsigned int n) { n_threads(n); }
@@ -50,7 +49,7 @@ namespace glaze
 #endif
       }
 
-      auto concurrency()
+      size_t concurrency()
       {
 #ifdef _WIN32
          auto num_groups = GetActiveProcessorGroupCount();
