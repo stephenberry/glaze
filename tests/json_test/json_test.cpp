@@ -620,7 +620,7 @@ struct glaze::meta<oob>
   static constexpr auto value = glaze::object("v", &oob::v, "n", &oob::n);
 };
 
-void Read_tests() {
+void read_tests() {
    using namespace boost::ut;
    
    "cout"_test = [] {
@@ -1224,7 +1224,7 @@ struct glaze::meta<EmptyObject>
    static constexpr auto value = glaze::object();
 };
 
-void Write_tests() {
+void write_tests() {
    using namespace boost::ut;
 
    "Write floating point types"_test = [] {
@@ -1550,6 +1550,6 @@ int main()
    json_pointer();
    early_end(); 
    bench();
-   Read_tests();
-   Write_tests();
+   read_tests();
+   write_tests();
 }
