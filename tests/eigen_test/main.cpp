@@ -43,8 +43,6 @@ int main()
       glaze::write_binary(m, b);
       Eigen::Matrix<double, 2, 2> e{};
       glaze::read_binary(e, b);
-      static_assert(!glaze::detail::is_dynamic_span<std::span<double, 4>>);
-      static_assert(glaze::detail::has_static_size<std::span<double, 4>>);
       const bool boolean = m == e;
       expect(boolean);
    };
