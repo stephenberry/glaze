@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include "glaze/read.hpp"
-#include "glaze/write.hpp"
-#include "glaze/json_ptr.hpp"
-#include "glaze/threadpool.hpp"
+#include "glaze/json/read.hpp"
+#include "glaze/json/write.hpp"
+#include "glaze/json/json_ptr.hpp"
+#include "glaze/thread/threadpool.hpp"
 #include "glaze/util/macros.hpp"
 
 #include <random>
