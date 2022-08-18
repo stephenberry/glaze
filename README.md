@@ -84,6 +84,10 @@ auto& x = glaze::get<double>(x, "/d");
 // x is a reference to d in the structure s
 ```
 
+## JSON With Comments (JSONC)
+
+Comments are supported with the specification defined here: [JSONC](https://github.com/stephenberry/JSONC)
+
 # Additional Features
 
 - Binary messaging for maximum performance
