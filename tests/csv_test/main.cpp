@@ -191,7 +191,7 @@ suite csv_recorder = [] {
 
         double testvar = 0.0;
 
-        rec.register_variable("test", &testvar);
+        rec["test"] = testvar;
 
         for (int i = 0; i < 10; i++)
         {

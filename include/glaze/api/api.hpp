@@ -42,10 +42,6 @@ namespace glaze
             return error;
          }
          
-         virtual constexpr const version_type version() const noexcept = 0;
-         virtual constexpr const sv version_sv() const noexcept = 0;
-         virtual constexpr const sv hash() const noexcept = 0;
-         
       protected:
          virtual void* get(const sv path, const sv type_hash) noexcept = 0;
 

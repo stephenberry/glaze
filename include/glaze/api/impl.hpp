@@ -25,18 +25,6 @@ namespace glaze
       {
          return get_void(interface, path, type_hash);
       }
-      
-      virtual constexpr const version_type version() const noexcept override {
-         return glaze::trait<Interface>::version;
-      }
-      
-      constexpr const sv version_sv() const noexcept override {
-         return glaze::trait<Interface>::version_sv;
-      }
-      
-      constexpr const sv hash() const noexcept override {
-         return glaze::hash<Interface>();
-      }
 
       protected:
       // Get a pointer to a value at the location of a json_ptr. Will return
