@@ -3,19 +3,16 @@
 
 #pragma once
 
+#include "glaze/core/common.hpp"
+
 #include <tuple>
 #include <variant>
 
 namespace glaze
 {
-	template <class, template<class...> class>
-	inline constexpr bool is_specialization_v = false;
-	template <template<class...> class T, class... Args>
-	inline constexpr bool is_specialization_v<T<Args...>, T> = true;
+	template <class T>
+	concept is_tuple = detail::is_specialization_v<T, std::tuple>;
 
 	template <class T>
-	concept is_tuple = is_specialization_v<T, std::tuple>;
-
-	template <class T>
-	concept is_variant = is_specialization_v<T, std::variant>;
+	concept is_variant = detail::is_specialization_v<T, std::variant>;
 }

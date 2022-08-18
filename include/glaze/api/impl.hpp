@@ -31,18 +31,6 @@ namespace glaze
       {
          return get_void(interface, path, type_hash);
       }
-      
-      virtual constexpr const version_type version() const noexcept override {
-         return glaze::trait<Interface>::version;
-      }
-      
-      constexpr const sv version_sv() const noexcept override {
-         return glaze::trait<Interface>::version_sv;
-      }
-      
-      constexpr const sv hash() const noexcept override {
-         return glaze::hash<Interface>();
-      }
 
       bool read(const uint32_t format, const sv path,
                  const sv data) noexcept override

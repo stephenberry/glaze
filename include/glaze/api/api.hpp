@@ -25,7 +25,7 @@ namespace glaze
          virtual ~api() noexcept {}
          
          template <class T>
-         [[nodiscard]]  T& get(const sv path);
+         [[nodiscard]] T& get(const sv path);
          
          template <class T>
          [[nodiscard]] T* get_if(const sv path) noexcept;
@@ -34,19 +34,13 @@ namespace glaze
                     const sv /*data*/) noexcept
          { return false; }
 
-          virtual bool write(const uint32_t /*format*/, const sv /*path*/,
-                            std::string& /*data*/) noexcept
-         {
+         virtual bool write(const uint32_t /*format*/, const sv /*path*/, std::string& /*data*/) noexcept {
             return false;
          }
          
          virtual const sv last_error() const noexcept {
             return error;
          }
-         
-         virtual constexpr const version_type version() const noexcept = 0;
-         virtual constexpr const sv version_sv() const noexcept = 0;
-         virtual constexpr const sv hash() const noexcept = 0;
          
       protected:
          virtual void* get(const sv path, const sv type_hash) noexcept = 0;

@@ -12,15 +12,7 @@
 #include <thread>
 #include <vector>
 
-#ifdef _WIN32
-#ifdef NOMINMAX
-#include <windows.h>
-#else
-#define NOMINMAX
-#include <windows.h>
-#undef NOMINMAX
-#endif
-#endif
+#include "glaze/util/macros.hpp"
 
 namespace glaze
 {
@@ -58,7 +50,7 @@ namespace glaze
 #endif
       }
 
-      unsigned int concurrency()
+      auto concurrency()
       {
 #ifdef _WIN32
          auto num_groups = GetActiveProcessorGroupCount();
@@ -160,4 +152,4 @@ namespace glaze
          }
       }
    };
-}  // namespace test
+}

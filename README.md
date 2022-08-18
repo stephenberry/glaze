@@ -67,28 +67,37 @@ Glaze is designed to be used in a header only manner. The macro `FMT_HEADER_ONLY
 
 ## Dependencies
 
-Dependencies are automatically included when running CMake.
+Dependencies are automatically included when running CMake. [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) is used for dependency management.
 
 - [fmt](https://github.com/fmtlib/fmt)
 - [fast_float](https://github.com/fastfloat/fast_float)
 - [frozen](https://github.com/serge-sans-paille/frozen.git)
 - [NanoRange](https://github.com/tcbrindle/NanoRange)
 
-> NanoRange is directly included until C++20 range support is across all compilers.
+> NanoRange is directly included until C++20 ranges are supported across all major compilers.
+
+# Additional Features
+
+- Binary messaging for maximum performance
+- Comma Separated Value files (CSV)
+- A data recorder (`recorder.hpp`)
+- A simple thread pool
+- Studies based on JSON structures
+- A JSON file include system
+- Eigen C++ matrix library support
 
 ## Glaze Interfaces
 
 Glaze has been designed to work as a generic interface for shared libraries and more. This is achieved through JSON pointer syntax access to memory.
 
----
+Glaze allows a single header API (`api.hpp`) to be used for every shared library interface, greatly simplifying shared library handling.
 
-## Caveats
+# JSON Caveats
 
 ### Integers
 
 - Integer types cannot begin with a positive `+` symbol, for efficiency.
-- Integer types do not support exponential values (e.g. `1e10`). Submit an issue if you desire a wrapper to enable this behavior, e.g. `exponential(&T::i)`.
 
-## License
+# License
 
 Glaze is distributed under the MIT license.

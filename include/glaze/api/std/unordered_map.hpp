@@ -10,7 +10,7 @@
 namespace glaze
 {
    template <class T>
-   concept unordered_map = is_specialization_v<T, std::unordered_map>;
+   concept unordered_map = detail::is_specialization_v<T, std::unordered_map>;
    
    template <unordered_map T>
    struct name_t<T> {

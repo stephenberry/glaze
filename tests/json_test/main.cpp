@@ -46,7 +46,16 @@ suite starter = [] {
        std::string buffer{};
        glaze::write_json(s, buffer);
        expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
-       //std::cout << glaze::prettify(buffer) << '\n';
+       expect(glaze::prettify(buffer) == R"({
+   "i": 287,
+   "d": 3.14,
+   "hello": "Hello World",
+   "arr": [
+      1,
+      2,
+      3
+   ]
+})");
     };
 };
 
@@ -586,6 +595,943 @@ void bench()
    };
 }
 
+struct v3
+{
+   double x{}, y{}, z{};
+};
+
+struct oob
+{
+   v3 v{};
+   int n{};
+};
+
+template <>
+struct glaze::meta<v3>
+{
+   static constexpr auto value = glaze::array(&v3::x, &v3::y, &v3::z);
+};
+
+static_assert(glaze::detail::is_specialization_v<std::decay_t<decltype(glaze::meta<v3>::value)>, glaze::detail::Array>, "");
+
+template <>
+struct glaze::meta<oob>
+{
+  static constexpr auto value = glaze::object("v", &oob::v, "n", &oob::n);
+};
+
+void Read_tests() {
+   using namespace boost::ut;
+   
+   "cout"_test = [] {
+      std::stringstream ss{};
+      ss << "3958713";
+      int i{};
+      glaze::read_json(i, ss);
+      expect(i == 3958713);
+   };
+   
+   "Read floating point types"_test = [] {
+      {
+         std::string s = "0.96875";
+         float f{};
+         glaze::read_json(f, s);
+         expect(f == 0.96875f);
+      }
+      {
+         std::string s = "0.96875";
+         double f{};
+         glaze::read_json(f, s);
+         expect(f == 0.96875);
+      }
+      {
+         std::string str = "0.96875";
+         std::deque<char> s(str.begin(), str.end());
+         double f{};
+         glaze::read_json(f, s);
+         expect(f == 0.96875);
+      }
+      {
+         // TODO: Maybe support long doubles at some point
+         //std::string s = "0.96875";
+         //long double f{};
+         //glaze::read_json(f, s);
+         //expect(f == 0.96875L);
+      }
+   };
+
+   "Read integral types"_test = [] {
+      {
+         std::string s = "true";
+         bool v;
+         glaze::read_json(v, s);
+         expect(v);
+      }
+//*   // TODO add escaped char support for unicode
+      /*{
+         const auto a_num = static_cast<int>('15\u00f8C');
+         std::string s = std::to_string(a_num);
+         char v{};
+         glaze::read_json(v, s);
+         expect(v == a_num);
+      }
+      {
+         const auto a_num = static_cast<int>('15\u00f8C');
+         std::string s = std::to_string(a_num);
+         wchar_t v{};
+         glaze::read_json(v, s);
+         expect(v == a_num);
+      }*/
+      {
+         std::string s = "1";
+         short v;
+         glaze::read_json(v, s);
+         expect(v == 1);
+      }
+      {
+         std::string s = "1";
+         int v;
+         glaze::read_json(v, s);
+         expect(v == 1);
+      }
+      {
+         std::string s = "1";
+         long v;
+         glaze::read_json(v, s);
+         expect(v == 1);
+      }
+      {
+         std::string s = "1";
+         long long v;
+         glaze::read_json(v, s);
+         expect(v == 1);
+      }
+      {
+         std::string s = "1";
+         unsigned short v;
+         glaze::read_json(v, s);
+         expect(v == 1);
+      }
+      {
+         std::string s = "1";
+         unsigned int v;
+         glaze::read_json(v, s);
+         expect(v == 1);
+      }
+      {
+         std::string s = "1";
+         unsigned long v;
+         glaze::read_json(v, s);
+         expect(v == 1);
+      }
+      {
+         std::string s = "1";
+         unsigned long long v;
+         glaze::read_json(v, s);
+         expect(v == 1);
+      }
+   };
+
+   "multiple int from double text"_test = [] {
+      std::vector<int> v;
+      std::string buffer = "[1.66, 3.24, 5.555]";
+      expect(nothrow([&] { glaze::read_json(v, buffer); }));
+      expect(v.size() == 3);
+      expect(v[0] == 1);
+      expect(v[1] == 3);
+      expect(v[2] == 5);
+   };
+
+   "comments"_test = [] {
+      {
+         std::string b = "1/*a comment*/00";
+         int a{};
+         glaze::read_json(a, b);
+//*      fails test
+         //expect(a == 100);
+      }
+      {
+         std::string b = R"([100, // a comment
+20])";
+         std::vector<int> a{};
+         glaze::read_json(a, b);
+         expect(a[0] == 100);
+         expect(a[1] == 20);
+      }
+   };
+
+   "Failed character read"_test = [] {
+      std::string err;
+      {
+         char b;
+         expect(throws([&] { glaze::read_json(b, err); }));
+      }
+   };
+
+   "Read array type"_test = [] {
+      std::string in = "    [ 3.25 , 1.125 , 3.0625 ]   ";
+      v3 v{};
+      glaze::read_json(v, in);
+
+      expect(v.x == 3.25);
+      expect(v.y == 1.125);
+      expect(v.z == 3.0625);
+   };
+
+   "Read partial array type"_test = [] {
+      {
+         std::string in = "    [ 3.25 , null , 3.125 ]   ";
+         v3 v{};
+
+         expect(throws([&] { glaze::read_json(v, in); }));
+      }
+ //*  // missing charictar bug?
+      {
+         std::string in = "    [ 3.25 , 3.125 ]   ";
+         [[maybe_unused]] v3 v{};
+         //glaze::read_json(v, in);
+
+         //expect(v.x == 3.25);
+         //expect(v.y == 3.125);
+         //expect(v.z == 0.0);
+      }
+   };
+
+   "Read object type"_test = [] {
+      std::string in =
+         R"(    { "v" :  [ 3.25 , 1.125 , 3.0625 ]   , "n" : 5 } )";
+      oob oob{};
+      glaze::read_json(oob, in);
+
+      expect(oob.v.x == 3.25);
+      expect(oob.v.y == 1.125);
+      expect(oob.v.z == 3.0625);
+      expect(oob.n == 5);
+   };
+
+   "Read partial object type"_test = [] {
+      std::string in =
+         R"(    { "v" :  [ 3.25 , null , 3.0625 ]   , "n" : null } )";
+      oob oob{};
+
+      expect(throws([&] { glaze::read_json(oob, in); }));
+   };
+
+   "Reversed object"_test = [] {
+      std::string in =
+         R"(    {  "n" : 5   ,  "v" :  [ 3.25 , 1.125 , 3.0625 ] } )";
+      oob oob{};
+      glaze::read_json(oob, in);
+
+      expect(oob.v.x == 3.25);
+      expect(oob.v.y == 1.125);
+      expect(oob.v.z == 3.0625);
+      expect(oob.n == 5);
+   };
+
+   "Read list"_test = [] {
+      std::string in = "[1, 2, 3, 4]";
+      std::list<int> l, lr{1, 2, 3, 4};
+      glaze::read_json(l, in);
+
+      expect(l == lr);
+   };
+
+   "Read forward list"_test = [] {
+      std::string in = "[1, 2, 3, 4]";
+      std::forward_list<int> l, lr{1, 2, 3, 4};
+      glaze::read_json(l, in);
+
+      expect(l == lr);
+   };
+
+   "Read deque"_test = [] {
+      {
+         std::string in = "[1, 2, 3, 4]";
+         std::deque<int> l, lr{1, 2, 3, 4};
+         glaze::read_json(l, in);
+
+         expect(l == lr);
+      }
+      {
+         std::string in = "[1, 2, 3, 4]";
+         std::deque<int> l{8, 9}, lr{1, 2, 3, 4};
+         glaze::read_json(l, in);
+
+         expect(l == lr);
+      }
+   };
+
+   "Read into returned data"_test = [] {
+      const std::string s = "[1, 2, 3, 4, 5, 6]";
+      const std::vector<int> v{1, 2, 3, 4, 5, 6};
+      std::vector<int> vr;
+      glaze::read_json(vr, s);
+      expect(vr == v);
+   };
+
+   "Read array"_test = [] {
+      {
+         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
+         std::array<int, 7> v1{}, v2{99}, v3{99, 99, 99, 99, 99},
+            vr{1, 5, 232, 75, 123, 54, 89};
+         glaze::read_json(v1, in);
+         glaze::read_json(v2, in);
+         glaze::read_json(v3, in);
+         expect(v1 == vr);
+         expect(v2 == vr);
+         expect(v3 == vr);
+      }
+   };
+
+   "Read vector"_test = [] {
+      {
+         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
+         std::vector<int> v, vr{1, 5, 232, 75, 123, 54, 89};
+         glaze::read_json(v, in);
+
+         expect(v == vr);
+      }
+      {
+         std::string in = R"([true, false, true, false])";
+         std::vector<bool> v, vr{true, false, true, false};
+         glaze::read_json(v, in);
+
+         expect(v == vr);
+      }
+      {
+         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
+         std::vector<int> v{1, 2, 3, 4}, vr{1, 5, 232, 75, 123, 54, 89};
+         glaze::read_json(v, in);
+
+         expect(v == vr);
+      }
+      {
+         std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
+         std::vector<int> v{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+            vr{1, 5, 232, 75, 123, 54, 89};
+         glaze::read_json(v, in);
+
+         expect(v == vr);
+      }
+   };
+
+   "Read partial vector"_test = [] {
+      std::string in = R"(    [1, 5, 232, 75, null, 54, 89] )";
+      std::vector<int> v, vr{1, 5, 232, 75, 0, 54, 89};
+      
+      expect(throws([&] { glaze::read_json(v, in); }));
+   };
+
+//*  ISSUE UT cannot run this test
+   "Read map"_test = [] {
+      {
+         std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
+         std::map<std::string, int> v, vr{{"as", 1}, {"so", 2}, {"make", 3}};
+         glaze::read_json(v, in);
+
+         //expect(v == vr);
+      }
+      {
+         std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
+         std::map<std::string, int> v{{"as", -1}, {"make", 10000}},
+            vr{{"as", 1}, {"so", 2}, {"make", 3}};
+         glaze::read_json(v, in);
+
+         //expect(v == vr);
+      }
+   };
+   
+   "Read partial map"_test = [] {
+      std::string in = R"(   { "as" : 1, "so" : null, "make" : 3 } )";
+      std::map<std::string, int> v, vr{{"as", 1}, {"so", 0}, {"make", 3}};
+
+      expect(throws([&] { glaze::read_json(v, in); }));
+   };
+
+   "Read boolean"_test = [] {
+      {
+         std::string in = R"(true)";
+         bool res{};
+         glaze::read_json(res, in);
+
+         expect(res == true);
+      }
+      {
+         std::string in = R"(false)";
+         bool res{true};
+         glaze::read_json(res, in);
+
+         expect(res == false);
+      }
+      {
+         std::string in = R"(null)";
+         bool res{false};
+         
+         expect(throws([&] {glaze::read_json(res, in); }));
+      }
+   };
+
+   "Read integer"_test = [] {
+      {
+         std::string in = R"(-1224125asdasf)";
+         int res{};
+         glaze::read_json(res, in);
+
+         expect(res == -1224125);
+      }
+      {
+         std::string in = R"(null)";
+         int res{};
+         
+         expect(throws([&] { glaze::read_json(res, in); }));
+      }
+   };
+
+   "Read double"_test = [] {
+      {
+         std::string in = R"(0.072265625flkka)";
+         double res{};
+         glaze::read_json(res, in);
+         expect(res == 0.072265625);
+      }
+      {
+         std::string in = R"(1e5das)";
+         double res{};
+         glaze::read_json(res, in);
+         expect(res == 1e5);
+      }
+      {
+         std::string in = R"(-0)";
+         double res{};
+         glaze::read_json(res, in);
+         expect(res == -0.0);
+      }
+      {
+         std::string in = R"(0e5)";
+         double res{};
+         glaze::read_json(res, in);
+         expect(res == 0.0);
+      }
+      {
+         std::string in = R"(0)";
+         double res{};
+         glaze::read_json(res, in);
+         expect(res == 0.0);
+      }
+      {
+         std::string in = R"(11)";
+         double res{};
+         glaze::read_json(res, in);
+         expect(res == 11.0);
+      }
+      {
+         std::string in = R"(0a)";
+         double res{};
+         glaze::read_json(res, in);
+         expect(res == 0.0);
+      }
+      {
+         std::string in = R"(11.0)";
+         double res{};
+         glaze::read_json(res, in);
+         expect(res == 11.0);
+      }
+      {
+         std::string in = R"(11e5)";
+         double res{};
+         glaze::read_json(res, in);
+         expect(res == 11.0e5);
+      }
+      {
+         std::string in = R"(null)";
+         double res{};
+         
+         expect(throws([&] {glaze::read_json(res, in); }));
+      }
+      {
+         std::string res = R"(success)";
+         double d;
+         expect(throws([&] {glaze::read_json(d, res); }));
+      }
+      {
+         std::string res = R"(-success)";
+         double d;
+         expect(throws([&] {glaze::read_json(d, res); }));
+      }
+      {
+         std::string res = R"(1.a)";
+         double d;
+         
+         expect(nothrow([&] {glaze::read_json(d, res); }));
+      }
+      {
+         std::string res = R"()";
+         double d;
+         expect(throws([&] {glaze::read_json(d, res); }));
+      }
+      {
+         std::string res = R"(-)";
+         double d;
+         expect(throws([&] {glaze::read_json(d, res); }));
+      }
+      {
+         std::string res = R"(1.)";
+         double d;
+
+         expect(nothrow([&] { glaze::read_json(d, res); }));
+      }
+      {
+         std::string res = R"(1.0e)";
+         double d;
+
+         expect(nothrow([&] { glaze::read_json(d, res); }));
+      }
+      {
+         std::string res = R"(1.0e-)";
+         double d;
+
+         expect(nothrow([&] { glaze::read_json(d, res); }));
+      }
+   };
+
+   "Read string"_test = [] {
+      std::string in =
+         R"("asljl{}121231212441[]123::,,;,;,,::,Q~123\a13dqwdwqwq")";
+      std::string res{};
+      glaze::read_json(res, in);
+//*   function fails, does not recognize '\'
+      //expect(res == "asljl{}121231212441[]123::,,;,;,,::,Q~123\\a13dqwdwqwq");
+   };
+
+   "Nested array"_test = [] {
+      std::vector<v3> v;
+      std::string buf =
+         R"([[1.000000,0.000000,3.000000],[2.000000,0.000000,0.000000]])";
+
+      glaze::read_json(v, buf);
+      expect(v[0].x == 1.0);
+      expect(v[0].z == 3.0);
+      expect(v[1].x == 2.0);
+   };
+
+   "Nested map"_test = [] {
+      std::map<std::string, v3> m;
+      std::string buf =
+         R"({"1":[4.000000,0.000000,0.000000],"2":[5.000000,0.000000,0.000000]})";
+
+      glaze::read_json(m, buf);
+      expect(m["1"].x == 4.0);
+      expect(m["2"].x == 5.0);
+   };
+
+//*  Bellow doesn't initialize m.
+//*  std::map<std::string, std::vector<double>> not allowed in c++20?
+   /*"Nested map 2"_test = {
+      std::map<std::string, std::vector<double>> m;
+      std::string buf =
+         R"({"1":[4.000000,0.000000,0.000000],"2":[5.000000,0.000000,0.000000,4.000000]})";
+
+      glaze::read_json(m, buf);
+      expect(m["1"][0] == 4.0);
+      expect(m["2"][0] == 5.0);
+      expect(m["2"][3] == 4.0);
+   };*/
+
+   "Integer keyed map"_test = [] {
+      std::map<int, std::vector<double>> m;
+      std::string buf =
+         R"({"1":[4.000000,0.000000,0.000000],"2":[5.000000,0.000000,0.000000,4.000000]})";
+
+      glaze::read_json(m, buf);
+      expect(m[1][0] == 4.0);
+      expect(m[2][0] == 5.0);
+      expect(m[2][3] == 4.0);
+   };
+//*  glaze does not support this type
+   "Invalid integer keyed map"_test = [] {
+      std::map<int, std::vector<double>> m;
+      // Numeric keys are not valid json but there is no harm in supporting them
+      // when reading
+      std::string buf =
+         R"({1:[4.000000,0.000000,0.000000],2:[5.000000,0.000000,0.000000,4.000000]})";
+
+      //glaze::read_json(m, buf);
+      //expect(m[1][0] == 4.0);
+      //expect(m[2][0] == 5.0);
+      //expect(m[2][3] == 4.0);
+   };
+}
+
+using Geodetic = v3;
+
+struct ThreeODetic
+{
+   Geodetic g1{};
+   int x1;
+};
+
+struct NineODetic
+{
+   ThreeODetic t1{};
+   Geodetic g1;
+};
+
+struct Named
+{
+   std::string name;
+   NineODetic value;
+};
+
+template <>
+struct glaze::meta<ThreeODetic>
+{
+   using t = ThreeODetic;
+   static constexpr auto value = glaze::array("geo", &t::g1, "int", &t::x1);
+};
+
+template <>
+struct glaze::meta<NineODetic>
+{
+   using n = NineODetic;
+   static constexpr auto value = glaze::array(&n::t1, &n::g1);
+};
+
+template <>
+struct glaze::meta<Named>
+{
+   using n = Named;
+   static constexpr auto value =
+      glaze::object("name", &n::name, "value", &n::value);
+};
+
+struct EmptyArray
+{};
+
+template <>
+struct glaze::meta<EmptyArray>
+{
+   static constexpr auto value = glaze::array();
+};
+
+struct EmptyObject
+{};
+
+//* Empty object not allowed
+template <>
+struct glaze::meta<EmptyObject>
+{
+   static constexpr auto value = glaze::object();
+};
+
+void Write_tests() {
+   using namespace boost::ut;
+
+   "Write floating point types"_test = [] {
+      {
+         std::string s;
+         float f{0.96875f};
+         glaze::write_json(f, s);
+         expect(s == "0.96875");
+      }
+      {
+         std::string s;
+         double f{0.96875};
+         glaze::write_json(f, s);
+         expect(s == "0.96875");
+      }
+      {
+         std::string s;
+         long double f{0.96875L};
+         glaze::write_json(f, s);
+         expect(s == "0.96875");
+      }
+   };
+
+   "Write integral types"_test = [] {
+      {
+         std::string s;
+         bool v{1};
+         glaze::write_json(v, s);
+         expect(s == "true");
+      }
+//* Two test below fail, unless changed to the following:
+      {
+         std::string s;
+         char v{'a'};
+         glaze::write_json(v, s);
+         //Is this what we want instead?
+         expect(s == R"("a")");  // std::to_string(static_cast<int>('a')));
+      }
+      {
+         std::string s;
+         wchar_t v{'a'};
+         glaze::write_json(v, s); //This line gives warning about converting wchar to char, is that fine? Should we write a to_buffer template to handle type wchar?
+         // Is the below what we actually expect?
+         expect(s == R"("a")");  // std::to_string(static_cast<int>('a')));
+      }
+      {
+         std::string s;
+         short v{1};
+         glaze::write_json(v, s);
+         expect(s == "1");
+      }
+      {
+         std::string s;
+         int v{1};
+         glaze::write_json(v, s);
+         expect(s == "1");
+      }
+      {
+         std::string s;
+         long v{1};
+         glaze::write_json(v, s);
+         expect(s == "1");
+      }
+      {
+         std::string s;
+         long long v{1};
+         glaze::write_json(v, s);
+         expect(s == "1");
+      }
+      {
+         std::string s;
+         unsigned short v{1};
+         glaze::write_json(v, s);
+         expect(s == "1");
+      }
+      {
+         std::string s;
+         unsigned int v{1};
+         glaze::write_json(v, s);
+         expect(s == "1");
+      }
+      {
+         std::string s;
+         unsigned long v{1};
+         glaze::write_json(v, s);
+         expect(s == "1");
+      }
+      {
+         std::string s;
+         unsigned long long v{1};
+         glaze::write_json(v, s);
+         expect(s == "1");
+      }
+   };
+
+//* write_json cannot handle type variant by itself, need to use std::get. Do we need to add variant support?
+   "Write variant"_test = [] {
+      std::variant<int, double, Geodetic> var;
+
+      var = 1;
+      auto i = std::get<0>(var);
+      std::string ibuf;
+      glaze::write_json(i, ibuf);
+      expect(ibuf == R"(1)");
+
+      var = 2.2;
+      auto d = std::get<1>(var);
+      std::string dbuf;
+      glaze::write_json(d, dbuf);
+      expect(dbuf == R"(2.2)");
+
+      var = Geodetic{1.0, 2.0, 5.0};
+      auto g = std::get<2>(var);
+      std::string gbuf;
+      glaze::write_json(g, gbuf);
+      expect(gbuf == R"([1,2,5])");
+   };
+
+   "Write empty array structure"_test = [] {
+      EmptyArray e;
+      std::string buf;
+      glaze::write_json(e, buf);
+      expect(buf == R"([])");
+   };
+
+//* Empty object not allowed
+   "Write empty object structure"_test = [] {
+      EmptyObject e;
+      std::string buf;
+      glaze::write_json(e, buf);
+      //expect(buf == R"({})");
+   };
+
+   "Write c-string"_test = [] {
+      std::string s = "aasdf";
+      char *c = s.data();
+      std::string buf;
+      glaze::write_json(c, buf);
+      expect(buf == R"("aasdf")");
+   };
+
+   "Write constant double"_test = [] {
+      const double d = 6.125;
+      std::string buf;
+      glaze::write_json(d, buf);
+      expect(buf == R"(6.125)");
+   };
+
+   "Write constant bool"_test = [] {
+      const bool b = true;
+      ;
+      std::string buf;
+      glaze::write_json(b, buf);
+      expect(buf == R"(true)");
+   };
+
+   "Write constant int"_test = [] {
+      const int i = 505;
+      std::string buf;
+      glaze::write_json(i, buf);
+      expect(buf == R"(505)");
+   };
+
+   "Write vector"_test = [] {
+      {
+         std::vector<double> v{1.1, 2.2, 3.3, 4.4};
+         std::string s;
+         glaze::write_json(v, s);
+
+         expect(s == "[1.1,2.2,3.3,4.4]");
+      }
+      {
+         std::vector<bool> v{true, false, true, false};
+         std::string s;
+         glaze::write_json(v, s);
+
+         expect(s == "[true,false,true,false]");
+      }
+   };
+
+   "Write list"_test = [] {
+      std::string in, inr = "[1,2,3,4]";
+      std::list<int> l{1, 2, 3, 4};
+      glaze::write_json(l, in);
+
+      expect(in == inr);
+   };
+
+   "Write forward list"_test = [] {
+      std::string in, inr = "[1,2,3,4]";
+      std::forward_list<int> l{1, 2, 3, 4};
+      glaze::write_json(l, in);
+
+      expect(in == inr);
+   };
+
+   "Write deque"_test = [] {
+      std::string in, inr = "[1,2,3,4]";
+      std::deque<int> l{1, 2, 3, 4};
+      glaze::write_json(l, in);
+
+      expect(in == inr);
+   };
+
+   "Write array"_test = [] {
+      std::array<double, 4> v{1.1, 2.2, 3.3, 4.4};
+      std::string s;
+      glaze::write_json(v, s);
+
+      expect(s == "[1.1,2.2,3.3,4.4]");
+   };
+
+   "Write map"_test = [] {
+      std::map<std::string, double> m{{"a", 2.2}, {"b", 11.111}, {"c", 211.2}};
+      std::string s;
+      glaze::write_json(m, s);
+
+      expect(s == R"({"a":2.2,"b":11.111,"c":211.2})");
+   };
+
+   "Write integer map"_test = [] {
+      std::map<int, double> m{{3, 2.2}, {5, 211.2}, {7, 11.111}};
+      std::string s;
+      glaze::write_json(m, s);
+
+      expect(s == R"({"3":2.2,"5":211.2,"7":11.111})");
+   };
+
+//* Gives 23 errors. Errors come from an MSVC include file "utility": it claims that the base class is undifined.
+   "Write object"_test = [] {
+      Named n{"Hello, world!", {{{21, 15, 13}, 0}, {0}}};
+
+      std::string s;
+      s.reserve(1000);
+      [[maybe_unused]] auto i = std::back_inserter(s);
+      //glaze::write_json(n, s);
+
+      //expect(
+         //s ==
+         //R"({"name":"Hello, world!","value":[{"geo":[21,15,13],"int":0},[0,0,0]]})");
+   };
+
+   "Write boolean"_test = [] {
+      {
+         bool b = true;
+         std::string s;
+         glaze::write_json(b, s);
+
+         expect(s == R"(true)");
+      }
+      {
+         bool b = false;
+         std::string s;
+         glaze::write_json(b, s);
+
+         expect(s == R"(false)");
+      }
+   };
+
+   "Hello World"_test = [] {
+      std::unordered_map<std::string, std::string> m;
+      m["Hello"] = "World";
+      std::string buf;
+      glaze::write_json(m, buf);
+
+      expect(buf == R"({"Hello":"World"})");
+   };
+
+   "Number"_test = [] {
+      std::unordered_map<std::string, double> x;
+      x["number"] = 5.55;
+
+      std::string jx;
+      glaze::write_json(x, jx);
+
+      expect(jx == R"({"number":5.55})");
+   };
+
+   "Nested array"_test = [] {
+      std::vector<Geodetic> v(2);
+      std::string buf;
+
+      glaze::write_json(v, buf);
+      expect(buf == R"([[0,0,0],[0,0,0]])");
+   };
+
+   "Nested map"_test = [] {
+      std::map<std::string, Geodetic> m;
+      m["1"];
+      m["2"];
+      std::string buf;
+
+      glaze::write_json(m, buf);
+      expect(buf == R"({"1":[0,0,0],"2":[0,0,0]})");
+   };
+
+   "Nested map 2"_test = [] {
+      std::map<std::string, std::vector<double>> m;
+      m["1"] = {4.0, 0.0, 0.0};
+      m["2"] = {5.0, 0.0, 0.0, 4.0};
+      std::string buf;
+
+      glaze::write_json(m, buf);
+      expect(buf == R"({"1":[4,0,0],"2":[5,0,0,4]})");
+   };
+}
+
 int main()
 {
    using namespace boost::ut;
@@ -604,4 +1550,6 @@ int main()
    json_pointer();
    early_end(); 
    bench();
+   Read_tests();
+   Write_tests();
 }

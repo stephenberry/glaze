@@ -7,16 +7,7 @@
 #include "glaze/write.hpp"
 #include "glaze/json_ptr.hpp"
 #include "glaze/threadpool.hpp"
-
-#ifdef _WIN32
-#ifdef NOMINMAX
-#include <windows.h>
-#else
-#define NOMINMAX
-#include <windows.h>
-#undef NOMINMAX
-#endif
-#endif
+#include "glaze/util/macros.hpp"
 
 #include <random>
 

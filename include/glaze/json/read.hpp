@@ -105,7 +105,7 @@ namespace glaze
             if (it == end) [[unlikely]]
                throw std::runtime_error("Unexpected end of buffer");
             
-            if constexpr (std::contiguous_iterator<It>)
+            if constexpr (std::contiguous_iterator<std::decay_t<It>>)
             {
                if constexpr (std::is_floating_point_v<T>)
                {
@@ -118,12 +118,14 @@ namespace glaze
                }
                else
                {
+                  double temp;
                   const auto size = std::distance(it, end);
                   const auto start = &*it;
-                  auto [p, ec] = std::from_chars(start, start + size, value);
+                  auto [p, ec] = fast_float::from_chars(start, start + size, temp);
                   if (ec != std::errc{}) [[unlikely]]
                      throw std::runtime_error("Failed to parse number");
                   it += (p - &*it);
+                  value = static_cast<T>(temp);
                }
             }
             else {

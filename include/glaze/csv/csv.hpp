@@ -23,10 +23,18 @@
 
 namespace glaze
 {
-    template<class ...T>
+    template <class ...T>
     size_t container_size(const std::variant<T...>& v)
     {
-        return std::visit([](auto&& x) {return x.size(); }, v);
+        return std::visit([](auto&& x) -> size_t {
+           using ContainerType = std::decay_t<decltype(x)>;
+           if constexpr (std::same_as<ContainerType, std::monostate>) {
+              throw std::runtime_error("container_size constainer is monostate");
+           }
+           else {
+              return x.size();
+           }
+        }, v);
     }
    
    template <size_t Offset, class Tuple, std::size_t...Is>
@@ -207,10 +215,16 @@ namespace glaze
               write_csv(buffer, ",");
 
                std::visit([&](auto&& arg) {
-               for (size_t i = 0; i < n; ++i) {
-                       write_csv(buffer, arg[i]); 
-                   write_csv(buffer, ",");
-               }
+                  using ContainerType = std::decay_t<decltype(arg)>;
+                  if constexpr (std::same_as<ContainerType, std::monostate>) {
+                     throw std::runtime_error("write_csv container is monostate");
+                  }
+                  else {
+                     for (size_t i = 0; i < n; ++i) {
+                        write_csv(buffer, arg[i]);
+                        write_csv(buffer, ",");
+                     }
+                  }
                }, data.first);
                buffer.append("\n");
            }
@@ -263,30 +277,25 @@ namespace glaze
        buffer >> var;
    }
 
-   template<class T>
+   template <class T>
    inline void convert_value(std::stringstream& buffer, T& var) requires std::is_integral_v<T>
    {
        if constexpr (std::is_same_v<T, bool>) 
        {
-           if (buffer.str().compare("1") == 0)
-           {
+           if (buffer.str().compare("1") == 0) {
                var = true;
            }
-           else if(buffer.str().compare("0") == 0)
-           {
+           else if(buffer.str().compare("0") == 0) {
                var = false;
            }
-           else
-           {
+           else {
                buffer.setstate(std::ios::failbit);
            }
        }
-       else
-       {
+       else {
            buffer >> var;
        }
    }
-
    
    template<class T>
    inline void read_csv(const std::string& buffer, T& container)
@@ -295,15 +304,14 @@ namespace glaze
        typename T::value_type temp;
        convert_value(convert, temp);
 
-       if (!convert)
-       {
-           throw std::runtime_error("csv::from_file | could not convert to type");
+       if (!convert) {
+          throw std::runtime_error("csv::from_file | could not convert to type");
        }
 
        container.push_back(temp);
    }
 
-   template<bool RowWise = true, class Tuple>
+   template <bool RowWise = true, class Tuple>
    inline void read_csv(std::fstream& file, Tuple& items) requires is_tuple<Tuple>
    {
        static constexpr auto N = std::tuple_size_v<Tuple>;
@@ -329,7 +337,6 @@ namespace glaze
                {
                    read_csv(value, item);
                }
-
            });
        }
        else
@@ -346,11 +353,10 @@ namespace glaze
                    auto& item = std::get<I>(items);
 
                    std::string value;
-                   if (std::getline(line, value, ','))
-                   {
+                   if (std::getline(line, value, ',')) {
                        read_csv(value, item);
                    }
-                   });
+               });
            }
        }
    }
