@@ -15,7 +15,7 @@ namespace glaze
    requires nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char))
    inline void write(T&& value, Buffer& buffer) noexcept
    {
-      if constexpr (std::same_as<Buffer, std::string>) {
+      if constexpr (std::same_as<Buffer, std::string> || std::same_as<Buffer, std::vector<std::byte>>) {
          detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), buffer);
       }
       else {
