@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "glaze/core/format.hpp"
+#include "glaze/core/opts.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/binary/header.hpp"
 #include "glaze/util/for_each.hpp"
@@ -18,9 +18,9 @@ namespace glaze
       template <>
       struct write<binary>
       {
-         template <class T, class B>
+         template <auto& Opts, class T, class B>
          static void op(T&& value, B&& b) {
-            to_binary<std::decay_t<T>>::op(std::forward<T>(value), std::forward<B>(b));
+            to_binary<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<B>(b));
          }
       };
       
@@ -28,6 +28,7 @@ namespace glaze
       requires (std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> || std::same_as<T, std::vector<bool>::const_reference>)
       struct to_binary<T>
       {
+         template <auto& Opts>
          static void op(const bool value, auto&& b) noexcept
          {
             if (value) {
@@ -42,6 +43,7 @@ namespace glaze
       template <func_t T>
       struct to_binary<T>
       {
+         template <auto& Opts>
          static void op(auto&& value, auto&& b) noexcept {}
       };
       
@@ -89,6 +91,7 @@ namespace glaze
       requires num_t<T> || char_t<T>
       struct to_binary<T>
       {
+         template <auto& Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             dump_type(value, b);
@@ -98,6 +101,7 @@ namespace glaze
       template <str_t T>
       struct to_binary<T>
       {
+         template <auto& Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             dump_int(value.size(), b);
@@ -108,13 +112,14 @@ namespace glaze
       template <array_t T>
       struct to_binary<T>
       {
+         template <auto& Opts>
          static void op(auto&& value, auto&& b)
          {
             if constexpr (resizeable<T>) {
                dump_int(value.size(), b);
             }
             for (auto&& x : value) {
-               write<binary>::op(x, b);
+               write<binary>::op<Opts>(x, b);
             }
          }
       };
@@ -122,12 +127,13 @@ namespace glaze
       template <map_t T>
       struct to_binary<T>
       {
+         template <auto& Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             dump_int(value.size(), b);
             for (auto&& [k, v] : value) {
-               write<binary>::op(k, b);
-               write<binary>::op(v, b);
+               write<binary>::op<Opts>(k, b);
+               write<binary>::op<Opts>(v, b);
             }
          }
       };
@@ -135,11 +141,12 @@ namespace glaze
       template <nullable_t T>
       struct to_binary<T>
       {
+         template <auto& Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             if (value) {
                dump<static_cast<std::byte>(1)>(b);
-               write<binary>::op(*value, b);
+               write<binary>::op<Opts>(*value, b);
             }
             else {
                dump<static_cast<std::byte>(0)>(b);
@@ -151,6 +158,7 @@ namespace glaze
       requires glaze_object_t<T>
       struct to_binary<T>
       {
+         template <auto& Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             using V = std::decay_t<T>;
@@ -160,7 +168,7 @@ namespace glaze
             for_each<N>([&](auto I) {
                static constexpr auto item = std::get<I>(meta_v<V>);
                dump_int(I, b); // dump the known key as an integer
-               write<binary>::op(value.*std::get<1>(item), b);
+               write<binary>::op<Opts>(value.*std::get<1>(item), b);
             });
          }
       };
@@ -168,6 +176,6 @@ namespace glaze
    
    template <class T, class Buffer>
    inline void write_binary(T&& value, Buffer&& buffer) {
-      write<binary>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      write<opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 }
