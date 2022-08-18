@@ -263,30 +263,25 @@ namespace glaze
        buffer >> var;
    }
 
-   template<class T>
+   template <class T>
    inline void convert_value(std::stringstream& buffer, T& var) requires std::is_integral_v<T>
    {
        if constexpr (std::is_same_v<T, bool>) 
        {
-           if (buffer.str().compare("1") == 0)
-           {
+           if (buffer.str().compare("1") == 0) {
                var = true;
            }
-           else if(buffer.str().compare("0") == 0)
-           {
+           else if(buffer.str().compare("0") == 0) {
                var = false;
            }
-           else
-           {
+           else {
                buffer.setstate(std::ios::failbit);
            }
        }
-       else
-       {
+       else {
            buffer >> var;
        }
    }
-
    
    template<class T>
    inline void read_csv(const std::string& buffer, T& container)
@@ -295,15 +290,14 @@ namespace glaze
        typename T::value_type temp;
        convert_value(convert, temp);
 
-       if (!convert)
-       {
-           throw std::runtime_error("csv::from_file | could not convert to type");
+       if (!convert) {
+          throw std::runtime_error("csv::from_file | could not convert to type");
        }
 
        container.push_back(temp);
    }
 
-   template<bool RowWise = true, class Tuple>
+   template <bool RowWise = true, class Tuple>
    inline void read_csv(std::fstream& file, Tuple& items) requires is_tuple<Tuple>
    {
        static constexpr auto N = std::tuple_size_v<Tuple>;
@@ -329,7 +323,6 @@ namespace glaze
                {
                    read_csv(value, item);
                }
-
            });
        }
        else
@@ -346,11 +339,10 @@ namespace glaze
                    auto& item = std::get<I>(items);
 
                    std::string value;
-                   if (std::getline(line, value, ','))
-                   {
+                   if (std::getline(line, value, ',')) {
                        read_csv(value, item);
                    }
-                   });
+               });
            }
        }
    }
