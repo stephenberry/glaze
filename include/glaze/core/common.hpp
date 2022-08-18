@@ -262,6 +262,17 @@ namespace glaze
             std::bool_constant<(std::decay_t<T>{}.size(), true)>()
          } -> std::same_as<std::true_type>;
       } && !is_span<T>);
+      
+      template <class T>
+      constexpr size_t get_size() noexcept
+      {
+         if constexpr (is_span<T>) {
+            return T::extent;
+         }
+         else {
+            return std::decay_t<T>{}.size();
+         }
+      };
 
       template <class T>
       concept tuple_t = requires(T t)
