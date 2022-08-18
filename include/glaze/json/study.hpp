@@ -18,9 +18,10 @@ namespace glaze
       using basic =
          std::variant<bool, char, char8_t, unsigned char, signed char, char16_t,
                       short, unsigned short, wchar_t, char32_t, float, int,
-                      unsigned int, long, unsigned long, double, long double,
+                      unsigned int, long, unsigned long, double,
                       long long, unsigned long long, std::string>;
-      struct param_distribution
+      
+      struct param
       {
          std::string ptr{};
          std::string distribution = "";
@@ -29,7 +30,7 @@ namespace glaze
 
       struct design
       {
-         std::vector<param_distribution> params{};  //!< study parameters
+         std::vector<param> params{};  //!< study parameters
          std::vector<std::unordered_map<std::string, raw_json>> states{};
          std::unordered_map<std::string, raw_json>
             overwrite{};  //!< pointer syntax and json representation
@@ -43,14 +44,14 @@ namespace glaze
    }  // namespace study
 
    template <>
-   struct glaze::meta<study::param_distribution>
+   struct meta<study::param>
    {
-      using T = study::param_distribution;
+      using T = study::param;
       static constexpr auto value = glaze::object("id", &T::ptr, "*", &T::ptr, "dist", &T::distribution, "values", &T::range);
    };
 
    template <>
-   struct glaze::meta<study::design>
+   struct meta<study::design>
    {
       using T = study::design;
       static constexpr auto value =
@@ -60,10 +61,10 @@ namespace glaze
 
    namespace study {
       template <class State>
-      void overwrite_state(State &state, std::unordered_map<std::string, raw_json> &overwrites)
+      void overwrite_state(State &state, const std::unordered_map<std::string, raw_json> &overwrites)
       {
-         for (auto&& pair : overwrites) {
-            glaze::overwrite(state, pair.first, pair.second);
+         for (auto&& [json_ptr, raw_json_str] : overwrites) {
+            glaze::overwrite(state, json_ptr, raw_json_str.str);
          }
       }
 
@@ -109,8 +110,19 @@ namespace glaze
                   [&](auto &&param_ptr) {
                      using param_type =
                         std::remove_pointer_t<std::decay_t<decltype(param_ptr)>>;
-                     *param_ptr =
-                        std::get<param_type>(param_set.elements[this_index]);
+                     
+                     if (std::holds_alternative<double>(param_set.elements[this_index])) {
+                        if constexpr (std::is_convertible_v<param_type, double>) {
+                           *param_ptr =
+                              static_cast<param_type>(std::get<double>(param_set.elements[this_index]));
+                        }
+                        else {
+                           throw std::runtime_error("full_factorial::generate: elements type not convertible to design type");
+                        }
+                     }
+                     else {
+                        *param_ptr = std::get<param_type>(param_set.elements[this_index]);
+                     }
                   },
                   param_set.param_ptr);
             }
@@ -119,7 +131,7 @@ namespace glaze
             return state;
          }
 
-         param_set param_set_from_dist(const param_distribution &dist)
+         param_set param_set_from_dist(const param &dist)
          {
             param_set param_set;
 
@@ -181,7 +193,7 @@ namespace glaze
                throw std::runtime_error(
                   "glaze::study::full_factorial::param_set_from_dist: Unknown "
                   "distribution for non random study '"
-                  + dist.distribution + "' passed!");
+                  + dist.distribution + "'!");
             }
 
             return param_set;
@@ -203,7 +215,7 @@ namespace glaze
          tpool.wait();
       }
 
-      struct param
+      struct random_param
       {
          basic_ptr param_ptr{};
          basic value{};
@@ -232,7 +244,7 @@ namespace glaze
          std::vector<size_t> resample_indices{};
          size_t index = 0;
 
-         std::vector<std::vector<param>> params_per_state{};
+         std::vector<std::vector<random_param>> params_per_state{};
 
          random_doe(State _state, const design &design)
             : state(std::move(_state))
@@ -291,9 +303,9 @@ namespace glaze
             reset();
          }
 
-         param param_from_dist(const param_distribution &dist)
+         random_param param_from_dist(const param &dist)
          {
-            param result{};
+            random_param result{};
 
             bool found{};
             detail::seek_impl(

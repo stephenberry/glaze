@@ -160,19 +160,28 @@ namespace glaze
    struct raw_json
    {
       std::string str;
+      
+      template <class T>
+      requires (!std::same_as<std::decay_t<T>, raw_json>)
+      raw_json(T&& s) : str(std::forward<T>(s)) {}
+      
+      raw_json(const raw_json&) = default;
+      raw_json(raw_json&&) = default;
+      raw_json& operator=(const raw_json&) = default;
+      raw_json& operator=(raw_json&&) = default;
    };
 
    using basic =
       std::variant<bool, char, char8_t, unsigned char, signed char, char16_t,
                    short, unsigned short, wchar_t, char32_t, float, int,
-                   unsigned int, long, unsigned long, double, long double,
+                   unsigned int, long, unsigned long, double,
                    long long, unsigned long long, std::string>;
 
    using basic_ptr =
       std::variant<bool *, char *, char8_t *, unsigned char *, signed char *,
                    char16_t *, short *, unsigned short *, wchar_t *, char32_t *,
                    float *, int *, unsigned int *, long *, unsigned long *,
-                   double *, long double *, long long *, unsigned long long *,
+                   double *, long long *, unsigned long long *,
                    std::string *>;
 
    namespace detail

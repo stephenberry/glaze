@@ -1532,6 +1532,39 @@ void write_tests() {
    };
 }
 
+#include "glaze/json/study.hpp"
+
+struct study_obj
+{
+   size_t x{};
+   double y{};
+};
+
+template <>
+struct glaze::meta<study_obj>
+{
+   using T = study_obj;
+   static constexpr auto value = glaze::object("x", &T::x, "y", &T::y);
+};
+
+void study_tests()
+{
+   "study"_test = [] {
+      glaze::study::design design;
+      design.params = { { "/x", "linspace", { "0", "1", "10" } } };
+      
+      glaze::study::full_factorial<study_obj> generator{ study_obj{}, design };
+      
+      std::vector<size_t> results;
+      glaze::study::run_study(generator, [&](const auto& point, [[maybe_unused]] const auto job_num){
+         results.emplace_back(point.x);
+      });
+      
+      expect(results[0] == 0);
+      expect(results[10] == 10);
+   };
+}
+
 int main()
 {
    using namespace boost::ut;
@@ -1552,4 +1585,5 @@ int main()
    bench();
    read_tests();
    write_tests();
+   study_tests();
 }
