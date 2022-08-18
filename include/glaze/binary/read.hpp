@@ -127,6 +127,17 @@ namespace glaze
          }
       };
       
+      template <class T>
+      constexpr size_t get_size() noexcept
+      {
+         if constexpr (is_span<T>) {
+            return T::extent;
+         }
+         else {
+            return std::decay_t<T>{}.size();
+         }
+      };
+      
       template <array_t T>
       struct from_binary<T>
       {
@@ -137,8 +148,7 @@ namespace glaze
 
             using V = typename std::decay_t<T>::value_type;
             if constexpr (has_static_size<T>) {
-               static constexpr auto n_bytes =
-                  sizeof(V) * std::decay_t<T>{}.size();
+               static constexpr auto n_bytes = sizeof(V) * get_size<T>();
                std::memcpy(value.data(), &(*it), n_bytes);
                std::advance(it, n_bytes);
             }

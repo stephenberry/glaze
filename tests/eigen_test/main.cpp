@@ -24,7 +24,7 @@ int main()
       m << 5, 1, 1, 7;
       std::string json{};
       glaze::write_json(m, json);
-      expect(json == "[5,1,1,7] ");
+      expect(json == "[5,1,1,7]");
    };
  
    "read_json"_test = [] {
@@ -43,6 +43,9 @@ int main()
       glaze::write_binary(m, b);
       Eigen::Matrix<double, 2, 2> e{};
       glaze::read_binary(e, b);
-      expect(m == e);
+      static_assert(!glaze::detail::is_dynamic_span<std::span<double, 4>>);
+      static_assert(glaze::detail::has_static_size<std::span<double, 4>>);
+      const bool boolean = m == e;
+      expect(boolean);
    };
 }

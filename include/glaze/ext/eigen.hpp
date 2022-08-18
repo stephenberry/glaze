@@ -40,7 +40,7 @@ namespace glaze
 
          static void op(auto &value, auto&& it, auto&& end)
          {
-            std::span view(value.data(), value.size());
+            std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
             detail::read<binary>::op(view, it, end);
          }
       };
@@ -51,9 +51,9 @@ namespace glaze
          static_assert(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0,
                        "Does not handle dynamic matrices");
 
-         static void op(auto &&value, auto &&b) noexcept
+         static void op(auto&& value, auto&& b) noexcept
          {
-            std::span view(value.data(), value.size());
+            std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
             detail::write<binary>::op(view, b);
          }
       };
@@ -66,7 +66,7 @@ namespace glaze
 
          static void op(auto &value, auto&& it, auto&& end)
          {
-            std::span view(value.data(), value.size());
+            std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
             detail::read<json>::op(view, it, end);
          }
       };
@@ -80,18 +80,8 @@ namespace glaze
          template <bool C>
          static void op(auto &&value, auto &&b) noexcept
          {
-            dump<'['>(b);
-            if (value.size() != 0) {
-               auto it = value.data();
-               write<json>::op<C>(*it, b);
-               ++it;
-               const auto end = value.data() + value.size();
-               for (; it != end; ++it) {
-                  dump<','>(b);
-                  write<json>::op<C>(*it, b);
-               }   
-            }
-            dump<']'>(b);
+            std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
+            detail::write<json>::op<C>(view, b);
          }
       };
    }  // namespace detail

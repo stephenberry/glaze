@@ -244,14 +244,24 @@ namespace glaze
       {
          container.resize(0);
       };
+      
+      template <class T>
+      concept is_span = requires(T t)
+      {
+         T::extent;
+         typename T::element_type;
+      };
+      
+      template <class T>
+      concept is_dynamic_span = T::extent == static_cast<size_t>(-1);
 
       template <class T>
-      concept has_static_size = requires(T container)
-      {
+      concept has_static_size = !is_dynamic_span<T>
+      || (requires(T container) {
          {
             std::bool_constant<(std::decay_t<T>{}.size(), true)>()
          } -> std::same_as<std::true_type>;
-      };
+      } && !is_span<T>);
 
       template <class T>
       concept tuple_t = requires(T t)
