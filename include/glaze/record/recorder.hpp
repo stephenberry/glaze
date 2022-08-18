@@ -25,6 +25,10 @@ namespace glaze
    struct assigner
    {
       assigner(Data& data) : data(data) {}
+      assigner(const assigner&) = default;
+      assigner(assigner&&) = default;
+      assigner& operator=(const assigner&) = default;
+      assigner& operator=(assigner&&) = default;
       
       Data& data;
       
