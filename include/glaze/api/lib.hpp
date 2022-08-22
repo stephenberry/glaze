@@ -20,7 +20,11 @@
 #include <Windows.h>
 #define SHARED_LIBRARY_EXTENSION ".dll"
 #define SHARED_LIBRARY_PREFIX ""
-#else
+#elif __APPLE__
+#include <dlfcn.h>
+#define SHARED_LIBRARY_EXTENSION ".dylib"
+#define SHARED_LIBRARY_PREFIX "lib"
+#elif __linux__
 #include <dlfcn.h>
 #define SHARED_LIBRARY_EXTENSION ".so"
 #define SHARED_LIBRARY_PREFIX "lib"

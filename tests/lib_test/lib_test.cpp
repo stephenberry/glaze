@@ -14,8 +14,12 @@ DLL_EXPORT glaze_interface create_api() noexcept { return {}; }
 void tests()
 {
    using namespace boost::ut;
+#ifdef GLAZE_API_ON_WINDOWS
    glaze::lib_loader lib("../../../bin");
-
+#else
+   glaze::lib_loader lib("../../../../bin");
+#endif
+   
    auto io = lib["my_api"]();
    
    "bool type name"_test = [] {
