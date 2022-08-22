@@ -44,7 +44,8 @@ namespace glaze
       struct to_binary<T>
       {
          template <auto& Opts>
-         static void op(auto&& value, auto&& b) noexcept {}
+         static void op(auto&& /*value*/, auto&& /*b*/) noexcept
+         {}
       };
       
       void dump_type(auto&& value, auto&& b) noexcept

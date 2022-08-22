@@ -8,6 +8,10 @@
 #include "glaze/core/format.hpp"
 
 #include <stdexcept>
+#include <mutex>
+#include <memory>
+#include <functional>
+#include <map>
 
 namespace glaze
 {
@@ -47,8 +51,10 @@ namespace glaze
 
          std::string error{};
       };
-      
-      [[nodiscard]] inline std::shared_ptr<glaze::api> create_api(const std::string_view name = "") noexcept;
+
+      using api_map_t =
+         std::map<std::string, std::function<std::shared_ptr<api>()>,
+                  std::less<>>;
       
       template <class T>
       T& api::get(const std::string_view path) {
@@ -79,3 +85,16 @@ namespace glaze
       }
    }
 }
+
+#if defined(_WIN32) || defined(__CYGWIN__)
+#define DLL_EXPORT __declspec(dllexport)
+#else
+define DLL_EXPORT
+#endif
+
+struct wrapper
+{
+   glaze::api_map_t map{};
+};
+
+extern "C" DLL_EXPORT wrapper create_api() noexcept;

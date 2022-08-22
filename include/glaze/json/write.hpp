@@ -94,7 +94,7 @@ namespace glaze
       struct to_json<T>
       {
          template <auto& Opts>
-         static void op(auto&& value, auto&& b) noexcept
+         static void op(auto&& /*value*/, auto&& /*b*/) noexcept
          {}
       };
 

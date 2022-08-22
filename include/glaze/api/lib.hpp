@@ -1,0 +1,112 @@
+#pragma once
+
+#include "glaze/api/api.hpp"
+
+#include <string_view>
+#include <filesystem>
+#include <map>
+#include <unordered_set>
+
+#if defined(_WIN32) || defined(__CYGWIN__)
+#ifndef GLAZE_API_ON_WINDOWS
+#define GLAZE_API_ON_WINDOWS
+#endif
+#endif
+
+#ifdef GLAZE_API_ON_WINDOWS
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#define SHARED_LIBRARY_EXTENSION ".dll"
+#define SHARED_LIBRARY_PREFIX ""
+#else
+#include <dlfcn.h>
+#define SHARED_LIBRARY_EXTENSION ".so"
+#define SHARED_LIBRARY_PREFIX "lib"
+#endif
+
+namespace glaze
+{
+#ifdef GLAZE_API_ON_WINDOWS
+   using lib_t = HINSTANCE;
+#else
+   using lib_t = void*;
+#endif
+
+   struct lib_loader
+   {
+      using create_t = wrapper(*)(void);
+
+      api_map_t api_map{};
+      std::vector<lib_t> loaded_libs{};
+
+      bool load_lib(const std::string& path) {
+#ifdef GLAZE_API_ON_WINDOWS
+         lib_t loaded_lib = LoadLibrary(path.c_str());
+#else
+         lib_t loaded_lib = dlopen(path.c_str(), RTLD_LAZY);
+#endif
+         if (loaded_lib) {
+            loaded_libs.emplace_back(loaded_lib);
+
+            #ifdef GLAZE_API_ON_WINDOWS
+            auto* ptr = (create_t)GetProcAddress(loaded_lib, "create_api");
+#else
+            auto* ptr = (create_t)dlsym(dlopen(path.c_str(), RTLD_NOW), "create_api");
+#endif
+
+            if (ptr) {
+               api_map.merge(ptr().map);
+               return true;
+            }
+         }
+
+         return false;
+      }
+
+      bool load_lib_by_name(const std::string& path)
+      {
+#ifdef NDEBUG
+         const std::string suffix = "";
+#else
+         const std::string suffix = "_d";
+#endif
+         const std::filesystem::path combined_path(
+            SHARED_LIBRARY_PREFIX + path + suffix + SHARED_LIBRARY_EXTENSION);
+
+         return (load_lib(std::filesystem::canonical(combined_path).string()));
+      }
+
+      void load_libs(const std::string_view directory)
+      {
+         std::filesystem::directory_entry dir(directory);
+         for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+            if (entry.is_regular_file() && entry.path().extension() == SHARED_LIBRARY_EXTENSION) {
+               load_lib(entry.path().string());
+            }
+         }
+      }
+
+      auto& operator[](std::string_view name)
+      {
+         return api_map[std::string(name)];
+      }
+
+      lib_loader() = default;
+      lib_loader(const std::string_view directory) { load_libs(directory); }
+
+      ~lib_loader()
+      {
+         api_map.clear();
+         for(const auto &lib: loaded_libs) {
+#ifdef GLAZE_API_ON_WINDOWS
+            FreeLibrary(lib);
+#else
+            dlclose(lib);
+#endif
+         }
+      }
+   };
+
+}

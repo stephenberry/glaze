@@ -44,13 +44,13 @@ namespace glaze
       template <func_t T>
       struct from_binary<T>
       {
-         static void op(auto&& value, auto&& it, auto&& end)
+         static void op(auto&& /*value*/, auto&& /*it*/, auto&& /*end*/)
          {
          }
       };
       
       // TODO: Handle errors
-      inline constexpr size_t int_from_header(auto&& it, auto&& end)
+      inline constexpr size_t int_from_header(auto&& it, auto&& /*end*/)
       {
          header8 h8;
          std::memcpy(&h8, &(*it), 1);
@@ -86,7 +86,7 @@ namespace glaze
       }
       
       template <size_t N>
-      inline constexpr size_t int_from_reduced(auto&& it, auto&& end)
+      inline constexpr size_t int_from_reduced(auto&& it, auto&& /*end*/)
       {
          if constexpr (N < 256) {
             uint8_t i;

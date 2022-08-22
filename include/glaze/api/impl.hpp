@@ -61,12 +61,13 @@ namespace glaze
          else {
             //TODO: avoid copy
             static thread_local std::vector<std::byte> buffer{};
-            return detail::seek_impl(
+            bool found = detail::seek_impl(
                [&](auto&& val) { glaze::write_binary(val, buffer);
                },
                interface, path);
             data.resize(buffer.size());
             std::memcpy(data.data(), buffer.data(), buffer.size());
+            return found;
          }
       }
 

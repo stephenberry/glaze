@@ -224,7 +224,7 @@ namespace glaze
       template <func_t T>
       struct from_json<T>
       {
-         static void op(auto& value, auto&& it, auto&& end)
+         static void op(auto& /*value*/, auto&& /*it*/, auto&& /*end*/)
          {
          }
       };

@@ -4,6 +4,7 @@
 #include <map>
 #include <vector>
 #include <variant>
+#include <deque>
 
 #include "glaze/util/type_traits.hpp"
 

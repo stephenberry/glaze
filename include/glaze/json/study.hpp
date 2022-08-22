@@ -10,6 +10,7 @@
 #include "glaze/util/macros.hpp"
 
 #include <random>
+#include <numeric>
 
 namespace glaze
 {
