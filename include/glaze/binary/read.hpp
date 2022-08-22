@@ -204,7 +204,7 @@ namespace glaze
       try {
          detail::bopts o;
          detail::read<binary>::op(o, b, e);
-         if (o.is_partial) {
+         if (o.partial) {
             
          }
          else {

@@ -8,6 +8,7 @@
 
 #include "fast_float/fast_float.h"
 #include "glaze/core/common.hpp"
+#include "glaze/util/string_view.hpp"
 
 namespace glaze
 {
@@ -265,5 +266,27 @@ namespace glaze
          },
          std::forward<T>(root_value), json_ptr);
       return result;
+   }
+   
+   inline constexpr std::pair<sv, sv> tokenize_json_ptr(sv s)
+   {
+       s.remove_prefix(1);
+       if (s.find('/') == std::string::npos) {
+           return { s, "" };
+       }
+       const auto i = s.find_first_of('/');
+       return { s.substr(0, i), s.substr(i, s.size() - i) };
+   }
+
+   template <auto& Str>
+   inline constexpr auto split_json_ptr()
+   {
+       constexpr auto N = std::count(Str.begin(), Str.end(), '/');
+       std::array<sv, N> arr{};
+       sv s = Str;
+       for (auto i = 0; i < N; ++i) {
+           std::tie(arr[i], s) = tokenize_json_ptr(s);
+       }
+       return arr;
    }
 }  // namespace glaze

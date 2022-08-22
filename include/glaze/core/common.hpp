@@ -9,6 +9,7 @@
 
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
+#include "glaze/util/string_view.hpp"
 
 #include "NanoRange/nanorange.hpp"
 

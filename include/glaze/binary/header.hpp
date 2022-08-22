@@ -9,7 +9,7 @@ namespace glaze::detail
 {
    struct bopts
    {
-      uint8_t is_partial : 1 = false;
+      uint8_t partial : 1 = false;
    };
    static_assert(sizeof(bopts) == 1);
    
