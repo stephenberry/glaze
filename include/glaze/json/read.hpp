@@ -445,6 +445,6 @@ namespace glaze
    
    template <class T, class Buffer>
    inline void read_json(T& value, Buffer&& buffer) {
-      read<json>(value, std::forward<Buffer>(buffer));
+      read<opts{}>(value, std::forward<Buffer>(buffer));
    }
 }  // namespace glaze

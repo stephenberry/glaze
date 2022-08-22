@@ -7,5 +7,5 @@
 
 DLL_EXPORT glaze_interface create_api() noexcept
 {
-   return {{"my_api", glaze::make_api<my_api>}};
+   return {{{"my_api", glaze::make_api<my_api>}}};
 }

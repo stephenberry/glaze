@@ -37,13 +37,13 @@ namespace glaze
       {
          if (format == json) {
             return detail::seek_impl(
-               [&](auto&& val) { glaze::read<json>(val, data);
+               [&](auto&& val) { glaze::read<opts{}>(val, data);
                },
                interface, path);
          }
          else {
             return detail::seek_impl(
-               [&](auto&& val) { glaze::read<binary>(val, data);
+               [&](auto&& val) { glaze::read<opts{.format = binary}>(val, data);
                },
                interface, path);
          }

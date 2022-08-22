@@ -8,7 +8,7 @@
 
 namespace glaze
 {
-   template <uint32_t Format, class Buffer>
+   template <opts Opts, class Buffer>
    requires nano::ranges::input_range<std::decay_t<Buffer>> &&
       std::same_as<std::byte, nano::ranges::range_value_t<std::decay_t<Buffer>>>
    inline void read(auto& value, Buffer&& buffer)
@@ -19,7 +19,7 @@ namespace glaze
          throw std::runtime_error("No input provided to read");
       }
       try {
-         detail::read<Format>::op(value, b, e);
+         detail::read<Opts.format>::op(value, b, e);
       }
       catch (const std::exception& e) {
          // TODO: Implement good error message
@@ -28,7 +28,7 @@ namespace glaze
    }
    
    // For reading json from a std::vector<char>, std::deque<char> and the like
-   template <uint32_t Format, class Buffer>
+   template <opts Opts, class Buffer>
    requires nano::ranges::input_range<std::decay_t<Buffer>> &&
       std::same_as<char, nano::ranges::range_value_t<std::decay_t<Buffer>>>
    inline void read(auto& value, Buffer&& buffer)
@@ -39,7 +39,7 @@ namespace glaze
          throw std::runtime_error("No input provided to read");
       }
       try {
-         detail::read<Format>::op(value, b, e);
+         detail::read<Opts.format>::op(value, b, e);
       }
       catch (const std::exception& e) {
          auto index = std::distance(std::ranges::begin(buffer), b);
@@ -51,18 +51,18 @@ namespace glaze
    }
 
    // For reading json from std::ofstream, std::cout, or other streams
-   template <uint32_t Format>
+   template <opts Opts>
    inline void read(auto& value, detail::stream_t auto& is)
    {
       std::istreambuf_iterator<char> b{is}, e{};
       if (b == e) {
          throw std::runtime_error("No input provided to read");
       }
-      detail::read<Format>::op(value, b, e);
+      detail::read<Opts.format>::op(value, b, e);
    }
 
    // For reading json from stuff convertable to a std::string_view
-   template <uint32_t Format, class T, class Buffer>
+   template <opts Opts, class T, class Buffer>
    requires(std::convertible_to<std::decay_t<Buffer>, std::string_view> &&
             !nano::ranges::input_range<
                std::decay_t<Buffer>>) inline void read(T& value,
@@ -72,6 +72,6 @@ namespace glaze
       if (str.empty()) {
          throw std::runtime_error("No input provided to read");
       }
-      read<Format>(value, str);
+      read<Opts>(value, str);
    }
 }

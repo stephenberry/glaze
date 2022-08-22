@@ -65,7 +65,7 @@ namespace glaze
          return false;
       }
 
-      bool load(const std::string_view& path) {
+      void load(const std::string_view& path) {
          const std::filesystem::path libpath(path);
          if (std::filesystem::is_directory(libpath)) {
             load_libs(path);
