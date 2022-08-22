@@ -268,6 +268,7 @@ namespace glaze
       return result;
    }
    
+   // TODO: handle ~ and / characters for full JSON pointer support
    inline constexpr std::pair<sv, sv> tokenize_json_ptr(sv s)
    {
        s.remove_prefix(1);
@@ -277,12 +278,13 @@ namespace glaze
        const auto i = s.find_first_of('/');
        return { s.substr(0, i), s.substr(i, s.size() - i) };
    }
-
+   
+   // TODO: handle ~ and / characters for full JSON pointer support
    template <auto& Str>
    inline constexpr auto split_json_ptr()
    {
        constexpr auto N = std::count(Str.begin(), Str.end(), '/');
-       std::array<sv, N> arr{};
+       std::array<sv, N> arr;
        sv s = Str;
        for (auto i = 0; i < N; ++i) {
            std::tie(arr[i], s) = tokenize_json_ptr(s);

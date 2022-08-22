@@ -1,3 +1,6 @@
+// Glaze Library
+// For the license information refer to glaze.hpp
+
 #pragma once
 
 #include "glaze/api/api.hpp"
@@ -5,7 +8,6 @@
 #include <string_view>
 #include <filesystem>
 #include <map>
-#include <unordered_set>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
 #ifndef GLAZE_API_ON_WINDOWS
@@ -54,7 +56,7 @@ namespace glaze
          if (loaded_lib) {
             loaded_libs.emplace_back(loaded_lib);
 
-            #ifdef GLAZE_API_ON_WINDOWS
+#ifdef GLAZE_API_ON_WINDOWS
             auto* ptr = (create_t)GetProcAddress(loaded_lib, "create_api");
 #else
             auto* ptr = (create_t)dlsym(dlopen(path.c_str(), RTLD_NOW), "create_api");
@@ -85,9 +87,9 @@ namespace glaze
       bool load_lib_by_name(const std::string& path)
       {
 #ifdef NDEBUG
-         const std::string suffix = "";
+         static std::string suffix = "";
 #else
-         const std::string suffix = "_d";
+         static std::string suffix = "_d";
 #endif
          const std::filesystem::path combined_path(path + suffix + SHARED_LIBRARY_EXTENSION);
 
@@ -110,6 +112,11 @@ namespace glaze
       }
 
       lib_loader() = default;
+      lib_loader(const lib_loader&) = delete;
+      lib_loader(lib_loader&&) = delete;
+      lib_loader& operator=(const lib_loader&) = delete;
+      lib_loader& operator=(lib_loader&&) = delete;
+      
       lib_loader(const std::string_view directory) { load(directory); }
 
       ~lib_loader()
