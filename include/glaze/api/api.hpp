@@ -18,9 +18,7 @@ namespace glaze
    inline namespace v0_0_1
    {
       struct api
-      {
-         using sv = std::string_view;
-         
+      {         
          api() noexcept = default;
          api(const api&) noexcept = default;
          api(api&&) noexcept = default;

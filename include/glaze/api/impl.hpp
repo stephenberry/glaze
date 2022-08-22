@@ -24,8 +24,6 @@ namespace glaze
    struct impl : api
    {
       Interface interface{};
-
-      using sv = std::string_view;
       
       void* get(const sv path, const sv type_hash) noexcept override
       {

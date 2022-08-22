@@ -4,6 +4,8 @@
 #pragma once
 
 #include "glaze/api/hash.hpp"
+#include "glaze/util/string_view.hpp"
+
 #include <array>
 
 #define GLAZE_SPECIALIZE(type, major, minor, revision) \
