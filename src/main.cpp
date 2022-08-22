@@ -31,6 +31,10 @@ int main() {
    std::string buffer = R"({"i":2})";
    try {
       glaze::read_json(s, buffer);
+      
+      std::vector<std::byte> out;
+      static constexpr std::array partial = { "/i", "/d" };
+      glaze::write_binary<partial>(s, out);
    }
    catch (const std::exception& e) {
       std::cout << e.what() << '\n';

@@ -16,6 +16,7 @@
 #include "glaze/core/format.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/dump.hpp"
+#include "glaze/json/from_ptr.hpp"
 
 namespace glaze
 {

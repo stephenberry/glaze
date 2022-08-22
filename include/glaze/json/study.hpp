@@ -65,7 +65,7 @@ namespace glaze
       void overwrite_state(State &state, const std::unordered_map<std::string, raw_json> &overwrites)
       {
          for (auto&& [json_ptr, raw_json_str] : overwrites) {
-            glaze::overwrite(state, json_ptr, raw_json_str.str);
+            glaze::write_from(state, json_ptr, raw_json_str.str);
          }
       }
 

@@ -48,20 +48,6 @@ void write_tests()
       }
    };
    
-   "bool_memcpy"_test = [] {
-      {
-         std::vector<std::byte> s;
-         bool b = true;
-         s.resize(sizeof(bool));
-         std::memcpy(s.data(), &b, sizeof(bool));
-         
-         std::vector<std::byte> out;
-         write_binary(b, out);
-         const bool success = out == s;
-         expect(success);
-      }
-   };
-   
    "bool"_test = [] {
       {
          bool b = true;

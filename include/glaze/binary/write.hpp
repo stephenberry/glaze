@@ -110,6 +110,18 @@ namespace glaze
          }
       };
       
+      template <>
+      struct to_binary<bopts>
+      {
+         template <auto& Opts>
+         static void op(auto&& value, auto&& b) noexcept
+         {
+            std::byte byte;
+            std::memcpy(&byte, &value, 1);
+            dump(byte, b);
+         }
+      };
+      
       template <array_t T>
       struct to_binary<T>
       {
@@ -177,6 +189,35 @@ namespace glaze
    
    template <class T, class Buffer>
    inline void write_binary(T&& value, Buffer&& buffer) {
+      write<opts{.format = binary}>(detail::bopts{}, std::forward<Buffer>(buffer));
       write<opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+   }
+   
+   template <auto& Partial, opts Opts, class T, class Buffer>
+   requires nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char))
+   inline void write(T&& value, Buffer& buffer) noexcept
+   {
+      if constexpr (std::same_as<Buffer, std::string> || std::same_as<Buffer, std::vector<std::byte>>) {
+         detail::bopts o{.is_partial = true};
+         write<opts{.format = binary}>(o, std::forward<Buffer>(buffer));
+         
+         using P = std::decay_t<decltype(Partial)>;
+         static constexpr auto N = std::tuple_size_v<P>;
+         for_each<N>([&](auto I) {
+            auto& path = std::get<I>(value);
+            
+            static constexpr auto frozen_map = detail::make_int_map<T>();
+            
+            read_from<Opts>(value, path, buffer);
+         });
+      }
+      else {
+      }
+   }
+   
+   template <auto& Partial, class T, class Buffer>
+   inline void write_binary(T&& value, Buffer&& buffer) {
+      write<opts{.format = binary}>(detail::bopts{.is_partial = true}, std::forward<Buffer>(buffer));
+      write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 }

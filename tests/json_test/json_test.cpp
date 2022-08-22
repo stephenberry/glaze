@@ -13,7 +13,7 @@
 
 #include "boost/ut.hpp"
 #include "glaze/json/json_ptr.hpp"
-#include "glaze/json/overwrite.hpp"
+#include "glaze/json/from_ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/json/prettify.hpp"
@@ -513,11 +513,11 @@ void json_pointer() {
 
    "overwrite"_test = [] {
       Thing thing{};
-      glaze::overwrite(thing, "/vec3", "[7.6, 1292.1, 0.333]");
+      glaze::write_from(thing, "/vec3", "[7.6, 1292.1, 0.333]");
       expect(thing.vec3.x == 7.6 && thing.vec3.y == 1292.1 &&
              thing.vec3.z == 0.333);
 
-      glaze::overwrite(thing, "/vec3/2", "999.9");
+      glaze::write_from(thing, "/vec3/2", "999.9");
       expect(thing.vec3.z == 999.9);
    };
 }
@@ -1549,6 +1549,7 @@ struct glaze::meta<study_obj>
 
 void study_tests()
 {
+   // TODO: Randomly erroring with: pointer being freed was not allocated
    "study"_test = [] {
       glaze::study::design design;
       design.params = { { "/x", "linspace", { "0", "1", "10" } } };

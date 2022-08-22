@@ -127,6 +127,16 @@ namespace glaze
          }
       };
       
+      template <>
+      struct from_binary<bopts>
+      {
+         static void op(auto&& value, auto&& it, auto&&)
+         {
+            std::memcpy(&value, &(*it), 1);
+            ++it;
+         }
+      };
+      
       template <array_t T>
       struct from_binary<T>
       {
@@ -184,7 +194,26 @@ namespace glaze
    }
    
    template <class T, class Buffer>
-   inline void read_binary(T&& value, Buffer&& buffer) {
-      read<binary>(std::forward<T>(value), std::forward<Buffer>(buffer));
+   inline void read_binary(T&& value, Buffer&& buffer)
+   {
+      auto b = std::ranges::begin(buffer);
+      auto e = std::ranges::end(buffer);
+      if (b == e) {
+         throw std::runtime_error("No input provided to read");
+      }
+      try {
+         detail::bopts o;
+         detail::read<binary>::op(o, b, e);
+         if (o.is_partial) {
+            
+         }
+         else {
+            detail::read<binary>::op(value, b, e);
+         }
+      }
+      catch (const std::exception& e) {
+         // TODO: Implement good error message
+         throw std::runtime_error("binary read error");
+      }
    }
 }

@@ -48,6 +48,10 @@ namespace glaze::detail
       b.emplace_back(c);
    }
    
+   inline void dump(std::byte c,std::vector<std::byte>& b) noexcept {
+      b.emplace_back(c);
+   }
+   
    inline void dump(const std::span<const std::byte> bytes, std::vector<std::byte>& b) noexcept {
       const auto n = bytes.size();
       const auto b_start = b.size();
