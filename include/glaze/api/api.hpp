@@ -89,7 +89,7 @@ namespace glaze
 #if defined(_WIN32) || defined(__CYGWIN__)
 #define DLL_EXPORT __declspec(dllexport)
 #else
-define DLL_EXPORT
+#define DLL_EXPORT
 #endif
 
 struct glaze_interface
