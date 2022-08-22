@@ -92,9 +92,14 @@ namespace glaze
 define DLL_EXPORT
 #endif
 
-struct wrapper
+struct glaze_interface
 {
    glaze::api_map_t map{};
+
+   auto& operator[](std::string_view api_name)
+   {
+      return map[std::string(api_name)];
+   }
 };
 
-extern "C" DLL_EXPORT wrapper create_api() noexcept;
+extern "C" DLL_EXPORT glaze_interface create_api() noexcept;

@@ -36,7 +36,7 @@ namespace glaze
 
    struct lib_loader
    {
-      using create_t = wrapper(*)(void);
+      using create_t = glaze_interface(*)(void);
 
       api_map_t api_map{};
       std::vector<lib_t> loaded_libs{};
@@ -65,6 +65,19 @@ namespace glaze
          return false;
       }
 
+      bool load(const std::string_view& path) {
+         const std::filesystem::path libpath(path);
+         if (std::filesystem::is_directory(libpath)) {
+            load_libs(path);
+         }
+         else if (libpath.extension() == SHARED_LIBRARY_EXTENSION) {
+            load_lib(libpath.string());
+         }
+         else {
+            load_lib_by_name(libpath.string());
+         }
+      }
+
       bool load_lib_by_name(const std::string& path)
       {
 #ifdef NDEBUG
@@ -72,8 +85,7 @@ namespace glaze
 #else
          const std::string suffix = "_d";
 #endif
-         const std::filesystem::path combined_path(
-            SHARED_LIBRARY_PREFIX + path + suffix + SHARED_LIBRARY_EXTENSION);
+         const std::filesystem::path combined_path(path + suffix + SHARED_LIBRARY_EXTENSION);
 
          return (load_lib(std::filesystem::canonical(combined_path).string()));
       }
@@ -88,13 +100,13 @@ namespace glaze
          }
       }
 
-      auto& operator[](std::string_view name)
+      auto& operator[](std::string_view lib_name)
       {
-         return api_map[std::string(name)];
+         return api_map[std::string(lib_name)];
       }
 
       lib_loader() = default;
-      lib_loader(const std::string_view directory) { load_libs(directory); }
+      lib_loader(const std::string_view directory) { load(directory); }
 
       ~lib_loader()
       {
