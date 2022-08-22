@@ -410,10 +410,9 @@ namespace glaze
       template <class Tuple>
       inline auto get_runtime(Tuple &&tuple, const size_t index)
       {
-         static constexpr auto indices =
-            std::make_index_sequence<std::tuple_size_v<std::decay_t<Tuple>>>{};
-         static constexpr auto runtime_getter =
-            tuple_runtime_getter<std::decay_t<Tuple>>(indices);
+         using T = std::decay_t<Tuple>;
+         static constexpr auto indices = std::make_index_sequence<std::tuple_size_v<T>>{};
+         static constexpr auto runtime_getter = tuple_runtime_getter<T>(indices);
          return runtime_getter[index](tuple);
       }
 
@@ -503,6 +502,24 @@ namespace glaze
          constexpr auto indices =
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_int_map_impl<T>(indices);
+      }
+      
+      template <class T, size_t... I>
+      constexpr auto make_key_int_map_impl(std::index_sequence<I...>)
+      {
+         return frozen::make_unordered_map<frozen::string, size_t,
+                                           std::tuple_size_v<meta_t<T>>>(
+            {std::make_pair<frozen::string, size_t>(
+               frozen::string(std::get<0>(std::get<I>(meta_v<T>))),
+                                                    I)...});
+      }
+      
+      template <class T>
+      constexpr auto make_key_int_map()
+      {
+         constexpr auto indices =
+            std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
+         return make_key_int_map_impl<T>(indices);
       }
       
       template <class T = void>

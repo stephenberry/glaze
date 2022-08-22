@@ -8,6 +8,7 @@
 #include "glaze/binary/header.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/core/write.hpp"
+#include "glaze/json/json_ptr.hpp"
 
 namespace glaze
 {
@@ -203,12 +204,21 @@ namespace glaze
          
          using P = std::decay_t<decltype(Partial)>;
          static constexpr auto N = std::tuple_size_v<P>;
+         
+         detail::dump_int(N, buffer); // write out the number of elements
+         
+         static constexpr auto key_to_int = detail::make_key_int_map<T>();
+         
          for_each<N>([&](auto I) {
-            //auto& path = std::get<I>(value);
+            static constexpr sv path = std::get<I>(Partial);
+            static constexpr auto keys = split_json_ptr<path>();
             
-            static constexpr auto frozen_map = detail::make_int_map<T>();
+            for (auto& key : keys) {
+               const auto i = key_to_int.find(key)->second;
+               detail::dump_int(i, buffer);
+            }
             
-            //read_from<Opts>(value, path, buffer);
+            write<opts{.format = binary}>(std::forward<T>(value), buffer);
          });
       }
       else {
