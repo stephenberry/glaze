@@ -8,7 +8,6 @@
 #include "glaze/core/format.hpp"
 
 #include <stdexcept>
-#include <mutex>
 #include <memory>
 #include <functional>
 #include <map>
@@ -33,12 +32,9 @@ namespace glaze
          [[nodiscard]] T* get_if(const sv path) noexcept;
 
          virtual bool read(const uint32_t /*format*/, const sv /*path*/,
-                    const sv /*data*/) noexcept
-         { return false; }
+                           const sv /*data*/) noexcept = 0;
 
-         virtual bool write(const uint32_t /*format*/, const sv /*path*/, std::string& /*data*/) noexcept {
-            return false;
-         }
+         virtual bool write(const uint32_t /*format*/, const sv /*path*/, std::string& /*data*/) = 0;
          
          virtual const sv last_error() const noexcept {
             return error;
@@ -54,6 +50,9 @@ namespace glaze
          std::map<std::string, std::function<std::shared_ptr<api>()>,
                   std::less<>>;
       
+      /// <summary>
+      /// access reference via JSON pointer path
+      /// </summary>
       template <class T>
       T& api::get(const std::string_view path) {
          static constexpr auto hash = glaze::hash<T>();
@@ -63,12 +62,12 @@ namespace glaze
          }
          else {
             error = "glaze::get<" + std::string(glaze::name<T>) + ">(\"" + std::string(path) + "\") | " + error;
-#ifdef __cpp_exceptions
+   #ifdef __cpp_exceptions
             throw std::runtime_error(error);
-#else
+   #else
             static T x{};
             return x;
-#endif
+   #endif
          }
       }
       
@@ -94,9 +93,12 @@ struct glaze_interface
 {
    glaze::api_map_t map{};
 
-   auto& operator[](std::string_view api_name)
+   auto& operator[](const std::string_view api_name)
    {
-      return map[std::string(api_name)];
+      if (auto it = map.find(std::string(api_name)); it != map.end()) {
+         return *it;
+      }
+      throw std::runtime_error("glaze_interface could not load: " + std::string(api_name));
    }
 };
 

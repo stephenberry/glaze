@@ -40,36 +40,12 @@ namespace glaze
    using lib_t = void*;
 #endif
 
-   struct lib_loader
+   struct lib_loader final
    {
       using create_t = glaze_interface(*)(void);
 
       api_map_t api_map{};
       std::vector<lib_t> loaded_libs{};
-
-      bool load_lib(const std::string& path) {
-#ifdef GLAZE_API_ON_WINDOWS
-         lib_t loaded_lib = LoadLibrary(path.c_str());
-#else
-         lib_t loaded_lib = dlopen(path.c_str(), RTLD_LAZY);
-#endif
-         if (loaded_lib) {
-            loaded_libs.emplace_back(loaded_lib);
-
-#ifdef GLAZE_API_ON_WINDOWS
-            auto* ptr = (create_t)GetProcAddress(loaded_lib, "create_api");
-#else
-            auto* ptr = (create_t)dlsym(dlopen(path.c_str(), RTLD_NOW), "create_api");
-#endif
-
-            if (ptr) {
-               api_map.merge(ptr().map);
-               return true;
-            }
-         }
-
-         return false;
-      }
 
       void load(const std::string_view& path) {
          const std::filesystem::path libpath(path);
@@ -82,18 +58,6 @@ namespace glaze
          else {
             load_lib_by_name(libpath.string());
          }
-      }
-
-      bool load_lib_by_name(const std::string& path)
-      {
-#ifdef NDEBUG
-         static std::string suffix = "";
-#else
-         static std::string suffix = "_d";
-#endif
-         const std::filesystem::path combined_path(path + suffix + SHARED_LIBRARY_EXTENSION);
-
-         return (load_lib(std::filesystem::canonical(combined_path).string()));
       }
 
       void load_libs(const std::string_view directory)
@@ -129,6 +93,43 @@ namespace glaze
             dlclose(lib);
 #endif
          }
+      }
+      
+   private:
+      bool load_lib(const std::string& path) {
+#ifdef GLAZE_API_ON_WINDOWS
+         lib_t loaded_lib = LoadLibrary(path.c_str());
+#else
+         lib_t loaded_lib = dlopen(path.c_str(), RTLD_LAZY);
+#endif
+         if (loaded_lib) {
+            loaded_libs.emplace_back(loaded_lib);
+
+#ifdef GLAZE_API_ON_WINDOWS
+            auto* ptr = (create_t)GetProcAddress(loaded_lib, "create_api");
+#else
+            auto* ptr = (create_t)dlsym(dlopen(path.c_str(), RTLD_NOW), "create_api");
+#endif
+
+            if (ptr) {
+               api_map.merge(ptr().map);
+               return true;
+            }
+         }
+
+         return false;
+      }
+      
+      bool load_lib_by_name(const std::string& path)
+      {
+#ifdef NDEBUG
+         static std::string suffix = "";
+#else
+         static std::string suffix = "_d";
+#endif
+         const std::filesystem::path combined_path(path + suffix + SHARED_LIBRARY_EXTENSION);
+
+         return (load_lib(std::filesystem::canonical(combined_path).string()));
       }
    };
 
