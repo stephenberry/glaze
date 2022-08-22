@@ -177,9 +177,11 @@ namespace glaze
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
             const auto n_keys = int_from_reduced<N>(it, end);
+            
+            static constexpr auto frozen_map = detail::make_int_map<T>();
+            
             for (size_t i = 0; i < n_keys; ++i) {
                const auto key = int_from_header(it, end);
-               static constexpr auto frozen_map = detail::make_int_map<T>();
                const auto& member_it = frozen_map.find(key);
                if (member_it != frozen_map.end()) {
                   std::visit(
@@ -205,7 +207,22 @@ namespace glaze
          detail::bopts o;
          detail::read<binary>::op(o, b, e);
          if (o.partial) {
+            // read the number of JSON pointer integer keys
+            const auto n_keys = detail::int_from_header(b, e);
             
+            static constexpr auto frozen_map = detail::make_int_map<T>();
+            
+            for (size_t i = 0; i < n_keys; ++i) {
+               const auto key = detail::int_from_header(b, e);
+               const auto& member_it = frozen_map.find(key);
+               if (member_it != frozen_map.end()) {
+                  std::visit(
+                     [&](auto&& member_ptr) {
+                        detail::read<binary>::op(value.*member_ptr, b, e);
+                     },
+                     member_it->second);
+               }
+            }
          }
          else {
             detail::read<binary>::op(value, b, e);

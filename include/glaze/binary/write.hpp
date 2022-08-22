@@ -206,19 +206,29 @@ namespace glaze
          static constexpr auto N = std::tuple_size_v<P>;
          
          detail::dump_int(N, buffer); // write out the number of elements
-         
-         static constexpr auto key_to_int = detail::make_key_int_map<T>();
+         // cannot use dump_reduce, because the partial is only locally knowns
          
          for_each<N>([&](auto I) {
             static constexpr sv path = std::get<I>(Partial);
             static constexpr auto keys = split_json_ptr<path>();
             
-            for (auto& key : keys) {
-               const auto i = key_to_int.find(key)->second;
-               detail::dump_int(i, buffer);
-            }
+            static constexpr auto key_to_int = detail::make_key_int_map<T>();
+            detail::dump_int(key_to_int.find(std::get<0>(keys))->second, buffer);
             
-            write<opts{.format = binary}>(std::forward<T>(value), buffer);
+            for_each_value<std::tuple_size_v<decltype(keys)> - 1>([&](auto I, auto&& value) {
+               static constexpr auto key = std::get<I() + 1>(keys);
+               using V = std::decay_t<decltype(value)>;
+               static constexpr auto frozen_map = detail::make_map<V>();
+               
+               static constexpr auto k_i_map = detail::make_key_int_map<V>();
+               detail::dump_int(k_i_map.find(key).second, buffer);
+               
+               if (I == std::tuple_size_v<decltype(keys)> - 1) {
+                  write<opts{.format = binary}>(value, buffer);
+               }
+               
+               return frozen_map.find(key).second;
+            }, value);
          });
       }
       else {

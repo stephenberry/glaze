@@ -28,4 +28,11 @@ namespace glaze
          (std::forward<Func>(f)(i), ...);
       });
    }
+   
+   template <size_t N, class Func, class Value, size_t I = 0>
+   constexpr void for_each_value(Func&& f, Value&& v) {
+      if constexpr (I != N) {
+         for_each_value<N, I + 1>(f, f(I, v));
+      }
+   }
 }
