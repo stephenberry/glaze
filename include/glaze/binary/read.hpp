@@ -127,16 +127,6 @@ namespace glaze
          }
       };
       
-      template <>
-      struct from_binary<bopts>
-      {
-         static void op(auto&& value, auto&& it, auto&&)
-         {
-            std::memcpy(&value, &(*it), 1);
-            ++it;
-         }
-      };
-      
       template <array_t T>
       struct from_binary<T>
       {
@@ -251,44 +241,6 @@ namespace glaze
    template <class T, class Buffer>
    inline void read_binary(T&& value, Buffer&& buffer)
    {
-      auto b = std::ranges::begin(buffer);
-      auto e = std::ranges::end(buffer);
-      if (b == e) {
-         throw std::runtime_error("No input provided to read");
-      }
-      try {
-         detail::bopts o;
-         detail::read<binary>::op(o, b, e);
-         if (o.partial) {
-            if constexpr (detail::glaze_object_t<T>) {
-               // read the number of JSON pointer integer keys
-               const auto n_keys = detail::int_from_header(b, e);
-               
-               static constexpr auto frozen_map = detail::make_int_map<T>();
-               
-               for (size_t i = 0; i < n_keys; ++i) {
-                  const auto key = detail::int_from_header(b, e);
-                  const auto& member_it = frozen_map.find(key);
-                  if (member_it != frozen_map.end()) {
-                     std::visit(
-                        [&](auto&& member_ptr) {
-                           detail::read<binary>::op(value.*member_ptr, b, e);
-                        },
-                        member_it->second);
-                  }
-               }
-            }
-            else {
-               throw std::runtime_error("Type not viable for partial read");
-            }
-         }
-         else {
-            detail::read<binary>::op(value, b, e);
-         }
-      }
-      catch (const std::exception& e) {
-         // TODO: Implement good error message
-         throw std::runtime_error("binary read error");
-      }
+      read<opts{.format = binary}>(value, buffer);
    }
 }

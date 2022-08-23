@@ -7,12 +7,6 @@
 
 namespace glaze::detail
 {
-   struct bopts
-   {
-      uint8_t partial : 1 = false;
-   };
-   static_assert(sizeof(bopts) == 1);
-   
    struct header8 {
       uint8_t config : 2;
       uint8_t size : 6;
