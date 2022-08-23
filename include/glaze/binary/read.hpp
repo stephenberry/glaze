@@ -207,21 +207,26 @@ namespace glaze
          detail::bopts o;
          detail::read<binary>::op(o, b, e);
          if (o.partial) {
-            // read the number of JSON pointer integer keys
-            const auto n_keys = detail::int_from_header(b, e);
-            
-            static constexpr auto frozen_map = detail::make_int_map<T>();
-            
-            for (size_t i = 0; i < n_keys; ++i) {
-               const auto key = detail::int_from_header(b, e);
-               const auto& member_it = frozen_map.find(key);
-               if (member_it != frozen_map.end()) {
-                  std::visit(
-                     [&](auto&& member_ptr) {
-                        detail::read<binary>::op(value.*member_ptr, b, e);
-                     },
-                     member_it->second);
+            if constexpr (detail::glaze_object_t<T>) {
+               // read the number of JSON pointer integer keys
+               const auto n_keys = detail::int_from_header(b, e);
+               
+               static constexpr auto frozen_map = detail::make_int_map<T>();
+               
+               for (size_t i = 0; i < n_keys; ++i) {
+                  const auto key = detail::int_from_header(b, e);
+                  const auto& member_it = frozen_map.find(key);
+                  if (member_it != frozen_map.end()) {
+                     std::visit(
+                        [&](auto&& member_ptr) {
+                           detail::read<binary>::op(value.*member_ptr, b, e);
+                        },
+                        member_it->second);
+                  }
                }
+            }
+            else {
+               throw std::runtime_error("Type not viable for partial read");
             }
          }
          else {
