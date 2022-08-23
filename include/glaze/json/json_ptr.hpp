@@ -4,6 +4,7 @@
 #pragma once
 
 #include <any>
+#include <algorithm>
 #include <charconv>
 
 #include "fast_float/fast_float.h"
@@ -289,6 +290,18 @@ namespace glaze
        for (auto i = 0; i < N; ++i) {
            std::tie(arr[i], s) = tokenize_json_ptr(s);
        }
+       return arr;
+   }
+   
+   inline constexpr auto json_ptrs(auto&&... args)
+   {
+       return std::to_array<sv>({ args... });
+   }
+   
+   // must copy to allow mutation in constexpr context
+   inline constexpr auto sort_json_ptrs(auto arr)
+   {
+       std::sort(arr.begin(), arr.end());
        return arr;
    }
 }  // namespace glaze

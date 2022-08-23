@@ -33,7 +33,7 @@ int main() {
       glaze::read_json(s, buffer);
       
       std::vector<std::byte> out;
-      static constexpr std::array partial = { "/i", "/d" };
+      static constexpr auto partial = glaze::json_ptrs("/i", "/d");
       glaze::write_binary<partial>(s, out);
       
       glaze::read_binary(s, out);

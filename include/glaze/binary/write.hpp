@@ -194,6 +194,8 @@ namespace glaze
          detail::dump_int(N, buffer); // write out the number of elements
          // cannot use dump_reduce, because the partial is only locally knowns
          
+         static constexpr auto sorted = sort_json_ptrs(Partial);
+         
          for_each<N>([&](auto I) {
             static constexpr sv path = std::get<I>(Partial);
             static constexpr auto keys = split_json_ptr<path>();
