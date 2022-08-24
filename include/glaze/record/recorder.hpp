@@ -14,19 +14,19 @@ namespace glaze
    namespace detail
    {
       template <class... T>
-      auto to_deque(std::variant<T...>&&)
+      auto to_variant_deque(std::variant<T...>&&)
       {
          return std::variant<std::monostate, std::deque<T>...>{};
       }
       
       template <class Data>
-      struct assigner
+      struct recorder_assigner
       {
-         assigner(Data& data) : data(data) {}
-         assigner(const assigner&) = default;
-         assigner(assigner&&) = default;
-         assigner& operator=(const assigner&) = default;
-         assigner& operator=(assigner&&) = default;
+         recorder_assigner(Data& data) : data(data) {}
+         recorder_assigner(const recorder_assigner&) = default;
+         recorder_assigner(recorder_assigner&&) = default;
+         recorder_assigner& operator=(const recorder_assigner&) = default;
+         recorder_assigner& operator=(recorder_assigner&&) = default;
          
          Data& data;
          
@@ -45,14 +45,14 @@ namespace glaze
    struct recorder
    {
       using variant_p = decltype(to_variant_pointer(std::declval<variant_t>()));
-      using container_type = decltype(detail::to_deque(std::declval<variant_t>()));
+      using container_type = decltype(detail::to_variant_deque(std::declval<variant_t>()));
 
       std::deque<std::pair<std::string, std::pair<container_type, void*>>>
          data;
       
       auto operator[](const std::string_view name) {
          auto& d = data.emplace_back(name, std::make_pair(std::monostate{}, nullptr));
-         return detail::assigner<std::pair<container_type, void*>>{ d.second };
+         return detail::recorder_assigner<std::pair<container_type, void*>>{ d.second };
       }
 
       void update()
