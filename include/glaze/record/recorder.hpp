@@ -7,6 +7,7 @@
 #include <deque>
 
 #include "glaze/util/type_traits.hpp"
+#include "glaze/util/variant.hpp"
 
 namespace glaze
 {
@@ -16,12 +17,6 @@ namespace glaze
       auto to_deque(std::variant<T...>&&)
       {
          return std::variant<std::monostate, std::deque<T>...>{};
-      }
-
-      template <class... T>
-      auto to_variant_pointer(std::variant<T...>&&)
-      {
-         return std::variant<T*...>{};
       }
       
       template <class Data>
@@ -49,7 +44,7 @@ namespace glaze
    template <is_variant variant_t>
    struct recorder
    {
-      using variant_p = decltype(detail::to_variant_pointer(std::declval<variant_t>()));
+      using variant_p = decltype(to_variant_pointer(std::declval<variant_t>()));
       using container_type = decltype(detail::to_deque(std::declval<variant_t>()));
 
       std::deque<std::pair<std::string, std::pair<container_type, void*>>>

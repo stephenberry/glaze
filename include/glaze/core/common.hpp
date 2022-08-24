@@ -5,11 +5,11 @@
 
 #include <string>
 #include <type_traits>
-#include <variant>
 
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
 #include "glaze/util/string_view.hpp"
+#include "glaze/util/variant.hpp"
 
 #include "NanoRange/nanorange.hpp"
 
@@ -177,13 +177,8 @@ namespace glaze
                    short, unsigned short, wchar_t, char32_t, float, int,
                    unsigned int, long, unsigned long, double,
                    long long, unsigned long long, std::string>;
-
-   using basic_ptr =
-      std::variant<bool *, char *, char8_t *, unsigned char *, signed char *,
-                   char16_t *, short *, unsigned short *, wchar_t *, char32_t *,
-                   float *, int *, unsigned int *, long *, unsigned long *,
-                   double *, long long *, unsigned long long *,
-                   std::string *>;
+   
+   using basic_ptr = decltype(to_variant_pointer(std::declval<basic>()));
 
    namespace detail
    {
