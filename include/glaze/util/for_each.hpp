@@ -29,10 +29,10 @@ namespace glaze
       });
    }
    
-   template <size_t N, class Func, class Value, size_t I = 0>
+   template <size_t N, size_t I = 0, class Func, class Value>
    constexpr void for_each_value(Func&& f, Value&& v) {
       if constexpr (I != N) {
-         for_each_value<N, I + 1>(f, f(I, v));
+         for_each_value<N, I + 1>(f, f(std::integral_constant<size_t, I>{}, v));
       }
    }
 }

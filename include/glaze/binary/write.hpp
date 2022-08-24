@@ -166,7 +166,24 @@ namespace glaze
       write<opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
    
-   template <auto& Partial, opts Opts, class T, class Buffer>
+   template <auto& Partial, opts Opts, size_t Depth = 0, class T, class Buffer>
+   requires nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char))
+   inline void write(T&& value, Buffer& buffer) noexcept
+   {
+      if constexpr (std::same_as<Buffer, std::string> || std::same_as<Buffer, std::vector<std::byte>>) {
+         using P = std::decay_t<decltype(Partial)>;
+         static constexpr auto N = std::tuple_size_v<P>;
+         static constexpr auto key_to_int = detail::make_key_int_map<T>();
+         
+         detail::dump_int(N, buffer); // write out the number of elements
+         
+         static constexpr auto sorted = (Depth == 0) ? sort_json_ptrs(Partial) : Partial;
+         
+         
+      }
+   }
+   
+   /*template <auto& Partial, opts Opts, class T, class Buffer>
    requires nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char))
    inline void write(T&& value, Buffer& buffer) noexcept
    {
@@ -180,6 +197,7 @@ namespace glaze
          
          static constexpr auto sorted = sort_json_ptrs(Partial);
          
+         // for every path
          for_each<N>([&](auto i) {
             static constexpr auto path = std::get<i>(sorted);
             static constexpr auto keys = split_json_ptr<path>();
@@ -192,51 +210,68 @@ namespace glaze
             else {
                static constexpr auto prev_path = std::get<i - 1>(sorted);
                static constexpr auto prev_keys = split_json_ptr<prev_path>();
+               static constexpr auto key = std::get<0>(keys);
                
-               if constexpr (std::get<0>(keys) != std::get<0>(prev_keys)) {
-                  detail::dump_int(key_to_int.find(std::get<0>(keys))->second, buffer);
+               if constexpr (key != std::get<0>(prev_keys)) {
+                  detail::dump_int(key_to_int.find(key)->second, buffer);
                }
             }
             
-            static constexpr auto Index = i; // lambda below cannot capture i
+            static constexpr auto frozen_map = detail::make_map<std::decay_t<T>>();
             
-            for_each_value<KeysRest>([&](auto I, auto&& value) {
-               static constexpr auto key = std::get<I() + 1>(keys);
+            static constexpr auto member_it = frozen_map.find(std::get<0>(keys));
+            if constexpr (member_it != frozen_map.end()) {
+               static constexpr auto member_ptr = std::get<member_it->second.index()>(member_it->second);
                
-               using V = std::decay_t<decltype(value)>;
-               static constexpr auto frozen_map = detail::make_map<V>();
-               
-               static constexpr auto k_i_map = detail::make_key_int_map<V>();
-               
-               if constexpr (i == 0) {
-                  detail::dump_int(k_i_map.find(key).second, buffer);
+               if constexpr (KeysRest == 0) {
+                  write<opts{.format = binary}>(value.*member_ptr, buffer);
                }
                else {
-                  static constexpr auto prev_path = std::get<Index - 1>(sorted);
-                  static constexpr auto prev_keys = split_json_ptr<prev_path>();
-                  static constexpr auto prev_key = std::get<I() + 1>(prev_keys);
+                  static constexpr auto Index = i; // lambda cannot capture i
                   
-                  if constexpr ((I() + 1) <= json_ptr_depth(prev_key)) {
-                     if constexpr (key != prev_key) {
-                        detail::dump_int(k_i_map.find(key).second, buffer);
+                  // recursing into each path
+                  for_each_value<KeysRest>([&](auto I, auto&& value) {
+                     static constexpr auto key = std::get<I + 1>(keys);
+                     
+                     using V = std::decay_t<decltype(value)>;
+                     static constexpr auto frozen_map = detail::make_map<V>();
+                     
+                     static constexpr auto k_i_map = detail::make_key_int_map<V>();
+                     
+                     if constexpr (Index == 0) {
+                        detail::dump_int(k_i_map.find(key)->second, buffer);
                      }
-                  }
-                  else {
-                     detail::dump_int(k_i_map.find(key).second, buffer);
-                  }
+                     else {
+                        static constexpr auto prev_path = std::get<Index - 1>(sorted);
+                        static constexpr auto prev_keys = split_json_ptr<prev_path>();
+                        static constexpr auto prev_depth = std::tuple_size_v<decltype(prev_keys)>;
+                        
+                        // dump key if not already written
+                        if constexpr ((I + 1) < prev_depth) {
+                           static constexpr auto prev_key = std::get<I + 1>(prev_keys);
+                           if constexpr (key != prev_key) {
+                              detail::dump_int(k_i_map.find(key).second, buffer);
+                           }
+                        }
+                        else {
+                           // dump key if deeper than previous
+                           detail::dump_int(k_i_map.find(key)->second, buffer);
+                        }
+                     }
+                     
+                     if constexpr (I == (KeysRest - 1)) {
+                        write<opts{.format = binary}>(value, buffer);
+                     }
+                     
+                     return frozen_map.find(key)->second;
+                  }, value.*member_ptr);
                }
-               
-               if constexpr (I == KeysRest) {
-                  write<opts{.format = binary}>(value, buffer);
-               }
-               
-               return frozen_map.find(key).second;
-            }, value);
+            }
          });
       }
       else {
       }
-   }
+   }*/
    
    template <auto& Partial, class T, class Buffer>
    inline void write_binary(T&& value, Buffer&& buffer) {

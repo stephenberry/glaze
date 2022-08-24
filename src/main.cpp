@@ -5,12 +5,25 @@
 
 #include "glaze/glaze.hpp"
 
+struct sub
+{
+   double x = 400.0;
+};
+
+template <>
+struct glaze::meta<sub>
+{
+   using T = sub;
+   static constexpr auto value = glaze::object("x", &T::x);
+};
+
 struct my_struct
 {
    int i = 287;
    double d = 3.14;
    std::string hello = "Hello World";
    std::array<uint64_t, 3> arr = {1, 2, 3};
+   sub sub{};
 };
 
 template <>
@@ -20,7 +33,8 @@ struct glaze::meta<my_struct>
    static constexpr auto value = glaze::object("i", &T::i,          //
                                                "d", &T::d,          //
                                                "hello", &T::hello,  //
-                                               "arr", &T::arr       //
+                                               "arr", &T::arr,       //
+                                               "sub", &T::sub       //
    );
 };
 
@@ -34,12 +48,15 @@ int main() {
       glaze::read_json(s, buffer);
       
       std::vector<std::byte> out;
-      static constexpr auto partial = glaze::json_ptrs("/i", "/d");
+      //static constexpr auto partial = glaze::json_ptrs("/i", "/d", "/sub/x");
+      static constexpr auto partial = glaze::json_ptrs("/sub/x");
+      //static constexpr auto partial = glaze::json_ptrs("/i", "/d");
       glaze::write_binary<partial>(s, out);
       
       s2.i = 5;
       s2.hello = "text";
       s2.d = 5.5;
+      s2.sub.x = 0.0;
       glaze::read_binary(s2, out);
    }
    catch (const std::exception& e) {
