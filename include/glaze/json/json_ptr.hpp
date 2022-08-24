@@ -281,12 +281,25 @@ namespace glaze
    // TODO: handle ~ and / characters for full JSON pointer support
    inline constexpr std::pair<sv, sv> tokenize_json_ptr(sv s)
    {
+      if (s.empty()) {
+         return { "", "" };
+      }
        s.remove_prefix(1);
        if (s.find('/') == std::string::npos) {
            return { s, "" };
        }
        const auto i = s.find_first_of('/');
        return { s.substr(0, i), s.substr(i, s.size() - i) };
+   }
+   
+   inline constexpr auto first_key(sv s)
+   {
+      return tokenize_json_ptr(s).first;
+   }
+   
+   inline constexpr auto remove_first_key(sv s)
+   {
+      return tokenize_json_ptr(s).second;
    }
    
    // TODO: handle ~ and / characters for full JSON pointer support
@@ -312,5 +325,60 @@ namespace glaze
    {
        std::sort(arr.begin(), arr.end());
        return arr;
+   }
+   
+   // input array must be sorted
+   inline constexpr auto group_json_ptrs_impl(const auto& arr)
+   {
+      constexpr auto N = std::tuple_size_v<std::decay_t<decltype(arr)>>;
+      
+      std::array<sv, N> first_keys;
+      std::transform(arr.begin(), arr.end(), first_keys.begin(), first_key);
+      
+      std::array<sv, N> unique_keys{};
+      const auto it = std::unique_copy(first_keys.begin(), first_keys.end(), unique_keys.begin());
+      
+      const auto n_unique = static_cast<size_t>(std::distance(unique_keys.begin(), it));
+      
+      std::array<size_t, N> n_items_per_group{};
+      
+      for (size_t i = 0; i < n_unique; ++i) {
+         n_items_per_group[i] = nano::ranges::count(first_keys, unique_keys[i]);
+      }
+      
+      return std::tuple{ n_items_per_group, n_unique, unique_keys };
+   }
+   
+   template <auto Arr, std::size_t...Is>
+   inline constexpr auto make_arrays(std::index_sequence<Is...>)
+   {
+      return std::make_tuple(std::pair{ sv{}, std::array<sv, Arr[Is]>{} }...);
+   };
+   
+   template <size_t N, auto& Arr>
+   inline constexpr auto sub_group(const auto start)
+   {
+      std::array<sv, N> ret;
+      std::transform(Arr.begin() + start, Arr.begin() + start + N, ret.begin(), remove_first_key);
+      return ret;
+   }
+   
+   template <auto& Arr>
+   inline constexpr auto group_json_ptrs()
+   {
+      constexpr auto group_info = group_json_ptrs_impl(Arr);
+      constexpr auto n_items_per_group = std::get<0>(group_info);
+      constexpr auto n_unique = std::get<1>(group_info);
+      constexpr auto unique_keys = std::get<2>(group_info);
+      
+      auto arrs = make_arrays<n_items_per_group>(std::make_index_sequence<n_unique>{});
+      size_t start{};
+      
+      for_each<n_unique>([&](auto I) {
+         std::get<I>(arrs) = { unique_keys[I], sub_group<n_items_per_group[I], Arr>(start) };
+         start += n_items_per_group[I];
+      });
+      
+      return arrs;
    }
 }  // namespace glaze
