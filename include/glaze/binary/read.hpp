@@ -86,7 +86,7 @@ namespace glaze
       }
       
       template <size_t N>
-      inline constexpr size_t int_from_reduced(auto&& it, auto&& /*end*/)
+      inline constexpr size_t int_from_raw(auto&& it, auto&& /*end*/)
       {
          if constexpr (N < 256) {
             uint8_t i;
@@ -217,9 +217,7 @@ namespace glaze
       {
          static void op(auto&& value, auto&& it, auto&& end)
          {
-            using V = std::decay_t<T>;
-            static constexpr auto N = std::tuple_size_v<meta_t<V>>;
-            const auto n_keys = int_from_reduced<N>(it, end);
+            const auto n_keys = int_from_header(it, end);
             
             static constexpr auto frozen_map = detail::make_int_map<T>();
             

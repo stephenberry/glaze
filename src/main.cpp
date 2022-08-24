@@ -28,6 +28,7 @@ struct glaze::meta<my_struct>
 
 int main() {
    my_struct s{};
+   my_struct s2{};
    std::string buffer = R"({"i":2})";
    try {
       glaze::read_json(s, buffer);
@@ -36,7 +37,10 @@ int main() {
       static constexpr auto partial = glaze::json_ptrs("/i", "/d");
       glaze::write_binary<partial>(s, out);
       
-      glaze::read_binary(s, out);
+      s2.i = 5;
+      s2.hello = "text";
+      s2.d = 5.5;
+      glaze::read_binary(s2, out);
    }
    catch (const std::exception& e) {
       std::cout << e.what() << '\n';
