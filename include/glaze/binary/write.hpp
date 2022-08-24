@@ -174,67 +174,64 @@ namespace glaze
          
          using P = std::decay_t<decltype(Partial)>;
          static constexpr auto N = std::tuple_size_v<P>;
+         static constexpr auto key_to_int = detail::make_key_int_map<T>();
          
          detail::dump_int(N, buffer); // write out the number of elements
          
          static constexpr auto sorted = sort_json_ptrs(Partial);
          
          for_each<N>([&](auto i) {
-            static constexpr auto path = std::get<i>(Partial);
+            static constexpr auto path = std::get<i>(sorted);
             static constexpr auto keys = split_json_ptr<path>();
             
             static constexpr auto KeysRest = std::tuple_size_v<decltype(keys)> - 1;
             
-            static constexpr auto key_to_int = detail::make_key_int_map<T>();
-            
-            if constexpr (i > 0)
-            {
-               // we puth this outside of the for_each_value loop so that we don't have to continually calculate these
-               static constexpr auto prev_path = std::get<i - 1>(Partial);
+            if constexpr (i == 0) {
+               detail::dump_int(key_to_int.find(std::get<0>(keys))->second, buffer);
+            }
+            else {
+               static constexpr auto prev_path = std::get<i - 1>(sorted);
                static constexpr auto prev_keys = split_json_ptr<prev_path>();
                
                if constexpr (std::get<0>(keys) != std::get<0>(prev_keys)) {
                   detail::dump_int(key_to_int.find(std::get<0>(keys))->second, buffer);
                }
+            }
+            
+            static constexpr auto Index = i; // lambda below cannot capture i
+            
+            for_each_value<KeysRest>([&](auto I, auto&& value) {
+               static constexpr auto key = std::get<I() + 1>(keys);
                
-               for_each_value<KeysRest>([&](auto I, auto&& value) {
-                  static constexpr auto key = std::get<I() + 1>(keys);
+               using V = std::decay_t<decltype(value)>;
+               static constexpr auto frozen_map = detail::make_map<V>();
+               
+               static constexpr auto k_i_map = detail::make_key_int_map<V>();
+               
+               if constexpr (i == 0) {
+                  detail::dump_int(k_i_map.find(key).second, buffer);
+               }
+               else {
+                  static constexpr auto prev_path = std::get<Index - 1>(sorted);
+                  static constexpr auto prev_keys = split_json_ptr<prev_path>();
                   static constexpr auto prev_key = std::get<I() + 1>(prev_keys);
                   
-                  using V = std::decay_t<decltype(value)>;
-                  static constexpr auto frozen_map = detail::make_map<V>();
-                  
-                  if constexpr (key != prev_key) {
-                     static constexpr auto k_i_map = detail::make_key_int_map<V>();
+                  if constexpr ((I() + 1) <= json_ptr_depth(prev_key)) {
+                     if constexpr (key != prev_key) {
+                        detail::dump_int(k_i_map.find(key).second, buffer);
+                     }
+                  }
+                  else {
                      detail::dump_int(k_i_map.find(key).second, buffer);
                   }
-                  
-                  if (I == KeysRest) {
-                     write<opts{.format = binary}>(value, buffer);
-                  }
-                  
-                  return frozen_map.find(key).second;
-               }, value);
-            }
-            else {
-               detail::dump_int(key_to_int.find(std::get<0>(keys))->second, buffer);
+               }
                
-               for_each_value<KeysRest>([&](auto I, auto&& value) {
-                  static constexpr auto key = std::get<I() + 1>(keys);
-                  
-                  using V = std::decay_t<decltype(value)>;
-                  static constexpr auto frozen_map = detail::make_map<V>();
-                  
-                  static constexpr auto k_i_map = detail::make_key_int_map<V>();
-                  detail::dump_int(k_i_map.find(key).second, buffer);
-                  
-                  if (I == KeysRest) {
-                     write<opts{.format = binary}>(value, buffer);
-                  }
-                  
-                  return frozen_map.find(key).second;
-               }, value);
-            }
+               if constexpr (I == KeysRest) {
+                  write<opts{.format = binary}>(value, buffer);
+               }
+               
+               return frozen_map.find(key).second;
+            }, value);
          });
       }
       else {

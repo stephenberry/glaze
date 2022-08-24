@@ -269,6 +269,15 @@ namespace glaze
       return result;
    }
    
+   inline constexpr size_t json_ptr_depth(const auto s)
+   {
+       size_t count = 0;
+       for (size_t i = 0; (i = s.find('/', i)) != std::string::npos; ++i) {
+           ++count;
+       }
+       return count;
+   }
+   
    // TODO: handle ~ and / characters for full JSON pointer support
    inline constexpr std::pair<sv, sv> tokenize_json_ptr(sv s)
    {
