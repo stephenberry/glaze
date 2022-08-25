@@ -18,18 +18,18 @@ namespace glaze
       template <class F, class T>
       requires array_t<std::decay_t<T>> || glaze_array_t<std::decay_t<T>> ||
          tuple_t<std::decay_t<T>>
-      bool seek_impl(F&& func, T&& value, std::string_view json_ptr);
+      bool seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
       requires nullable_t<std::decay_t<T>>
-      bool seek_impl(F&& func, T&& value, std::string_view json_ptr);
+      bool seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
       requires map_t<std::decay_t<T>> || glaze_object_t<T>
-      bool seek_impl(F&& func, T&& value, std::string_view json_ptr);
+      bool seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
-      bool seek_impl(F&& func, T&& value, std::string_view json_ptr)
+      bool seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
             func(value);
@@ -41,7 +41,7 @@ namespace glaze
       // TODO: compile time search for `~` and optimize if escape does not exist
       template <class F, class T>
       requires map_t<std::decay_t<T>> || glaze_object_t<T>
-      bool seek_impl(F&& func, T&& value, std::string_view json_ptr)
+      bool seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
             func(value);
@@ -116,7 +116,7 @@ namespace glaze
       template <class F, class T>
       requires array_t<std::decay_t<T>> || glaze_array_t<std::decay_t<T>> ||
          tuple_t<std::decay_t<T>>
-      bool seek_impl(F&& func, T&& value, std::string_view json_ptr)
+      bool seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
             func(value);
@@ -159,7 +159,7 @@ namespace glaze
 
       template <class F, class T>
       requires nullable_t<std::decay_t<T>>
-      bool seek_impl(F&& func, T&& value, std::string_view json_ptr)
+      bool seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
             func(value);
@@ -172,7 +172,7 @@ namespace glaze
 
    // Call a function on an value at the location of a json_ptr
    template <class F, class T>
-   bool seek(F&& func, T&& value, std::string_view json_ptr)
+   bool seek(F&& func, T&& value, sv json_ptr)
    {
       return detail::seek_impl(std::forward<F>(func), std::forward<T>(value),
                                json_ptr);
@@ -181,7 +181,7 @@ namespace glaze
    // Get a refrence to a value at the location of a json_ptr. Will throw if
    // value doesnt exist or is wrong type
    template <class V, class T>
-   V& get(T&& root_value, std::string_view json_ptr)
+   V& get(T&& root_value, sv json_ptr)
    {
       V* result{};
       detail::seek_impl(
@@ -207,7 +207,7 @@ namespace glaze
    // Get a pointer to a value at the location of a json_ptr. Will return
    // nullptr if value doesnt exist or is wrong type
    template <class V, class T>
-   V* get_if(T&& root_value, std::string_view json_ptr)
+   V* get_if(T&& root_value, sv json_ptr)
    {
       V* result{};
       detail::seek_impl(
@@ -223,7 +223,7 @@ namespace glaze
    // Get a value at the location of a json_ptr. Will throw if
    // value doesnt exist or is not asignable or is a narrowing conversion.
    template <class V, class T>
-   V get_value(T&& root_value, std::string_view json_ptr)
+   V get_value(T&& root_value, sv json_ptr)
    {
       V result{};
       bool found{};
@@ -250,7 +250,7 @@ namespace glaze
    // Assign to a value at the location of a json_ptr with respect to the root_value
    // if assignable and not a narrowing conversion
    template <class T, class V>
-   bool set(T&& root_value, const std::string_view json_ptr, V&& value)
+   bool set(T&& root_value, const sv json_ptr, V&& value)
    {
       bool result{};
       detail::seek_impl(

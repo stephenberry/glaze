@@ -47,7 +47,7 @@ namespace glaze
       interface api_map{};
       std::vector<lib_t> loaded_libs{};
 
-      void load(const std::string_view& path) {
+      void load(const sv path) {
          const std::filesystem::path libpath(path);
          if (std::filesystem::is_directory(libpath)) {
             load_libs(path);
@@ -60,7 +60,7 @@ namespace glaze
          }
       }
 
-      void load_libs(const std::string_view directory)
+      void load_libs(const sv directory)
       {
          std::filesystem::directory_entry dir(directory);
          for (const auto& entry : std::filesystem::directory_iterator(dir)) {
@@ -70,7 +70,7 @@ namespace glaze
          }
       }
 
-      auto& operator[](std::string_view lib_name)
+      auto& operator[](const sv lib_name)
       {
          return api_map[std::string(lib_name)];
       }

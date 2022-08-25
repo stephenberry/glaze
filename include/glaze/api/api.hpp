@@ -54,7 +54,7 @@ namespace glaze
       /// access reference via JSON pointer path
       /// </summary>
       template <class T>
-      T& api::get(const std::string_view path) {
+      T& api::get(const sv path) {
          static constexpr auto hash = glaze::hash<T>();
          auto* ptr = get(path, hash);
          if (ptr) {
@@ -72,7 +72,7 @@ namespace glaze
       }
       
       template <class T>
-      T* api::get_if(const std::string_view path) noexcept {
+      T* api::get_if(const sv path) noexcept {
          static constexpr auto hash = glaze::hash<T>();
          auto* ptr = get(path, hash);
          if (ptr) {
