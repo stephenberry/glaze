@@ -25,7 +25,7 @@ namespace glaze
       };
       
       template <class T>
-      requires (num_t<T> || std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> || std::same_as<T, std::vector<bool>::const_reference>)
+      requires (num_t<T> || char_t<T>)
       struct from_binary<T>
       {
          static void op(auto&& value, auto&& it, auto&& end)
@@ -38,6 +38,16 @@ namespace glaze
                throw std::runtime_error("Missing binary data");
             }
             std::advance(it, sizeof(V));
+         }
+      };
+
+      template <class T>
+      requires(std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>) struct from_binary<T>
+      {
+         static void op(auto&& value, auto&& it, auto&& end)
+         {
+            value = static_cast<bool>(*it);
+            ++it;
          }
       };
 
@@ -133,9 +143,6 @@ namespace glaze
       {
          static void op(auto&& value, auto&& it, auto&& end)
          {
-            // TODO: this doesnt handle non contiguous containers like deque
-            static_assert(nano::ranges::contiguous_range<T>);
-
             using V = typename std::decay_t<T>::value_type;
             if constexpr (has_static_size<T>) {
                static constexpr auto n_bytes = sizeof(V) * get_size<T>();
@@ -153,8 +160,9 @@ namespace glaze
                   throw std::runtime_error("Attempted to read into non resizable container with the wrong number of items.");
                }
 
-               std::memcpy(value.data(), &(*it), n_bytes);
-               std::advance(it, n_bytes);
+               for (auto&& item: value) {
+                  read<binary>::op(item, it, end);
+               }
             }
          }
       };
@@ -224,6 +232,19 @@ namespace glaze
                      member_it->second);
                }
             }
+         }
+      };
+
+      template <class T>
+      requires glaze_array_t<T>
+      struct from_binary<T>
+      {
+         static void op(auto&& value, auto&& it, auto&& end)
+         {
+            using V = std::decay_t<T>;
+            for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
+               read<binary>::op(value.*std::get<I>(meta_v<V>), it, end);
+            });
          }
       };
    }
