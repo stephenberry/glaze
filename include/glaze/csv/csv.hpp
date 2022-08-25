@@ -312,10 +312,10 @@ namespace glaze
        container.push_back(temp);
    }
 
-   template <bool RowWise = true, class Tuple>
-   inline void read_csv(std::fstream& file, Tuple& items) requires is_tuple<Tuple>
+   template <bool RowWise = true>
+   inline void read_csv(std::fstream& file, is_tuple auto&& items)
    {
-       static constexpr auto N = std::tuple_size_v<Tuple>;
+       static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(items)>>;
 
        if constexpr (RowWise) 
        {
@@ -362,7 +362,7 @@ namespace glaze
        }
    }
 
-   // TODO: change fstream to generic buffer? will that be useful?
+   // TODO: change fstream to generic buffer
 
    template <bool RowWise = true, class... Args>
    inline void from_csv_file(const std::string_view file_name, Args&&... args)
@@ -370,10 +370,8 @@ namespace glaze
        std::string buffer;
 
        std::fstream file(std::string{ file_name } + ".csv", std::ios::in);
-
-       auto parameters = std::tie(std::forward<Args>(args)...);
-
-       read_csv<RowWise>(file, parameters);
+      
+       read_csv<RowWise>(file, std::make_tuple(std::forward<Args>(args)...));
    }
 }
 
