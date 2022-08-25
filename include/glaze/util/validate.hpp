@@ -46,9 +46,9 @@ namespace glaze
                            static_cast<std::size_t>(dist), context};
       }
 
-      inline std::string generate_error_string(const std::string& error,
+      inline std::string generate_error_string(const sv error,
                                                const source_info& info,
-                                               const std::string& filename = "")
+                                               const sv filename = "")
       {
          std::string s{};
          auto it = std::back_inserter(s);
