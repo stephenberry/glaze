@@ -8,13 +8,14 @@
 struct sub
 {
    double x = 400.0;
+   double y = 200.0;
 };
 
 template <>
 struct glaze::meta<sub>
 {
    using T = sub;
-   static constexpr auto value = glaze::object("x", &T::x);
+   static constexpr auto value = glaze::object("x", &T::x, "y", &T::y);
 };
 
 struct my_struct
@@ -51,14 +52,10 @@ int main() {
       static constexpr auto partial = glaze::json_ptrs("/i",
                                                        "/d",
                                                        "/sub/x",
-                                                       "/i/y/z",
-                                                       "/sub/i",
-                                                       "/sub/sub/d",
-                                                       "/x/y");
-      //static constexpr auto partial = glaze::json_ptrs("/sub/x");
-      //static constexpr auto partial = glaze::json_ptrs("/i", "/d");
+                                                       "/sub/y");
       
       static constexpr auto sorted = glaze::sort_json_ptrs(partial);
+
       static constexpr auto groups = glaze::group_json_ptrs<sorted>();
       
       static constexpr auto N = std::tuple_size_v<decltype(groups)>;
@@ -71,19 +68,13 @@ int main() {
          std::cout << '\n';
       });
       
-      static constexpr auto group_info = glaze::group_json_ptrs_impl(partial);
-      auto n_items_per_group = std::get<0>(group_info);
-      auto n_unique = std::get<1>(group_info);
-      auto unique_keys = std::get<2>(group_info);
-      
       glaze::write_binary<partial>(s, out);
-      
-      
       
       s2.i = 5;
       s2.hello = "text";
       s2.d = 5.5;
       s2.sub.x = 0.0;
+      s2.sub.y = 20;
       glaze::read_binary(s2, out);
    }
    catch (const std::exception& e) {

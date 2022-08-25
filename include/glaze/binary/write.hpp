@@ -170,17 +170,39 @@ namespace glaze
    requires nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char))
    inline void write(T&& value, Buffer& buffer) noexcept
    {
-      if constexpr (std::same_as<Buffer, std::string> || std::same_as<Buffer, std::vector<std::byte>>) {
-         using P = std::decay_t<decltype(Partial)>;
-         static constexpr auto N = std::tuple_size_v<P>;
-         static constexpr auto key_to_int = detail::make_key_int_map<T>();
-         
-         detail::dump_int(N, buffer); // write out the number of elements
-         
-         static constexpr auto sorted = (Depth == 0) ? sort_json_ptrs(Partial) : Partial;
-         
-         
-      }
+      // TODO should we support partial = {""}?
+
+      static_assert(std::same_as<Buffer, std::string> ||
+                    std::same_as<Buffer, std::vector<std::byte>>);
+      static constexpr auto key_to_int = detail::make_key_int_map<T>();
+      static constexpr auto partial = Partial; //MSVC 16.11 hack
+      static constexpr auto sorted = (Depth == 0) ? sort_json_ptrs(partial) : partial;
+      static constexpr auto groups = glaze::group_json_ptrs<sorted>();
+      static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
+
+      detail::dump_int(N, buffer);
+
+      glaze::for_each<N>([&](auto I) {
+         static constexpr auto group = []() {
+            return std::get<decltype(I)::value>(groups);
+         }(); //MSVC internal compiler error workaround
+         static constexpr auto key = std::get<0>(group);
+         static constexpr auto sub_partial = std::get<1>(group);
+         static constexpr auto frozen_map = detail::make_map<std::decay_t<T>>();
+         static constexpr auto member_it = frozen_map.find(key);
+         static_assert(member_it != frozen_map.end(),
+                        "Invalid key passed to partial write");
+         static constexpr auto member_ptr =
+               std::get<member_it->second.index()>(member_it->second);
+
+         detail::dump_int(key_to_int.find(key)->second, buffer);
+         if constexpr (nano::ranges::count(sub_partial,"") > 0) {
+            detail::write<binary>::op<Opts>(value.*member_ptr, buffer);
+         }
+         else {
+            write<sub_partial, Opts>(value.*member_ptr, buffer);
+         }
+      });   
    }
    
    /*template <auto& Partial, opts Opts, class T, class Buffer>

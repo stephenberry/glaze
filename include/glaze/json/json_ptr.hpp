@@ -317,7 +317,7 @@ namespace glaze
    
    inline constexpr auto json_ptrs(auto&&... args)
    {
-       return std::to_array<sv>({ args... });
+      return std::array{sv{args}...};
    }
    
    // must copy to allow mutation in constexpr context
@@ -354,28 +354,37 @@ namespace glaze
    {
       return std::make_tuple(std::pair{ sv{}, std::array<sv, Arr[Is]>{} }...);
    };
-   
+
    template <size_t N, auto& Arr>
    inline constexpr auto sub_group(const auto start)
    {
+      constexpr auto arr = Arr; // Msvc currently generates an internal compiler error otherwise
       std::array<sv, N> ret;
-      std::transform(Arr.begin() + start, Arr.begin() + start + N, ret.begin(), remove_first_key);
+      std::transform(arr.begin() + start, arr.begin() + start + N, ret.begin(), remove_first_key);
       return ret;
    }
    
    template <auto& Arr>
    inline constexpr auto group_json_ptrs()
    {
-      constexpr auto group_info = group_json_ptrs_impl(Arr);
+      constexpr auto arr =
+         Arr;  // Msvc currently generates an internal compiler error otherwise
+      constexpr auto group_info = group_json_ptrs_impl(arr);
       constexpr auto n_items_per_group = std::get<0>(group_info);
       constexpr auto n_unique = std::get<1>(group_info);
       constexpr auto unique_keys = std::get<2>(group_info);
       
       auto arrs = make_arrays<n_items_per_group>(std::make_index_sequence<n_unique>{});
       size_t start{};
-      
+
       for_each<n_unique>([&](auto I) {
-         std::get<I>(arrs) = { unique_keys[I], sub_group<n_items_per_group[I], Arr>(start) };
+         // NOTE: VS 2019 wont let us grab n_items_per_group as constexpr unless
+         // its static but this is a constexpr func This is fixed in VS 2022
+         constexpr size_t n_items =
+            std::tuple_size_v<std::decay_t<decltype(std::get<I>(arrs).second)>>;
+
+         std::get<I>(arrs).first = unique_keys[I];
+         std::get<I>(arrs).second = glaze::sub_group<n_items, Arr>(start);
          start += n_items_per_group[I];
       });
       
