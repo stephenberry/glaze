@@ -38,18 +38,6 @@ namespace glaze
         }, v);
     }
    
-   template <size_t Offset, class Tuple, std::size_t...Is>
-   auto tuple_splitter_impl(Tuple&& tuple, std::index_sequence<Is...>) {
-      return std::make_tuple(std::get<Is * 2 + Offset>(tuple)...);
-   }
-   
-   template <class Tuple, std::size_t...Is>
-   auto tuple_splitter(Tuple&& tuple) {
-      static constexpr auto N = std::tuple_size_v<Tuple>;
-      static constexpr auto index_seq = std::make_index_sequence<N / 2>{};
-      return std::make_pair(tuple_splitter_impl<0>(tuple, index_seq), tuple_splitter_impl<1>(tuple, index_seq));
-   }
-   
    template <class Buffer>
    inline void write_csv(Buffer& buffer, const std::string_view sv) {
       buffer.append(sv);
@@ -82,7 +70,7 @@ namespace glaze
    template <bool RowWise = true, class Buffer, class Tuple>
    inline void write_csv(Buffer& buffer, Tuple&& tuple) requires is_tuple<Tuple>
    {
-      const auto tuples = tuple_splitter(std::forward<Tuple>(tuple));
+      const auto tuples = tuple_split(std::forward<Tuple>(tuple));
       static constexpr auto N = std::tuple_size_v<Tuple> / 2;
       
       const auto& data = std::get<1>(tuples);
@@ -315,7 +303,7 @@ namespace glaze
    template <bool RowWise = true>
    inline void read_csv(std::fstream& file, is_tuple auto&& items)
    {
-       static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(items)>>;
+       static constexpr auto N = size_v<decltype(items)>;
 
        if constexpr (RowWise) 
        {
@@ -367,8 +355,6 @@ namespace glaze
    template <bool RowWise = true, class... Args>
    inline void from_csv_file(const std::string_view file_name, Args&&... args)
    {
-       std::string buffer;
-
        std::fstream file(std::string{ file_name } + ".csv", std::ios::in);
       
        read_csv<RowWise>(file, std::make_tuple(std::forward<Args>(args)...));
