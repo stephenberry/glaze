@@ -10,6 +10,7 @@
 #include "frozen/unordered_map.h"
 #include "glaze/util/string_view.hpp"
 #include "glaze/util/variant.hpp"
+#include "glaze/util/tuple.hpp"
 
 #include "NanoRange/nanorange.hpp"
 
@@ -17,14 +18,6 @@ namespace glaze
 {
    namespace detail
    {
-      // from
-      // https://stackoverflow.com/questions/16337610/how-to-know-if-a-type-is-a-specialization-of-stdvector
-      template <class, template<class...> class>
-      inline constexpr bool is_specialization_v = false;
-      
-      template <template<class...> class T, class... Args>
-      inline constexpr bool is_specialization_v<T<Args...>, T> = true;
-      
       template <class T>
       struct Array {
          T value;
