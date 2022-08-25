@@ -22,6 +22,9 @@ namespace glaze
 {
    namespace detail
    {
+      template <class T = void>
+      struct to_json {};
+      
       template <>
       struct write<json>
       {

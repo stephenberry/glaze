@@ -59,7 +59,7 @@ namespace glaze
          
          fmt::format_to(it, FMT_COMPILE("{}:{}: {}\n"), info.line, info.column, error);
          fmt::format_to(it, FMT_COMPILE("   {}\n   "), info.context);
-
+         
          for (std::size_t i = 1; i < info.column; ++i) {
             s += " ";
          }

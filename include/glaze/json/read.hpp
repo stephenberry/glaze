@@ -56,6 +56,9 @@ namespace glaze
          }
       }
       
+      template <class T = void>
+      struct from_json {};
+      
       template <>
       struct read<json>
       {
