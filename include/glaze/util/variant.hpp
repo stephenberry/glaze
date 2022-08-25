@@ -17,4 +17,18 @@ namespace glaze
    {
       return std::variant<T*...>{};
    }
+   
+   template <class ...T>
+   size_t variant_container_size(const std::variant<T...>& v)
+   {
+       return std::visit([](auto&& x) -> size_t {
+          using ContainerType = std::decay_t<decltype(x)>;
+          if constexpr (std::same_as<ContainerType, std::monostate>) {
+             throw std::runtime_error("container_size constainer is monostate");
+          }
+          else {
+             return x.size();
+          }
+       }, v);
+   }
 }

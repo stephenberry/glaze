@@ -20,24 +20,10 @@
 #include "glaze/record/recorder.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/for_each.hpp"
-#include "glaze/util/tuple.hpp"
+#include "glaze/core/common.hpp"
 
 namespace glaze
 {
-    template <class ...T>
-    size_t container_size(const std::variant<T...>& v)
-    {
-        return std::visit([](auto&& x) -> size_t {
-           using ContainerType = std::decay_t<decltype(x)>;
-           if constexpr (std::same_as<ContainerType, std::monostate>) {
-              throw std::runtime_error("container_size constainer is monostate");
-           }
-           else {
-              return x.size();
-           }
-        }, v);
-    }
-   
    template <class Buffer>
    inline void write_csv(Buffer& buffer, const std::string_view sv) {
       buffer.append(sv);
@@ -191,9 +177,9 @@ namespace glaze
        size_t n = std::numeric_limits<size_t>::max();
        for (auto& [title, data] : map) {
            if (n == std::numeric_limits<size_t>::max()) {
-               n = container_size(data.first);
+               n = variant_container_size(data.first);
            }
-           else if (n != container_size(data.first)) {
+           else if (n != variant_container_size(data.first)) {
                throw std::runtime_error("csv::to_file | mismatching dimensions");
            }
        }
