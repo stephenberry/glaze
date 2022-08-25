@@ -69,7 +69,7 @@ namespace glaze
       {
          using result_type = decltype(func());
 
-         std::lock_guard<std::mutex> lock(mtx);
+         std::lock_guard lock(mtx);
 
          auto promise = std::make_shared<std::promise<result_type>>();
 
@@ -96,7 +96,7 @@ namespace glaze
 
       void wait()
       {
-         std::unique_lock<std::mutex> lock(mtx);
+         std::unique_lock lock(mtx);
          if (queue.empty() && (working == 0)) return;
          done_cv.wait(lock, [&]() { return queue.empty() && (working == 0); });
       }

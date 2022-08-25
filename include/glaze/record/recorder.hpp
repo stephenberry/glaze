@@ -7,6 +7,7 @@
 #include <deque>
 
 #include "glaze/util/type_traits.hpp"
+#include "glaze/util/string_view.hpp"
 #include "glaze/util/variant.hpp"
 
 namespace glaze
@@ -50,7 +51,7 @@ namespace glaze
       std::deque<std::pair<std::string, std::pair<container_type, void*>>>
          data;
       
-      auto operator[](const std::string_view name) {
+      auto operator[](const sv name) {
          auto& d = data.emplace_back(name, std::make_pair(std::monostate{}, nullptr));
          return detail::recorder_assigner<std::pair<container_type, void*>>{ d.second };
       }
