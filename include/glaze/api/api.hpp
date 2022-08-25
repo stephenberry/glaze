@@ -46,7 +46,7 @@ namespace glaze
          std::string error{};
       };
 
-      using api_map_t =
+      using interface =
          std::map<std::string, std::function<std::shared_ptr<api>()>,
                   std::less<>>;
       
@@ -90,4 +90,4 @@ namespace glaze
 #endif
 
 // IMPORTANT: unmanged memory returned
-extern "C" DLL_EXPORT glaze::api_map_t* create_api() noexcept;
+extern "C" DLL_EXPORT glaze::interface* glaze_interface() noexcept;

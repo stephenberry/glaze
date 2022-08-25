@@ -42,9 +42,9 @@ namespace glaze
 
    struct lib_loader final
    {
-      using create_t = glaze_interface(*)(void);
+      using create = glaze::interface*(*)(void);
 
-      api_map_t api_map{};
+      interface api_map{};
       std::vector<lib_t> loaded_libs{};
 
       void load(const std::string_view& path) {
@@ -106,13 +106,13 @@ namespace glaze
             loaded_libs.emplace_back(loaded_lib);
 
 #ifdef GLAZE_API_ON_WINDOWS
-            auto* ptr = (create_t)GetProcAddress(loaded_lib, "create_api");
+            auto* ptr = (create)GetProcAddress(loaded_lib, "create_api");
 #else
-            auto* ptr = (create_t)dlsym(dlopen(path.c_str(), RTLD_NOW), "create_api");
+            auto* ptr = (create)dlsym(dlopen(path.c_str(), RTLD_NOW), "create_api");
 #endif
 
             if (ptr) {
-               api_map.merge(ptr().map);
+               api_map.merge(*ptr());
                return true;
             }
          }
