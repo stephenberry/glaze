@@ -5,7 +5,12 @@
 
 #include <string>
 #include <optional>
-#include <sstream>
+
+#ifndef FMT_HEADER_ONLY
+#define FMT_HEADER_ONLY
+#endif  // !FMT_HEADER_ONLY
+#include "fmt/format.h"
+#include "fmt/compile.h"
 
 namespace glaze
 {
@@ -41,26 +46,26 @@ namespace glaze
                            static_cast<std::size_t>(dist), context};
       }
 
-      inline std::string generate_error_string(std::string const& error,
-                                               source_info const& info,
-                                               std::string const& filename = "")
+      inline std::string generate_error_string(const std::string& error,
+                                               const source_info& info,
+                                               const std::string& filename = "")
       {
-         std::stringstream ss{};
-
+         std::string s{};
+         auto it = std::back_inserter(s);
+         
          if (!filename.empty()) {
-            ss << filename << ":";
+            fmt::format_to(it, FMT_COMPILE("{}:"), filename);
+         }
+         
+         fmt::format_to(it, FMT_COMPILE("{}:{}: {}\n"), info.line, info.column, error);
+         fmt::format_to(it, FMT_COMPILE("   {}\n   "), info.context);
+
+         for (std::size_t i = 1; i < info.column; ++i) {
+            s += " ";
          }
 
-         ss << info.line << ":" << info.column << ": " << error << "\n";
-         ss << "\t" << info.context << "\n";
-         ss << "\t";
-
-         for (std::size_t i = 1; i < info.column; i++) {
-            ss << " ";
-         }
-
-         ss << "^\n";
-         return ss.str();
+         s += "^\n";
+         return s;
       }
    }  // namespace detail
 }  // namespace test

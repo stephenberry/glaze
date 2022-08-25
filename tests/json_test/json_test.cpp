@@ -1533,6 +1533,21 @@ void write_tests() {
    };
 }
 
+suite error_outputs = [] {
+   "invalid character"_test = [] {
+      try
+      {
+         std::string s = R"({"Hello":"World"x, "color": "red"})";
+         std::map<std::string, std::string> m;
+         glaze::read_json(m, s);
+      }
+      catch (const std::exception& e) {
+         expect(std::string(e.what()) ==
+                "1:17: Expected:,\n   {\"Hello\":\"World\"x, \"color\": \"red\"}\n                   ^\n");
+      }
+   };
+};
+
 #include "glaze/json/study.hpp"
 
 struct study_obj
