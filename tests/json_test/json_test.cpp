@@ -17,6 +17,7 @@
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/json/prettify.hpp"
+#include "glaze/util/progress_bar.hpp"
 
 using namespace boost::ut;
 
