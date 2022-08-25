@@ -193,9 +193,14 @@ namespace glaze
             return param_set;
          }
       };
+      
+      template <class T>
+      concept generator = requires(T g)
+      {
+         g.generate();
+      };
 
-      template <class Generator>
-      void run_study(Generator& g, auto&& f)
+      void run_study(generator auto& g, auto&& f)
       {
          glaze::pool tpool{};
          size_t job_num = 0;
