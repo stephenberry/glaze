@@ -10,7 +10,7 @@
 namespace glaze
 {
    template <class T>
-   concept vector = detail::is_specialization_v<T, std::vector>;
+   concept vector = is_specialization_v<T, std::vector>;
    
    template <vector T>
    struct name_t<T> {

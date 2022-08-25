@@ -47,7 +47,7 @@ namespace glaze
    }
    
    template <class T>
-   concept function = detail::is_specialization_v<T, std::function>;
+   concept function = is_specialization_v<T, std::function>;
    
    template <function T>
    struct name_t<T> {

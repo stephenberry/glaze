@@ -165,7 +165,7 @@ namespace glaze
          {
             const auto n = int_from_header(it, end);
 
-            for (int i = 0; i < n; i++) {
+            for (size_t i = 0; i < n; ++i) {
                if constexpr (std::is_same_v<typename T::key_type,
                                             std::string>) {
                   std::string key{};
