@@ -1549,7 +1549,6 @@ struct glaze::meta<study_obj>
 
 void study_tests()
 {
-   // TODO: Randomly erroring with: pointer being freed was not allocated
    "study"_test = [] {
       glaze::study::design design;
       design.params = { { "/x", "linspace", { "0", "1", "10" } } };
@@ -1557,9 +1556,13 @@ void study_tests()
       glaze::study::full_factorial generator{ study_obj{}, design };
       
       std::vector<size_t> results;
+      std::mutex mtx{};
       glaze::study::run_study(generator, [&](const auto& point, [[maybe_unused]] const auto job_num){
+         std::unique_lock lock{mtx};
          results.emplace_back(point.x);
       });
+      
+      std::sort(results.begin(), results.end());
       
       expect(results[0] == 0);
       expect(results[10] == 10);
