@@ -423,37 +423,6 @@ namespace glaze
                           "third element should be a comment_t");
       };
 
-      template <size_t I = 0, class Tuple, class Members = std::tuple<>,
-                class Member = std::tuple<>>
-      constexpr auto group_members(Tuple&& tuple, Members&& members = {},
-                                          Member&& member = {})
-      {
-         if constexpr (std::tuple_size_v<Tuple> == 0) {
-            return std::make_tuple();
-         }
-         else if constexpr (I >= std::tuple_size_v<Tuple>) {
-            check_member<Member>();
-            return std::tuple_cat(members, std::make_tuple(member));
-         }
-         else if constexpr (I == 0) {
-            return group_members<I + 1>(std::forward<Tuple>(tuple),
-                                        std::forward<Members>(members),
-                                        std::make_tuple(std::get<I>(tuple)));
-         }
-         else if constexpr (str_t<std::tuple_element_t<I, Tuple>>) {
-            check_member<Member>();
-            return group_members<I + 1>(
-               std::forward<Tuple>(tuple),
-               std::tuple_cat(members, std::make_tuple(member)),
-               std::make_tuple(std::get<I>(tuple)));
-         }
-         else {
-            return group_members<I + 1>(
-               std::forward<Tuple>(tuple), std::forward<Members>(members),
-               std::tuple_cat(member, std::make_tuple(std::get<I>(tuple))));
-         }
-      }
-
       template <class T, size_t... I>
       constexpr auto make_map_impl(std::index_sequence<I...>)
       {
