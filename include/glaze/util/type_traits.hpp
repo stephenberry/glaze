@@ -3,16 +3,13 @@
 
 #pragma once
 
-#include "glaze/core/common.hpp"
-
-#include <tuple>
-#include <variant>
-
 namespace glaze
 {
-	template <class T>
-	concept is_tuple = detail::is_specialization_v<T, std::tuple>;
-
-	template <class T>
-	concept is_variant = detail::is_specialization_v<T, std::variant>;
+   // from
+   // https://stackoverflow.com/questions/16337610/how-to-know-if-a-type-is-a-specialization-of-stdvector
+   template <class, template<class...> class>
+   inline constexpr bool is_specialization_v = false;
+   
+   template <template<class...> class T, class... Args>
+   inline constexpr bool is_specialization_v<T<Args...>, T> = true;
 }

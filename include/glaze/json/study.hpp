@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "glaze/core/common.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/json/json_ptr.hpp"
@@ -16,12 +17,6 @@ namespace glaze
 {
    namespace study
    {
-      using basic =
-         std::variant<bool, char, char8_t, unsigned char, signed char, char16_t,
-                      short, unsigned short, wchar_t, char32_t, float, int,
-                      unsigned int, long, unsigned long, double,
-                      long long, unsigned long long, std::string>;
-      
       struct param
       {
          std::string ptr{};
@@ -33,10 +28,8 @@ namespace glaze
       {
          std::vector<param> params{};  //!< study parameters
          std::vector<std::unordered_map<std::string, raw_json>> states{};
-         std::unordered_map<std::string, raw_json>
-            overwrite{};  //!< pointer syntax and json representation
-         std::default_random_engine::result_type
-            seed{};                //!< Seed for randomized study
+         std::unordered_map<std::string, raw_json> overwrite{}; //!< pointer syntax and json representation
+         std::default_random_engine::result_type seed{}; //!< Seed for randomized study
          size_t random_samples{};  //!< Number of runs to perform in randomized
                                    //!< study. If zero it will run a full
                                    //!< factorial ignoring random distributions
@@ -200,9 +193,14 @@ namespace glaze
             return param_set;
          }
       };
+      
+      template <class T>
+      concept generator = requires(T g)
+      {
+         g.generate();
+      };
 
-      template <class Generator>
-      void run_study(Generator& g, auto&& f)
+      void run_study(generator auto& g, auto&& f)
       {
          glaze::pool tpool{};
          size_t job_num = 0;

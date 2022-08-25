@@ -35,19 +35,20 @@ struct glaze::meta<my_api>
 
 GLAZE_SPECIALIZE(my_api, 0, 0, 1)
 
-DLL_EXPORT glaze_interface create_api() noexcept
+DLL_EXPORT glaze::interface* glaze_interface() noexcept
 {
-   return {{
+   return new glaze::interface{
       {"my_api", glaze::make_api<my_api>},
       {"my_api2", glaze::make_api<my_api>}
-   }};
+   };
 }
 
 void tests()
 {
    using namespace boost::ut;
-
-   auto io = create_api()["my_api"]();
+   
+   std::unique_ptr<glaze::interface> interface{ glaze_interface() };
+   auto io = (*interface)["my_api"]();
    
    "bool type name"_test = [] {
       {

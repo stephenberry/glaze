@@ -26,6 +26,7 @@ namespace glaze
       void n_threads(const unsigned int n)
       {
 #ifdef _WIN32
+         // NOT REQUIRED IN WINDOWS 11
          // TODO smarter distrubution of threads among groups.
          auto num_groups = GetActiveProcessorGroupCount();
          WORD group = 0;
@@ -49,7 +50,7 @@ namespace glaze
 #endif
       }
 
-      size_t concurrency()
+      size_t concurrency() const
       {
 #ifdef _WIN32
          auto num_groups = GetActiveProcessorGroupCount();
@@ -63,12 +64,12 @@ namespace glaze
 #endif
       }
 
-      template <typename F>
+      template <class F>
       std::future<std::invoke_result_t<std::decay_t<F>>> emplace_back(F &&func)
       {
          using result_type = decltype(func());
 
-         std::lock_guard<std::mutex> lock(m);
+         std::lock_guard<std::mutex> lock(mtx);
 
          auto promise = std::make_shared<std::promise<result_type>>();
 
@@ -95,7 +96,7 @@ namespace glaze
 
       void wait()
       {
-         std::unique_lock<std::mutex> lock(m);
+         std::unique_lock<std::mutex> lock(mtx);
          if (queue.empty() && (working == 0)) return;
          done_cv.wait(lock, [&]() { return queue.empty() && (working == 0); });
       }
@@ -105,7 +106,7 @@ namespace glaze
       ~pool()
       {
          // Close the queue and finish all the remaining work
-         std::unique_lock<std::mutex> lock(m);
+         std::unique_lock lock(mtx);
          closed = true;
          work_cv.notify_all();
          lock.unlock();
@@ -119,7 +120,7 @@ namespace glaze
       std::deque<std::function<void()>> queue;
       std::atomic<unsigned int> working = 0;
       bool closed = false;
-      std::mutex m;
+      std::mutex mtx;
       std::condition_variable work_cv;
       std::condition_variable done_cv;
 
@@ -127,7 +128,7 @@ namespace glaze
       {
          while (true) {
             // Wait for work
-            std::unique_lock<std::mutex> lock(m);
+            std::unique_lock<std::mutex> lock(mtx);
             work_cv.wait(lock, [this]() { return closed || !queue.empty(); });
             if (queue.empty()) {
                if (closed) {

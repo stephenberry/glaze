@@ -74,29 +74,30 @@ namespace glaze
 
       inline void prettify_other_states(const char c, general_state& state) noexcept
       {
+         using enum general_state;
          switch (state) {
-         case general_state::ESCAPED:
-            state = general_state::NORMAL;
+         case ESCAPED:
+            state = NORMAL;
             break;
-         case general_state::STRING:
+         case STRING:
             if (c == '"') {
-               state = general_state::NORMAL;
+               state = NORMAL;
             }
             break;
-         case general_state::BEFORE_ASTERISK:
-            state = general_state::COMMENT;
+         case BEFORE_ASTERISK:
+            state = COMMENT;
             break;
-         case general_state::COMMENT:
+         case COMMENT:
             if (c == '*') {
-               state = general_state::BEFORE_FSLASH;
+               state = BEFORE_FSLASH;
             }
             break;
-         case general_state::BEFORE_FSLASH:
+         case BEFORE_FSLASH:
             if (c == '/') {
-               state = general_state::NORMAL;
+               state = NORMAL;
             }
             else {
-               state = general_state::COMMENT;
+               state = COMMENT;
             }
             break;
          default:

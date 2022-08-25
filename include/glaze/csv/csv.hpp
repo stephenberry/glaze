@@ -20,35 +20,10 @@
 #include "glaze/record/recorder.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/for_each.hpp"
+#include "glaze/core/common.hpp"
 
 namespace glaze
 {
-    template <class ...T>
-    size_t container_size(const std::variant<T...>& v)
-    {
-        return std::visit([](auto&& x) -> size_t {
-           using ContainerType = std::decay_t<decltype(x)>;
-           if constexpr (std::same_as<ContainerType, std::monostate>) {
-              throw std::runtime_error("container_size constainer is monostate");
-           }
-           else {
-              return x.size();
-           }
-        }, v);
-    }
-   
-   template <size_t Offset, class Tuple, std::size_t...Is>
-   auto tuple_splitter_impl(Tuple&& tuple, std::index_sequence<Is...>) {
-      return std::make_tuple(std::get<Is * 2 + Offset>(tuple)...);
-   }
-   
-   template <class Tuple, std::size_t...Is>
-   auto tuple_splitter(Tuple&& tuple) {
-      static constexpr auto N = std::tuple_size_v<Tuple>;
-      static constexpr auto index_seq = std::make_index_sequence<N / 2>{};
-      return std::make_pair(tuple_splitter_impl<0>(tuple, index_seq), tuple_splitter_impl<1>(tuple, index_seq));
-   }
-   
    template <class Buffer>
    inline void write_csv(Buffer& buffer, const std::string_view sv) {
       buffer.append(sv);
@@ -81,7 +56,7 @@ namespace glaze
    template <bool RowWise = true, class Buffer, class Tuple>
    inline void write_csv(Buffer& buffer, Tuple&& tuple) requires is_tuple<Tuple>
    {
-      const auto tuples = tuple_splitter(std::forward<Tuple>(tuple));
+      const auto tuples = tuple_split(std::forward<Tuple>(tuple));
       static constexpr auto N = std::tuple_size_v<Tuple> / 2;
       
       const auto& data = std::get<1>(tuples);
@@ -202,9 +177,9 @@ namespace glaze
        size_t n = std::numeric_limits<size_t>::max();
        for (auto& [title, data] : map) {
            if (n == std::numeric_limits<size_t>::max()) {
-               n = container_size(data.first);
+               n = variant_container_size(data.first);
            }
-           else if (n != container_size(data.first)) {
+           else if (n != variant_container_size(data.first)) {
                throw std::runtime_error("csv::to_file | mismatching dimensions");
            }
        }
@@ -311,10 +286,10 @@ namespace glaze
        container.push_back(temp);
    }
 
-   template <bool RowWise = true, class Tuple>
-   inline void read_csv(std::fstream& file, Tuple& items) requires is_tuple<Tuple>
+   template <bool RowWise = true>
+   inline void read_csv(std::fstream& file, is_tuple auto&& items)
    {
-       static constexpr auto N = std::tuple_size_v<Tuple>;
+       static constexpr auto N = size_v<decltype(items)>;
 
        if constexpr (RowWise) 
        {
@@ -361,18 +336,14 @@ namespace glaze
        }
    }
 
-   // TODO: change fstream to generic buffer? will that be useful?
+   // TODO: change fstream to generic buffer
 
    template <bool RowWise = true, class... Args>
    inline void from_csv_file(const std::string_view file_name, Args&&... args)
    {
-       std::string buffer;
-
        std::fstream file(std::string{ file_name } + ".csv", std::ios::in);
-
-       auto parameters = std::tie(std::forward<Args>(args)...);
-
-       read_csv<RowWise>(file, parameters);
+      
+       read_csv<RowWise>(file, std::make_tuple(std::forward<Args>(args)...));
    }
 }
 

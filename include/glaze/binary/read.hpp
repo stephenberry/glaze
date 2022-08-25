@@ -166,7 +166,7 @@ namespace glaze
          {
             const auto n = int_from_header(it, end);
 
-            for (int i = 0; i < n; i++) {
+            for (size_t i = 0; i < n; ++i) {
                static thread_local typename T::key_type key{};
                read<binary>::op(key, it, end);
                read<binary>::op(value[key], it, end);
