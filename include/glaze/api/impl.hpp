@@ -20,14 +20,14 @@
 
 namespace glaze
 {
-   template <class Interface>
+   template <class UserType>
    struct impl : api
    {
-      Interface interface{};
+      UserType user{};
       
       void* get(const sv path, const sv type_hash) noexcept override
       {
-         return get_void(interface, path, type_hash);
+         return get_void(user, path, type_hash);
       }
 
       bool read(const uint32_t format, const sv path,
@@ -37,13 +37,13 @@ namespace glaze
             return detail::seek_impl(
                [&](auto&& val) { glaze::read<opts{}>(val, data);
                },
-               interface, path);
+               user, path);
          }
          else {
             return detail::seek_impl(
                [&](auto&& val) { glaze::read<opts{.format = binary}>(val, data);
                },
-               interface, path);
+               user, path);
          }
       }
 
@@ -53,7 +53,7 @@ namespace glaze
          if (format == json) {
             return detail::seek_impl(
                [&](auto&& val) {
-                  glaze::write_json(val, data); }, interface,
+                  glaze::write_json(val, data); }, user,
                path);
          }
          else {
@@ -62,7 +62,7 @@ namespace glaze
             bool found = detail::seek_impl(
                [&](auto&& val) { glaze::write_binary(val, buffer);
                },
-               interface, path);
+               user, path);
             data.resize(buffer.size());
             std::memcpy(data.data(), buffer.data(), buffer.size());
             return found;
