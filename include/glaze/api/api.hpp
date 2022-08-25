@@ -89,17 +89,5 @@ namespace glaze
 #define DLL_EXPORT
 #endif
 
-struct glaze_interface
-{
-   glaze::api_map_t map{};
-
-   auto& operator[](const std::string_view api_name)
-   {
-      if (auto it = map.find(std::string(api_name)); it != map.end()) {
-         return it->second;
-      }
-      throw std::runtime_error("glaze_interface could not load: " + std::string(api_name));
-   }
-};
-
-extern "C" DLL_EXPORT glaze_interface create_api() noexcept;
+// IMPORTANT: unmanged memory returned
+extern "C" DLL_EXPORT glaze::api_map_t* create_api() noexcept;
