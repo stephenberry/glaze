@@ -20,6 +20,7 @@
 #include "glaze/record/recorder.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/for_each.hpp"
+#include "glaze/util/tuple.hpp"
 
 namespace glaze
 {
