@@ -124,6 +124,7 @@ namespace glaze
             const auto n_bytes = sizeof(V) * n;
             value.resize(n);
             std::memcpy(value.data(), &(*it), n_bytes);
+            std::advance(it, n_bytes);
          }
       };
       
@@ -166,18 +167,9 @@ namespace glaze
             const auto n = int_from_header(it, end);
 
             for (int i = 0; i < n; i++) {
-               if constexpr (std::is_same_v<typename T::key_type,
-                                            std::string>) {
-                  std::string key{};
-                  read<binary>::op(key, it, end);
-                  ++it;
-                  read<binary>::op(value[key], it, end);
-               }
-               else {
-                  static thread_local typename T::key_type key_value{};
-                  read<binary>::op(key_value, it, end);
-                  read<binary>::op(value[key_value], it, end);
-               }
+               static thread_local typename T::key_type key{};
+               read<binary>::op(key, it, end);
+               read<binary>::op(value[key], it, end);
             }
          };
       };

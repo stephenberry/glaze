@@ -23,7 +23,7 @@ namespace glaze
       }
       catch (const std::exception& e) {
          // TODO: Implement good error message
-         throw std::runtime_error("binary read error");
+         throw std::runtime_error("binary read error:" + std::string(e.what()));
       }
    }
    

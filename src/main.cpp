@@ -25,6 +25,7 @@ struct my_struct
    std::string hello = "Hello World";
    std::array<uint64_t, 3> arr = {1, 2, 3};
    sub sub{};
+   std::map<std::string, int> map{};
 };
 
 template <>
@@ -34,8 +35,9 @@ struct glaze::meta<my_struct>
    static constexpr auto value = glaze::object("i", &T::i,          //
                                                "d", &T::d,          //
                                                "hello", &T::hello,  //
-                                               "arr", &T::arr,       //
-                                               "sub", &T::sub       //
+                                               "arr", &T::arr,      //
+                                               "sub", &T::sub,      //
+                                               "map", &T::map       //
    );
 };
 
@@ -44,7 +46,7 @@ struct glaze::meta<my_struct>
 int main() {
    my_struct s{};
    my_struct s2{};
-   std::string buffer = R"({"i":2})";
+   std::string buffer = R"({"i":2,"map":{"fish":5,"cake":2,"bear":3}})";
    try {
       glaze::read_json(s, buffer);
       
@@ -52,7 +54,9 @@ int main() {
       static constexpr auto partial = glaze::json_ptrs("/i",
                                                        "/d",
                                                        "/sub/x",
-                                                       "/sub/y");
+                                                       "/sub/y",
+                                                       "/map/fish",
+                                                       "/map/bear");
       
       static constexpr auto sorted = glaze::sort_json_ptrs(partial);
 

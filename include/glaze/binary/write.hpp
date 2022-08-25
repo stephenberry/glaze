@@ -176,9 +176,9 @@ namespace glaze
          detail::write<binary>::op<Opts>(value, buffer);
       }
       else {
-         static_assert(std::same_as<Buffer, std::string> ||
-                       std::same_as<Buffer, std::vector<std::byte>>);
-         static constexpr auto key_to_int = detail::make_key_int_map<T>();
+         static_assert(detail::glaze_object_t<std::decay_t<T>> ||
+                          detail::map_t<std::decay_t<T>>,
+                       "Only object types are supported for partial.");
          static constexpr auto sorted = sort_json_ptrs(partial);
          static constexpr auto groups = glaze::group_json_ptrs<sorted>();
          static constexpr auto N =
@@ -186,22 +186,45 @@ namespace glaze
 
          detail::dump_int(N, buffer);
 
-         glaze::for_each<N>([&](auto I) {
-            static constexpr auto group = []() {
-               return std::get<decltype(I)::value>(groups);
-            }();  // MSVC internal compiler error workaround
-            static constexpr auto key = std::get<0>(group);
-            static constexpr auto sub_partial = std::get<1>(group);
-            static constexpr auto frozen_map = detail::make_map<T>();
-            static constexpr auto member_it = frozen_map.find(key);
-            static_assert(member_it != frozen_map.end(),
-                          "Invalid key passed to partial write");
-            static constexpr auto member_ptr =
-               std::get<member_it->second.index()>(member_it->second);
+         if constexpr (detail::glaze_object_t<std::decay_t<T>>) {
+            static constexpr auto key_to_int = detail::make_key_int_map<T>();
+            glaze::for_each<N>([&](auto I) {
+               static constexpr auto group = []() {
+                  return std::get<decltype(I)::value>(groups);
+               }();  // MSVC internal compiler error workaround
+               static constexpr auto key = std::get<0>(group);
+               static constexpr auto sub_partial = std::get<1>(group);
+               static constexpr auto frozen_map = detail::make_map<T>();
+               static constexpr auto member_it = frozen_map.find(key);
+               static_assert(member_it != frozen_map.end(),
+                             "Invalid key passed to partial write");
+               static constexpr auto member_ptr =
+                  std::get<member_it->second.index()>(member_it->second);
 
-            detail::dump_int(key_to_int.find(key)->second, buffer);
-            write<sub_partial, Opts>(value.*member_ptr, buffer);
-         });
+               detail::dump_int(key_to_int.find(key)->second, buffer);
+               write<sub_partial, Opts>(value.*member_ptr, buffer);
+            });
+         }
+         else if constexpr (detail::map_t<std::decay_t<T>>) {
+            glaze::for_each<N>([&](auto I) {
+               static constexpr auto group = []() {
+                  return std::get<decltype(I)::value>(groups);
+               }();  // MSVC internal compiler error workaround
+               static constexpr auto key_value = std::get<0>(group);
+               static constexpr auto sub_partial = std::get<1>(group);
+               static thread_local auto key =
+                  std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
+               detail::write<binary>::op<Opts>(key, buffer);
+               auto it = value.find(key);
+               if (it != value.end()) {
+                  write<sub_partial, Opts>(it->second, buffer);
+               }
+               else {
+                  throw std::runtime_error(
+                     "Invalid key for map when writing out partial message");
+               }      
+            });
+         }
       }
    }
    
