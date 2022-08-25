@@ -518,12 +518,11 @@ namespace glaze
 
    constexpr auto object(auto&&... args)
    {
-      return detail::Object{ detail::group_members(std::make_tuple(args...)) };
-   }
-   
-   template <auto& Tuple>
-   constexpr auto object_template()
-   {
-      return group_builder<Tuple>::op();
+      if constexpr (sizeof...(args) == 0) {
+         return detail::Object{ std::make_tuple() };
+      }
+      else {
+         return detail::Object{ group_builder<std::decay_t<decltype(std::make_tuple(args...))>>::op(std::make_tuple(args...)) };
+      }
    }
 }  // namespace glaze

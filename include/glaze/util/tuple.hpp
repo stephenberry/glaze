@@ -129,17 +129,18 @@ namespace glaze
        return std::tuple{ starts, sizes };
    }
 
-   template <auto& Tuple>
+   template <class Tuple>
    struct group_builder
    {
-       static constexpr auto h = make_groups_helper<Tuple>();
-       static constexpr auto starts = std::get<0>(h);
-       static constexpr auto sizes = std::get<1>(h);
+      static constexpr auto default_tuple = Tuple{};
+      static constexpr auto h = make_groups_helper<default_tuple>();
+      static constexpr auto starts = std::get<0>(h);
+      static constexpr auto sizes = std::get<1>(h);
 
-       static constexpr auto op()
-       {
-           constexpr auto n_groups = starts.size();
-           return make_groups_impl<starts, sizes>(Tuple, std::make_index_sequence<n_groups>{});
-       }
+      static constexpr auto op(Tuple&& t)
+      {
+         constexpr auto n_groups = starts.size();
+         return make_groups_impl<starts, sizes>(std::forward<Tuple>(t), std::make_index_sequence<n_groups>{});
+      }
    };
 }

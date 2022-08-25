@@ -139,7 +139,7 @@ struct Thing
 template <>
 struct glaze::meta<Thing> {
    using T = Thing;
-   static constexpr auto tuple = std::make_tuple(
+   static constexpr auto value = glaze::object(
       "thing",       &T::thing,                                     //
       "thing2array", &T::thing2array,                               //
       "vec3",        &T::vec3,                                      //
@@ -158,7 +158,6 @@ struct glaze::meta<Thing> {
       "mapi",        &T::mapi,                                      //
       "thing_ptr",   &T::thing_ptr                                  //
    );
-   static constexpr auto value = glaze::object_template<tuple>();
 };
 
 void basic_types() {
