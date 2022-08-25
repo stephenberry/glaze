@@ -425,8 +425,8 @@ namespace glaze
 
       template <size_t I = 0, class Tuple, class Members = std::tuple<>,
                 class Member = std::tuple<>>
-      constexpr auto group_members(Tuple &&tuple, Members &&members = {},
-                                          Member &&member = {})
+      constexpr auto group_members(Tuple&& tuple, Members&& members = {},
+                                          Member&& member = {})
       {
          if constexpr (std::tuple_size_v<Tuple> == 0) {
             return std::make_tuple();
@@ -518,6 +518,11 @@ namespace glaze
 
    constexpr auto object(auto&&... args)
    {
-      return detail::Object{ detail::group_members(std::make_tuple(args...)) };
+      if constexpr (sizeof...(args) == 0) {
+         return detail::Object{ std::make_tuple() };
+      }
+      else {
+         return detail::Object{ group_builder<std::decay_t<decltype(std::make_tuple(args...))>>::op(std::make_tuple(args...)) };
+      }
    }
 }  // namespace glaze

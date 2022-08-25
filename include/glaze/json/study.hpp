@@ -223,9 +223,9 @@ namespace glaze
          {
             std::visit(
                [&](auto&& p) {
-                  *p = std::get<
+                  *p = *std::get_if<
                      std::remove_pointer_t<std::decay_t<decltype(p)>>>(
-                     value);
+                     &value);
                },
                param_ptr);
          }
