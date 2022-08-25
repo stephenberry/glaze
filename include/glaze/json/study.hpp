@@ -202,16 +202,16 @@ namespace glaze
 
       void run_study(generator auto& g, auto&& f)
       {
-         glaze::pool tpool{};
+         glaze::pool pool{};
          size_t job_num = 0;
          while (!g.empty()) {
             // generate mutates
-            tpool.emplace_back([=, state = g.generate()] {
+            pool.emplace_back([=, state = g.generate()] {
                f(std::move(state), job_num);
             });
             ++job_num;
          }
-         tpool.wait();
+         pool.wait();
       }
 
       struct random_param
@@ -421,50 +421,60 @@ namespace glaze
             }
          }
       };
-
-      struct ProgressBar
+   }  // namespace study
+   
+   struct progress_bar final
+   {
+      size_t width{};
+      size_t completed{};
+      size_t total{};
+      double time_taken{};
+      
+      std::string string() const
       {
-         std::size_t width;
-         std::size_t completed;
-         std::size_t total;
-         double time_taken;
-      };
-
-      inline std::ostream &operator<<(std::ostream &o, ProgressBar const &bar)
-      {
-         const std::size_t one = 1;
-         const std::size_t total = std::max(bar.total, one);
-         const std::size_t completed = std::min(bar.completed, total);
+         std::string s{};
+         
+         const size_t one = 1;
+         const auto total = std::max(this->total, one);
+         const auto completed = std::min(this->completed, total);
          const auto progress = static_cast<double>(completed) / total;
          const auto percentage = static_cast<size_t>(std::round(progress * 100));
 
-         if (bar.width > 2) {
-            const std::size_t len = bar.width - 2;
-            const std::size_t filled =
-               static_cast<unsigned int>(std::round(progress * len));
+         if (width > 2) {
+            const auto len = width - 2;
+            const auto filled = static_cast<size_t>(std::round(progress * len));
 
-            o << "[";
+            s += "[";
 
-            for (std::size_t i = 0; i < filled; i++) {
-               o << '=';
+            for (size_t i = 0; i < filled; ++i) {
+               s += '=';
             }
 
-            for (std::size_t i = 0; i < len - filled; i++) {
-               o << '-';
+            for (size_t i = 0; i < len - filled; ++i) {
+               s += '-';
             }
 
-            o << "] ";
+            s += "]";
          }
 
-         const std::size_t eta_s = static_cast<std::size_t>(
-            std::round(static_cast<double>(total - completed) * bar.time_taken /
+         const auto eta_s = static_cast<size_t>(
+            std::round(((total - completed) * time_taken) /
                        std::max(completed, one)));
-         const std::size_t minutes = eta_s / 60;
-         const std::size_t seconds_remaining = eta_s - minutes * 60;
-         o << std::round(percentage) << "% | ETA: " << minutes << "m"
-           << seconds_remaining << "s | " << completed << "/" << total;
-
-         return o;
+         const auto minutes = eta_s / 60;
+         const auto seconds = eta_s - minutes * 60;
+         fmt::format_to(std::back_inserter(s), FMT_COMPILE(" {}% | ETA: {}m {}s | {}/{}"),
+                        std::round(percentage),
+                        minutes,
+                        seconds,
+                        completed,
+                        total);
+         return s;
       }
-   }  // namespace study
+   };
+
+   inline std::ostream& operator<<(std::ostream &o, const progress_bar& bar)
+   {
+      o << bar.string();
+      return o;
+   }
 }  // namespace glaze

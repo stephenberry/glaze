@@ -12,11 +12,7 @@
 #include <cmath>
 #include <deque>
 #include <iostream>
-#include <map>
-#include <vector>
-#include <string>
 #include <functional>
-#include <variant>
 #include <numeric>
 #include <sstream>
 
@@ -139,7 +135,6 @@ suite csv_read = [] {
         std::deque<bool> z;
 
         from_csv_file("rowwise_to_file_test", x, y, z);
-
     };
 
     "colwise_from_file"_test = [] {
@@ -147,7 +142,6 @@ suite csv_read = [] {
         std::deque<bool> z;
 
         from_csv_file<false>("colwise_to_file_test", z, y, x);
-
     };
 
     // more complicated. needs a small discussion on expectations
@@ -184,24 +178,26 @@ suite csv_read = [] {
 };
 
 suite csv_recorder = [] {
+   
+   "recorder_to_file"_test = [] {
+       
+       recorder<std::variant<double, float>> rec;
+       
+       double x = 0.0;
+       float y = 0.f;
+       
+       rec["x"] = x;
+       rec["y"] = y;
 
-    "recorder_to_file"_test = [] {
-
-        recorder<std::variant<double, float>> rec;
-
-        double testvar = 0.0;
-
-        rec["test"] = testvar;
-
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 10; ++i)
         {
-            testvar += 1.5;
+            x += 1.5;
+           y += static_cast<float>(i);
             rec.update();
         }
 
         to_csv_file("recorder_out", rec);
     };
-
 };
 
 int main()
