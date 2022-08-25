@@ -10,19 +10,23 @@
 #include "glaze/core/write.hpp"
 #include "glaze/json/json_ptr.hpp"
 
+#include <utility>
+
 namespace glaze
 {
    namespace detail
    {      
       template <class T = void>
       struct to_binary {};
-      
+
       template <>
       struct write<binary>
       {
          template <auto& Opts, class T, class B>
-         static void op(T&& value, B&& b) {
-            to_binary<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<B>(b));
+         static void op(T&& value, B&& b)
+         {
+            to_binary<std::decay_t<T>>::template op<Opts>(
+               std::forward<T>(value), std::forward<B>(b));
          }
       };
       
@@ -102,7 +106,7 @@ namespace glaze
          template <auto& Opts>
          static void op(auto&& value, auto&& b)
          {
-            if constexpr (resizeable<T>) {
+            if constexpr (!has_static_size<T>) {
                dump_int(value.size(), b);
             }
             for (auto&& x : value) {
@@ -156,6 +160,20 @@ namespace glaze
                static constexpr auto item = std::get<I>(meta_v<V>);
                dump_int(I, b); // dump the known key as an integer
                write<binary>::op<Opts>(value.*std::get<1>(item), b);
+            });
+         }
+      };
+
+      template <class T>
+      requires glaze_array_t<T>
+      struct to_binary<T>
+      {
+         template <auto& Opts>
+         static void op(auto&& value, auto&& b) noexcept
+         {
+            using V = std::decay_t<T>;
+            for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
+               write<binary>::op<Opts>(value.*std::get<I>(meta_v<V>), b);
             });
          }
       };

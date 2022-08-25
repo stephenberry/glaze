@@ -8,6 +8,7 @@
 
 #include <bit>
 #include <map>
+#include <deque>
 
 #include "glaze/binary/write.hpp"
 #include "glaze/binary/read.hpp"
@@ -32,6 +33,116 @@ struct glaze::meta<my_struct>
                                                "arr", &T::arr       //
    );
 };
+
+struct sub_thing
+{
+   double a{3.14};
+   std::string b{"stuff"};
+};
+
+template <>
+struct glaze::meta<sub_thing>
+{
+   static constexpr auto value =
+      glaze::object("a", &sub_thing::a, "Test comment 1"_c,  //
+                    "b", &sub_thing::b, "Test comment 2"_c   //
+      );
+};
+
+struct sub_thing2
+{
+   double a{3.14};
+   std::string b{"stuff"};
+   double c{999.342494903};
+   double d{0.000000000001};
+   double e{203082348402.1};
+   float f{89.089f};
+   double g{12380.00000013};
+   double h{1000000.000001};
+};
+
+template <>
+struct glaze::meta<sub_thing2>
+{
+   using T = sub_thing2;
+   static constexpr auto value =
+      glaze::object("a", &T::a, "Test comment 1"_c,  //
+                    "b", &T::b, "Test comment 2"_c,  //
+                    "c", &T::c,                      //
+                    "d", &T::d,                      //
+                    "e", &T::e,                      //
+                    "f", &T::f,                      //
+                    "g", &T::g,                      //
+                    "h", &T::h                       //
+      );
+};
+
+struct V3
+{
+   double x{3.14};
+   double y{2.7};
+   double z{6.5};
+
+   bool operator==(const V3& rhs) const
+   {
+      return (x == rhs.x) && (y == rhs.y) && (z == rhs.z);
+   }
+};
+
+template <>
+struct glaze::meta<V3>
+{
+   static constexpr auto value = glaze::array(&V3::x, &V3::y, &V3::z);
+};
+
+struct Thing
+{
+   sub_thing thing{};
+   std::array<sub_thing2, 1> thing2array{};
+   V3 vec3{};
+   std::list<int> list{6, 7, 8, 2};
+   std::array<std::string, 4> array = {"as\"df\\ghjkl", "pie", "42", "foo"};
+   std::vector<V3> vector = {{9.0, 6.7, 3.1}, {}};
+   int i{8};
+   double d{2};
+   bool b{};
+   char c{'W'};
+   std::vector<bool> vb = {true, false, false, true, true, true, true};
+   std::shared_ptr<sub_thing> sptr = std::make_shared<sub_thing>();
+   std::optional<V3> optional{};
+   std::deque<double> deque = {9.0, 6.7, 3.1};
+   std::map<std::string, int> map = {{"a", 4}, {"f", 7}, {"b", 12}};
+   std::map<int, double> mapi{{5, 3.14}, {7, 7.42}, {2, 9.63}};
+   sub_thing* thing_ptr{};
+
+   Thing() : thing_ptr(&thing){};
+};
+
+template <>
+struct glaze::meta<Thing>
+{
+   using T = Thing;
+   static constexpr auto value =
+      glaze::object("thing", &T::thing,                       //
+                    "thing2array", &T::thing2array,      //
+                    "vec3", &T::vec3,                    //
+                    "list", &T::list,                    //
+                    "deque", &T::deque,                       //
+                    "vector", &T::vector,                     //
+                    "i", &T::i,                          //
+                    "d", &T::d, "double is the best type"_c,  //
+                    "b", &T::b,                          //
+                    "c", &T::c,                          //
+                    "vb", &T::vb,                             //
+                    "sptr", &T::sptr,                         //
+                    "optional", &T::optional,                 //
+                    "array", &T::array,                       //
+                    "map", &T::map,                           //
+                    "mapi", &T::mapi,                         //
+                    "thing_ptr", &T::thing_ptr                //
+      );
+};
+
 
 void write_tests()
 {
@@ -184,6 +295,52 @@ void write_tests()
       for (auto& item : dbl_map) {
          expect(dbl_read[item.first] == item.second);
       }
+   };
+
+   
+   "complex user obect"_test = [] {
+      std::vector<std::byte> buffer{};
+
+      Thing obj{};
+      obj.thing.a = 5.7;
+      obj.thing2array[0].a = 992;
+      obj.vec3.x = 1.004;
+      obj.list = {9, 3, 7, 4, 2};
+      obj.array = {"life", "of", "pi", "!"};      
+      obj.vector = {{7, 7, 7}, {3, 6, 7}};
+      obj.i = 4;
+      obj.d = 0.9;
+      obj.b = true;
+      obj.c = 'L';
+      obj.vb = {false, true, true, false, false, true, true};
+      obj.sptr = nullptr;
+      obj.optional = {1, 2, 3};
+      obj.deque = {0.0, 2.2, 3.9};
+      obj.map = {{"a", 7}, {"f", 3}, {"b", 4}};
+      obj.mapi = {{5, 5.0}, {7, 7.1}, {2, 2.22222}};
+      
+      glaze::write_binary(obj, buffer);
+
+      Thing obj2{};
+      glaze::read_binary(obj2, buffer);
+
+      expect(obj2.thing.a == 5.7);
+      expect(obj2.thing.a == 5.7);
+      expect(obj2.thing2array[0].a == 992);
+      expect(obj2.vec3.x == 1.004);
+      expect(obj2.list == decltype(obj2.list){9, 3, 7, 4, 2});
+      expect(obj2.array == decltype(obj2.array){"life", "of", "pi", "!"});
+      expect(obj2.vector == decltype(obj2.vector){{7, 7, 7}, {3, 6, 7}});
+      expect(obj2.i == 4);
+      expect(obj2.d == 0.9);
+      expect(obj2.b == true);
+      expect(obj2.c == 'L');
+      expect(obj2.vb == decltype(obj2.vb){false, true, true, false, false, true, true});
+      expect(obj2.sptr == nullptr);
+      expect(obj2.optional == std::make_optional<V3>(1, 2, 3));
+      expect(obj2.deque == decltype(obj2.deque){0.0, 2.2, 3.9});
+      expect(obj2.map == decltype(obj2.map){{"a", 7}, {"f", 3}, {"b", 4}});
+      expect(obj2.mapi == decltype(obj2.mapi){{5, 5.0}, {7, 7.1}, {2, 2.22222}});
    };
 }
 
