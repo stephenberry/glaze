@@ -151,7 +151,6 @@ namespace glaze
             }
             else {
                const auto n = int_from_header(it, end);
-               const auto n_bytes = sizeof(V) * n;
 
                if constexpr (resizeable<T>) {
                   value.resize(n);
