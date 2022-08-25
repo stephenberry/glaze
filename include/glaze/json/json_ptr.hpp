@@ -95,8 +95,7 @@ namespace glaze
          }
 
          if constexpr (glaze_object_t<T>) {
-            static constexpr auto frozen_map =
-               glaze::detail::make_map<std::decay_t<T>>();
+            static constexpr auto frozen_map = detail::make_map<T>();
             const auto& member_it = frozen_map.find(frozen::string(key));
             if (member_it != frozen_map.end()) {
                return std::visit(

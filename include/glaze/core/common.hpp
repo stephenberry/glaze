@@ -477,7 +477,7 @@ namespace glaze
       {
          constexpr auto indices =
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_map_impl<T>(indices);
+         return make_map_impl<std::decay_t<T>>(indices);
       }
       
       template <class T, size_t... I>

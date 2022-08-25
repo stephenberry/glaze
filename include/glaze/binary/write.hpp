@@ -192,8 +192,7 @@ namespace glaze
             }();  // MSVC internal compiler error workaround
             static constexpr auto key = std::get<0>(group);
             static constexpr auto sub_partial = std::get<1>(group);
-            static constexpr auto frozen_map =
-               detail::make_map<std::decay_t<T>>();
+            static constexpr auto frozen_map = detail::make_map<T>();
             static constexpr auto member_it = frozen_map.find(key);
             static_assert(member_it != frozen_map.end(),
                           "Invalid key passed to partial write");
