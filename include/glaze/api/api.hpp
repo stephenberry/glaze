@@ -96,7 +96,7 @@ struct glaze_interface
    auto& operator[](const std::string_view api_name)
    {
       if (auto it = map.find(std::string(api_name)); it != map.end()) {
-         return *it;
+         return it->second;
       }
       throw std::runtime_error("glaze_interface could not load: " + std::string(api_name));
    }
