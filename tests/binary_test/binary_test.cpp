@@ -338,7 +338,7 @@ void write_tests()
       expect(obj2.c == 'L');
       expect(obj2.vb == decltype(obj2.vb){false, true, true, false, false, true, true});
       expect(obj2.sptr == nullptr);
-      expect(obj2.optional == std::make_optional<V3>(1, 2, 3));
+      expect(obj2.optional == std::make_optional<V3>(V3{1, 2, 3}));
       expect(obj2.deque == decltype(obj2.deque){0.0, 2.2, 3.9});
       expect(obj2.map == decltype(obj2.map){{"a", 7}, {"f", 3}, {"b", 4}});
       expect(obj2.mapi == decltype(obj2.mapi){{5, 5.0}, {7, 7.1}, {2, 2.22222}});
