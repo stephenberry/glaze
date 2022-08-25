@@ -41,6 +41,7 @@ namespace glaze
          }
          
       protected:
+         /// unchecked void* access
          virtual void* get(const sv path, const sv type_hash) noexcept = 0;
 
          std::string error{};
@@ -50,9 +51,7 @@ namespace glaze
          std::map<std::string, std::function<std::shared_ptr<api>()>,
                   std::less<>>;
       
-      /// <summary>
       /// access reference via JSON pointer path
-      /// </summary>
       template <class T>
       T& api::get(const sv path) {
          static constexpr auto hash = glaze::hash<T>();

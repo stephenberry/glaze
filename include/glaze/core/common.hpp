@@ -509,12 +509,6 @@ namespace glaze
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_key_int_map_impl<T>(indices);
       }
-      
-      template <class T = void>
-      struct from_json {};
-      
-      template <class T = void>
-      struct to_json {};
    }  // namespace detail
 
    constexpr auto array(auto&&... args)

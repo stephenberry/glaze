@@ -202,16 +202,16 @@ namespace glaze
 
       void run_study(generator auto& g, auto&& f)
       {
-         glaze::pool tpool{};
+         glaze::pool pool{};
          size_t job_num = 0;
          while (!g.empty()) {
             // generate mutates
-            tpool.emplace_back([=, state = g.generate()] {
+            pool.emplace_back([=, state = g.generate()] {
                f(std::move(state), job_num);
             });
             ++job_num;
          }
-         tpool.wait();
+         pool.wait();
       }
 
       struct random_param
@@ -421,50 +421,5 @@ namespace glaze
             }
          }
       };
-
-      struct ProgressBar
-      {
-         std::size_t width;
-         std::size_t completed;
-         std::size_t total;
-         double time_taken;
-      };
-
-      inline std::ostream &operator<<(std::ostream &o, ProgressBar const &bar)
-      {
-         const std::size_t one = 1;
-         const std::size_t total = std::max(bar.total, one);
-         const std::size_t completed = std::min(bar.completed, total);
-         const auto progress = static_cast<double>(completed) / total;
-         const auto percentage = static_cast<size_t>(std::round(progress * 100));
-
-         if (bar.width > 2) {
-            const std::size_t len = bar.width - 2;
-            const std::size_t filled =
-               static_cast<unsigned int>(std::round(progress * len));
-
-            o << "[";
-
-            for (std::size_t i = 0; i < filled; i++) {
-               o << '=';
-            }
-
-            for (std::size_t i = 0; i < len - filled; i++) {
-               o << '-';
-            }
-
-            o << "] ";
-         }
-
-         const std::size_t eta_s = static_cast<std::size_t>(
-            std::round(static_cast<double>(total - completed) * bar.time_taken /
-                       std::max(completed, one)));
-         const std::size_t minutes = eta_s / 60;
-         const std::size_t seconds_remaining = eta_s - minutes * 60;
-         o << std::round(percentage) << "% | ETA: " << minutes << "m"
-           << seconds_remaining << "s | " << completed << "/" << total;
-
-         return o;
-      }
    }  // namespace study
 }  // namespace glaze

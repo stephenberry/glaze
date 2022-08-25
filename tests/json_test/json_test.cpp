@@ -17,6 +17,7 @@
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/json/prettify.hpp"
+#include "glaze/util/progress_bar.hpp"
 
 using namespace boost::ut;
 
@@ -1532,6 +1533,21 @@ void write_tests() {
    };
 }
 
+suite error_outputs = [] {
+   "invalid character"_test = [] {
+      try
+      {
+         std::string s = R"({"Hello":"World"x, "color": "red"})";
+         std::map<std::string, std::string> m;
+         glaze::read_json(m, s);
+      }
+      catch (const std::exception& e) {
+         expect(std::string(e.what()) ==
+                "1:17: Expected:,\n   {\"Hello\":\"World\"x, \"color\": \"red\"}\n                   ^\n");
+      }
+   };
+};
+
 #include "glaze/json/study.hpp"
 
 struct study_obj
@@ -1568,6 +1584,19 @@ void study_tests()
       expect(results[10] == 10);
    };
 }
+
+suite progress_bar_tests = [] {
+
+    "progress bar 30%"_test = [] {
+       glaze::progress_bar bar{.width = 12, .completed = 3, .total = 10, .time_taken = 30.0};
+       expect(bar.string() == "[===-------] 30% | ETA: 1m 10s | 3/10");
+    };
+   
+   "progress bar 100%"_test = [] {
+      glaze::progress_bar bar{.width = 12, .completed = 10, .total = 10, .time_taken = 30.0};
+      expect(bar.string() == "[==========] 100% | ETA: 0m 0s | 10/10");
+   };
+};
 
 int main()
 {
