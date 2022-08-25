@@ -9,6 +9,7 @@
 #include <bit>
 #include <map>
 #include <deque>
+#include <list>
 
 #include "glaze/binary/write.hpp"
 #include "glaze/binary/read.hpp"
