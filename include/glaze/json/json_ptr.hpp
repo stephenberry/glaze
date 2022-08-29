@@ -10,6 +10,7 @@
 #include "fast_float/fast_float.h"
 #include "glaze/core/common.hpp"
 #include "glaze/util/string_view.hpp"
+#include "glaze/util/parse.hpp"
 
 namespace glaze
 {
@@ -388,5 +389,57 @@ namespace glaze
       });
       
       return arrs;
+   }
+
+   //TODO support custom types
+   template <class Root_t, detail::string_literal ptr, class Expected_t = void>
+   constexpr bool valid() {
+      using V = std::decay_t<Root_t>;
+      if constexpr (ptr.sv() == sv{""}) {
+         return std::same_as<Expected_t, void> ||
+                std::same_as<V, Expected_t>;
+      }
+      else {
+         constexpr auto tokens = tokenize_json_ptr(ptr.sv());
+         constexpr auto key_str = tokens.first;
+         constexpr auto rem_ptr =
+            detail::string_literal_from_view<tokens.second.size()>(tokens.second);
+         if constexpr (detail::glaze_object_t<V>) {
+            constexpr auto frozen_map = detail::make_map<V>();
+            constexpr auto member_it = frozen_map.find(key_str);
+            if constexpr (member_it != frozen_map.end()) {
+               constexpr auto member_ptr =
+                  std::get<member_it->second.index()>(member_it->second);
+               using sub_t = decltype(std::declval<V>().*member_ptr);
+
+               return valid<sub_t, rem_ptr, Expected_t>();
+            }
+            else {
+               return false;
+            }
+         }
+         else if constexpr (detail::map_t<V>) {
+            return valid<V::mapped_type, rem_ptr, Expected_t>();
+         }
+         else if constexpr (detail::glaze_array_t<V>) {
+            constexpr auto member_array =
+               glaze::detail::make_array<std::decay_t<V>>();
+            constexpr auto index = glaze::detail::stoui(key_str); //TODO: Will not build if not int
+            constexpr auto member_ptr = member_array[index];
+            using sub_t = decltype(std::get<member_ptr.index()>(member_ptr));
+            return valid<sub_t, rem_ptr, Expected_t>();
+         }
+         else if constexpr (detail::array_t<V>) {
+            constexpr auto index = glaze::detail::stoui(key_str);
+            return valid<V::value_type, rem_ptr, Expected_t>();
+         }
+         else if constexpr (detail::nullable_t<V>) {
+            using sub_t = decltype(*std::declval<V>());
+            return valid<sub_t, ptr, Expected_t>();
+         }
+         else {
+            return false;
+         }
+      }
    }
 }  // namespace glaze

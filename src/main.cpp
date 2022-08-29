@@ -4,6 +4,7 @@
 // Dummy target since interface targets dont show up in some ides
 
 #include "glaze/glaze.hpp"
+#include "glaze/json/json_ptr.hpp"
 
 struct sub
 {

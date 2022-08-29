@@ -145,4 +145,21 @@ namespace glaze::detail
       }
       return false;
    }
+
+   constexpr bool is_digit(char c) { return c <= '9' && c >= '0'; }
+
+   constexpr size_t stoui(std::string_view s, size_t value = 0)
+   {
+      if (s.empty()) {
+         return value;
+      }
+
+      else if (is_digit(s[0])) {
+         return stoui(s.substr(1), (s[0] - '0') + value * 10);
+      }
+
+      else {
+         throw std::runtime_error("not a digit");
+      }
+   }
 }
