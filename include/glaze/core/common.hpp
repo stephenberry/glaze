@@ -148,7 +148,7 @@ namespace glz
       template <class T>
       concept local_meta_t = requires
       {
-         std::decay_t<T>::value;
+         std::decay_t<T>::glaze::value;
       };
    }  // namespace detail
 
@@ -160,7 +160,7 @@ namespace glz
    inline constexpr auto meta_wrapper_v = [] {
       using V = std::decay_t<T>;
       if constexpr (detail::local_meta_t<V>) {
-         return V::value;
+         return V::glaze::value;
       }
       else {
          return meta<V>::value;

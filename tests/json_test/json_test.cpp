@@ -1603,9 +1603,12 @@ struct local_meta
    double x{};
    int y{};
    
-   using T = local_meta;
-   static constexpr auto value = glz::object("x", &T::x, "A comment for x", //
-                                               "y", &T::y, "A comment for y");
+   struct glaze
+   {
+      using T = local_meta;
+      static constexpr auto value = glz::object("x", &T::x, "A comment for x", //
+                                                  "y", &T::y, "A comment for y");
+   };
 };
 
 static_assert(glz::detail::glaze_t<local_meta>);
