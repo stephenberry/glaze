@@ -238,7 +238,13 @@ namespace glaze
                      concat_arrays(concat_arrays("\"", std::get<0>(item)), "\":");
                   write<json>::op<Opts>(quoted, b);
                }
-               write<json>::op<Opts>(value.*std::get<1>(item), b);
+               if constexpr (std::is_member_pointer_v<
+                                std::tuple_element_t<1, decltype(item)>>) {
+                  write<json>::op<Opts>(value.*std::get<1>(item), b);
+               }
+               else {
+                  write<json>::op<Opts>(std::get<1>(item)(value), b);
+               }
                constexpr auto S = std::tuple_size_v<decltype(item)>;
                if constexpr (Opts.comments && S > 2) {
                   constexpr sv comment = std::get<2>(item);

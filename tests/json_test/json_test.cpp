@@ -33,7 +33,7 @@ template <>
 struct glaze::meta<my_struct> {
    using T = my_struct;
    static constexpr auto glaze = object(
-      "i", &T::i, //
+      "i", [](auto&& v) { return v.i; },  //
       "d", &T::d, //
       "hello", &T::hello, //
       "arr", &T::arr //
@@ -70,7 +70,7 @@ template <>
 struct glaze::meta<sub_thing> {
    static constexpr auto glaze = object(
       "a", &sub_thing::a, "Test comment 1",  //
-      "b", &sub_thing::b, "Test comment 2"   //
+      "b", [](auto&& v) -> auto& { return v.b; }, "Test comment 2"  //
    );
 };
 

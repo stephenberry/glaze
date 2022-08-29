@@ -386,7 +386,13 @@ namespace glaze
                   if (member_it != frozen_map.end()) {
                      std::visit(
                         [&](auto&& member_ptr) {
-                           read<json>::op(value.*member_ptr, it, end);
+                           using V = std::decay_t<decltype(member_ptr)>;
+                           if constexpr (std::is_member_pointer_v<V>) {
+                              read<json>::op(value.*member_ptr, it, end);
+                           }
+                           else {
+                              read<json>::op(member_ptr(value), it, end);
+                           }
                         },
                         member_it->second);
                   }

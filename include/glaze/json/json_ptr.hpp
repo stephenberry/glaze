@@ -101,8 +101,15 @@ namespace glaze
             if (member_it != frozen_map.end()) {
                return std::visit(
                   [&](auto&& member_ptr) {
-                     return seek_impl(std::forward<F>(func), value.*member_ptr,
-                                      json_ptr);
+                     using V = std::decay_t<decltype(member_ptr)>;
+                     if constexpr (std::is_member_pointer_v<V>) {
+                        return seek_impl(std::forward<F>(func),
+                                         value.*member_ptr, json_ptr);
+                     }
+                     else {
+                        return seek_impl(std::forward<F>(func),
+                                         member_ptr(value), json_ptr);
+                     }
                   },
                   member_it->second);
             }
@@ -410,9 +417,16 @@ namespace glaze
             if constexpr (member_it != frozen_map.end()) {
                constexpr auto member_ptr =
                   std::get<member_it->second.index()>(member_it->second);
-               using sub_t = decltype(std::declval<V>().*member_ptr);
+               using Vsub = std::decay_t<decltype(member_ptr)>;
+               if constexpr (std::is_member_pointer_v<Vsub>) {
+                  using sub_t = decltype(std::declval<V>().*member_ptr);
+                  return valid<sub_t, rem_ptr, Expected_t>();
+               }
+               else {
+                  using sub_t = std::invoke_result_t<member_ptr,V>;
+                  return valid<sub_t, rem_ptr, Expected_t>();
+               }
 
-               return valid<sub_t, rem_ptr, Expected_t>();
             }
             else {
                return false;

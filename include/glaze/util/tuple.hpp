@@ -63,7 +63,7 @@ namespace glaze
    template <auto& Tuple, auto Val>
    constexpr auto filter_single(value<Val>) {
       using V = std::decay_t<decltype(std::get<Val>(Tuple))>;
-      if constexpr (std::is_member_pointer_v<V>) {
+      if constexpr (!std::convertible_to<V, std::string_view>) {
          static_assert(Val != 0, "member pointer cannot be the first item");
          return value_sequence<Val - 1>{}; // shift backwards as group starts with the name
       }
