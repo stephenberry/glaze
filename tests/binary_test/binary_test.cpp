@@ -44,7 +44,7 @@ struct sub_thing
 template <>
 struct glz::meta<sub_thing>
 {
-   static constexpr auto glaze =
+   static constexpr auto value =
       glz::object("a", &sub_thing::a, "Test comment 1",  //
                     "b", &sub_thing::b, "Test comment 2"   //
       );
@@ -66,7 +66,7 @@ template <>
 struct glz::meta<sub_thing2>
 {
    using T = sub_thing2;
-   static constexpr auto glaze =
+   static constexpr auto value =
       glz::object("a", &T::a, "Test comment 1",  //
                     "b", &T::b, "Test comment 2",  //
                     "c", &T::c,                      //
