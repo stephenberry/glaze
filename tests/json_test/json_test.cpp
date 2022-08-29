@@ -69,8 +69,8 @@ struct sub_thing
 template <>
 struct glaze::meta<sub_thing> {
    static constexpr auto value = object(
-      "a", &sub_thing::a, "Test comment 1"_c,  //
-      "b", &sub_thing::b, "Test comment 2"_c   //
+      "a", &sub_thing::a, "Test comment 1",  //
+      "b", &sub_thing::b, "Test comment 2"   //
    );
 };
 
@@ -90,8 +90,8 @@ template <>
 struct glaze::meta<sub_thing2> {
    using T = sub_thing2;
    static constexpr auto value = glaze::object(
-      "a", &T::a, "Test comment 1"_c,  //
-      "b", &T::b, "Test comment 2"_c,  //
+      "a", &T::a, "Test comment 1",    //
+      "b", &T::b, "Test comment 2",    //
       "c", &T::c,                      //
       "d", &T::d,                      //
       "e", &T::e,                      //
@@ -147,7 +147,7 @@ struct glaze::meta<Thing> {
       "deque",       &T::deque,                                     //
       "vector",      &T::vector,                                    //
       "i",           &T::i,                                         //
-      "d",           &T::d,           "double is the best type"_c,  //
+      "d",           &T::d,           "double is the best type",    //
       "b",           &T::b,                                         //
       "c",           &T::c,                                         //
       "vb",          &T::vb,                                        //

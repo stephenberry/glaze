@@ -241,10 +241,7 @@ namespace glaze
                write<json>::op<Opts>(value.*std::get<1>(item), b);
                constexpr auto S = std::tuple_size_v<decltype(item)>;
                if constexpr (Opts.comments && S > 2) {
-                  static_assert(
-                     std::is_same_v<std::decay_t<decltype(std::get<2>(item))>,
-                                    comment_t>);
-                  constexpr auto comment = std::get<2>(item).str;
+                  constexpr sv comment = std::get<2>(item);
                   if constexpr (comment.size() > 0) {
                      dump<"/*">(b);
                      dump(comment, b);

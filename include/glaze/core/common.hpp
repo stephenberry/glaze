@@ -141,16 +141,6 @@ namespace glaze
    template <class T>
    using meta_t = std::decay_t<decltype(meta_v<T>)>;
 
-   struct comment_t
-   {
-      std::string_view str;
-   };
-
-   constexpr comment_t operator"" _c(const char *s, std::size_t n) noexcept
-   {
-      return comment_t{{s, n}};
-   }
-
    struct raw_json
    {
       std::string str;
@@ -419,8 +409,8 @@ namespace glaze
             static_assert(std::is_member_pointer_v<std::tuple_element_t<1, M>>,
                           "second element should be the member pointer");
          if constexpr (std::tuple_size_v < M >> 2)
-            static_assert(std::is_same_v<std::tuple_element_t<2, M>, comment_t>,
-                          "third element should be a comment_t");
+            static_assert(str_t<std::tuple_element_t<2, M>>,
+                          "third element should be a string comment");
       };
 
       template <class T, size_t... I>
