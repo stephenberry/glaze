@@ -12,7 +12,7 @@
 #include "glaze/util/string_view.hpp"
 #include "glaze/util/parse.hpp"
 
-namespace glaze
+namespace glz
 {
    namespace detail
    {
@@ -140,7 +140,7 @@ namespace glaze
 
          if constexpr (glaze_array_t<std::decay_t<T>>) {
             static constexpr auto member_array =
-               glaze::detail::make_array<std::decay_t<T>>();
+               glz::detail::make_array<std::decay_t<T>>();
             if (index >= member_array.size()) return false;
             return std::visit(
                [&](auto&& member_ptr) {
@@ -391,7 +391,7 @@ namespace glaze
             std::tuple_size_v<std::decay_t<decltype(std::get<I>(arrs).second)>>;
 
          std::get<I>(arrs).first = unique_keys[I];
-         std::get<I>(arrs).second = glaze::sub_group<n_items, Arr>(start);
+         std::get<I>(arrs).second = glz::sub_group<n_items, Arr>(start);
          start += n_items_per_group[I];
       });
       
@@ -437,14 +437,14 @@ namespace glaze
          }
          else if constexpr (detail::glaze_array_t<V>) {
             constexpr auto member_array =
-               glaze::detail::make_array<std::decay_t<V>>();
-            constexpr auto index = glaze::detail::stoui(key_str); //TODO: Will not build if not int
+               glz::detail::make_array<std::decay_t<V>>();
+            constexpr auto index = glz::detail::stoui(key_str); //TODO: Will not build if not int
             constexpr auto member_ptr = member_array[index];
             using sub_t = decltype(std::get<member_ptr.index()>(member_ptr));
             return valid<sub_t, rem_ptr, Expected_t>();
          }
          else if constexpr (detail::array_t<V>) {
-            constexpr auto index = glaze::detail::stoui(key_str);
+            constexpr auto index = glz::detail::stoui(key_str);
             return valid<V::value_type, rem_ptr, Expected_t>();
          }
          else if constexpr (detail::nullable_t<V>) {

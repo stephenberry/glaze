@@ -7,7 +7,7 @@
 #include "glaze/core/common.hpp"
 #include "glaze/util/validate.hpp"
 
-namespace glaze
+namespace glz
 {
    // For writing to a std::string, std::vector<char>, std::deque<char> and
    // the like

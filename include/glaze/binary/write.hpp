@@ -12,7 +12,7 @@
 
 #include <utility>
 
-namespace glaze
+namespace glz
 {
    namespace detail
    {      
@@ -198,7 +198,7 @@ namespace glaze
                           detail::map_t<std::decay_t<T>>,
                        "Only object types are supported for partial.");
          static constexpr auto sorted = sort_json_ptrs(partial);
-         static constexpr auto groups = glaze::group_json_ptrs<sorted>();
+         static constexpr auto groups = glz::group_json_ptrs<sorted>();
          static constexpr auto N =
             std::tuple_size_v<std::decay_t<decltype(groups)>>;
 
@@ -206,7 +206,7 @@ namespace glaze
 
          if constexpr (detail::glaze_object_t<std::decay_t<T>>) {
             static constexpr auto key_to_int = detail::make_key_int_map<T>();
-            glaze::for_each<N>([&](auto I) {
+            glz::for_each<N>([&](auto I) {
                static constexpr auto group = []() {
                   return std::get<decltype(I)::value>(groups);
                }();  // MSVC internal compiler error workaround
@@ -224,7 +224,7 @@ namespace glaze
             });
          }
          else if constexpr (detail::map_t<std::decay_t<T>>) {
-            glaze::for_each<N>([&](auto I) {
+            glz::for_each<N>([&](auto I) {
                static constexpr auto group = []() {
                   return std::get<decltype(I)::value>(groups);
                }();  // MSVC internal compiler error workaround

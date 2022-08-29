@@ -22,10 +22,10 @@ struct my_api
 };
 
 template <>
-struct glaze::meta<my_api>
+struct glz::meta<my_api>
 {
    using T = my_api;
-   static constexpr auto value = glaze::object("x", &T::x,  //
+   static constexpr auto value = glz::object("x", &T::x,  //
                                                "y", &T::y,  //
                                                "z", &T::z,  //
                                                "s", &T::s,  //

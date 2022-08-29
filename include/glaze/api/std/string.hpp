@@ -7,7 +7,7 @@
 
 #include "glaze/api/name.hpp"
 
-namespace glaze
+namespace glz
 {
    template <>
    struct name_t<std::string> {

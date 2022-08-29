@@ -30,9 +30,9 @@ struct my_struct
 };
 
 template <>
-struct glaze::meta<my_struct> {
+struct glz::meta<my_struct> {
    using T = my_struct;
-   static constexpr auto glaze = object(
+   static constexpr auto value = object(
       "i", [](auto&& v) { return v.i; },  //
       "d", &T::d, //
       "hello", &T::hello, //
@@ -45,9 +45,9 @@ suite starter = [] {
     "example"_test = [] {
        my_struct s{};
        std::string buffer{};
-       glaze::write_json(s, buffer);
+       glz::write_json(s, buffer);
        expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
-       expect(glaze::prettify(buffer) == R"({
+       expect(glz::prettify(buffer) == R"({
    "i": 287,
    "d": 3.14,
    "hello": "Hello World",
@@ -67,8 +67,8 @@ struct sub_thing
 };
 
 template <>
-struct glaze::meta<sub_thing> {
-   static constexpr auto glaze = object(
+struct glz::meta<sub_thing> {
+   static constexpr auto value = object(
       "a", &sub_thing::a, "Test comment 1",  //
       "b", [](auto&& v) -> auto& { return v.b; }, "Test comment 2"  //
    );
@@ -87,9 +87,9 @@ struct sub_thing2
 };
 
 template <>
-struct glaze::meta<sub_thing2> {
+struct glz::meta<sub_thing2> {
    using T = sub_thing2;
-   static constexpr auto glaze = glaze::object(
+   static constexpr auto value = object(
       "a", &T::a, "Test comment 1",    //
       "b", &T::b, "Test comment 2",    //
       "c", &T::c,                      //
@@ -109,8 +109,8 @@ struct V3
 };
 
 template <>
-struct glaze::meta<V3> {
-   static constexpr auto glaze = glaze::array(&V3::x, &V3::y, &V3::z);
+struct glz::meta<V3> {
+   static constexpr auto value = array(&V3::x, &V3::y, &V3::z);
 };
 
 struct Thing
@@ -137,9 +137,9 @@ struct Thing
 };
 
 template <>
-struct glaze::meta<Thing> {
+struct glz::meta<Thing> {
    using T = Thing;
-   static constexpr auto glaze = glaze::object(
+   static constexpr auto value = object(
       "thing",       &T::thing,                                     //
       "thing2array", &T::thing2array,                               //
       "vec3",        &T::vec3,                                      //
@@ -165,89 +165,89 @@ void basic_types() {
 
    "double write"_test = [] {
       std::string buffer{};
-      glaze::write_json(3.14, buffer);
+      glz::write_json(3.14, buffer);
       expect(buffer == "3.14");
       buffer.clear();
-      glaze::write_json(9.81, buffer);
+      glz::write_json(9.81, buffer);
       expect(buffer == "9.81");
       buffer.clear();
-      glaze::write_json(0.0, buffer);
+      glz::write_json(0.0, buffer);
       expect(buffer == "0");
       buffer.clear();
-      glaze::write_json(-0.0, buffer);
+      glz::write_json(-0.0, buffer);
       expect(buffer == "-0");
    };
 
    "double read valid"_test = [] {
       double num{};
-      glaze::read_json(num, "3.14");
+      glz::read_json(num, "3.14");
       expect(num == 3.14);
-      glaze::read_json(num, "9.81");
+      glz::read_json(num, "9.81");
       expect(num == 9.81);
-      glaze::read_json(num, "0");
+      glz::read_json(num, "0");
       expect(num == 0);
-      glaze::read_json(num, "-0");
+      glz::read_json(num, "-0");
       expect(num == -0);
    };
 
    "int write"_test = [] {
       std::string buffer{};
-      glaze::write_json(0, buffer);
+      glz::write_json(0, buffer);
       expect(buffer == "0");
       buffer.clear();
-      glaze::write_json(999, buffer);
+      glz::write_json(999, buffer);
       expect(buffer == "999");
       buffer.clear();
-      glaze::write_json(-6, buffer);
+      glz::write_json(-6, buffer);
       expect(buffer == "-6");
       buffer.clear();
-      glaze::write_json(10000, buffer);
+      glz::write_json(10000, buffer);
       expect(buffer == "10000");
    };
 
    "int read valid"_test = [] {
       int num{};
-      glaze::read_json(num, "-1");
+      glz::read_json(num, "-1");
       expect(num == -1);
-      glaze::read_json(num, "0");
+      glz::read_json(num, "0");
       expect(num == 0);
-      glaze::read_json(num, "999");
+      glz::read_json(num, "999");
       expect(num == 999);
-      glaze::read_json(num, "1e4");
+      glz::read_json(num, "1e4");
       expect(num == 10000);
    };
 
    "bool write"_test = [] {
       std::string buffer{};
-      glaze::write_json(true, buffer);
+      glz::write_json(true, buffer);
       expect(buffer == "true");
       buffer.clear();
-      glaze::write_json(false, buffer);
+      glz::write_json(false, buffer);
       expect(buffer == "false");
    };
 
    "bool read valid"_test = [] {
       bool val{};
-      glaze::read_json(val, "true");
+      glz::read_json(val, "true");
       expect(val == true);
-      glaze::read_json(val, "false");
+      glz::read_json(val, "false");
       expect(val == false);
    };
 
    "string write"_test = [] {
       std::string buffer{};
-      glaze::write_json("fish", buffer);
+      glz::write_json("fish", buffer);
       expect(buffer == "\"fish\"");
       buffer.clear();
-      glaze::write_json("as\"df\\ghjkl", buffer);
+      glz::write_json("as\"df\\ghjkl", buffer);
       expect(buffer == "\"as\\\"df\\\\ghjkl\"");
    };
 
    "bool read valid"_test = [] {
       std::string val{};
-      glaze::read_json(val, "\"fish\"");
+      glz::read_json(val, "\"fish\"");
       expect(val == "fish");
-      glaze::read_json(val, "\"as\\\"df\\\\ghjkl\"");
+      glz::read_json(val, "\"as\\\"df\\\\ghjkl\"");
       expect(val == "as\"df\\ghjkl");
    };
 }
@@ -259,8 +259,8 @@ void container_types() {
       for (auto& item : vec) item = rand();
       std::string buffer{};
       std::vector<int> vec2{};
-      glaze::write_json(vec, buffer);
-      glaze::read_json(vec2, buffer);
+      glz::write_json(vec, buffer);
+      glz::read_json(vec2, buffer);
       expect(vec == vec2);
    };
    "vector double roundtrip"_test = [] {
@@ -268,8 +268,8 @@ void container_types() {
       for (auto& item : vec) item = rand() / (1.0 + rand());
       std::string buffer{};
       std::vector<double> vec2{};
-      glaze::write_json(vec, buffer);
-      glaze::read_json(vec2, buffer);
+      glz::write_json(vec, buffer);
+      glz::read_json(vec2, buffer);
       expect(vec == vec2);
    };
    "vector bool roundtrip"_test = [] {
@@ -277,8 +277,8 @@ void container_types() {
       for (auto&& item : vec) item = rand() / (1.0 + rand());
       std::string buffer{};
       std::vector<bool> vec2{};
-      glaze::write_json(vec, buffer);
-      glaze::read_json(vec2, buffer);
+      glz::write_json(vec, buffer);
+      glz::read_json(vec2, buffer);
       expect(vec == vec2);
    };
    "deque roundtrip"_test = [] {
@@ -286,8 +286,8 @@ void container_types() {
       for (auto& item : deq) item = rand();
       std::string buffer{};
       std::vector<int> deq2{};
-      glaze::write_json(deq, buffer);
-      glaze::read_json(deq2, buffer);
+      glz::write_json(deq, buffer);
+      glz::read_json(deq2, buffer);
       expect(deq == deq2);
    };
    "list roundtrip"_test = [] {
@@ -295,8 +295,8 @@ void container_types() {
       for (auto& item : lis) item = rand();
       std::string buffer{};
       std::list<int> lis2{};
-      glaze::write_json(lis, buffer);
-      glaze::read_json(lis2, buffer);
+      glz::write_json(lis, buffer);
+      glz::read_json(lis2, buffer);
       expect(lis == lis2);
    };
    "forward_list roundtrip"_test = [] {
@@ -304,8 +304,8 @@ void container_types() {
       for (auto& item : lis) item = rand();
       std::string buffer{};
       std::forward_list<int> lis2{};
-      glaze::write_json(lis, buffer);
-      glaze::read_json(lis2, buffer);
+      glz::write_json(lis, buffer);
+      glz::read_json(lis2, buffer);
       expect(lis == lis2);
    };
    "map string keys roundtrip"_test = [] {
@@ -318,8 +318,8 @@ void container_types() {
       }
       std::string buffer{};
       std::map<std::string, int> map2{};
-      glaze::write_json(map, buffer);
-      glaze::read_json(map2, buffer);
+      glz::write_json(map, buffer);
+      glz::read_json(map2, buffer);
       //expect(map == map2);
       for (auto& it : map) {
          expect(map2[it.first] == it.second);
@@ -332,8 +332,8 @@ void container_types() {
       }
       std::string buffer{};
       std::map<int, int> map2{};
-      glaze::write_json(map, buffer);
-      glaze::read_json(map2, buffer);
+      glz::write_json(map, buffer);
+      glz::read_json(map2, buffer);
       //expect(map == map2);
       for (auto& it : map) {
          expect(map2[it.first] == it.second);
@@ -346,8 +346,8 @@ void container_types() {
       }
       std::string buffer{};
       std::unordered_map<int, int> map2{};
-      glaze::write_json(map, buffer);
-      glaze::read_json(map2, buffer);
+      glz::write_json(map, buffer);
+      glz::read_json(map2, buffer);
       // expect(map == map2);
       for (auto& it : map) {
          expect(map2[it.first] == it.second);
@@ -357,8 +357,8 @@ void container_types() {
       auto tuple = std::make_tuple(3, 2.7, std::string("curry"));
       decltype(tuple) tuple2{};
       std::string buffer{};
-      glaze::write_json(tuple, buffer);
-      glaze::read_json(tuple2, buffer);
+      glz::write_json(tuple, buffer);
+      glz::read_json(tuple2, buffer);
       expect(tuple == tuple2);
    };
 }
@@ -368,55 +368,55 @@ void nullable_types() {
    "optional"_test = [] {
       std::optional<int> oint{};
       std::string buffer{};
-      glaze::write_json(oint, buffer);
+      glz::write_json(oint, buffer);
       expect(buffer == "null");
 
-      glaze::read_json(oint, "5");
+      glz::read_json(oint, "5");
       expect(bool(oint) && *oint == 5);
       buffer.clear();
-      glaze::write_json(oint, buffer);
+      glz::write_json(oint, buffer);
       expect(buffer == "5");
 
-      glaze::read_json(oint, "null");
+      glz::read_json(oint, "null");
       expect(!bool(oint));
       buffer.clear();
-      glaze::write_json(oint, buffer);
+      glz::write_json(oint, buffer);
       expect(buffer == "null");
    };
    "shared_ptr"_test = [] {
       std::shared_ptr<int> oint{};
       std::string buffer{};
-      glaze::write_json(oint, buffer);
+      glz::write_json(oint, buffer);
       expect(buffer == "null");
 
-      glaze::read_json(oint, "5");
+      glz::read_json(oint, "5");
       expect(bool(oint) && *oint == 5);
       buffer.clear();
-      glaze::write_json(oint, buffer);
+      glz::write_json(oint, buffer);
       expect(buffer == "5");
 
-      glaze::read_json(oint, "null");
+      glz::read_json(oint, "null");
       expect(!bool(oint));
       buffer.clear();
-      glaze::write_json(oint, buffer);
+      glz::write_json(oint, buffer);
       expect(buffer == "null");
    };
    "unique_ptr"_test = [] {
       std::unique_ptr<int> oint{};
       std::string buffer{};
-      glaze::write_json(oint, buffer);
+      glz::write_json(oint, buffer);
       expect(buffer == "null");
 
-      glaze::read_json(oint, "5");
+      glz::read_json(oint, "5");
       expect(bool(oint) && *oint == 5);
       buffer.clear();
-      glaze::write_json(oint, buffer);
+      glz::write_json(oint, buffer);
       expect(buffer == "5");
 
-      glaze::read_json(oint, "null");
+      glz::read_json(oint, "null");
       expect(!bool(oint));
       buffer.clear();
-      glaze::write_json(oint, buffer);
+      glz::write_json(oint, buffer);
       expect(buffer == "null");
    };
 }
@@ -427,26 +427,26 @@ void user_types() {
    "user array"_test = [] {
       V3 v3{9.1, 7.2, 1.9};
       std::string buffer{};
-      glaze::write_json(v3, buffer);
+      glz::write_json(v3, buffer);
       expect(buffer == "[9.1,7.2,1.9]");
 
-      glaze::read_json(v3, "[42.1,99.2,55.3]");
+      glz::read_json(v3, "[42.1,99.2,55.3]");
       expect(v3.x == 42.1 && v3.y == 99.2 && v3.z == 55.3);
    };
 
    "simple user obect"_test = [] {
       sub_thing obj{.a = 77.2, .b = "not a lizard"};
       std::string buffer{};
-      glaze::write_json(obj, buffer);
+      glz::write_json(obj, buffer);
       expect(buffer == "{\"a\":77.2,\"b\":\"not a lizard\"}");
 
-      glaze::read_json(obj, "{\"a\":999,\"b\":\"a boat of goldfish\"}");
+      glz::read_json(obj, "{\"a\":999,\"b\":\"a boat of goldfish\"}");
       expect(obj.a == 999.0 && obj.b == "a boat of goldfish");
 
       //Should skip invalid keys
       expect(nothrow([&] {
          //glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
-         glaze::read_json(obj,
+         glz::read_json(obj,
                           R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
    /**/, "a":322})");
       }));
@@ -456,14 +456,14 @@ void user_types() {
    "complex user obect"_test = [] {
       Thing obj{};
       std::string buffer{};
-      glaze::write_json(obj, buffer);
+      glz::write_json(obj, buffer);
       expect(buffer == R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})");
-      expect(nothrow([&] { glaze::read_json(obj, buffer); }));
+      expect(nothrow([&] { glz::read_json(obj, buffer); }));
 
       buffer.clear();
-      glaze::write_jsonc(obj, buffer);
+      glz::write_jsonc(obj, buffer);
       expect(buffer == R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2/*double is the best type*/,"b":false,"c":"W","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/}})");
-      expect(nothrow([&] { glaze::read_json(obj, buffer); }));
+      expect(nothrow([&] { glz::read_json(obj, buffer); }));
    };
 }
 
@@ -473,40 +473,40 @@ void json_pointer() {
    "seek"_test = [] {
       Thing thing{};
       std::any a{};
-      glaze::seek([&](auto&& val) { a = val; }, thing, "/thing_ptr/a");
+      glz::seek([&](auto&& val) { a = val; }, thing, "/thing_ptr/a");
       expect(a.has_value() && a.type() == typeid(double) &&
              std::any_cast<double>(a) == thing.thing_ptr->a);
    };
 
    "get"_test = [] {
       Thing thing{};
-      expect(thing.thing.a == glaze::get<double>(thing, "/thing_ptr/a"));
-      expect(&thing.map["f"] == glaze::get_if<int>(thing, "/map/f"));
-      expect(&thing.vector == glaze::get_if<std::vector<V3>>(thing, "/vector"));
-      expect(&thing.vector[1] == glaze::get_if<V3>(thing, "/vector/1"));
-      expect(thing.vector[1].x == glaze::get<double>(thing, "/vector/1/0"));
-      expect(thing.thing_ptr == glaze::get<sub_thing*>(thing, "/thing_ptr"));
+      expect(thing.thing.a == glz::get<double>(thing, "/thing_ptr/a"));
+      expect(&thing.map["f"] == glz::get_if<int>(thing, "/map/f"));
+      expect(&thing.vector == glz::get_if<std::vector<V3>>(thing, "/vector"));
+      expect(&thing.vector[1] == glz::get_if<V3>(thing, "/vector/1"));
+      expect(thing.vector[1].x == glz::get<double>(thing, "/vector/1/0"));
+      expect(thing.thing_ptr == glz::get<sub_thing*>(thing, "/thing_ptr"));
 
       //Invalid lookup
-      expect(throws([&] { glaze::get<char>(thing, "/thing_ptr/a"); }));
-      expect(nothrow([&] { glaze::get_if<char>(thing, "/thing_ptr/a"); }));
-      expect(throws([&] { glaze::get<double>(thing, "/thing_ptr/c"); }));
-      expect(nothrow([&] { glaze::get_if<double>(thing, "/thing_ptr/c"); }));
+      expect(throws([&] { glz::get<char>(thing, "/thing_ptr/a"); }));
+      expect(nothrow([&] { glz::get_if<char>(thing, "/thing_ptr/a"); }));
+      expect(throws([&] { glz::get<double>(thing, "/thing_ptr/c"); }));
+      expect(nothrow([&] { glz::get_if<double>(thing, "/thing_ptr/c"); }));
    };
 
    "set"_test = [] {
       Thing thing{};
-      glaze::set(thing, "/thing_ptr/a", 42.0);
-      glaze::set(thing, "/thing_ptr/b", "Value was set.");
+      glz::set(thing, "/thing_ptr/a", 42.0);
+      glz::set(thing, "/thing_ptr/b", "Value was set.");
       expect(thing.thing_ptr->a == 42.0);
       expect(thing.thing_ptr->b == "Value was set.");
    };
 
    "set tuple"_test = [] {
       auto tuple = std::make_tuple(3, 2.7, std::string("curry"));
-      glaze::set(tuple, "/0", 5);
-      glaze::set(tuple, "/1", 42.0);
-      glaze::set(tuple, "/2", "fish");
+      glz::set(tuple, "/0", 5);
+      glz::set(tuple, "/1", 42.0);
+      glz::set(tuple, "/2", "fish");
       expect(std::get<0>(tuple) == 5.0);
       expect(std::get<1>(tuple) == 42.0);
       expect(std::get<2>(tuple) == "fish");
@@ -514,11 +514,11 @@ void json_pointer() {
 
    "overwrite"_test = [] {
       Thing thing{};
-      glaze::write_from(thing, "/vec3", "[7.6, 1292.1, 0.333]");
+      glz::write_from(thing, "/vec3", "[7.6, 1292.1, 0.333]");
       expect(thing.vec3.x == 7.6 && thing.vec3.y == 1292.1 &&
              thing.vec3.z == 0.333);
 
-      glaze::write_from(thing, "/vec3/2", "999.9");
+      glz::write_from(thing, "/vec3/2", "999.9");
       expect(thing.vec3.z == 999.9);
    };
 }
@@ -536,7 +536,7 @@ void early_end()
       {
          buffer = buffer.substr(0, buffer.size() - 1);
          // This is mainly to check if all our end checks are in place. In debug mode it should check if we try to read past the end and abort.
-         expect(throws([&] { glaze::read_json(obj, buffer); }));
+         expect(throws([&] { glz::read_json(obj, buffer); }));
       }
    };
 }
@@ -554,12 +554,12 @@ void bench()
       Thing thing{};
 
       std::string buffer;
-      glaze::write_json(thing, buffer);
+      glz::write_json(thing, buffer);
 
       auto tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
          buffer.clear();
-         glaze::write_json(thing, buffer);
+         glz::write_json(thing, buffer);
       }
       auto tend = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(
@@ -572,7 +572,7 @@ void bench()
 
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
-         glaze::read_json(thing, buffer);
+         glz::read_json(thing, buffer);
       }
       tend = std::chrono::high_resolution_clock::now();
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(
@@ -584,7 +584,7 @@ void bench()
 
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
-         glaze::get<std::string>(thing, "/thing_ptr/b");
+         glz::get<std::string>(thing, "/thing_ptr/b");
       }
       tend = std::chrono::high_resolution_clock::now();
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(
@@ -608,17 +608,17 @@ struct oob
 };
 
 template <>
-struct glaze::meta<v3>
+struct glz::meta<v3>
 {
-   static constexpr auto glaze = glaze::array(&v3::x, &v3::y, &v3::z);
+   static constexpr auto value = array(&v3::x, &v3::y, &v3::z);
 };
 
-static_assert(glaze::is_specialization_v<std::decay_t<decltype(glaze::meta<v3>::glaze)>, glaze::detail::Array>, "");
+static_assert(glz::is_specialization_v<std::decay_t<decltype(glz::meta<v3>::value)>, glz::detail::Array>, "");
 
 template <>
-struct glaze::meta<oob>
+struct glz::meta<oob>
 {
-  static constexpr auto glaze = glaze::object("v", &oob::v, "n", &oob::n);
+  static constexpr auto value = object("v", &oob::v, "n", &oob::n);
 };
 
 void read_tests() {
@@ -628,7 +628,7 @@ void read_tests() {
       std::stringstream ss{};
       ss << "3958713";
       int i{};
-      glaze::read_json(i, ss);
+      glz::read_json(i, ss);
       expect(i == 3958713);
    };
    
@@ -636,20 +636,20 @@ void read_tests() {
       {
          std::string s = "0.96875";
          float f{};
-         glaze::read_json(f, s);
+         glz::read_json(f, s);
          expect(f == 0.96875f);
       }
       {
          std::string s = "0.96875";
          double f{};
-         glaze::read_json(f, s);
+         glz::read_json(f, s);
          expect(f == 0.96875);
       }
       {
          std::string str = "0.96875";
          std::deque<char> s(str.begin(), str.end());
          double f{};
-         glaze::read_json(f, s);
+         glz::read_json(f, s);
          expect(f == 0.96875);
       }
       {
@@ -665,7 +665,7 @@ void read_tests() {
       {
          std::string s = "true";
          bool v;
-         glaze::read_json(v, s);
+         glz::read_json(v, s);
          expect(v);
       }
 //*   // TODO add escaped char support for unicode
@@ -686,49 +686,49 @@ void read_tests() {
       {
          std::string s = "1";
          short v;
-         glaze::read_json(v, s);
+         glz::read_json(v, s);
          expect(v == 1);
       }
       {
          std::string s = "1";
          int v;
-         glaze::read_json(v, s);
+         glz::read_json(v, s);
          expect(v == 1);
       }
       {
          std::string s = "1";
          long v;
-         glaze::read_json(v, s);
+         glz::read_json(v, s);
          expect(v == 1);
       }
       {
          std::string s = "1";
          long long v;
-         glaze::read_json(v, s);
+         glz::read_json(v, s);
          expect(v == 1);
       }
       {
          std::string s = "1";
          unsigned short v;
-         glaze::read_json(v, s);
+         glz::read_json(v, s);
          expect(v == 1);
       }
       {
          std::string s = "1";
          unsigned int v;
-         glaze::read_json(v, s);
+         glz::read_json(v, s);
          expect(v == 1);
       }
       {
          std::string s = "1";
          unsigned long v;
-         glaze::read_json(v, s);
+         glz::read_json(v, s);
          expect(v == 1);
       }
       {
          std::string s = "1";
          unsigned long long v;
-         glaze::read_json(v, s);
+         glz::read_json(v, s);
          expect(v == 1);
       }
    };
@@ -736,7 +736,7 @@ void read_tests() {
    "multiple int from double text"_test = [] {
       std::vector<int> v;
       std::string buffer = "[1.66, 3.24, 5.555]";
-      expect(nothrow([&] { glaze::read_json(v, buffer); }));
+      expect(nothrow([&] { glz::read_json(v, buffer); }));
       expect(v.size() == 3);
       expect(v[0] == 1);
       expect(v[1] == 3);
@@ -747,7 +747,7 @@ void read_tests() {
       {
          std::string b = "1/*a comment*/00";
          int a{};
-         glaze::read_json(a, b);
+         glz::read_json(a, b);
 //*      fails test
          //expect(a == 100);
       }
@@ -755,7 +755,7 @@ void read_tests() {
          std::string b = R"([100, // a comment
 20])";
          std::vector<int> a{};
-         glaze::read_json(a, b);
+         glz::read_json(a, b);
          expect(a[0] == 100);
          expect(a[1] == 20);
       }
@@ -765,14 +765,14 @@ void read_tests() {
       std::string err;
       {
          char b;
-         expect(throws([&] { glaze::read_json(b, err); }));
+         expect(throws([&] { glz::read_json(b, err); }));
       }
    };
 
    "Read array type"_test = [] {
       std::string in = "    [ 3.25 , 1.125 , 3.0625 ]   ";
       v3 v{};
-      glaze::read_json(v, in);
+      glz::read_json(v, in);
 
       expect(v.x == 3.25);
       expect(v.y == 1.125);
@@ -784,7 +784,7 @@ void read_tests() {
          std::string in = "    [ 3.25 , null , 3.125 ]   ";
          v3 v{};
 
-         expect(throws([&] { glaze::read_json(v, in); }));
+         expect(throws([&] { glz::read_json(v, in); }));
       }
  //*  // missing charictar bug?
       {
@@ -802,7 +802,7 @@ void read_tests() {
       std::string in =
          R"(    { "v" :  [ 3.25 , 1.125 , 3.0625 ]   , "n" : 5 } )";
       oob oob{};
-      glaze::read_json(oob, in);
+      glz::read_json(oob, in);
 
       expect(oob.v.x == 3.25);
       expect(oob.v.y == 1.125);
@@ -815,14 +815,14 @@ void read_tests() {
          R"(    { "v" :  [ 3.25 , null , 3.0625 ]   , "n" : null } )";
       oob oob{};
 
-      expect(throws([&] { glaze::read_json(oob, in); }));
+      expect(throws([&] { glz::read_json(oob, in); }));
    };
 
    "Reversed object"_test = [] {
       std::string in =
          R"(    {  "n" : 5   ,  "v" :  [ 3.25 , 1.125 , 3.0625 ] } )";
       oob oob{};
-      glaze::read_json(oob, in);
+      glz::read_json(oob, in);
 
       expect(oob.v.x == 3.25);
       expect(oob.v.y == 1.125);
@@ -833,7 +833,7 @@ void read_tests() {
    "Read list"_test = [] {
       std::string in = "[1, 2, 3, 4]";
       std::list<int> l, lr{1, 2, 3, 4};
-      glaze::read_json(l, in);
+      glz::read_json(l, in);
 
       expect(l == lr);
    };
@@ -841,7 +841,7 @@ void read_tests() {
    "Read forward list"_test = [] {
       std::string in = "[1, 2, 3, 4]";
       std::forward_list<int> l, lr{1, 2, 3, 4};
-      glaze::read_json(l, in);
+      glz::read_json(l, in);
 
       expect(l == lr);
    };
@@ -850,14 +850,14 @@ void read_tests() {
       {
          std::string in = "[1, 2, 3, 4]";
          std::deque<int> l, lr{1, 2, 3, 4};
-         glaze::read_json(l, in);
+         glz::read_json(l, in);
 
          expect(l == lr);
       }
       {
          std::string in = "[1, 2, 3, 4]";
          std::deque<int> l{8, 9}, lr{1, 2, 3, 4};
-         glaze::read_json(l, in);
+         glz::read_json(l, in);
 
          expect(l == lr);
       }
@@ -867,7 +867,7 @@ void read_tests() {
       const std::string s = "[1, 2, 3, 4, 5, 6]";
       const std::vector<int> v{1, 2, 3, 4, 5, 6};
       std::vector<int> vr;
-      glaze::read_json(vr, s);
+      glz::read_json(vr, s);
       expect(vr == v);
    };
 
@@ -876,9 +876,9 @@ void read_tests() {
          std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
          std::array<int, 7> v1{}, v2{99}, v3{99, 99, 99, 99, 99},
             vr{1, 5, 232, 75, 123, 54, 89};
-         glaze::read_json(v1, in);
-         glaze::read_json(v2, in);
-         glaze::read_json(v3, in);
+         glz::read_json(v1, in);
+         glz::read_json(v2, in);
+         glz::read_json(v3, in);
          expect(v1 == vr);
          expect(v2 == vr);
          expect(v3 == vr);
@@ -889,21 +889,21 @@ void read_tests() {
       {
          std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
          std::vector<int> v, vr{1, 5, 232, 75, 123, 54, 89};
-         glaze::read_json(v, in);
+         glz::read_json(v, in);
 
          expect(v == vr);
       }
       {
          std::string in = R"([true, false, true, false])";
          std::vector<bool> v, vr{true, false, true, false};
-         glaze::read_json(v, in);
+         glz::read_json(v, in);
 
          expect(v == vr);
       }
       {
          std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
          std::vector<int> v{1, 2, 3, 4}, vr{1, 5, 232, 75, 123, 54, 89};
-         glaze::read_json(v, in);
+         glz::read_json(v, in);
 
          expect(v == vr);
       }
@@ -911,7 +911,7 @@ void read_tests() {
          std::string in = R"(    [1, 5, 232, 75, 123, 54, 89] )";
          std::vector<int> v{1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
             vr{1, 5, 232, 75, 123, 54, 89};
-         glaze::read_json(v, in);
+         glz::read_json(v, in);
 
          expect(v == vr);
       }
@@ -921,7 +921,7 @@ void read_tests() {
       std::string in = R"(    [1, 5, 232, 75, null, 54, 89] )";
       std::vector<int> v, vr{1, 5, 232, 75, 0, 54, 89};
       
-      expect(throws([&] { glaze::read_json(v, in); }));
+      expect(throws([&] { glz::read_json(v, in); }));
    };
 
 //*  ISSUE UT cannot run this test
@@ -929,7 +929,7 @@ void read_tests() {
       {
          std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
          std::map<std::string, int> v, vr{{"as", 1}, {"so", 2}, {"make", 3}};
-         glaze::read_json(v, in);
+         glz::read_json(v, in);
 
          //expect(v == vr);
       }
@@ -937,7 +937,7 @@ void read_tests() {
          std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
          std::map<std::string, int> v{{"as", -1}, {"make", 10000}},
             vr{{"as", 1}, {"so", 2}, {"make", 3}};
-         glaze::read_json(v, in);
+         glz::read_json(v, in);
 
          //expect(v == vr);
       }
@@ -947,21 +947,21 @@ void read_tests() {
       std::string in = R"(   { "as" : 1, "so" : null, "make" : 3 } )";
       std::map<std::string, int> v, vr{{"as", 1}, {"so", 0}, {"make", 3}};
 
-      expect(throws([&] { glaze::read_json(v, in); }));
+      expect(throws([&] { glz::read_json(v, in); }));
    };
 
    "Read boolean"_test = [] {
       {
          std::string in = R"(true)";
          bool res{};
-         glaze::read_json(res, in);
+         glz::read_json(res, in);
 
          expect(res == true);
       }
       {
          std::string in = R"(false)";
          bool res{true};
-         glaze::read_json(res, in);
+         glz::read_json(res, in);
 
          expect(res == false);
       }
@@ -969,7 +969,7 @@ void read_tests() {
          std::string in = R"(null)";
          bool res{false};
          
-         expect(throws([&] {glaze::read_json(res, in); }));
+         expect(throws([&] {glz::read_json(res, in); }));
       }
    };
 
@@ -977,7 +977,7 @@ void read_tests() {
       {
          std::string in = R"(-1224125asdasf)";
          int res{};
-         glaze::read_json(res, in);
+         glz::read_json(res, in);
 
          expect(res == -1224125);
       }
@@ -985,7 +985,7 @@ void read_tests() {
          std::string in = R"(null)";
          int res{};
          
-         expect(throws([&] { glaze::read_json(res, in); }));
+         expect(throws([&] { glz::read_json(res, in); }));
       }
    };
 
@@ -993,106 +993,106 @@ void read_tests() {
       {
          std::string in = R"(0.072265625flkka)";
          double res{};
-         glaze::read_json(res, in);
+         glz::read_json(res, in);
          expect(res == 0.072265625);
       }
       {
          std::string in = R"(1e5das)";
          double res{};
-         glaze::read_json(res, in);
+         glz::read_json(res, in);
          expect(res == 1e5);
       }
       {
          std::string in = R"(-0)";
          double res{};
-         glaze::read_json(res, in);
+         glz::read_json(res, in);
          expect(res == -0.0);
       }
       {
          std::string in = R"(0e5)";
          double res{};
-         glaze::read_json(res, in);
+         glz::read_json(res, in);
          expect(res == 0.0);
       }
       {
          std::string in = R"(0)";
          double res{};
-         glaze::read_json(res, in);
+         glz::read_json(res, in);
          expect(res == 0.0);
       }
       {
          std::string in = R"(11)";
          double res{};
-         glaze::read_json(res, in);
+         glz::read_json(res, in);
          expect(res == 11.0);
       }
       {
          std::string in = R"(0a)";
          double res{};
-         glaze::read_json(res, in);
+         glz::read_json(res, in);
          expect(res == 0.0);
       }
       {
          std::string in = R"(11.0)";
          double res{};
-         glaze::read_json(res, in);
+         glz::read_json(res, in);
          expect(res == 11.0);
       }
       {
          std::string in = R"(11e5)";
          double res{};
-         glaze::read_json(res, in);
+         glz::read_json(res, in);
          expect(res == 11.0e5);
       }
       {
          std::string in = R"(null)";
          double res{};
          
-         expect(throws([&] {glaze::read_json(res, in); }));
+         expect(throws([&] {glz::read_json(res, in); }));
       }
       {
          std::string res = R"(success)";
          double d;
-         expect(throws([&] {glaze::read_json(d, res); }));
+         expect(throws([&] {glz::read_json(d, res); }));
       }
       {
          std::string res = R"(-success)";
          double d;
-         expect(throws([&] {glaze::read_json(d, res); }));
+         expect(throws([&] {glz::read_json(d, res); }));
       }
       {
          std::string res = R"(1.a)";
          double d;
          
-         expect(nothrow([&] {glaze::read_json(d, res); }));
+         expect(nothrow([&] {glz::read_json(d, res); }));
       }
       {
          std::string res = R"()";
          double d;
-         expect(throws([&] {glaze::read_json(d, res); }));
+         expect(throws([&] {glz::read_json(d, res); }));
       }
       {
          std::string res = R"(-)";
          double d;
-         expect(throws([&] {glaze::read_json(d, res); }));
+         expect(throws([&] {glz::read_json(d, res); }));
       }
       {
          std::string res = R"(1.)";
          double d;
 
-         expect(nothrow([&] { glaze::read_json(d, res); }));
+         expect(nothrow([&] { glz::read_json(d, res); }));
       }
       {
          std::string res = R"(1.0e)";
          double d;
 
-         expect(nothrow([&] { glaze::read_json(d, res); }));
+         expect(nothrow([&] { glz::read_json(d, res); }));
       }
       {
          std::string res = R"(1.0e-)";
          double d;
 
-         expect(nothrow([&] { glaze::read_json(d, res); }));
+         expect(nothrow([&] { glz::read_json(d, res); }));
       }
    };
 
@@ -1100,7 +1100,7 @@ void read_tests() {
       std::string in =
          R"("asljl{}121231212441[]123::,,;,;,,::,Q~123\a13dqwdwqwq")";
       std::string res{};
-      glaze::read_json(res, in);
+      glz::read_json(res, in);
 //*   function fails, does not recognize '\'
       //expect(res == "asljl{}121231212441[]123::,,;,;,,::,Q~123\\a13dqwdwqwq");
    };
@@ -1110,7 +1110,7 @@ void read_tests() {
       std::string buf =
          R"([[1.000000,0.000000,3.000000],[2.000000,0.000000,0.000000]])";
 
-      glaze::read_json(v, buf);
+      glz::read_json(v, buf);
       expect(v[0].x == 1.0);
       expect(v[0].z == 3.0);
       expect(v[1].x == 2.0);
@@ -1121,7 +1121,7 @@ void read_tests() {
       std::string buf =
          R"({"1":[4.000000,0.000000,0.000000],"2":[5.000000,0.000000,0.000000]})";
 
-      glaze::read_json(m, buf);
+      glz::read_json(m, buf);
       expect(m["1"].x == 4.0);
       expect(m["2"].x == 5.0);
    };
@@ -1144,7 +1144,7 @@ void read_tests() {
       std::string buf =
          R"({"1":[4.000000,0.000000,0.000000],"2":[5.000000,0.000000,0.000000,4.000000]})";
 
-      glaze::read_json(m, buf);
+      glz::read_json(m, buf);
       expect(m[1][0] == 4.0);
       expect(m[2][0] == 5.0);
       expect(m[2][3] == 4.0);
@@ -1185,34 +1185,34 @@ struct Named
 };
 
 template <>
-struct glaze::meta<ThreeODetic>
+struct glz::meta<ThreeODetic>
 {
    using t = ThreeODetic;
-   static constexpr auto glaze = glaze::array("geo", &t::g1, "int", &t::x1);
+   static constexpr auto value = array("geo", &t::g1, "int", &t::x1);
 };
 
 template <>
-struct glaze::meta<NineODetic>
+struct glz::meta<NineODetic>
 {
    using n = NineODetic;
-   static constexpr auto glaze = glaze::array(&n::t1, &n::g1);
+   static constexpr auto value = array(&n::t1, &n::g1);
 };
 
 template <>
-struct glaze::meta<Named>
+struct glz::meta<Named>
 {
    using n = Named;
    static constexpr auto glaze =
-      glaze::object("name", &n::name, "value", &n::value);
+      glz::object("name", &n::name, "value", &n::value);
 };
 
 struct EmptyArray
 {};
 
 template <>
-struct glaze::meta<EmptyArray>
+struct glz::meta<EmptyArray>
 {
-   static constexpr auto glaze = glaze::array();
+   static constexpr auto value = array();
 };
 
 struct EmptyObject
@@ -1220,9 +1220,9 @@ struct EmptyObject
 
 //* Empty object not allowed
 template <>
-struct glaze::meta<EmptyObject>
+struct glz::meta<EmptyObject>
 {
-   static constexpr auto glaze = glaze::object();
+   static constexpr auto value = object();
 };
 
 void write_tests() {
@@ -1232,19 +1232,19 @@ void write_tests() {
       {
          std::string s;
          float f{0.96875f};
-         glaze::write_json(f, s);
+         glz::write_json(f, s);
          expect(s == "0.96875");
       }
       {
          std::string s;
          double f{0.96875};
-         glaze::write_json(f, s);
+         glz::write_json(f, s);
          expect(s == "0.96875");
       }
       {
          std::string s;
          long double f{0.96875L};
-         glaze::write_json(f, s);
+         glz::write_json(f, s);
          expect(s == "0.96875");
       }
    };
@@ -1253,70 +1253,70 @@ void write_tests() {
       {
          std::string s;
          bool v{1};
-         glaze::write_json(v, s);
+         glz::write_json(v, s);
          expect(s == "true");
       }
 //* Two test below fail, unless changed to the following:
       {
          std::string s;
          char v{'a'};
-         glaze::write_json(v, s);
+         glz::write_json(v, s);
          //Is this what we want instead?
          expect(s == R"("a")");  // std::to_string(static_cast<int>('a')));
       }
       {
          std::string s;
          wchar_t v{'a'};
-         glaze::write_json(v, s); //This line gives warning about converting wchar to char, is that fine? Should we write a to_buffer template to handle type wchar?
+         glz::write_json(v, s); //This line gives warning about converting wchar to char, is that fine? Should we write a to_buffer template to handle type wchar?
          // Is the below what we actually expect?
          expect(s == R"("a")");  // std::to_string(static_cast<int>('a')));
       }
       {
          std::string s;
          short v{1};
-         glaze::write_json(v, s);
+         glz::write_json(v, s);
          expect(s == "1");
       }
       {
          std::string s;
          int v{1};
-         glaze::write_json(v, s);
+         glz::write_json(v, s);
          expect(s == "1");
       }
       {
          std::string s;
          long v{1};
-         glaze::write_json(v, s);
+         glz::write_json(v, s);
          expect(s == "1");
       }
       {
          std::string s;
          long long v{1};
-         glaze::write_json(v, s);
+         glz::write_json(v, s);
          expect(s == "1");
       }
       {
          std::string s;
          unsigned short v{1};
-         glaze::write_json(v, s);
+         glz::write_json(v, s);
          expect(s == "1");
       }
       {
          std::string s;
          unsigned int v{1};
-         glaze::write_json(v, s);
+         glz::write_json(v, s);
          expect(s == "1");
       }
       {
          std::string s;
          unsigned long v{1};
-         glaze::write_json(v, s);
+         glz::write_json(v, s);
          expect(s == "1");
       }
       {
          std::string s;
          unsigned long long v{1};
-         glaze::write_json(v, s);
+         glz::write_json(v, s);
          expect(s == "1");
       }
    };
@@ -1328,26 +1328,26 @@ void write_tests() {
       var = 1;
       auto i = std::get<0>(var);
       std::string ibuf;
-      glaze::write_json(i, ibuf);
+      glz::write_json(i, ibuf);
       expect(ibuf == R"(1)");
 
       var = 2.2;
       auto d = std::get<1>(var);
       std::string dbuf;
-      glaze::write_json(d, dbuf);
+      glz::write_json(d, dbuf);
       expect(dbuf == R"(2.2)");
 
       var = Geodetic{1.0, 2.0, 5.0};
       auto g = std::get<2>(var);
       std::string gbuf;
-      glaze::write_json(g, gbuf);
+      glz::write_json(g, gbuf);
       expect(gbuf == R"([1,2,5])");
    };
 
    "Write empty array structure"_test = [] {
       EmptyArray e;
       std::string buf;
-      glaze::write_json(e, buf);
+      glz::write_json(e, buf);
       expect(buf == R"([])");
    };
 
@@ -1355,7 +1355,7 @@ void write_tests() {
    "Write empty object structure"_test = [] {
       EmptyObject e;
       std::string buf;
-      glaze::write_json(e, buf);
+      glz::write_json(e, buf);
       //expect(buf == R"({})");
    };
 
@@ -1363,14 +1363,14 @@ void write_tests() {
       std::string s = "aasdf";
       char *c = s.data();
       std::string buf;
-      glaze::write_json(c, buf);
+      glz::write_json(c, buf);
       expect(buf == R"("aasdf")");
    };
 
    "Write constant double"_test = [] {
       const double d = 6.125;
       std::string buf;
-      glaze::write_json(d, buf);
+      glz::write_json(d, buf);
       expect(buf == R"(6.125)");
    };
 
@@ -1378,14 +1378,14 @@ void write_tests() {
       const bool b = true;
       ;
       std::string buf;
-      glaze::write_json(b, buf);
+      glz::write_json(b, buf);
       expect(buf == R"(true)");
    };
 
    "Write constant int"_test = [] {
       const int i = 505;
       std::string buf;
-      glaze::write_json(i, buf);
+      glz::write_json(i, buf);
       expect(buf == R"(505)");
    };
 
@@ -1393,14 +1393,14 @@ void write_tests() {
       {
          std::vector<double> v{1.1, 2.2, 3.3, 4.4};
          std::string s;
-         glaze::write_json(v, s);
+         glz::write_json(v, s);
 
          expect(s == "[1.1,2.2,3.3,4.4]");
       }
       {
          std::vector<bool> v{true, false, true, false};
          std::string s;
-         glaze::write_json(v, s);
+         glz::write_json(v, s);
 
          expect(s == "[true,false,true,false]");
       }
@@ -1409,7 +1409,7 @@ void write_tests() {
    "Write list"_test = [] {
       std::string in, inr = "[1,2,3,4]";
       std::list<int> l{1, 2, 3, 4};
-      glaze::write_json(l, in);
+      glz::write_json(l, in);
 
       expect(in == inr);
    };
@@ -1417,7 +1417,7 @@ void write_tests() {
    "Write forward list"_test = [] {
       std::string in, inr = "[1,2,3,4]";
       std::forward_list<int> l{1, 2, 3, 4};
-      glaze::write_json(l, in);
+      glz::write_json(l, in);
 
       expect(in == inr);
    };
@@ -1425,7 +1425,7 @@ void write_tests() {
    "Write deque"_test = [] {
       std::string in, inr = "[1,2,3,4]";
       std::deque<int> l{1, 2, 3, 4};
-      glaze::write_json(l, in);
+      glz::write_json(l, in);
 
       expect(in == inr);
    };
@@ -1433,7 +1433,7 @@ void write_tests() {
    "Write array"_test = [] {
       std::array<double, 4> v{1.1, 2.2, 3.3, 4.4};
       std::string s;
-      glaze::write_json(v, s);
+      glz::write_json(v, s);
 
       expect(s == "[1.1,2.2,3.3,4.4]");
    };
@@ -1441,7 +1441,7 @@ void write_tests() {
    "Write map"_test = [] {
       std::map<std::string, double> m{{"a", 2.2}, {"b", 11.111}, {"c", 211.2}};
       std::string s;
-      glaze::write_json(m, s);
+      glz::write_json(m, s);
 
       expect(s == R"({"a":2.2,"b":11.111,"c":211.2})");
    };
@@ -1449,7 +1449,7 @@ void write_tests() {
    "Write integer map"_test = [] {
       std::map<int, double> m{{3, 2.2}, {5, 211.2}, {7, 11.111}};
       std::string s;
-      glaze::write_json(m, s);
+      glz::write_json(m, s);
 
       expect(s == R"({"3":2.2,"5":211.2,"7":11.111})");
    };
@@ -1472,14 +1472,14 @@ void write_tests() {
       {
          bool b = true;
          std::string s;
-         glaze::write_json(b, s);
+         glz::write_json(b, s);
 
          expect(s == R"(true)");
       }
       {
          bool b = false;
          std::string s;
-         glaze::write_json(b, s);
+         glz::write_json(b, s);
 
          expect(s == R"(false)");
       }
@@ -1489,7 +1489,7 @@ void write_tests() {
       std::unordered_map<std::string, std::string> m;
       m["Hello"] = "World";
       std::string buf;
-      glaze::write_json(m, buf);
+      glz::write_json(m, buf);
 
       expect(buf == R"({"Hello":"World"})");
    };
@@ -1499,7 +1499,7 @@ void write_tests() {
       x["number"] = 5.55;
 
       std::string jx;
-      glaze::write_json(x, jx);
+      glz::write_json(x, jx);
 
       expect(jx == R"({"number":5.55})");
    };
@@ -1508,7 +1508,7 @@ void write_tests() {
       std::vector<Geodetic> v(2);
       std::string buf;
 
-      glaze::write_json(v, buf);
+      glz::write_json(v, buf);
       expect(buf == R"([[0,0,0],[0,0,0]])");
    };
 
@@ -1518,7 +1518,7 @@ void write_tests() {
       m["2"];
       std::string buf;
 
-      glaze::write_json(m, buf);
+      glz::write_json(m, buf);
       expect(buf == R"({"1":[0,0,0],"2":[0,0,0]})");
    };
 
@@ -1528,7 +1528,7 @@ void write_tests() {
       m["2"] = {5.0, 0.0, 0.0, 4.0};
       std::string buf;
 
-      glaze::write_json(m, buf);
+      glz::write_json(m, buf);
       expect(buf == R"({"1":[4,0,0],"2":[5,0,0,4]})");
    };
 }
@@ -1539,7 +1539,7 @@ suite error_outputs = [] {
       {
          std::string s = R"({"Hello":"World"x, "color": "red"})";
          std::map<std::string, std::string> m;
-         glaze::read_json(m, s);
+         glz::read_json(m, s);
       }
       catch (const std::exception& e) {
          expect(std::string(e.what()) ==
@@ -1557,23 +1557,23 @@ struct study_obj
 };
 
 template <>
-struct glaze::meta<study_obj>
+struct glz::meta<study_obj>
 {
    using T = study_obj;
-   static constexpr auto glaze = glaze::object("x", &T::x, "y", &T::y);
+   static constexpr auto value = object("x", &T::x, "y", &T::y);
 };
 
 void study_tests()
 {
    "study"_test = [] {
-      glaze::study::design design;
+      glz::study::design design;
       design.params = { { "/x", "linspace", { "0", "1", "10" } } };
       
-      glaze::study::full_factorial generator{ study_obj{}, design };
+      glz::study::full_factorial generator{ study_obj{}, design };
       
       std::vector<size_t> results;
       std::mutex mtx{};
-      glaze::study::run_study(generator, [&](const auto& point, [[maybe_unused]] const auto job_num){
+      glz::study::run_study(generator, [&](const auto& point, [[maybe_unused]] const auto job_num){
          std::unique_lock lock{mtx};
          results.emplace_back(point.x);
       });
@@ -1588,12 +1588,12 @@ void study_tests()
 suite progress_bar_tests = [] {
 
     "progress bar 30%"_test = [] {
-       glaze::progress_bar bar{.width = 12, .completed = 3, .total = 10, .time_taken = 30.0};
+       glz::progress_bar bar{.width = 12, .completed = 3, .total = 10, .time_taken = 30.0};
        expect(bar.string() == "[===-------] 30% | ETA: 1m 10s | 3/10");
     };
    
    "progress bar 100%"_test = [] {
-      glaze::progress_bar bar{.width = 12, .completed = 10, .total = 10, .time_taken = 30.0};
+      glz::progress_bar bar{.width = 12, .completed = 10, .total = 10, .time_taken = 30.0};
       expect(bar.string() == "[==========] 100% | ETA: 0m 0s | 10/10");
    };
 };
@@ -1603,20 +1603,23 @@ struct local_meta
    double x{};
    int y{};
    
+   struct glaze
+   {
    using T = local_meta;
-   static constexpr auto glaze = glaze::object("x", &T::x, "A comment for x", //
+      static constexpr auto value = glz::object("x", &T::x, "A comment for x", //
                                                "y", &T::y, "A comment for y");
+   };
 };
 
-static_assert(glaze::detail::glaze_t<local_meta>);
-static_assert(glaze::detail::glaze_object_t<local_meta>);
-static_assert(glaze::detail::local_meta_t<local_meta>);
+static_assert(glz::detail::glaze_t<local_meta>);
+static_assert(glz::detail::glaze_object_t<local_meta>);
+static_assert(glz::detail::local_meta_t<local_meta>);
 
 suite local_meta_tests = [] {
    "local_meta"_test = [] {
       std::string out;
       local_meta m{};
-      glaze::write_json(m, out);
+      glz::write_json(m, out);
    };
 };
 

@@ -5,7 +5,7 @@
 
 #include "../interface.hpp"
 
-DLL_EXPORT glaze::interface* create_api() noexcept
+DLL_EXPORT glz::interface* create_api() noexcept
 {
-   return new glaze::interface{{"my_api", glaze::make_api<my_api>}};
+   return new glz::interface{{"my_api", glz::make_api<my_api>}};
 }

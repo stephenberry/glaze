@@ -12,7 +12,7 @@
 
 #include <span>
 
-namespace glaze
+namespace glz
 {
    namespace detail
    {

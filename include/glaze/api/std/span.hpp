@@ -7,7 +7,7 @@
 
 #include "glaze/api/name.hpp"
 
-namespace glaze
+namespace glz
 {
    template <class, template<class, size_t> class>
    inline constexpr bool is_span_v = false;

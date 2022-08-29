@@ -13,7 +13,7 @@
 #include "fmt/format.h"
 #include "fmt/compile.h"
 
-namespace glaze
+namespace glz
 {
    struct progress_bar final
    {

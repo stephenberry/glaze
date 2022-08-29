@@ -8,7 +8,7 @@
 #include "glaze/binary/header.hpp"
 #include "glaze/core/read.hpp"
 
-namespace glaze
+namespace glz
 {
    namespace detail
    {

@@ -8,7 +8,7 @@
 
 #include "glaze/util/type_traits.hpp"
 
-namespace glaze
+namespace glz
 {
    namespace detail
    {

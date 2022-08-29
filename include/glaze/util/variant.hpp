@@ -7,7 +7,7 @@
 
 #include "glaze/util/type_traits.hpp"
 
-namespace glaze
+namespace glz
 {
    template <class T>
    concept is_variant = is_specialization_v<T, std::variant>;

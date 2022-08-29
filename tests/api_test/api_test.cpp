@@ -21,10 +21,10 @@ struct my_api
 };
 
 template <>
-struct glaze::meta<my_api>
+struct glz::meta<my_api>
 {
    using T = my_api;
-   static constexpr auto value = glaze::object(
+   static constexpr auto value = glz::object(
       "x", &T::x, //
       "y", &T::y, //
       "z", &T::z, //
@@ -35,11 +35,11 @@ struct glaze::meta<my_api>
 
 GLAZE_SPECIALIZE(my_api, 0, 0, 1)
 
-DLL_EXPORT glaze::interface* glaze_interface() noexcept
+DLL_EXPORT glz::interface* glaze_interface() noexcept
 {
-   return new glaze::interface{
-      {"my_api", glaze::make_api<my_api>},
-      {"my_api2", glaze::make_api<my_api>}
+   return new glz::interface{
+      {"my_api", glz::make_api<my_api>},
+      {"my_api2", glz::make_api<my_api>}
    };
 }
 
@@ -47,28 +47,28 @@ void tests()
 {
    using namespace boost::ut;
    
-   std::unique_ptr<glaze::interface> interface{ glaze_interface() };
+   std::unique_ptr<glz::interface> interface{ glaze_interface() };
    auto io = (*interface)["my_api"]();
    
    "bool type name"_test = [] {
       {
-         std::string_view b = glaze::name<bool>;
+         std::string_view b = glz::name<bool>;
          expect(b == "bool");
       }
       {
-         std::string_view b = glaze::name<bool&>;
+         std::string_view b = glz::name<bool&>;
          expect(b == "bool&");
       }
       {
-         std::string_view b = glaze::name<const bool&>;
+         std::string_view b = glz::name<const bool&>;
          expect(b == "const bool&");
       }
       {
-         std::string_view b = glaze::name<bool*>;
+         std::string_view b = glz::name<bool*>;
          expect(b == "bool*");
       }
       {
-         std::string_view b = glaze::name<const bool*>;
+         std::string_view b = glz::name<const bool*>;
          expect(b == "const bool*");
       }
    };
@@ -76,11 +76,11 @@ void tests()
    "vector type name"_test = [] {
       {
          std::string_view v =
-            glaze::name<std::vector<std::vector<int>*>>;
+            glz::name<std::vector<std::vector<int>*>>;
          expect(v == "std::vector<std::vector<int32_t>*>");
       }
       {
-         std::string_view v = glaze::name<std::vector<float>>;
+         std::string_view v = glz::name<std::vector<float>>;
          expect(v == "std::vector<float>");
       }
    };
@@ -88,34 +88,34 @@ void tests()
    "unordered type name"_test = [] {
       {
          std::string_view u =
-            glaze::name<std::unordered_set<std::vector<std::string>>>;
+            glz::name<std::unordered_set<std::vector<std::string>>>;
          expect(u == "std::unordered_set<std::vector<std::string>>");
       }
       {
          std::string_view u =
-            glaze::name<std::unordered_map<uint64_t, std::string_view>>;
+            glz::name<std::unordered_map<uint64_t, std::string_view>>;
          expect(u == "std::unordered_map<uint64_t,std::string_view>");
       }
    };
 
    "double type name"_test = [] {
       {
-         std::string_view d = glaze::name<double*>;
+         std::string_view d = glz::name<double*>;
          expect(d == "double*");
       }
       {
-         std::string_view d = glaze::name<const double&>;
+         std::string_view d = glz::name<const double&>;
          expect(d == "const double&");
       }
    };
 
    "deque type name"_test = [] {
-      std::string_view d = glaze::name<std::deque<bool>>;
+      std::string_view d = glz::name<std::deque<bool>>;
       expect(d == "std::vector<bool>");
    };
 
    "span type name"_test = [] {
-      std::string_view s = glaze::name<std::span<double>>;
+      std::string_view s = glz::name<std::span<double>>;
       expect(s == "std::span<double,18446744073709551615>");
    };
 
@@ -130,7 +130,7 @@ void tests()
 
    "function type name"_test = [] {
       std::string_view f =
-         glaze::name<std::function<double(const int&, const double&)>>;
+         glz::name<std::function<double(const int&, const double&)>>;
       expect(f == "std::function<double(const int32_t&,const double&)");
    };
 

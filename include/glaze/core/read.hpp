@@ -6,7 +6,7 @@
 #include "glaze/core/common.hpp"
 #include "glaze/util/validate.hpp"
 
-namespace glaze
+namespace glz
 {
    template <opts Opts, class Buffer>
    requires nano::ranges::input_range<std::decay_t<Buffer>> &&

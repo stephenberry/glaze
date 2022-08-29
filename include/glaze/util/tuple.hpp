@@ -5,7 +5,7 @@
 
 #include <tuple>
 
-namespace glaze
+namespace glz
 {
    template <class T>
    concept is_tuple = is_specialization_v<T, std::tuple>;

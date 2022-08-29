@@ -22,7 +22,7 @@
 #include "glaze/util/for_each.hpp"
 #include "glaze/core/common.hpp"
 
-namespace glaze
+namespace glz
 {
    template <class Buffer>
    inline void write_csv(Buffer& buffer, const std::string_view sv) {

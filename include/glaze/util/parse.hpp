@@ -3,7 +3,7 @@
 
 #pragma once
 
-namespace glaze::detail
+namespace glz::detail
 {
    template <char c>
    inline void match(auto&& it, auto&& end)

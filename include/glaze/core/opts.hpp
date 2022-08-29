@@ -5,7 +5,7 @@
 
 #include "glaze/core/format.hpp"
 
-namespace glaze
+namespace glz
 {
    struct opts
    {

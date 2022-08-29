@@ -13,7 +13,7 @@
 #include <random>
 #include <numeric>
 
-namespace glaze
+namespace glz
 {
    namespace study
    {
@@ -41,7 +41,7 @@ namespace glaze
    struct meta<study::param>
    {
       using T = study::param;
-      static constexpr auto value = glaze::object("id", &T::ptr, "*", &T::ptr, "dist", &T::distribution, "values", &T::range);
+      static constexpr auto value = glz::object("id", &T::ptr, "*", &T::ptr, "dist", &T::distribution, "values", &T::range);
    };
 
    template <>
@@ -49,7 +49,7 @@ namespace glaze
    {
       using T = study::design;
       static constexpr auto value =
-         glaze::object("params", &T::params, "states", &T::states, "overwrite", &T::overwrite,
+         glz::object("params", &T::params, "states", &T::states, "overwrite", &T::overwrite,
          "seed", &T::seed, "random_samples", &T::random_samples);
    };
 
@@ -58,7 +58,7 @@ namespace glaze
       void overwrite_state(State &state, const std::unordered_map<std::string, raw_json> &overwrites)
       {
          for (auto&& [json_ptr, raw_json_str] : overwrites) {
-            glaze::write_from(state, json_ptr, raw_json_str.str);
+            glz::write_from(state, json_ptr, raw_json_str.str);
          }
       }
 
@@ -171,9 +171,9 @@ namespace glaze
                double step{};
                double stop{};
 
-               glaze::read_json(start, dist.range[0].str);
-               glaze::read_json(step, dist.range[1].str);
-               glaze::read_json(stop, dist.range[2].str);
+               glz::read_json(start, dist.range[0].str);
+               glz::read_json(step, dist.range[1].str);
+               glz::read_json(stop, dist.range[2].str);
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -202,7 +202,7 @@ namespace glaze
 
       void run_study(generator auto& g, auto&& f)
       {
-         glaze::pool pool{};
+         glz::pool pool{};
          size_t job_num = 0;
          while (!g.empty()) {
             // generate mutates
@@ -360,8 +360,8 @@ namespace glaze
                double start{};
                double stop{};
 
-               glaze::read_json(start, dist.range[0].str);
-               glaze::read_json(stop, dist.range[2].str);
+               glz::read_json(start, dist.range[0].str);
+               glz::read_json(stop, dist.range[2].str);
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -382,8 +382,8 @@ namespace glaze
                double start{};
                double stop{};
 
-               glaze::read_json(start, dist.range[0].str);
-               glaze::read_json(stop, dist.range[1].str);
+               glz::read_json(start, dist.range[0].str);
+               glz::read_json(stop, dist.range[1].str);
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -405,8 +405,8 @@ namespace glaze
                double mean{};
                double std_dev{};
 
-               glaze::read_json(mean, dist.range[0].str);
-               glaze::read_json(std_dev, dist.range[1].str);
+               glz::read_json(mean, dist.range[0].str);
+               glz::read_json(std_dev, dist.range[1].str);
 
                result.gen() =
                   [this, dist = std::normal_distribution<double>(

@@ -3,7 +3,7 @@
 
 #pragma once
 
-namespace glaze
+namespace glz
 {
    // from
    // https://stackoverflow.com/questions/16337610/how-to-know-if-a-type-is-a-specialization-of-stdvector
