@@ -28,7 +28,7 @@ template <>
 struct glz::meta<my_struct>
 {
    using T = my_struct;
-   static constexpr auto glaze = glz::object("i", &T::i,          //
+   static constexpr auto value = object("i", &T::i,          //
                                                "d", &T::d,          //
                                                "hello", &T::hello,  //
                                                "arr", &T::arr       //
@@ -93,7 +93,7 @@ struct V3
 template <>
 struct glz::meta<V3>
 {
-   static constexpr auto glaze = glz::array(&V3::x, &V3::y, &V3::z);
+   static constexpr auto value = array(&V3::x, &V3::y, &V3::z);
 };
 
 struct Thing

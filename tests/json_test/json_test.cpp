@@ -32,7 +32,7 @@ struct my_struct
 template <>
 struct glz::meta<my_struct> {
    using T = my_struct;
-   static constexpr auto glaze = object(
+   static constexpr auto value = object(
       "i", &T::i, //
       "d", &T::d, //
       "hello", &T::hello, //
@@ -68,7 +68,7 @@ struct sub_thing
 
 template <>
 struct glz::meta<sub_thing> {
-   static constexpr auto glaze = object(
+   static constexpr auto value = object(
       "a", &sub_thing::a, "Test comment 1",  //
       "b", &sub_thing::b, "Test comment 2"   //
    );
@@ -89,7 +89,7 @@ struct sub_thing2
 template <>
 struct glz::meta<sub_thing2> {
    using T = sub_thing2;
-   static constexpr auto glaze = glz::object(
+   static constexpr auto value = object(
       "a", &T::a, "Test comment 1",    //
       "b", &T::b, "Test comment 2",    //
       "c", &T::c,                      //
@@ -110,7 +110,7 @@ struct V3
 
 template <>
 struct glz::meta<V3> {
-   static constexpr auto glaze = glz::array(&V3::x, &V3::y, &V3::z);
+   static constexpr auto value = array(&V3::x, &V3::y, &V3::z);
 };
 
 struct Thing
@@ -139,7 +139,7 @@ struct Thing
 template <>
 struct glz::meta<Thing> {
    using T = Thing;
-   static constexpr auto glaze = glz::object(
+   static constexpr auto value = object(
       "thing",       &T::thing,                                     //
       "thing2array", &T::thing2array,                               //
       "vec3",        &T::vec3,                                      //
@@ -610,15 +610,15 @@ struct oob
 template <>
 struct glz::meta<v3>
 {
-   static constexpr auto glaze = glz::array(&v3::x, &v3::y, &v3::z);
+   static constexpr auto value = array(&v3::x, &v3::y, &v3::z);
 };
 
-static_assert(glz::is_specialization_v<std::decay_t<decltype(glz::meta<v3>::glaze)>, glz::detail::Array>, "");
+static_assert(glz::is_specialization_v<std::decay_t<decltype(glz::meta<v3>::value)>, glz::detail::Array>, "");
 
 template <>
 struct glz::meta<oob>
 {
-  static constexpr auto glaze = glz::object("v", &oob::v, "n", &oob::n);
+  static constexpr auto value = object("v", &oob::v, "n", &oob::n);
 };
 
 void read_tests() {
@@ -1188,14 +1188,14 @@ template <>
 struct glz::meta<ThreeODetic>
 {
    using t = ThreeODetic;
-   static constexpr auto glaze = glz::array("geo", &t::g1, "int", &t::x1);
+   static constexpr auto value = array("geo", &t::g1, "int", &t::x1);
 };
 
 template <>
 struct glz::meta<NineODetic>
 {
    using n = NineODetic;
-   static constexpr auto glaze = glz::array(&n::t1, &n::g1);
+   static constexpr auto value = array(&n::t1, &n::g1);
 };
 
 template <>
@@ -1212,7 +1212,7 @@ struct EmptyArray
 template <>
 struct glz::meta<EmptyArray>
 {
-   static constexpr auto glaze = glz::array();
+   static constexpr auto value = array();
 };
 
 struct EmptyObject
@@ -1222,7 +1222,7 @@ struct EmptyObject
 template <>
 struct glz::meta<EmptyObject>
 {
-   static constexpr auto glaze = glz::object();
+   static constexpr auto value = object();
 };
 
 void write_tests() {
@@ -1560,7 +1560,7 @@ template <>
 struct glz::meta<study_obj>
 {
    using T = study_obj;
-   static constexpr auto glaze = glz::object("x", &T::x, "y", &T::y);
+   static constexpr auto value = object("x", &T::x, "y", &T::y);
 };
 
 void study_tests()
@@ -1604,7 +1604,7 @@ struct local_meta
    int y{};
    
    using T = local_meta;
-   static constexpr auto glaze = glz::object("x", &T::x, "A comment for x", //
+   static constexpr auto value = glz::object("x", &T::x, "A comment for x", //
                                                "y", &T::y, "A comment for y");
 };
 
