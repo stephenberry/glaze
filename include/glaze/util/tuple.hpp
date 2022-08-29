@@ -60,19 +60,21 @@ namespace glaze
        return {};
    }
 
-   template <auto& Tuple, auto Val, class F>
-   constexpr auto filter_single(value<Val>, F pred) {
-       if constexpr (pred(std::get<Val>(Tuple))) {
-           return value_sequence<Val>{};
-       }
-       else {
-           return value_sequence<>{};
-       }
+   template <auto& Tuple, auto Val>
+   constexpr auto filter_single(value<Val>) {
+      using V = std::decay_t<decltype(std::get<Val>(Tuple))>;
+      if constexpr (std::is_member_pointer_v<V>) {
+         static_assert(Val != 0, "member pointer cannot be the first item");
+         return value_sequence<Val - 1>{}; // shift backwards as group starts with the name
+      }
+      else {
+         return value_sequence<>{};
+      }
    }
 
-   template <auto& Tuple, auto... Vals, class F>
-   constexpr auto filter(value_sequence<Vals...>, F pred) {
-       return (filter_single<Tuple>(value<Vals>{}, pred) + ...);
+   template <auto& Tuple, auto... Vals>
+   constexpr auto filter(value_sequence<Vals...>) {
+       return (filter_single<Tuple>(value<Vals>{}) + ...);
    }
 
    template <auto Val0, auto Val1>
@@ -112,16 +114,7 @@ namespace glaze
        constexpr auto N = std::tuple_size_v<std::decay_t<decltype(Tuple)>>;
 
        constexpr auto filtered = filter<Tuple>(
-       make_value_sequence(std::make_index_sequence<N>()),
-       [](auto&& v) constexpr {
-           using V = std::decay_t<decltype(v)>;
-           if constexpr (std::convertible_to<std::decay_t<V>, std::string_view>) {
-               return true;
-           }
-           else {
-               return false;
-           }
-       });
+       make_value_sequence(std::make_index_sequence<N>()));
 
        constexpr auto sizes = group_sizes<N>(filtered);
        constexpr auto starts = filtered.to_array();
