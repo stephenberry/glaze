@@ -32,7 +32,7 @@ struct my_struct
 template <>
 struct glaze::meta<my_struct> {
    using T = my_struct;
-   static constexpr auto value = object(
+   static constexpr auto glaze = object(
       "i", &T::i, //
       "d", &T::d, //
       "hello", &T::hello, //
@@ -68,7 +68,7 @@ struct sub_thing
 
 template <>
 struct glaze::meta<sub_thing> {
-   static constexpr auto value = object(
+   static constexpr auto glaze = object(
       "a", &sub_thing::a, "Test comment 1",  //
       "b", &sub_thing::b, "Test comment 2"   //
    );
@@ -89,7 +89,7 @@ struct sub_thing2
 template <>
 struct glaze::meta<sub_thing2> {
    using T = sub_thing2;
-   static constexpr auto value = glaze::object(
+   static constexpr auto glaze = glaze::object(
       "a", &T::a, "Test comment 1",    //
       "b", &T::b, "Test comment 2",    //
       "c", &T::c,                      //
@@ -110,7 +110,7 @@ struct V3
 
 template <>
 struct glaze::meta<V3> {
-   static constexpr auto value = glaze::array(&V3::x, &V3::y, &V3::z);
+   static constexpr auto glaze = glaze::array(&V3::x, &V3::y, &V3::z);
 };
 
 struct Thing
@@ -139,7 +139,7 @@ struct Thing
 template <>
 struct glaze::meta<Thing> {
    using T = Thing;
-   static constexpr auto value = glaze::object(
+   static constexpr auto glaze = glaze::object(
       "thing",       &T::thing,                                     //
       "thing2array", &T::thing2array,                               //
       "vec3",        &T::vec3,                                      //
@@ -610,15 +610,15 @@ struct oob
 template <>
 struct glaze::meta<v3>
 {
-   static constexpr auto value = glaze::array(&v3::x, &v3::y, &v3::z);
+   static constexpr auto glaze = glaze::array(&v3::x, &v3::y, &v3::z);
 };
 
-static_assert(glaze::is_specialization_v<std::decay_t<decltype(glaze::meta<v3>::value)>, glaze::detail::Array>, "");
+static_assert(glaze::is_specialization_v<std::decay_t<decltype(glaze::meta<v3>::glaze)>, glaze::detail::Array>, "");
 
 template <>
 struct glaze::meta<oob>
 {
-  static constexpr auto value = glaze::object("v", &oob::v, "n", &oob::n);
+  static constexpr auto glaze = glaze::object("v", &oob::v, "n", &oob::n);
 };
 
 void read_tests() {
@@ -1188,21 +1188,21 @@ template <>
 struct glaze::meta<ThreeODetic>
 {
    using t = ThreeODetic;
-   static constexpr auto value = glaze::array("geo", &t::g1, "int", &t::x1);
+   static constexpr auto glaze = glaze::array("geo", &t::g1, "int", &t::x1);
 };
 
 template <>
 struct glaze::meta<NineODetic>
 {
    using n = NineODetic;
-   static constexpr auto value = glaze::array(&n::t1, &n::g1);
+   static constexpr auto glaze = glaze::array(&n::t1, &n::g1);
 };
 
 template <>
 struct glaze::meta<Named>
 {
    using n = Named;
-   static constexpr auto value =
+   static constexpr auto glaze =
       glaze::object("name", &n::name, "value", &n::value);
 };
 
@@ -1212,7 +1212,7 @@ struct EmptyArray
 template <>
 struct glaze::meta<EmptyArray>
 {
-   static constexpr auto value = glaze::array();
+   static constexpr auto glaze = glaze::array();
 };
 
 struct EmptyObject
@@ -1222,7 +1222,7 @@ struct EmptyObject
 template <>
 struct glaze::meta<EmptyObject>
 {
-   static constexpr auto value = glaze::object();
+   static constexpr auto glaze = glaze::object();
 };
 
 void write_tests() {
@@ -1560,7 +1560,7 @@ template <>
 struct glaze::meta<study_obj>
 {
    using T = study_obj;
-   static constexpr auto value = glaze::object("x", &T::x, "y", &T::y);
+   static constexpr auto glaze = glaze::object("x", &T::x, "y", &T::y);
 };
 
 void study_tests()
@@ -1595,6 +1595,28 @@ suite progress_bar_tests = [] {
    "progress bar 100%"_test = [] {
       glaze::progress_bar bar{.width = 12, .completed = 10, .total = 10, .time_taken = 30.0};
       expect(bar.string() == "[==========] 100% | ETA: 0m 0s | 10/10");
+   };
+};
+
+struct local_meta
+{
+   double x{};
+   int y{};
+   
+   using T = local_meta;
+   static constexpr auto glaze = glaze::object("x", &T::x, "A comment for x", //
+                                               "y", &T::y, "A comment for y");
+};
+
+static_assert(glaze::detail::glaze_t<local_meta>);
+static_assert(glaze::detail::glaze_object_t<local_meta>);
+static_assert(glaze::detail::local_meta_t<local_meta>);
+
+suite local_meta_tests = [] {
+   "local_meta"_test = [] {
+      std::string out;
+      local_meta m{};
+      glaze::write_json(m, out);
    };
 };
 

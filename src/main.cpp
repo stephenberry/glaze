@@ -15,7 +15,7 @@ template <>
 struct glaze::meta<sub>
 {
    using T = sub;
-   static constexpr auto value = glaze::object("x", &T::x, "y", &T::y);
+   static constexpr auto glaze = object("x", &T::x, "y", &T::y);
 };
 
 struct my_struct
@@ -32,7 +32,7 @@ template <>
 struct glaze::meta<my_struct>
 {
    using T = my_struct;
-   static constexpr auto value = glaze::object("i", &T::i,          //
+   static constexpr auto glaze = object("i", &T::i,          //
                                                "d", &T::d,          //
                                                "hello", &T::hello,  //
                                                "arr", &T::arr,      //

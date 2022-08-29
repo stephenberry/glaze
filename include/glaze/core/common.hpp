@@ -129,6 +129,12 @@ namespace glaze
       
       template <uint32_t Format>
       struct write {};
+      
+      template <class T>
+      concept local_meta_t = requires
+      {
+         std::decay_t<T>::glaze;
+      };
    }  // namespace detail
 
    template <class T>
@@ -136,10 +142,24 @@ namespace glaze
    {};
    
    template <class T>
-   inline constexpr auto &meta_v = meta<std::decay_t<T>>::value.value;
+   inline constexpr auto meta_wrapper_v = [] {
+      using V = std::decay_t<T>;
+      if constexpr (detail::local_meta_t<V>) {
+         return V::glaze;
+      }
+      else {
+         return meta<V>::glaze;
+      }
+   }();
+   
+   template <class T>
+   inline constexpr auto meta_v = meta_wrapper_v<T>.value;
 
    template <class T>
    using meta_t = std::decay_t<decltype(meta_v<T>)>;
+   
+   template <class T>
+   using meta_wrapper_t = std::decay_t<decltype(meta_wrapper_v<T>)>;
 
    struct raw_json
    {
@@ -182,8 +202,9 @@ namespace glaze
       template <class T>
       concept glaze_t = requires
       {
-         meta<std::decay_t<T>>::value;
-      };
+         meta<std::decay_t<T>>::glaze;
+      }
+      || local_meta_t<T>;
 
       template <class T>
       concept complex_t = glaze_t<std::decay_t<T>>;
@@ -290,10 +311,10 @@ namespace glaze
       }
 
       template <class T>
-      concept glaze_array_t = glaze_t<T> && is_specialization_v<std::decay_t<decltype(meta<std::decay_t<T>>::value)>, Array>;
+      concept glaze_array_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Array>;
 
       template <class T>
-      concept glaze_object_t = glaze_t<T> && is_specialization_v<std::decay_t<decltype(meta<std::decay_t<T>>::value)>, Object>;
+      concept glaze_object_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Object>;
 
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to)

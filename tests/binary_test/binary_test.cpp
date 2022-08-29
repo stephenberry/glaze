@@ -28,7 +28,7 @@ template <>
 struct glaze::meta<my_struct>
 {
    using T = my_struct;
-   static constexpr auto value = glaze::object("i", &T::i,          //
+   static constexpr auto glaze = glaze::object("i", &T::i,          //
                                                "d", &T::d,          //
                                                "hello", &T::hello,  //
                                                "arr", &T::arr       //
@@ -44,7 +44,7 @@ struct sub_thing
 template <>
 struct glaze::meta<sub_thing>
 {
-   static constexpr auto value =
+   static constexpr auto glaze =
       glaze::object("a", &sub_thing::a, "Test comment 1",  //
                     "b", &sub_thing::b, "Test comment 2"   //
       );
@@ -66,7 +66,7 @@ template <>
 struct glaze::meta<sub_thing2>
 {
    using T = sub_thing2;
-   static constexpr auto value =
+   static constexpr auto glaze =
       glaze::object("a", &T::a, "Test comment 1",  //
                     "b", &T::b, "Test comment 2",  //
                     "c", &T::c,                      //
@@ -93,7 +93,7 @@ struct V3
 template <>
 struct glaze::meta<V3>
 {
-   static constexpr auto value = glaze::array(&V3::x, &V3::y, &V3::z);
+   static constexpr auto glaze = glaze::array(&V3::x, &V3::y, &V3::z);
 };
 
 struct Thing
@@ -123,7 +123,7 @@ template <>
 struct glaze::meta<Thing>
 {
    using T = Thing;
-   static constexpr auto value =
+   static constexpr auto glaze =
       glaze::object("thing", &T::thing,                       //
                     "thing2array", &T::thing2array,      //
                     "vec3", &T::vec3,                    //
