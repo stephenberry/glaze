@@ -108,8 +108,6 @@ struct glaze::meta<thing> {
 };
 ```
 
-
-
 Prettified output:
 
 ```json
@@ -121,13 +119,21 @@ Prettified output:
 
 # Additional Features
 
-- Binary messaging for maximum performance
+- Tagged binary messaging for maximum performance
 - Comma Separated Value files (CSV)
-- A data recorder (`recorder.hpp`)
+- A data recorder (logging) (`recorder.hpp`)
 - A simple thread pool
 - Studies based on JSON structures
 - A JSON file include system
 - Eigen C++ matrix library support
+
+## Tagged Binary Messages
+
+[TODO: expand]
+
+## Data Recorder (Logging)
+
+[TODO: expand]
 
 ## Glaze Interfaces
 
