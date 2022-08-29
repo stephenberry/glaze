@@ -9,6 +9,7 @@
 #include <bit>
 #include <map>
 #include <deque>
+#include <list>
 
 #include "glaze/binary/write.hpp"
 #include "glaze/binary/read.hpp"
@@ -27,7 +28,7 @@ template <>
 struct glaze::meta<my_struct>
 {
    using T = my_struct;
-   static constexpr auto value = glaze::object("i", &T::i,          //
+   static constexpr auto glaze = glaze::object("i", &T::i,          //
                                                "d", &T::d,          //
                                                "hello", &T::hello,  //
                                                "arr", &T::arr       //
@@ -43,9 +44,9 @@ struct sub_thing
 template <>
 struct glaze::meta<sub_thing>
 {
-   static constexpr auto value =
-      glaze::object("a", &sub_thing::a, "Test comment 1"_c,  //
-                    "b", &sub_thing::b, "Test comment 2"_c   //
+   static constexpr auto glaze =
+      glaze::object("a", &sub_thing::a, "Test comment 1",  //
+                    "b", &sub_thing::b, "Test comment 2"   //
       );
 };
 
@@ -65,9 +66,9 @@ template <>
 struct glaze::meta<sub_thing2>
 {
    using T = sub_thing2;
-   static constexpr auto value =
-      glaze::object("a", &T::a, "Test comment 1"_c,  //
-                    "b", &T::b, "Test comment 2"_c,  //
+   static constexpr auto glaze =
+      glaze::object("a", &T::a, "Test comment 1",  //
+                    "b", &T::b, "Test comment 2",  //
                     "c", &T::c,                      //
                     "d", &T::d,                      //
                     "e", &T::e,                      //
@@ -92,7 +93,7 @@ struct V3
 template <>
 struct glaze::meta<V3>
 {
-   static constexpr auto value = glaze::array(&V3::x, &V3::y, &V3::z);
+   static constexpr auto glaze = glaze::array(&V3::x, &V3::y, &V3::z);
 };
 
 struct Thing
@@ -122,7 +123,7 @@ template <>
 struct glaze::meta<Thing>
 {
    using T = Thing;
-   static constexpr auto value =
+   static constexpr auto glaze =
       glaze::object("thing", &T::thing,                       //
                     "thing2array", &T::thing2array,      //
                     "vec3", &T::vec3,                    //
@@ -130,7 +131,7 @@ struct glaze::meta<Thing>
                     "deque", &T::deque,                       //
                     "vector", &T::vector,                     //
                     "i", &T::i,                          //
-                    "d", &T::d, "double is the best type"_c,  //
+                    "d", &T::d, "double is the best type",  //
                     "b", &T::b,                          //
                     "c", &T::c,                          //
                     "vb", &T::vb,                             //
@@ -337,7 +338,7 @@ void write_tests()
       expect(obj2.c == 'L');
       expect(obj2.vb == decltype(obj2.vb){false, true, true, false, false, true, true});
       expect(obj2.sptr == nullptr);
-      expect(obj2.optional == std::make_optional<V3>(1, 2, 3));
+      expect(obj2.optional == std::make_optional<V3>(V3{1, 2, 3}));
       expect(obj2.deque == decltype(obj2.deque){0.0, 2.2, 3.9});
       expect(obj2.map == decltype(obj2.map){{"a", 7}, {"f", 3}, {"b", 4}});
       expect(obj2.mapi == decltype(obj2.mapi){{5, 5.0}, {7, 7.1}, {2, 2.22222}});

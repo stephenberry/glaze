@@ -144,6 +144,12 @@ namespace glaze
       
       template <uint32_t Format>
       struct write {};
+      
+      template <class T>
+      concept local_meta_t = requires
+      {
+         std::decay_t<T>::glaze;
+      };
    }  // namespace detail
 
    template <class T>
@@ -151,20 +157,24 @@ namespace glaze
    {};
    
    template <class T>
-   inline constexpr auto &meta_v = meta<std::decay_t<T>>::value.value;
+   inline constexpr auto meta_wrapper_v = [] {
+      using V = std::decay_t<T>;
+      if constexpr (detail::local_meta_t<V>) {
+         return V::glaze;
+      }
+      else {
+         return meta<V>::glaze;
+      }
+   }();
+   
+   template <class T>
+   inline constexpr auto meta_v = meta_wrapper_v<T>.value;
 
    template <class T>
    using meta_t = std::decay_t<decltype(meta_v<T>)>;
-
-   struct comment_t
-   {
-      std::string_view str;
-   };
-
-   constexpr comment_t operator"" _c(const char *s, std::size_t n) noexcept
-   {
-      return comment_t{{s, n}};
-   }
+   
+   template <class T>
+   using meta_wrapper_t = std::decay_t<decltype(meta_wrapper_v<T>)>;
 
    struct raw_json
    {
@@ -207,8 +217,9 @@ namespace glaze
       template <class T>
       concept glaze_t = requires
       {
-         meta<std::decay_t<T>>::value;
-      };
+         meta<std::decay_t<T>>::glaze;
+      }
+      || local_meta_t<T>;
 
       template <class T>
       concept complex_t = glaze_t<std::decay_t<T>>;
@@ -315,10 +326,10 @@ namespace glaze
       }
 
       template <class T>
-      concept glaze_array_t = glaze_t<T> && is_specialization_v<std::decay_t<decltype(meta<std::decay_t<T>>::value)>, Array>;
+      concept glaze_array_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Array>;
 
       template <class T>
-      concept glaze_object_t = glaze_t<T> && is_specialization_v<std::decay_t<decltype(meta<std::decay_t<T>>::value)>, Object>;
+      concept glaze_object_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Object>;
 
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to)
@@ -434,40 +445,9 @@ namespace glaze
             static_assert(std::is_member_pointer_v<std::tuple_element_t<1, M>>,
                           "second element should be the member pointer");
          if constexpr (std::tuple_size_v < M >> 2)
-            static_assert(std::is_same_v<std::tuple_element_t<2, M>, comment_t>,
-                          "third element should be a comment_t");
+            static_assert(str_t<std::tuple_element_t<2, M>>,
+                          "third element should be a string comment");
       };
-
-      template <size_t I = 0, class Tuple, class Members = std::tuple<>,
-                class Member = std::tuple<>>
-      constexpr auto group_members(Tuple &&tuple, Members &&members = {},
-                                          Member &&member = {})
-      {
-         if constexpr (std::tuple_size_v<Tuple> == 0) {
-            return std::make_tuple();
-         }
-         else if constexpr (I >= std::tuple_size_v<Tuple>) {
-            check_member<Member>();
-            return std::tuple_cat(members, std::make_tuple(member));
-         }
-         else if constexpr (I == 0) {
-            return group_members<I + 1>(std::forward<Tuple>(tuple),
-                                        std::forward<Members>(members),
-                                        std::make_tuple(std::get<I>(tuple)));
-         }
-         else if constexpr (str_t<std::tuple_element_t<I, Tuple>>) {
-            check_member<Member>();
-            return group_members<I + 1>(
-               std::forward<Tuple>(tuple),
-               std::tuple_cat(members, std::make_tuple(member)),
-               std::make_tuple(std::get<I>(tuple)));
-         }
-         else {
-            return group_members<I + 1>(
-               std::forward<Tuple>(tuple), std::forward<Members>(members),
-               std::tuple_cat(member, std::make_tuple(std::get<I>(tuple))));
-         }
-      }
 
       template <class T, size_t... I>
       constexpr auto make_map_impl(std::index_sequence<I...>)
@@ -533,6 +513,11 @@ namespace glaze
 
    constexpr auto object(auto&&... args)
    {
-      return detail::Object{ detail::group_members(std::make_tuple(args...)) };
+      if constexpr (sizeof...(args) == 0) {
+         return detail::Object{ std::make_tuple() };
+      }
+      else {
+         return detail::Object{ group_builder<std::decay_t<decltype(std::make_tuple(args...))>>::op(std::make_tuple(args...)) };
+      }
    }
 }  // namespace glaze
