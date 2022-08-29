@@ -9,7 +9,7 @@
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 
-namespace glaze
+namespace glz
 {
    template <class T, class B>
    bool write_from(T&& root_value, const sv json_ptr, B&& buffer) {

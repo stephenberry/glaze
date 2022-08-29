@@ -3,7 +3,7 @@
 
 #pragma once
 
-namespace glaze
+namespace glz
 {
    static constexpr uint32_t binary = 0;
    static constexpr uint32_t json = 10;

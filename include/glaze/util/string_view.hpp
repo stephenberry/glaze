@@ -5,7 +5,7 @@
 
 #include <string_view>
 
-namespace glaze
+namespace glz
 {
    using sv = std::string_view;
 }

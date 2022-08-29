@@ -13,7 +13,7 @@ struct sub
 };
 
 template <>
-struct glaze::meta<sub>
+struct glz::meta<sub>
 {
    using T = sub;
    static constexpr auto glaze = object("x", &T::x, "y", &T::y);
@@ -30,7 +30,7 @@ struct my_struct
 };
 
 template <>
-struct glaze::meta<my_struct>
+struct glz::meta<my_struct>
 {
    using T = my_struct;
    static constexpr auto glaze = object("i", &T::i,          //
@@ -49,22 +49,22 @@ int main() {
    my_struct s2{};
    std::string buffer = R"({"i":2,"map":{"fish":5,"cake":2,"bear":3}})";
    try {
-      glaze::read_json(s, buffer);
+      glz::read_json(s, buffer);
       
       std::vector<std::byte> out;
-      static constexpr auto partial = glaze::json_ptrs("/i",
+      static constexpr auto partial = glz::json_ptrs("/i",
                                                        "/d",
                                                        "/sub/x",
                                                        "/sub/y",
                                                        "/map/fish",
                                                        "/map/bear");
       
-      static constexpr auto sorted = glaze::sort_json_ptrs(partial);
+      static constexpr auto sorted = glz::sort_json_ptrs(partial);
 
-      static constexpr auto groups = glaze::group_json_ptrs<sorted>();
+      static constexpr auto groups = glz::group_json_ptrs<sorted>();
       
       static constexpr auto N = std::tuple_size_v<decltype(groups)>;
-      glaze::for_each<N>([&](auto I){
+      glz::for_each<N>([&](auto I){
          const auto group = std::get<I>(groups);
          std::cout << std::get<0>(group) << ": ";
          for (auto& rest : std::get<1>(group)) {
@@ -73,14 +73,14 @@ int main() {
          std::cout << '\n';
       });
       
-      glaze::write_binary<partial>(s, out);
+      glz::write_binary<partial>(s, out);
       
       s2.i = 5;
       s2.hello = "text";
       s2.d = 5.5;
       s2.sub.x = 0.0;
       s2.sub.y = 20;
-      glaze::read_binary(s2, out);
+      glz::read_binary(s2, out);
    }
    catch (const std::exception& e) {
       std::cout << e.what() << '\n';

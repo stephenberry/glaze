@@ -8,7 +8,7 @@
 #include "glaze/api/name.hpp"
 #include "glaze/core/common.hpp"
 
-namespace glaze
+namespace glz
 {
    namespace detail
    {

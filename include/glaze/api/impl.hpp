@@ -18,7 +18,7 @@
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 
-namespace glaze
+namespace glz
 {
    template <class UserType>
    struct impl : api
@@ -35,13 +35,13 @@ namespace glaze
       {
          if (format == json) {
             return detail::seek_impl(
-               [&](auto&& val) { glaze::read<opts{}>(val, data);
+               [&](auto&& val) { glz::read<opts{}>(val, data);
                },
                user, path);
          }
          else {
             return detail::seek_impl(
-               [&](auto&& val) { glaze::read<opts{.format = binary}>(val, data);
+               [&](auto&& val) { glz::read<opts{.format = binary}>(val, data);
                },
                user, path);
          }
@@ -53,14 +53,14 @@ namespace glaze
          if (format == json) {
             return detail::seek_impl(
                [&](auto&& val) {
-                  glaze::write_json(val, data); }, user,
+                  glz::write_json(val, data); }, user,
                path);
          }
          else {
             //TODO: avoid copy
             static thread_local std::vector<std::byte> buffer{};
             bool found = detail::seek_impl(
-               [&](auto&& val) { glaze::write_binary(val, buffer);
+               [&](auto&& val) { glz::write_binary(val, buffer);
                },
                user, path);
             data.resize(buffer.size());
@@ -79,13 +79,13 @@ namespace glaze
          detail::seek_impl(
             [&](auto&& val) {
                using V = std::decay_t<decltype(val)>;
-               static constexpr auto h = glaze::hash<V>();
+               static constexpr auto h = glz::hash<V>();
                if (h == type_hash) [[likely]] {
                   result = &val;
                }
                else [[unlikely]] {
                   error = "mismatching types";
-                  error += ", expected: " + std::string(glaze::name<T>);
+                  error += ", expected: " + std::string(glz::name<T>);
                }
             },
             std::forward<T>(root_value), json_ptr);

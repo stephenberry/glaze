@@ -10,7 +10,7 @@
 #include "glaze/util/string_view.hpp"
 #include "glaze/util/variant.hpp"
 
-namespace glaze
+namespace glz
 {
    namespace detail
    {

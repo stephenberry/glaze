@@ -14,7 +14,7 @@
 
 #include "glaze/util/macros.hpp"
 
-namespace glaze
+namespace glz
 {
    // A simple threadpool
    struct pool

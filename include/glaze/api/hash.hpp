@@ -21,7 +21,7 @@
 // 256 bit: 7.6545351e60 times
 // From these calculations it is apparent that a 128 bit hash is more than sufficient
 
-namespace glaze
+namespace glz
 {
    template <class T, T Value, size_t... Is>
    consteval auto make_array_impl(std::index_sequence<Is...>) {

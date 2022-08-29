@@ -5,7 +5,7 @@
 
 // TODO: this only handles /**/ style comments
 
-namespace glaze
+namespace glz
 {
    namespace detail
    {

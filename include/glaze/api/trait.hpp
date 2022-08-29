@@ -18,7 +18,7 @@ struct glaze::version_t<type> { \
    static constexpr version_type value = { major, minor, revision }; \
 };
 
-namespace glaze
+namespace glz
 {
    using version_type = std::array<uint32_t, 3>;
    
@@ -131,7 +131,7 @@ namespace glaze
       static constexpr sv comma = ",";
    public:
       static constexpr sv version_sv = detail::join_v<v, major_version, comma, minor_version, comma, revision>;
-      static constexpr version_type version = ::glaze::version<T>;
+      static constexpr version_type version = ::glz::version<T>;
       
       static constexpr sv hash = hash128_v<to_hash>;
    };

@@ -5,7 +5,7 @@
 
 #include <cstdint>
 
-namespace glaze::detail
+namespace glz::detail
 {
    struct header8 final {
       uint8_t config : 2;

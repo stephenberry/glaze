@@ -32,7 +32,7 @@
 #define SHARED_LIBRARY_PREFIX "lib"
 #endif
 
-namespace glaze
+namespace glz
 {
 #ifdef GLAZE_API_ON_WINDOWS
    using lib_t = HINSTANCE;
@@ -42,7 +42,7 @@ namespace glaze
 
    struct lib_loader final
    {
-      using create = glaze::interface*(*)(void);
+      using create = glz::interface*(*)(void);
 
       interface api_map{};
       std::vector<lib_t> loaded_libs{};

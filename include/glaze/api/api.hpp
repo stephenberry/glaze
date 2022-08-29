@@ -12,7 +12,7 @@
 #include <functional>
 #include <map>
 
-namespace glaze
+namespace glz
 {
    inline namespace v0_0_1
    {
@@ -54,13 +54,13 @@ namespace glaze
       /// access reference via JSON pointer path
       template <class T>
       T& api::get(const sv path) {
-         static constexpr auto hash = glaze::hash<T>();
+         static constexpr auto hash = glz::hash<T>();
          auto* ptr = get(path, hash);
          if (ptr) {
             return *static_cast<T*>(ptr);
          }
          else {
-            error = "glaze::get<" + std::string(glaze::name<T>) + ">(\"" + std::string(path) + "\") | " + error;
+            error = "glaze::get<" + std::string(glz::name<T>) + ">(\"" + std::string(path) + "\") | " + error;
    #ifdef __cpp_exceptions
             throw std::runtime_error(error);
    #else
@@ -72,7 +72,7 @@ namespace glaze
       
       template <class T>
       T* api::get_if(const sv path) noexcept {
-         static constexpr auto hash = glaze::hash<T>();
+         static constexpr auto hash = glz::hash<T>();
          auto* ptr = get(path, hash);
          if (ptr) {
             return static_cast<T*>(ptr);
@@ -89,4 +89,4 @@ namespace glaze
 #endif
 
 // IMPORTANT: unmanged memory returned
-extern "C" DLL_EXPORT glaze::interface* glaze_interface() noexcept;
+extern "C" DLL_EXPORT glz::interface* glaze_interface() noexcept;

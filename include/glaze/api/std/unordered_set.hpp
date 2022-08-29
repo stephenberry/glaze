@@ -7,7 +7,7 @@
 
 #include "glaze/api/name.hpp"
 
-namespace glaze
+namespace glz
 {
    template <class T>
    concept unordered_set = is_specialization_v<T, std::unordered_set>;

@@ -14,7 +14,7 @@
 #include "glaze/binary/write.hpp"
 #include "glaze/binary/read.hpp"
 
-using namespace glaze;
+using namespace glz;
 
 struct my_struct
 {
@@ -25,10 +25,10 @@ struct my_struct
 };
 
 template <>
-struct glaze::meta<my_struct>
+struct glz::meta<my_struct>
 {
    using T = my_struct;
-   static constexpr auto glaze = glaze::object("i", &T::i,          //
+   static constexpr auto glaze = glz::object("i", &T::i,          //
                                                "d", &T::d,          //
                                                "hello", &T::hello,  //
                                                "arr", &T::arr       //
@@ -42,10 +42,10 @@ struct sub_thing
 };
 
 template <>
-struct glaze::meta<sub_thing>
+struct glz::meta<sub_thing>
 {
    static constexpr auto glaze =
-      glaze::object("a", &sub_thing::a, "Test comment 1",  //
+      glz::object("a", &sub_thing::a, "Test comment 1",  //
                     "b", &sub_thing::b, "Test comment 2"   //
       );
 };
@@ -63,11 +63,11 @@ struct sub_thing2
 };
 
 template <>
-struct glaze::meta<sub_thing2>
+struct glz::meta<sub_thing2>
 {
    using T = sub_thing2;
    static constexpr auto glaze =
-      glaze::object("a", &T::a, "Test comment 1",  //
+      glz::object("a", &T::a, "Test comment 1",  //
                     "b", &T::b, "Test comment 2",  //
                     "c", &T::c,                      //
                     "d", &T::d,                      //
@@ -91,9 +91,9 @@ struct V3
 };
 
 template <>
-struct glaze::meta<V3>
+struct glz::meta<V3>
 {
-   static constexpr auto glaze = glaze::array(&V3::x, &V3::y, &V3::z);
+   static constexpr auto glaze = glz::array(&V3::x, &V3::y, &V3::z);
 };
 
 struct Thing
@@ -120,11 +120,11 @@ struct Thing
 };
 
 template <>
-struct glaze::meta<Thing>
+struct glz::meta<Thing>
 {
    using T = Thing;
    static constexpr auto glaze =
-      glaze::object("thing", &T::thing,                       //
+      glz::object("thing", &T::thing,                       //
                     "thing2array", &T::thing2array,      //
                     "vec3", &T::vec3,                    //
                     "list", &T::list,                    //
@@ -320,10 +320,10 @@ void write_tests()
       obj.map = {{"a", 7}, {"f", 3}, {"b", 4}};
       obj.mapi = {{5, 5.0}, {7, 7.1}, {2, 2.22222}};
       
-      glaze::write_binary(obj, buffer);
+      glz::write_binary(obj, buffer);
 
       Thing obj2{};
-      glaze::read_binary(obj2, buffer);
+      glz::read_binary(obj2, buffer);
 
       expect(obj2.thing.a == 5.7);
       expect(obj2.thing.a == 5.7);

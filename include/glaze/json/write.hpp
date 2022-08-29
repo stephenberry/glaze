@@ -18,7 +18,7 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/json/from_ptr.hpp"
 
-namespace glaze
+namespace glz
 {
    namespace detail
    {

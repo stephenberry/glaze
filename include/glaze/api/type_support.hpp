@@ -8,7 +8,7 @@
 
 #include "glaze/util/for_each.hpp"
 
-namespace glaze
+namespace glz
 {   
    template<class T> struct false_v : std::false_type {};
    namespace detail {

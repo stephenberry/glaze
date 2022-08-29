@@ -14,7 +14,7 @@
 
 #include "NanoRange/nanorange.hpp"
 
-namespace glaze
+namespace glz
 {
    namespace detail
    {

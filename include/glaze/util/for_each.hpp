@@ -5,7 +5,7 @@
 
 #include <utility>
 
-namespace glaze
+namespace glz
 {
    template <class = void, std::size_t...Is>
    constexpr auto indexer(std::index_sequence<Is...>) {

@@ -14,7 +14,7 @@
 #include "glaze/util/parse.hpp"
 #include "glaze/util/for_each.hpp"
 
-namespace glaze
+namespace glz
 {
    namespace detail
    {

@@ -7,7 +7,7 @@
 
 #include <span>
 
-namespace glaze::detail
+namespace glz::detail
 {
    inline void dump(const char c, std::string& b) noexcept {
       b.push_back(c);
