@@ -78,15 +78,46 @@ Dependencies are automatically included when running CMake. [CPM.cmake](https://
 
 ## JSON Pointer Syntax
 
+Glaze supports JSON pointer syntax access in a C++ context. This is extremely helpful for building generic APIs, allowing components of complex arguments to be accessed without needed know the encapsulating class.
+
 ```c++
 my_struct s{};
-auto& x = glaze::get<double>(x, "/d");
-// x is a reference to d in the structure s
+auto& d = glaze::get<double>(s, "/d");
+// d is a reference to d in the structure s
 ```
 
 ## JSON With Comments (JSONC)
 
 Comments are supported with the specification defined here: [JSONC](https://github.com/stephenberry/JSONC)
+
+Comments can also be included in the `glaze::meta` description for your types. These comments can be written out to provide a description of your JSON interface. Calling `write_jsonc` as opposed to `write_json` will write out any comments included in the `meta` description.
+
+```c++
+struct thing {
+  double x{5.0};
+  int y{7};
+};
+
+template <>
+struct glaze::meta<thing> {
+   static constexpr auto value = object(
+      using T = thing;
+      "x", &T::a, "x is a double"_c,  //
+      "y", &T::b, "y is an int"_c   //
+   );
+};
+```
+
+
+
+Prettified output:
+
+```json
+{
+  "a": 5 /*x is a double*/,
+  "b": 7 /*y is an int*/
+}
+```
 
 # Additional Features
 
