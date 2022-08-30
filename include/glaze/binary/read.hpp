@@ -226,7 +226,13 @@ namespace glz
                if (member_it != frozen_map.end()) {
                   std::visit(
                      [&](auto&& member_ptr) {
-                        read<binary>::op(value.*member_ptr, it, end);
+                        using V = std::decay_t<decltype(member_ptr)>;
+                        if constexpr (std::is_member_pointer_v<V>) {
+                           read<binary>::op(value.*member_ptr, it, end);
+                        }
+                        else {
+                           read<binary>::op(member_ptr(value), it, end);
+                        }
                      },
                      member_it->second);
                }
