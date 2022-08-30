@@ -397,7 +397,14 @@ namespace glz
       
       return arrs;
    }
-
+   
+   template <class T, detail::string_literal key_str>
+   struct member_getter
+   {
+      static constexpr auto frozen_map = detail::make_map<T>();
+      static constexpr auto member_it = frozen_map.find(key_str.sv());
+   };
+   
    //TODO support custom types
    template <class Root_t, detail::string_literal ptr, class Expected_t = void>
    constexpr bool valid() {
@@ -412,10 +419,9 @@ namespace glz
          constexpr auto rem_ptr =
             detail::string_literal_from_view<tokens.second.size()>(tokens.second);
          if constexpr (detail::glaze_object_t<V>) {
-            constexpr auto frozen_map = detail::make_map<V>();
-            constexpr auto member_it = frozen_map.find(key_str);
-            if constexpr (member_it != frozen_map.end()) {
-               constexpr auto& member_ptr = std::get<member_it->second.index()>(member_it->second);
+            using G = member_getter<V, detail::string_literal_from_view<key_str.size()>(key_str)>;
+            if constexpr (G::member_it != G::frozen_map.end()) {
+               constexpr auto& member_ptr = std::get<G::member_it->second.index()>(G::member_it->second);
                using mptr_t = std::decay_t<decltype(member_ptr)>;
                if constexpr (std::is_member_pointer_v<mptr_t>) {
                   using sub_t = decltype(std::declval<V>().*member_ptr);
@@ -434,7 +440,7 @@ namespace glz
             }
          }
          else if constexpr (detail::map_t<V>) {
-            return valid<V::mapped_type, rem_ptr, Expected_t>();
+            return valid<typename V::mapped_type, rem_ptr, Expected_t>();
          }
          else if constexpr (detail::glaze_array_t<V>) {
             constexpr auto member_array =
@@ -442,7 +448,7 @@ namespace glz
             constexpr auto index = glz::detail::stoui(key_str); //TODO: Will not build if not int
             if constexpr (index >= 0 && index < member_array.size()) {
                constexpr auto member = member_array[index];
-               constexpr auto& member_ptr = std::get<member.index()>(member);
+               constexpr auto member_ptr = std::get<member.index()>(member);
                using sub_t = decltype(std::declval<V>().*member_ptr);
                return valid<sub_t, rem_ptr, Expected_t>();
             }
@@ -451,8 +457,8 @@ namespace glz
             }
          }
          else if constexpr (detail::array_t<V>) {
-            constexpr auto index = glz::detail::stoui(key_str);
-            return valid<V::value_type, rem_ptr, Expected_t>();
+            glz::detail::stoui(key_str);
+            return valid<typename V::value_type, rem_ptr, Expected_t>();
          }
          else if constexpr (detail::nullable_t<V>) {
             using sub_t = decltype(*std::declval<V>());

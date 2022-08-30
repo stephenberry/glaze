@@ -494,8 +494,6 @@ void json_pointer() {
       expect(&thing.vector[1] == glz::get_if<V3>(thing, "/vector/1"));
       expect(thing.vector[1].x == glz::get<double>(thing, "/vector/1/0"));
       expect(thing.thing_ptr == glz::get<sub_thing*>(thing, "/thing_ptr"));
-      
-      auto& x = glz::get<sub_thing>(thing, "/thing_ptr");
 
       //Invalid lookup
       expect(throws([&] { glz::get<char>(thing, "/thing_ptr/a"); }));
@@ -533,7 +531,7 @@ void json_pointer() {
    };
 
    "valid"_test = [] {
-      constexpr bool is_valid = glz::valid<Thing, "/thing/a", double>(); //Verify constexpr
+      [[maybe_unused]] constexpr bool is_valid = glz::valid<Thing, "/thing/a", double>(); //Verify constexpr
 
       expect(glz::valid<Thing, "/thing_ptr/a", double>() == true);
       expect(glz::valid<Thing, "/thing_ptr/a", int>() == false);

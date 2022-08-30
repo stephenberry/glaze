@@ -218,6 +218,19 @@ namespace glz
          }
          pool.wait();
       }
+      
+      /*void run_study(nano::ranges::range auto& states, auto&& f)
+      {
+         glz::pool pool{};
+         const auto n = states.size();
+         for (size_t i = 0; job_num < n; ++i)
+         {
+            pool.emplace_back([=, state = states[i]](const auto) {
+               f(std::move(state), i);
+            });
+         }
+         pool.wait();
+      }*/
 
       struct random_param
       {
