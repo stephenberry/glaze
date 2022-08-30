@@ -415,18 +415,19 @@ namespace glz
             constexpr auto frozen_map = detail::make_map<V>();
             constexpr auto member_it = frozen_map.find(key_str);
             if constexpr (member_it != frozen_map.end()) {
-               constexpr auto member_ptr =
-                  std::get<member_it->second.index()>(member_it->second);
-               using Vsub = std::decay_t<decltype(member_ptr)>;
-               if constexpr (std::is_member_pointer_v<Vsub>) {
+               constexpr auto& member_ptr = std::get<member_it->second.index()>(member_it->second);
+               using mptr_t = std::decay_t<decltype(member_ptr)>;
+               if constexpr (std::is_member_pointer_v<mptr_t>) {
                   using sub_t = decltype(std::declval<V>().*member_ptr);
                   return valid<sub_t, rem_ptr, Expected_t>();
                }
-               else {
-                  using sub_t = std::invoke_result_t<member_ptr,V>;
-                  return valid<sub_t, rem_ptr, Expected_t>();
+               else if constexpr (std::invocable<decltype(member_ptr), V>) {
+                   using sub_t = std::invoke_result_t<decltype(member_ptr),V>;
+                   return valid<sub_t, rem_ptr, Expected_t>();
                }
-
+               else {
+                  return false;
+               }
             }
             else {
                return false;
@@ -439,9 +440,15 @@ namespace glz
             constexpr auto member_array =
                glz::detail::make_array<std::decay_t<V>>();
             constexpr auto index = glz::detail::stoui(key_str); //TODO: Will not build if not int
-            constexpr auto member_ptr = member_array[index];
-            using sub_t = decltype(std::get<member_ptr.index()>(member_ptr));
-            return valid<sub_t, rem_ptr, Expected_t>();
+            if constexpr (index >= 0 && index < member_array.size()) {
+               constexpr auto member = member_array[index];
+               constexpr auto& member_ptr = std::get<member.index()>(member);
+               using sub_t = decltype(std::declval<V>().*member_ptr);
+               return valid<sub_t, rem_ptr, Expected_t>();
+            }
+            else {
+               return false;
+            }
          }
          else if constexpr (detail::array_t<V>) {
             constexpr auto index = glz::detail::stoui(key_str);

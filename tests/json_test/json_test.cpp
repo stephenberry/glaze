@@ -478,6 +478,14 @@ void json_pointer() {
              std::any_cast<double>(a) == thing.thing_ptr->a);
    };
 
+   "seek lambda"_test = [] {
+      Thing thing{};
+      std::any b{};
+      glz::seek([&](auto&& val) { b = val; }, thing, "/thing/b");
+      expect(b.has_value() && b.type() == typeid(std::string) &&
+             std::any_cast<std::string>(b) == thing.thing.b);
+   };
+
    "get"_test = [] {
       Thing thing{};
       expect(thing.thing.a == glz::get<double>(thing, "/thing_ptr/a"));
@@ -520,6 +528,23 @@ void json_pointer() {
 
       glz::write_from(thing, "/vec3/2", "999.9");
       expect(thing.vec3.z == 999.9);
+   };
+
+   "valid"_test = [] {
+      constexpr bool is_valid = glz::valid<Thing, "/thing/a", double>(); //Verify constexpr
+
+      expect(glz::valid<Thing, "/thing_ptr/a", double>() == true);
+      expect(glz::valid<Thing, "/thing_ptr/a", int>() == false);
+      expect(glz::valid<Thing, "/thing_ptr/b">() == true);
+      expect(glz::valid<Thing, "/thing_ptr/z">() == false);
+
+      expect(glz::valid<Thing, "/vec3/2", double>() == true);
+      expect(glz::valid<Thing, "/vec3/3", double>() == false);
+
+      expect(glz::valid<Thing, "/map/f", int>() == true);
+      expect(glz::valid<Thing, "/vector", std::vector<V3>>() == true);
+      expect(glz::valid<Thing, "/vector/1", V3>() == true);
+      expect(glz::valid<Thing, "/vector/1/0", double>() == true);
    };
 }
 
