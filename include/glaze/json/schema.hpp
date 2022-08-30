@@ -12,7 +12,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace glaze
+namespace glz
 {
    struct pointer
    {
@@ -35,13 +35,13 @@ namespace glaze
 }
 
 template <>
-struct glaze::meta<glaze::interface_t> {
+struct glz::meta<glaze::interface_t> {
    using T = glaze::interface_t;
    static constexpr auto value = glaze::object("includes", &T::includes, "data", &T::data, "pointers",
                      &T::pointers);
 };
 
-namespace glaze
+namespace glz
 {
    template <class Value>
    struct interface_t_parser
@@ -69,17 +69,17 @@ namespace glaze
          get_buffer(buffer, path);
 
          spec.clear();
-         glaze::read_json(spec, buffer);
+         read_json(spec, buffer);
 
          for (auto&& include : spec.includes) {
             parse(data, include,
                   relativize_if_not_absolute(working_directory, include).parent_path());
          }
 
-         glaze::read_json(data, spec.data.str);
+         read_json(data, spec.data.str);
 
          for (auto&& pointer : spec.pointers) {
-            glaze::overwrite(data, pointer.ptr, pointer.data);
+            overwrite(data, pointer.ptr, pointer.data);
          }
 
          parsing_files.erase(path_str);

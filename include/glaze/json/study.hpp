@@ -41,7 +41,7 @@ namespace glz
    struct meta<study::param>
    {
       using T = study::param;
-      static constexpr auto value = glz::object("id", &T::ptr, "*", &T::ptr, "dist", &T::distribution, "values", &T::range);
+      static constexpr auto value = object("id", &T::ptr, "*", &T::ptr, "dist", &T::distribution, "values", &T::range);
    };
 
    template <>
@@ -53,9 +53,9 @@ namespace glz
          "seed", &T::seed, "random_samples", &T::random_samples);
    };
 
-   namespace study {
-      template <class State>
-      void overwrite_state(State &state, const std::unordered_map<std::string, raw_json> &overwrites)
+   namespace study
+   {
+      void overwrite(auto& state, const std::unordered_map<std::string, raw_json> &overwrites)
       {
          for (auto&& [json_ptr, raw_json_str] : overwrites) {
             write_from(state, json_ptr, raw_json_str.str);
@@ -81,12 +81,12 @@ namespace glz
          {
             max_index = design.params.empty() ? 0 : 1;
 
-            overwrite_state(state, design.overwrite);
+            overwrite(state, design.overwrite);
 
             for (auto &param : design.params) {
                param_sets.emplace_back(param_set_from_dist(param));
                auto num_elements = param_sets.back().elements.size();
-               if (num_elements != 0) max_index *= num_elements;
+               if (num_elements != 0) { max_index *= num_elements; }
             }
          }
 
@@ -247,7 +247,7 @@ namespace glz
          random_doe(State _state, const design &design)
             : state(std::move(_state))
          {
-            overwrite_state(state, design.overwrite);
+            overwrite(state, design.overwrite);
 
             engine.seed(seed);
             resample_indices.resize(random_samples);
