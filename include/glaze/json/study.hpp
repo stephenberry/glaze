@@ -209,7 +209,7 @@ namespace glz
          while (!g.done()) {
             // generate mutates
             // TODO: maybe save states and mutate them across threads
-            pool.emplace_back([=, state = g.generate()](const auto thread_number) {
+            pool.emplace_back([=, state = g.generate()](const auto) {
                f(std::move(state), job_num);
             });
             ++job_num;
