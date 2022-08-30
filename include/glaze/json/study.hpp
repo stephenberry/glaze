@@ -9,6 +9,7 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/thread/threadpool.hpp"
 #include "glaze/util/macros.hpp"
+#include "glaze/util/type_traits.hpp"
 
 #include <random>
 #include <numeric>
@@ -173,9 +174,9 @@ namespace glz
                double step{};
                double stop{};
 
-               glz::read_json(start, dist.range[0].str);
-               glz::read_json(step, dist.range[1].str);
-               glz::read_json(stop, dist.range[2].str);
+               read_json(start, dist.range[0].str);
+               read_json(step, dist.range[1].str);
+               read_json(stop, dist.range[2].str);
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -200,6 +201,7 @@ namespace glz
       concept generator = requires(T g)
       {
          g.generate();
+         g.generate(1);
       };
 
       void run_study(generator auto& g, auto&& f)
@@ -274,14 +276,19 @@ namespace glz
 
          bool done() const { return index >= params_per_state.size(); }
 
-         const State& generate()
+         const State& generate(const size_t i)
          {
-            auto &params = params_per_state[index++];
+            auto &params = params_per_state[i];
             for (auto &param : params) {
                param.apply();
             }
 
             return state;
+         }
+         
+         const State& generate()
+         {
+            return generate(index++);
          }
 
          void reset() { index = 0; }
@@ -311,16 +318,14 @@ namespace glz
 
             bool found{};
             detail::seek_impl(
-               [&](auto &&val) {
+               [&](auto&& val) {
                   if constexpr (std::is_assignable_v<
                                    basic, std::decay_t<decltype(val)>>) {
                      found = true;
                      result.param_ptr = &val;
                   }
                   else {
-                     throw std::runtime_error(
-                        "Study params only support basic types like double, "
-                        "int, bool, or std::string");
+                     static_assert(false_v<decltype(val)>, "Study params only support basic types like double, int, bool, or std::string");
                   }
                },
                state, dist.ptr);

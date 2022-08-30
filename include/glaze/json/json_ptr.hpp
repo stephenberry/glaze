@@ -199,9 +199,10 @@ namespace glz
                                         std::string(json_ptr) +
                                         "\" with wrong type");
             else if constexpr (!std::is_lvalue_reference_v<decltype(val)>)
-               throw std::runtime_error(
-                  " Called get on \"" + std::string(json_ptr) +
-                  "\" that points to data that cannot be refrenced directly");
+               static_assert(false_v<decltype(val)>, "Called get on a json pointer that points to data that cannot be referenced directly");
+               /*throw std::runtime_error(
+                  " Called get on '" + std::string(json_ptr) +
+                  "' that points to data that cannot be refrenced directly");*/
             else
                result = &val;
          },
