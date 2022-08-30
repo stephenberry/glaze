@@ -31,7 +31,7 @@ namespace glz
          auto num_groups = GetActiveProcessorGroupCount();
          WORD group = 0;
          for (size_t i = threads.size(); i < n; ++i) {
-            auto thread = std::thread(&pool::worker, this);
+            auto thread = std::thread(&pool::worker, this, i);
             auto hndl = thread.native_handle();
             GROUP_AFFINITY affinity;
             if (GetThreadGroupAffinity(hndl, &affinity) &&
@@ -131,7 +131,9 @@ namespace glz
          while (true) {
             // Wait for work
             std::unique_lock<std::mutex> lock(mtx);
-            work_cv.wait(lock, [this]() { return closed || !queue.empty(); });
+            work_cv.wait(lock, [this]() {
+               return closed || !(front_index == last_index);
+            });
             if (queue.empty()) {
                if (closed) {
                   return;
@@ -142,9 +144,6 @@ namespace glz
             // Grab work
             ++working;
             auto work = queue.find(front_index++);
-            if (work == queue.end()) {
-               throw std::runtime_error("index not found");
-            }
             lock.unlock();
 
             work->second(thread_number);
