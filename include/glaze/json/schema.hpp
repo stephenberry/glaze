@@ -37,7 +37,7 @@ namespace glz
 template <>
 struct glz::meta<glaze::interface_t> {
    using T = glaze::interface_t;
-   static constexpr auto value = glaze::object("includes", &T::includes, "data", &T::data, "pointers",
+   static constexpr auto value = object("includes", &T::includes, "data", &T::data, "pointers",
                      &T::pointers);
 };
 

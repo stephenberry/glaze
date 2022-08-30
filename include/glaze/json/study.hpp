@@ -27,7 +27,7 @@ namespace glz
       struct design
       {
          std::vector<param> params{};  //!< study parameters
-         std::vector<std::unordered_map<std::string, raw_json>> states{};
+         std::vector<std::unordered_map<std::string, raw_json>> states{}; //!< map of pointer syntax and json representation
          std::unordered_map<std::string, raw_json> overwrite{}; //!< pointer syntax and json representation
          std::default_random_engine::result_type seed{}; //!< Seed for randomized study
          size_t random_samples{};  //!< Number of runs to perform in randomized study.
@@ -41,7 +41,7 @@ namespace glz
    struct meta<study::param>
    {
       using T = study::param;
-      static constexpr auto value = object("id", &T::ptr, "*", &T::ptr, "dist", &T::distribution, "values", &T::range);
+      static constexpr auto value = object("ptr", &T::ptr, "dist", &T::distribution, "values", &T::range);
    };
 
    template <>
@@ -64,7 +64,7 @@ namespace glz
 
       struct param_set
       {
-         basic_ptr param_ptr{};
+         basic_ptr param_ptr{}; // to only seek once
          std::vector<basic> elements{};
       };
 
@@ -75,12 +75,6 @@ namespace glz
          std::vector<param_set> param_sets;
          std::size_t index{};
          std::size_t max_index{};
-         
-         struct glaze
-         {
-            using T = full_factorial;
-            static constexpr auto value = object("state", &T::state, "param_sets", &T::param_sets, "index", &T::index, "max_index", &T::max_index);
-         };
 
          full_factorial(State _state, const design& design)
             : state(std::move(_state))
@@ -90,21 +84,21 @@ namespace glz
             overwrite(state, design.overwrite);
 
             for (auto &param : design.params) {
-               param_sets.emplace_back(param_set_from_dist(param));
-               auto num_elements = param_sets.back().elements.size();
+               auto& ps = param_sets.emplace_back(param_set_from_dist(param));
+               const auto num_elements = ps.elements.size();
                if (num_elements != 0) { max_index *= num_elements; }
             }
          }
 
-         bool empty() const { return index >= max_index; }
+         bool done() const { return index >= max_index; }
 
          std::size_t size() const { return max_index; }
-
-         const State& generate()
+         
+         const State& generate(const size_t i)
          {
             for (auto &param_set : param_sets) {
-               const auto this_size = std::max(param_set.elements.size(), std::size_t{1});
-               const auto this_index = index % this_size;
+               const auto this_size = std::max(param_set.elements.size(), size_t{1});
+               const auto this_index = i % this_size;
                std::visit(
                   [&](auto&& param_ptr) {
                      using V =
@@ -126,8 +120,12 @@ namespace glz
                   param_set.param_ptr);
             }
 
-            ++index;
             return state;
+         }
+
+         const State& generate()
+         {
+            return generate(index++);
          }
 
          param_set param_set_from_dist(const param &dist)
@@ -208,7 +206,7 @@ namespace glz
       {
          glz::pool pool{};
          size_t job_num = 0;
-         while (!g.empty()) {
+         while (!g.done()) {
             // generate mutates
             pool.emplace_back([=, state = g.generate()] {
                f(std::move(state), job_num);
@@ -273,7 +271,7 @@ namespace glz
             resample(1.0);
          }
 
-         bool empty() const { return index >= params_per_state.size(); }
+         bool done() const { return index >= params_per_state.size(); }
 
          const State& generate()
          {
@@ -326,8 +324,7 @@ namespace glz
                },
                state, dist.ptr);
             if (!found) {
-               throw std::runtime_error("Param \"" + dist.ptr +
-                                        "\" doesnt exist");
+               throw std::runtime_error("Param '" + dist.ptr + "' doesnt exist");
             }
 
             if (dist.distribution == "elements") {
