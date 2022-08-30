@@ -159,7 +159,13 @@ namespace glz
             for_each<N>([&](auto I) {
                static constexpr auto item = std::get<I>(meta_v<V>);
                dump_int(I, b); // dump the known key as an integer
-               write<binary>::op<Opts>(value.*std::get<1>(item), b);
+               if constexpr (std::is_member_pointer_v<
+                                std::tuple_element_t<1, decltype(item)>>) {
+                  write<binary>::op<Opts>(value.*std::get<1>(item), b);
+               }
+               else {
+                  write<binary>::op<Opts>(std::get<1>(item)(value), b);
+               }
             });
          }
       };

@@ -11,6 +11,7 @@
 #include "glaze/util/string_view.hpp"
 #include "glaze/util/variant.hpp"
 #include "glaze/util/tuple.hpp"
+#include "glaze/util/type_traits.hpp"
 
 #include "NanoRange/nanorange.hpp"
 

@@ -123,14 +123,14 @@ template <>
 struct glz::meta<Thing>
 {
    using T = Thing;
-   static constexpr auto glaze =
+   static constexpr auto value =
       glz::object("thing", &T::thing,                       //
                     "thing2array", &T::thing2array,      //
                     "vec3", &T::vec3,                    //
                     "list", &T::list,                    //
                     "deque", &T::deque,                       //
-                    "vector", &T::vector,                     //
-                    "i", &T::i,                          //
+                    "vector", [](auto&& v) -> auto& { return v.vector; },  //
+                    "i", [](auto&& v) -> auto& { return v.i; },       //
                     "d", &T::d, "double is the best type",  //
                     "b", &T::b,                          //
                     "c", &T::c,                          //
