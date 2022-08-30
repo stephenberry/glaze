@@ -45,7 +45,7 @@ namespace glz
          }
 #else
          for (size_t i = threads.size(); i < n; ++i) {
-            threads.emplace_back(std::thread(&pool::worker, this));
+            threads.emplace_back(std::thread(&pool::worker, this, i));
          }
 #endif
       }
@@ -65,18 +65,18 @@ namespace glz
       }
 
       template <class F>
-      std::future<std::invoke_result_t<std::decay_t<F>>> emplace_back(F &&func)
+      std::future<std::invoke_result_t<std::decay_t<F>, size_t>> emplace_back(F &&func)
       {
-         using result_type = decltype(func());
+         using result_type = decltype(func(size_t{}));
 
          std::lock_guard lock(mtx);
 
          auto promise = std::make_shared<std::promise<result_type>>();
 
-         queue.emplace_back([=](auto...) {
+         queue.emplace_back([=](const size_t thread_number) {
             try {
                if constexpr (std::is_void<result_type>::value) {
-                  func();
+                  func(thread_number);
                }
                else {
                   promise->set_value(func());
@@ -117,14 +117,14 @@ namespace glz
 
      private:
       std::vector<std::thread> threads;
-      std::deque<std::function<void()>> queue;
+      std::deque<std::function<void(const size_t)>> queue;
       std::atomic<unsigned int> working = 0;
       bool closed = false;
       std::mutex mtx;
       std::condition_variable work_cv;
       std::condition_variable done_cv;
 
-      void worker()
+      void worker(const size_t thread_number)
       {
          while (true) {
             // Wait for work
@@ -143,7 +143,7 @@ namespace glz
             queue.pop_front();
             lock.unlock();
 
-            work();
+            work(thread_number);
 
             // Notify that work is finished
             lock.lock();
