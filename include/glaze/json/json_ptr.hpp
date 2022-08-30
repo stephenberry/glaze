@@ -423,7 +423,7 @@ namespace glz
                   return valid<sub_t, rem_ptr, Expected_t>();
                }
                else {
-                  using sub_t = std::invoke_result_t<member_ptr,V>;
+                  using sub_t = std::invoke_result_t<decltype(member_ptr),V>;
                   return valid<sub_t, rem_ptr, Expected_t>();
                }
 
