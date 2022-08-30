@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "NanoRange/nanorange.hpp"
+
 #include "glaze/core/common.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
@@ -219,18 +221,19 @@ namespace glz
          pool.wait();
       }
       
-      /*void run_study(nano::ranges::range auto& states, auto&& f)
+      template <class T> requires nano::ranges::range<T>
+      void run_study(T& states, auto&& f)
       {
          glz::pool pool{};
          const auto n = states.size();
-         for (size_t i = 0; job_num < n; ++i)
+         for (size_t i = 0; i < n; ++i)
          {
             pool.emplace_back([=, state = states[i]](const auto) {
                f(std::move(state), i);
             });
          }
          pool.wait();
-      }*/
+      }
 
       struct random_param
       {
