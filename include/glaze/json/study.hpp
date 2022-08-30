@@ -75,6 +75,12 @@ namespace glz
          std::vector<param_set> param_sets;
          std::size_t index{};
          std::size_t max_index{};
+         
+         struct glaze
+         {
+            using T = full_factorial;
+            static constexpr auto value = object("state", &T::state, "param_sets", &T::param_sets, "index", &T::index, "max_index", &T::max_index);
+         };
 
          full_factorial(State _state, const design& design)
             : state(std::move(_state))
@@ -101,20 +107,20 @@ namespace glz
                const auto this_index = index % this_size;
                std::visit(
                   [&](auto&& param_ptr) {
-                     using T =
+                     using V =
                         std::remove_pointer_t<std::decay_t<decltype(param_ptr)>>;
                      
                      auto& element = param_set.elements[this_index];
                      if (std::holds_alternative<double>(element)) {
-                        if constexpr (std::is_convertible_v<T, double>) {
-                           *param_ptr = static_cast<T>(std::get<double>(element));
+                        if constexpr (std::is_convertible_v<V, double>) {
+                           *param_ptr = static_cast<V>(std::get<double>(element));
                         }
                         else {
                            throw std::runtime_error("full_factorial::generate: elements type not convertible to design type");
                         }
                      }
                      else {
-                        *param_ptr = std::get<T>(param_set.elements[this_index]);
+                        *param_ptr = std::get<V>(param_set.elements[this_index]);
                      }
                   },
                   param_set.param_ptr);
