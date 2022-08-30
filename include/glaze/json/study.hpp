@@ -49,7 +49,7 @@ namespace glz
    {
       using T = study::design;
       static constexpr auto value =
-         glz::object("params", &T::params, "states", &T::states, "overwrite", &T::overwrite,
+         object("params", &T::params, "states", &T::states, "overwrite", &T::overwrite,
          "seed", &T::seed, "random_samples", &T::random_samples);
    };
 
@@ -58,7 +58,7 @@ namespace glz
       void overwrite_state(State &state, const std::unordered_map<std::string, raw_json> &overwrites)
       {
          for (auto&& [json_ptr, raw_json_str] : overwrites) {
-            glz::write_from(state, json_ptr, raw_json_str.str);
+            write_from(state, json_ptr, raw_json_str.str);
          }
       }
 
