@@ -97,31 +97,30 @@ namespace glz
          const State& generate()
          {
             for (auto &param_set : param_sets) {
-               const std::size_t this_size = std::max(
-                  param_set.elements.size(), static_cast<std::size_t>(1));
-               const std::size_t this_index = index % this_size;
+               const auto this_size = std::max(param_set.elements.size(), std::size_t{1});
+               const auto this_index = index % this_size;
                std::visit(
-                  [&](auto &&param_ptr) {
-                     using param_type =
+                  [&](auto&& param_ptr) {
+                     using T =
                         std::remove_pointer_t<std::decay_t<decltype(param_ptr)>>;
                      
-                     if (std::holds_alternative<double>(param_set.elements[this_index])) {
-                        if constexpr (std::is_convertible_v<param_type, double>) {
-                           *param_ptr =
-                              static_cast<param_type>(std::get<double>(param_set.elements[this_index]));
+                     auto& element = param_set.elements[this_index];
+                     if (std::holds_alternative<double>(element)) {
+                        if constexpr (std::is_convertible_v<T, double>) {
+                           *param_ptr = static_cast<T>(std::get<double>(element));
                         }
                         else {
                            throw std::runtime_error("full_factorial::generate: elements type not convertible to design type");
                         }
                      }
                      else {
-                        *param_ptr = std::get<param_type>(param_set.elements[this_index]);
+                        *param_ptr = std::get<T>(param_set.elements[this_index]);
                      }
                   },
                   param_set.param_ptr);
             }
 
-            index++;
+            ++index;
             return state;
          }
 
