@@ -291,7 +291,7 @@ namespace glz
             std::size_t to_resample = static_cast<std::size_t>(
                std::ceil(ratio * params_per_state.size()));
 
-            for (std::size_t i = 0; i < to_resample; i++) {
+            for (std::size_t i = 0; i < to_resample; ++i) {
                auto &params = params_per_state[resample_indices[i]];
                for (auto &param : params) {
                   param.value = param.gen();
