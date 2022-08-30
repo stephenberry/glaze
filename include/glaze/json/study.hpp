@@ -20,7 +20,7 @@ namespace glz
       struct param
       {
          std::string ptr{};
-         std::string distribution = "";
+         std::string distribution{};
          std::vector<raw_json> range{};
       };
 
@@ -30,8 +30,8 @@ namespace glz
          std::vector<std::unordered_map<std::string, raw_json>> states{};
          std::unordered_map<std::string, raw_json> overwrite{}; //!< pointer syntax and json representation
          std::default_random_engine::result_type seed{}; //!< Seed for randomized study
-         size_t random_samples{};  //!< Number of runs to perform in randomized
-                                   //!< study. If zero it will run a full
+         size_t random_samples{};  //!< Number of runs to perform in randomized study.
+                                   //! If zero it will run a full
                                    //!< factorial ignoring random distributions
                                    //!< instead instead of a randomized study
       };
@@ -144,8 +144,7 @@ namespace glz
                },
                state, dist.ptr);
             if (!found) {
-               throw std::runtime_error("Param \"" + dist.ptr +
-                                        "\" doesnt exist");
+               throw std::runtime_error("Param '" + dist.ptr + "' doesn't exist");
             }
 
             if (dist.distribution == "elements") {
@@ -359,8 +358,8 @@ namespace glz
                double start{};
                double stop{};
 
-               glz::read_json(start, dist.range[0].str);
-               glz::read_json(stop, dist.range[2].str);
+               read_json(start, dist.range[0].str);
+               read_json(stop, dist.range[2].str);
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -381,8 +380,8 @@ namespace glz
                double start{};
                double stop{};
 
-               glz::read_json(start, dist.range[0].str);
-               glz::read_json(stop, dist.range[1].str);
+               read_json(start, dist.range[0].str);
+               read_json(stop, dist.range[1].str);
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -404,8 +403,8 @@ namespace glz
                double mean{};
                double std_dev{};
 
-               glz::read_json(mean, dist.range[0].str);
-               glz::read_json(std_dev, dist.range[1].str);
+               read_json(mean, dist.range[0].str);
+               read_json(std_dev, dist.range[1].str);
 
                result.gen() =
                   [this, dist = std::normal_distribution<double>(
