@@ -73,7 +73,7 @@ namespace glz
 
          auto promise = std::make_shared<std::promise<result_type>>();
 
-         queue.emplace_back([=, f = std::forward<F>(func)](const size_t thread_number) {
+         queue.emplace(last_index++, [=, f = std::forward<F>(func)](const size_t thread_number) {
             try {
                if constexpr (std::is_void<result_type>::value) {
                   f(thread_number);
@@ -117,7 +117,9 @@ namespace glz
 
      private:
       std::vector<std::thread> threads;
-      std::deque<std::function<void(const size_t)>> queue;
+      std::unordered_map<size_t, std::function<void(const size_t)>> queue;
+      std::atomic<size_t> front_index{};
+      std::atomic<size_t> last_index{};
       std::atomic<unsigned int> working = 0;
       bool closed = false;
       std::mutex mtx;
@@ -139,14 +141,18 @@ namespace glz
 
             // Grab work
             ++working;
-            auto work = queue.front();
-            queue.pop_front();
+            auto work = queue.find(front_index++);
+            if (work == queue.end()) {
+               throw std::runtime_error("index not found");
+            }
             lock.unlock();
 
-            work(thread_number);
+            work->second(thread_number);
+            
+            lock.lock();
+            queue.erase(work);
 
             // Notify that work is finished
-            lock.lock();
             --working;
             done_cv.notify_all();
          }
