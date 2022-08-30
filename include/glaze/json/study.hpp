@@ -325,7 +325,7 @@ namespace glz
                      result.param_ptr = &val;
                   }
                   else {
-                     static_assert(false_v<decltype(val)>, "Study params only support basic types like double, int, bool, or std::string");
+                     throw std::runtime_error("Study params only support basic types like double, int, bool, or std::string");
                   }
                },
                state, dist.ptr);
