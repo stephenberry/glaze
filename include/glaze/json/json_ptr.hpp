@@ -200,8 +200,8 @@ namespace glz
                                         "\" with wrong type");
             else if constexpr (!std::is_lvalue_reference_v<decltype(val)>)
                throw std::runtime_error(
-                  " Called get on \"" + std::string(json_ptr) +
-                  "\" that points to data that cannot be refrenced directly");
+                  " Called get on '" + std::string(json_ptr) +
+                  "' that points to data that cannot be refrenced directly");
             else
                result = &val;
          },

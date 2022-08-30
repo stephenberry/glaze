@@ -9,13 +9,7 @@
 #include "glaze/util/for_each.hpp"
 
 namespace glz
-{   
-   template<class T> struct false_v : std::false_type {};
-   namespace detail {
-       struct aggressive_unicorn_type; // Do not unleash
-   }
-   template<> struct false_v<detail::aggressive_unicorn_type> : std::true_type {};
-   
+{
 #define specialize(type) template <> \
    struct name_t<type> { \
       static constexpr std::string_view value = #type; \

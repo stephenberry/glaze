@@ -31,7 +31,7 @@ namespace glz
          auto num_groups = GetActiveProcessorGroupCount();
          WORD group = 0;
          for (size_t i = threads.size(); i < n; ++i) {
-            auto thread = std::thread(&pool::worker, this);
+            auto thread = std::thread(&pool::worker, this, i);
             auto hndl = thread.native_handle();
             GROUP_AFFINITY affinity;
             if (GetThreadGroupAffinity(hndl, &affinity) &&
@@ -45,7 +45,7 @@ namespace glz
          }
 #else
          for (size_t i = threads.size(); i < n; ++i) {
-            threads.emplace_back(std::thread(&pool::worker, this));
+            threads.emplace_back(std::thread(&pool::worker, this, i));
          }
 #endif
       }
@@ -65,21 +65,21 @@ namespace glz
       }
 
       template <class F>
-      std::future<std::invoke_result_t<std::decay_t<F>>> emplace_back(F &&func)
+      std::future<std::invoke_result_t<std::decay_t<F>, size_t>> emplace_back(F&& func)
       {
-         using result_type = decltype(func());
+         using result_type = decltype(func(size_t{}));
 
          std::lock_guard lock(mtx);
 
          auto promise = std::make_shared<std::promise<result_type>>();
 
-         queue.emplace_back([=](auto...) {
+         queue.emplace(last_index++, [=, f = std::forward<F>(func)](const size_t thread_number) {
             try {
                if constexpr (std::is_void<result_type>::value) {
-                  func();
+                  f(thread_number);
                }
                else {
-                  promise->set_value(func());
+                  promise->set_value(f(thread_number));
                }
             }
             catch (...) {
@@ -117,19 +117,23 @@ namespace glz
 
      private:
       std::vector<std::thread> threads;
-      std::deque<std::function<void()>> queue;
+      std::unordered_map<size_t, std::function<void(const size_t)>> queue;
+      std::atomic<size_t> front_index{};
+      std::atomic<size_t> last_index{};
       std::atomic<unsigned int> working = 0;
       bool closed = false;
       std::mutex mtx;
       std::condition_variable work_cv;
       std::condition_variable done_cv;
 
-      void worker()
+      void worker(const size_t thread_number)
       {
          while (true) {
             // Wait for work
             std::unique_lock<std::mutex> lock(mtx);
-            work_cv.wait(lock, [this]() { return closed || !queue.empty(); });
+            work_cv.wait(lock, [this]() {
+               return closed || !(front_index == last_index);
+            });
             if (queue.empty()) {
                if (closed) {
                   return;
@@ -139,14 +143,15 @@ namespace glz
 
             // Grab work
             ++working;
-            auto work = queue.front();
-            queue.pop_front();
+            auto work = queue.find(front_index++);
             lock.unlock();
 
-            work();
+            work->second(thread_number);
+            
+            lock.lock();
+            queue.erase(work);
 
             // Notify that work is finished
-            lock.lock();
             --working;
             done_cv.notify_all();
          }

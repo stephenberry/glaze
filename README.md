@@ -17,9 +17,9 @@ struct my_struct
 };
 
 template <>
-struct glaze::meta<my_struct> {
+struct glz::meta<my_struct> {
    using T = my_struct;
-   static constexpr auto value = glaze::object(
+   static constexpr auto value = object(
       "i", &T::i, //
       "d", &T::d, //
       "hello", &T::hello, //
@@ -48,7 +48,7 @@ struct glaze::meta<my_struct> {
 ```c++
 my_struct s{};
 std::string buffer{};
-glaze::write_json(s, buffer);
+glz::write_json(s, buffer);
 // buffer is now: {"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}
 ```
 
@@ -57,7 +57,7 @@ glaze::write_json(s, buffer);
 ```c++
 std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
 my_struct s{};
-glaze::read_json(s, buffer);
+glz::read_json(s, buffer);
 // populates 's' from JSON
 ```
 
@@ -82,7 +82,7 @@ Glaze supports JSON pointer syntax access in a C++ context. This is extremely he
 
 ```c++
 my_struct s{};
-auto& d = glaze::get<double>(s, "/d");
+auto& d = glz::get<double>(s, "/d");
 // d is a reference to d in the structure s
 ```
 
@@ -99,7 +99,7 @@ struct thing {
 };
 
 template <>
-struct glaze::meta<thing> {
+struct glz::meta<thing> {
    static constexpr auto value = object(
       using T = thing;
       "x", &T::a, "x is a double"_c,  //

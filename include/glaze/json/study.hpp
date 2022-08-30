@@ -9,6 +9,7 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/thread/threadpool.hpp"
 #include "glaze/util/macros.hpp"
+#include "glaze/util/type_traits.hpp"
 
 #include <random>
 #include <numeric>
@@ -20,18 +21,18 @@ namespace glz
       struct param
       {
          std::string ptr{};
-         std::string distribution = "";
+         std::string distribution{};
          std::vector<raw_json> range{};
       };
 
       struct design
       {
          std::vector<param> params{};  //!< study parameters
-         std::vector<std::unordered_map<std::string, raw_json>> states{};
+         std::vector<std::unordered_map<std::string, raw_json>> states{}; //!< map of pointer syntax and json representation
          std::unordered_map<std::string, raw_json> overwrite{}; //!< pointer syntax and json representation
          std::default_random_engine::result_type seed{}; //!< Seed for randomized study
-         size_t random_samples{};  //!< Number of runs to perform in randomized
-                                   //!< study. If zero it will run a full
+         size_t random_samples{};  //!< Number of runs to perform in randomized study.
+                                   //! If zero it will run a full
                                    //!< factorial ignoring random distributions
                                    //!< instead instead of a randomized study
       };
@@ -41,7 +42,7 @@ namespace glz
    struct meta<study::param>
    {
       using T = study::param;
-      static constexpr auto value = glz::object("id", &T::ptr, "*", &T::ptr, "dist", &T::distribution, "values", &T::range);
+      static constexpr auto value = object("ptr", &T::ptr, "dist", &T::distribution, "values", &T::range);
    };
 
    template <>
@@ -49,22 +50,22 @@ namespace glz
    {
       using T = study::design;
       static constexpr auto value =
-         glz::object("params", &T::params, "states", &T::states, "overwrite", &T::overwrite,
+         object("params", &T::params, "states", &T::states, "overwrite", &T::overwrite,
          "seed", &T::seed, "random_samples", &T::random_samples);
    };
 
-   namespace study {
-      template <class State>
-      void overwrite_state(State &state, const std::unordered_map<std::string, raw_json> &overwrites)
+   namespace study
+   {
+      void overwrite(auto& state, const std::unordered_map<std::string, raw_json> &overwrites)
       {
          for (auto&& [json_ptr, raw_json_str] : overwrites) {
-            glz::write_from(state, json_ptr, raw_json_str.str);
+            write_from(state, json_ptr, raw_json_str.str);
          }
       }
 
       struct param_set
       {
-         basic_ptr param_ptr{};
+         basic_ptr param_ptr{}; // to only seek once
          std::vector<basic> elements{};
       };
 
@@ -81,48 +82,51 @@ namespace glz
          {
             max_index = design.params.empty() ? 0 : 1;
 
-            overwrite_state(state, design.overwrite);
+            overwrite(state, design.overwrite);
 
             for (auto &param : design.params) {
-               param_sets.emplace_back(param_set_from_dist(param));
-               auto num_elements = param_sets.back().elements.size();
-               if (num_elements != 0) max_index *= num_elements;
+               auto& ps = param_sets.emplace_back(param_set_from_dist(param));
+               const auto num_elements = ps.elements.size();
+               if (num_elements != 0) { max_index *= num_elements; }
             }
          }
 
-         bool empty() const { return index >= max_index; }
+         bool done() const { return index >= max_index; }
 
          std::size_t size() const { return max_index; }
-
-         const State& generate()
+         
+         const State& generate(const size_t i)
          {
             for (auto &param_set : param_sets) {
-               const std::size_t this_size = std::max(
-                  param_set.elements.size(), static_cast<std::size_t>(1));
-               const std::size_t this_index = index % this_size;
+               const auto this_size = std::max(param_set.elements.size(), size_t{1});
+               const auto this_index = i % this_size;
                std::visit(
-                  [&](auto &&param_ptr) {
-                     using param_type =
+                  [&](auto&& param_ptr) {
+                     using V =
                         std::remove_pointer_t<std::decay_t<decltype(param_ptr)>>;
                      
-                     if (std::holds_alternative<double>(param_set.elements[this_index])) {
-                        if constexpr (std::is_convertible_v<param_type, double>) {
-                           *param_ptr =
-                              static_cast<param_type>(std::get<double>(param_set.elements[this_index]));
+                     auto& element = param_set.elements[this_index];
+                     if (std::holds_alternative<double>(element)) {
+                        if constexpr (std::is_convertible_v<V, double>) {
+                           *param_ptr = static_cast<V>(std::get<double>(element));
                         }
                         else {
                            throw std::runtime_error("full_factorial::generate: elements type not convertible to design type");
                         }
                      }
                      else {
-                        *param_ptr = std::get<param_type>(param_set.elements[this_index]);
+                        *param_ptr = std::get<V>(param_set.elements[this_index]);
                      }
                   },
                   param_set.param_ptr);
             }
 
-            index++;
             return state;
+         }
+
+         const State& generate()
+         {
+            return generate(index++);
          }
 
          param_set param_set_from_dist(const param &dist)
@@ -145,8 +149,7 @@ namespace glz
                },
                state, dist.ptr);
             if (!found) {
-               throw std::runtime_error("Param \"" + dist.ptr +
-                                        "\" doesnt exist");
+               throw std::runtime_error("Param '" + dist.ptr + "' doesn't exist");
             }
 
             if (dist.distribution == "elements") {
@@ -171,9 +174,9 @@ namespace glz
                double step{};
                double stop{};
 
-               glz::read_json(start, dist.range[0].str);
-               glz::read_json(step, dist.range[1].str);
-               glz::read_json(stop, dist.range[2].str);
+               read_json(start, dist.range[0].str);
+               read_json(step, dist.range[1].str);
+               read_json(stop, dist.range[2].str);
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -198,15 +201,17 @@ namespace glz
       concept generator = requires(T g)
       {
          g.generate();
+         g.generate(1);
       };
 
       void run_study(generator auto& g, auto&& f)
       {
          glz::pool pool{};
          size_t job_num = 0;
-         while (!g.empty()) {
+         while (!g.done()) {
             // generate mutates
-            pool.emplace_back([=, state = g.generate()] {
+            // TODO: maybe save states and mutate them across threads
+            pool.emplace_back([=, state = g.generate()](const auto) {
                f(std::move(state), job_num);
             });
             ++job_num;
@@ -248,7 +253,7 @@ namespace glz
          random_doe(State _state, const design &design)
             : state(std::move(_state))
          {
-            overwrite_state(state, design.overwrite);
+            overwrite(state, design.overwrite);
 
             engine.seed(seed);
             resample_indices.resize(random_samples);
@@ -269,16 +274,21 @@ namespace glz
             resample(1.0);
          }
 
-         bool empty() const { return index >= params_per_state.size(); }
+         bool done() const { return index >= params_per_state.size(); }
 
-         const State& generate()
+         const State& generate(const size_t i)
          {
-            auto &params = params_per_state[index++];
+            auto &params = params_per_state[i];
             for (auto &param : params) {
                param.apply();
             }
 
             return state;
+         }
+         
+         const State& generate()
+         {
+            return generate(index++);
          }
 
          void reset() { index = 0; }
@@ -292,7 +302,7 @@ namespace glz
             std::size_t to_resample = static_cast<std::size_t>(
                std::ceil(ratio * params_per_state.size()));
 
-            for (std::size_t i = 0; i < to_resample; i++) {
+            for (std::size_t i = 0; i < to_resample; ++i) {
                auto &params = params_per_state[resample_indices[i]];
                for (auto &param : params) {
                   param.value = param.gen();
@@ -308,22 +318,19 @@ namespace glz
 
             bool found{};
             detail::seek_impl(
-               [&](auto &&val) {
+               [&](auto&& val) {
                   if constexpr (std::is_assignable_v<
                                    basic, std::decay_t<decltype(val)>>) {
                      found = true;
                      result.param_ptr = &val;
                   }
                   else {
-                     throw std::runtime_error(
-                        "Study params only support basic types like double, "
-                        "int, bool, or std::string");
+                     throw std::runtime_error("Study params only support basic types like double, int, bool, or std::string");
                   }
                },
                state, dist.ptr);
             if (!found) {
-               throw std::runtime_error("Param \"" + dist.ptr +
-                                        "\" doesnt exist");
+               throw std::runtime_error("Param '" + dist.ptr + "' doesnt exist");
             }
 
             if (dist.distribution == "elements") {
@@ -360,8 +367,8 @@ namespace glz
                double start{};
                double stop{};
 
-               glz::read_json(start, dist.range[0].str);
-               glz::read_json(stop, dist.range[2].str);
+               read_json(start, dist.range[0].str);
+               read_json(stop, dist.range[2].str);
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -382,8 +389,8 @@ namespace glz
                double start{};
                double stop{};
 
-               glz::read_json(start, dist.range[0].str);
-               glz::read_json(stop, dist.range[1].str);
+               read_json(start, dist.range[0].str);
+               read_json(stop, dist.range[1].str);
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -405,8 +412,8 @@ namespace glz
                double mean{};
                double std_dev{};
 
-               glz::read_json(mean, dist.range[0].str);
-               glz::read_json(std_dev, dist.range[1].str);
+               read_json(mean, dist.range[0].str);
+               read_json(std_dev, dist.range[1].str);
 
                result.gen() =
                   [this, dist = std::normal_distribution<double>(
