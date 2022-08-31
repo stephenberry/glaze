@@ -1648,6 +1648,18 @@ suite local_meta_tests = [] {
    };
 };
 
+suite raw_json_tests = [] {
+   "round_trip_raw_json"_test = [] {
+      std::vector<glz::raw_json> v{ "0", "1", "2" };
+      std::string s;
+      glz::write_json(v, s);
+      expect(s == R"([0,1,2])");
+      expect(nothrow([&] {
+         glz::read_json(v, s);
+      }));
+   };
+};
+
 int main()
 {
    using namespace boost::ut;

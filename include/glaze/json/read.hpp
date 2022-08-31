@@ -45,6 +45,7 @@ namespace glz
                   continue;
                case ',':
                case '}':
+               case ']':
                   break;
                default:
                   ++it;
