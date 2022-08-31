@@ -99,9 +99,11 @@ namespace glz
          
          const State& generate(const size_t i)
          {
+            size_t deconst_index = i;
             for (auto &param_set : param_sets) {
                const auto this_size = std::max(param_set.elements.size(), size_t{1});
-               const auto this_index = i % this_size;
+               const auto this_index = deconst_index % this_size;
+               deconst_index /= this_size;
                std::visit(
                   [&](auto&& param_ptr) {
                      using V =
