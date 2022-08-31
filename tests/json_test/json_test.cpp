@@ -1578,7 +1578,7 @@ suite error_outputs = [] {
 struct study_obj
 {
    size_t x{};
-   double y{};
+   size_t y{};
 };
 
 template <>
@@ -1607,6 +1607,34 @@ void study_tests()
       
       expect(results[0] == 0);
       expect(results[10] == 10);
+   };
+   
+   "doe"_test = [] {
+      glz::study::design design;
+      design.params = { { "/x", "linspace", { "0", "1", "3" } },
+         { "/y", "linspace", { "0", "1", "2" } }
+      };
+      
+      glz::study::full_factorial g{ study_obj{}, design };
+      
+      std::vector<std::string> results;
+      for (size_t i = 0; i < g.size(); ++i) {
+         const auto point = g.generate(i);
+         results.emplace_back(std::to_string(point.x) + "|" + std::to_string(point.y));
+      }
+      
+      std::sort(results.begin(), results.end());
+      
+      std::vector<std::string> results2;
+      std::mutex mtx{};
+      glz::study::run_study(g, [&](const auto& point, [[maybe_unused]] const auto job_num){
+         std::unique_lock lock{mtx};
+         results2.emplace_back(std::to_string(point.x) + "|" + std::to_string(point.y));
+      });
+      
+      std::sort(results2.begin(), results2.end());
+      
+      expect(results == results2);
    };
 }
 
