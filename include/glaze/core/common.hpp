@@ -36,6 +36,15 @@ namespace glz
       
       template <class T>
       Object(T) -> Object<T>;
+
+      template <class T>
+      struct Enum
+      {
+         T value;
+      };
+
+      template <class T>
+      Enum(T) -> Enum<T>;
       
       template <int... I>
       using is = std::integer_sequence<int, I...>;
@@ -306,6 +315,9 @@ namespace glz
       template <class T>
       concept glaze_object_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Object>;
 
+      template <class T>
+      concept glaze_enum_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Enum>;
+
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to)
       {
@@ -479,6 +491,43 @@ namespace glz
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_key_int_map_impl<T>(indices);
       }
+
+      template <class T, size_t... I>
+      constexpr auto make_enum_to_string_map_impl(std::index_sequence<I...>)
+      {
+         using key_t = std::underlying_type_t<T>;
+         return frozen::make_unordered_map<key_t, frozen::string,
+                                           std::tuple_size_v<meta_t<T>>>(
+            {std::make_pair<key_t, frozen::string>(
+               static_cast<key_t>(std::get<1>(std::get<I>(meta_v<T>))),
+               frozen::string(std::get<0>(std::get<I>(meta_v<T>))))...});
+      }
+
+      template <class T>
+      constexpr auto make_enum_to_string_map()
+      {
+         constexpr auto indices =
+            std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
+         return make_enum_to_string_map_impl<T>(indices);
+      }
+
+      template <class T, size_t... I>
+      constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>)
+      {
+         return frozen::make_unordered_map<frozen::string, T,
+                                           std::tuple_size_v<meta_t<T>>>(
+            {std::make_pair<frozen::string, T>(
+               frozen::string(std::get<0>(std::get<I>(meta_v<T>))),
+               T(std::get<1>(std::get<I>(meta_v<T>))))...});
+      }
+
+      template <class T>
+      constexpr auto make_string_to_enum_map()
+      {
+         constexpr auto indices =
+            std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
+         return make_string_to_enum_map_impl<T>(indices);
+      }
    }  // namespace detail
 
    constexpr auto array(auto&&... args)
@@ -494,5 +543,12 @@ namespace glz
       else {
          return detail::Object{ group_builder<std::decay_t<decltype(std::make_tuple(args...))>>::op(std::make_tuple(args...)) };
       }
+   }
+
+   constexpr auto make_enum(auto &&...args)
+   {
+      return detail::Enum{
+         group_builder<std::decay_t<decltype(std::make_tuple(args...))>>::op(
+            std::make_tuple(args...))};
    }
 }  // namespace glaze

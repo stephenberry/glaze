@@ -225,6 +225,26 @@ namespace glz
          }
       };
 
+      template <glaze_enum_t T>
+      struct from_json<T>
+      {
+         static void op(auto& value, auto&& it, auto&& end)
+         {
+            //Could do better key parsing for enums since we know we cant have escapes and we know the max size
+            static thread_local std::string key{};
+            read<json>::op(key, it, end);
+
+            static constexpr auto frozen_map = detail::make_string_to_enum_map<T>();
+            const auto& member_it = frozen_map.find(frozen::string(key));
+            if (member_it != frozen_map.end()) {
+               value = member_it->second;
+            }
+            else [[unlikely]] {
+               throw std::runtime_error("Enexpected enum value '" + key + "'");
+            }
+         }
+      };
+
       template <func_t T>
       struct from_json<T>
       {

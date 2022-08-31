@@ -79,7 +79,7 @@ namespace glz
       }
       
       template <class T>
-      requires num_t<T> || char_t<T>
+      requires num_t<T> || char_t<T> || glaze_enum_t<T>
       struct to_binary<T>
       {
          template <auto& Opts>

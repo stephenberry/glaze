@@ -25,7 +25,7 @@ namespace glz
       };
       
       template <class T>
-      requires (num_t<T> || char_t<T>)
+      requires(num_t<T> || char_t<T> || glaze_enum_t<T>)
       struct from_binary<T>
       {
          static void op(auto&& value, auto&& it, auto&& end)

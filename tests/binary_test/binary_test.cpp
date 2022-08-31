@@ -44,10 +44,10 @@ struct sub_thing
 template <>
 struct glz::meta<sub_thing>
 {
-   static constexpr auto value =
-      glz::object("a", &sub_thing::a, "Test comment 1",  //
-                    "b", &sub_thing::b, "Test comment 2"   //
-      );
+   static constexpr auto value = object(
+      "a", &sub_thing::a, "Test comment 1",                         //
+      "b", [](auto&& v) -> auto& { return v.b; }, "Test comment 2"  //
+   );
 };
 
 struct sub_thing2
@@ -66,16 +66,15 @@ template <>
 struct glz::meta<sub_thing2>
 {
    using T = sub_thing2;
-   static constexpr auto value =
-      glz::object("a", &T::a, "Test comment 1",  //
-                    "b", &T::b, "Test comment 2",  //
-                    "c", &T::c,                      //
-                    "d", &T::d,                      //
-                    "e", &T::e,                      //
-                    "f", &T::f,                      //
-                    "g", &T::g,                      //
-                    "h", &T::h                       //
-      );
+   static constexpr auto value = object("a", &T::a, "Test comment 1",  //
+                                        "b", &T::b, "Test comment 2",  //
+                                        "c", &T::c,                    //
+                                        "d", &T::d,                    //
+                                        "e", &T::e,                    //
+                                        "f", &T::f,                    //
+                                        "g", &T::g,                    //
+                                        "h", &T::h                     //
+   );
 };
 
 struct V3
@@ -96,6 +95,18 @@ struct glz::meta<V3>
    static constexpr auto value = array(&V3::x, &V3::y, &V3::z);
 };
 
+enum class Color { Red, Green, Blue };
+
+template <>
+struct glz::meta<Color>
+{
+   using T = Color;
+   static constexpr auto value = make_enum("Red", T::Red,      //
+                                           "Green", T::Green,  //
+                                           "Blue", T::Blue     //
+   );
+};
+
 struct Thing
 {
    sub_thing thing{};
@@ -108,6 +119,7 @@ struct Thing
    double d{2};
    bool b{};
    char c{'W'};
+   Color color{Color::Green};
    std::vector<bool> vb = {true, false, false, true, true, true, true};
    std::shared_ptr<sub_thing> sptr = std::make_shared<sub_thing>();
    std::optional<V3> optional{};
@@ -123,29 +135,27 @@ template <>
 struct glz::meta<Thing>
 {
    using T = Thing;
-   static constexpr auto value =
-      glz::object("thing", &T::thing,                       //
-                    "thing2array", &T::thing2array,      //
-                    "vec3", &T::vec3,                    //
-                    "list", &T::list,                    //
-                    "deque", &T::deque,                       //
-                    //"vector", [](auto&& v) -> auto& { return v.vector; },  //
-                    //"i", [](auto&& v) -> auto& { return v.i; },       //
-                    "vector", &T::vector,                   //
-                    "i", &T::i,                                            //
-                    "d", &T::d, "double is the best type",  //
-                    "b", &T::b,                          //
-                    "c", &T::c,                          //
-                    "vb", &T::vb,                             //
-                    "sptr", &T::sptr,                         //
-                    "optional", &T::optional,                 //
-                    "array", &T::array,                       //
-                    "map", &T::map,                           //
-                    "mapi", &T::mapi,                         //
-                    "thing_ptr", &T::thing_ptr                //
-      );
+   static constexpr auto value = object(
+      "thing", &T::thing,                                    //
+      "thing2array", &T::thing2array,                        //
+      "vec3", &T::vec3,                                      //
+      "list", &T::list,                                      //
+      "deque", &T::deque,                                    //
+      "vector", [](auto&& v) -> auto& { return v.vector; },  //
+      "i", [](auto&& v) -> auto& { return v.i; },            //
+      "d", &T::d, "double is the best type",                 //
+      "b", &T::b,                                            //
+      "c", &T::c,                                            //
+      "color", &T::color,                                    //
+      "vb", &T::vb,                                          //
+      "sptr", &T::sptr,                                      //
+      "optional", &T::optional,                              //
+      "array", &T::array,                                    //
+      "map", &T::map,                                        //
+      "mapi", &T::mapi,                                      //
+      "thing_ptr", &T::thing_ptr                             //
+   );
 };
-
 
 void write_tests()
 {
@@ -300,6 +310,15 @@ void write_tests()
       }
    };
 
+   "enum"_test = [] {
+      Color color = Color::Green;
+      std::vector<std::byte> buffer{};
+      glz::write_binary(color, buffer);
+
+      Color color_read = Color::Red;
+      glz::read_binary(color_read, buffer);
+      expect(color == color_read);
+   };
    
    "complex user obect"_test = [] {
       std::vector<std::byte> buffer{};
@@ -315,6 +334,7 @@ void write_tests()
       obj.d = 0.9;
       obj.b = true;
       obj.c = 'L';
+      obj.color = Color::Blue;
       obj.vb = {false, true, true, false, false, true, true};
       obj.sptr = nullptr;
       obj.optional = {1, 2, 3};
@@ -338,6 +358,7 @@ void write_tests()
       expect(obj2.d == 0.9);
       expect(obj2.b == true);
       expect(obj2.c == 'L');
+      expect(obj2.color == Color::Blue);
       expect(obj2.vb == decltype(obj2.vb){false, true, true, false, false, true, true});
       expect(obj2.sptr == nullptr);
       expect(obj2.optional == std::make_optional<V3>(V3{1, 2, 3}));

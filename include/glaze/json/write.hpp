@@ -94,6 +94,36 @@ namespace glz
          }
       };
 
+      template <glaze_enum_t T>
+      struct to_json<T>
+      {
+         template <auto& Opts>
+         static void op(auto&& value, auto&& b) noexcept
+         {
+            using key_t = std::underlying_type_t<T>;
+            static constexpr auto frozen_map =
+               detail::make_enum_to_string_map<T>();
+            const auto& member_it = frozen_map.find(static_cast<key_t>(value));
+            if (member_it != frozen_map.end()) {
+               std::string_view str = {member_it->second.data(),
+                                       member_it->second.size()};
+               // Note: Assumes people dont use strings with chars that need to
+               // be
+               // escaped for their enum names
+               // TODO: Could create a pre qouted map for better perf
+               dump<'"'>(b);
+               dump(str, b);
+               dump<'"'>(b);
+            }
+            else [[unlikely]] {
+               // What do we want to happen if the value doesnt have a mapped
+               // string
+               write<json>::op<Opts>(
+                  static_cast<std::underlying_type_t<T>>(value), b);
+            }
+         }
+      };
+
       template <func_t T>
       struct to_json<T>
       {

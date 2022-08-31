@@ -106,11 +106,32 @@ struct V3
    double x{3.14};
    double y{2.7};
    double z{6.5};
+
+   bool operator==(const V3& rhs) const
+   {
+      return (x == rhs.x) && (y == rhs.y) && (z == rhs.z);
+   }
 };
 
 template <>
 struct glz::meta<V3> {
    static constexpr auto value = array(&V3::x, &V3::y, &V3::z);
+};
+
+enum class Color {
+   Red,
+   Green,
+   Blue
+};
+
+template <>
+struct glz::meta<Color>
+{
+   using T = Color;
+   static constexpr auto value = make_enum("Red", T::Red,      //
+                                           "Green", T::Green,  //
+                                           "Blue", T::Blue     //
+   );
 };
 
 struct Thing
@@ -125,6 +146,7 @@ struct Thing
    double d{2};
    bool b{};
    char c{'W'};
+   Color color{Color::Green};
    std::vector<bool> vb = {true, false, false, true, true, true, true};
    std::shared_ptr<sub_thing> sptr = std::make_shared<sub_thing>();
    std::optional<V3> optional{};
@@ -145,11 +167,12 @@ struct glz::meta<Thing> {
       "vec3",        &T::vec3,                                      //
       "list",        &T::list,                                      //
       "deque",       &T::deque,                                     //
-      "vector",      &T::vector,                                    //
-      "i",           &T::i,                                         //
+      "vector",      [](auto&& v) -> auto& { return v.vector; },    //
+      "i",           [](auto&& v) -> auto& { return v.i; },         //
       "d",           &T::d,           "double is the best type",    //
       "b",           &T::b,                                         //
       "c",           &T::c,                                         //
+      "color",       &T::color,                                         //
       "vb",          &T::vb,                                        //
       "sptr",        &T::sptr,                                      //
       "optional",    &T::optional,                                  //
@@ -421,6 +444,23 @@ void nullable_types() {
    };
 }
 
+void enum_types()
+{
+   using namespace boost::ut;
+   "enum"_test = [] {
+      Color color = Color::Red;
+      std::string buffer{};
+      glz::write_json(color, buffer);
+      expect(buffer == "\"Red\"");
+
+      glz::read_json(color, "\"Green\"");
+      expect(color == Color::Green);
+      buffer.clear();
+      glz::write_json(color, buffer);
+      expect(buffer == "\"Green\"");
+   };
+}
+
 void user_types() {
    using namespace boost::ut;
 
@@ -457,13 +497,62 @@ void user_types() {
       Thing obj{};
       std::string buffer{};
       glz::write_json(obj, buffer);
-      expect(buffer == R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})");
+      expect(buffer == R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","color":"Green","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})");
       expect(nothrow([&] { glz::read_json(obj, buffer); }));
 
       buffer.clear();
       glz::write_jsonc(obj, buffer);
-      expect(buffer == R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2/*double is the best type*/,"b":false,"c":"W","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/}})");
+      expect(buffer == R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2/*double is the best type*/,"b":false,"c":"W","color":"Green","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/}})");
       expect(nothrow([&] { glz::read_json(obj, buffer); }));
+   };
+
+   "complex user obect roundtrip"_test = [] {
+      std::string buffer{};
+
+      Thing obj{};
+      obj.thing.a = 5.7;
+      obj.thing2array[0].a = 992;
+      obj.vec3.x = 1.004;
+      obj.list = {9, 3, 7, 4, 2};
+      obj.array = {"life", "of", "pi", "!"};
+      obj.vector = {{7, 7, 7}, {3, 6, 7}};
+      obj.i = 4;
+      obj.d = 0.9;
+      obj.b = true;
+      obj.c = 'L';
+      obj.color = Color::Blue;
+      obj.vb = {false, true, true, false, false, true, true};
+      obj.sptr = nullptr;
+      obj.optional = {1, 2, 3};
+      obj.deque = {0.0, 2.2, 3.9};
+      obj.map = {{"a", 7}, {"f", 3}, {"b", 4}};
+      obj.mapi = {{5, 5.0}, {7, 7.1}, {2, 2.22222}};
+
+      glz::write_json(obj, buffer);
+
+      Thing obj2{};
+      glz::read_json(obj2, buffer);
+
+      expect(obj2.thing.a == 5.7);
+      expect(obj2.thing.a == 5.7);
+      expect(obj2.thing2array[0].a == 992);
+      expect(obj2.vec3.x == 1.004);
+      expect(obj2.list == decltype(obj2.list){9, 3, 7, 4, 2});
+      expect(obj2.array == decltype(obj2.array){"life", "of", "pi", "!"});
+      expect(obj2.vector == decltype(obj2.vector){{7, 7, 7}, {3, 6, 7}});
+      expect(obj2.i == 4);
+      expect(obj2.d == 0.9);
+      expect(obj2.b == true);
+      expect(obj2.c == 'L');
+      expect(obj2.color == Color::Blue);
+      expect(obj2.vb ==
+             decltype(obj2.vb){false, true, true, false, false, true, true});
+      expect(obj2.sptr == nullptr);
+      expect(obj2.optional == std::make_optional<V3>(V3{1, 2, 3}));
+      expect(obj2.deque == decltype(obj2.deque){0.0, 2.2, 3.9});
+      expect(obj2.map == decltype(obj2.map){{"a", 7}, {"f", 3}, {"b", 4}});
+      expect(obj2.mapi ==
+             decltype(obj2.mapi){{5, 5.0}, {7, 7.1}, {2, 2.22222}});
    };
 }
 
@@ -1674,6 +1763,7 @@ int main()
    basic_types();
    container_types();
    nullable_types();
+   enum_types();
    user_types();
    json_pointer();
    early_end(); 
