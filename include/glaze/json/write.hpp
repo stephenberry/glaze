@@ -140,27 +140,29 @@ namespace glz
          static void op(auto&& value, auto&& b) noexcept
          {
             dump<'{'>(b);
-            auto it = value.cbegin();
-            auto write_pair = [&] {
-               using Key = decltype(it->first);
-               if constexpr (str_t<Key> || char_t<Key>) {
-                  write<json>::op<Opts>(it->first, b);
-               }
-               else {
-                  dump<'"'>(b);
-                  write<json>::op<Opts>(it->first, b);
-                  dump<'"'>(b);
-               }
-               dump<':'>(b);
-               write<json>::op<Opts>(it->second, b);
-            };
-            write_pair();
-            ++it;
-            
-            const auto end = value.cend();
-            for (; it != end; ++it) {
-               dump<','>(b);
+            if (!value.empty()) {
+               auto it = value.cbegin();
+               auto write_pair = [&] {
+                  using Key = decltype(it->first);
+                  if constexpr (str_t<Key> || char_t<Key>) {
+                     write<json>::op<Opts>(it->first, b);
+                  }
+                  else {
+                     dump<'"'>(b);
+                     write<json>::op<Opts>(it->first, b);
+                     dump<'"'>(b);
+                  }
+                  dump<':'>(b);
+                  write<json>::op<Opts>(it->second, b);
+               };
                write_pair();
+               ++it;
+               
+               const auto end = value.cend();
+               for (; it != end; ++it) {
+                  dump<','>(b);
+                  write_pair();
+               }
             }
             dump<'}'>(b);
          }
