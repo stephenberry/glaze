@@ -153,6 +153,8 @@ namespace glz
    {
       std::string str;
       
+      raw_json() = default;
+      
       template <class T>
       requires (!std::same_as<std::decay_t<T>, raw_json>)
       raw_json(T&& s) : str(std::forward<T>(s)) {}
