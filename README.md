@@ -354,7 +354,53 @@ Glaze has been designed to work as a generic interface for shared libraries and 
 
 Glaze allows a single header API (`api.hpp`) to be used for every shared library interface, greatly simplifying shared library handling.
 
-> A valid concern is binary compatibility between types. Glaze uses compile time hashing of types that can catch changes to classes or types that would cause binary incompatibility. These compile time hashes are checked when accessing across the interface and provide a safeguard, much like a `std::any_cast`, but working across code and compiler changes.
+## Type Safety
+
+A valid interface concern is binary compatibility between types. Glaze uses compile time hashing of types that is able to catch a wide range of changes to classes or types that would cause binary incompatibility. These compile time hashes are checked when accessing across the interface and provide a safeguard, much like a `std::any_cast`, but working across compilations.`std::any_cast` does not guarantee any safety between separately compiled code, whereas Glaze adds significant type checking across compilations and versions of compilers.
+
+## Name
+
+Every type accessed through a Glaze api must be named. It is best practice to give the type the same name as it has in C++, including the namespace (at least local namespace).
+
+Concepts exist for naming `const`, pointer (`*`), and reference (`&`), versions of types as they are used. Many standard library containers are also supported.
+
+```c++
+expect(glz::name_v<std::vector<float>> == "std::vector<float>");
+```
+
+To add a name for your class, include it in the `glz::meta`:
+
+```c++
+template <>
+struct glz::meta<my_api> {
+  static constexpr std::string_view name = "my_api";
+};
+```
+
+Or, include it locally:
+
+```c++
+struct my_api {
+	struct glaze {
+		static constexpr std::string_view name = "my_api";
+	};
+};
+```
+
+## Version
+
+Glaze also always a version to be specified for types. By default all types get a version of `0.0.1`. The version tag allows the user to intentionally break API compatibility for a type for changes that would not be caught by the compile time type checking.
+
+```c++
+template <>
+struct glz::meta<my_api> {
+  static constexpr glz::version_t version{ 0, 0, 2 };
+};
+```
+
+Or, include it locally like `name` or `value`.
+
+## Functions
 
 [TODO: expand]
 
