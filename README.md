@@ -170,6 +170,8 @@ struct glz::meta<Thing> {
 
 The value `v` passed to the lambda function will be a `Thing` object, and the lambda function allows us to make the subclass invisible to the object interface.
 
+Lambda functions by default copy returns, therefore the `auto&` return type is typically required in order for glaze to write to memory.
+
 > Note that remapping can also be achieved through pointers/references, as glaze treats values, pointers, and references in the same manner when writing/reading.
 
 ## Enums
@@ -230,11 +232,23 @@ string prettify(auto& in, bool tabs = false, uint32_t indent_size = 3)
 
 ## Array Types
 
-[TODO: expand]
+Array types logically convert to JSON array values. Concepts are used to allow various containers and even user containers if they match standard library interfaces.
+
+- `glz::array` (compile time mixed types)
+- `std::array`
+- `std::vector`
+- `std::deque`
+- `std::list`
+- `std::forward_list`
+- `std::span`
 
 ## Object Types
 
-[TODO: expand]
+Object types logically convert to JSON object values, such as maps. Like JSON, Glaze treats object definitions as unordered maps. Therefore the order of an object layout does not have to mach the same binary sequence in C++ (hence the tagged specification).
+
+- `glz::object` (compile time mixed types)
+- `std::map`
+- `std::unordered_map`
 
 ## Nullable Types
 
@@ -287,7 +301,24 @@ Most classes use `std::memcpy` for maximum performance.
 
 Compile time known objects use integer mapping for JSON equivalent keys, significantly reducing message sizes and increasing performance.
 
-[TODO: expand]
+**Write Binary**
+
+```c++
+my_struct s{};
+std::vector<std::byte> buffer{};
+glz::write_binary(s, buffer);
+```
+
+**Read Binary**
+
+```c++
+my_struct s{};
+glz::read_binary(s, buffer);
+```
+
+## Binary Arrays
+
+Arrays of compile time known size, e.g. `std::array`, do not include the size (number of elements) with the message. This is to enable minimal binary size if required. Dynamic types, such as `std::vector`, include the number of elements. *This means that statically sized arrays and dynamically sized arrays cannot be intermixed across implementations.*
 
 # Comma Separated Value Format (CSV)
 
