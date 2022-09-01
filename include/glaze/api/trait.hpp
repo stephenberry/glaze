@@ -62,6 +62,8 @@ namespace glz
 #endif
       
       static constexpr sv blank = ""; // to end possible macros
+
+      static constexpr sv members = glz::name_v<glz::detail::member_tuple_t<T>>;
       
       static constexpr sv to_hash = detail::join_v<
       type_name_hash,
@@ -104,7 +106,9 @@ namespace glz
 #ifdef _MSC_VER
       msvc,
 #endif
-      blank
+      blank,
+
+      members
       >;
       
    private:

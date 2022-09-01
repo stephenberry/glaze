@@ -5,9 +5,9 @@
 
 #include <map>
 
-#include "glaze/name.hpp"
+#include "glaze/api/name.hpp"
 
-namespace glaze
+namespace glz
 {
    template <class T>
    concept map = is_specialization_v<T, std::map>;

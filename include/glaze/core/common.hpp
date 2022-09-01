@@ -5,6 +5,7 @@
 
 #include <string>
 #include <type_traits>
+#include <tuple>
 
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
@@ -528,6 +529,24 @@ namespace glz
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_string_to_enum_map_impl<T>(indices);
       }
+
+      template <class T, class mptr_t>
+      using member_t = std::decay_t<std::conditional_t<std::is_member_pointer_v<std::decay_t<mptr_t>>, decltype(std::declval<T>().*std::declval<std::decay_t<mptr_t>>()), std::invoke_result_t<std::decay_t<mptr_t>, T>>>;
+
+      template <class T,
+                class = std::make_index_sequence<std::tuple_size<meta_t<T>>::value>>
+      struct members_from_meta;
+
+      template <class T, size_t... I>
+      struct members_from_meta<T, std::index_sequence<I...>>
+      {
+         using type = typename std::tuple<member_t<
+            T, std::tuple_element_t<1, std::tuple_element_t<I, meta_t<T>>>>
+         ...>;
+      };
+
+      template <class T>
+      using member_tuple_t = typename members_from_meta<T>::type;
    }  // namespace detail
 
    constexpr auto array(auto&&... args)

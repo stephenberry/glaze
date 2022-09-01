@@ -6,7 +6,11 @@
 #include <array>
 
 namespace glz
-{
+{   
+   template <class T>
+   struct meta
+   {};
+
    namespace detail
    {
       template <class T>
@@ -14,19 +18,29 @@ namespace glz
       {
          T::glaze::value;
       };
+
+      template <class T>
+      concept global_meta_t = requires
+      {
+         meta<T>::value;
+      };
    }
-   
-   template <class T>
-   struct meta
-   {};
+
+   struct empty
+   {
+      static constexpr std::tuple<> value{};
+   };
    
    template <class T>
    inline constexpr auto meta_wrapper_v = [] {
       if constexpr (detail::local_meta_t<T>) {
          return T::glaze::value;
       }
-      else {
+      else if constexpr (detail::global_meta_t<T>) {
          return meta<T>::value;
+      }
+      else {
+         return empty{};
       }
    }();
    
