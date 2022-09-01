@@ -256,18 +256,22 @@ glz::read_json(ptr, "null");
 expect(!bool(ptr));
 ```
 
+## JSON Caveats
+
+- Integer types cannot begin with a positive `+` symbol, for efficiency.
+
 # More Features
 
 - Tagged binary messaging for maximum performance
 - Comma Separated Value files (CSV)
 - A data recorder (logging) (`recorder.hpp`)
+- A generic library API
 - A simple thread pool
 - Studies based on JSON structures
 - A JSON file include system
 - Eigen C++ matrix library support
-- A generic library API
 
-## Tagged Binary Messages (Crusher)
+# Tagged Binary Messages (Crusher)
 
 Glaze provides a tagged binary format to send and receive messages much like JSON, but with significantly improved performance and message size savings.
 
@@ -281,11 +285,13 @@ Compile time known objects use integer mapping for JSON equivalent keys, signifi
 
 [TODO: expand]
 
-## Comma Separated Value files (CSV)
+# Comma Separated Value Format (CSV)
+
+Glaze by default writes row wise files, as this is more efficient for in memory data that is written once to file. Column wise output is also supported for logging use cases.
 
 [TODO: expand]
 
-## Data Recorder (Logging)
+# Data Recorder
 
 `record/recorder.hpp` provides an efficient recorder for mixed data types. The template argument takes a variant of supported types. However, recorder does not store recorded elements in this variant type. Instead, the variant is reinterpreted as a variant of deques of those types.
 
@@ -307,7 +313,7 @@ for (int i = 0; i < 100; ++i) {
 to_csv_file("recorder_out", rec);
 ```
 
-## Glaze Interfaces (Generic Library API)
+# Glaze Interfaces (Generic Library API)
 
 Glaze has been designed to work as a generic interface for shared libraries and more. This is achieved through JSON pointer syntax access to memory.
 
@@ -315,11 +321,15 @@ Glaze allows a single header API (`api.hpp`) to be used for every shared library
 
 > A valid concern is binary compatibility between types. Glaze uses compile time hashing of types that can catch changes to classes or types that would cause binary incompatibility. These compile time hashes are checked when accessing across the interface and provide a safeguard, much like a `std::any_cast`, but working across code and compiler changes.
 
-# JSON Caveats
+[TODO: expand]
 
-### Integers
+# Extensions
 
-- Integer types cannot begin with a positive `+` symbol, for efficiency.
+See the `ext` directory for extensions.
+
+## Eigen
+
+[Eigen](https://gitlab.com/libeigen/eigen) is a linear algebra library. Glaze currently supports fixed sized matrices and vectors.
 
 # License
 
