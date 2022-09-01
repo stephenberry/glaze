@@ -7,6 +7,7 @@
 #include <string_view>
 
 #include "glaze/util/type_traits.hpp"
+#include "glaze/core/meta.hpp"
 
 namespace glz
 {
@@ -36,10 +37,10 @@ namespace glz
       static constexpr auto join_v = join<Strs...>::value;
    }
    
-   template <class T>
+   /*template <class T>
    concept has_glaze_name = requires {
        T::glaze_name;
-   };
+   };*/
    
    template <size_t N>
    struct string_literal {
@@ -62,20 +63,6 @@ namespace glz
    
    template <string_literal Str>
    inline constexpr std::string_view chars = chars_impl<Str>::value;
-   
-   template <class T>
-   struct name_t;
-   
-   template <class T>
-   concept named = requires {
-      name_t<T>::value;
-   };
-   
-   template <class T>
-   struct name_t {};
-   
-   template <named T>
-   inline constexpr std::string_view name = name_t<T>::value;
    
    template <const std::string_view& Str>
    struct stringer_impl {

@@ -18,11 +18,11 @@ namespace glz
    concept span = is_span_v<T, std::span>;
    
    template <span T>
-   struct name_t<T> {
+   struct meta<T> {
       using V = typename T::element_type;
       static constexpr std::string_view extent = to_sv<T::extent>();
-      static constexpr std::string_view value = detail::join_v<chars<"std::span<">,
-      name<V>,
+      static constexpr std::string_view name = detail::join_v<chars<"std::span<">,
+      name_v<V>,
       chars<",">,
       extent,
       chars<">">>;

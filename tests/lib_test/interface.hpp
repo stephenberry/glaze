@@ -31,6 +31,7 @@ struct glz::meta<my_api>
                                                "s", &T::s,  //
                                                "f", &T::f,  //
                                                "init", &T::init);
+   
+   static constexpr std::string_view name = "my_api";
+   static constexpr glz::version_t version{ 0, 0, 1 };
 };
-
-GLAZE_SPECIALIZE(my_api, 0, 0, 1)

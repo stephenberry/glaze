@@ -5,36 +5,17 @@
 
 #include "glaze/api/hash.hpp"
 #include "glaze/util/string_view.hpp"
+#include "glaze/core/meta.hpp"
 
 #include <array>
 
-#define GLAZE_SPECIALIZE(type, major, minor, revision) \
-template <> \
-struct glaze::name_t<type> { \
-   static constexpr std::string_view value = #type; \
-}; \
-template <> \
-struct glaze::version_t<type> { \
-   static constexpr version_type value = { major, minor, revision }; \
-};
-
 namespace glz
 {
-   using version_type = std::array<uint32_t, 3>;
-   
-   template <class T>
-   struct version_t {
-      static constexpr version_type value = {0,0,0};
-   };
-   
-   template <class T>
-   inline constexpr version_type version = version_t<T>::value;
-
    template <class T>
    struct trait
    {
       using sv = std::string_view;
-      static constexpr sv type_name_unhashed = name<T>;
+      static constexpr sv type_name_unhashed = name_v<T>;
       static constexpr sv type_name_hash = hash128_v<type_name_unhashed>; // must hash for consistent length
       
       static constexpr sv type_size_hash = hash128_v<int_to_sv_v<size_t, sizeof(T)>>; // must hash for consistent length
@@ -131,7 +112,7 @@ namespace glz
       static constexpr sv comma = ",";
    public:
       static constexpr sv version_sv = detail::join_v<v, major_version, comma, minor_version, comma, revision>;
-      static constexpr version_type version = ::glz::version<T>;
+      static constexpr version_t version = ::glz::version<T>;
       
       static constexpr sv hash = hash128_v<to_hash>;
    };

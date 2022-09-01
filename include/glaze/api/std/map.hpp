@@ -13,13 +13,13 @@ namespace glaze
    concept map = is_specialization_v<T, std::map>;
    
    template <map T>
-   struct name_t<T> {
+   struct meta<T> {
       using Key = typename T::key_type;
       using V = typename T::mapped_type;
-      static constexpr std::string_view value = detail::join_v<chars<"std::map<">,
-      name<Key>,
+      static constexpr std::string_view name = detail::join_v<chars<"std::map<">,
+      name_v<Key>,
       chars<",">,
-      name<V>,
+      name_v<V>,
       chars<">">>;
    };
 }

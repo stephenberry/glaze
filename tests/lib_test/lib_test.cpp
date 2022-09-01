@@ -24,23 +24,23 @@ void tests()
    
    "bool type name"_test = [] {
       {
-         std::string_view b = glz::name<bool>;
+         std::string_view b = glz::name_v<bool>;
          expect(b == "bool");
       }
       {
-         std::string_view b = glz::name<bool&>;
+         std::string_view b = glz::name_v<bool&>;
          expect(b == "bool&");
       }
       {
-         std::string_view b = glz::name<const bool&>;
+         std::string_view b = glz::name_v<const bool&>;
          expect(b == "const bool&");
       }
       {
-         std::string_view b = glz::name<bool*>;
+         std::string_view b = glz::name_v<bool*>;
          expect(b == "bool*");
       }
       {
-         std::string_view b = glz::name<const bool*>;
+         std::string_view b = glz::name_v<const bool*>;
          expect(b == "const bool*");
       }
    };
@@ -48,11 +48,11 @@ void tests()
    "vector type name"_test = [] {
       {
          std::string_view v =
-            glz::name<std::vector<std::vector<int>*>>;
+            glz::name_v<std::vector<std::vector<int>*>>;
          expect(v == "std::vector<std::vector<int32_t>*>");
       }
       {
-         std::string_view v = glz::name<std::vector<float>>;
+         std::string_view v = glz::name_v<std::vector<float>>;
          expect(v == "std::vector<float>");
       }
    };
@@ -60,34 +60,34 @@ void tests()
    "unordered type name"_test = [] {
       {
          std::string_view u =
-            glz::name<std::unordered_set<std::vector<std::string>>>;
+            glz::name_v<std::unordered_set<std::vector<std::string>>>;
          expect(u == "std::unordered_set<std::vector<std::string>>");
       }
       {
          std::string_view u =
-            glz::name<std::unordered_map<uint64_t, std::string_view>>;
+            glz::name_v<std::unordered_map<uint64_t, std::string_view>>;
          expect(u == "std::unordered_map<uint64_t,std::string_view>");
       }
    };
 
    "double type name"_test = [] {
       {
-         std::string_view d = glz::name<double*>;
+         std::string_view d = glz::name_v<double*>;
          expect(d == "double*");
       }
       {
-         std::string_view d = glz::name<const double&>;
+         std::string_view d = glz::name_v<const double&>;
          expect(d == "const double&");
       }
    };
 
    "deque type name"_test = [] {
-      std::string_view d = glz::name<std::deque<bool>>;
+      std::string_view d = glz::name_v<std::deque<bool>>;
       expect(d == "std::vector<bool>");
    };
 
    "span type name"_test = [] {
-      std::string_view s = glz::name<std::span<double>>;
+      std::string_view s = glz::name_v<std::span<double>>;
       expect(s == "std::span<double,18446744073709551615>");
    };
 
@@ -102,7 +102,7 @@ void tests()
 
    "function type name"_test = [] {
       std::string_view f =
-         glz::name<std::function<double(const int&, const double&)>>;
+         glz::name_v<std::function<double(const int&, const double&)>>;
       expect(f == "std::function<double(const int32_t&,const double&)");
    };
 

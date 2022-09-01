@@ -32,10 +32,10 @@ namespace glz
                return Str;
             }
             else if constexpr (I == N - 1) {
-               return expander<detail::join_v<Str, name<std::tuple_element_t<I, Tuple>>>, Tuple, I + 1>::value;
+               return expander<detail::join_v<Str, name_v<std::tuple_element_t<I, Tuple>>>, Tuple, I + 1>::value;
             }
             else {
-               return expander<detail::join_v<Str, name<std::tuple_element_t<I, Tuple>>, chars<",">>, Tuple, I + 1>::value;
+               return expander<detail::join_v<Str, name_v<std::tuple_element_t<I, Tuple>>, chars<",">>, Tuple, I + 1>::value;
             }
          }
          
@@ -50,7 +50,7 @@ namespace glz
    concept function = is_specialization_v<T, std::function>;
    
    template <function T>
-   struct name_t<T> {
+   struct meta<T> {
       
       static constexpr auto impl() noexcept
       {
@@ -58,7 +58,7 @@ namespace glz
          using R = typename fun::result_type;
          if constexpr (fun::N == 0 && named<R>) {
             return detail::join_v<chars<"std::function<">,
-            name<R>,
+            name_v<R>,
             chars<"()>">>;
          }
          else if constexpr (fun::N == 0) {
@@ -66,7 +66,7 @@ namespace glz
          }
          else {
             return detail::join_v<chars<"std::function<">,
-            name<R>,
+            name_v<R>,
             chars<"(">,
             detail::expander_v<chars<"">, typename fun::arguments>,
             chars<")>">>;
@@ -74,6 +74,6 @@ namespace glz
       }
       
       static constexpr auto arr = impl(); // Give the joined string static storage
-      static constexpr std::string_view value {arr.data(), arr.size() - 1};
+      static constexpr std::string_view name {arr.data(), arr.size() - 1};
    };
 }

@@ -8,7 +8,7 @@
 
 #include "boost/ut.hpp"
 #include "glaze/json/json_ptr.hpp"
-#include "glaze/json/overwrite.hpp"
+#include "glaze/json/from_ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/ext/eigen.hpp"
@@ -23,13 +23,13 @@ int main()
       Eigen::Matrix<double, 2, 2> m{};
       m << 5, 1, 1, 7;
       std::string json{};
-      glaze::write_json(m, json);
+      glz::write_json(m, json);
       expect(json == "[5,1,1,7]");
    };
  
    "read_json"_test = [] {
       Eigen::Matrix<double, 2 , 2> m{};
-      glaze::read_json(m, "[2,1,7,4]");
+      glz::read_json(m, "[2,1,7,4]");
       expect(m.rows() == 2);
       expect(m.cols() == 2);
       expect(m(0,1) == 7);
@@ -40,9 +40,9 @@ int main()
       Eigen::Matrix<double, 2, 2> m{};
       m << 1, 2, 3, 4;
       std::vector<std::byte> b;
-      glaze::write_binary(m, b);
+      glz::write_binary(m, b);
       Eigen::Matrix<double, 2, 2> e{};
-      glaze::read_binary(e, b);
+      glz::read_binary(e, b);
       const bool boolean = m == e;
       expect(boolean);
    };

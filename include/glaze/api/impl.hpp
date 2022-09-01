@@ -85,7 +85,7 @@ namespace glz
                }
                else [[unlikely]] {
                   error = "mismatching types";
-                  error += ", expected: " + std::string(glz::name<T>);
+                  error += ", expected: " + std::string(glz::name_v<T>);
                }
             },
             std::forward<T>(root_value), json_ptr);

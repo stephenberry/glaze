@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <array>
+
 namespace glz
 {
    namespace detail
@@ -18,7 +20,6 @@ namespace glz
    struct meta
    {};
    
-   // Do not decay T here for sake of name
    template <class T>
    inline constexpr auto meta_wrapper_v = [] {
       if constexpr (detail::local_meta_t<T>) {
@@ -38,11 +39,35 @@ namespace glz
    template <class T>
    using meta_wrapper_t = std::decay_t<decltype(meta_wrapper_v<std::decay_t<T>>)>;
    
-   /*template <class T>
+   template <class T>
    concept named = requires {
-      name_t<T>::value;
+      meta<T>::name;
    };
    
    template <named T>
-   inline constexpr std::string_view name = meta_wrapper_v<T>.name;*/
+   inline constexpr std::string_view name_v = [] {
+      if constexpr (detail::local_meta_t<T>) {
+         return T::glaze::name;
+      }
+      else {
+         return meta<T>::name;
+      }
+   }();
+   
+   using version_t = std::array<uint32_t, 3>;
+   
+   template <class T>
+   concept versioned = requires {
+      meta<std::decay_t<T>>::version;
+   };
+   
+   template <class T>
+   inline constexpr version_t version = []() -> version_t {
+      if constexpr (versioned<T>) {
+         return meta<std::decay_t<T>>::version;
+      }
+      else {
+         return { 0, 0, 1 };
+      }
+   }();
 }

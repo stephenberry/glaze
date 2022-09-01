@@ -13,10 +13,10 @@ namespace glz
    concept vector = is_specialization_v<T, std::vector>;
    
    template <vector T>
-   struct name_t<T> {
+   struct meta<T> {
       using V = typename T::value_type;
-      static constexpr std::string_view value = detail::join_v<chars<"std::vector<">,
-      name<V>,
+      static constexpr std::string_view name = detail::join_v<chars<"std::vector<">,
+      name_v<V>,
       chars<">">>;
    };
 }

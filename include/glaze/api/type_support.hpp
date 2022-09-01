@@ -11,8 +11,8 @@
 namespace glz
 {
 #define specialize(type) template <> \
-   struct name_t<type> { \
-      static constexpr std::string_view value = #type; \
+   struct meta<type> { \
+      static constexpr std::string_view name = #type; \
    };
    
    specialize(bool)
@@ -30,26 +30,26 @@ namespace glz
    concept lvalue_reference = std::is_lvalue_reference_v<T>;
    
    template <lvalue_reference T>
-   struct name_t<T> {
+   struct meta<T> {
       using V = std::remove_reference_t<T>;
-      static constexpr std::string_view value = detail::join_v<name<V>, chars<"&">>;
+      static constexpr std::string_view name = detail::join_v<name_v<V>, chars<"&">>;
    };
    
    template <class T>
    concept constant = std::is_const_v<T>;
    
    template <constant T>
-   struct name_t<T> {
+   struct meta<T> {
       using V = std::remove_const_t<T>;
-      static constexpr std::string_view value = detail::join_v<chars<"const ">, name<V>>;
+      static constexpr std::string_view name = detail::join_v<chars<"const ">, name_v<V>>;
    };
    
    template <class T>
    concept pointer = std::is_pointer_v<T>;
    
    template <pointer T>
-   struct name_t<T> {
+   struct meta<T> {
       using V = std::remove_pointer_t<T>;
-      static constexpr std::string_view value = detail::join_v<name<V>, chars<"*">>;
+      static constexpr std::string_view name = detail::join_v<name_v<V>, chars<"*">>;
    };
 }

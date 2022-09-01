@@ -237,7 +237,7 @@ namespace glz
                static constexpr auto key_value = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
                static thread_local auto key =
-                  std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
+                  typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
                detail::write<binary>::op<Opts>(key, buffer);
                auto it = value.find(key);
                if (it != value.end()) {

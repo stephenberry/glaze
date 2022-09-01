@@ -10,7 +10,7 @@
 namespace glz
 {
    template <>
-   struct name_t<std::string> {
-      static constexpr std::string_view value = "std::string";
+   struct meta<std::string> {
+      static constexpr std::string_view name = "std::string";
    };
 }
