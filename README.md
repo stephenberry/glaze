@@ -163,6 +163,8 @@ struct glz::meta<Thing> {
 
 The value `v` passed to the lambda function will be a `Thing` object, and the lambda function allows us to make the subclass invisible to the object interface.
 
+> Note that remapping can also be achieved through pointers/references, as glaze treats values, pointers, and references in the same manner when writing/reading.
+
 ## Enums
 
 In JSON enums are used in their string form. In binary they are used in their integer form.
@@ -188,6 +190,36 @@ Color color = Color::Red;
 std::string buffer{};
 glz::write_json(color, buffer);
 expect(buffer == "\"Red\"");
+```
+
+## Prettify
+
+`glz::prettify` formats JSON text for easier reading.
+
+```c++
+std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
+auto beautiful = glz::prettify(buffer);
+```
+
+`beautiful` is now:
+
+```json
+{
+   "i": 287,
+   "d": 3.14,
+   "hello": "Hello World",
+   "arr": [
+      1,
+      2,
+      3
+   ]
+}
+```
+
+Simplified prettify definition below, which allows the use of tabs or changing the number of spaces per indent.
+
+```c++
+string prettify(auto& in, bool tabs = false, uint32_t indent_size = 3)
 ```
 
 # More Features

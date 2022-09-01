@@ -18,7 +18,7 @@ namespace glz
          BEFORE_FSLASH
       };
 
-      inline void prettify_normal_state(const char c, auto& out, int& indent, auto nl,
+      inline void prettify_normal_state(const char c, auto& out, uint32_t& indent, auto nl,
                                  general_state& state) noexcept
       {
          switch (c) {
@@ -110,15 +110,15 @@ namespace glz
    /// pretty print a JSON string
    /// </summary>
    inline void prettify(const auto& in, auto& out, const bool tabs = false,
-                 const int indent_size = 3) noexcept
+                 const uint32_t indent_size = 3) noexcept
    {
       out.reserve(in.size());
-      int indent{};
+      uint32_t indent{};
 
       auto nl = [&]() {
          out += "\n";
 
-         for (auto i = 0; i < indent * (tabs ? 1 : indent_size); i++) {
+         for (uint32_t i = 0; i < indent * (tabs ? 1 : indent_size); i++) {
             out += tabs ? "\t" : " ";
          }
       };
@@ -142,7 +142,7 @@ namespace glz
    /// allocating version of prettify
    /// </summary>
    inline std::string prettify(const auto& in, const bool tabs = false,
-                 const int indent_size = 3) noexcept
+                 const uint32_t indent_size = 3) noexcept
    {
       std::string out{};
       prettify(in, out, tabs, indent_size);
