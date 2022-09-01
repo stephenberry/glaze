@@ -203,7 +203,7 @@ namespace glz
       {
          meta<std::decay_t<T>>::value;
       }
-      || local_meta_t<T>;
+      || local_meta_t<std::decay_t<T>>;
 
       template <class T>
       concept complex_t = glaze_t<std::decay_t<T>>;
