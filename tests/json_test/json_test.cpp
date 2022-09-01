@@ -407,39 +407,39 @@ void nullable_types() {
       expect(buffer == "null");
    };
    "shared_ptr"_test = [] {
-      std::shared_ptr<int> oint{};
+      std::shared_ptr<int> ptr{};
       std::string buffer{};
-      glz::write_json(oint, buffer);
+      glz::write_json(ptr, buffer);
       expect(buffer == "null");
 
-      glz::read_json(oint, "5");
-      expect(bool(oint) && *oint == 5);
+      glz::read_json(ptr, "5");
+      expect(bool(ptr) && *ptr == 5);
       buffer.clear();
-      glz::write_json(oint, buffer);
+      glz::write_json(ptr, buffer);
       expect(buffer == "5");
 
-      glz::read_json(oint, "null");
-      expect(!bool(oint));
+      glz::read_json(ptr, "null");
+      expect(!bool(ptr));
       buffer.clear();
-      glz::write_json(oint, buffer);
+      glz::write_json(ptr, buffer);
       expect(buffer == "null");
    };
    "unique_ptr"_test = [] {
-      std::unique_ptr<int> oint{};
+      std::unique_ptr<int> ptr{};
       std::string buffer{};
-      glz::write_json(oint, buffer);
+      glz::write_json(ptr, buffer);
       expect(buffer == "null");
 
-      glz::read_json(oint, "5");
-      expect(bool(oint) && *oint == 5);
+      glz::read_json(ptr, "5");
+      expect(bool(ptr) && *ptr == 5);
       buffer.clear();
-      glz::write_json(oint, buffer);
+      glz::write_json(ptr, buffer);
       expect(buffer == "5");
 
-      glz::read_json(oint, "null");
-      expect(!bool(oint));
+      glz::read_json(ptr, "null");
+      expect(!bool(ptr));
       buffer.clear();
-      glz::write_json(oint, buffer);
+      glz::write_json(ptr, buffer);
       expect(buffer == "null");
    };
 }

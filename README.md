@@ -107,6 +107,13 @@ Dependencies are automatically included when running CMake. [CPM.cmake](https://
 
 > NanoRange is directly included until C++20 ranges are supported across all major compilers.
 
+## Unit Test Dependencies
+
+*Only required for building tests.*
+
+- [UT](https://github.com/boost-ext/ut)
+- [Eigen](https://gitlab.com/libeigen/eigen)
+
 ## JSON Pointer Syntax
 
 Glaze supports JSON pointer syntax access in a C++ context. This is extremely helpful for building generic APIs, which allows components of complex arguments to be accessed without needed know the encapsulating class.
@@ -173,8 +180,7 @@ In JSON enums are used in their string form. In binary they are used in their in
 enum class Color { Red, Green, Blue };
 
 template <>
-struct glz::meta<Color>
-{
+struct glz::meta<Color> {
    using enum Color;
    static constexpr auto value = enumerate("Red", Red,
                                            "Green", Green,
@@ -220,6 +226,34 @@ Simplified prettify definition below, which allows the use of tabs or changing t
 
 ```c++
 string prettify(auto& in, bool tabs = false, uint32_t indent_size = 3)
+```
+
+## Array Types
+
+[TODO: expand]
+
+## Object Types
+
+[TODO: expand]
+
+## Nullable Types
+
+Glaze supports `std::unique_ptr`, `std::shared_ptr`, and `std::optional` as nullable types. Nullable types can be allocated by JSON input or nullified by the `null` keyword.
+
+```c++
+std::unique_ptr<int> ptr{};
+std::string buffer{};
+glz::write_json(ptr, buffer);
+expect(buffer == "null");
+
+glz::read_json(ptr, "5");
+expect(*ptr == 5);
+buffer.clear();
+glz::write_json(ptr, buffer);
+expect(buffer == "5");
+
+glz::read_json(ptr, "null");
+expect(!bool(ptr));
 ```
 
 # More Features
