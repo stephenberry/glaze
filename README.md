@@ -253,7 +253,25 @@ Compile time known objects use integer mapping for JSON equivalent keys, signifi
 
 ## Data Recorder (Logging)
 
-[TODO: expand]
+`record/recorder.hpp` provides an efficient recorder for mixed data types. The template argument takes a variant of supported types. However, recorder does not store recorded elements in this variant type. Instead, the variant is reinterpreted as a variant of deques of those types.
+
+```c++
+glz::recorder<std::variant<double, float>> rec;
+
+double x = 0.0;
+float y = 0.f;
+
+rec["x"] = x;
+rec["y"] = y;
+
+for (int i = 0; i < 100; ++i) {
+	x += 1.5;
+	y += static_cast<float>(i);
+	rec.update(); // saves the current state of x and y
+}
+
+to_csv_file("recorder_out", rec);
+```
 
 ## Glaze Interfaces (Generic Library API)
 

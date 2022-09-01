@@ -178,26 +178,25 @@ suite csv_read = [] {
 };
 
 suite csv_recorder = [] {
-   
    "recorder_to_file"_test = [] {
-       
-       recorder<std::variant<double, float>> rec;
-       
-       double x = 0.0;
-       float y = 0.f;
-       
-       rec["x"] = x;
-       rec["y"] = y;
-
-        for (int i = 0; i < 10; ++i)
-        {
-            x += 1.5;
-           y += static_cast<float>(i);
-            rec.update();
-        }
-
-        to_csv_file("recorder_out", rec);
-    };
+      
+      recorder<std::variant<double, float>> rec;
+      
+      double x = 0.0;
+      float y = 0.f;
+      
+      rec["x"] = x;
+      rec["y"] = y;
+      
+      for (int i = 0; i < 100; ++i)
+      {
+         x += 1.5;
+         y += static_cast<float>(i);
+         rec.update();
+      }
+      
+      to_csv_file("recorder_out", rec);
+   };
 };
 
 int main()

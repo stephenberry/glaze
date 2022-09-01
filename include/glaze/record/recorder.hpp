@@ -42,11 +42,11 @@ namespace glz
    /// recorder for saving state over the course of a run
    /// deques are used to avoid reallocation for large amounts of data as the recording length is typically unknown
    /// </summary>
-   template <is_variant variant_t>
+   template <is_variant Variant>
    struct recorder
    {
-      using variant_p = decltype(to_variant_pointer(std::declval<variant_t>()));
-      using container_type = decltype(detail::to_variant_deque(std::declval<variant_t>()));
+      using variant_p = decltype(to_variant_pointer(std::declval<Variant>()));
+      using container_type = decltype(detail::to_variant_deque(std::declval<Variant>()));
 
       std::deque<std::pair<std::string, std::pair<container_type, void*>>>
          data;
