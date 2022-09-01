@@ -400,6 +400,31 @@ struct glz::meta<my_api> {
 
 Or, include it locally like `name` or `value`.
 
+## What Is Checked?
+
+Glaze catches the following changes:
+
+-  `name` in meta
+-  `version` in meta
+- the `sizeof` the type
+- The compiler (clang, gcc, msvc)
+- `std::is_trivial`
+- `std::is_standard_layout`
+- `std::is_default_constructible`
+- `std::is_trivially_default_constructible`
+- `std::is_nothrow_default_constructible`
+- `std::is_trivially_copyable`
+- `std::is_move_constructible`
+- `std::is_trivially_move_constructible`
+- `std::is_nothrow_move_constructible`
+- `std::is_destructible`
+- `std::is_trivially_destructible`
+- `std::is_nothrow_destructible`
+- `std::has_unique_object_representations`
+- `std::is_polymorphic`
+- `std::has_virtual_destructor`
+- `std::is_aggregate`
+
 ## Functions
 
 [TODO: expand]
