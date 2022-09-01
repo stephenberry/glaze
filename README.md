@@ -25,10 +25,10 @@ template <>
 struct glz::meta<my_struct> {
    using T = my_struct;
    static constexpr auto value = object(
-      "i", &T::i, //
-      "d", &T::d, //
-      "hello", &T::hello, //
-      "arr", &T::arr //
+      "i", &T::i,
+      "d", &T::d,
+      "hello", &T::hello,
+      "arr", &T::arr
    );
 };
 ```
@@ -81,10 +81,10 @@ struct my_struct
   struct glaze {
      using T = my_struct;
      static constexpr auto value = glz::object(
-        "i", &T::i, //
-        "d", &T::d, //
-        "hello", &T::hello, //
-        "arr", &T::arr //
+        "i", &T::i,
+        "d", &T::d,
+        "hello", &T::hello,
+        "arr", &T::arr
      );
   };
 };
@@ -133,8 +133,8 @@ template <>
 struct glz::meta<thing> {
    static constexpr auto value = object(
       using T = thing;
-      "x", &T::a, "x is a double",  //
-      "y", &T::b, "y is an int"     //
+      "x", &T::a, "x is a double",
+      "y", &T::b, "y is an int"
    );
 };
 ```
@@ -146,6 +146,48 @@ Prettified output:
   "a": 5 /*x is a double*/,
   "b": 7 /*y is an int*/
 }
+```
+
+## Object Mapping
+
+When using member pointers (e.g. `&T::a`) the C++ class structures must match the JSON interface. It may be desirable to map C++ classes with differing layouts to the same object interface. This is accomplished through registering lambda functions instead of member pointers.
+
+```c++
+template <>
+struct glz::meta<Thing> {
+   static constexpr auto value = object(
+      "i", [](auto&& self) -> auto& { return self.subclass.i; }
+   );
+};
+```
+
+The value `v` passed to the lambda function will be a `Thing` object, and the lambda function allows us to make the subclass invisible to the object interface.
+
+## Enums
+
+In JSON enums are used in their string form. In binary they are used in their integer form.
+
+```c++
+enum class Color { Red, Green, Blue };
+
+template <>
+struct glz::meta<Color>
+{
+   using enum Color;
+   static constexpr auto value = enumerate("Red", Red,
+                                           "Green", Green,
+                                           "Blue", Blue
+   );
+};
+```
+
+In use:
+
+```c++
+Color color = Color::Red;
+std::string buffer{};
+glz::write_json(color, buffer);
+expect(buffer == "\"Red\"");
 ```
 
 # More Features

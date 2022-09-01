@@ -29,9 +29,9 @@ struct glz::meta<my_struct>
 {
    using T = my_struct;
    static constexpr auto value = object("i", &T::i,          //
-                                               "d", &T::d,          //
-                                               "hello", &T::hello,  //
-                                               "arr", &T::arr       //
+                                        "d", &T::d,          //
+                                        "hello", &T::hello,  //
+                                        "arr", &T::arr       //
    );
 };
 
@@ -100,10 +100,10 @@ enum class Color { Red, Green, Blue };
 template <>
 struct glz::meta<Color>
 {
-   using T = Color;
-   static constexpr auto value = make_enum("Red", T::Red,      //
-                                           "Green", T::Green,  //
-                                           "Blue", T::Blue     //
+   using enum Color;
+   static constexpr auto value = enumerate("Red", Red,      //
+                                           "Green", Green,  //
+                                           "Blue", Blue     //
    );
 };
 

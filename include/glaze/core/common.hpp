@@ -545,7 +545,7 @@ namespace glz
       }
    }
 
-   constexpr auto make_enum(auto &&...args)
+   constexpr auto enumerate(auto &&...args)
    {
       return detail::Enum{
          group_builder<std::decay_t<decltype(std::make_tuple(args...))>>::op(
