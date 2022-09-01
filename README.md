@@ -256,6 +256,10 @@ glz::read_json(ptr, "null");
 expect(!bool(ptr));
 ```
 
+## Partial Objects
+
+[TODO: expand]
+
 ## JSON Caveats
 
 - Integer types cannot begin with a positive `+` symbol, for efficiency.
