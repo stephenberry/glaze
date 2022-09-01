@@ -449,7 +449,9 @@ expect(f(x, y) == 38.5);
 
 # Thread Pool
 
-[TODO: expand]
+Glaze contains a simple thread pool for the sake of running studies efficiently across threads using the included JSON study code. However, the thread pool is generic and can be used for various applications. It is designed to minimize copies of the data passed to threads.
+
+[TODO: example]
 
 # Design of Experiments (Studies)
 
