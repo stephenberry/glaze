@@ -270,10 +270,6 @@ glz::read_json(ptr, "null");
 expect(!bool(ptr));
 ```
 
-## Partial Objects
-
-[TODO: expand]
-
 ## JSON Caveats
 
 - Integer types cannot begin with a positive `+` symbol, for efficiency.
@@ -320,6 +316,19 @@ glz::read_binary(s, buffer);
 
 Arrays of compile time known size, e.g. `std::array`, do not include the size (number of elements) with the message. This is to enable minimal binary size if required. Dynamic types, such as `std::vector`, include the number of elements. *This means that statically sized arrays and dynamically sized arrays cannot be intermixed across implementations.*
 
+## Partial Objects
+
+It is sometimes desirable to write out only a portion of an object. This is permitted via an array of JSON pointers, which indicate which parts of the object should be written out.
+
+```c++
+static constexpr auto partial = glz::json_ptrs("/i",
+                                               "/d",
+                                               "/sub/x",
+                                               "/sub/y");
+std::vector<std::byte> out;
+glz::write_binary<partial>(s, out);
+```
+
 # Comma Separated Value Format (CSV)
 
 Glaze by default writes row wise files, as this is more efficient for in memory data that is written once to file. Column wise output is also supported for logging use cases.
@@ -353,6 +362,8 @@ to_csv_file("recorder_out", rec);
 Glaze has been designed to work as a generic interface for shared libraries and more. This is achieved through JSON pointer syntax access to memory.
 
 Glaze allows a single header API (`api.hpp`) to be used for every shared library interface, greatly simplifying shared library handling.
+
+> Interfaces are simply Glaze object types. So whatever any JSON/binary interface can automatically be used as a library API.
 
 ## Type Safety
 
@@ -426,6 +437,25 @@ Glaze catches the following changes:
 - `std::is_aggregate`
 
 ## Functions
+
+Functions do not make sense in a JSON or binary context (and are ignored in those contexts). However, Glaze allows `std::function` types to be added to objects and arrays in order to use them across Glaze APIs.
+
+```c++
+int x = 7;
+double y = 5.5;
+auto& f = io->get<std::function<double(int, double)>>("/f");
+expect(f(x, y) == 38.5);
+```
+
+# Thread Pool
+
+[TODO: expand]
+
+# Design of Experiments (Studies)
+
+[TODO: expand]
+
+# JSON Schema (Include System)
 
 [TODO: expand]
 
