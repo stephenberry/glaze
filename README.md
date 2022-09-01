@@ -5,6 +5,11 @@ Glaze reads into C++ memory, simplifying interfaces and offering incredible perf
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
+- Direct to memory serialization/deserialization
+- Compile time maps with constant time lookup
+- Nearly zero intermediate allocations
+- Much more!
+
 ### Example
 
 ```c++
@@ -61,6 +66,32 @@ glz::read_json(s, buffer);
 // populates 's' from JSON
 ```
 
+## Local Glaze Meta
+
+Glaze also supports metadata provided within its associated class, as shown below:
+
+```c++
+struct my_struct
+{
+  int i = 287;
+  double d = 3.14;
+  std::string hello = "Hello World";
+  std::array<uint64_t, 3> arr = { 1, 2, 3 };
+  
+  struct glaze {
+     using T = my_struct;
+     static constexpr auto value = glz::object(
+        "i", &T::i, //
+        "d", &T::d, //
+        "hello", &T::hello, //
+        "arr", &T::arr //
+     );
+  };
+};
+```
+
+> Template specialization of `glz::meta` is preferred when separating class definition from the serialization mapping. Local glaze metadata is helpful for working within the local namespace or when the class itself is templated.
+
 ## Header Only
 
 Glaze is designed to be used in a header only manner. The macro `FMT_HEADER_ONLY` is used for the [fmt](https://github.com/fmtlib/fmt) library.
@@ -78,7 +109,7 @@ Dependencies are automatically included when running CMake. [CPM.cmake](https://
 
 ## JSON Pointer Syntax
 
-Glaze supports JSON pointer syntax access in a C++ context. This is extremely helpful for building generic APIs, allowing components of complex arguments to be accessed without needed know the encapsulating class.
+Glaze supports JSON pointer syntax access in a C++ context. This is extremely helpful for building generic APIs, which allows components of complex arguments to be accessed without needed know the encapsulating class.
 
 ```c++
 my_struct s{};
@@ -90,7 +121,7 @@ auto& d = glz::get<double>(s, "/d");
 
 Comments are supported with the specification defined here: [JSONC](https://github.com/stephenberry/JSONC)
 
-Comments can also be included in the `glaze::meta` description for your types. These comments can be written out to provide a description of your JSON interface. Calling `write_jsonc` as opposed to `write_json` will write out any comments included in the `meta` description.
+Comments may also be included in the `glaze::meta` description for your types. These comments can be written out to provide a description of your JSON interface. Calling `write_jsonc` as opposed to `write_json` will write out any comments included in the `meta` description.
 
 ```c++
 struct thing {
@@ -102,8 +133,8 @@ template <>
 struct glz::meta<thing> {
    static constexpr auto value = object(
       using T = thing;
-      "x", &T::a, "x is a double"_c,  //
-      "y", &T::b, "y is an int"_c   //
+      "x", &T::a, "x is a double",  //
+      "y", &T::b, "y is an int"     //
    );
 };
 ```
@@ -117,7 +148,7 @@ Prettified output:
 }
 ```
 
-# Additional Features
+# More Features
 
 - Tagged binary messaging for maximum performance
 - Comma Separated Value files (CSV)
@@ -126,8 +157,23 @@ Prettified output:
 - Studies based on JSON structures
 - A JSON file include system
 - Eigen C++ matrix library support
+- A generic library API
 
-## Tagged Binary Messages
+## Tagged Binary Messages (Crusher)
+
+Glaze provides a tagged binary format to send and receive messages much like JSON, but with significantly improved performance and message size savings.
+
+The binary specification is known as [Crusher]() [TODO: add link].
+
+Integers and integer keys are locally compressed for efficiency. Elements are byte aligned, but compression uses bit packing where the benefits are greatest and performance costs are low.
+
+Most classes use `std::memcpy` for maximum performance.
+
+Compile time known objects use integer mapping for JSON equivalent keys, significantly reducing message sizes and increasing performance.
+
+[TODO: expand]
+
+## Comma Separated Value files (CSV)
 
 [TODO: expand]
 
@@ -135,7 +181,7 @@ Prettified output:
 
 [TODO: expand]
 
-## Glaze Interfaces
+## Glaze Interfaces (Generic Library API)
 
 Glaze has been designed to work as a generic interface for shared libraries and more. This is achieved through JSON pointer syntax access to memory.
 
