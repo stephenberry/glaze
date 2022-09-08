@@ -537,11 +537,21 @@ namespace glz
       struct members_from_meta;
 
       template <class T, size_t... I>
+      inline constexpr auto members_from_meta_impl() {
+         if constexpr (std::is_enum_v<std::decay_t<T>>) {
+            return std::tuple{};
+         }
+         else {
+            return std::tuple<
+               member_t<T, std::tuple_element_t<
+                              1, std::tuple_element_t<I, meta_t<T>>>>...>{};
+         }
+      }
+
+      template <class T, size_t... I>
       struct members_from_meta<T, std::index_sequence<I...>>
       {
-         using type = typename std::tuple<member_t<
-            T, std::tuple_element_t<1, std::tuple_element_t<I, meta_t<T>>>>
-         ...>;
+         using type = decltype(members_from_meta_impl<T, I...>());
       };
 
       template <class T>
