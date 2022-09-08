@@ -47,7 +47,7 @@ namespace glz
          std::string error{};
       };
 
-      using interface =
+      using iface =
          std::map<std::string, std::function<std::shared_ptr<api>()>,
                   std::less<>>;
       
@@ -89,4 +89,4 @@ namespace glz
 #endif
 
 // IMPORTANT: unmanged memory returned
-extern "C" DLL_EXPORT glz::interface* glaze_interface() noexcept;
+extern "C" DLL_EXPORT glz::iface* glaze_interface() noexcept;

@@ -9,7 +9,7 @@
 #include "glaze/api/api.hpp"
 #include "glaze/api/lib.hpp"
 
-DLL_EXPORT glz::interface* create_api() noexcept { return {}; }
+DLL_EXPORT glz::iface* create_api() noexcept { return {}; }
 
 void tests()
 {

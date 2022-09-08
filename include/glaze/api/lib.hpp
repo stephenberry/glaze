@@ -42,9 +42,9 @@ namespace glz
 
    struct lib_loader final
    {
-      using create = glz::interface*(*)(void);
+      using create = glz::iface*(*)(void);
 
-      interface api_map{};
+      iface api_map{};
       std::vector<lib_t> loaded_libs{};
 
       void load(const sv path) {

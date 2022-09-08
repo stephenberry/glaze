@@ -37,9 +37,9 @@ struct glz::meta<my_api>
    static constexpr glz::version_t version{ 0, 0, 1 };
 };
 
-DLL_EXPORT glz::interface* glaze_interface() noexcept
+DLL_EXPORT glz::iface* glaze_interface() noexcept
 {
-   return new glz::interface{
+   return new glz::iface{
       {"my_api", glz::make_api<my_api>},
       {"my_api2", glz::make_api<my_api>}
    };
@@ -49,7 +49,7 @@ void tests()
 {
    using namespace boost::ut;
    
-   std::unique_ptr<glz::interface> interface{ glaze_interface() };
+   std::unique_ptr<glz::iface> interface{ glaze_interface() };
    auto io = (*interface)["my_api"]();
    
    "bool type name"_test = [] {
