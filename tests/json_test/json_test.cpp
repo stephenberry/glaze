@@ -18,6 +18,7 @@
 #include "glaze/json/write.hpp"
 #include "glaze/json/prettify.hpp"
 #include "glaze/util/progress_bar.hpp"
+#include "glaze/api/impl.hpp"
 
 using namespace boost::ut;
 
@@ -68,6 +69,7 @@ struct sub_thing
 
 template <>
 struct glz::meta<sub_thing> {
+   static constexpr std::string_view name = "sub_thing";
    static constexpr auto value = object(
       "a", &sub_thing::a, "Test comment 1",  //
       "b", [](auto&& v) -> auto& { return v.b; }, "Test comment 2"  //
@@ -89,6 +91,7 @@ struct sub_thing2
 template <>
 struct glz::meta<sub_thing2> {
    using T = sub_thing2;
+   static constexpr std::string_view name = "sub_thing2";
    static constexpr auto value = object(
       "a", &T::a, "Test comment 1",    //
       "b", &T::b, "Test comment 2",    //
@@ -115,6 +118,7 @@ struct V3
 
 template <>
 struct glz::meta<V3> {
+   static constexpr std::string_view name = "V3";
    static constexpr auto value = array(&V3::x, &V3::y, &V3::z);
 };
 
@@ -127,6 +131,7 @@ enum class Color {
 template <>
 struct glz::meta<Color>
 {
+   static constexpr std::string_view name = "Color";
    using enum Color;
    static constexpr auto value = enumerate("Red", Red,      //
                                            "Green", Green,  //
@@ -161,6 +166,7 @@ struct Thing
 template <>
 struct glz::meta<Thing> {
    using T = Thing;
+   static constexpr std::string_view name = "Thing";
    static constexpr auto value = object(
       "thing",       &T::thing,                                     //
       "thing2array", &T::thing2array,                               //
@@ -554,6 +560,12 @@ void user_types() {
       expect(obj2.mapi ==
              decltype(obj2.mapi){{5, 5.0}, {7, 7.1}, {2, 2.22222}});
    };
+
+   "complex user obect member names"_test = [] {
+      expect(
+         glz::name_v<glz::detail::member_tuple_t<Thing>> == "std::tuple<sub_thing,std::array<sub_thing2,1>,V3,std::list<int32_t>,std::deque<double>,std::vector<V3>,int32_t,double,bool,char,Color,std::vector<bool>,std::shared_ptr<sub_thing>,std::optional<V3>,std::array<std::string,4>,std::map<std::string,int32_t>,std::map<int32_t,double>,sub_thing*>"
+      );
+   };
 }
 
 void json_pointer() {
@@ -724,6 +736,7 @@ struct oob
 template <>
 struct glz::meta<v3>
 {
+   static constexpr std::string_view name = "v3";
    static constexpr auto value = array(&v3::x, &v3::y, &v3::z);
 };
 
@@ -732,6 +745,7 @@ static_assert(glz::is_specialization_v<std::decay_t<decltype(glz::meta<v3>::valu
 template <>
 struct glz::meta<oob>
 {
+   static constexpr std::string_view name = "oob";
   static constexpr auto value = object("v", &oob::v, "n", &oob::n);
 };
 
@@ -1286,6 +1300,7 @@ struct Named
 template <>
 struct glz::meta<ThreeODetic>
 {
+   static constexpr std::string_view name = "ThreeODetic";
    using t = ThreeODetic;
    static constexpr auto value = array("geo", &t::g1, "int", &t::x1);
 };
@@ -1293,6 +1308,7 @@ struct glz::meta<ThreeODetic>
 template <>
 struct glz::meta<NineODetic>
 {
+   static constexpr std::string_view name = "NineODetic";
    using n = NineODetic;
    static constexpr auto value = array(&n::t1, &n::g1);
 };
@@ -1300,6 +1316,7 @@ struct glz::meta<NineODetic>
 template <>
 struct glz::meta<Named>
 {
+   static constexpr std::string_view name = "Named";
    using n = Named;
    static constexpr auto glaze =
       glz::object("name", &n::name, "value", &n::value);
@@ -1311,6 +1328,7 @@ struct EmptyArray
 template <>
 struct glz::meta<EmptyArray>
 {
+   static constexpr std::string_view name = "EmptyArray";
    static constexpr auto value = array();
 };
 
@@ -1321,6 +1339,7 @@ struct EmptyObject
 template <>
 struct glz::meta<EmptyObject>
 {
+   static constexpr std::string_view name = "EmptyObject";
    static constexpr auto value = object();
 };
 

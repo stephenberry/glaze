@@ -121,6 +121,12 @@ void tests()
       expect(s == "std::span<double,18446744073709551615>");
    };
 
+   "tuple type name"_test = [] {
+      std::string_view t = glz::name_v<std::tuple<double, std::string>>;
+      expect(t ==
+             "std::tuple<double,std::string>");
+   };
+
    "my_api type io"_test = [&] {
       auto& x = io->get<int>("/x");
       auto& y = io->get<double>("/y");
