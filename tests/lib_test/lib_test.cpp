@@ -15,7 +15,7 @@ void tests()
 {
    using namespace boost::ut;
 #ifdef GLAZE_API_ON_WINDOWS
-   glaze::lib_loader lib("../../../bin");
+   glz::lib_loader lib("../../../bin");
 #else
    glz::lib_loader lib("../../../../bin");
 #endif
