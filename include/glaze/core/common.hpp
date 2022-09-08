@@ -237,8 +237,10 @@ namespace glz
          pair_t<nano::ranges::range_value_t<T>> && map_subscriptable<T>;
 
       template <class T>
-      concept array_t =
-         (!complex_t<T> && !str_t<T> && !map_t<T> && nano::ranges::range<T>);
+      concept array_t = requires(T container)
+      {
+         container.empty();
+      } && (!complex_t<T> && !str_t<T> && !map_t<T> && nano::ranges::range<T>);
 
       template <class T>
       concept emplace_backable = requires(T container)
