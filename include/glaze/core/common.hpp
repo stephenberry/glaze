@@ -175,6 +175,12 @@ namespace glz
       raw_json& operator=(raw_json&&) = default;
    };
 
+   template <>
+   struct meta<raw_json>
+   {
+      static constexpr std::string_view name = "raw_json";
+   };
+
    using basic =
       std::variant<bool, char, char8_t, unsigned char, signed char, char16_t,
                    short, unsigned short, wchar_t, char32_t, float, int,
@@ -531,7 +537,18 @@ namespace glz
       }
 
       template <class T, class mptr_t>
-      using member_t = std::decay_t<std::conditional_t<std::is_member_pointer_v<std::decay_t<mptr_t>>, decltype(std::declval<T>().*std::declval<std::decay_t<mptr_t>>()), std::invoke_result_t<std::decay_t<mptr_t>, T>>>;
+      using member_t = std::decay_t<decltype([]() {
+         if constexpr (std::is_member_pointer_v<std::decay_t<mptr_t>>) {
+            return std::declval<T>().*std::declval<std::decay_t<mptr_t>>();
+         }
+         else if constexpr (std::is_enum_v<std::decay_t<T>>) {
+            return std::declval<T>();
+         }
+         else {
+            return std::declval<std::decay_t<mptr_t>>()(std::declval<T>());
+         }
+         }())>;
+      //using member_t = std::decay_t<std::conditional_t<std::is_member_pointer_v<std::decay_t<mptr_t>>, decltype(std::declval<T>().*std::declval<std::decay_t<mptr_t>>()), std::invoke_result_t<std::decay_t<mptr_t>, T>>>;
 
       template <class T,
                 class = std::make_index_sequence<std::tuple_size<meta_t<T>>::value>>

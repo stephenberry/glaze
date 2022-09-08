@@ -5,6 +5,7 @@
 
 #include "glaze/glaze.hpp"
 #include "glaze/json/json_ptr.hpp"
+#include "glaze/api/impl.hpp"
 
 struct sub
 {
@@ -15,14 +16,29 @@ struct sub
 template <>
 struct glz::meta<sub>
 {
+   static constexpr std::string_view name = "sub";
    using T = sub;
    static constexpr auto value = object("x", &T::x, "y", &T::y);
+};
+
+enum class Color { Red, Green, Blue };
+
+template <>
+struct glz::meta<Color>
+{
+   static constexpr std::string_view name = "Color";
+   using enum Color;
+   static constexpr auto value = enumerate("Red", Red,      //
+                                           "Green", Green,  //
+                                           "Blue", Blue     //
+   );
 };
 
 struct my_struct
 {
    int i = 287;
    double d = 3.14;
+   Color c = Color::Red;
    std::string hello = "Hello World";
    std::array<uint64_t, 3> arr = {1, 2, 3};
    sub sub{};
@@ -32,9 +48,12 @@ struct my_struct
 template <>
 struct glz::meta<my_struct>
 {
+   static constexpr std::string_view name = "my_struct";
    using T = my_struct;
-   static constexpr auto value = object("i", &T::i,          //
-                                               "d", &T::d,          //
+   static constexpr auto value = object(
+      "i", [](auto&& v) -> auto& { return v.i; },  //
+                                        "d", &T::d,     //
+                                        "c", &T::c,
                                                "hello", &T::hello,  //
                                                "arr", &T::arr,      //
                                                "sub", &T::sub,      //
@@ -45,6 +64,7 @@ struct glz::meta<my_struct>
 #include <iostream>
 
 int main() {
+   std::cout << glz::name_v<glz::detail::member_tuple_t<my_struct>> << "\n";
    my_struct s{};
    my_struct s2{};
    std::string buffer = R"({"i":2,"map":{"fish":5,"cake":2,"bear":3}})";
