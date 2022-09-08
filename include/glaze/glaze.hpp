@@ -35,3 +35,4 @@
 #include "glaze/binary.hpp"
 #include "glaze/csv.hpp"
 #include "glaze/json.hpp"
+#include "glaze/file/file_ops.hpp"
