@@ -64,15 +64,10 @@ namespace glz
                path);
          }
          else {
-            //TODO: avoid copy
-            static thread_local std::vector<std::byte> buffer{};
-            bool found = detail::seek_impl(
-               [&](auto&& val) { glz::write_binary(val, buffer);
+            return detail::seek_impl(
+               [&](auto&& val) { glz::write_binary(val, data);
                },
                user, path);
-            data.resize(buffer.size());
-            std::memcpy(data.data(), buffer.data(), buffer.size());
-            return found;
          }
       }
 

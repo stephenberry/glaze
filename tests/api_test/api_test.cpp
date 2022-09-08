@@ -51,6 +51,7 @@ void tests()
    
    std::unique_ptr<glz::iface> interface{ glaze_interface() };
    auto io = (*interface)["my_api"]();
+   auto io2 = (*interface)["my_api2"]();
    
    "bool type name"_test = [] {
       {
@@ -113,7 +114,7 @@ void tests()
 
    "deque type name"_test = [] {
       std::string_view d = glz::name_v<std::deque<bool>>;
-      expect(d == "std::vector<bool>");
+      expect(d == "std::deque<bool>");
    };
 
    "span type name"_test = [] {
@@ -147,6 +148,15 @@ void tests()
       double y = 5.5;
       auto& f = io->get<std::function<double(const int&, const double&)>>("/f");
       expect(f(x, y) == 38.5);
+   };
+
+   "my_api binary io"_test = [&] {
+      io->get<int>("/x") = 1;
+      io2->get<int>("/x") = 5;
+      std::string buffer{};
+      io2->write(glz::binary, "", buffer);
+      io->read(glz::binary, "", buffer);
+      expect(io->get<int>("/x") == 5);
    };
 }
 

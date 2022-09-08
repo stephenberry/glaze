@@ -43,16 +43,28 @@ namespace glz::detail
       b.append(str.data(), str.size());
    }
    
-   template <std::byte c>
-   inline void dump(std::vector<std::byte>& b) noexcept {
-      b.emplace_back(c);
+   template <std::byte c, class B>
+   inline void dump(B&& b) noexcept
+   {
+      // TODO use std::bit_cast when apple clang supports it
+      static constexpr std::byte chr = c;
+      using value_t = nano::ranges::range_value_t<std::decay_t<B>>;
+      static_assert(sizeof(value_t) == sizeof(std::byte));
+      b.push_back(*reinterpret_cast<value_t*>(const_cast<std::byte*>(&chr)));
    }
-   
-   inline void dump(std::byte c,std::vector<std::byte>& b) noexcept {
-      b.emplace_back(c);
+
+   template <class B>
+   inline void dump(std::byte c, auto&& b) noexcept
+   {
+      // TODO use std::bit_cast when apple clang supports it
+      using value_t = nano::ranges::range_value_t<std::decay_t<B>>;
+      static_assert(sizeof(value_t) == sizeof(std::byte));
+      b.push_back(*reinterpret_cast<value_t*>(&c));
    }
-   
-   inline void dump(const std::span<const std::byte> bytes, std::vector<std::byte>& b) noexcept {
+
+   template <class B>
+   inline void dump(const std::span<const std::byte> bytes, B&& b) noexcept
+   {
       const auto n = bytes.size();
       const auto b_start = b.size();
       b.resize(b.size() + n);
