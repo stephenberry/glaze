@@ -58,13 +58,19 @@ namespace glz
       meta<T>::name;
    };
    
-   template <named T>
+   template <class T>
    inline constexpr std::string_view name_v = [] {
-      if constexpr (detail::local_meta_t<T>) {
-         return T::glaze::name;
+
+      if constexpr (named<T>) {
+         if constexpr (detail::local_meta_t<T>) {
+            return T::glaze::name;
+         }
+         else {
+            return meta<T>::name;
+         }
       }
       else {
-         return meta<T>::name;
+         return "Unnamed";
       }
    }();
    

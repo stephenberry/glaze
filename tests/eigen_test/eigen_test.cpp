@@ -46,4 +46,14 @@ int main()
       const bool boolean = m == e;
       expect(boolean);
    };
+
+   "array"_test = [] {
+      Eigen::Vector3d m{1, 2, 3};
+      std::vector<std::byte> b;
+      glz::write_binary(m, b);
+      Eigen::Vector3d e{};
+      glz::read_binary(e, b);
+      const bool boolean = m == e;
+      expect(boolean);
+   };
 }

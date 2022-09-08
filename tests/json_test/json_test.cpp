@@ -1254,18 +1254,16 @@ void read_tests() {
       expect(m["2"].x == 5.0);
    };
 
-//*  Bellow doesn't initialize m.
-//*  std::map<std::string, std::vector<double>> not allowed in c++20?
-   /*"Nested map 2"_test = {
+   "Nested map 2"_test = [] {
       std::map<std::string, std::vector<double>> m;
       std::string buf =
          R"({"1":[4.000000,0.000000,0.000000],"2":[5.000000,0.000000,0.000000,4.000000]})";
 
-      glaze::read_json(m, buf);
+      glz::read_json(m, buf);
       expect(m["1"][0] == 4.0);
       expect(m["2"][0] == 5.0);
       expect(m["2"][3] == 4.0);
-   };*/
+   };
 
    "Integer keyed map"_test = [] {
       std::map<int, std::vector<double>> m;
@@ -1276,19 +1274,6 @@ void read_tests() {
       expect(m[1][0] == 4.0);
       expect(m[2][0] == 5.0);
       expect(m[2][3] == 4.0);
-   };
-//*  glaze does not support this type
-   "Invalid integer keyed map"_test = [] {
-      std::map<int, std::vector<double>> m;
-      // Numeric keys are not valid json but there is no harm in supporting them
-      // when reading
-      std::string buf =
-         R"({1:[4.000000,0.000000,0.000000],2:[5.000000,0.000000,0.000000,4.000000]})";
-
-      //glaze::read_json(m, buf);
-      //expect(m[1][0] == 4.0);
-      //expect(m[2][0] == 5.0);
-      //expect(m[2][3] == 4.0);
    };
 }
 
