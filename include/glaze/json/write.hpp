@@ -149,7 +149,16 @@ namespace glz
          static void op(auto&& value, auto&& b) noexcept
          {
             dump<'['>(b);
-            if (!value.empty()) {
+            const auto is_empty = [&]() -> bool {
+               if constexpr (nano::ranges::sized_range<T>) {
+                  return value.size() ? false : true;
+               }
+               else {
+                  return value.empty();
+               }
+            }();
+
+            if (!is_empty) {
                auto it = value.begin();
                write<json>::op<Opts>(*it, b);
                ++it;
