@@ -6,6 +6,7 @@
 #include "glaze/core/write.hpp"
 
 #include <span>
+//#include <bit>
 
 namespace glz::detail
 {
@@ -47,10 +48,16 @@ namespace glz::detail
    inline void dump(B&& b) noexcept
    {
       // TODO use std::bit_cast when apple clang supports it
-      static constexpr std::byte chr = c;
       using value_t = nano::ranges::range_value_t<std::decay_t<B>>;
-      static_assert(sizeof(value_t) == sizeof(std::byte));
-      b.push_back(*reinterpret_cast<value_t*>(const_cast<std::byte*>(&chr)));
+      if constexpr (std::same_as<value_t, std::byte>) {
+         b.emplace_back(c);
+      }
+      else {
+         static constexpr std::byte chr = c;
+         static_assert(sizeof(value_t) == sizeof(std::byte));
+         b.push_back(*reinterpret_cast<value_t*>(const_cast<std::byte*>(&chr)));
+         //b.push_back(std::bit_cast<value_t>(c));
+      }
    }
 
    template <class B>
@@ -58,8 +65,14 @@ namespace glz::detail
    {
       // TODO use std::bit_cast when apple clang supports it
       using value_t = nano::ranges::range_value_t<std::decay_t<B>>;
-      static_assert(sizeof(value_t) == sizeof(std::byte));
-      b.push_back(*reinterpret_cast<value_t*>(&c));
+      if constexpr (std::same_as<value_t, std::byte>) {
+         b.emplace_back(c);
+      }
+      else {
+         static_assert(sizeof(value_t) == sizeof(std::byte));
+         b.push_back(*reinterpret_cast<value_t*>(const_cast<std::byte*>(&c)));
+         // b.push_back(std::bit_cast<value_t>(c));
+      }
    }
 
    template <class B>

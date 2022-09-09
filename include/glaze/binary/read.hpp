@@ -145,9 +145,9 @@ namespace glz
          {
             using V = typename std::decay_t<T>::value_type;
             if constexpr (has_static_size<T>) {
-               static constexpr auto n_bytes = sizeof(V) * get_size<T>();
-               std::memcpy(value.data(), &(*it), n_bytes);
-               std::advance(it, n_bytes);
+               for (auto&& item : value) {
+                  read<binary>::op(item, it, end);
+               }
             }
             else {
                const auto n = int_from_header(it, end);

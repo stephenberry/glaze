@@ -10,6 +10,7 @@
 #include <map>
 #include <deque>
 #include <list>
+#include <chrono>
 
 #include "glaze/binary/write.hpp"
 #include "glaze/binary/read.hpp"
@@ -368,9 +369,55 @@ void write_tests()
    };
 }
 
+void bench()
+{
+   using namespace boost::ut;
+   "bench"_test = [] {
+      std::cout << "\nPerformance regresion test: \n";
+#ifdef NDEBUG
+      size_t repeat = 100000;
+#else
+      size_t repeat = 1000;
+#endif
+      Thing thing{};
+
+      std::vector<std::byte> buffer;
+      //std::string buffer;
+
+      auto tstart = std::chrono::high_resolution_clock::now();
+      for (size_t i{}; i < repeat; ++i) {
+         buffer.clear();
+         glz::write_binary(thing, buffer);
+      }
+      auto tend = std::chrono::high_resolution_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(
+                         tend - tstart)
+                         .count();
+      auto mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
+      std::cout << "to_binary size: " << buffer.size() << " bytes\n";
+      std::cout << "to_binary: " << duration << " s, " << mbytes_per_sec
+                << " MB/s"
+                << "\n";
+
+      tstart = std::chrono::high_resolution_clock::now();
+      for (size_t i{}; i < repeat; ++i) {
+         glz::read_binary(thing, buffer);
+      }
+      tend = std::chrono::high_resolution_clock::now();
+      duration = std::chrono::duration_cast<std::chrono::duration<double>>(
+                    tend - tstart)
+                    .count();
+      mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
+      std::cout << "from_binary: " << duration << " s, " << mbytes_per_sec
+                << " MB/s"
+                << "\n";
+   };
+}
+
 int main()
 {
    using namespace boost::ut;
 
    write_tests();
+   bench();
 }
