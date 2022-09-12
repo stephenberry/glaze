@@ -7,7 +7,7 @@
 #include <string>
 #include <filesystem>
 
-namespace glaze
+namespace glz
 {
    template <class T>
    void file_to_buffer(T &buffer, const std::string &file_name)
