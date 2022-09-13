@@ -106,9 +106,9 @@ namespace glz
             loaded_libs.emplace_back(loaded_lib);
 
 #ifdef GLAZE_API_ON_WINDOWS
-            auto* ptr = (create)GetProcAddress(loaded_lib, "create_api");
+            auto* ptr = (create)GetProcAddress(loaded_lib, "glaze_interface");
 #else
-            auto* ptr = (create)dlsym(dlopen(path.c_str(), RTLD_NOW), "create_api");
+            auto* ptr = (create)dlsym(dlopen(path.c_str(), RTLD_NOW), "glaze_interface");
 #endif
 
             if (ptr) {
