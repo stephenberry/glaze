@@ -7,7 +7,7 @@
 #include <string>
 #include <filesystem>
 
-namespace glaze
+namespace glz
 {
    template <class T>
    void file_to_buffer(T &buffer, const std::string &file_name)
@@ -30,10 +30,10 @@ namespace glaze
    }
 
    template <class T>
-   T file_to_buffer(const std::string &file_name)
+   T file_to_buffer(T&& file_name)
    {
-      T buffer{};
-      file_to_buffer(buffer, file_name);
+      std::string buffer{};
+      file_to_buffer(buffer, std::forward<T>(file_name));
       return buffer;
    }
 

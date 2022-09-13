@@ -536,7 +536,8 @@ namespace glz
       }
 
       template <class T, class mptr_t>
-      using member_t = std::decay_t<decltype([]() {
+      constexpr auto member_check()
+      {
          if constexpr (std::is_member_pointer_v<std::decay_t<mptr_t>>) {
             return std::declval<T>().*std::declval<std::decay_t<mptr_t>>();
          }
@@ -546,8 +547,7 @@ namespace glz
          else {
             return std::declval<std::decay_t<mptr_t>>()(std::declval<T>());
          }
-         }())>;
-      //using member_t = std::decay_t<std::conditional_t<std::is_member_pointer_v<std::decay_t<mptr_t>>, decltype(std::declval<T>().*std::declval<std::decay_t<mptr_t>>()), std::invoke_result_t<std::decay_t<mptr_t>, T>>>;
+      }
 
       template <class T,
                 class = std::make_index_sequence<std::tuple_size<meta_t<T>>::value>>
@@ -560,8 +560,8 @@ namespace glz
          }
          else {
             return std::tuple<
-               member_t<T, std::tuple_element_t<
-                              1, std::tuple_element_t<I, meta_t<T>>>>...>{};
+               std::decay_t<decltype(member_check<T, std::tuple_element_t<
+                              1, std::tuple_element_t<I, meta_t<T>>>>())>...>{};
          }
       }
 
