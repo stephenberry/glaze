@@ -60,7 +60,7 @@ namespace glz
             return *static_cast<T*>(ptr);
          }
          else {
-            error = "glaze::get<" + std::string(glz::name_v<T>) + ">(\"" + std::string(path) + "\") | " + error;
+            error = "\n api: glaze::get<" + std::string(glz::name_v<T>) + ">(\"" + std::string(path) + "\") | " + error;
    #ifdef __cpp_exceptions
             throw std::runtime_error(error);
    #else

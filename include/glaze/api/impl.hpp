@@ -91,7 +91,7 @@ namespace glz
                }
             },
             std::forward<T>(root_value), json_ptr);
-         if (result == nullptr) {
+         if (error.empty() && result == nullptr) {
             error = "invalid path";
          }
          return result;
