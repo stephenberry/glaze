@@ -365,7 +365,7 @@ Glaze by default writes row wise files, as this is more efficient for in memory 
 `record/recorder.hpp` provides an efficient recorder for mixed data types. The template argument takes a variant of supported types. However, recorder does not store recorded elements in this variant type. Instead, the variant is reinterpreted as a variant of deques of those types.
 
 ```c++
-glz::recorder<std::variant<double, float>> rec;
+glz::recorder<double, float> rec;
 
 double x = 0.0;
 float y = 0.f;
