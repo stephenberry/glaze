@@ -362,7 +362,7 @@ Glaze by default writes row wise files, as this is more efficient for in memory 
 
 # Data Recorder
 
-`record/recorder.hpp` provides an efficient recorder for mixed data types. The template argument takes a variant of supported types. However, recorder does not store recorded elements in this variant type. Instead, the variant is reinterpreted as a variant of deques of those types.
+`record/recorder.hpp` provides an efficient recorder for mixed data types. The template argument takes all the supported types. The recorder stores the data as a variant of deques of those types. `std::deque` is used to avoid the cost of reallocating when a `std::vector` would grow, and typically a recorder is used in cases when the length is unknown.
 
 ```c++
 glz::recorder<double, float> rec;
