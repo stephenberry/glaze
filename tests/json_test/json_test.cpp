@@ -1801,12 +1801,10 @@ int main()
 {
    using namespace boost::ut;
    // TODO:
-   // *Way more invalid input tests.
    // *Valid but with combinations of comments and whitespace to validate that code is working correctly.
    // *More complex string and json pointer tests.
    // *Stream tests.
    // *Test other buffer types.
-   // *More tests in general.
 
    basic_types();
    container_types();
