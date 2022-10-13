@@ -61,6 +61,14 @@ struct glz::meta<my_struct> {
 
 ```c++
 my_struct s{};
+std::string buffer = glz::write_json(s);
+// buffer is now: {"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}
+```
+
+or
+
+```c++
+my_struct s{};
 std::string buffer{};
 glz::write_json(s, buffer);
 // buffer is now: {"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}
@@ -70,9 +78,17 @@ glz::write_json(s, buffer);
 
 ```c++
 std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
+auto s = glz::read_json<my_struct>(buffer);
+// s is a my_struct populated from JSON
+```
+
+or
+
+```c++
+std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
 my_struct s{};
 glz::read_json(s, buffer);
-// populates 's' from JSON
+// populates s from JSON
 ```
 
 ## Local Glaze Meta
