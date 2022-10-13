@@ -21,39 +21,32 @@ namespace glz
       inline void skip_object_value(auto&& it, auto&& end)
       {
          skip_ws(it, end);
-         if (it == end) [[unlikely]]
-            return;
-         switch (*it) {
-         case '{':
-            skip_until_closed<'{', '}'>(it, end);
-            break;
-         case '[':
-            skip_until_closed<'[', ']'>(it, end);
-            break;
-         case '"':
-            skip_string(it, end);
-            skip_ws(it, end);
-            break;
-         default: {
-            while (it < end) {
-               switch (*it) {
-               case '/':
-                  skip_comment(it, end);
-                  continue;
+         while (it != end) {
+            switch (*it) {
+               case '{':
+                  skip_until_closed<'{', '}'>(it, end);
+                  break;
+               case '[':
+                  skip_until_closed<'[', ']'>(it, end);
+                  break;
                case '"':
                   skip_string(it, end);
+                  skip_ws(it, end);
+                  break;
+               case '/':
+                  skip_comment(it, end);
                   continue;
                case ',':
                case '}':
                case ']':
                   break;
-               default:
+               default: {
                   ++it;
                   continue;
                }
-               break;
             }
-         }
+            
+            break;
          }
       }
       
