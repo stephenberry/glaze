@@ -15,7 +15,7 @@ namespace glz
    namespace detail
    {
       template <class... T>
-      auto to_variant_deque(std::variant<T...>&&)
+      auto to_variant_deque()
       {
          return std::variant<std::monostate, std::deque<T>...>{};
       }
@@ -42,11 +42,10 @@ namespace glz
    /// recorder for saving state over the course of a run
    /// deques are used to avoid reallocation for large amounts of data as the recording length is typically unknown
    /// </summary>
-   template <is_variant Variant>
+   template <class... Ts>
    struct recorder
    {
-      using variant_p = decltype(to_variant_pointer(std::declval<Variant>()));
-      using container_type = decltype(detail::to_variant_deque(std::declval<Variant>()));
+      using container_type = decltype(detail::to_variant_deque<Ts...>());
 
       std::deque<std::pair<std::string, std::pair<container_type, void*>>>
          data;

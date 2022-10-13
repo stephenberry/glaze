@@ -180,7 +180,7 @@ suite csv_read = [] {
 suite csv_recorder = [] {
    "recorder_to_file"_test = [] {
       
-      recorder<std::variant<double, float>> rec;
+      recorder<double, float> rec;
       
       double x = 0.0;
       float y = 0.f;

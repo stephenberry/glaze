@@ -167,8 +167,8 @@ namespace glz
       write_csv<RowWise>(buffer, std::make_tuple(std::forward<Args>(args)...));
    }
    
-   template <bool RowWise = true, class Buffer, class Variant>
-   inline void write_csv(Buffer& buffer, recorder<Variant>& rec)
+   template <bool RowWise = true, class Buffer, class... Ts>
+   inline void write_csv(Buffer& buffer, recorder<Ts...>& rec)
    {
        auto& map = rec.data;
 
