@@ -15,6 +15,7 @@ namespace glz
    requires nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char))
    inline void write(T&& value, Buffer& buffer) noexcept
    {
+      buffer.clear();
       if constexpr (std::same_as<Buffer, std::string> || std::same_as<Buffer, std::vector<std::byte>>) {
          detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), buffer);
       }
