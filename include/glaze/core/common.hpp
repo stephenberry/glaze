@@ -6,6 +6,7 @@
 #include <string>
 #include <type_traits>
 #include <tuple>
+#include <utility>
 
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
@@ -538,14 +539,15 @@ namespace glz
       template <class T, class mptr_t>
       constexpr auto member_check()
       {
-         if constexpr (std::is_member_pointer_v<std::decay_t<mptr_t>>) {
-            return std::declval<T>().*std::declval<std::decay_t<mptr_t>>();
+         using mptr_type = std::decay_t<mptr_t>;
+         if constexpr (std::is_member_pointer_v<mptr_type>) {
+            return std::declval<T>().*std::declval<mptr_type>();
          }
          else if constexpr (std::is_enum_v<std::decay_t<T>>) {
             return std::declval<T>();
          }
-         else {
-            return std::declval<std::decay_t<mptr_t>>()(std::declval<T>());
+         else { // is a lambda function
+            return mptr_type{}(std::declval<T>());
          }
       }
 
