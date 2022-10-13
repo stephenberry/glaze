@@ -1,14 +1,22 @@
 # Glaze
-An extremely fast, in memory, JSON and interface library for modern C++.
+The fastest direct to memory JSON library in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
 
-Glaze reads into C++ memory, simplifying interfaces and offering incredible performance.
+| Library                                                      | Runtime (s) | Ratio    |
+| ------------------------------------------------------------ | ----------- | -------- |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **2.79**    | **1.0**  |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **3.45**    | **1.24** |
+| [**nlohmann json**](https://github.com/nlohmann/json)        | **18.51**   | **6.63** |
+
+[Performance test code available here](https://github.com/stephenberry/json_performance)
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 - Direct to memory serialization/deserialization
-- Compile time maps with constant time lookup
+- Compile time maps with constant time lookups and perfect hashing
 - Nearly zero intermediate allocations
 - Much more!
+
+> Performance note: Glaze is designed to read and write entire JSON messages. If a document object model is desired with the lazy parsing then [simdjson](https://github.com/simdjson/simdjson) is an excellent choice.
 
 ### Example
 
