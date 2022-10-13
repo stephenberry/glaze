@@ -14,6 +14,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - Direct to memory serialization/deserialization
 - Compile time maps with constant time lookups and perfect hashing
 - Nearly zero intermediate allocations
+- Direct memory access through JSON pointer syntax
 - Much more!
 
 > Performance note: Glaze is designed to read and write entire JSON messages. If a document object model is desired with the lazy parsing then [simdjson](https://github.com/simdjson/simdjson) is an excellent choice.
