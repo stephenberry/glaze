@@ -440,7 +440,7 @@ struct my_api {
 
 ## Version
 
-Glaze also always a version to be specified for types. By default all types get a version of `0.0.1`. The version tag allows the user to intentionally break API compatibility for a type for changes that would not be caught by the compile time type checking.
+By default all types get a version of `0.0.1`. The version tag allows the user to intentionally break API compatibility for a type when making changes that would not be caught by the compile time type checking.
 
 ```c++
 template <>
