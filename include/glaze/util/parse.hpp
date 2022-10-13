@@ -43,7 +43,7 @@ namespace glz::detail
 
    inline void skip_comment(auto&& it, auto&& end)
    {
-      match<'/'>(it, end);
+      ++it;
       if (it == end) [[unlikely]]
          throw std::runtime_error("Unexpected end, expected comment");
       else if (*it == '/') {
@@ -84,15 +84,14 @@ namespace glz::detail
 
    inline void skip_string(auto&& it, auto&& end) noexcept
    {
-      match<'"'>(it, end);
+      ++it;
       while (it < end) {
          if (*it == '"') {
             ++it;
             break;
          }
-         else if (*it == '\\')
-            if (++it == end) [[unlikely]]
-               break;
+         else if (*it == '\\' && ++it == end) [[unlikely]]
+            break;
          ++it;
       }
    }
@@ -100,7 +99,7 @@ namespace glz::detail
    template <char open, char close>
    inline void skip_until_closed(auto&& it, auto&& end)
    {
-      match<open>(it, end);
+      ++it;
       size_t open_count = 1;
       size_t close_count = 0;
       while (it < end && open_count > close_count) {
