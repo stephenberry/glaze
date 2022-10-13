@@ -31,7 +31,6 @@ namespace glz
                   break;
                case '"':
                   skip_string(it, end);
-                  skip_ws(it, end);
                   break;
                case '/':
                   skip_comment(it, end);
