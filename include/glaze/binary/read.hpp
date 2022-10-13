@@ -257,6 +257,14 @@ namespace glz
    template <class T, class Buffer>
    inline void read_binary(T&& value, Buffer&& buffer)
    {
-      read<opts{.format = binary}>(value, buffer);
+      read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
+   }
+   
+   template <class T, class Buffer>
+   inline auto read_binary(Buffer&& buffer)
+   {
+      T value{};
+      read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
+      return value;
    }
 }

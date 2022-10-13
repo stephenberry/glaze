@@ -1785,6 +1785,18 @@ suite raw_json_tests = [] {
    };
 };
 
+suite json_helpers = [] {
+   "json_helpers"_test = [] {
+      my_struct v{};
+      auto json = glz::write_json(v);
+      expect(json == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
+      
+      expect(nothrow([&] {
+         v = glz::read_json<my_struct>(json);
+      }));
+   };
+};
+
 int main()
 {
    using namespace boost::ut;

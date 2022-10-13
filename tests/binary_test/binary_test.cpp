@@ -414,6 +414,24 @@ void bench()
    };
 }
 
+using namespace boost::ut;
+
+suite binary_helpers = [] {
+   "binary_helpers"_test = [] {
+      my_struct v{};
+      
+      std::string binary;
+      
+      expect(nothrow([&] {
+         binary = glz::write_binary(v);
+      }));
+      
+      expect(nothrow([&] {
+         v = glz::read_binary<my_struct>(binary);
+      }));
+   };
+};
+
 int main()
 {
    using namespace boost::ut;

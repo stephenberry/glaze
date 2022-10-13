@@ -190,6 +190,13 @@ namespace glz
       write<opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
    
+   template <class T>
+   inline auto write_binary(T&& value) {
+      std::string buffer{};
+      write<opts{.format = binary}>(std::forward<T>(value), buffer);
+      return buffer;
+   }
+   
    template <auto& Partial, opts Opts, class T, class Buffer>
    requires nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char))
    inline void write(T&& value, Buffer& buffer) noexcept

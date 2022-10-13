@@ -95,7 +95,7 @@ namespace glz
       struct from_json<T>
       {
          template <class It>
-         static void op(auto& value, It&& it, auto&& end)
+         static void op(auto&& value, It&& it, auto&& end)
          {
             skip_ws(it, end);
             if (it == end) [[unlikely]]
@@ -468,5 +468,12 @@ namespace glz
    template <class T, class Buffer>
    inline void read_json(T& value, Buffer&& buffer) {
       read<opts{}>(value, std::forward<Buffer>(buffer));
+   }
+   
+   template <class T, class Buffer>
+   inline auto read_json(Buffer&& buffer) {
+      T value{};
+      read<opts{}>(value, std::forward<Buffer>(buffer));
+      return value;
    }
 }  // namespace glaze

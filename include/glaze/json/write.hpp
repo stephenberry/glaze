@@ -309,8 +309,22 @@ namespace glz
       write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
    
+   template <class T>
+   inline auto write_json(T&& value) {
+      std::string buffer{};
+      write<opts{}>(std::forward<T>(value), buffer);
+      return buffer;
+   }
+   
    template <class T, class Buffer>
    inline void write_jsonc(T&& value, Buffer&& buffer) {
       write<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+   }
+   
+   template <class T>
+   inline auto write_jsonc(T&& value) {
+      std::string buffer{};
+      write<opts{.comments = true}>(std::forward<T>(value), buffer);
+      return buffer;
    }
 }  // namespace glaze
