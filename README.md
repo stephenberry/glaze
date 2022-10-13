@@ -163,8 +163,8 @@ struct thing {
 
 template <>
 struct glz::meta<thing> {
+   using T = thing;
    static constexpr auto value = object(
-      using T = thing;
       "x", &T::a, "x is a double",
       "y", &T::b, "y is an int"
    );
