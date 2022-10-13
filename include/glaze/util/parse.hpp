@@ -69,24 +69,16 @@ namespace glz::detail
    inline void skip_ws(auto&& it, auto&& end)
    {
       while (it != end) {
-         switch (*it) {
-         case ' ':
-         case '\f':
-         case '\r':
-         case '\t':
-         case '\v':
-         case '\n': {
+         // assuming ascii
+         if (static_cast<uint8_t>(*it) < 33) {
             ++it;
-            continue;
          }
-         case '/': {
+         else if (*it == '/') {
             skip_comment(it, end);
-            continue;
          }
-         default:
+         else {
             break;
          }
-         break;  // if not white space break
       }
    }
 

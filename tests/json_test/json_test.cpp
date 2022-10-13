@@ -173,8 +173,11 @@ struct glz::meta<Thing> {
       "vec3",        &T::vec3,                                      //
       "list",        &T::list,                                      //
       "deque",       &T::deque,                                     //
-      "vector",      [](auto&& v) -> auto& { return v.vector; },    //
-      "i",           [](auto&& v) -> auto& { return v.i; },         //
+                                        // TODO: fix!!!
+      //"vector",      [](auto&& v) -> auto& { return v.vector; },    //
+      //"i",           [](auto&& v) -> auto& { return v.i; },         //
+      "vector", &T::vector,
+      "i", &T::i,
       "d",           &T::d,           "double is the best type",    //
       "b",           &T::b,                                         //
       "c",           &T::c,                                         //
