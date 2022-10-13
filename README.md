@@ -358,6 +358,21 @@ glz::write_binary<partial>(s, out);
 
 Glaze by default writes row wise files, as this is more efficient for in memory data that is written once to file. Column wise output is also supported for logging use cases.
 
+### Row wise
+
+```c++
+std::vector<double> x, y;
+std::deque<bool> z;
+for (auto i = 0; i < 100; ++i) {
+  const auto a = static_cast<double>(i);
+  x.emplace_back(a);
+  y.emplace_back(std::sin(a));
+  z.emplace_back(i % 2 == 0);
+}
+
+to_csv_file("rowwise_to_file_test", "x", x, "y", y, "z", z);
+```
+
 [TODO: expand]
 
 # Data Recorder
