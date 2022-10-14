@@ -22,7 +22,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 ### Raw Buffer Performance
 
-Glaze is just about as fast writing to a `std::string` as it is writing to a raw char buffer. If you have sufficiently allocated space in your buffer you can write to the raw buffer, as shown below.
+Glaze is just about as fast writing to a `std::string` as it is writing to a raw char buffer. If you have sufficiently allocated space in your buffer you can write to the raw buffer, as shown below, but it is not recommended.
 
 ```c++
 glz::read_json(obj, buffer);
