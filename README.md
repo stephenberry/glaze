@@ -308,6 +308,28 @@ glz::read_json(ptr, "null");
 expect(!bool(ptr));
 ```
 
+## Error Handling
+
+Glaze is safe to use with untrusted messages. Exceptions are thrown on errors, which can be caught and handled however you want.
+
+Glaze also tries to be helpful and give useful information about where the error is exactly.
+
+For example, this test case:
+
+```json
+{"Hello":"World"x, "color": "red"}
+```
+
+Produces this error:
+
+```
+1:17: Expected:,
+   {"Hello":"World"x, "color": "red"}
+                   ^
+```
+
+Denoting that x is invalid here.
+
 ## JSON Caveats
 
 - Integer types cannot begin with a positive `+` symbol, for efficiency.
