@@ -145,43 +145,133 @@ namespace glz
       template <str_t T>
       struct from_json<T>
       {
-         static void op(auto& value, auto&& it, auto&& end)
+         template <class It, class End>
+         static void op(auto& value, It&& it, End&& end)
          {
             // TODO: this does not handle control chars like \t and \n
             
             skip_ws(it, end);
             match<'"'>(it, end);
-            const auto cend = value.cend();
-            for (auto c = value.begin(); c < cend; ++c, ++it)
-            {
-               if (it == end) [[unlikely]]
-                  throw std::runtime_error("Expected \"");
-               switch (*it) {
-                  [[unlikely]] case '\\':
-                  {
-                     if (++it == end) [[unlikely]]
-                        throw std::runtime_error("Expected \"");
-                     else [[likely]] {
-                        *c = *it;
+            
+            // overwrite portion
+            
+            if constexpr (nano::contiguous_iterator<std::decay_t<It>>
+                          && nano::contiguous_iterator<std::decay_t<End>>) {
+               const auto n_buffer = static_cast<size_t>(std::distance(it, end));
+               const auto n_value = value.size();
+               
+               // must use 2 * n_value to handle potential escape characters
+               if (2 * n_value < n_buffer) {
+                  // we don't have to check if we are reaching our end iterator
+                  
+                  for (size_t i = 0; i < n_value; ++i, ++it) {
+                     switch (*it) {
+                        [[unlikely]] case '\\':
+                        {
+                           ++it;
+                           value[i] = *it;
+                           break;
+                        }
+                        [[unlikely]] case '"':
+                        {
+                           ++it;
+                           value.resize(i);
+                           return;
+                        }
+                        [[likely]] default : value[i] = *it;
                      }
-                     break;
                   }
-                  [[unlikely]] case '"':
+               }
+               else {
+                  const auto cend = value.cend();
+                  for (auto c = value.begin(); c < cend; ++c, ++it)
                   {
-                     ++it;
-                     value.resize(std::distance(value.begin(), c));
-                     return;
+                     if (it == end) [[unlikely]]
+                        throw std::runtime_error(R"(Expected ")");
+                     switch (*it) {
+                        [[unlikely]] case '\\':
+                        {
+                           if (++it == end) [[unlikely]]
+                              throw std::runtime_error(R"(Expected ")");
+                           else [[likely]] {
+                              *c = *it;
+                           }
+                           break;
+                        }
+                        [[unlikely]] case '"':
+                        {
+                           ++it;
+                           value.resize(std::distance(value.begin(), c));
+                           return;
+                        }
+                        [[likely]] default : *c = *it;
+                     }
                   }
-                  [[likely]] default : *c = *it;
+               }
+            }
+            else {
+               const auto cend = value.cend();
+               for (auto c = value.begin(); c < cend; ++c, ++it)
+               {
+                  if (it == end) [[unlikely]]
+                     throw std::runtime_error(R"(Expected ")");
+                  switch (*it) {
+                     [[unlikely]] case '\\':
+                     {
+                        if (++it == end) [[unlikely]]
+                           throw std::runtime_error(R"(Expected ")");
+                        else [[likely]] {
+                           *c = *it;
+                        }
+                        break;
+                     }
+                     [[unlikely]] case '"':
+                     {
+                        ++it;
+                        value.resize(std::distance(value.begin(), c));
+                        return;
+                     }
+                     [[likely]] default : *c = *it;
+                  }
                }
             }
             
+            // growth portion
+            if constexpr (nano::contiguous_iterator<std::decay_t<It>>
+                          && nano::contiguous_iterator<std::decay_t<End>>) {
+               auto start = it;
+               // non escaped portion
+               while (it < end) {
+                  switch (*it) {
+                     [[unlikely]] case '\\': {
+                        value.append(start, it);
+                        ++it; // skip first backslash
+                        value.push_back(*it); // add the escaped character
+                        ++it;
+                        break;
+                     }
+                     [[unlikely]] case '"':
+                     {
+                        value.append(start, it);
+                        ++it;
+                        return;
+                     }
+                     [[likely]] default : {
+                        ++it;
+                        continue;
+                     }
+                  }
+                  break;
+               }
+            }
+            
+            // growth portion
             while (it < end) {
                switch (*it) {
                   [[unlikely]] case '\\':
                   {
                      if (++it == end) [[unlikely]]
-                        throw std::runtime_error("Expected \"");
+                        throw std::runtime_error(R"(Expected ")");
                      else [[likely]] {
                         value.push_back(*it);
                      }
@@ -196,7 +286,8 @@ namespace glz
                }
                ++it;
             }
-            throw std::runtime_error("Expected \"");
+            
+            throw std::runtime_error(R"(Expected ")");
          }
       };
       

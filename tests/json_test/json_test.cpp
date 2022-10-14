@@ -272,7 +272,7 @@ void basic_types() {
       expect(buffer == "\"as\\\"df\\\\ghjkl\"");
    };
 
-   "bool read valid"_test = [] {
+   "backslash testing"_test = [] {
       std::string val{};
       glz::read_json(val, "\"fish\"");
       expect(val == "fish");
