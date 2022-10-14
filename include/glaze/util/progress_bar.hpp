@@ -27,9 +27,9 @@ namespace glz
          std::string s{};
          
          const size_t one = 1;
-         const auto total = std::max(this->total, one);
-         const auto completed = std::min(this->completed, total);
-         const auto progress = static_cast<double>(completed) / total;
+         const auto one_or_total = std::max(total, one);
+         const auto one_or_completed = std::min(completed, one_or_total);
+         const auto progress = static_cast<double>(one_or_completed) / one_or_total;
          const auto percentage = static_cast<size_t>(std::round(progress * 100));
 
          if (width > 2) {
@@ -50,16 +50,15 @@ namespace glz
          }
 
          const auto eta_s = static_cast<size_t>(
-            std::round(((total - completed) * time_taken) /
-                       std::max(completed, one)));
+            std::round(((one_or_total - one_or_completed) * time_taken) / std::max(one_or_completed, one)));
          const auto minutes = eta_s / 60;
          const auto seconds = eta_s - minutes * 60;
-         fmt::format_to(std::back_inserter(s), FMT_COMPILE(" {}% | ETA: {}m {}s | {}/{}"),
-                        std::round(percentage),
-                        minutes,
-                        seconds,
-                        completed,
-                        total);
+         fmt::format_to(std::back_inserter(s), FMT_COMPILE(" {}% | ETA: {}m {}s | {}/{}"), //
+                        std::round(percentage), //
+                        minutes, //
+                        seconds, //
+                        one_or_completed,                                                   //
+                        one_or_total);
          return s;
       }
    };
