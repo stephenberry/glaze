@@ -1,12 +1,12 @@
 # Glaze
 The fastest direct to memory JSON library in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
 
-| Library                                                      | Runtime (s) | Ratio    |
-| ------------------------------------------------------------ | ----------- | -------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **2.24**    | **1.0**  |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) (with unsafe raw buffer) | **2.58**    | **1.15** |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **3.13**    | **1.39** |
-| [**nlohmann json**](https://github.com/nlohmann/json)        | **18.51**   | **8.26** |
+| Library                                                      | Roundtrip Runtime (s) | Write (MB/s) | Read (MB/s) |
+| ------------------------------------------------------------ | --------------------- | ------------ | ----------- |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **2.27**              | **530.21**   | **533.34**  |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) (with unsafe raw buffer) | **2.59**              | **461.71**   | **460.97**  |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **3.18**              | **316.75**   | **460.11**  |
+| [**nlohmann json**](https://github.com/nlohmann/json)        | **18.58**             | **76.47**    | **65.65**   |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
