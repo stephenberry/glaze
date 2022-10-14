@@ -19,6 +19,21 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 > Performance note: Glaze is designed to read and write entire JSON messages. If a document object model is desired with the lazy parsing then [simdjson](https://github.com/simdjson/simdjson) is an excellent choice.
 
+### Raw Buffer Performance
+
+You can get even better write performance by writing directly to a char buffer. However, you must have sufficiently allocated space in your buffer for the message. It is unsafe to use without thinking.
+
+```c++
+glz::read_json(obj, buffer);
+const auto n = glz::write_json(obj, buffer.data());
+buffer.resize(n);
+```
+
+| Library                                                      | Runtime (s) | Ratio    |
+| ------------------------------------------------------------ | ----------- | -------- |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **2.28**    | **1.0**  |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.58**    | **1.13** |
+
 ### Example
 
 ```c++
