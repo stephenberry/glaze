@@ -22,7 +22,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 ## Compiler Support
 
-Glaze builds with clang and MSVC compilers. Currently it doesn't build with gcc because of std::declval issues ([see issue #7](https://github.com/stephenberry/glaze/issues/7#issue-1409706710).
+Glaze builds with clang and MSVC compilers. Currently it doesn't build with gcc because of std::declval issues ([see issue #7](https://github.com/stephenberry/glaze/issues/7#issue-1409706710)).
 
 ### Raw Buffer Performance
 
