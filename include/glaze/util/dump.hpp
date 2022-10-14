@@ -14,6 +14,15 @@ namespace glz::detail
       b.push_back(c);
    }
    
+   inline void dump(const char c, std::string& b, auto&& ix) noexcept {
+      if (ix == b.size()) [[unlikely]] {
+         b.resize(b.size() * 2);
+      }
+      
+      b[ix] = c;
+      ++ix;
+   }
+   
    inline void dump(const char c, char*& b) noexcept {
       *b = c;
       ++b;
@@ -22,6 +31,16 @@ namespace glz::detail
    template <char c>
    inline void dump(std::string& b) noexcept {
       b.push_back(c);
+   }
+   
+   template <char c>
+   inline void dump(std::string& b, auto&& ix) noexcept {
+      if (ix == b.size()) [[unlikely]] {
+         b.resize(b.size() * 2);
+      }
+      
+      b[ix] = c;
+      ++ix;
    }
    
    template <char c>
@@ -55,6 +74,19 @@ namespace glz::detail
          ++b;
       }
    }
+   
+   template <string_literal str>
+   inline void dump(std::string& b, auto&& ix) noexcept {
+      static constexpr auto s = str.sv();
+      static constexpr auto n = s.size();
+      
+      while (ix + n >= b.size()) [[unlikely]] {
+         b.resize(b.size() * 2);
+      }
+      
+      std::memcpy(b.data() + ix, s.data(), n);
+      ix += n;
+   }
 
    inline void dump(const std::string_view str, std::output_iterator<char> auto&& it) noexcept {
       std::copy(str.data(), str.data() + str.size(), it);
@@ -62,6 +94,16 @@ namespace glz::detail
 
    inline void dump(const std::string_view str, std::string& b) noexcept {
       b.append(str.data(), str.size());
+   }
+   
+   inline void dump(const std::string_view str, std::string& b, auto&& ix) noexcept {
+      const auto n = str.size();
+      while (ix + n >= b.size()) [[unlikely]] {
+         b.resize(b.size() * 2);
+      }
+      
+      std::memcpy(b.data() + ix, str.data(), n);
+      ix += n;
    }
    
    inline void dump(const std::string_view str, char*& b) noexcept {
