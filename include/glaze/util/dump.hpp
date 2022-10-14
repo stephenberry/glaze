@@ -14,9 +14,20 @@ namespace glz::detail
       b.push_back(c);
    }
    
+   inline void dump(const char c, char*& b) noexcept {
+      *b = c;
+      ++b;
+   }
+   
    template <char c>
    inline void dump(std::string& b) noexcept {
       b.push_back(c);
+   }
+   
+   template <char c>
+   inline void dump(char*& b) noexcept {
+      *b = c;
+      ++b;
    }
 
    template <char c>
@@ -35,6 +46,15 @@ namespace glz::detail
    inline void dump(std::string& b) noexcept {
       b.append(str.value, str.size);
    }
+   
+   template <string_literal str>
+   inline void dump(char*& b) noexcept {
+      static constexpr auto s = str.sv();
+      for (auto& c : s) {
+         *b = c;
+         ++b;
+      }
+   }
 
    inline void dump(const std::string_view str, std::output_iterator<char> auto&& it) noexcept {
       std::copy(str.data(), str.data() + str.size(), it);
@@ -42,6 +62,13 @@ namespace glz::detail
 
    inline void dump(const std::string_view str, std::string& b) noexcept {
       b.append(str.data(), str.size());
+   }
+   
+   inline void dump(const std::string_view str, char*& b) noexcept {
+      for (auto& c : str) {
+         *b = c;
+         ++b;
+      }
    }
    
    template <std::byte c, class B>

@@ -53,14 +53,19 @@ namespace glz
       template <num_t T>
       struct to_json<T>
       {
-         template <auto& Opts>
-         static void op(auto&& value, auto&& b) noexcept
+         template <auto& Opts, class B>
+         static void op(auto&& value, B&& b) noexcept
          {
             /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {
                // more efficient strings in C++23:
              https://en.cppreference.com/w/cpp/string/basic_string/resize_and_overwrite
              }*/
-            fmt::format_to(std::back_inserter(b), FMT_COMPILE("{}"), value);
+            if constexpr (std::same_as<std::decay_t<B>, char*>) {
+               b = fmt::format_to(std::forward<B>(b), FMT_COMPILE("{}"), value);
+            }
+            else {
+               fmt::format_to(std::back_inserter(b), FMT_COMPILE("{}"), value);
+            }
          }
       };
 
@@ -305,8 +310,8 @@ namespace glz
    }  // namespace detail
    
    template <class T, class Buffer>
-   inline void write_json(T&& value, Buffer&& buffer) {
-      write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+   inline auto write_json(T&& value, Buffer&& buffer) {
+      return write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
    
    template <class T>

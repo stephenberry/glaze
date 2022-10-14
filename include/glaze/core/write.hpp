@@ -23,6 +23,15 @@ namespace glz
          detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), std::back_inserter(buffer));
       }
    }
+   
+   template <opts Opts, class T, class Buffer>
+   requires std::same_as<std::decay_t<Buffer>, char*>
+   inline size_t write(T&& value, Buffer&& buffer) noexcept
+   {
+      auto start = buffer;
+      detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), buffer);
+      return static_cast<size_t>(std::distance(start, buffer));
+   }
 
    // For writing json to std::ofstream, std::cout, or other streams
    template <opts Opts, class T>

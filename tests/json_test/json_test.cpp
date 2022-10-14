@@ -1794,6 +1794,17 @@ suite json_helpers = [] {
    };
 };
 
+suite allocated_write = [] {
+   "allocated_write"_test = [] {
+      my_struct v{};
+      std::string s{};
+      s.resize(100);
+      auto length = glz::write_json(v, s.data());
+      s.resize(length);
+      expect(s == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
+   };
+};
+
 int main()
 {
    using namespace boost::ut;
