@@ -123,7 +123,7 @@ namespace glz
                write_char(value);
             }
             else {
-               const std::string_view str = value;
+               const sv str = value;
                for (auto&& c : str) {
                   write_char(c);
                }
@@ -135,22 +135,35 @@ namespace glz
          static void op(auto&& value, auto&& b, auto&& ix) noexcept
          {
             dump<'"'>(b, ix);
-            const auto write_char = [&](auto&& c, auto&& ix) {
-               switch (c) {
+            if constexpr (char_t<T>) {
+               switch (value) {
                case '\\':
                case '"':
                   dump<'\\'>(b, ix);
                   break;
                }
-               dump(c, b, ix);
-            };
-            if constexpr (char_t<T>) {
-               write_char(value, ix);
+               dump(value, b, ix);
             }
             else {
-               const std::string_view str = value;
+               const sv str = value;
+               const auto n = str.size();
+               
+               // we use 2 * n to handle potential escape characters
+               while ((ix + 2 * n) >= b.size()) [[unlikely]] {
+                  b.resize(b.size() * 2);
+               }
+               
+               // now we don't have to check writing
                for (auto&& c : str) {
-                  write_char(c, ix);
+                  switch (c) {
+                  case '\\':
+                  case '"':
+                     b[ix] = '\\';
+                     ++ix;
+                     break;
+                  }
+                  b[ix] = c;
+                  ++ix;
                }
             }
             dump<'"'>(b, ix);
