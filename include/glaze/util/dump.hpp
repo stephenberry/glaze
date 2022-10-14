@@ -10,11 +10,11 @@
 
 namespace glz::detail
 {
-   inline void dump(const char c, std::string& b) noexcept {
+   inline void dump(const char c, push_backable auto& b) noexcept {
       b.push_back(c);
    }
    
-   inline void dump(const char c, std::string& b, auto&& ix) noexcept {
+   inline void dump(const char c, dyn_array_like auto& b, auto&& ix) noexcept {
       if (ix == b.size()) [[unlikely]] {
          b.resize(b.size() * 2);
       }
@@ -29,12 +29,12 @@ namespace glz::detail
    }
    
    template <char c>
-   inline void dump(std::string& b) noexcept {
+   inline void dump(push_backable auto& b) noexcept {
       b.push_back(c);
    }
    
    template <char c>
-   inline void dump(std::string& b, auto&& ix) noexcept {
+   inline void dump(dyn_array_like auto& b, auto&& ix) noexcept {
       if (ix == b.size()) [[unlikely]] {
          b.resize(b.size() * 2);
       }
@@ -76,7 +76,7 @@ namespace glz::detail
    }
    
    template <string_literal str>
-   inline void dump(std::string& b, auto&& ix) noexcept {
+   inline void dump(dyn_array_like auto& b, auto&& ix) noexcept {
       static constexpr auto s = str.sv();
       static constexpr auto n = s.size();
       
@@ -88,15 +88,15 @@ namespace glz::detail
       ix += n;
    }
 
-   inline void dump(const std::string_view str, std::output_iterator<char> auto&& it) noexcept {
+   inline void dump(const sv str, std::output_iterator<char> auto&& it) noexcept {
       std::copy(str.data(), str.data() + str.size(), it);
    }
 
-   inline void dump(const std::string_view str, std::string& b) noexcept {
+   inline void dump(const sv str, std::string& b) noexcept {
       b.append(str.data(), str.size());
    }
    
-   inline void dump(const std::string_view str, std::string& b, auto&& ix) noexcept {
+   inline void dump(const sv str, std::string& b, auto&& ix) noexcept {
       const auto n = str.size();
       while (ix + n >= b.size()) [[unlikely]] {
          b.resize(b.size() * 2);
@@ -106,7 +106,7 @@ namespace glz::detail
       ix += n;
    }
    
-   inline void dump(const std::string_view str, char*& b) noexcept {
+   inline void dump(const sv str, char*& b) noexcept {
       for (auto& c : str) {
          *b = c;
          ++b;

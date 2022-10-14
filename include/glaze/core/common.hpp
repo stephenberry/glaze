@@ -253,12 +253,31 @@ namespace glz
             container.emplace_back()
             } -> std::same_as<typename T::reference>;
       };
+      
+      template <class T>
+      concept push_backable = requires(T container)
+      {
+         {
+            container.push_back(std::declval<typename T::value_type>())
+         };
+      };
 
       template <class T>
       concept resizeable = requires(T container)
       {
          container.resize(0);
       };
+      
+      template <class T>
+      concept accessible = requires (T container)
+      {
+         {
+            container[size_t{}]
+         } -> std::same_as<typename T::reference>;
+      };
+      
+      template <class T>
+      concept dyn_array_like = resizeable<T> && accessible<T>;
       
       template <class T>
       concept is_span = requires(T t)

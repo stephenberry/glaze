@@ -92,6 +92,8 @@ namespace glz
              https://en.cppreference.com/w/cpp/string/basic_string/resize_and_overwrite
              }*/
             
+            // https://stackoverflow.com/questions/1701055/what-is-the-maximum-length-in-chars-needed-to-represent-any-double-value
+            // maximum length for a double should be 24 chars, we use 64 to be sufficient
             while (ix + 64 >= b.size()) [[unlikely]] {
                b.resize(b.size() * 2);
             }
