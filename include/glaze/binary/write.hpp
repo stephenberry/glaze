@@ -233,7 +233,12 @@ namespace glz
                   std::get<member_it->second.index()>(member_it->second);
 
                detail::dump_int(key_to_int.find(key)->second, buffer);
-               write<sub_partial, Opts>(value.*member_ptr, buffer);
+               if constexpr (std::is_member_pointer_v<decltype(member_ptr)>) {
+                  write<sub_partial, Opts>(value.*member_ptr, buffer);
+               }
+               else {
+                  write<sub_partial, Opts>(member_ptr(value), buffer);
+               }
             });
          }
          else if constexpr (detail::map_t<std::decay_t<T>>) {
