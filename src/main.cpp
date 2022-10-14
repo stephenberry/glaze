@@ -7,17 +7,17 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/api/impl.hpp"
 
-struct sub
+struct sub_t
 {
    double x = 400.0;
    double y = 200.0;
 };
 
 template <>
-struct glz::meta<sub>
+struct glz::meta<sub_t>
 {
    static constexpr std::string_view name = "sub";
-   using T = sub;
+   using T = sub_t;
    static constexpr auto value = object("x", &T::x, "y", &T::y);
 };
 
@@ -41,7 +41,7 @@ struct my_struct
    Color c = Color::Red;
    std::string hello = "Hello World";
    std::array<uint64_t, 3> arr = {1, 2, 3};
-   sub sub{};
+   sub_t sub{};
    std::map<std::string, int> map{};
 };
 

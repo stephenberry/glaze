@@ -1804,6 +1804,19 @@ suite allocated_write = [] {
    };
 };
 
+suite nan_tests = [] {
+   "nan_tests"_test = [] {
+      double d = NAN;
+      std::string s{};
+      glz::write_json(d, s);
+      expect(s == R"("nan")");
+      
+      d = 0.0;
+      glz::read_json(d, s);
+      expect(d == NAN);
+   };
+};
+
 int main()
 {
    using namespace boost::ut;
