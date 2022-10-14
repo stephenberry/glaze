@@ -183,8 +183,7 @@ namespace glz
                   }
                }
                else {
-                  const auto cend = value.cend();
-                  for (auto c = value.begin(); c < cend; ++c, ++it)
+                  for (size_t i = 0; i < n_value; ++i, ++it)
                   {
                      if (it == end) [[unlikely]]
                         throw std::runtime_error(R"(Expected ")");
@@ -194,17 +193,17 @@ namespace glz
                            if (++it == end) [[unlikely]]
                               throw std::runtime_error(R"(Expected ")");
                            else [[likely]] {
-                              *c = *it;
+                              value[i] = *it;
                            }
                            break;
                         }
                         [[unlikely]] case '"':
                         {
                            ++it;
-                           value.resize(std::distance(value.begin(), c));
+                           value.resize(i);
                            return;
                         }
-                        [[likely]] default : *c = *it;
+                        [[likely]] default : value[i] = *it;
                      }
                   }
                }
@@ -240,54 +239,51 @@ namespace glz
             if constexpr (nano::contiguous_iterator<std::decay_t<It>>
                           && nano::contiguous_iterator<std::decay_t<End>>) {
                auto start = it;
-               // non escaped portion
+
                while (it < end) {
                   switch (*it) {
-                     [[unlikely]] case '\\': {
+                     case '\\': {
                         value.append(start, it);
-                        ++it; // skip first backslash
+                        ++it; // skip first escape
                         value.push_back(*it); // add the escaped character
                         ++it;
+                        start = it;
                         break;
                      }
-                     [[unlikely]] case '"':
-                     {
+                     case '"': {
                         value.append(start, it);
                         ++it;
                         return;
                      }
-                     [[likely]] default : {
+                     default:
+                        break;
+                  }
+                  
+                  ++it;
+               }
+            }
+            else {
+               while (it < end) {
+                  switch (*it) {
+                     [[unlikely]] case '\\':
+                     {
+                        if (++it == end) [[unlikely]]
+                           throw std::runtime_error(R"(Expected ")");
+                        else [[likely]] {
+                           value.push_back(*it);
+                        }
+                        break;
+                     }
+                     [[unlikely]] case '"':
+                     {
                         ++it;
-                        continue;
+                        return;
                      }
+                     [[likely]] default : value.push_back(*it);
                   }
-                  break;
+                  ++it;
                }
             }
-            
-            // growth portion
-            while (it < end) {
-               switch (*it) {
-                  [[unlikely]] case '\\':
-                  {
-                     if (++it == end) [[unlikely]]
-                        throw std::runtime_error(R"(Expected ")");
-                     else [[likely]] {
-                        value.push_back(*it);
-                     }
-                     break;
-                  }
-                  [[unlikely]] case '"':
-                  {
-                     ++it;
-                     return;
-                  }
-                  [[likely]] default : value.push_back(*it);
-               }
-               ++it;
-            }
-            
-            throw std::runtime_error(R"(Expected ")");
          }
       };
       
