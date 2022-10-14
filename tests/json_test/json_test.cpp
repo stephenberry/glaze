@@ -877,8 +877,7 @@ void read_tests() {
          std::string b = "1/*a comment*/00";
          int a{};
          glz::read_json(a, b);
-//*      fails test
-         //expect(a == 100);
+         expect(a == 1);
       }
       {
          std::string b = R"([100, // a comment
