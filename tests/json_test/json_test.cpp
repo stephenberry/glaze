@@ -914,11 +914,11 @@ void read_tests() {
 
          expect(throws([&] { glz::read_json(v, in); }));
       }
- //*  // missing charictar bug?
+      // do we want to support partial reading of fixed sized arrays?
       {
          std::string in = "    [ 3.25 , 3.125 ]   ";
          [[maybe_unused]] v3 v{};
-         //glaze::read_json(v, in);
+         //glz::read_json(v, in);
 
          //expect(v.x == 3.25);
          //expect(v.y == 3.125);
