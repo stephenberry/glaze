@@ -143,7 +143,6 @@ namespace glz
       {
          static void op(auto&& value, auto&& it, auto&& end)
          {
-            using V = typename std::decay_t<T>::value_type;
             if constexpr (has_static_size<T>) {
                for (auto&& item : value) {
                   read<binary>::op(item, it, end);
