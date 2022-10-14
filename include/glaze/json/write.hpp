@@ -28,12 +28,12 @@ namespace glz
       template <>
       struct write<json>
       {
-         template <auto& Opts, class T, class B>
+         template <auto Opts, class T, class B>
          static void op(T&& value, B&& b) {
             to_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<B>(b));
          }
          
-         template <auto& Opts, class T, class B, class IX>
+         template <auto Opts, class T, class B, class IX>
          static void op(T&& value, B&& b, IX&& ix) {
             to_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<B>(b), std::forward<IX>(ix));
          }
@@ -43,7 +43,7 @@ namespace glz
       requires (std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> || std::same_as<T, std::vector<bool>::const_reference>)
       struct to_json<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(const bool value, auto&& b) noexcept
          {
             if (value) {
@@ -54,7 +54,7 @@ namespace glz
             }
          }
          
-         template <auto& Opts>
+         template <auto Opts>
          static void op(const bool value, auto&& b, auto&& ix) noexcept
          {
             if (value) {
@@ -69,7 +69,7 @@ namespace glz
       template <num_t T>
       struct to_json<T>
       {
-         template <auto& Opts, class B>
+         template <auto Opts, class B>
          static void op(auto&& value, B&& b) noexcept
          {
             /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {
@@ -84,7 +84,7 @@ namespace glz
             }
          }
          
-         template <auto& Opts, class B>
+         template <auto Opts, class B>
          static void op(auto&& value, B&& b, auto&& ix) noexcept
          {
             /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {
@@ -106,7 +106,7 @@ namespace glz
       requires str_t<T> || char_t<T>
       struct to_json<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             dump<'"'>(b);
@@ -131,7 +131,7 @@ namespace glz
             dump<'"'>(b);
          }
          
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b, auto&& ix) noexcept
          {
             dump<'"'>(b, ix);
@@ -173,7 +173,7 @@ namespace glz
       template <glaze_enum_t T>
       struct to_json<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             using key_t = std::underlying_type_t<T>;
@@ -199,7 +199,7 @@ namespace glz
             }
          }
          
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b, auto&& ix) noexcept
          {
             using key_t = std::underlying_type_t<T>;
@@ -229,11 +229,11 @@ namespace glz
       template <func_t T>
       struct to_json<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& /*value*/, auto&& /*b*/) noexcept
          {}
          
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& /*value*/, auto&& /*b*/, auto&& /*ix*/) noexcept
          {}
       };
@@ -242,12 +242,12 @@ namespace glz
       requires std::same_as<std::decay_t<T>, raw_json>
       struct to_json<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b) noexcept {
             dump(value.str, b);
          }
          
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b, auto&& ix) noexcept {
             dump(value.str, b, ix);
          }
@@ -256,7 +256,7 @@ namespace glz
       template <array_t T>
       struct to_json<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             dump<'['>(b);
@@ -282,7 +282,7 @@ namespace glz
             dump<']'>(b);
          }
          
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b, auto&& ix) noexcept
          {
             dump<'['>(b, ix);
@@ -312,7 +312,7 @@ namespace glz
       template <map_t T>
       struct to_json<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             dump<'{'>(b);
@@ -343,7 +343,7 @@ namespace glz
             dump<'}'>(b);
          }
          
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b, auto&& ix) noexcept
          {
             dump<'{'>(b, ix);
@@ -378,7 +378,7 @@ namespace glz
       template <nullable_t T>
       struct to_json<T>
       {
-         template <auto& Opts, class B>
+         template <auto Opts, class B>
          static void op(auto&& value, B&& b) noexcept
          {
             if (value)
@@ -388,7 +388,7 @@ namespace glz
             }
          }
          
-         template <auto& Opts, class B>
+         template <auto Opts, class B>
          static void op(auto&& value, B&& b, auto&& ix) noexcept
          {
             if (value)
@@ -403,7 +403,7 @@ namespace glz
       requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
       struct to_json<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             static constexpr auto N = []() constexpr
@@ -433,7 +433,7 @@ namespace glz
             dump<']'>(b);
          }
          
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b, auto&& ix) noexcept
          {
             static constexpr auto N = []() constexpr
@@ -468,7 +468,7 @@ namespace glz
       requires glaze_object_t<T>
       struct to_json<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             using V = std::decay_t<T>;
@@ -510,7 +510,7 @@ namespace glz
             dump<'}'>(b);
          }
          
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b, auto&& ix) noexcept
          {
             using V = std::decay_t<T>;

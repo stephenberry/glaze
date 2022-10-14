@@ -22,7 +22,7 @@ namespace glz
       template <>
       struct write<binary>
       {
-         template <auto& Opts, class T, class B>
+         template <auto Opts, class T, class B>
          static void op(T&& value, B&& b)
          {
             to_binary<std::decay_t<T>>::template op<Opts>(
@@ -34,7 +34,7 @@ namespace glz
       requires (std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> || std::same_as<T, std::vector<bool>::const_reference>)
       struct to_binary<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(const bool value, auto&& b) noexcept
          {
             if (value) {
@@ -49,7 +49,7 @@ namespace glz
       template <func_t T>
       struct to_binary<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& /*value*/, auto&& /*b*/) noexcept
          {}
       };
@@ -82,7 +82,7 @@ namespace glz
       requires num_t<T> || char_t<T> || glaze_enum_t<T>
       struct to_binary<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             dump_type(value, b);
@@ -92,7 +92,7 @@ namespace glz
       template <str_t T>
       struct to_binary<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             dump_int(value.size(), b);
@@ -103,7 +103,7 @@ namespace glz
       template <array_t T>
       struct to_binary<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b)
          {
             if constexpr (!has_static_size<T>) {
@@ -118,7 +118,7 @@ namespace glz
       template <map_t T>
       struct to_binary<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             dump_int(value.size(), b);
@@ -132,7 +132,7 @@ namespace glz
       template <nullable_t T>
       struct to_binary<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             if (value) {
@@ -149,7 +149,7 @@ namespace glz
       requires glaze_object_t<T>
       struct to_binary<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             using V = std::decay_t<T>;
@@ -174,7 +174,7 @@ namespace glz
       requires glaze_array_t<T>
       struct to_binary<T>
       {
-         template <auto& Opts>
+         template <auto Opts>
          static void op(auto&& value, auto&& b) noexcept
          {
             using V = std::decay_t<T>;
