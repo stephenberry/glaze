@@ -537,7 +537,7 @@ namespace glz
       }
 
       template <class T, class mptr_t>
-      constexpr auto member_check()
+      constexpr decltype(auto) member_check()
       {
          using mptr_type = std::decay_t<mptr_t>;
          if constexpr (std::is_member_pointer_v<mptr_type>) {
@@ -547,7 +547,8 @@ namespace glz
             return std::declval<T>();
          }
          else { // is a lambda function
-            return mptr_type{}(std::declval<T>());
+            return std::declval<std::invoke_result_t<mptr_t, T>>();
+            //return mptr_type{}(std::declval<T>());
          }
       }
 
