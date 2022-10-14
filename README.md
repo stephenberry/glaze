@@ -206,7 +206,7 @@ struct glz::meta<Thing> {
 };
 ```
 
-The value `v` passed to the lambda function will be a `Thing` object, and the lambda function allows us to make the subclass invisible to the object interface.
+The value `self` passed to the lambda function will be a `Thing` object, and the lambda function allows us to make the subclass invisible to the object interface.
 
 Lambda functions by default copy returns, therefore the `auto&` return type is typically required in order for glaze to write to memory.
 
