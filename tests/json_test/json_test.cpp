@@ -1813,6 +1813,7 @@ suite nan_tests = [] {
       
       d = 0.0;
       glz::read_json(d, s);
+      // TODO: why doesn't this work?
       //expect(d == NAN);
    };
 };
