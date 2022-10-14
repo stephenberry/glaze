@@ -404,9 +404,9 @@ rec["x"] = x;
 rec["y"] = y;
 
 for (int i = 0; i < 100; ++i) {
-	x += 1.5;
-	y += static_cast<float>(i);
-	rec.update(); // saves the current state of x and y
+   x += 1.5;
+   y += static_cast<float>(i);
+   rec.update(); // saves the current state of x and y
 }
 
 to_csv_file("recorder_out", rec);
