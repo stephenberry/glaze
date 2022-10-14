@@ -541,7 +541,7 @@ namespace glz
       {
          using mptr_type = std::decay_t<mptr_t>;
          if constexpr (std::is_member_pointer_v<mptr_type>) {
-            return std::declval<T>().*std::declval<mptr_type>();
+            return std::declval<T>().*mptr_type{};
          }
          else if constexpr (std::is_enum_v<std::decay_t<T>>) {
             return std::declval<T>();
