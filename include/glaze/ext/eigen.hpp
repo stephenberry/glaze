@@ -84,6 +84,13 @@ namespace glz
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
             detail::write<json>::op<Opts>(view, b);
          }
+         
+         template <auto& Opts>
+         static void op(auto &&value, auto &&b, auto&& ix) noexcept
+         {
+            std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
+            detail::write<json>::op<Opts>(view, b, ix);
+         }
       };
    }  // namespace detail
 }  // namespace glaze
