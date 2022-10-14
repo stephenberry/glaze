@@ -10,6 +10,8 @@ The fastest direct to memory JSON library in the world. Glaze reads and writes f
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
+*daw_json_link is [significantly faster](https://github.com/beached/daw_json_link/blob/release/docs/images/kostya_bench_chart_2021_04_03.png) than libraries like [rapidjson](https://github.com/Tencent/rapidjson), so while benchmarks are coming, glaze has outperformed everything we've tested against*
+
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 - Direct to memory serialization/deserialization
