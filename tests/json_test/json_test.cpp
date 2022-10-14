@@ -753,7 +753,7 @@ struct glz::meta<oob>
 void read_tests() {
    using namespace boost::ut;
    
-   "cout"_test = [] {
+   "stringstream"_test = [] {
       std::stringstream ss{};
       ss << "3958713";
       int i{};
@@ -1058,7 +1058,7 @@ void read_tests() {
          std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
          std::map<std::string, int> v, vr{{"as", 1}, {"so", 2}, {"make", 3}};
          glz::read_json(v, in);
-
+         
          //expect(v == vr);
       }
       {
