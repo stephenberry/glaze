@@ -229,11 +229,11 @@ namespace glz
                static constexpr auto member_it = frozen_map.find(key);
                static_assert(member_it != frozen_map.end(),
                              "Invalid key passed to partial write");
-               static constexpr auto member_ptr =
-                  std::get<member_it->second.index()>(member_it->second);
+               static constexpr auto ix = member_it->second.index();
+               static constexpr decltype(auto) member_ptr = std::get<ix>(member_it->second);
 
                detail::dump_int(key_to_int.find(key)->second, buffer);
-               if constexpr (std::is_member_pointer_v<decltype(member_ptr)>) {
+               if constexpr (std::is_member_pointer_v<std::decay_t<decltype(member_ptr)>>) {
                   write<sub_partial, Opts>(value.*member_ptr, buffer);
                }
                else {
