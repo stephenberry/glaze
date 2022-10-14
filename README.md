@@ -180,8 +180,8 @@ template <>
 struct glz::meta<thing> {
    using T = thing;
    static constexpr auto value = object(
-      "x", &T::a, "x is a double",
-      "y", &T::b, "y is an int"
+      "x", &T::x, "x is a double",
+      "y", &T::y, "y is an int"
    );
 };
 ```
@@ -190,8 +190,8 @@ Prettified output:
 
 ```json
 {
-  "a": 5 /*x is a double*/,
-  "b": 7 /*y is an int*/
+  "x": 5 /*x is a double*/,
+  "y": 7 /*y is an int*/
 }
 ```
 
