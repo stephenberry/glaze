@@ -6,6 +6,7 @@ The fastest direct to memory JSON library in the world. Glaze reads and writes f
 | [**Glaze**](https://github.com/stephenberry/glaze)           | **2.27**              | **530.21**   | **533.34**  |
 | [**daw_json_link**](https://github.com/beached/daw_json_link) (with unsafe raw buffer) | **2.59**              | **461.71**   | **460.97**  |
 | [**daw_json_link**](https://github.com/beached/daw_json_link) | **3.18**              | **316.75**   | **460.11**  |
+| [**json_struct**](https://github.com/jorgen/json_struct)     | **8.31**              | **467.03**   | **172.73**  |
 | [**nlohmann json**](https://github.com/nlohmann/json)        | **18.58**             | **76.47**    | **65.65**   |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
