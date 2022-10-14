@@ -18,7 +18,7 @@
 #include "glaze/util/tuple.hpp"
 #include "glaze/util/type_traits.hpp"
 
-#include "nanorange.hpp"
+#include <nanorange.hpp>
 
 namespace glz
 {

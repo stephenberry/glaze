@@ -1,69 +1,47 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.15)
+
+include(cmake/prelude.cmake)
 
 project(
-  glaze
-  VERSION 0.2
-  LANGUAGES CXX
+    glaze
+    VERSION 0.2
+    LANGUAGES NONE
 )
 
-if(NOT ${CPM_LOCAL_PACKAGE_PATHS} STREQUAL "")
-   include(${CPM_LOCAL_PACKAGE_PATHS})
+include(cmake/project-is-top-level.cmake)
+include(cmake/variables.cmake)
+
+add_library(glaze_glaze INTERFACE)
+add_library(glaze::glaze ALIAS glaze_glaze)
+
+set_property(TARGET glaze_glaze PROPERTY EXPORT_NAME glaze)
+
+target_compile_features(glaze_glaze INTERFACE cxx_std_20)
+target_include_directories(
+    glaze_glaze ${warning_guard}
+    INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+)
+
+find_package(fmt 9 REQUIRED)
+find_package(nanorange REQUIRED)
+find_package(frozen 1.1.1 REQUIRED)
+find_package(FastFloat 3.4 REQUIRED)
+target_link_libraries(
+    glaze_glaze INTERFACE
+    fmt::fmt-header-only
+    nanorange::nanorange
+    frozen::frozen
+    FastFloat::fast_float
+)
+
+if(NOT CMAKE_SKIP_INSTALL_RULES)
+  include(cmake/install-rules.cmake)
 endif()
 
-include(cmake/CPM.cmake)
-
-CPMAddPackage(
-   NAME fast_float
-   GIT_REPOSITORY https://github.com/fastfloat/fast_float.git
-   GIT_TAG v3.4.0
-)
-
-CPMAddPackage(
-   NAME fmt
-   GIT_REPOSITORY https://github.com/fmtlib/fmt
-   GIT_TAG 9.0.0
-)
-
-CPMAddPackage(
-   NAME frozen
-   GIT_REPOSITORY https://github.com/serge-sans-paille/frozen.git
-   GIT_TAG 1.1.1
-)
-
-CPMAddPackage(
-   NAME NanoRange
-   DOWNLOAD_ONLY YES
-   GIT_REPOSITORY https://github.com/tcbrindle/NanoRange
-   GIT_TAG master
-)
-
-add_library(${PROJECT_NAME} INTERFACE)
-
-target_include_directories(${PROJECT_NAME} INTERFACE include ${NanoRange_SOURCE_DIR}/single_include/)
-
-target_link_libraries(${PROJECT_NAME} INTERFACE fast_float fmt-header-only frozen)
-
-target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_20)
-
-if(${CMAKE_PROJECT_NAME} STREQUAL ${PROJECT_NAME})
-   # This flag allows visual studio projects to be organized into folders
-   # in the solution explorer.
-   set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-
-   # create dummy target since some editors will not display interface targets
-   file(GLOB_RECURSE headers CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/glaze/*.hpp")
-   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/include" PREFIX "headers" FILES ${headers})
-   file(GLOB_RECURSE sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
-   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/src" PREFIX "sources" FILES ${sources})
-   add_executable(_${PROJECT_NAME} ${headers} ${sources})
-   target_link_libraries(_${PROJECT_NAME} PRIVATE ${PROJECT_NAME})
-   if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-     target_compile_options(_${PROJECT_NAME} PRIVATE -Wall -Wextra)
-   elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-     target_compile_options(_${PROJECT_NAME} PRIVATE /W4)
-   endif()
-
-   # Add test targets
-   enable_testing()
-   add_subdirectory(tests)
+if(NOT glaze_DEVELOPER_MODE)
+  return()
+elseif(NOT PROJECT_IS_TOP_LEVEL)
+  message(AUTHOR_WARNING "Developer mode is intended for developers of glaze")
 endif()
+
+include(cmake/dev-mode.cmake)
