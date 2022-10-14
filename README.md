@@ -3,9 +3,10 @@ The fastest direct to memory JSON library in the world. Glaze reads and writes f
 
 | Library                                                      | Runtime (s) | Ratio    |
 | ------------------------------------------------------------ | ----------- | -------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **2.70**    | **1.0**  |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **3.13**    | **1.16** |
-| [**nlohmann json**](https://github.com/nlohmann/json)        | **18.51**   | **6.86** |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **2.24**    | **1.0**  |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) (with unsafe raw buffer) | **2.58**    | **1.15** |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **3.13**    | **1.39** |
+| [**nlohmann json**](https://github.com/nlohmann/json)        | **18.51**   | **8.26** |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
@@ -21,18 +22,13 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 ### Raw Buffer Performance
 
-You can get even better write performance by writing directly to a char buffer. However, you must have sufficiently allocated space in your buffer for the message. It is unsafe to use without thinking.
+Glaze is just about as fast writing to a `std::string` as it is writing to a raw char buffer. If you have sufficiently allocated space in your buffer you can write to the raw buffer, as shown below.
 
 ```c++
 glz::read_json(obj, buffer);
 const auto n = glz::write_json(obj, buffer.data());
 buffer.resize(n);
 ```
-
-| Library                                                      | Runtime (s) | Ratio    |
-| ------------------------------------------------------------ | ----------- | -------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **2.28**    | **1.0**  |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.58**    | **1.13** |
 
 ### Example
 
