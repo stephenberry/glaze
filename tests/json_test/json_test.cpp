@@ -692,8 +692,8 @@ void bench()
                          tend - tstart)
                          .count();
       auto mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
-      std::cout << "to_json size: " << buffer.size() << " bytes\n";
-      std::cout << "to_json: " << duration << " s, " << mbytes_per_sec
+      std::cout << "write_json size: " << buffer.size() << " bytes\n";
+      std::cout << "write_json: " << duration << " s, " << mbytes_per_sec
                 << " MB/s"
                 << "\n";
 
@@ -706,7 +706,7 @@ void bench()
                     tend - tstart)
                     .count();
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
-      std::cout << "from_json: " << duration << " s, " << mbytes_per_sec
+      std::cout << "read_json: " << duration << " s, " << mbytes_per_sec
                      << " MB/s" << "\n";
 
       tstart = std::chrono::high_resolution_clock::now();
