@@ -269,6 +269,12 @@ namespace glz
       };
       
       template <class T>
+      concept has_data = requires(T container)
+      {
+         container.data();
+      };
+      
+      template <class T>
       concept accessible = requires (T container)
       {
          {
@@ -277,7 +283,7 @@ namespace glz
       };
       
       template <class T>
-      concept dyn_array_like = resizeable<T> && accessible<T>;
+      concept vector_like = resizeable<T> && accessible<T> && has_data<T>;
       
       template <class T>
       concept is_span = requires(T t)

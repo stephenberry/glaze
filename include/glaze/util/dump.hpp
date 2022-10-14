@@ -14,7 +14,7 @@ namespace glz::detail
       b.push_back(c);
    }
    
-   inline void dump(const char c, dyn_array_like auto& b, auto&& ix) noexcept {
+   inline void dump(const char c, vector_like auto& b, auto&& ix) noexcept {
       if (ix == b.size()) [[unlikely]] {
          b.resize(b.size() * 2);
       }
@@ -34,7 +34,7 @@ namespace glz::detail
    }
    
    template <char c>
-   inline void dump(dyn_array_like auto& b, auto&& ix) noexcept {
+   inline void dump(vector_like auto& b, auto&& ix) noexcept {
       if (ix == b.size()) [[unlikely]] {
          b.resize(b.size() * 2);
       }
@@ -60,11 +60,6 @@ namespace glz::detail
    inline void dump(std::output_iterator<char> auto&& it) noexcept {
       std::copy(str.value, str.value + str.size, it);
    }
-
-   template <string_literal str>
-   inline void dump(std::string& b) noexcept {
-      b.append(str.value, str.size);
-   }
    
    template <string_literal str>
    inline void dump(char*& b) noexcept {
@@ -76,7 +71,7 @@ namespace glz::detail
    }
    
    template <string_literal str>
-   inline void dump(dyn_array_like auto& b, auto&& ix) noexcept {
+   inline void dump(vector_like auto& b, auto&& ix) noexcept {
       static constexpr auto s = str.sv();
       static constexpr auto n = s.size();
       
@@ -91,12 +86,8 @@ namespace glz::detail
    inline void dump(const sv str, std::output_iterator<char> auto&& it) noexcept {
       std::copy(str.data(), str.data() + str.size(), it);
    }
-
-   inline void dump(const sv str, std::string& b) noexcept {
-      b.append(str.data(), str.size());
-   }
    
-   inline void dump(const sv str, std::string& b, auto&& ix) noexcept {
+   inline void dump(const sv str, vector_like auto& b, auto&& ix) noexcept {
       const auto n = str.size();
       while (ix + n >= b.size()) [[unlikely]] {
          b.resize(b.size() * 2);
