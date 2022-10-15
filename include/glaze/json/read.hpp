@@ -353,32 +353,59 @@ namespace glz
          static void op(auto& value, auto&& it, auto&& end)
          {
             skip_ws(it, end);
-            auto value_it = value.begin();
             match<'['>(it, end);
             skip_ws(it, end);
-            for (size_t i = 0; it < end; ++i) {
-               if (*it == ']') [[unlikely]] {
+            
+            if (*it == ']') [[unlikely]] {
+               ++it;
+               if constexpr (resizeable<T>) {
+                  value.clear();
+               }
+               return;
+            }
+            
+            const auto n = value.size();
+            
+            auto value_it = value.begin();
+            
+            for (size_t i = 0; i < n; ++i) {
+               read<json>::op(*value_it++, it, end);
+               skip_ws(it, end);
+               if (*it == ',') [[likely]] {
                   ++it;
-                  if constexpr (resizeable<T>) value.resize(i);
+               }
+               else if (*it == ']') {
+                  ++it;
+                  if constexpr (resizeable<T>) {
+                     value.resize(i + 1);
+                  }
                   return;
                }
-               if (i > 0) [[likely]] {
-                  match<','>(it, end);
+               else [[unlikely]] {
+                  throw std::runtime_error("Expected ]");
                }
-               if (i < static_cast<size_t>(value.size())) {
-                  read<json>::op(*value_it++, it, end);
-               }
-               else {
-                  if constexpr (emplace_backable<T>) {
-                     read<json>::op(value.emplace_back(), it, end);
-                  }
-                  else {
-                     throw std::runtime_error("Exceeded static array size.");
-                  }
-               }
-               skip_ws(it, end);
             }
-            throw std::runtime_error("Expected ]");
+            
+            // growing
+            if constexpr (emplace_backable<T>) {
+               for (size_t i = 0; it < end; ++i) {
+                  read<json>::op(value.emplace_back(), it, end);
+                  skip_ws(it, end);
+                  if (*it == ',') [[likely]] {
+                     ++it;
+                  }
+                  else if (*it == ']') {
+                     ++it;
+                     return;
+                  }
+                  else [[unlikely]] {
+                     throw std::runtime_error("Expected ]");
+                  }
+               }
+            }
+            else {
+               throw std::runtime_error("Exceeded static array size.");
+            }
          }
       };
       
