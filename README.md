@@ -1,5 +1,5 @@
 # Glaze
-The fastest direct to memory JSON library in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
+One of the fastest JSON libraries in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
 
 | Library                                                      | Roundtrip Runtime (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | --------------------- | ------------ | ----------- |
@@ -11,7 +11,7 @@ The fastest direct to memory JSON library in the world. Glaze reads and writes f
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
-*daw_json_link is [significantly faster](https://github.com/beached/daw_json_link/blob/release/docs/images/kostya_bench_chart_2021_04_03.png) than libraries like [rapidjson](https://github.com/Tencent/rapidjson), so while benchmarks are coming, glaze has outperformed everything we've tested against*
+*daw_json_link is [significantly faster](https://github.com/beached/daw_json_link/blob/release/docs/images/kostya_bench_chart_2021_04_03.png) than libraries like [rapidjson](https://github.com/Tencent/rapidjson), so while benchmarks are coming, glaze has outperformed everything we've tested against. [simdjson](https://github.com/simdjson/simdjson) will probably be faster in a lot of reading contexts, but requires more code from the user to achieve this for nested objects*
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
@@ -26,16 +26,6 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 ## Compiler Support
 
 Glaze builds with clang and MSVC compilers. Currently it doesn't build with gcc because of std::declval issues ([see issue #7](https://github.com/stephenberry/glaze/issues/7#issue-1409706710)).
-
-### Raw Buffer Performance
-
-Glaze is just about as fast writing to a `std::string` as it is writing to a raw char buffer. If you have sufficiently allocated space in your buffer you can write to the raw buffer, as shown below, but it is not recommended.
-
-```c++
-glz::read_json(obj, buffer);
-const auto n = glz::write_json(obj, buffer.data());
-buffer.resize(n);
-```
 
 ### Example
 
@@ -336,6 +326,16 @@ Produces this error:
 ```
 
 Denoting that x is invalid here.
+
+### Raw Buffer Performance
+
+Glaze is just about as fast writing to a `std::string` as it is writing to a raw char buffer. If you have sufficiently allocated space in your buffer you can write to the raw buffer, as shown below, but it is not recommended.
+
+```
+glz::read_json(obj, buffer);
+const auto n = glz::write_json(obj, buffer.data());
+buffer.resize(n);
+```
 
 ## JSON Caveats
 
