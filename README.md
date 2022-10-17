@@ -134,7 +134,7 @@ Dependencies are automatically included when running CMake. [CPM.cmake](https://
 - [frozen](https://github.com/serge-sans-paille/frozen.git)
 - [NanoRange](https://github.com/tcbrindle/NanoRange)
 
-> NanoRange is directly included until C++20 ranges are supported across all major compilers.
+> NanoRange will be removed once C++20 ranges are supported across all major compilers.
 
 ## Unit Test Dependencies
 
