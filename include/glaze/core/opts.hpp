@@ -12,6 +12,7 @@ namespace glz
       uint32_t format = json;
       bool comments = false; // write out comments
       bool opening_handled = false; // is whitespace and the opening character handled
+      bool error_on_unknown_keys = true;
    };
    
    template <opts Opts>

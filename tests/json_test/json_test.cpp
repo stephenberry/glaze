@@ -517,6 +517,13 @@ void user_types() {
       //Should skip invalid keys
       expect(nothrow([&] {
          //glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
+         glz::read<glz::opts{.error_on_unknown_keys = false}>(obj,
+                          R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
+   /**/, "a":322})");
+      }));
+      
+      expect(throws([&] {
+         //glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
          glz::read_json(obj,
                           R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
    /**/, "a":322})");

@@ -581,7 +581,12 @@ namespace glz
                         member_it->second);
                   }
                   else [[unlikely]] {
-                     skip_object_value(it, end);
+                     if constexpr (Opts.error_on_unknown_keys) {
+                        throw std::runtime_error("Unknown key: " + std::string(key));
+                     }
+                     else {
+                        skip_object_value(it, end);
+                     }
                   }
                }
                else {
