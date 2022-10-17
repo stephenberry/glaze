@@ -121,6 +121,30 @@ target_link_libraries(${PROJECT_NAME} glaze)
 
 Or, use the [Glaze Conan recipe](https://github.com/Ahajha/glaze-conan)
 
+## Header Only
+
+Glaze is designed to be used in a header only manner. The macro `FMT_HEADER_ONLY` is used for the [fmt](https://github.com/fmtlib/fmt) library.
+
+## Dependencies
+
+Dependencies are automatically included when running CMake. [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) is used for dependency management.
+
+- [fmt](https://github.com/fmtlib/fmt)
+- [fast_float](https://github.com/fastfloat/fast_float)
+- [frozen](https://github.com/serge-sans-paille/frozen.git)
+- [NanoRange](https://github.com/tcbrindle/NanoRange)
+
+> NanoRange is directly included until C++20 ranges are supported across all major compilers.
+
+## Unit Test Dependencies
+
+*Only required for building tests.*
+
+- [UT](https://github.com/boost-ext/ut)
+- [Eigen](https://gitlab.com/libeigen/eigen)
+
+## See [Wiki](https://github.com/stephenberry/glaze/wiki) for Frequently Asked Questions
+
 ## Local Glaze Meta
 
 Glaze also supports metadata provided within its associated class, as shown below:
@@ -146,30 +170,6 @@ struct my_struct
 ```
 
 > Template specialization of `glz::meta` is preferred when separating class definition from the serialization mapping. Local glaze metadata is helpful for working within the local namespace or when the class itself is templated.
-
-## Header Only
-
-Glaze is designed to be used in a header only manner. The macro `FMT_HEADER_ONLY` is used for the [fmt](https://github.com/fmtlib/fmt) library.
-
-## Dependencies
-
-Dependencies are automatically included when running CMake. [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) is used for dependency management.
-
-- [fmt](https://github.com/fmtlib/fmt)
-- [fast_float](https://github.com/fastfloat/fast_float)
-- [frozen](https://github.com/serge-sans-paille/frozen.git)
-- [NanoRange](https://github.com/tcbrindle/NanoRange)
-
-> NanoRange is directly included until C++20 ranges are supported across all major compilers.
-
-## Unit Test Dependencies
-
-*Only required for building tests.*
-
-- [UT](https://github.com/boost-ext/ut)
-- [Eigen](https://gitlab.com/libeigen/eigen)
-
-## See [Wiki](https://github.com/stephenberry/glaze/wiki) for Frequently Asked Questions
 
 ## JSON Pointer Syntax
 
