@@ -547,14 +547,16 @@ namespace glz
                   typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
                if constexpr (str_t<Key> || char_t<Key>) {
                   static constexpr sv key = std::get<0>(item);
-                  if constexpr (needs_escaping<key>()) {
+                  /*if constexpr (needs_escaping<key>()) {
                      write<json>::op<Opts>(key, b, ix);
                      dump<':'>(b, ix);
                   }
                   else {
                      static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\":">>;
                      dump<quoted>(b, ix);
-                  }
+                  }*/
+                  write<json>::op<Opts>(key, b, ix);
+                  dump<':'>(b, ix);
                }
                else {
                   static constexpr auto quoted =
