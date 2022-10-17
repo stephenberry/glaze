@@ -1,13 +1,13 @@
 # Glaze
 One of the fastest JSON libraries in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
 
-| Library                                                      | Roundtrip Runtime (s) | Write (MB/s) | Read (MB/s) |
-| ------------------------------------------------------------ | --------------------- | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.87**              | **635**      | **645**     |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) (with unsafe raw buffer) | **2.59**              | **462**      | **461**     |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **3.18**              | **317**      | **460**     |
-| [**json_struct**](https://github.com/jorgen/json_struct)     | **8.31**              | **467**      | **173**     |
-| [**nlohmann json**](https://github.com/nlohmann/json)        | **18.58**             | **76**       | **66**      |
+| Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
+| ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.87**           | **635**      | **645**     |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) (with unsafe raw buffer) | **2.59**           | **462**      | **461**     |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **3.18**           | **317**      | **460**     |
+| [**json_struct**](https://github.com/jorgen/json_struct)     | **8.31**           | **467**      | **173**     |
+| [**nlohmann json**](https://github.com/nlohmann/json)        | **18.58**          | **76**       | **66**      |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
@@ -22,6 +22,21 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - Much more!
 
 > Performance note: Glaze is designed to read and write entire JSON messages. If a document object model is desired with lazy parsing then [simdjson](https://github.com/simdjson/simdjson) is an excellent choice.
+
+## Binary Performance
+
+*Tagged binary specification described further down.*
+
+| Metric                | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
+| --------------------- | ------------------ | ------------ | ----------- |
+| Raw performance       | **0.45**           | **1,697**    | **682**     |
+| Equivalent JSON data* | **0.45**           | **3,222**    | **1,295**   |
+
+JSON message size: 617 bytes
+
+Binary message size: 325 bytes
+
+*Binary data packs more efficiently than JSON, so transporting the same amount of information is even faster.
 
 ## Compiler Support
 

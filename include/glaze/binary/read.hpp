@@ -135,10 +135,17 @@ namespace glz
          {
             const auto n = int_from_header(it, end);
             using V = typename std::decay_t<T>::value_type;
-            const auto n_bytes = sizeof(V) * n;
-            value.resize(n);
-            std::memcpy(value.data(), &(*it), n_bytes);
-            std::advance(it, n_bytes);
+            if constexpr (sizeof(V) == 1) {
+               value.resize(n);
+               std::memcpy(value.data(), &(*it), n);
+               std::advance(it, n);
+            }
+            else {
+               const auto n_bytes = sizeof(V) * n;
+               value.resize(n);
+               std::memcpy(value.data(), &(*it), n_bytes);
+               std::advance(it, n_bytes);
+            }
          }
       };
       
@@ -178,7 +185,7 @@ namespace glz
          {
             const auto n = int_from_header(it, end);
             
-            if constexpr (std::is_arithmetic_v<typename T::key_type>) {
+            if constexpr (std::is_arithmetic_v<std::decay_t<typename T::key_type>>) {
                typename T::key_type key;
                for (size_t i = 0; i < n; ++i) {
                   read<binary>::op<Opts>(key, it, end);
@@ -201,7 +208,7 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, auto&& it, auto&& end)
          {
-            bool has_value = static_cast<bool>(*it);
+            const auto has_value = static_cast<bool>(*it);
             ++it;
 
             if (has_value) {
