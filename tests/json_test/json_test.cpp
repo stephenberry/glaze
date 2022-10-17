@@ -957,15 +957,16 @@ void read_tests() {
 
          expect(throws([&] { glz::read_json(v, in); }));
       }
-      // do we want to support partial reading of fixed sized arrays?
+      
+      // partial reading of fixed sized arrays
       {
          std::string in = "    [ 3.25 , 3.125 ]   ";
          [[maybe_unused]] v3 v{};
-         //glz::read_json(v, in);
+         glz::read_json(v, in);
 
-         //expect(v.x == 3.25);
-         //expect(v.y == 3.125);
-         //expect(v.z == 0.0);
+         expect(v.x == 3.25);
+         expect(v.y == 3.125);
+         expect(v.z == 0.0);
       }
    };
 
@@ -1615,7 +1616,7 @@ void write_tests() {
       expect(s == R"({"3":2.2,"5":211.2,"7":11.111})");
    };
 
-//* Gives 23 errors. Errors come from an MSVC include file "utility": it claims that the base class is undifined.
+//* TODO: Gives 23 errors. Errors come from an MSVC include file "utility": it claims that the base class is undifined.
    "Write object"_test = [] {
       Named n{"Hello, world!", {{{21, 15, 13}, 0}, {0}}};
 

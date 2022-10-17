@@ -480,6 +480,9 @@ namespace glz
             skip_ws(it, end);
             
             for_each<N>([&](auto I) {
+               if (*it == ']') {
+                  return;
+               }
                if constexpr (I != 0) {
                   match<','>(it, end);
                }
