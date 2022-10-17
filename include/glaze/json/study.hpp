@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "NanoRange/nanorange.hpp"
+#include "nanorange.hpp"
 
 #include "glaze/core/common.hpp"
 #include "glaze/json/read.hpp"
