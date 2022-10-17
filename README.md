@@ -361,7 +361,7 @@ buffer.resize(n);
 
 ## JSON Caveats
 
-- Integer types cannot begin with a positive `+` symbol, for efficiency.
+- Number types cannot begin with a positive `+` symbol, for efficiency.
 
 # More Features
 
