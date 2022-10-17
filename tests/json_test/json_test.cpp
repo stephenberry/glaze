@@ -189,6 +189,31 @@ struct glz::meta<Thing> {
    );
 };
 
+struct Escaped
+{
+   int escaped_key{};
+};
+
+template <>
+struct glz::meta<Escaped> {
+   using T = Escaped;
+   static constexpr auto value = object(R"(escaped"key)", &T::escaped_key);
+};
+
+suite escaping_tests = [] {
+   "escaped_key"_test = [] {
+      std::string out;
+      Escaped obj{};
+      glz::write_json(obj, out);
+      
+      expect(out == R"({"escaped\"key":0})");
+      
+      std::string in = R"({"escaped\"key":5})";
+      glz::read_json(obj, in);
+      expect(obj.escaped_key == 5);
+   };
+};
+
 void basic_types() {
    using namespace boost::ut;
 
