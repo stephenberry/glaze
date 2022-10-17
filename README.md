@@ -475,7 +475,7 @@ A valid interface concern is binary compatibility between types. Glaze uses comp
 
 ## Name
 
-Every type accessed through a Glaze api must be named. It is best practice to give the type the same name as it has in C++, including the namespace (at least local namespace).
+By default custom type names from `glz::name_v` will be `"Unnamed"`. It is best practice to give types the same name as it has in C++, including the namespace (at least the local namespace).
 
 Concepts exist for naming `const`, pointer (`*`), and reference (`&`), versions of types as they are used. Many standard library containers are also supported.
 
@@ -492,7 +492,7 @@ struct glz::meta<my_api> {
 };
 ```
 
-Or, include it locally:
+Or, include it via local glaze meta:
 
 ```c++
 struct my_api {
