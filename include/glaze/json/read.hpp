@@ -266,7 +266,7 @@ namespace glz
                }
             }
             else {
-               while (it < end) {
+               while (it != end) {
                   switch (*it) {
                      [[unlikely]] case '\\':
                      {
@@ -510,7 +510,7 @@ namespace glz
             match<'{'>(it, end);
             skip_ws(it, end);
             bool first = true;
-            while (it < end) {
+            while (it != end) {
                if (*it == '}') [[unlikely]] {
                   ++it;
                   return;
@@ -558,7 +558,7 @@ namespace glz
                   }
                   else {
                      static thread_local std::string static_key{};
-                     read<json>::op(static_key, it, end);
+                     read<json>::op<Opts>(static_key, it, end);
                      key = static_key;
                   }
                   

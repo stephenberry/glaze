@@ -192,12 +192,14 @@ struct glz::meta<Thing> {
 struct Escaped
 {
    int escaped_key{};
+   std::string escaped_key2{ "hi" };
 };
 
 template <>
 struct glz::meta<Escaped> {
    using T = Escaped;
-   static constexpr auto value = object(R"(escaped"key)", &T::escaped_key);
+   static constexpr auto value = object(R"(escaped"key)", &T::escaped_key, //
+                                        R"(escaped""key2)", &T::escaped_key2);
 };
 
 suite escaping_tests = [] {
@@ -206,11 +208,12 @@ suite escaping_tests = [] {
       Escaped obj{};
       glz::write_json(obj, out);
       
-      expect(out == R"({"escaped\"key":0})");
+      expect(out == R"({"escaped\"key":0,"escaped\"\"key2":"hi"})");
       
-      std::string in = R"({"escaped\"key":5})";
+      std::string in = R"({"escaped\"key":5,"escaped\"\"key2":"bye"})";
       glz::read_json(obj, in);
       expect(obj.escaped_key == 5);
+      expect(obj.escaped_key2 == "bye");
    };
 };
 
@@ -758,6 +761,8 @@ void bench()
 struct v3
 {
    double x{}, y{}, z{};
+   
+   auto operator<=>(const v3&) const = default;
 };
 
 struct oob
@@ -785,12 +790,18 @@ struct glz::meta<oob>
 void read_tests() {
    using namespace boost::ut;
    
-   "stringstream"_test = [] {
+   "stringstream read"_test = [] {
       std::stringstream ss{};
       ss << "3958713";
       int i{};
       glz::read_json(i, ss);
       expect(i == 3958713);
+      
+      ss.clear();
+      ss << R"({"v":[0.1, 0.2, 0.3]})";
+      oob obj{};
+      glz::read_json(obj, ss);
+      expect(obj.v == v3{ 0.1, 0.2, 0.3 });
    };
    
    "Read floating point types"_test = [] {
