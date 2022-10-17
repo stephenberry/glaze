@@ -468,6 +468,15 @@ namespace glz
             dump<']'>(b, ix);
          }
       };
+
+      template <const std::string_view& S>
+      inline constexpr auto array_from_sv()
+      {
+         constexpr auto N = S.size();
+         std::array<char, N> arr;
+         std::copy_n(S.data(), N, arr.data());
+         return arr;
+      }
       
       template <const std::string_view& S>
       inline constexpr bool needs_escaping()
@@ -478,15 +487,6 @@ namespace glz
             }
          }
          return false;
-      }
-      
-      template <const std::string_view& S>
-      inline constexpr auto array_from_sv()
-      {
-         constexpr auto N = S.size();
-         std::array<char, N> arr;
-         std::copy_n(S.data(), N, arr.data());
-         return arr;
       }
       
       template <class T>
@@ -547,16 +547,20 @@ namespace glz
                   typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
                if constexpr (str_t<Key> || char_t<Key>) {
                   static constexpr sv key = std::get<0>(item);
-                  /*if constexpr (needs_escaping<key>()) {
+                  // TODO: gain this performance when MSVC fixes their bug
+                  #if _MSC_VER
+                  write<json>::op<Opts>(key, b, ix);
+                  dump<':'>(b, ix);
+                  #else
+                  if constexpr (needs_escaping<key>()) {
                      write<json>::op<Opts>(key, b, ix);
                      dump<':'>(b, ix);
                   }
                   else {
                      static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\":">>;
                      dump<quoted>(b, ix);
-                  }*/
-                  write<json>::op<Opts>(key, b, ix);
-                  dump<':'>(b, ix);
+                  }
+                  #endif
                }
                else {
                   static constexpr auto quoted =
