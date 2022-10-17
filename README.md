@@ -101,6 +101,26 @@ glz::read_json(s, buffer);
 // populates s from JSON
 ```
 
+## How To Use Glaze
+
+*This documentation is subject to change*
+
+Currently the easiest way to use Glaze with CMake is via [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake).
+
+```cmake
+include(cmake/CPM.cmake)
+
+CPMAddPackage(
+   NAME glaze
+   GIT_REPOSITORY https://github.com/stephenberry/glaze
+   GIT_TAG main
+)
+
+target_link_libraries(${PROJECT_NAME} glaze)
+```
+
+Or, use the [Glaze Conan recipe](https://github.com/Ahajha/glaze-conan)
+
 ## Local Glaze Meta
 
 Glaze also supports metadata provided within its associated class, as shown below:
