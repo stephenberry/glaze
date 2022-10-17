@@ -55,15 +55,16 @@ namespace glz
       template <>
       struct read<json>
       {
-         template <class T, class It0, class It1>
+         template <auto Opts, class T, class It0, class It1>
          static void op(T&& value, It0&& it, It1&& end) {
-            from_json<std::decay_t<T>>::op(std::forward<T>(value), std::forward<It0>(it), std::forward<It1>(end));
+            from_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
       
       template <bool_t T>
       struct from_json<T>
       {
+         template <auto Opts>
          static void op(bool_t auto&& value, auto&& it, auto&& end)
          {
             skip_ws(it, end);
@@ -94,7 +95,7 @@ namespace glz
       template <num_t T>
       struct from_json<T>
       {
-         template <class It>
+         template <auto Opts, class It>
          static void op(auto&& value, It&& it, auto&& end)
          {
             skip_ws(it, end);
@@ -145,13 +146,15 @@ namespace glz
       template <str_t T>
       struct from_json<T>
       {
-         template <class It, class End>
+         template <auto Opts, class It, class End>
          static void op(auto& value, It&& it, End&& end)
          {
             // TODO: this does not handle control chars like \t and \n
             
-            skip_ws(it, end);
-            match<'"'>(it, end);
+            if constexpr (!Opts.opening_handled) {
+               skip_ws(it, end);
+               match<'"'>(it, end);
+            }
             
             // overwrite portion
             
@@ -290,6 +293,7 @@ namespace glz
       template <char_t T>
       struct from_json<T>
       {
+         template <auto Opts>
          static void op(auto& value, auto&& it, auto&& end)
          {
             // TODO: this does not handle escaped chars
@@ -307,11 +311,12 @@ namespace glz
       template <glaze_enum_t T>
       struct from_json<T>
       {
+         template <auto Opts>
          static void op(auto& value, auto&& it, auto&& end)
          {
             //Could do better key parsing for enums since we know we cant have escapes and we know the max size
             static thread_local std::string key{};
-            read<json>::op(key, it, end);
+            read<json>::op<Opts>(key, it, end);
 
             static constexpr auto frozen_map = detail::make_string_to_enum_map<T>();
             const auto& member_it = frozen_map.find(frozen::string(key));
@@ -327,6 +332,7 @@ namespace glz
       template <func_t T>
       struct from_json<T>
       {
+         template <auto Opts>
          static void op(auto& /*value*/, auto&& /*it*/, auto&& /*end*/)
          {
          }
@@ -335,6 +341,7 @@ namespace glz
       template <>
       struct from_json<raw_json>
       {
+         template <auto Opts>
          static void op(raw_json& value, auto&& it, auto&& end)
          {
             // TODO this will not work for streams where we cant move backward
@@ -350,11 +357,15 @@ namespace glz
        !resizeable<T>)
       struct from_json<T>
       {
+         template <auto Opts>
          static void op(auto& value, auto&& it, auto&& end)
          {
             skip_ws(it, end);
             match<'['>(it, end);
             skip_ws(it, end);
+            if (it == end) {
+               throw std::runtime_error("Unexpected end");
+            }
             
             if (*it == ']') [[unlikely]] {
                ++it;
@@ -369,8 +380,11 @@ namespace glz
             auto value_it = value.begin();
             
             for (size_t i = 0; i < n; ++i) {
-               read<json>::op(*value_it++, it, end);
+               read<json>::op<Opts>(*value_it++, it, end);
                skip_ws(it, end);
+               if (it == end) {
+                  throw std::runtime_error("Unexpected end");
+               }
                if (*it == ',') [[likely]] {
                   ++it;
                }
@@ -389,7 +403,7 @@ namespace glz
             // growing
             if constexpr (emplace_backable<T>) {
                for (size_t i = 0; it < end; ++i) {
-                  read<json>::op(value.emplace_back(), it, end);
+                  read<json>::op<Opts>(value.emplace_back(), it, end);
                   skip_ws(it, end);
                   if (*it == ',') [[likely]] {
                      ++it;
@@ -414,6 +428,7 @@ namespace glz
        resizeable<T>)
       struct from_json<T>
       {
+         template <auto Opts>
          static void op(auto& value, auto&& it, auto&& end)
          {
             using value_t = nano::ranges::range_value_t<T>;
@@ -436,7 +451,7 @@ namespace glz
                if (i > 0) [[likely]] {
                   match<','>(it, end);
                }
-               read<json>::op(buffer.emplace_back(), it, end);
+               read<json>::op<Opts>(buffer.emplace_back(), it, end);
                skip_ws(it, end);
             }
             throw std::runtime_error("Expected ]");
@@ -446,6 +461,7 @@ namespace glz
       template <class T> requires glaze_array_t<T> || tuple_t<T>
       struct from_json<T>
       {
+         template <auto Opts>
          static void op(auto& value, auto&& it, auto&& end)
          {
             static constexpr auto N = []() constexpr
@@ -468,10 +484,10 @@ namespace glz
                   match<','>(it, end);
                }
                if constexpr (glaze_array_t<T>) {
-                  read<json>::op(value.*std::get<I>(meta_v<T>), it, end);
+                  read<json>::op<Opts>(value.*std::get<I>(meta_v<T>), it, end);
                }
                else {
-                  read<json>::op(std::get<I>(value), it, end);
+                  read<json>::op<Opts>(std::get<I>(value), it, end);
                }
                skip_ws(it, end);
             });
@@ -487,7 +503,8 @@ namespace glz
       requires map_t<T> || glaze_object_t<T>
       struct from_json<T>
       {
-         static void op(auto& value, auto&& it, auto&& end)
+         template <auto Opts, class It>
+         static void op(auto& value, It&& it, auto&& end)
          {
             skip_ws(it, end);
             match<'{'>(it, end);
@@ -503,11 +520,51 @@ namespace glz
                else [[likely]] {
                   match<','>(it, end);
                }
-               static thread_local std::string key{};
-               read<json>::op(key, it, end);
-               skip_ws(it, end);
-               match<':'>(it, end);
+               
                if constexpr (glaze_object_t<T>) {
+                  std::string_view key;
+                  if constexpr (std::contiguous_iterator<std::decay_t<It>>)
+                  {
+                     // skip white space and escape characters and find the string
+                     skip_ws(it, end);
+                     match<'"'>(it, end);
+                     auto start = it;
+                     bool escaped = false;
+                     while (true) {
+                        if (it == end) [[unlikely]] {
+                           throw std::runtime_error("Expected \"");
+                        }
+                        if (*it == '\\') [[unlikely]] {
+                           escaped = true;
+                           it = start;
+                           break;
+                        }
+                        else if (*it == '"') {
+                           break;
+                        }
+                        ++it;
+                     }
+                     
+                     if (escaped) [[unlikely]] {
+                        // we dont' optimize this currently because it would increase binary size significantly with the complexity of generating escaped compile time versions of keys
+                        static thread_local std::string static_key{};
+                        read<json>::op<opening_handled<Opts>()>(static_key, it, end);
+                        key = static_key;
+                     }
+                     else [[likely]] {
+                        key = sv{ &*start, static_cast<size_t>(std::distance(start, it)) };
+                        ++it;
+                     }
+                  }
+                  else {
+                     static thread_local std::string static_key{};
+                     read<json>::op(static_key, it, end);
+                     key = static_key;
+                  }
+                  
+                  skip_ws(it, end);
+                  match<':'>(it, end);
+                  
                   static constexpr auto frozen_map = detail::make_map<T>();
                   const auto& member_it = frozen_map.find(frozen::string(key));
                   if (member_it != frozen_map.end()) {
@@ -515,10 +572,10 @@ namespace glz
                         [&](auto&& member_ptr) {
                            using V = std::decay_t<decltype(member_ptr)>;
                            if constexpr (std::is_member_pointer_v<V>) {
-                              read<json>::op(value.*member_ptr, it, end);
+                              read<json>::op<Opts>(value.*member_ptr, it, end);
                            }
                            else {
-                              read<json>::op(member_ptr(value), it, end);
+                              read<json>::op<Opts>(member_ptr(value), it, end);
                            }
                         },
                         member_it->second);
@@ -528,14 +585,20 @@ namespace glz
                   }
                }
                else {
+                  static thread_local std::string key{};
+                  read<json>::op<Opts>(key, it, end);
+                  
+                  skip_ws(it, end);
+                  match<':'>(it, end);
+                  
                   if constexpr (std::is_same_v<typename T::key_type,
                                                std::string>) {
-                     read<json>::op(value[key], it, end);
+                     read<json>::op<Opts>(value[key], it, end);
                   }
                   else {
                      static thread_local typename T::key_type key_value{};
-                     read<json>::op(key_value, key.begin(), key.end());
-                     read<json>::op(value[key_value], it, end);
+                     read<json>::op<Opts>(key_value, key.begin(), key.end());
+                     read<json>::op<Opts>(value[key_value], it, end);
                   }
                }
                skip_ws(it, end);
@@ -547,6 +610,7 @@ namespace glz
       template <nullable_t T>
       struct from_json<T>
       {
+         template <auto Opts>
          static void op(auto& value, auto&& it, auto&& end)
          {
             skip_ws(it, end);
@@ -573,7 +637,7 @@ namespace glz
                         "Cannot read into unset nullable that is not "
                         "std::optional, std::unique_ptr, or std::shared_ptr");
                }
-               read<json>::op(*value, it, end);
+               read<json>::op<Opts>(*value, it, end);
             }
          }
       };

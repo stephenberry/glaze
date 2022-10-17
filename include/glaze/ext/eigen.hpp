@@ -38,10 +38,11 @@ namespace glz
          static_assert(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0,
                        "Does not handle dynamic matrices");
 
+         template <auto Opts>
          static void op(auto &value, auto&& it, auto&& end)
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::read<binary>::op(view, it, end);
+            detail::read<binary>::op<Opts>(view, it, end);
          }
       };
       
@@ -65,10 +66,11 @@ namespace glz
          static_assert(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0,
                        "Does not handle dynamic matrices");
 
+         template <auto Opts>
          static void op(auto &value, auto&& it, auto&& end)
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::read<json>::op(view, it, end);
+            detail::read<json>::op<Opts>(view, it, end);
          }
       };
 

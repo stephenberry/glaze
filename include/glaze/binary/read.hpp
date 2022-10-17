@@ -18,9 +18,9 @@ namespace glz
       template <>
       struct read<binary>
       {
-         template <class T, class It0, class It1>
+         template <auto Opts, class T, class It0, class It1>
          static void op(T&& value, It0&& it, It1&& end) {
-            from_binary<std::decay_t<T>>::op(std::forward<T>(value), std::forward<It0>(it), std::forward<It1>(end));
+            from_binary<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
       
@@ -28,6 +28,7 @@ namespace glz
       requires(num_t<T> || char_t<T> || glaze_enum_t<T>)
       struct from_binary<T>
       {
+         template <auto Opts>
          static void op(auto&& value, auto&& it, auto&& end)
          {
             using V = std::decay_t<T>;
@@ -44,6 +45,7 @@ namespace glz
       template <class T>
       requires(std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>) struct from_binary<T>
       {
+         template <auto Opts>
          static void op(auto&& value, auto&& it, auto&& end)
          {
             value = static_cast<bool>(*it);
@@ -54,6 +56,7 @@ namespace glz
       template <func_t T>
       struct from_binary<T>
       {
+         template <auto Opts>
          static void op(auto&& /*value*/, auto&& /*it*/, auto&& /*end*/)
          {
          }
@@ -127,6 +130,7 @@ namespace glz
       template <str_t T>
       struct from_binary<T>
       {
+         template <auto Opts>
          static void op(auto&& value, auto&& it, auto&& end)
          {
             const auto n = int_from_header(it, end);
@@ -141,11 +145,12 @@ namespace glz
       template <array_t T>
       struct from_binary<T>
       {
+         template <auto Opts>
          static void op(auto&& value, auto&& it, auto&& end)
          {
             if constexpr (has_static_size<T>) {
                for (auto&& item : value) {
-                  read<binary>::op(item, it, end);
+                  read<binary>::op<Opts>(item, it, end);
                }
             }
             else {
@@ -159,7 +164,7 @@ namespace glz
                }
 
                for (auto&& item: value) {
-                  read<binary>::op(item, it, end);
+                  read<binary>::op<Opts>(item, it, end);
                }
             }
          }
@@ -168,14 +173,15 @@ namespace glz
       template <map_t T>
       struct from_binary<T>
       {
+         template <auto Opts>
          static void op(auto&& value, auto&& it, auto&& end)
          {
             const auto n = int_from_header(it, end);
 
             for (size_t i = 0; i < n; ++i) {
                static thread_local typename T::key_type key{};
-               read<binary>::op(key, it, end);
-               read<binary>::op(value[key], it, end);
+               read<binary>::op<Opts>(key, it, end);
+               read<binary>::op<Opts>(value[key], it, end);
             }
          };
       };
@@ -183,6 +189,7 @@ namespace glz
       template <nullable_t T>
       struct from_binary<T>
       {
+         template <auto Opts>
          static void op(auto&& value, auto&& it, auto&& end)
          {
             bool has_value = static_cast<bool>(*it);
@@ -196,7 +203,7 @@ namespace glz
                else if constexpr (is_specialization_v<T, std::shared_ptr>)
                   value = std::make_shared<typename T::element_type>();
 
-               read<binary>::op(*value, it, end);
+               read<binary>::op<Opts>(*value, it, end);
             }
             else {
                if constexpr (is_specialization_v<T, std::optional>)
@@ -213,6 +220,7 @@ namespace glz
       requires glaze_object_t<T>
       struct from_binary<T>
       {
+         template <auto Opts>
          static void op(auto&& value, auto&& it, auto&& end)
          {
             const auto n_keys = int_from_header(it, end);
@@ -227,10 +235,10 @@ namespace glz
                      [&](auto&& member_ptr) {
                         using V = std::decay_t<decltype(member_ptr)>;
                         if constexpr (std::is_member_pointer_v<V>) {
-                           read<binary>::op(value.*member_ptr, it, end);
+                           read<binary>::op<Opts>(value.*member_ptr, it, end);
                         }
                         else {
-                           read<binary>::op(member_ptr(value), it, end);
+                           read<binary>::op<Opts>(member_ptr(value), it, end);
                         }
                      },
                      member_it->second);
@@ -243,11 +251,12 @@ namespace glz
       requires glaze_array_t<T>
       struct from_binary<T>
       {
+         template <auto Opts>
          static void op(auto&& value, auto&& it, auto&& end)
          {
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-               read<binary>::op(value.*std::get<I>(meta_v<V>), it, end);
+               read<binary>::op<Opts>(value.*std::get<I>(meta_v<V>), it, end);
             });
          }
       };

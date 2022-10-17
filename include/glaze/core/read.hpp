@@ -19,7 +19,7 @@ namespace glz
          throw std::runtime_error("No input provided to read");
       }
       try {
-         detail::read<Opts.format>::op(value, b, e);
+         detail::read<Opts.format>::template op<Opts>(value, b, e);
       }
       catch (const std::exception& e) {
          // TODO: Implement good error message
@@ -39,7 +39,7 @@ namespace glz
          throw std::runtime_error("No input provided to read");
       }
       try {
-         detail::read<Opts.format>::op(value, b, e);
+         detail::read<Opts.format>::template op<Opts>(value, b, e);
       }
       catch (const std::exception& e) {
          auto index = std::distance(std::ranges::begin(buffer), b);
@@ -58,7 +58,7 @@ namespace glz
       if (b == e) {
          throw std::runtime_error("No input provided to read");
       }
-      detail::read<Opts.format>::op(value, b, e);
+      detail::read<Opts.format>::template op<Opts>(value, b, e);
    }
 
    // For reading json from stuff convertable to a std::string_view
