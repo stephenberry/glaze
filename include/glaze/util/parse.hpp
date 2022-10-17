@@ -81,6 +81,19 @@ namespace glz::detail
          }
       }
    }
+   
+   inline void skip_ws_no_comments(auto&& it, auto&& end)
+   {
+      while (it != end) {
+         // assuming ascii
+         if (static_cast<uint8_t>(*it) < 33) {
+            ++it;
+         }
+         else {
+            break;
+         }
+      }
+   }
 
    inline void skip_string(auto&& it, auto&& end) noexcept
    {

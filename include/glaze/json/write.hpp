@@ -94,8 +94,8 @@ namespace glz
             
             // https://stackoverflow.com/questions/1701055/what-is-the-maximum-length-in-chars-needed-to-represent-any-double-value
             // maximum length for a double should be 24 chars, we use 64 to be sufficient
-            while (ix + 64 >= b.size()) [[unlikely]] {
-               b.resize(b.size() * 2);
+            if (ix + 64 > b.size()) [[unlikely]] {
+               b.resize(std::max(b.size() * 2, ix + 64));
             }
             
             auto start = b.data() + ix;
@@ -136,8 +136,8 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, auto&& b, auto&& ix) noexcept
          {
-            dump<'"'>(b, ix);
             if constexpr (char_t<T>) {
+               dump<'"'>(b, ix);
                switch (value) {
                case '\\':
                case '"':
@@ -145,15 +145,18 @@ namespace glz
                   break;
                }
                dump(value, b, ix);
+               dump<'"'>(b, ix);
             }
             else {
                const sv str = value;
                const auto n = str.size();
                
-               // we use 2 * n to handle potential escape characters
-               while ((ix + 2 * n) >= b.size()) [[unlikely]] {
-                  b.resize(b.size() * 2);
+               // we use 4 * n to handle potential escape characters and quoted bounds (excessive safety)
+               if ((ix + 4 * n) >= b.size()) [[unlikely]] {
+                  b.resize(std::max(b.size() * 2, ix + 4 * n));
                }
+               
+               dump_unchecked<'"'>(b, ix);
                
                // now we don't have to check writing
                for (auto&& c : str) {
@@ -167,8 +170,8 @@ namespace glz
                   b[ix] = c;
                   ++ix;
                }
+               dump_unchecked<'"'>(b, ix);
             }
-            dump<'"'>(b, ix);
          }
       };
 
@@ -466,6 +469,26 @@ namespace glz
          }
       };
       
+      template <const std::string_view& S>
+      inline constexpr bool needs_escaping()
+      {
+         for (auto& c : S) {
+            if (c == '"') {
+               return true;
+            }
+         }
+         return false;
+      }
+      
+      template <const std::string_view& S>
+      inline constexpr auto array_from_sv()
+      {
+         constexpr auto N = S.size();
+         std::array<char, N> arr;
+         std::copy_n(S.data(), N, arr.data());
+         return arr;
+      }
+      
       template <class T>
       requires glaze_object_t<T>
       struct to_json<T>
@@ -523,8 +546,15 @@ namespace glz
                using Key =
                   typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
                if constexpr (str_t<Key> || char_t<Key>) {
-                  write<json>::op<Opts>(std::get<0>(item), b, ix);
-                  dump<':'>(b, ix);
+                  static constexpr sv key = std::get<0>(item);
+                  if constexpr (needs_escaping<key>()) {
+                     write<json>::op<Opts>(key, b, ix);
+                     dump<':'>(b, ix);
+                  }
+                  else {
+                     static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\":">>;
+                     dump<quoted>(b, ix);
+                  }
                }
                else {
                   static constexpr auto quoted =

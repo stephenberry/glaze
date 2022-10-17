@@ -44,6 +44,12 @@ namespace glz::detail
    }
    
    template <char c>
+   inline void dump_unchecked(vector_like auto& b, auto&& ix) noexcept {
+      b[ix] = c;
+      ++ix;
+   }
+   
+   template <char c>
    inline void dump(char*& b) noexcept {
       *b = c;
       ++b;
@@ -61,6 +67,11 @@ namespace glz::detail
       std::copy(str.value, str.value + str.size, it);
    }
    
+   template <const sv& str>
+   inline void dump(std::output_iterator<char> auto&& it) noexcept {
+      std::copy_n(str.data(), str.size(), it);
+   }
+   
    template <string_literal str>
    inline void dump(char*& b) noexcept {
       static constexpr auto s = str.sv();
@@ -75,8 +86,21 @@ namespace glz::detail
       static constexpr auto s = str.sv();
       static constexpr auto n = s.size();
       
-      while (ix + n >= b.size()) [[unlikely]] {
-         b.resize(b.size() * 2);
+      if (ix + n > b.size()) [[unlikely]] {
+         b.resize(std::max(b.size() * 2, ix + n));
+      }
+      
+      std::memcpy(b.data() + ix, s.data(), n);
+      ix += n;
+   }
+   
+   template <const sv& str>
+   inline void dump(vector_like auto& b, auto&& ix) noexcept {
+      static constexpr auto s = str;
+      static constexpr auto n = s.size();
+      
+      if (ix + n > b.size()) [[unlikely]] {
+         b.resize(std::max(b.size() * 2, ix + n));
       }
       
       std::memcpy(b.data() + ix, s.data(), n);
@@ -89,8 +113,8 @@ namespace glz::detail
    
    inline void dump(const sv str, vector_like auto& b, auto&& ix) noexcept {
       const auto n = str.size();
-      while (ix + n >= b.size()) [[unlikely]] {
-         b.resize(b.size() * 2);
+      if (ix + n > b.size()) [[unlikely]] {
+         b.resize(std::max(b.size() * 2, ix + n));
       }
       
       std::memcpy(b.data() + ix, str.data(), n);

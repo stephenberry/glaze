@@ -12,6 +12,7 @@
 #include "frozen/unordered_map.h"
 
 #include "glaze/core/meta.hpp"
+#include "glaze/api/name.hpp"
 #include "glaze/util/string_view.hpp"
 #include "glaze/util/variant.hpp"
 #include "glaze/util/tuple.hpp"
