@@ -1853,13 +1853,12 @@ suite nan_tests = [] {
       double d = NAN;
       std::string s{};
       glz::write_json(d, s);
-      // TODO: this output is -nan for MSVC and man for clang
-      //expect(s == "nan");
+      // TODO: this output is -nan for MSVC and nan for clang
+      expect(s == "nan" || s == "-nan");
       
       d = 0.0;
       glz::read_json(d, s);
-      // TODO: why doesn't this work?
-      //expect(d == NAN);
+      expect(std::isnan(d));
    };
 };
 
