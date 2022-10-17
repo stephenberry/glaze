@@ -46,7 +46,7 @@ namespace glz
       requires(std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>) struct from_binary<T>
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end)
+         static void op(auto&& value, auto&& it, auto&& /* end */)
          {
             value = static_cast<bool>(*it);
             ++it;

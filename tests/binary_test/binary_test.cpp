@@ -420,14 +420,14 @@ suite binary_helpers = [] {
    "binary_helpers"_test = [] {
       my_struct v{};
       
-      std::string binary;
+      std::string b;
       
       expect(nothrow([&] {
-         binary = glz::write_binary(v);
+         b = glz::write_binary(v);
       }));
       
       expect(nothrow([&] {
-         v = glz::read_binary<my_struct>(binary);
+         v = glz::read_binary<my_struct>(b);
       }));
    };
 };

@@ -21,9 +21,9 @@ namespace glz
    {
       pool() : pool(concurrency()) {}
 
-      pool(const unsigned int n) { n_threads(n); }
+      pool(const size_t n) { n_threads(n); }
 
-      void n_threads(const unsigned int n)
+      void n_threads(const size_t n)
       {
 #ifdef _WIN32
          // NOT REQUIRED IN WINDOWS 11

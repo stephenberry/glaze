@@ -158,10 +158,10 @@ namespace glz
 
             if (dist.distribution == "elements") {
                std::visit(
-                  [&](auto &&param_ptr) {
-                     for (auto &&json : dist.range) {
+                  [&](auto&& param_ptr) {
+                     for (auto&& j : dist.range) {
                         auto elem = *param_ptr;
-                        read_json(elem, json.str);
+                        read_json(elem, j.str);
                         param_set.elements.emplace_back(elem);
                      }
                   },
