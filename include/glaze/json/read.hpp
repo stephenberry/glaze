@@ -363,6 +363,9 @@ namespace glz
             skip_ws(it, end);
             match<'['>(it, end);
             skip_ws(it, end);
+            if (it == end) {
+               throw std::runtime_error("Unexpected end");
+            }
             
             if (*it == ']') [[unlikely]] {
                ++it;
@@ -379,6 +382,9 @@ namespace glz
             for (size_t i = 0; i < n; ++i) {
                read<json>::op<Opts>(*value_it++, it, end);
                skip_ws(it, end);
+               if (it == end) {
+                  throw std::runtime_error("Unexpected end");
+               }
                if (*it == ',') [[likely]] {
                   ++it;
                }
