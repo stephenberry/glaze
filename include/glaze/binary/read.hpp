@@ -177,11 +177,20 @@ namespace glz
          static void op(auto&& value, auto&& it, auto&& end)
          {
             const auto n = int_from_header(it, end);
-
-            for (size_t i = 0; i < n; ++i) {
-               static thread_local typename T::key_type key{};
-               read<binary>::op<Opts>(key, it, end);
-               read<binary>::op<Opts>(value[key], it, end);
+            
+            if constexpr (std::is_arithmetic_v<typename T::key_type>) {
+               typename T::key_type key;
+               for (size_t i = 0; i < n; ++i) {
+                  read<binary>::op<Opts>(key, it, end);
+                  read<binary>::op<Opts>(value[key], it, end);
+               }
+            }
+            else {
+               static thread_local typename T::key_type key;
+               for (size_t i = 0; i < n; ++i) {
+                  read<binary>::op<Opts>(key, it, end);
+                  read<binary>::op<Opts>(value[key], it, end);
+               }
             }
          };
       };
