@@ -38,9 +38,9 @@ Binary message size: 325 bytes
 
 ## Compiler Support
 
-Glaze builds with clang and MSVC compilers. Currently it doesn't build with gcc because of std::declval issues ([see issue #7](https://github.com/stephenberry/glaze/issues/7#issue-1409706710)).
+Glaze builds with [Clang](https://clang.llvm.org), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/), and [GCC](https://gcc.gnu.org) compilers.
 
-*Currently clang performs better at writing because of MSVC compiler errors that we have to avoid.*
+*Currently clang and gcc should perform better at writing because of MSVC compiler issues (waiting for a fix).*
 
 ### Example
 
