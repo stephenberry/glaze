@@ -524,6 +524,35 @@ Glaze allows a single header API (`api.hpp`) to be used for every shared library
 
 > Interfaces are simply Glaze object types. So whatever any JSON/binary interface can automatically be used as a library API.
 
+The API is shown below. It is simple, yet incredibly powerful, allowing pretty much any C++ class to be manipulated across the API via JSON or binary, or even the class itself to be passed and safely cast on the other side.
+
+```c++
+struct api {
+  /*default constructors hidden for brevity*/
+  
+  template <class T>
+    [[nodiscard]] T& get(const sv path);
+
+  template <class T>
+    [[nodiscard]] T* get_if(const sv path) noexcept;
+
+  virtual bool read(const uint32_t /*format*/, const sv /*path*/,
+                    const sv /*data*/) noexcept = 0;
+
+  virtual bool write(const uint32_t /*format*/, const sv /*path*/, std::string& /*data*/) = 0;
+
+  virtual const sv last_error() const noexcept {
+    return error;
+  }
+
+  protected:
+  /// unchecked void* access
+  virtual void* get(const sv path, const sv type_hash) noexcept = 0;
+
+  std::string error{};
+};
+```
+
 ## Type Safety
 
 A valid interface concern is binary compatibility between types. Glaze uses compile time hashing of types that is able to catch a wide range of changes to classes or types that would cause binary incompatibility. These compile time hashes are checked when accessing across the interface and provide a safeguard, much like a `std::any_cast`, but working across compilations.`std::any_cast` does not guarantee any safety between separately compiled code, whereas Glaze adds significant type checking across compilations and versions of compilers.
