@@ -370,7 +370,7 @@ namespace glz
                result.gen() =
                   [this, dist = std::uniform_int_distribution<std::size_t>(
                       0, dist.range.size() - 1),
-                   elements = std::move(elements)]() {
+                   elements = std::move(elements)]() mutable {
                      std::size_t element_index = dist(this->engine);
                      return elements[element_index];
                };
@@ -393,7 +393,7 @@ namespace glz
                }
 
                result.gen() = [this,
-                               dist = std::uniform_real_distribution<double>(start, stop)]() {
+                               dist = std::uniform_real_distribution<double>(start, stop)]() mutable {
                   return dist(this->engine);
                };
             }
@@ -416,7 +416,7 @@ namespace glz
 
                result.gen() = [this,
                                dist = std::uniform_real_distribution<double>(
-                                  start, stop)]() {
+                                  start, stop)]() mutable {
                  return dist(this->engine);
                };
             }
@@ -435,7 +435,7 @@ namespace glz
 
                result.gen() =
                   [this, dist = std::normal_distribution<double>(
-                                        mean, std_dev)]() {
+                                        mean, std_dev)]() mutable {
                   return dist(this->engine);
                };
             }
