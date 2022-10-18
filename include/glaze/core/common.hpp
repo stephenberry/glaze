@@ -354,7 +354,12 @@ namespace glz
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to)
       {
+#if __GNUC__
+         // TODO: guard gcc against narrowing conversions when fixed
+         to = from;
+#else
          To{from};
+#endif
       };
       
       template <class T>
