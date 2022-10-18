@@ -583,9 +583,9 @@ Or, include it via local glaze meta:
 
 ```c++
 struct my_api {
-	struct glaze {
-		static constexpr std::string_view name = "my_api";
-	};
+  struct glaze {
+    static constexpr std::string_view name = "my_api";
+  };
 };
 ```
 
