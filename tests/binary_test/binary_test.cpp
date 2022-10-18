@@ -262,7 +262,7 @@ void write_tests()
 
       out.clear();
 
-      std::shared_ptr<float> sh_float = std::make_shared<float>(5.55);
+      std::shared_ptr<float> sh_float = std::make_shared<float>(5.55f);
       write_binary(sh_float, out);
 
       std::shared_ptr<float> out_flt;
