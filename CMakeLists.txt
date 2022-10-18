@@ -4,6 +4,7 @@ project(
   glaze
   VERSION 0.2
   LANGUAGES CXX
+  CXX_STANDARD 20
 )
 
 if(NOT ${CPM_LOCAL_PACKAGE_PATHS} STREQUAL "")
