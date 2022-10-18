@@ -441,18 +441,18 @@ namespace glz
          using tuple_ref = std::add_lvalue_reference_t<Tuple>;
          using getter_t = value_t (*)(tuple_ref);
          return std::array<getter_t, std::tuple_size_v<Tuple>>{
-            +[](tuple_ref tuple) -> value_t {
-               return &std::get<Is>(tuple);
+            +[](tuple_ref t) -> value_t {
+               return &std::get<Is>(t);
             }...};
       }
 
       template <class Tuple>
-      inline auto get_runtime(Tuple &&tuple, const size_t index)
+      inline auto get_runtime(Tuple &&t, const size_t index)
       {
          using T = std::decay_t<Tuple>;
          static constexpr auto indices = std::make_index_sequence<std::tuple_size_v<T>>{};
          static constexpr auto runtime_getter = tuple_runtime_getter<T>(indices);
-         return runtime_getter[index](tuple);
+         return runtime_getter[index](t);
       }
 
       template <class M>
