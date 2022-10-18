@@ -9,6 +9,8 @@ on:
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
+  CC: gcc-11
+  CXX: g++-11
 
 jobs:
   build:
@@ -19,11 +21,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Clang
-      uses: egor-tensin/setup-clang@v1
-      with:
-        version: 15
-        platform: x64
+    #- name: Set up Clang
+    #  uses: egor-tensin/setup-clang@v1
+    #  with:
+    #    version: 15
+    #    platform: x64
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
