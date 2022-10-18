@@ -192,6 +192,35 @@ auto& d = glz::get<double>(s, "/d");
 // d is a reference to d in the structure s
 ```
 
+```c++
+my_struct s{};
+glz::set(s, "/d", 42.0);
+// d is now 42.0
+```
+
+> JSON pointer syntax works with deeply nested objects and anything serializable.
+
+```c++
+// Tuple Example
+auto tuple = std::make_tuple(3, 2.7, std::string("curry"));
+glz::set(tuple, "/0", 5);
+expect(std::get<0>(tuple) == 5.0);
+```
+
+### write_from
+
+`write_from` allows you to write to a nested JSON pointer via a JSON input buffer.
+
+```c++
+Thing thing{};
+glz::write_from(thing, "/vec3", "[7.6, 1292.1, 0.333]");
+expect(thing.vec3.x == 7.6 && thing.vec3.y == 1292.1 &&
+thing.vec3.z == 0.333);
+
+glz::write_from(thing, "/vec3/2", "999.9");
+expect(thing.vec3.z == 999.9);
+```
+
 ## JSON With Comments (JSONC)
 
 Comments are supported with the specification defined here: [JSONC](https://github.com/stephenberry/JSONC)
