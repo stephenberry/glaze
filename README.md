@@ -154,7 +154,7 @@ Dependencies are automatically included when running CMake. [CPM.cmake](https://
 - [UT](https://github.com/boost-ext/ut)
 - [Eigen](https://gitlab.com/libeigen/eigen)
 
-## See [Wiki](https://github.com/stephenberry/glaze/wiki) for Frequently Asked Questions
+## See [Wiki](https://github.com/stephenberry/glaze/wiki) for [Frequently Asked Questions](https://github.com/stephenberry/glaze/wiki)
 
 ## Local Glaze Meta
 
@@ -373,6 +373,19 @@ buffer.resize(n);
 ## JSON Caveats
 
 - Number types cannot begin with a positive `+` symbol, for efficiency.
+
+## Compile Time Options
+
+The `glz::opts` struct defines compile time optional settings for reading/writing.
+
+Instead of calling `glz::read_json(...)`, you can call `glz::read<glz::opts{}>(...)` and customize the options.
+
+For example: `glz::read<glz::opts{.error_on_unknown_keys = false}>(...)` will turn off erroring on unknown keys and simple skip the items.
+
+`glz::opts` can also switch between formats:
+
+- `glz::read<glz::opts{.format = glz::binary}>(...)` -> `glz::read_binary(...)`
+- `glz::read<glz::opts{.format = glz::json}>(...)` -> `glz::read_json(...)`
 
 # More Features
 
