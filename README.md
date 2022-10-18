@@ -212,7 +212,7 @@ expect(std::get<0>(tuple) == 5.0);
 
 ### write_from
 
-`write_from` allows you to write to a nested JSON pointer via a JSON input buffer.
+`write_from` allows you to write to a JSON pointer via a JSON input buffer.
 
 ```c++
 Thing thing{};
