@@ -587,6 +587,9 @@ namespace glz
       {
          using type = std::invoke_result_t<mptr_t, T>;
       };
+      
+      template <class T, class mptr_t>
+      using member_check_t = typename member_check<T, mptr_t>::type;
 
       /*template <class T, class mptr_t>
       constexpr decltype(auto) member_check()
@@ -615,8 +618,8 @@ namespace glz
          }
          else {
             return std::tuple<
-            std::decay_t<typename member_check<T, std::tuple_element_t<
-                              1, std::tuple_element_t<I, meta_t<T>>>>::type>...>{};
+            std::decay_t<member_check_t<T, std::tuple_element_t<
+                              1, std::tuple_element_t<I, meta_t<T>>>>>...>{};
          }
       }
 
