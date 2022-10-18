@@ -1,4 +1,4 @@
-name: CMake
+name: gcc
 
 on:
   push:
