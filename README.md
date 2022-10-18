@@ -184,6 +184,8 @@ struct my_struct
 
 ## JSON Pointer Syntax
 
+[Here is a simple JSON pointer syntax explanation](https://github.com/stephenberry/JSON-Pointer)
+
 Glaze supports JSON pointer syntax access in a C++ context. This is extremely helpful for building generic APIs, which allows components of complex arguments to be accessed without needed know the encapsulating class.
 
 ```c++
