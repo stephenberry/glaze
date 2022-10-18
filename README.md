@@ -134,11 +134,9 @@ target_link_libraries(${PROJECT_NAME} glaze)
 
 Or, use the [Glaze Conan recipe](https://github.com/Ahajha/glaze-conan)
 
-## Header Only
-
-Glaze is designed to be used in a header only manner. The macro `FMT_HEADER_ONLY` is used for the [fmt](https://github.com/fmtlib/fmt) library.
-
 ## Dependencies
+
+Glaze can be used header only by linking to `fmt-header-only`. `fmt` can also be statically linked.
 
 Dependencies are automatically included when running CMake. [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) is used for dependency management.
 
