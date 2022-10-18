@@ -561,8 +561,34 @@ namespace glz
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_string_to_enum_map_impl<T>(indices);
       }
+      
+      template <class, class>
+      struct member_check;
 
       template <class T, class mptr_t>
+      requires std::is_member_pointer_v<std::decay_t<mptr_t>>
+      struct member_check<T, mptr_t>
+      {
+         using type = decltype(std::declval<T>().*std::decay_t<mptr_t>{});
+      };
+
+      template <class T, class mptr_t>
+      requires(!std::is_member_pointer_v<std::decay_t<mptr_t>> &&
+               std::is_enum_v<std::decay_t<T>>)
+      struct member_check<T, mptr_t>
+      {
+         using type = T;
+      };
+
+      template <class T, class mptr_t>
+      requires(!std::is_member_pointer_v<std::decay_t<mptr_t>> &&
+               !std::is_enum_v<std::decay_t<T>>)
+      struct member_check<T, mptr_t>
+      {
+         using type = std::invoke_result_t<mptr_t, T>;
+      };
+
+      /*template <class T, class mptr_t>
       constexpr decltype(auto) member_check()
       {
          using mptr_type = std::decay_t<mptr_t>;
@@ -576,7 +602,7 @@ namespace glz
             return std::declval<std::invoke_result_t<mptr_t, T>>();
             //return mptr_type{}(std::declval<T>());
          }
-      }
+      }*/
 
       template <class T,
                 class = std::make_index_sequence<std::tuple_size<meta_t<T>>::value>>
@@ -589,8 +615,8 @@ namespace glz
          }
          else {
             return std::tuple<
-               std::decay_t<decltype(member_check<T, std::tuple_element_t<
-                              1, std::tuple_element_t<I, meta_t<T>>>>())>...>{};
+            std::decay_t<typename member_check<T, std::tuple_element_t<
+                              1, std::tuple_element_t<I, meta_t<T>>>>::type>...>{};
          }
       }
 
