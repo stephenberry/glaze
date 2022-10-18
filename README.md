@@ -19,6 +19,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - Compile time maps with constant time lookups and perfect hashing
 - Nearly zero intermediate allocations
 - Direct memory access through JSON pointer syntax
+- Tagged binary spec through the same API for maximum performance
 - Much more!
 
 ## Binary Performance
