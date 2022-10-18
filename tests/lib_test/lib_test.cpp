@@ -116,7 +116,8 @@ void tests()
 
 int main()
 {
-   tests();
+   // TODO: Enable testing after figuring out how to make pathing generic
+   //tests();
    
    return 0;
 }
