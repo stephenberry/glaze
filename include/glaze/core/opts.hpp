@@ -15,13 +15,31 @@ namespace glz
       bool error_on_unknown_keys = true;
       
       // meant for internal use
-      bool opening_handled = false; // is whitespace and the opening character handled
+      bool whitespace_handled = false;
+      bool opening_handled = false; // the opening character has been handled
    };
    
    template <opts Opts>
    constexpr auto opening_handled()
    {
       opts ret = Opts;
+      ret.opening_handled = true;
+      return ret;
+   };
+   
+   template <opts Opts>
+   constexpr auto ws_handled()
+   {
+      opts ret = Opts;
+      ret.whitespace_handled = true;
+      return ret;
+   };
+   
+   template <opts Opts>
+   constexpr auto ws_and_opening_handled()
+   {
+      opts ret = Opts;
+      ret.whitespace_handled = true;
       ret.opening_handled = true;
       return ret;
    };

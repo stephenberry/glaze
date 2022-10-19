@@ -67,7 +67,10 @@ namespace glz
          template <auto Opts>
          static void op(bool_t auto&& value, auto&& it, auto&& end)
          {
-            skip_ws(it, end);
+            if constexpr (!Opts.whitespace_handled) {
+               skip_ws(it, end);
+            }
+            
             if (it < end) [[likely]] {
                switch (*it) {
                case 't': {
@@ -98,9 +101,13 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, It&& it, auto&& end)
          {
-            skip_ws(it, end);
-            if (it == end) [[unlikely]]
+            if constexpr (!Opts.whitespace_handled) {
+               skip_ws(it, end);
+            }
+            
+            if (it == end) [[unlikely]] {
                throw std::runtime_error("Unexpected end of buffer");
+            }
             
             if constexpr (std::contiguous_iterator<std::decay_t<It>>)
             {
@@ -151,8 +158,11 @@ namespace glz
          {
             // TODO: this does not handle control chars like \t and \n
             
-            if constexpr (!Opts.opening_handled) {
+            if constexpr (!Opts.whitespace_handled) {
                skip_ws(it, end);
+            }
+            
+            if constexpr (!Opts.opening_handled) {
                match<'"'>(it, end);
             }
             
@@ -360,7 +370,10 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, auto&& it, auto&& end)
          {
-            skip_ws(it, end);
+            if constexpr (!Opts.whitespace_handled) {
+               skip_ws(it, end);
+            }
+            
             match<'['>(it, end);
             skip_ws(it, end);
             if (it == end) {
@@ -380,13 +393,14 @@ namespace glz
             auto value_it = value.begin();
             
             for (size_t i = 0; i < n; ++i) {
-               read<json>::op<Opts>(*value_it++, it, end);
+               read<json>::op<ws_handled<Opts>()>(*value_it++, it, end);
                skip_ws(it, end);
                if (it == end) {
                   throw std::runtime_error("Unexpected end");
                }
                if (*it == ',') [[likely]] {
                   ++it;
+                  skip_ws(it, end);
                }
                else if (*it == ']') {
                   ++it;
@@ -403,10 +417,11 @@ namespace glz
             // growing
             if constexpr (emplace_backable<T>) {
                for (size_t i = 0; it < end; ++i) {
-                  read<json>::op<Opts>(value.emplace_back(), it, end);
+                  read<json>::op<ws_handled<Opts>()>(value.emplace_back(), it, end);
                   skip_ws(it, end);
                   if (*it == ',') [[likely]] {
                      ++it;
+                     skip_ws(it, end);
                   }
                   else if (*it == ']') {
                      ++it;
@@ -435,7 +450,10 @@ namespace glz
             static thread_local std::vector<value_t> buffer{};
             buffer.clear();
 
-            skip_ws(it, end);
+            if constexpr (!Opts.whitespace_handled) {
+               skip_ws(it, end);
+            }
+            
             match<'['>(it, end);
             skip_ws(it, end);
             for (size_t i = 0; it < end; ++i) {
@@ -475,7 +493,10 @@ namespace glz
             }
             ();
             
-            skip_ws(it, end);
+            if constexpr (!Opts.whitespace_handled) {
+               skip_ws(it, end);
+            }
+            
             match<'['>(it, end);
             skip_ws(it, end);
             
@@ -485,19 +506,17 @@ namespace glz
                }
                if constexpr (I != 0) {
                   match<','>(it, end);
+                  skip_ws(it, end);
                }
                if constexpr (glaze_array_t<T>) {
-                  read<json>::op<Opts>(value.*std::get<I>(meta_v<T>), it, end);
+                  read<json>::op<ws_handled<Opts>()>(value.*std::get<I>(meta_v<T>), it, end);
                }
                else {
-                  read<json>::op<Opts>(std::get<I>(value), it, end);
+                  read<json>::op<ws_handled<Opts>()>(std::get<I>(value), it, end);
                }
                skip_ws(it, end);
             });
             
-            if constexpr (N == 0) {
-               skip_ws(it, end);
-            }
             match<']'>(it, end);
          }
       };
@@ -509,7 +528,10 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto& value, It&& it, auto&& end)
          {
-            skip_ws(it, end);
+            if constexpr (!Opts.whitespace_handled) {
+               skip_ws(it, end);
+            }
+            
             match<'{'>(it, end);
             skip_ws(it, end);
             bool first = true;
@@ -551,7 +573,7 @@ namespace glz
                      if (escaped) [[unlikely]] {
                         // we dont' optimize this currently because it would increase binary size significantly with the complexity of generating escaped compile time versions of keys
                         static thread_local std::string static_key{};
-                        read<json>::op<opening_handled<Opts>()>(static_key, it, end);
+                        read<json>::op<ws_and_opening_handled<Opts>()>(static_key, it, end);
                         key = static_key;
                      }
                      else [[likely]] {
@@ -621,7 +643,10 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, auto&& it, auto&& end)
          {
-            skip_ws(it, end);
+            if constexpr (!Opts.whitespace_handled) {
+               skip_ws(it, end);
+            }
+            
             if (it == end) {
                throw std::runtime_error("Unexexpected eof");
             }
