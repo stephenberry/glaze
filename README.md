@@ -43,7 +43,7 @@ Binary message size: 325 bytes
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg)
 
-*Currently clang and gcc should perform better at writing because of MSVC compiler issues (waiting for a fix).*
+*Currently clang and gcc should perform better at writing because of MSVC issues (waiting for a fix).*
 
 ### Example
 
@@ -118,8 +118,6 @@ glz::read_json(s, buffer);
 ```
 
 ## How To Use Glaze
-
-*This documentation is subject to change*
 
 Currently the easiest way to use Glaze with CMake is via [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake).
 
