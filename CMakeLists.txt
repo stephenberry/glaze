@@ -8,6 +8,8 @@ project(
     LANGUAGES CXX
 )
 
+include(cmake/CPM.cmake)
+
 option(glaze_USE_LOCAL_PACKAGES "Use CPM_USE_LOCAL_PACKAGES" ON) # changing default to ON to integrate better with Conan and find_package
 set(CPM_USE_LOCAL_PACKAGES glaze_USE_LOCAL_PACKAGES)
 
@@ -24,8 +26,6 @@ target_include_directories(
     glaze_glaze ${warning_guard}
     INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
 )
-
-include(cmake/CPM.cmake)
 
 #find_package(fmt 9 REQUIRED)
 CPMAddPackage(
