@@ -31,7 +31,7 @@ CPMAddPackage(
    NAME fmt
    OPTIONS FMT_INSTALL
    GIT_REPOSITORY https://github.com/fmtlib/fmt
-   GIT_TAG 9.0.0
+   GIT_TAG 9.1.0
 )
 
 #find_package(nanorange REQUIRED)
@@ -39,7 +39,7 @@ CPMAddPackage(
    NAME nanorange
    OPTIONS USE_SINGLE_HEADER "BUILD_TESTING OFF" DO_INSTALL
    GIT_REPOSITORY https://github.com/tcbrindle/NanoRange
-   GIT_TAG bf32251d65673fe170d602777c087786c529ead8
+   # No version tags
 )
 
 if (nanorange_ADDED)
@@ -57,7 +57,7 @@ CPMAddPackage(
 CPMAddPackage(
    NAME FastFloat
    GIT_REPOSITORY https://github.com/fastfloat/fast_float.git
-   GIT_TAG b4d7cceb9322972ab1c53095d195d096b2e335d0 # fixes cmake alias
+   #GIT_TAG # waiting for new release, need latest
 )
 
 target_link_libraries(
