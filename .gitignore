@@ -2,5 +2,10 @@
 *bin/
 .vscode/
 .cache/
+conan/
 compile_commands.json
 .DS_Store
+CMakeUserPresets.json
+conanbuildinfo.txt
+conaninfo.txt
+graph_info.json

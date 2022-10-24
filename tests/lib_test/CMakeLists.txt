@@ -4,19 +4,11 @@ add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
- target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra)
-elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
- target_compile_options(${PROJECT_NAME} PRIVATE /W4)
-endif()
-
-include("${ut_SOURCE_DIR}/cmake/AddCustomCommandOrTest.cmake")
-
-target_link_libraries(${PROJECT_NAME} PRIVATE glaze Boost::ut)
+target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze Boost::ut)
 
 add_subdirectory(test_lib)
 
 add_dependencies(${PROJECT_NAME} test_lib)
 
-ut_add_custom_command_or_test(TARGET ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
+add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
