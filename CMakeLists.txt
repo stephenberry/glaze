@@ -8,8 +8,8 @@ project(
     LANGUAGES CXX
 )
 
-option(glaze_USE_LOCAL_PACKAGES "Use CPM_USE_LOCAL_PACKAGES" OFF) # changing default to ON to integrate better with Conan and find_package
-set(CPM_USE_LOCAL_PACKAGE glaze_USE_LOCAL_PACKAGES CACHE BOOL "" FORCE)
+#option(glaze_USE_LOCAL_PACKAGES "Use CPM_USE_LOCAL_PACKAGES" OFF) # changing default to ON to integrate better with Conan and find_package
+#set(CPM_USE_LOCAL_PACKAGE glaze_USE_LOCAL_PACKAGES CACHE BOOL "" FORCE)
 
 include(cmake/CPM.cmake)
 
