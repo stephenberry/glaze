@@ -11,7 +11,7 @@ project(
 include(cmake/CPM.cmake)
 
 option(glaze_USE_LOCAL_PACKAGES "Use CPM_USE_LOCAL_PACKAGES" ON) # changing default to ON to integrate better with Conan and find_package
-set(CPM_USE_LOCAL_PACKAGES glaze_USE_LOCAL_PACKAGES)
+set(CPM_USE_LOCAL_PACKAGE glaze_USE_LOCAL_PACKAGES CACHE BOOL "" FORCE)
 
 include(cmake/project-is-top-level.cmake)
 include(cmake/variables.cmake)
