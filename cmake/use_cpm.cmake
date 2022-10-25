@@ -1,6 +1,6 @@
 include(cmake/CPM.cmake)
 
-macro(redirect_find_package_to_cpm method package)
+macro(glaze_redirect_find_package_to_cpm method package)
   if("${package}" STREQUAL "fmt")
    CPMAddPackage(
       NAME fmt
@@ -64,6 +64,6 @@ macro(redirect_find_package_to_cpm method package)
 endmacro()
 
 cmake_language(
-    SET_DEPENDENCY_PROVIDER redirect_find_package_to_cpm
+    SET_DEPENDENCY_PROVIDER glaze_redirect_find_package_to_cpm
     SUPPORTED_METHODS FIND_PACKAGE
 )

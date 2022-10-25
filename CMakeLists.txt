@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.15)
 
+if (CPMAddPackage)
+   include(use_cpm.cmake)
+endif()
+
 include(cmake/prelude.cmake)
 
 project(
@@ -7,8 +11,6 @@ project(
     VERSION 0.0.8
     LANGUAGES CXX
 )
-
-#option(CPM_USE_LOCAL_PACKAGES "Try find_package before downloading dependencies" ON)
 
 include(cmake/project-is-top-level.cmake)
 include(cmake/variables.cmake)
