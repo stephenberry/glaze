@@ -10,5 +10,5 @@ add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
 if (MSVC)
    # for a C++ standards compliant preprocessor:
-	target_compile_options(${PROJECT_NAME} "/Zc:preprocessor")
+   target_compile_options(${PROJECT_NAME} PUBLIC "/Zc:preprocessor")
 endif()
