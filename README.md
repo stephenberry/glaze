@@ -154,9 +154,7 @@ target_link_libraries(main PRIVATE glaze::glaze)
 
 ## Dependencies
 
-Glaze can be used header only by linking to `fmt-header-only`. `fmt` can also be statically linked.
-
-Dependencies are automatically included when running CMake. [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) is used for dependency management.
+Glaze can be used header only by linking to `fmt-header-only`, or `fmt` can be statically linked.
 
 - [fmt](https://github.com/fmtlib/fmt)
 - [fast_float](https://github.com/fastfloat/fast_float)
