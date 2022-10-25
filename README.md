@@ -192,6 +192,35 @@ struct my_struct
 
 > Template specialization of `glz::meta` is preferred when separating class definition from the serialization mapping. Local glaze metadata is helpful for working within the local namespace or when the class itself is templated.
 
+## Struct Registration Macros
+
+Glaze provides macros to more efficiently register your C++ structs.
+
+> In order to use these macros you must include the header: `glaze/core/macros.hpp`
+
+- GLZ_META is for external registration
+- GLZ_LOCAL_META is for internal registration
+
+```c++
+struct macro_t {
+   double x = 5.0;
+   std::string y = "yay!";
+   int z = 55;
+};
+
+GLZ_META(macro_t, x, y, z);
+
+struct local_macro_t {
+   double x = 5.0;
+   std::string y = "yay!";
+   int z = 55;
+   
+   GLZ_LOCAL_META(local_macro_t, x, y, z);
+};
+```
+
+**Note: MSVC requires the compiler flag `/Zc:preprocessor` for a standards compliant preprocessor.**
+
 ## JSON Pointer Syntax
 
 [Here is a simple JSON pointer syntax explanation](https://github.com/stephenberry/JSON-Pointer)

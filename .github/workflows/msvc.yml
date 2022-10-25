@@ -36,7 +36,8 @@ jobs:
       run: conan install . -b missing
 
     - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_TOOLCHAIN_FILE="./conan/conan_toolchain.cmake"
+      # using specific windows SDK to address this issue: https://stackoverflow.com/questions/65402366/c5105-and-other-compiler-warnings-when-building-with-github-actions-winsdk-10
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_TOOLCHAIN_FILE="./conan/conan_toolchain.cmake" -DCMAKE_SYSTEM_VERSION="10.0.22621.0"
 
     - name: Build
       run: cmake --build build --config ${{env.BUILD_TYPE}} -j 2
