@@ -14,6 +14,11 @@ include(cmake/variables.cmake)
 add_library(glaze_glaze INTERFACE)
 add_library(glaze::glaze ALIAS glaze_glaze)
 
+if (MSVC)
+   # for a C++ standards compliant preprocessor:
+   target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor")
+endif()
+
 set_property(TARGET glaze_glaze PROPERTY EXPORT_NAME glaze)
 
 target_compile_features(glaze_glaze INTERFACE cxx_std_20)
