@@ -119,7 +119,7 @@ glz::read_json(s, buffer);
 
 ## How To Use Glaze
 
-Currently the easiest way to use Glaze with CMake is via [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake).
+[CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) approach:
 
 ```cmake
 include(cmake/CPM.cmake)
