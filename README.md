@@ -219,6 +219,8 @@ struct local_macro_t {
 };
 ```
 
+**Note: MSVC requires the compiler flag `/Zc:preprocessor` for a standards compliant preprocessor.**
+
 ## JSON Pointer Syntax
 
 [Here is a simple JSON pointer syntax explanation](https://github.com/stephenberry/JSON-Pointer)
