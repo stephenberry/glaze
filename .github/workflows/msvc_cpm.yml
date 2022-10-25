@@ -1,0 +1,46 @@
+name: msvc
+
+on:
+  push:
+    branches:
+    - main
+    - feature/*
+    paths-ignore:
+    - '**.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+    - '**.md'
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: windows-2019
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Conan
+      uses: turtlebrowser/get-conan@main
+
+    - name: Configure Conan
+      run: |
+        conan profile new default
+        cp .github/vs-16.profile "$env:userprofile/.conan/profiles/default"
+        conan profile update settings.build_type=${{env.BUILD_TYPE}} default
+        conan profile update "settings.compiler.runtime=MD$(($env:BUILD_TYPE -eq 'Release') ? '' : 'd')" default
+
+    - name: Install dependencies
+      run: conan install . -b missing
+
+    - name: Configure CMake
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_TOOLCHAIN_FILE="./conan/conan_toolchain.cmake"
+
+    - name: Build
+      run: cmake --build build --config ${{env.BUILD_TYPE}} -j 2
+
+    - name: Test
+      working-directory: build
+      run: ctest -C ${{env.BUILD_TYPE}} -j 2 --output-on-failure
