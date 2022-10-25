@@ -119,7 +119,15 @@ glz::read_json(s, buffer);
 
 ## How To Use Glaze
 
-[CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) approach:
+### [CPM](https://github.com/cpm-cmake/CPM.cmake)
+
+We use [CMake Dependency Providers](https://cmake.org/cmake/help/latest/guide/using-dependencies/index.html#id11) to override `find_package` when using [CPM](https://github.com/cpm-cmake/CPM.cmake). This means you need to call CMake with an additional include when using CPM.
+
+```
+cmake ... -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=.../glaze/cmake/use_cpm.cmake
+```
+
+Other than that addition, you can use CPM as normal:
 
 ```cmake
 include(cmake/CPM.cmake)
@@ -130,10 +138,19 @@ CPMAddPackage(
    GIT_TAG main
 )
 
-target_link_libraries(${PROJECT_NAME} glaze)
+target_link_libraries(${PROJECT_NAME} glaze::glaze)
 ```
 
-Or, use the [Glaze Conan recipe](https://github.com/Ahajha/glaze-conan)
+### Conan
+
+- [Glaze Conan recipe](https://github.com/Ahajha/glaze-conan)
+- Also included in [Conan Center](https://conan.io/center/)
+
+```
+find_package(glaze REQUIRED)
+
+target_link_libraries(main PRIVATE glaze::glaze)
+```
 
 ## Dependencies
 
