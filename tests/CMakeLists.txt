@@ -1,9 +1,4 @@
-CPMAddPackage(
-  NAME ut
-  OPTIONSM "BOOST_UT_ENABLE_RUN_AFTER_BUILD OFF"
-  GIT_REPOSITORY https://github.com/boost-ext/ut.git
-  GIT_TAG v1.1.9
-)
+find_package(ut 1.1.9 REQUIRED)
 
 add_subdirectory(api_test)
 add_subdirectory(binary_test)

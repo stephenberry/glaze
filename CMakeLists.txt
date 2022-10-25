@@ -1,16 +1,16 @@
 cmake_minimum_required(VERSION 3.15)
 
+if (CPMAddPackage)
+   include(use_cpm.cmake)
+endif()
+
 include(cmake/prelude.cmake)
 
 project(
     glaze
-    VERSION 0.0.7
+    VERSION 0.0.9
     LANGUAGES CXX
 )
-
-option(CPM_USE_LOCAL_PACKAGES "Try `find_package` before downloading dependencies" ON)
-
-include(cmake/CPM.cmake)
 
 include(cmake/project-is-top-level.cmake)
 include(cmake/variables.cmake)
@@ -26,39 +26,10 @@ target_include_directories(
     INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
 )
 
-#find_package(fmt 9 REQUIRED)
-CPMAddPackage(
-   NAME fmt
-   OPTIONS FMT_INSTALL
-   GIT_REPOSITORY https://github.com/fmtlib/fmt
-   GIT_TAG 9.1.0
-)
-
-#find_package(nanorange REQUIRED)
-CPMAddPackage(
-   NAME nanorange
-   OPTIONS USE_SINGLE_HEADER "BUILD_TESTING OFF" DO_INSTALL
-   GIT_REPOSITORY https://github.com/tcbrindle/NanoRange
-   # No version tags
-)
-
-if (nanorange_ADDED)
-  add_library(nanorange::nanorange ALIAS nanorange)
-endif()
-
-#find_package(frozen 1.1.1 REQUIRED)
-CPMAddPackage(
-   NAME frozen
-   GIT_REPOSITORY https://github.com/serge-sans-paille/frozen.git
-   GIT_TAG 1.1.1
-)
-
-#find_package(FastFloat 3.4 REQUIRED)
-CPMAddPackage(
-   NAME FastFloat
-   GIT_REPOSITORY https://github.com/fastfloat/fast_float.git
-   #GIT_TAG # waiting for new release, need latest
-)
+find_package(fmt 9 REQUIRED)
+find_package(nanorange REQUIRED)
+find_package(frozen 1.1.1 REQUIRED)
+find_package(FastFloat 3.4 REQUIRED)
 
 target_link_libraries(
     glaze_glaze INTERFACE
