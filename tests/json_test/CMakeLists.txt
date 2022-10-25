@@ -1,5 +1,10 @@
 project(json_test)
 
+if (MSVC)
+   # for a C++ standards compliant preprocessor:
+	target_compile_options(${PROJECT_NAME} INTERFACE "/Zc:preprocessor")
+endif()
+
 add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)

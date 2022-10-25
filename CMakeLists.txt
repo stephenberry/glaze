@@ -8,11 +8,6 @@ project(
     LANGUAGES CXX
 )
 
-if (MSVC)
-   # for a C++ standards compliant preprocessor:
-	target_compile_options(${PROJECT_NAME} INTERFACE "/Zc:preprocessor")
-endif()
-
 include(cmake/project-is-top-level.cmake)
 include(cmake/variables.cmake)
 
