@@ -22,10 +22,37 @@ target_include_directories(
     INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
 )
 
-find_package(fmt 9 REQUIRED)
-find_package(nanorange REQUIRED)
-find_package(frozen 1.1.1 REQUIRED)
-find_package(FastFloat 3.4 REQUIRED)
+include(cmake/CPM.cmake)
+
+CPMFindPackage(
+   NAME fmt
+   OPTIONS FMT_INSTALL
+   GIT_REPOSITORY https://github.com/fmtlib/fmt
+   GIT_TAG 9.1.0
+)
+
+CPMFindPackage(
+   NAME nanorange
+   OPTIONS USE_SINGLE_HEADER "BUILD_TESTING OFF" DO_INSTALL
+   GIT_REPOSITORY https://github.com/tcbrindle/NanoRange
+   GIT_TAG master # No version tags
+)
+
+if (nanorange_ADDED)
+   add_library(nanorange::nanorange ALIAS nanorange)
+endif()
+
+CPMFindPackage(
+   NAME frozen
+   GIT_REPOSITORY https://github.com/serge-sans-paille/frozen.git
+   GIT_TAG 1.1.1
+)
+
+CPMFindPackage(
+   NAME FastFloat
+   GIT_REPOSITORY https://github.com/fastfloat/fast_float.git
+   GIT_TAG main # waiting for new release, need latest
+)
 
 target_link_libraries(
     glaze_glaze INTERFACE

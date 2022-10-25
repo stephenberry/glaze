@@ -45,13 +45,13 @@ macro(glaze_redirect_find_package_to_cpm method package)
         set(Eigen3_SOURCE_DIR ${CPM_Eigen3_SOURCE})
         set(Eigen3_ADDED 1)
     else()
-        CPMAddPackage(
-          NAME Eigen3
-          VERSION 3.4.0
-          URL https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
-          # Eigen's CMakelists are not intended for library use
-          DOWNLOAD_ONLY YES 
-        )
+      CPMFindPackage(
+        NAME Eigen3
+        VERSION 3.4.0
+        URL https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
+        # Eigen's CMakelists are not intended for library use
+        DOWNLOAD_ONLY YES 
+      )
     endif()
     
     if(Eigen3_ADDED)
