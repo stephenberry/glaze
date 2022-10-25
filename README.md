@@ -141,7 +141,7 @@ CPMAddPackage(
 target_link_libraries(${PROJECT_NAME} glaze::glaze)
 ```
 
-### Conan
+### [Conan](https://conan.io)
 
 - [Glaze Conan recipe](https://github.com/Ahajha/glaze-conan)
 - Also included in [Conan Center](https://conan.io/center/)
