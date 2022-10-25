@@ -11,6 +11,7 @@
 #include <list>
 #include <deque>
 
+#include "glaze/core/macros.hpp"
 #include "boost/ut.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/from_ptr.hpp"
@@ -1859,6 +1860,42 @@ suite nan_tests = [] {
       d = 0.0;
       glz::read_json(d, s);
       expect(std::isnan(d));
+   };
+};
+
+struct macro_t
+{
+   double x = 5.0;
+   std::string y = "yay!";
+   int z = 55;
+};
+
+GLZ_META(macro_t, x, y, z);
+
+struct local_macro_t
+{
+   double x = 5.0;
+   std::string y = "yay!";
+   int z = 55;
+   
+   GLZ_LOCAL_META(local_macro_t, x, y, z);
+};
+
+suite macro_tests = [] {
+   "macro test"_test = [] {
+      macro_t obj{};
+      std::string b{};
+      glz::write_json(obj, b);
+      
+      expect(b == R"({"x":5,"y":"yay!","z":55})");
+   };
+   
+   "local macro test"_test = [] {
+      local_macro_t obj{};
+      std::string b{};
+      glz::write_json(obj, b);
+      
+      expect(b == R"({"x":5,"y":"yay!","z":55})");
    };
 };
 
