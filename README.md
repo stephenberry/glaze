@@ -124,7 +124,7 @@ glz::read_json(s, buffer);
 ```cmake
 include(cmake/CPM.cmake)
 
-CPMAddPackage(
+CPMFindPackage(
    NAME glaze
    GIT_REPOSITORY https://github.com/stephenberry/glaze
    GIT_TAG main
