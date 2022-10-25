@@ -1,8 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
-
-if (CPMAddPackage)
-   include(use_cpm.cmake)
-endif()
+cmake_minimum_required(VERSION 3.24)
 
 include(cmake/prelude.cmake)
 
