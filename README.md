@@ -133,6 +133,8 @@ CPMFindPackage(
 target_link_libraries(${PROJECT_NAME} glaze::glaze)
 ```
 
+> CPM will search via `find_package` first, to see if dependencies have been installed. If not, CPM will automatically pull the dependencies into your project.
+
 ### [Conan](https://conan.io)
 
 - [Glaze Conan recipe](https://github.com/Ahajha/glaze-conan)
