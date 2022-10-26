@@ -316,7 +316,8 @@ namespace glz
                else {
                   write<json>::op<Opts>(std::get<I>(value), std::forward<Args>(args)...);
                }
-               // MSVC bug if this logic is in the constexpr
+               // MSVC bug if this logic is in the `if constexpr`
+               // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
                   dump<','>(std::forward<Args>(args)...);
