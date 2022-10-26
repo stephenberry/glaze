@@ -316,7 +316,9 @@ namespace glz
                else {
                   write<json>::op<Opts>(std::get<I>(value), std::forward<Args>(args)...);
                }
-               if constexpr (I < N - 1) {
+               // MSVC bug if this logic is in the constexpr
+               constexpr bool needs_comma = I < N - 1;
+               if constexpr (needs_comma) {
                   dump<','>(std::forward<Args>(args)...);
                }
             });
