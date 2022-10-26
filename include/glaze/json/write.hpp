@@ -40,25 +40,14 @@ namespace glz
       requires (std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> || std::same_as<T, std::vector<bool>::const_reference>)
       struct to_json<T>
       {
-         template <auto Opts>
-         static void op(const bool value, auto&& b) noexcept
+         template <auto Opts, class... Args>
+         static void op(const bool value, Args&&... args) noexcept
          {
             if (value) {
-               dump<"true">(b);
+               dump<"true">(std::forward<Args>(args)...);
             }
             else {
-               dump<"false">(b);
-            }
-         }
-         
-         template <auto Opts>
-         static void op(const bool value, auto&& b, auto&& ix) noexcept
-         {
-            if (value) {
-               dump<"true">(b, ix);
-            }
-            else {
-               dump<"false">(b, ix);
+               dump<"false">(std::forward<Args>(args)...);
             }
          }
       };
@@ -69,10 +58,6 @@ namespace glz
          template <auto Opts, class B>
          static void op(auto&& value, B&& b) noexcept
          {
-            /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {
-               // more efficient strings in C++23:
-             https://en.cppreference.com/w/cpp/string/basic_string/resize_and_overwrite
-             }*/
             if constexpr (std::same_as<std::decay_t<B>, char*>) {
                b = fmt::format_to(std::forward<B>(b), FMT_COMPILE("{}"), value);
             }
@@ -175,8 +160,8 @@ namespace glz
       template <glaze_enum_t T>
       struct to_json<T>
       {
-         template <auto Opts>
-         static void op(auto&& value, auto&& b) noexcept
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args) noexcept
          {
             using key_t = std::underlying_type_t<T>;
             static constexpr auto frozen_map =
@@ -189,41 +174,15 @@ namespace glz
                // be
                // escaped for their enum names
                // TODO: Could create a pre qouted map for better perf
-               dump<'"'>(b);
-               dump(str, b);
-               dump<'"'>(b);
+               dump<'"'>(std::forward<Args>(args)...);
+               dump(str, std::forward<Args>(args)...);
+               dump<'"'>(std::forward<Args>(args)...);
             }
             else [[unlikely]] {
                // What do we want to happen if the value doesnt have a mapped
                // string
                write<json>::op<Opts>(
-                  static_cast<std::underlying_type_t<T>>(value), b);
-            }
-         }
-         
-         template <auto Opts>
-         static void op(auto&& value, auto&& b, auto&& ix) noexcept
-         {
-            using key_t = std::underlying_type_t<T>;
-            static constexpr auto frozen_map =
-               detail::make_enum_to_string_map<T>();
-            const auto& member_it = frozen_map.find(static_cast<key_t>(value));
-            if (member_it != frozen_map.end()) {
-               const sv str = {member_it->second.data(),
-                                       member_it->second.size()};
-               // Note: Assumes people dont use strings with chars that need to
-               // be
-               // escaped for their enum names
-               // TODO: Could create a pre qouted map for better perf
-               dump<'"'>(b, ix);
-               dump(str, b, ix);
-               dump<'"'>(b, ix);
-            }
-            else [[unlikely]] {
-               // What do we want to happen if the value doesnt have a mapped
-               // string
-               write<json>::op<Opts>(
-                  static_cast<std::underlying_type_t<T>>(value), b, ix);
+                  static_cast<std::underlying_type_t<T>>(value), std::forward<Args>(args)...);
             }
          }
       };
@@ -231,12 +190,8 @@ namespace glz
       template <func_t T>
       struct to_json<T>
       {
-         template <auto Opts>
-         static void op(auto&& /*value*/, auto&& /*b*/) noexcept
-         {}
-         
-         template <auto Opts>
-         static void op(auto&& /*value*/, auto&& /*b*/, auto&& /*ix*/) noexcept
+         template <auto Opts, class... Args>
+         static void op(auto&& /*value*/, Args&&...) noexcept
          {}
       };
 
@@ -258,10 +213,10 @@ namespace glz
       template <array_t T>
       struct to_json<T>
       {
-         template <auto Opts>
-         static void op(auto&& value, auto&& b) noexcept
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args) noexcept
          {
-            dump<'['>(b);
+            dump<'['>(std::forward<Args>(args)...);
             const auto is_empty = [&]() -> bool {
                if constexpr (nano::ranges::sized_range<T>) {
                   return value.size() ? false : true;
@@ -270,133 +225,66 @@ namespace glz
                   return value.empty();
                }
             }();
-
+            
             if (!is_empty) {
                auto it = value.begin();
-               write<json>::op<Opts>(*it, b);
+               write<json>::op<Opts>(*it, std::forward<Args>(args)...);
                ++it;
                const auto end = value.end();
                for (; it != end; ++it) {
-                  dump<','>(b);
-                  write<json>::op<Opts>(*it, b);
+                  dump<','>(std::forward<Args>(args)...);
+                  write<json>::op<Opts>(*it, std::forward<Args>(args)...);
                }
             }
-            dump<']'>(b);
-         }
-         
-         template <auto Opts>
-         static void op(auto&& value, auto&& b, auto&& ix) noexcept
-         {
-            dump<'['>(b, ix);
-            const auto is_empty = [&]() -> bool {
-               if constexpr (nano::ranges::sized_range<T>) {
-                  return value.size() ? false : true;
-               }
-               else {
-                  return value.empty();
-               }
-            }();
-
-            if (!is_empty) {
-               auto it = value.begin();
-               write<json>::op<Opts>(*it, b, ix);
-               ++it;
-               const auto end = value.end();
-               for (; it != end; ++it) {
-                  dump<','>(b, ix);
-                  write<json>::op<Opts>(*it, b, ix);
-               }
-            }
-            dump<']'>(b, ix);
+            dump<']'>(std::forward<Args>(args)...);
          }
       };
 
       template <map_t T>
       struct to_json<T>
       {
-         template <auto Opts>
-         static void op(auto&& value, auto&& b) noexcept
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args) noexcept
          {
-            dump<'{'>(b);
+            dump<'{'>(std::forward<Args>(args)...);
             if (!value.empty()) {
                auto it = value.cbegin();
                auto write_pair = [&] {
                   using Key = decltype(it->first);
                   if constexpr (str_t<Key> || char_t<Key>) {
-                     write<json>::op<Opts>(it->first, b);
+                     write<json>::op<Opts>(it->first, std::forward<Args>(args)...);
                   }
                   else {
-                     dump<'"'>(b);
-                     write<json>::op<Opts>(it->first, b);
-                     dump<'"'>(b);
+                     dump<'"'>(std::forward<Args>(args)...);
+                     write<json>::op<Opts>(it->first, std::forward<Args>(args)...);
+                     dump<'"'>(std::forward<Args>(args)...);
                   }
-                  dump<':'>(b);
-                  write<json>::op<Opts>(it->second, b);
+                  dump<':'>(std::forward<Args>(args)...);
+                  write<json>::op<Opts>(it->second, std::forward<Args>(args)...);
                };
                write_pair();
                ++it;
                
                const auto end = value.cend();
                for (; it != end; ++it) {
-                  dump<','>(b);
+                  dump<','>(std::forward<Args>(args)...);
                   write_pair();
                }
             }
-            dump<'}'>(b);
-         }
-         
-         template <auto Opts>
-         static void op(auto&& value, auto&& b, auto&& ix) noexcept
-         {
-            dump<'{'>(b, ix);
-            if (!value.empty()) {
-               auto it = value.cbegin();
-               auto write_pair = [&] {
-                  using Key = decltype(it->first);
-                  if constexpr (str_t<Key> || char_t<Key>) {
-                     write<json>::op<Opts>(it->first, b, ix);
-                  }
-                  else {
-                     dump<'"'>(b, ix);
-                     write<json>::op<Opts>(it->first, b, ix);
-                     dump<'"'>(b, ix);
-                  }
-                  dump<':'>(b, ix);
-                  write<json>::op<Opts>(it->second, b, ix);
-               };
-               write_pair();
-               ++it;
-               
-               const auto end = value.cend();
-               for (; it != end; ++it) {
-                  dump<','>(b, ix);
-                  write_pair();
-               }
-            }
-            dump<'}'>(b, ix);
+            dump<'}'>(std::forward<Args>(args)...);
          }
       };
       
       template <nullable_t T>
       struct to_json<T>
       {
-         template <auto Opts, class B>
-         static void op(auto&& value, B&& b) noexcept
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args) noexcept
          {
             if (value)
-               write<json>::op<Opts>(*value, std::forward<B>(b));
+               write<json>::op<Opts>(*value, std::forward<Args>(args)...);
             else {
-               dump<"null">(b);
-            }
-         }
-         
-         template <auto Opts, class B>
-         static void op(auto&& value, B&& b, auto&& ix) noexcept
-         {
-            if (value)
-               write<json>::op<Opts>(*value, std::forward<B>(b), ix);
-            else {
-               dump<"null">(b, ix);
+               dump<"null">(std::forward<Args>(args)...);
             }
          }
       };
