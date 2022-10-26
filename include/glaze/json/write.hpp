@@ -293,8 +293,8 @@ namespace glz
       requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
       struct to_json<T>
       {
-         template <auto Opts>
-         static void op(auto&& value, auto&& b) noexcept
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args) noexcept
          {
             static constexpr auto N = []() constexpr
             {
@@ -307,50 +307,20 @@ namespace glz
             }
             ();
             
-            dump<'['>(b);
+            dump<'['>(std::forward<Args>(args)...);
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(value.*std::get<I>(meta_v<V>), b);
+                  write<json>::op<Opts>(value.*std::get<I>(meta_v<V>), std::forward<Args>(args)...);
                }
                else {
-                  write<json>::op<Opts>(std::get<I>(value), b);
+                  write<json>::op<Opts>(std::get<I>(value), std::forward<Args>(args)...);
                }
                if constexpr (I < N - 1) {
-                  dump<','>(b);
+                  dump<','>(std::forward<Args>(args)...);
                }
             });
-            dump<']'>(b);
-         }
-         
-         template <auto Opts>
-         static void op(auto&& value, auto&& b, auto&& ix) noexcept
-         {
-            static constexpr auto N = []() constexpr
-            {
-               if constexpr (glaze_array_t<std::decay_t<T>>) {
-                  return std::tuple_size_v<meta_t<std::decay_t<T>>>;
-               }
-               else {
-                  return std::tuple_size_v<std::decay_t<T>>;
-               }
-            }
-            ();
-            
-            dump<'['>(b, ix);
-            using V = std::decay_t<T>;
-            for_each<N>([&](auto I) {
-               if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(value.*std::get<I>(meta_v<V>), b, ix);
-               }
-               else {
-                  write<json>::op<Opts>(std::get<I>(value), b, ix);
-               }
-               if constexpr (I < N - 1) {
-                  dump<','>(b, ix);
-               }
-            });
-            dump<']'>(b, ix);
+            dump<']'>(std::forward<Args>(args)...);
          }
       };
 
