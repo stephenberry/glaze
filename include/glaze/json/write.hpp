@@ -451,7 +451,8 @@ namespace glz
                if constexpr (str_t<Key> || char_t<Key>) {
                   static constexpr sv key = std::get<0>(item);
                   // MSVC produces an internal compile error for string_view, thus the need to convert to an array
-                  if constexpr (needs_escaping(array_from_sv<key>())) {
+                  constexpr auto ne = needs_escaping(array_from_sv<key>());
+                  if constexpr (ne) {
                      write<json>::op<Opts>(key, b, ix);
                      dump<':'>(b, ix);
                   }
