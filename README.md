@@ -28,12 +28,12 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 | Metric                | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | --------------------- | ------------------ | ------------ | ----------- |
-| Raw performance       | **0.45**           | **1,697**    | **682**     |
-| Equivalent JSON data* | **0.45**           | **3,222**    | **1,295**   |
+| Raw performance       | **0.40**           | **1795**     | **1703**    |
+| Equivalent JSON data* | **0.40**           | **3,164**    | **3,002**   |
 
 JSON message size: 617 bytes
 
-Binary message size: 325 bytes
+Binary message size: 350 bytes
 
 *Binary data packs more efficiently than JSON, so transporting the same amount of information is even faster.
 
