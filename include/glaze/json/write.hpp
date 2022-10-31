@@ -450,7 +450,7 @@ namespace glz
 
                if constexpr (str_t<Key> || char_t<Key>) {
                   static constexpr sv key = std::get<0>(item);
-                  if constexpr (needs_escaping(key)) {
+                  if constexpr (true) {
                      write<json>::op<Opts>(key, b, ix);
                      dump<':'>(b, ix);
                   }
