@@ -16,19 +16,12 @@ namespace glz
    inline void write(T&& value, Buffer& buffer) noexcept
    {
       if constexpr (std::same_as<Buffer, std::string> || std::same_as<Buffer, std::vector<std::byte>>) {
-         if constexpr (Opts.format == json) {
-            if (buffer.empty()) {
-               buffer.resize(128);
-            }
-            size_t ix = 0; // overwrite index
-            detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), buffer, ix);
-            buffer.resize(ix);
+         if (buffer.empty()) {
+            buffer.resize(128);
          }
-         else {
-            // TODO: add ix optimization to binary
-            buffer.clear();
-            detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), buffer);
-         }
+         size_t ix = 0; // overwrite index
+         detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), buffer, ix);
+         buffer.resize(ix);
       }
       else {
          buffer.clear();

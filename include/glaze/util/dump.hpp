@@ -143,9 +143,30 @@ namespace glz::detail
          //b.push_back(std::bit_cast<value_t>(c));
       }
    }
+   
+   template <std::byte c, class B>
+   inline void dump(B&& b, auto&& ix) noexcept
+   {      
+      if (ix == b.size()) [[unlikely]] {
+         b.resize(b.size() * 2);
+      }
+      
+      using value_t = nano::ranges::range_value_t<std::decay_t<B>>;
+      if constexpr (std::same_as<value_t, std::byte>) {
+         b[ix] = c;
+      }
+      else {
+         static constexpr std::byte chr = c;
+         static_assert(sizeof(value_t) == sizeof(std::byte));
+         b[ix] = *reinterpret_cast<value_t*>(const_cast<std::byte*>(&chr));
+         // TODO use std::bit_cast when apple clang supports it
+         //b[ix] = std::bit_cast<value_t>(c);
+      }
+      ++ix;
+   }
 
    template <class B>
-   inline void dump(std::byte c, auto&& b) noexcept
+   inline void dump(std::byte c, B&& b) noexcept
    {
       // TODO use std::bit_cast when apple clang supports it
       using value_t = nano::ranges::range_value_t<std::decay_t<B>>;
@@ -158,6 +179,26 @@ namespace glz::detail
          // b.push_back(std::bit_cast<value_t>(c));
       }
    }
+   
+   template <class B>
+   inline void dump(std::byte c, auto&& b, auto&& ix) noexcept
+   {
+      if (ix == b.size()) [[unlikely]] {
+         b.resize(b.size() * 2);
+      }
+      
+      using value_t = nano::ranges::range_value_t<std::decay_t<B>>;
+      if constexpr (std::same_as<value_t, std::byte>) {
+         b[ix] = c;
+      }
+      else {
+         static_assert(sizeof(value_t) == sizeof(std::byte));
+         b[ix] = *reinterpret_cast<value_t*>(const_cast<std::byte*>(&c));
+         // TODO use std::bit_cast when apple clang supports it
+         //b[ix] = std::bit_cast<value_t>(c);
+      }
+      ++ix;
+   }
 
    template <class B>
    inline void dump(const std::span<const std::byte> bytes, B&& b) noexcept
@@ -166,5 +207,17 @@ namespace glz::detail
       const auto b_start = b.size();
       b.resize(b.size() + n);
       std::memcpy(b.data() + b_start, bytes.data(), n);
+   }
+   
+   template <class B>
+   inline void dump(const std::span<const std::byte> bytes, B&& b, auto&& ix) noexcept
+   {
+      const auto n = bytes.size();
+      if (ix + n > b.size()) [[unlikely]] {
+         b.resize(std::max(b.size() * 2, ix + n));
+      }
+      
+      std::memcpy(b.data() + ix, bytes.data(), n);
+      ix += n;
    }
 }
