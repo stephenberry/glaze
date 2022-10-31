@@ -419,11 +419,6 @@ namespace glz
                   typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
                if constexpr (str_t<Key> || char_t<Key>) {
                   static constexpr sv key = std::get<0>(item);
-                  // TODO: gain this performance when MSVC fixes their bug
-                  #if _MSC_VER
-                  write<json>::op<Opts>(key, b, ix);
-                  dump<':'>(b, ix);
-                  #else
                   if constexpr (needs_escaping<key>()) {
                      write<json>::op<Opts>(key, b, ix);
                      dump<':'>(b, ix);
@@ -432,7 +427,6 @@ namespace glz
                      static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\":">>;
                      dump<quoted>(b, ix);
                   }
-                  #endif
                }
                else {
                   static constexpr auto quoted =
