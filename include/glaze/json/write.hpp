@@ -354,10 +354,9 @@ namespace glz
          return arr;
       }
       
-      template <const std::string_view& S>
-      inline constexpr bool needs_escaping()
+      inline constexpr bool needs_escaping(const std::string_view& s)
       {
-         for (auto& c : S) {
+         for (auto& c : s) {
             if (c == '"') {
                return true;
             }
@@ -451,7 +450,7 @@ namespace glz
 
                if constexpr (str_t<Key> || char_t<Key>) {
                   static constexpr sv key = std::get<0>(item);
-                  if constexpr (needs_escaping<key>()) {
+                  if constexpr (needs_escaping(key)) {
                      write<json>::op<Opts>(key, b, ix);
                      dump<':'>(b, ix);
                   }
