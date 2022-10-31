@@ -268,6 +268,10 @@ namespace glz
                
                const auto end = value.cend();
                for (; it != end; ++it) {
+                  using Value = std::decay_t<decltype(it->second)>;
+                  if constexpr (nullable_t<Value> && Opts.skip_null_members) {
+                     if (!bool(it->second)) continue;
+                  }
                   dump<','>(std::forward<Args>(args)...);
                   write_pair();
                }
@@ -373,19 +377,31 @@ namespace glz
             dump<'{'>(b);
             for_each<N>([&](auto I) {
                static constexpr auto item = std::get<I>(meta_v<V>);
-               using Key =
-                  typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
+               using mptr_t = std::tuple_element_t<1, decltype(item)>;
+               using val_t = member_check_t<V, mptr_t>;
+
+               if constexpr (nullable_t<val_t> && Opts.skip_null_members) {
+                  auto is_null = [&]() {
+                     if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {
+                        return !value.*std::get<1>(item);
+                     }
+                     else {
+                        return !std::get<1>(item)(value);
+                     }
+                  }();
+                  if (is_null) return;
+               }
+
+               using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
                if constexpr (str_t<Key> || char_t<Key>) {
                   write<json>::op<Opts>(std::get<0>(item), b);
                   dump<':'>(b);
                }
                else {
-                  static constexpr auto quoted =
-                     concat_arrays(concat_arrays("\"", std::get<0>(item)), "\":");
+                  static constexpr auto quoted = concat_arrays(concat_arrays("\"", std::get<0>(item)), "\":");
                   write<json>::op<Opts>(quoted, b);
                }
-               if constexpr (std::is_member_pointer_v<
-                                std::tuple_element_t<1, decltype(item)>>) {
+               if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {
                   write<json>::op<Opts>(value.*std::get<1>(item), b);
                }
                else {
@@ -415,15 +431,31 @@ namespace glz
             dump<'{'>(b, ix);
             for_each<N>([&](auto I) {
                static constexpr auto item = std::get<I>(meta_v<V>);
-               using Key =
-                  typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
+               using mptr_t = std::tuple_element_t<1, decltype(item)>;
+               using val_t = member_check_t<V, mptr_t>;
+
+               if constexpr (nullable_t<val_t> && Opts.skip_null_members) {
+                  auto is_null = [&]()
+                  {
+                     if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {
+                        return !bool(value.*std::get<1>(item));
+                     }
+                     else {
+                        return !bool(std::get<1>(item)(value));
+                     }
+                  }();
+                  if (is_null) return;
+               }
+
+               using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
+
                if constexpr (str_t<Key> || char_t<Key>) {
                   static constexpr sv key = std::get<0>(item);
-                  // TODO: gain this performance when MSVC fixes their bug
-                  #if _MSC_VER
+// TODO: gain this performance when MSVC fixes their bug
+#if _MSC_VER
                   write<json>::op<Opts>(key, b, ix);
                   dump<':'>(b, ix);
-                  #else
+#else
                   if constexpr (needs_escaping<key>()) {
                      write<json>::op<Opts>(key, b, ix);
                      dump<':'>(b, ix);
@@ -432,15 +464,13 @@ namespace glz
                      static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\":">>;
                      dump<quoted>(b, ix);
                   }
-                  #endif
+#endif
                }
                else {
-                  static constexpr auto quoted =
-                     concat_arrays(concat_arrays("\"", std::get<0>(item)), "\":");
+                  static constexpr auto quoted = concat_arrays(concat_arrays("\"", std::get<0>(item)), "\":");
                   write<json>::op<Opts>(quoted, b, ix);
                }
-               if constexpr (std::is_member_pointer_v<
-                                std::tuple_element_t<1, decltype(item)>>) {
+               if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {
                   write<json>::op<Opts>(value.*std::get<1>(item), b, ix);
                }
                else {
