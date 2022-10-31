@@ -241,24 +241,22 @@ namespace glz
          {
             const auto n_keys = int_from_header(it, end);
             
-            static constexpr auto frozen_map = detail::make_int_map<T>();
+            static constexpr auto storage = detail::make_int_map<T>();
             
             for (size_t i = 0; i < n_keys; ++i) {
                const auto key = int_from_header(it, end);
-               const auto& member_it = frozen_map.find(key);
-               if (member_it != frozen_map.end()) {
-                  std::visit(
-                     [&](auto&& member_ptr) {
-                        using V = std::decay_t<decltype(member_ptr)>;
-                        if constexpr (std::is_member_pointer_v<V>) {
-                           read<binary>::op<Opts>(value.*member_ptr, it, end);
-                        }
-                        else {
-                           read<binary>::op<Opts>(member_ptr(value), it, end);
-                        }
-                     },
-                     member_it->second);
-               }
+               const auto& member_it = storage[key];
+               std::visit(
+                  [&](auto&& member_ptr) {
+                     using V = std::decay_t<decltype(member_ptr)>;
+                     if constexpr (std::is_member_pointer_v<V>) {
+                        read<binary>::op<Opts>(value.*member_ptr, it, end);
+                     }
+                     else {
+                        read<binary>::op<Opts>(member_ptr(value), it, end);
+                     }
+                  },
+                  member_it);
             }
          }
       };

@@ -28,20 +28,27 @@ namespace glz
             to_binary<std::decay_t<T>>::template op<Opts>(
                std::forward<T>(value), std::forward<B>(b));
          }
+         
+         template <auto Opts, class T, class B, class IX>
+         static void op(T&& value, B&& b, IX&& ix)
+         {
+            to_binary<std::decay_t<T>>::template op<Opts>(
+               std::forward<T>(value), std::forward<B>(b), std::forward<IX>(ix));
+         }
       };
       
       template <class T>
       requires (std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> || std::same_as<T, std::vector<bool>::const_reference>)
       struct to_binary<T>
       {
-         template <auto Opts>
-         static void op(const bool value, auto&& b) noexcept
+         template <auto Opts, class... Args>
+         static void op(const bool value, Args&&... args) noexcept
          {
             if (value) {
-               dump<static_cast<std::byte>(1)>(b);
+               dump<static_cast<std::byte>(1)>(std::forward<Args>(args)...);
             }
             else {
-               dump<static_cast<std::byte>(0)>(b);
+               dump<static_cast<std::byte>(0)>(std::forward<Args>(args)...);
             }
          }
       };
@@ -49,29 +56,31 @@ namespace glz
       template <func_t T>
       struct to_binary<T>
       {
-         template <auto Opts>
-         static void op(auto&& /*value*/, auto&& /*b*/) noexcept
+         template <auto Opts, class... Args>
+         static void op(auto&& /*value*/, Args&&... args) noexcept
          {}
       };
       
-      void dump_type(auto&& value, auto&& b) noexcept
+      template <class... Args>
+      void dump_type(auto&& value, Args&&... args) noexcept
       {
-         dump(std::as_bytes(std::span{ &value, 1 }), b);
+         dump(std::as_bytes(std::span{ &value, 1 }), std::forward<Args>(args)...);
       }
       
-      void dump_int(size_t i, auto&& b)
+      template <class... Args>
+      void dump_int(size_t i, Args&&... args)
       {
          if (i < 64) {
-            dump_type(header8{ 0, static_cast<uint8_t>(i) }, b);
+            dump_type(header8{ 0, static_cast<uint8_t>(i) }, std::forward<Args>(args)...);
          }
          else if (i < 16384) {
-            dump_type(header16{ 1, static_cast<uint16_t>(i) }, b);
+            dump_type(header16{ 1, static_cast<uint16_t>(i) }, std::forward<Args>(args)...);
          }
          else if (i < 1073741824) {
-            dump_type(header32{ 2, static_cast<uint32_t>(i) }, b);
+            dump_type(header32{ 2, static_cast<uint32_t>(i) }, std::forward<Args>(args)...);
          }
          else if (i < 4611686018427387904) {
-            dump_type(header64{ 3, i }, b);
+            dump_type(header64{ 3, i }, std::forward<Args>(args)...);
          }
          else {
             throw std::runtime_error("size not supported");
@@ -82,35 +91,35 @@ namespace glz
       requires num_t<T> || char_t<T> || glaze_enum_t<T>
       struct to_binary<T>
       {
-         template <auto Opts>
-         static void op(auto&& value, auto&& b) noexcept
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args) noexcept
          {
-            dump_type(value, b);
+            dump_type(value, std::forward<Args>(args)...);
          }
       };
       
       template <str_t T>
       struct to_binary<T>
       {
-         template <auto Opts>
-         static void op(auto&& value, auto&& b) noexcept
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args) noexcept
          {
-            dump_int(value.size(), b);
-            dump(std::as_bytes(std::span{ value.data(), value.size() }), b);
+            dump_int(value.size(), std::forward<Args>(args)...);
+            dump(std::as_bytes(std::span{ value.data(), value.size() }), std::forward<Args>(args)...);
          }
       };
       
       template <array_t T>
       struct to_binary<T>
       {
-         template <auto Opts>
-         static void op(auto&& value, auto&& b)
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args)
          {
             if constexpr (!has_static_size<T>) {
-               dump_int(value.size(), b);
+               dump_int(value.size(), std::forward<Args>(args)...);
             }
             for (auto&& x : value) {
-               write<binary>::op<Opts>(x, b);
+               write<binary>::op<Opts>(x, std::forward<Args>(args)...);
             }
          }
       };
@@ -118,13 +127,13 @@ namespace glz
       template <map_t T>
       struct to_binary<T>
       {
-         template <auto Opts>
-         static void op(auto&& value, auto&& b) noexcept
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args) noexcept
          {
-            dump_int(value.size(), b);
+            dump_int(value.size(), std::forward<Args>(args)...);
             for (auto&& [k, v] : value) {
-               write<binary>::op<Opts>(k, b);
-               write<binary>::op<Opts>(v, b);
+               write<binary>::op<Opts>(k, std::forward<Args>(args)...);
+               write<binary>::op<Opts>(v, std::forward<Args>(args)...);
             }
          }
       };
@@ -132,15 +141,15 @@ namespace glz
       template <nullable_t T>
       struct to_binary<T>
       {
-         template <auto Opts>
-         static void op(auto&& value, auto&& b) noexcept
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args) noexcept
          {
             if (value) {
-               dump<static_cast<std::byte>(1)>(b);
-               write<binary>::op<Opts>(*value, b);
+               dump<static_cast<std::byte>(1)>(std::forward<Args>(args)...);
+               write<binary>::op<Opts>(*value, std::forward<Args>(args)...);
             }
             else {
-               dump<static_cast<std::byte>(0)>(b);
+               dump<static_cast<std::byte>(0)>(std::forward<Args>(args)...);
             }
          }
       };
@@ -149,22 +158,22 @@ namespace glz
       requires glaze_object_t<T>
       struct to_binary<T>
       {
-         template <auto Opts>
-         static void op(auto&& value, auto&& b) noexcept
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args) noexcept
          {
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
-            dump_int(N, b); // even though N is known at compile time in this case, it is not known for partial cases, so we still use a compressed integer
+            dump_int(N, std::forward<Args>(args)...); // even though N is known at compile time in this case, it is not known for partial cases, so we still use a compressed integer
             
             for_each<N>([&](auto I) {
                static constexpr auto item = std::get<I>(meta_v<V>);
-               dump_int(I, b); // dump the known key as an integer
+               dump_int(I, std::forward<Args>(args)...); // dump the known key as an integer
                if constexpr (std::is_member_pointer_v<
                                 std::tuple_element_t<1, decltype(item)>>) {
-                  write<binary>::op<Opts>(value.*std::get<1>(item), b);
+                  write<binary>::op<Opts>(value.*std::get<1>(item), std::forward<Args>(args)...);
                }
                else {
-                  write<binary>::op<Opts>(std::get<1>(item)(value), b);
+                  write<binary>::op<Opts>(std::get<1>(item)(value), std::forward<Args>(args)...);
                }
             });
          }
@@ -174,12 +183,12 @@ namespace glz
       requires glaze_array_t<T>
       struct to_binary<T>
       {
-         template <auto Opts>
-         static void op(auto&& value, auto&& b) noexcept
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args) noexcept
          {
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-               write<binary>::op<Opts>(value.*std::get<I>(meta_v<V>), b);
+               write<binary>::op<Opts>(value.*std::get<I>(meta_v<V>), std::forward<Args>(args)...);
             });
          }
       };

@@ -497,11 +497,8 @@ namespace glz
       constexpr auto make_int_map_impl(std::index_sequence<I...>)
       {
          using value_t = value_tuple_variant_t<meta_t<T>>;
-         return frozen::make_unordered_map<size_t, value_t,
-                                           std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<size_t, value_t>(
-               I,
-               std::get<1>(std::get<I>(meta_v<T>)))...});
+         return std::array<value_t, std::tuple_size_v<meta_t<T>>>(
+            {std::get<1>(std::get<I>(meta_v<T>))...});
       }
       
       template <class T>
