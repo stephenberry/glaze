@@ -9,6 +9,7 @@
 #include <charconv>
 #include <iterator>
 #include <ostream>
+#include <variant>
 
 #include "glaze/core/format.hpp"
 #include "glaze/util/for_each.hpp"
@@ -286,6 +287,19 @@ namespace glz
             else {
                dump<"null">(std::forward<Args>(args)...);
             }
+         }
+      };
+
+      template <class T>
+      concept variant_t = is_specialization_v<T, std::variant>;
+
+      template <variant_t T>
+      struct to_json<T>
+      {
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args) noexcept
+         {
+            std::visit([&](auto&& val) { write<json>::op<Opts>(val, std::forward<Args>(args)...); }, value);
          }
       };
 

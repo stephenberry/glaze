@@ -1863,6 +1863,21 @@ suite nan_tests = [] {
    };
 };
 
+suite variant_tests = [] {
+   "variant_write_tests"_test = [] {
+      std::variant<double, std::string> d = "not_a_fish";
+      std::string s{};
+
+      glz::write_json(d, s);
+      expect(s == R"("not_a_fish")");
+
+      d = 5.7;
+      s.clear();
+      glz::write_json(d, s);
+      expect(s == "5.7");
+   };
+};
+
 struct macro_t
 {
    double x = 5.0;
