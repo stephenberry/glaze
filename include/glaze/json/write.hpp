@@ -383,10 +383,10 @@ namespace glz
                if constexpr (nullable_t<val_t> && Opts.skip_null_members) {
                   auto is_null = [&]() {
                      if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {
-                        return !value.*std::get<1>(item);
+                        return !bool(value.*std::get<1>(item));
                      }
                      else {
-                        return !std::get<1>(item)(value);
+                        return !bool(std::get<1>(item)(value));
                      }
                   }();
                   if (is_null) return;
