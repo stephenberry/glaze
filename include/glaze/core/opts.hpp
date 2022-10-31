@@ -13,6 +13,7 @@ namespace glz
       uint32_t format = json;
       bool comments = false; // write out comments
       bool error_on_unknown_keys = true;
+      bool skip_null_members = true; // Skip writing out params in an object if the value is null
       
       // meant for internal use
       bool whitespace_handled = false;
