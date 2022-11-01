@@ -43,8 +43,6 @@ Binary message size: 350 bytes
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg)
 
-*Currently clang and gcc should perform better at writing because of MSVC issues (waiting for a fix).*
-
 ### Example
 
 ```c++
@@ -472,9 +470,9 @@ For example: `glz::read<glz::opts{.error_on_unknown_keys = false}>(...)` will tu
 
 Glaze provides a tagged binary format to send and receive messages much like JSON, but with significantly improved performance and message size savings.
 
-The binary specification is known as [Crusher]() [TODO: add link].
+The binary specification is known as [Crusher](https://github.com/stephenberry/crusher).
 
-Integers and integer keys are locally compressed for efficiency. Elements are byte aligned, but compression uses bit packing where the benefits are greatest and performance costs are low.
+Integers and integer keys are locally compressed for efficiency. Elements are byte aligned, but size headers uses bit packing where the benefits are greatest and performance costs are low.
 
 Most classes use `std::memcpy` for maximum performance.
 
