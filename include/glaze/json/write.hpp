@@ -346,17 +346,18 @@ namespace glz
       };
 
       template <const std::string_view& S>
-      inline constexpr auto array_from_sv()
+      inline constexpr auto array_from_sv() noexcept
       {
-         constexpr auto N = S.size();
+         constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
+         constexpr auto N = s.size();
          std::array<char, N> arr;
-         std::copy_n(S.data(), N, arr.data());
+         std::copy_n(s.data(), N, arr.data());
          return arr;
       }
-      
-      inline constexpr bool needs_escaping(auto&& s)
+
+      inline constexpr bool needs_escaping(const auto& S) noexcept
       {
-         for (auto& c : s) {
+         for (const auto& c : S) {
             if (c == '"') {
                return true;
             }
@@ -448,8 +449,7 @@ namespace glz
 
                using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
                
-               static constexpr auto is_string_type = str_t<Key> || char_t<Key>;
-               if constexpr (is_string_type) {
+               if constexpr (str_t<Key> || char_t<Key>) {
                   static constexpr sv key = std::get<0>(item);
                   if constexpr (needs_escaping(key)) {
                      write<json>::op<Opts>(key, b, ix);
