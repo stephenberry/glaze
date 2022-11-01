@@ -8,6 +8,7 @@
 
 #include "glaze/util/type_traits.hpp"
 #include "glaze/core/meta.hpp"
+#include "glaze/util/for_each.hpp"
 
 namespace glz
 {
