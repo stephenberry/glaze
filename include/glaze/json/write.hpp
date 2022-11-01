@@ -447,12 +447,11 @@ namespace glz
                }
 
                using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
-
-               if constexpr (str_t<Key> || char_t<Key>) {
+               
+               static constexpr auto is_string_type = str_t<Key> || char_t<Key>;
+               if constexpr (is_string_type) {
                   static constexpr sv key = std::get<0>(item);
-                  // MSVC produces an internal compile error for string_view, thus the need to convert to an array
-                  constexpr auto ne = needs_escaping(array_from_sv<key>());
-                  if constexpr (ne) {
+                  if constexpr (needs_escaping(key)) {
                      write<json>::op<Opts>(key, b, ix);
                      dump<':'>(b, ix);
                   }
