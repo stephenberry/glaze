@@ -43,8 +43,6 @@ Binary message size: 350 bytes
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg)
 
-*Currently clang and gcc should perform better at writing because of MSVC issues (waiting for a fix).*
-
 ### Example
 
 ```c++
