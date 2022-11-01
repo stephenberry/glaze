@@ -375,6 +375,7 @@ namespace glz
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
             dump<'{'>(b);
+            bool first = true;
             for_each<N>([&](auto I) {
                static constexpr auto item = std::get<I>(meta_v<V>);
                using mptr_t = std::tuple_element_t<1, decltype(item)>;
@@ -390,6 +391,15 @@ namespace glz
                      }
                   }();
                   if (is_null) return;
+               }
+
+               if (first) {
+                  first = false;
+               }
+               else {
+                  // Null members may be skipped so we cant just write it out for all but the last member unless
+                  // trailing commas are allowed
+                  dump<','>(b);
                }
 
                using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
@@ -416,9 +426,6 @@ namespace glz
                      dump<"*/">(b);
                   }
                }
-               if constexpr (I < N - 1) {
-                  dump<','>(b);
-               }
             });
             dump<'}'>(b);
          }
@@ -429,6 +436,7 @@ namespace glz
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
             dump<'{'>(b, ix);
+            bool first = true;
             for_each<N>([&](auto I) {
                static constexpr auto item = std::get<I>(meta_v<V>);
                using mptr_t = std::tuple_element_t<1, decltype(item)>;
@@ -445,6 +453,15 @@ namespace glz
                      }
                   }();
                   if (is_null) return;
+               }
+
+               if (first) {
+                  first = false;
+               }
+               else  {
+                  // Null members may be skipped so we cant just write it out for all but the last member unless
+                  // trailing commas are allowed
+                  dump<','>(b, ix);
                }
 
                using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
@@ -484,9 +501,6 @@ namespace glz
                      dump(comment, b, ix);
                      dump<"*/">(b, ix);
                   }
-               }
-               if constexpr (I < N - 1) {
-                  dump<','>(b, ix);
                }
             });
             dump<'}'>(b, ix);
