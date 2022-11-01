@@ -346,18 +346,18 @@ namespace glz
       };
 
       template <const std::string_view& S>
-      inline constexpr auto array_from_sv()
+      inline constexpr auto array_from_sv() noexcept
       {
-         constexpr auto N = S.size();
+         constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
+         constexpr auto N = s.size();
          std::array<char, N> arr;
-         std::copy_n(S.data(), N, arr.data());
+         std::copy_n(s.data(), N, arr.data());
          return arr;
       }
-      
-      template <const std::string_view& S>
-      inline constexpr bool needs_escaping()
+
+      inline constexpr bool needs_escaping(const auto& S) noexcept
       {
-         for (auto& c : S) {
+         for (const auto& c : S) {
             if (c == '"') {
                return true;
             }
@@ -383,10 +383,10 @@ namespace glz
                if constexpr (nullable_t<val_t> && Opts.skip_null_members) {
                   auto is_null = [&]() {
                      if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {
-                        return !value.*std::get<1>(item);
+                        return !bool(value.*std::get<1>(item));
                      }
                      else {
-                        return !std::get<1>(item)(value);
+                        return !bool(std::get<1>(item)(value));
                      }
                   }();
                   if (is_null) return;
@@ -448,15 +448,10 @@ namespace glz
                }
 
                using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
-
+               
                if constexpr (str_t<Key> || char_t<Key>) {
                   static constexpr sv key = std::get<0>(item);
-// TODO: gain this performance when MSVC fixes their bug
-#if _MSC_VER
-                  write<json>::op<Opts>(key, b, ix);
-                  dump<':'>(b, ix);
-#else
-                  if constexpr (needs_escaping<key>()) {
+                  if constexpr (needs_escaping(key)) {
                      write<json>::op<Opts>(key, b, ix);
                      dump<':'>(b, ix);
                   }
@@ -464,7 +459,6 @@ namespace glz
                      static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\":">>;
                      dump<quoted>(b, ix);
                   }
-#endif
                }
                else {
                   static constexpr auto quoted = concat_arrays(concat_arrays("\"", std::get<0>(item)), "\":");

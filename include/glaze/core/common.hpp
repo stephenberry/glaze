@@ -494,7 +494,7 @@ namespace glz
       }
       
       template <class T, size_t... I>
-      constexpr auto make_int_map_impl(std::index_sequence<I...>)
+      constexpr auto make_int_storage_impl(std::index_sequence<I...>)
       {
          using value_t = value_tuple_variant_t<meta_t<T>>;
          return std::array<value_t, std::tuple_size_v<meta_t<T>>>(
@@ -502,11 +502,11 @@ namespace glz
       }
       
       template <class T>
-      constexpr auto make_int_map()
+      constexpr auto make_int_storage()
       {
          constexpr auto indices =
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_int_map_impl<T>(indices);
+         return make_int_storage_impl<T>(indices);
       }
       
       template <class T, size_t... I>
@@ -592,7 +592,8 @@ namespace glz
       
       template <class T, class mptr_t>
       using member_check_t = typename member_check<T, mptr_t>::type;
-
+      
+      // this function approach does not work with gcc
       /*template <class T, class mptr_t>
       constexpr decltype(auto) member_check()
       {

@@ -442,7 +442,7 @@ buffer.resize(n);
 
 ## JSON Caveats
 
-- Number types cannot begin with a positive `+` symbol, for efficiency.
+- Not all control characters are handled in strings.
 
 ## Compile Time Options
 

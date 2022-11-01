@@ -241,11 +241,10 @@ namespace glz
          {
             const auto n_keys = int_from_header(it, end);
             
-            static constexpr auto storage = detail::make_int_map<T>();
+            static constexpr auto storage = detail::make_int_storage<T>();
             
             for (size_t i = 0; i < n_keys; ++i) {
                const auto key = int_from_header(it, end);
-               const auto& member_it = storage[key];
                std::visit(
                   [&](auto&& member_ptr) {
                      using V = std::decay_t<decltype(member_ptr)>;
@@ -256,7 +255,7 @@ namespace glz
                         read<binary>::op<Opts>(member_ptr(value), it, end);
                      }
                   },
-                  member_it);
+                          storage[key]);
             }
          }
       };

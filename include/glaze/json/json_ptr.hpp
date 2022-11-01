@@ -421,7 +421,8 @@ namespace glz
          if constexpr (detail::glaze_object_t<V>) {
             using G = member_getter<V, detail::string_literal_from_view<key_str.size()>(key_str)>;
             if constexpr (G::member_it != G::frozen_map.end()) {
-               constexpr auto& member_ptr = std::get<G::member_it->second.index()>(G::member_it->second);
+               constexpr auto& element = G::member_it->second;
+               constexpr auto& member_ptr = std::get<element.index()>(element);
                using mptr_t = std::decay_t<decltype(member_ptr)>;
                if constexpr (std::is_member_pointer_v<mptr_t>) {
                   using sub_t = decltype(std::declval<V>().*member_ptr);
