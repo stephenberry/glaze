@@ -4,14 +4,14 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from C++ 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
 | [**Glaze**](https://github.com/stephenberry/glaze)           | **1.81**           | **658**      | **663**     |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1260**    |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1260***   |
 | [**daw_json_link**](https://github.com/beached/daw_json_link) | **3.27**           | **308**      | **450**     |
 | [**json_struct**](https://github.com/jorgen/json_struct)     | **5.43**           | **323**      | **468**     |
 | [**nlohmann**](https://github.com/nlohmann/json)             | **18.68**          | **77**       | **66**      |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
-*Note: [simdjson](https://github.com/simdjson/simdjson) is a fantastic library for fast JSON parsing, but has a few caveats. simdjson (on demand) can experience major performance losses for files where the data is not in the expected sequence (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user.*
+**Note: [simdjson](https://github.com/simdjson/simdjson) is a fantastic library for fast JSON parsing, but has a few caveats. simdjson (on demand) can experience major performance losses for files where the data is not in the expected sequence (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user.*
 
 [ABC Test](https://github.com/stephenberry/json_performance) shows how simdjson can have poor performance when keys are not in the expected sequence:
 
