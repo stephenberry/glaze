@@ -4,7 +4,6 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from C++ 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
 | [**Glaze**](https://github.com/stephenberry/glaze)           | **1.87**           | **635**      | **645**     |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) (with unsafe raw buffer) | **2.59**           | **462**      | **461**     |
 | [**daw_json_link**](https://github.com/beached/daw_json_link) | **3.18**           | **317**      | **460**     |
 | [**json_struct**](https://github.com/jorgen/json_struct)     | **8.31**           | **467**      | **173**     |
 | [**nlohmann json**](https://github.com/nlohmann/json)        | **18.58**          | **76**       | **66**      |
