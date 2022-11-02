@@ -171,7 +171,7 @@ Glaze can be used header only by linking to `fmt-header-only`, or `fmt` can be s
 
 ## Local Glaze Meta
 
-Glaze also supports metadata provided within its associated class, as shown below:
+Glaze also supports metadata provided within its associated class:
 
 ```c++
 struct my_struct
@@ -199,7 +199,7 @@ struct my_struct
 
 Glaze provides macros to more efficiently register your C++ structs.
 
-> In order to use these macros you must include the header: `glaze/core/macros.hpp`
+> These macros are included in the header: `glaze/core/macros.hpp`
 
 - GLZ_META is for external registration
 - GLZ_LOCAL_META is for internal registration
