@@ -3,14 +3,15 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from C++ 
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.83**           | **661**      | **648**     |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **3.27**           | **305**      | **467**     |
-| [**json_struct**](https://github.com/jorgen/json_struct)     | **5.43**           | **322**      | **470**     |
-| [**nlohmann**](https://github.com/nlohmann/json)             | **19.07**          | **75**       | **66**      |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.81**           | **658**      | **663**     |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1260**    |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **3.27**           | **308**      | **450**     |
+| [**json_struct**](https://github.com/jorgen/json_struct)     | **5.43**           | **323**      | **468**     |
+| [**nlohmann**](https://github.com/nlohmann/json)             | **18.68**          | **77**       | **66**      |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
-*daw_json_link is [significantly faster](https://github.com/beached/daw_json_link/blob/release/docs/images/kostya_bench_chart_2021_04_03.png) than libraries like [rapidjson](https://github.com/Tencent/rapidjson), so while benchmarks are coming, glaze has outperformed everything we've tested against. [simdjson](https://github.com/simdjson/simdjson) will probably be faster in a lot of reading contexts, but requires more code from the user to achieve this for nested objects*
+*Note: [simdjson](https://github.com/simdjson/simdjson) is a fantastic library for fast JSON parsing, but has a few caveats. simdjson (on demand) can experience major performance losses for files where the data is not in the expected sequence (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user.*
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
