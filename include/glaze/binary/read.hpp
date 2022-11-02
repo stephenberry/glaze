@@ -19,7 +19,7 @@ namespace glz
       struct read<binary>
       {
          template <auto Opts, class T, class It0, class It1>
-         static void op(T&& value, It0&& it, It1&& end) {
+         static void op(T&& value, It0&& it, It1&& end) noexcept {
             from_binary<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
@@ -29,15 +29,10 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end)
+         static void op(auto&& value, auto&& it, auto&& end) noexcept
          {
             using V = std::decay_t<T>;
-            if (it != end) {
-               std::memcpy(&value, &(*it), sizeof(V));
-            }
-            else {
-               throw std::runtime_error("Missing binary data");
-            }
+            std::memcpy(&value, &(*it), sizeof(V));
             std::advance(it, sizeof(V));
          }
       };
@@ -46,7 +41,7 @@ namespace glz
       requires(std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>) struct from_binary<T>
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& /* end */)
+         static void op(auto&& value, auto&& it, auto&& /* end */) noexcept
          {
             value = static_cast<bool>(*it);
             ++it;
@@ -57,13 +52,12 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         static void op(auto&& /*value*/, auto&& /*it*/, auto&& /*end*/)
+         static void op(auto&& /*value*/, auto&& /*it*/, auto&& /*end*/) noexcept
          {
          }
       };
       
-      // TODO: Handle errors
-      inline constexpr size_t int_from_header(auto&& it, auto&& /*end*/)
+      inline constexpr size_t int_from_header(auto&& it, auto&& /*end*/) noexcept
       {
          header8 h8;
          std::memcpy(&h8, &(*it), 1);
@@ -99,7 +93,7 @@ namespace glz
       }
       
       template <size_t N>
-      inline constexpr size_t int_from_raw(auto&& it, auto&& /*end*/)
+      inline constexpr size_t int_from_raw(auto&& it, auto&& /*end*/) noexcept
       {
          if constexpr (N < 256) {
             uint8_t i;
@@ -128,10 +122,10 @@ namespace glz
       }
       
       template <str_t T>
-      struct from_binary<T>
+      struct from_binary<T> final
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end)
+         static void op(auto&& value, auto&& it, auto&& end) noexcept
          {
             const auto n = int_from_header(it, end);
             using V = typename std::decay_t<T>::value_type;
@@ -150,10 +144,10 @@ namespace glz
       };
       
       template <array_t T>
-      struct from_binary<T>
+      struct from_binary<T> final
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end)
+         static void op(auto&& value, auto&& it, auto&& end) noexcept
          {
             if constexpr (has_static_size<T>) {
                for (auto&& item : value) {
@@ -166,9 +160,6 @@ namespace glz
                if constexpr (resizeable<T>) {
                   value.resize(n);
                }
-               else if (n != value.size()) {
-                  throw std::runtime_error("Attempted to read into non resizable container with the wrong number of items.");
-               }
 
                for (auto&& item: value) {
                   read<binary>::op<Opts>(item, it, end);
@@ -178,10 +169,10 @@ namespace glz
       };
 
       template <map_t T>
-      struct from_binary<T>
+      struct from_binary<T> final
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end)
+         static void op(auto&& value, auto&& it, auto&& end) noexcept
          {
             const auto n = int_from_header(it, end);
             
@@ -203,10 +194,10 @@ namespace glz
       };
 
       template <nullable_t T>
-      struct from_binary<T>
+      struct from_binary<T> final
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end)
+         static void op(auto&& value, auto&& it, auto&& end) noexcept
          {
             const auto has_value = static_cast<bool>(*it);
             ++it;
@@ -234,10 +225,10 @@ namespace glz
       
       template <class T>
       requires glaze_object_t<T>
-      struct from_binary<T>
+      struct from_binary<T> final
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end)
+         static void op(auto&& value, auto&& it, auto&& end) noexcept
          {
             const auto n_keys = int_from_header(it, end);
             
@@ -262,10 +253,10 @@ namespace glz
 
       template <class T>
       requires glaze_array_t<T>
-      struct from_binary<T>
+      struct from_binary<T> final
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end)
+         static void op(auto&& value, auto&& it, auto&& end) noexcept
          {
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
@@ -276,13 +267,13 @@ namespace glz
    }
    
    template <class T, class Buffer>
-   inline void read_binary(T&& value, Buffer&& buffer)
+   inline void read_binary(T&& value, Buffer&& buffer) noexcept
    {
       read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
    }
    
    template <class T, class Buffer>
-   inline auto read_binary(Buffer&& buffer)
+   inline auto read_binary(Buffer&& buffer) noexcept
    {
       T value{};
       read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
