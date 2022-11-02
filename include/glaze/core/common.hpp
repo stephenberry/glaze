@@ -481,7 +481,7 @@ namespace glz
          using value_t = value_tuple_variant_t<meta_t<T>>;
          constexpr auto n = std::tuple_size_v<meta_t<T>>;
          if constexpr (n <= 16) {
-            return glz::detail::make_naive_map<value_t, n>(
+            return glz::detail::make_naive_map<value_t, n, allow_hash_check>(
                {std::make_pair<std::string_view, value_t>(
                   std::string_view(std::get<0>(std::get<I>(meta_v<T>))),
                   std::get<1>(std::get<I>(meta_v<T>)))...});

@@ -96,7 +96,7 @@ namespace glz
       constexpr auto make_naive_map(std::initializer_list<std::pair<std::string_view, T>> pairs)
       {
          assert(pairs.size() == N);
-         naive_map<T, N> ht{};
+         naive_map<T, N, allow_hash_check> ht{};
          constexpr auto m = 2 * N;
 
          std::array<std::string_view, N> keys{};
