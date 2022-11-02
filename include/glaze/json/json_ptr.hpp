@@ -97,7 +97,7 @@ namespace glz
 
          if constexpr (glaze_object_t<T>) {
             static constexpr auto frozen_map = detail::make_map<T>();
-            const auto& member_it = frozen_map.find(frozen::string(key));
+            const auto& member_it = frozen_map.find(sv{key});
             if (member_it != frozen_map.end()) {
                return std::visit(
                   [&](auto&& member_ptr) {

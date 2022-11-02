@@ -17,6 +17,7 @@
 #include "glaze/util/variant.hpp"
 #include "glaze/util/tuple.hpp"
 #include "glaze/util/type_traits.hpp"
+#include "glaze/util/hash_map.hpp"
 
 #include <nanorange.hpp>
 
@@ -474,23 +475,31 @@ namespace glz
                           "third element should be a string comment");
       };
 
-      template <class T, size_t... I>
+      template <class T, bool allow_hash_check, size_t... I>
       constexpr auto make_map_impl(std::index_sequence<I...>)
       {
          using value_t = value_tuple_variant_t<meta_t<T>>;
-         return frozen::make_unordered_map<frozen::string, value_t,
-                                           std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<frozen::string, value_t>(
-               frozen::string(std::get<0>(std::get<I>(meta_v<T>))),
-               std::get<1>(std::get<I>(meta_v<T>)))...});
+         constexpr auto n = std::tuple_size_v<meta_t<T>>;
+         if constexpr (n <= 16) {
+            return glz::detail::make_naive_map<value_t, n, allow_hash_check>(
+               {std::make_pair<std::string_view, value_t>(
+                  std::string_view(std::get<0>(std::get<I>(meta_v<T>))),
+                  std::get<1>(std::get<I>(meta_v<T>)))...});
+         }
+         else {
+            return frozen::make_unordered_map<frozen::string, value_t, n>(
+               {std::make_pair<frozen::string, value_t>(
+                  frozen::string(std::get<0>(std::get<I>(meta_v<T>))),
+                  std::get<1>(std::get<I>(meta_v<T>)))...});
+         }
       }
 
-      template <class T>
+      template <class T, bool allow_hash_check = false>
       constexpr auto make_map()
       {
          constexpr auto indices =
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_map_impl<std::decay_t<T>>(indices);
+         return make_map_impl<std::decay_t<T>, allow_hash_check>(indices);
       }
       
       template <class T, size_t... I>

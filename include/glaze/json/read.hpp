@@ -590,8 +590,8 @@ namespace glz
                   skip_ws(it, end);
                   match<':'>(it, end);
                   
-                  static constexpr auto frozen_map = detail::make_map<T>();
-                  const auto& member_it = frozen_map.find(frozen::string(key));
+                  static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
+                  const auto& member_it = frozen_map.find(key);
                   if (member_it != frozen_map.end()) {
                      std::visit(
                         [&](auto&& member_ptr) {
