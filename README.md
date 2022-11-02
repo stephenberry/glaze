@@ -24,7 +24,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 ## Binary Performance
 
-*Tagged binary specification described further down.*
+Tagged binary specification: [Crusher](https://github.com/stephenberry/crusher)
 
 | Metric                | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | --------------------- | ------------------ | ------------ | ----------- |
@@ -468,6 +468,20 @@ For example: `glz::read<glz::opts{.error_on_unknown_keys = false}>(...)` will tu
 
 - `glz::read<glz::opts{.format = glz::binary}>(...)` -> `glz::read_binary(...)`
 - `glz::read<glz::opts{.format = glz::json}>(...)` -> `glz::read_json(...)`
+
+## Available Options
+
+The struct below shows the available options and the default behavior.
+
+```c++
+struct opts {
+  uint32_t format = json;
+  bool comments = false; // write out comments
+  bool error_on_unknown_keys = true; // error when an unknown key is encountered
+  bool skip_null_members = true; // skip writing out params in an object if the value is null
+  bool no_except = false; // turn off and on throwing exceptions (work in progress)
+};
+```
 
 # More Features
 
