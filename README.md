@@ -13,6 +13,13 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from C++ 
 
 *Note: [simdjson](https://github.com/simdjson/simdjson) is a fantastic library for fast JSON parsing, but has a few caveats. simdjson (on demand) can experience major performance losses for files where the data is not in the expected sequence (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user.*
 
+[ABC Test](https://github.com/stephenberry/json_performance) shows how simdjson can have poor performance when keys are not in the expected sequence:
+
+| Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
+| ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **3.80**           | **678**      | **408**     |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **111**     |
+
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 - Direct to memory serialization/deserialization
