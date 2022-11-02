@@ -27,24 +27,12 @@ jobs:
         echo "CC=$(brew --prefix llvm@14)/bin/clang" >> "$GITHUB_ENV"
         echo "CXX=$(brew --prefix llvm@14)/bin/clang++" >> "$GITHUB_ENV"
 
-    - name: Install Conan
-      uses: turtlebrowser/get-conan@main
-
-    - name: Configure Conan
-      run: |
-        conan profile new default
-        cp .github/clang-14.profile ~/.conan/profiles/default
-        conan profile update settings.build_type=${{env.BUILD_TYPE}} default
-
-    - name: Install dependencies
-      run: conan install . -b missing
-
     - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_TOOLCHAIN_FILE="./conan/conan_toolchain.cmake"
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
     - name: Build
-      run: cmake --build build -j 2
+      run: cmake --build build --config ${{env.BUILD_TYPE}} -j 2
 
     - name: Test
       working-directory: build
-      run: ctest -j 2 --output-on-failure
+      run: ctest -C ${{env.BUILD_TYPE}} -j 2 --output-on-failure
