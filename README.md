@@ -705,9 +705,7 @@ Glaze contains a simple thread pool for the sake of running studies efficiently 
 
 See the `ext` directory for extensions.
 
-## Eigen
-
-[Eigen](https://gitlab.com/libeigen/eigen) is a linear algebra library. Glaze currently supports fixed sized matrices and vectors.
+- [Eigen](https://gitlab.com/libeigen/eigen). Supports fixed size matrices and vectors.
 
 # License
 
