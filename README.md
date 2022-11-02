@@ -160,8 +160,6 @@ Glaze can be used header only by linking to `fmt-header-only`, or `fmt` can be s
 - [frozen](https://github.com/serge-sans-paille/frozen.git)
 - [NanoRange](https://github.com/tcbrindle/NanoRange)
 
-> NanoRange will be removed once C++20 ranges are supported across all major compilers.
-
 ## Unit Test Dependencies
 
 *Only required for building tests.*
