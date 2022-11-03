@@ -27,7 +27,7 @@ namespace glz
          {
             uint32_t h = (fnv32_offset_basis ^ seed) * fnv32_prime;
             for (const auto& c : value) { h = (h ^ static_cast<uint32_t>(c)) * fnv32_prime; }
-            return h >> 8;
+            return h >> 8; // shift needed for seeding
          }
       };
       
@@ -37,11 +37,7 @@ namespace glz
          {
             uint64_t h = (fnv64_offset_basis ^ seed) * fnv64_prime;
             for (const auto& c : value) { h = (h ^ static_cast<uint64_t>(c)) * fnv64_prime; }
-            return h >> 8;
-            
-            /*uint64_t h = (0x811c9dc5 ^ seed) * static_cast<uint64_t>(0x01000193);
-            for (const auto &c : value) h = (h ^ static_cast<uint64_t>(c)) * static_cast<uint64_t>(0x01000193);
-            return h >> 8;*/
+            return h >> 8; // shift needed for seeding
          }
       };
 
@@ -57,6 +53,7 @@ namespace glz
       template <size_t N, class HashType>
       constexpr HashType naive_perfect_hash(auto&& keys) noexcept
       {
+         static_assert(N <= 16);
          constexpr size_t m = N > 10 ? 3 * N : 2 * N;
          std::array<size_t, N> hashes{};
          std::array<size_t, N> buckets{};
@@ -64,7 +61,7 @@ namespace glz
          auto hash_alg = fnv1a<HashType>{};
 
          frozen::default_prg_t gen{};
-         for (size_t i = 0; i < 10000; ++i) {
+         for (size_t i = 0; i < 1024; ++i) {
             HashType seed = gen();
             size_t index = 0;
             for (const auto& key : keys) {
@@ -90,11 +87,12 @@ namespace glz
       template <class Value, std::size_t N, class HashType, bool allow_hash_check = false>
       struct naive_map
       {
+         static_assert(N <= 16);
          static constexpr size_t m = N > 10 ? 3 * N : 2 * N;
          HashType seed{};
          std::array<std::pair<std::string_view, Value>, N> items{};
          std::array<HashType, N> hashes{};
-         std::array<size_t, m> table{};
+         std::array<uint8_t, m> table{};
 
          constexpr decltype(auto) begin() const { return items.begin(); }
          constexpr decltype(auto) end() const { return items.end(); }
@@ -119,7 +117,15 @@ namespace glz
          {
             const auto hash = fnv1a<HashType>{}(key, seed);
             const auto index = table[hash % m];
-            if (hashes[index] != hash) return items.end();
+            if constexpr (allow_hash_check) {
+               if (hashes[index] != hash) [[unlikely]]
+                  return items.end();
+            }
+            else {
+               const auto& item = items[index];
+               if (item.first != key) [[unlikely]]
+                  return items.end();
+            }
             return items.begin() + index;
          }
       };
@@ -129,7 +135,7 @@ namespace glz
       {
          assert(pairs.size() == N);
          naive_map<T, N, HashType, allow_hash_check> ht{};
-         constexpr auto m = 2 * N;
+         constexpr size_t m = N > 10 ? 3 * N : 2 * N;
 
          std::array<std::string_view, N> keys{};
          size_t i = 0;
