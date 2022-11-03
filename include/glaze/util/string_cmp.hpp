@@ -8,7 +8,7 @@
 namespace glz
 {
    // An optimized string comparison algorithm that is typically faster than memcmp
-   inline bool string_cmp(const std::string_view s0, const std::string_view s1) noexcept
+   inline bool string_cmp(auto&& s0, auto&& s1) noexcept
    {
        const auto n = s0.size();
        if (s1.size() != n) {
@@ -19,10 +19,6 @@ namespace glz
          const auto* d0 = reinterpret_cast<const uint64_t*>(s0.data());
           const auto* d1 = reinterpret_cast<const uint64_t*>(s1.data());
           const auto shift = 64 - 8 * n;
-          /*std::cout << fmt::format("{:b}\n", *d0);
-          std::cout << fmt::format("{:b}\n", *d1);
-          std::cout << fmt::format("{:b}\n", (*d0) << shift);
-          std::cout << fmt::format("{:b}\n", (*d1) << shift);*/
           return ((*d0) << shift) == ((*d1) << shift);
          //return std::memcmp(s0.data(), s1.data(), n);
        }
