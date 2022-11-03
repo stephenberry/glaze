@@ -27,9 +27,9 @@ namespace glz
          //return std::memcmp(s0.data(), s1.data(), n);
        }
 
-       const auto* d0 = s0.data();
-       const auto* d1 = s1.data();
-       const auto* end7 = s0.end() - 7;
+       const char* d0 = s0.data();
+       const char* d1 = s1.data();
+       const char* end7 = s0.end() - 7;
 
        for (; d0 < end7; d0 += 8, d1 += 8) {
          if (*reinterpret_cast<const uint64_t*>(d0) != *reinterpret_cast<const uint64_t*>(d1)) {
