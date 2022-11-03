@@ -11,7 +11,7 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from C++ 
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
-**Note: [simdjson](https://github.com/simdjson/simdjson) is a fantastic library for fast JSON parsing, but has a few caveats. simdjson (on demand) can experience major performance losses for files where the data is not in the expected sequence (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user.*
+*Note: [simdjson](https://github.com/simdjson/simdjson) is a fantastic library for fast JSON parsing, but has a few caveats. simdjson (on demand) can experience major performance losses for files where the data is not in the expected sequence (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user.*
 
 [ABC Test](https://github.com/stephenberry/json_performance) shows how simdjson can have poor performance when keys are not in the expected sequence:
 
