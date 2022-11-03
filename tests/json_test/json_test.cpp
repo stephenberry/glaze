@@ -224,16 +224,16 @@ void basic_types() {
    "double write"_test = [] {
       std::string buffer{};
       glz::write_json(3.14, buffer);
-      expect(buffer == "3.14");
+      expect(buffer == "3.14") << buffer;
       buffer.clear();
       glz::write_json(9.81, buffer);
-      expect(buffer == "9.81");
+      expect(buffer == "9.81") << buffer;
       buffer.clear();
       glz::write_json(0.0, buffer);
-      expect(buffer == "0");
+      expect(buffer == "0") << buffer;
       buffer.clear();
       glz::write_json(-0.0, buffer);
-      expect(buffer == "-0");
+      expect(buffer == "-0") << buffer;
    };
 
    "double read valid"_test = [] {
@@ -1402,19 +1402,19 @@ void write_tests() {
          std::string s;
          float f{0.96875f};
          glz::write_json(f, s);
-         expect(s == "0.96875");
+         expect(s == "0.96875") << s;
       }
       {
          std::string s;
          double f{0.96875};
          glz::write_json(f, s);
-         expect(s == "0.96875");
+         expect(s == "0.96875") << s;
       }
       {
          std::string s;
          long double f{0.96875L};
          glz::write_json(f, s);
-         expect(s == "0.96875");
+         expect(s == "0.96875") << s;
       }
    };
 

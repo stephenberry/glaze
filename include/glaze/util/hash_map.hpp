@@ -92,7 +92,7 @@ namespace glz
          static constexpr size_t m = N > 10 ? 3 * N : 2 * N;
          HashType seed{};
          std::array<std::pair<std::string_view, Value>, N> items{};
-         std::array<HashType, N> hashes{};
+         std::array<HashType, N * allow_hash_check> hashes{};
          std::array<uint8_t, m> table{};
 
          constexpr decltype(auto) begin() const { return items.begin(); }
@@ -163,7 +163,9 @@ namespace glz
 
          for (size_t i = 0; i < N; ++i) {
             const auto hash = fnv1a<HashType>{}(keys[i], ht.seed);
-            ht.hashes[i] = hash;
+            if constexpr (allow_hash_check) {
+               ht.hashes[i] = hash;
+            }
             ht.table[hash % m] = i;
          }
 
