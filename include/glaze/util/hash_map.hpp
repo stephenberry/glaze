@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <frozen/random.h>
+#include "glaze/util/string_cmp.hpp"
 
 namespace glz
 {
@@ -107,8 +108,14 @@ namespace glz
                   throw std::runtime_error("Invalid key");
             }
             else {
-               if (item.first != key) [[unlikely]]
-                  throw std::runtime_error("Invalid key");
+               if (std::is_constant_evaluated()) {
+                  if (item.first != key) [[unlikely]]
+                     throw std::runtime_error("Invalid key");
+               }
+               else {
+                  if (!string_cmp(item.first, key)) [[unlikely]]
+                     throw std::runtime_error("Invalid key");
+               }
             }
             return item.second;
          }
@@ -123,8 +130,14 @@ namespace glz
             }
             else {
                const auto& item = items[index];
-               if (item.first != key) [[unlikely]]
-                  return items.end();
+               if (std::is_constant_evaluated()) {
+                  if (item.first != key) [[unlikely]]
+                     return items.end();
+               }
+               else {
+                  if (!string_cmp(item.first, key)) [[unlikely]]
+                     return items.end();
+               }
             }
             return items.begin() + index;
          }
@@ -133,6 +146,7 @@ namespace glz
       template <class T, size_t N, class HashType, bool allow_hash_check = false>
       constexpr auto make_naive_map(std::initializer_list<std::pair<std::string_view, T>> pairs)
       {
+         static_assert(N <= 16);
          assert(pairs.size() == N);
          naive_map<T, N, HashType, allow_hash_check> ht{};
          constexpr size_t m = N > 10 ? 3 * N : 2 * N;
