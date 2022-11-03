@@ -27,7 +27,7 @@ namespace glz
          {
             uint32_t h = (fnv32_offset_basis ^ seed) * fnv32_prime;
             for (const auto& c : value) { h = (h ^ static_cast<uint32_t>(c)) * fnv32_prime; }
-            return h;
+            return h >> 8;
          }
       };
       
@@ -36,8 +36,12 @@ namespace glz
          constexpr uint64_t operator()(auto&& value, const uint64_t seed) noexcept
          {
             uint64_t h = (fnv64_offset_basis ^ seed) * fnv64_prime;
-            for (const auto &c : value) { h = (h ^ static_cast<uint64_t>(c)) * fnv64_prime; }
-            return h;
+            for (const auto& c : value) { h = (h ^ static_cast<uint64_t>(c)) * fnv64_prime; }
+            return h >> 8;
+            
+            /*uint64_t h = (0x811c9dc5 ^ seed) * static_cast<uint64_t>(0x01000193);
+            for (const auto &c : value) h = (h ^ static_cast<uint64_t>(c)) * static_cast<uint64_t>(0x01000193);
+            return h >> 8;*/
          }
       };
 
@@ -51,16 +55,16 @@ namespace glz
       }
 
       template <size_t N, class HashType>
-      constexpr HashType naive_perfect_hash(auto&& keys)
+      constexpr HashType naive_perfect_hash(auto&& keys) noexcept
       {
-         constexpr auto m = 2 * N;
+         constexpr size_t m = N > 10 ? 3 * N : 2 * N;
          std::array<size_t, N> hashes{};
          std::array<size_t, N> buckets{};
          
          auto hash_alg = fnv1a<HashType>{};
 
          frozen::default_prg_t gen{};
-         for (size_t i = 0; i < 1000; ++i) {
+         for (size_t i = 0; i < 10000; ++i) {
             HashType seed = gen();
             size_t index = 0;
             for (const auto& key : keys) {
@@ -86,7 +90,7 @@ namespace glz
       template <class Value, std::size_t N, class HashType, bool allow_hash_check = false>
       struct naive_map
       {
-         static constexpr size_t m = 2 * N;
+         static constexpr size_t m = N > 10 ? 3 * N : 2 * N;
          HashType seed{};
          std::array<std::pair<std::string_view, Value>, N> items{};
          std::array<HashType, N> hashes{};
