@@ -16,8 +16,6 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/json/from_ptr.hpp"
 
-#include "dragonbox/dragonbox_to_chars.h"
-
 namespace glz
 {
    namespace detail
@@ -83,17 +81,9 @@ namespace glz
                b.resize(std::max(b.size() * 2, ix + 64));
             }
             
-            using V = std::decay_t<decltype(value)>;
-            if constexpr (std::same_as<V, float> || std::same_as<V, double>) {
-               auto start = b.data() + ix;
-               const auto end = jkj::dragonbox::to_chars_n(value, start);
-               ix += std::distance(start, end);
-            }
-            else {
-               auto start = b.data() + ix;
-               auto end = fmt::format_to(start, FMT_COMPILE("{}"), value);
-               ix += std::distance(start, end);
-            }
+            auto start = b.data() + ix;
+            auto end = fmt::format_to(start, FMT_COMPILE("{}"), value);
+            ix += std::distance(start, end);
          }
       };
 
