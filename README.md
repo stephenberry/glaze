@@ -153,10 +153,9 @@ target_link_libraries(main PRIVATE glaze::glaze)
 
 ## Dependencies
 
-Glaze can be used header only by linking to `fmt-header-only`, or `fmt` can be statically linked.
-
-- [fmt](https://github.com/fmtlib/fmt)
+- [dragonbox](https://github.com/jk-jeon/dragonbox)
 - [fast_float](https://github.com/fastfloat/fast_float)
+- [fmt](https://github.com/fmtlib/fmt)
 - [frozen](https://github.com/serge-sans-paille/frozen.git)
 - [NanoRange](https://github.com/tcbrindle/NanoRange)
 
