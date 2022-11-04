@@ -1,13 +1,13 @@
 # Glaze
 One of the fastest JSON libraries in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
 
-| Library                                                      | Roundtrip Time (s) | Write (s) | Read (s) |
-| ------------------------------------------------------------ | ------------------ | --------- | -------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.47**           | **987**   | **689**  |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**   | **1260** |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **3.21**           | **308**   | **464**  |
-| [**json_struct**](https://github.com/jorgen/json_struct)     | **4.52**           | **220**   | **321**  |
-| [**nlohmann**](https://github.com/nlohmann/json)             | **18.64**          | **77**    | **67**   |
+| Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
+| ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.47**           | **987**      | **689**     |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1260**    |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **3.21**           | **308**      | **464**     |
+| [**json_struct**](https://github.com/jorgen/json_struct)     | **4.52**           | **220**      | **321**     |
+| [**nlohmann**](https://github.com/nlohmann/json)             | **18.64**          | **77**       | **67**      |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
@@ -15,10 +15,10 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from C++ 
 
 [ABC Test](https://github.com/stephenberry/json_performance) shows how simdjson can have poor performance when keys are not in the expected sequence:
 
-| Library                                                      | Roundtrip Time (s) | Write (s) | Read (s) |
-| ------------------------------------------------------------ | ------------------ | --------- | -------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **3.77**           | **691**   | **412**  |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**   | **116**  |
+| Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
+| ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **3.77**           | **691**      | **412**     |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **116**     |
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
