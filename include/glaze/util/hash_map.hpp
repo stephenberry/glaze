@@ -50,12 +50,17 @@ namespace glz
          }
          return false;
       }
+      
+      template <size_t N>
+      constexpr auto naive_bucket_size() noexcept {
+         return N < 8 ? 2 * N : 4 * N;
+      }
 
       template <size_t N, class HashType>
       constexpr HashType naive_perfect_hash(auto&& keys) noexcept
       {
          static_assert(N <= 16);
-         constexpr size_t m = N > 10 ? 3 * N : 2 * N;
+         constexpr size_t m = naive_bucket_size<N>();
          std::array<size_t, N> hashes{};
          std::array<size_t, N> buckets{};
          
@@ -89,7 +94,7 @@ namespace glz
       struct naive_map
       {
          static_assert(N <= 16);
-         static constexpr size_t m = N > 10 ? 3 * N : 2 * N;
+         static constexpr size_t m = naive_bucket_size<N>();
          HashType seed{};
          std::array<std::pair<std::string_view, Value>, N> items{};
          std::array<HashType, N * allow_hash_check> hashes{};
@@ -149,7 +154,7 @@ namespace glz
          static_assert(N <= 16);
          assert(pairs.size() == N);
          naive_map<T, N, HashType, allow_hash_check> ht{};
-         constexpr size_t m = N > 10 ? 3 * N : 2 * N;
+         constexpr size_t m = naive_bucket_size<N>();
 
          std::array<std::string_view, N> keys{};
          size_t i = 0;

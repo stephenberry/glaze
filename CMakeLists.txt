@@ -59,7 +59,7 @@ CPMFindPackage(
    GIT_TAG main # waiting for new release, need latest
 )
 
-CPMFindPackage(
+CPMAddPackage(
    NAME dragonbox
    GIT_REPOSITORY https://github.com/jk-jeon/dragonbox
    GIT_TAG 1.1.3
@@ -68,10 +68,10 @@ CPMFindPackage(
 target_link_libraries(
     glaze_glaze INTERFACE
     fmt::fmt-header-only
+    dragonbox::dragonbox_to_chars
     nanorange::nanorange
     frozen::frozen
     FastFloat::fast_float
-    dragonbox::dragonbox_to_chars
 )
 
 if(NOT CMAKE_SKIP_INSTALL_RULES)
