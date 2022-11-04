@@ -16,7 +16,7 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/json/from_ptr.hpp"
 
-#include "dragonbox/dragonbox_to_chars.h"
+#include "glaze/util/to_chars.hpp"
 
 namespace glz
 {
@@ -86,7 +86,10 @@ namespace glz
             using V = std::decay_t<decltype(value)>;
             if constexpr (std::same_as<V, float> || std::same_as<V, double>) {
                auto start = b.data() + ix;
-               const auto end = jkj::dragonbox::to_chars_n(value, start);
+               //TODO: We should be able to improve this
+               const auto end = glz::dragonbox::to_chars(value, start);
+               // Faster but only scientific notation
+               // const auto end = jkj::dragonbox::to_chars_n(value, start);
                ix += std::distance(start, end);
             }
             else {
