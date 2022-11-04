@@ -483,7 +483,9 @@ namespace glz
          
          auto naive_or_normal_hash = [&]
          {
-            if constexpr (n <= 16) {
+            // these variables needed for MSVC
+            constexpr bool n_16 = n <= 16;
+            if constexpr (n_16) {
                return glz::detail::make_naive_map<value_t, n, uint32_t, allow_hash_check>(
                   {std::make_pair<sv, value_t>(
                      sv(std::get<0>(std::get<I>(meta_v<T>))),
@@ -497,12 +499,15 @@ namespace glz
             }
          };
          
-         if constexpr (n < 3) {
+         // these variables needed for MSVC
+         constexpr bool n_3 = n < 3;
+         constexpr bool n_128 = n < 128;
+         if constexpr (n_3) {
             return make_micro_map<value_t, n>({std::make_pair<sv, value_t>(
                                                                            sv(std::get<0>(std::get<I>(meta_v<T>))),
                                                                            std::get<1>(std::get<I>(meta_v<T>)))...});
          }
-         else if constexpr (n < 128) // don't even attempt a first character hash if we have too many keys
+         else if constexpr (n_128) // don't even attempt a first character hash if we have too many keys
          {
             constexpr auto f1_desc = first_char_hash<n>(std::array<sv, n>{sv{std::get<0>(std::get<I>(meta_v<T>))}...});
             
