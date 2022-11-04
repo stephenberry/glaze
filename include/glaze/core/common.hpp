@@ -480,17 +480,49 @@ namespace glz
       {
          using value_t = value_tuple_variant_t<meta_t<T>>;
          constexpr auto n = std::tuple_size_v<meta_t<T>>;
-         if constexpr (n <= 16) {
-            return glz::detail::make_naive_map<value_t, n, uint32_t, allow_hash_check>(
-               {std::make_pair<std::string_view, value_t>(
-                  std::string_view(std::get<0>(std::get<I>(meta_v<T>))),
-                  std::get<1>(std::get<I>(meta_v<T>)))...});
+         
+         auto naive_or_normal_hash = [&]
+         {
+            // these variables needed for MSVC
+            constexpr bool n_16 = n <= 16;
+            if constexpr (n_16) {
+               return glz::detail::make_naive_map<value_t, n, uint32_t, allow_hash_check>(
+                  {std::make_pair<sv, value_t>(
+                     sv(std::get<0>(std::get<I>(meta_v<T>))),
+                     std::get<1>(std::get<I>(meta_v<T>)))...});
+            }
+            else {
+               return frozen::make_unordered_map<frozen::string, value_t, n>(
+                  {std::make_pair<frozen::string, value_t>(
+                     frozen::string(std::get<0>(std::get<I>(meta_v<T>))),
+                     std::get<1>(std::get<I>(meta_v<T>)))...});
+            }
+         };
+         
+         // these variables needed for MSVC
+         constexpr bool n_3 = n < 3;
+         constexpr bool n_128 = n < 128;
+         if constexpr (n_3) {
+            return make_micro_map<value_t, n>({std::make_pair<sv, value_t>(
+                                                                           sv(std::get<0>(std::get<I>(meta_v<T>))),
+                                                                           std::get<1>(std::get<I>(meta_v<T>)))...});
+         }
+         else if constexpr (n_128) // don't even attempt a first character hash if we have too many keys
+         {
+            constexpr auto f1_desc = first_char_hash<n>(std::array<sv, n>{sv{std::get<0>(std::get<I>(meta_v<T>))}...});
+            
+            if constexpr (f1_desc.valid) {
+               return make_first_char_map<value_t, f1_desc>(
+                                                            {std::make_pair<sv, value_t>(
+                                                                                         sv(std::get<0>(std::get<I>(meta_v<T>))),
+                                                                                         std::get<1>(std::get<I>(meta_v<T>)))...});
+            }
+            else {
+               return naive_or_normal_hash();
+            }
          }
          else {
-            return frozen::make_unordered_map<frozen::string, value_t, n>(
-               {std::make_pair<frozen::string, value_t>(
-                  frozen::string(std::get<0>(std::get<I>(meta_v<T>))),
-                  std::get<1>(std::get<I>(meta_v<T>)))...});
+            return naive_or_normal_hash();
          }
       }
 
