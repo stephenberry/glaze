@@ -176,5 +176,244 @@ namespace glz
 
          return ht;
       }
+      
+      struct first_char_hash_desc
+      {
+         size_t N{};
+         bool valid{};
+         uint8_t min_diff{};
+         uint8_t front{};
+         uint8_t back{};
+      };
+
+      template <size_t N>
+      inline constexpr first_char_hash_desc first_char_hash(const std::array<std::string_view, N>& v) noexcept
+      {
+         if (N > 255) {
+            return {};
+         }
+         
+         std::array<uint8_t, N> hashes;
+         for (size_t i = 0; i < N; ++i) {
+            if (v[i].size() == 0) {
+               return {};
+            }
+            hashes[i] = static_cast<uint8_t>(v[i][0]);
+         }
+         
+         std::sort(hashes.begin(), hashes.end());
+         
+         uint8_t min_diff = std::numeric_limits<uint8_t>::max();
+         for (size_t i = 0; i < N - 1; ++i) {
+            if ((hashes[i + 1] - hashes[i]) < min_diff) {
+               min_diff = hashes[i + 1] - hashes[i];
+            }
+         }
+         
+         return first_char_hash_desc{ N, min_diff > 0, min_diff, hashes.front(), hashes.back() };
+      }
+
+      template <class T, first_char_hash_desc D>
+      struct first_char_map
+      {
+         static constexpr auto N = D.N;
+         static_assert(N < 256);
+         std::array<std::pair<std::string_view, T>, N> items{};
+         static constexpr size_t N_table = D.back - D.front + 1;
+         std::array<uint8_t, N_table> table{};
+         
+         constexpr decltype(auto) begin() const { return items.begin(); }
+         constexpr decltype(auto) end() const { return items.end(); }
+         
+         constexpr decltype(auto) at(auto&& key) const
+         {
+            if (key.size() == 0) {
+               throw std::runtime_error("Invalid key");
+            }
+            const auto k = static_cast<uint8_t>(key[0]) - D.front;
+            if (k > N_table) {
+               throw std::runtime_error("Invalid key");
+            }
+            const auto index = table[k];
+            const auto& item = items[index];
+            if (std::is_constant_evaluated()) {
+               if (item.first != key) [[unlikely]]
+                  throw std::runtime_error("Invalid key");
+            }
+            else {
+               if (!string_cmp(item.first, key)) [[unlikely]]
+                  throw std::runtime_error("Invalid key");
+            }
+            return item.second;
+         }
+         
+         constexpr decltype(auto) find(auto&& key) const
+         {
+            if (key.size() == 0) {
+               return items.end();
+            }
+            const auto k = static_cast<uint8_t>(key[0]) - D.front;
+            if (k > N_table) {
+               return items.end();
+            }
+            const auto index = table[k];
+            const auto& item = items[index];
+            if (std::is_constant_evaluated()) {
+               if (item.first != key) [[unlikely]]
+                  return items.end();
+            }
+            else {
+               if (!string_cmp(item.first, key)) [[unlikely]]
+                  return items.end();
+            }
+            return items.begin() + index;
+         }
+      };
+
+      template <class T, first_char_hash_desc D>
+      constexpr auto make_first_char_map(std::initializer_list<std::pair<std::string_view, T>> pairs)
+      {
+         constexpr auto N = D.N;
+         static_assert(N < 256);
+         assert(pairs.size() == N);
+         first_char_map<T, D> ht{};
+         
+         uint8_t i = 0;
+         for (const auto& pair : pairs) {
+            ht.items[i] = pair;
+            ht.table[static_cast<uint8_t>(pair.first[0]) - D.front] = i;
+            ++i;
+         }
+         
+         return ht;
+      }
+      
+      template <class T, size_t N>
+      struct micro_map {};
+      
+      template <class T>
+      struct micro_map<T, 1>
+      {
+         std::array<std::pair<std::string_view, T>, 1> items{};
+         
+         constexpr decltype(auto) begin() const { return items.begin(); }
+         constexpr decltype(auto) end() const { return items.end(); }
+         
+         constexpr decltype(auto) at(auto&& key) const
+         {
+            if (std::is_constant_evaluated()) {
+               if (items[0].first == key) {
+                  return items[0].second;
+               }
+               else {
+                  throw std::runtime_error("Invalid key");
+               }
+            }
+            else {
+               if (string_cmp(items[0].first, key)) {
+                  return items[0].second;
+               }
+               else {
+                  throw std::runtime_error("Invalid key");
+               }
+            }
+         }
+         
+         constexpr decltype(auto) find(auto&& key) const
+         {
+            if (std::is_constant_evaluated()) {
+               if (items[0].first == key) {
+                  return items.begin();
+               }
+               else {
+                  return items.end();
+               }
+            }
+            else {
+               if (string_cmp(items[0].first, key)) {
+                  return items.begin();
+               }
+               else {
+                  return items.end();
+               }
+            }
+         }
+      };
+      
+      template <class T>
+      struct micro_map<T, 2>
+      {
+         std::array<std::pair<std::string_view, T>, 2> items{};
+         
+         constexpr decltype(auto) begin() const { return items.begin(); }
+         constexpr decltype(auto) end() const { return items.end(); }
+         
+         constexpr decltype(auto) at(auto&& key) const
+         {
+            if (std::is_constant_evaluated()) {
+               if (items[0].first == key) {
+                  return items[0].second;
+               }
+               else if (items[1].first == key) {
+                  return items[1].second;
+               }
+               else {
+                  throw std::runtime_error("Invalid key");
+               }
+            }
+            else {
+               if (string_cmp(items[0].first, key)) {
+                  return items[0].second;
+               }
+               else if (string_cmp(items[1].first, key)) {
+                  return items[1].second;
+               }
+               else {
+                  throw std::runtime_error("Invalid key");
+               }
+            }
+         }
+         
+         constexpr decltype(auto) find(auto&& key) const
+         {
+            if (std::is_constant_evaluated()) {
+               if (items[0].first == key) {
+                  return items.begin();
+               }
+               else if (items[1].first == key) {
+                  return items.begin() + 1;
+               }
+               else {
+                  return items.end();
+               }
+            }
+            else {
+               if (string_cmp(items[0].first, key)) {
+                  return items.begin();
+               }
+               else if (string_cmp(items[1].first, key)) {
+                  return items.begin() + 1;
+               }
+               else {
+                  return items.end();
+               }
+            }
+         }
+      };
+      
+      template <class T, size_t N>
+      constexpr auto make_micro_map(std::initializer_list<std::pair<std::string_view, T>> pairs)
+      {
+         assert(pairs.size() == N);
+         micro_map<T, N> ht{};
+         
+         size_t i = 0;
+         for (const auto& pair : pairs) {
+            ht.items[i] = pair;
+            ++i;
+         }
+         
+         return ht;
+      }
    }
 }
