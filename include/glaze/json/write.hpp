@@ -16,6 +16,8 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/json/from_ptr.hpp"
 
+#include "glaze/util/to_chars.hpp"
+
 namespace glz
 {
    namespace detail
@@ -81,9 +83,20 @@ namespace glz
                b.resize(std::max(b.size() * 2, ix + 64));
             }
             
-            auto start = b.data() + ix;
-            auto end = fmt::format_to(start, FMT_COMPILE("{}"), value);
-            ix += std::distance(start, end);
+            using V = std::decay_t<decltype(value)>;
+            if constexpr (std::same_as<V, float> || std::same_as<V, double>) {
+               auto start = b.data() + ix;
+               //TODO: We should be able to improve this
+               const auto end = glz::dragonbox::to_chars(value, start);
+               // Faster but only scientific notation
+               // const auto end = jkj::dragonbox::to_chars_n(value, start);
+               ix += std::distance(start, end);
+            }
+            else {
+               auto start = b.data() + ix;
+               auto end = fmt::format_to(start, FMT_COMPILE("{}"), value);
+               ix += std::distance(start, end);
+            }
          }
       };
 
