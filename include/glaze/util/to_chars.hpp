@@ -1,12 +1,20 @@
+// Glaze Library
+// For the license information refer to glaze.hpp
+
 #include "dragonbox/dragonbox_to_chars.h"
 #include "fmt/format.h"
 
+#include <concepts>
+
 namespace glz::dragonbox
 {
-   template <class UInt>
-   static constexpr std::uint32_t decimal_length(UInt const v)
+   template <class T>
+   concept Uint = std::same_as<T, uint32_t> || std::same_as<T, uint64_t>;
+   
+   template <Uint T>
+   static constexpr std::uint32_t decimal_length(const T v) noexcept
    {
-      if constexpr (std::is_same_v<UInt, std::uint32_t>) {
+      if constexpr (std::same_as<T, std::uint32_t>) {
          // Function precondition: v is not a 10-digit number.
          // (f2s: 9 digits are sufficient for round-tripping.)
          // (d2fixed: We print 9-digit blocks.)
@@ -38,7 +46,6 @@ namespace glz::dragonbox
          return 1;
       }
       else {
-         static_assert(std::is_same_v<UInt, std::uint64_t>);
          // This is slightly faster than a loop.
          // The average output length is 16.38 digits, so we check high-to-low.
          // Function precondition: v is not an 18, 19, or 20-digit number.
@@ -112,8 +119,8 @@ namespace glz::dragonbox
          if (br.is_nonzero()) {
             auto decimal = to_decimal<V, jkj::dragonbox::default_float_traits<V>>(s, exponent_bits,
                                                                                   jkj::dragonbox::policy::sign::ignore);
-            auto significand = decimal.significand;
-            auto exponent = decimal.exponent;
+            const auto significand = decimal.significand;
+            const auto exponent = decimal.exponent;
 
             if (exponent == 0) {
                return fmt::detail::format_decimal(buffer, significand, decimal_length(significand)).end;
