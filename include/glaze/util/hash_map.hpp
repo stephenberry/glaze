@@ -32,8 +32,8 @@ namespace glz
                h ^= (!std::is_constant_evaluated() && ((reinterpret_cast<std::uintptr_t>(value.data()) & 4095) > 4088))
                        ? ((to_uint64(value.data() - 8 + n, n) >> shift) << shift)
                        : (to_uint64(value.data(), n) << shift);
-               h *= fnv64_prime;
                h ^= h >> 33;
+               h *= fnv64_prime;
                return h;
             }
 
@@ -41,14 +41,14 @@ namespace glz
             const char* end7 = value.data() + n - 7;
             for (; d0 < end7; d0 += 8) {
                h ^= to_uint64(d0);
-               h *= fnv64_prime;
                h ^= h >> 33;
+               h *= fnv64_prime;
             }
 
             const uint64_t nm8 = n - 8;
             h ^= to_uint64(value.data() + nm8);
-            h *= fnv64_prime;
             h ^= h >> 33;
+            h *= fnv64_prime;
             return h;
          }
       };
@@ -58,7 +58,8 @@ namespace glz
       {
          constexpr uint32_t operator()(auto&& value, const uint32_t seed) noexcept
          {
-            return xsm1<uint64_t>{}(value, seed);
+            uint64_t hash = xsm1<uint64_t>{}(value, seed);
+            return hash >> 32;
          }
       };
 
@@ -79,7 +80,7 @@ namespace glz
       template <size_t N, class HashType>
       constexpr HashType naive_perfect_hash(auto&& keys) noexcept
       {
-         static_assert(N <= 16);
+         static_assert(N <= 20);
          constexpr size_t m = naive_bucket_size<N>();
          std::array<size_t, N> hashes{};
          std::array<size_t, N> buckets{};
@@ -113,7 +114,7 @@ namespace glz
       template <class Value, std::size_t N, class HashType, bool allow_hash_check = false>
       struct naive_map
       {
-         static_assert(N <= 16);
+         static_assert(N <= 20);
          static constexpr size_t m = naive_bucket_size<N>();
          HashType seed{};
          std::array<std::pair<std::string_view, Value>, N> items{};
@@ -155,14 +156,8 @@ namespace glz
             }
             else {
                const auto& item = items[index];
-               if (std::is_constant_evaluated()) {
-                  if (item.first != key) [[unlikely]]
-                     return items.end();
-               }
-               else {
-                  if (!string_cmp(item.first, key)) [[unlikely]]
-                     return items.end();
-               }
+               if (!string_cmp(item.first, key)) [[unlikely]]
+                  return items.end();
             }
             return items.begin() + index;
          }
@@ -171,7 +166,7 @@ namespace glz
       template <class T, size_t N, class HashType, bool allow_hash_check = false>
       constexpr auto make_naive_map(std::initializer_list<std::pair<std::string_view, T>> pairs)
       {
-         static_assert(N <= 16);
+         static_assert(N <= 20);
          assert(pairs.size() == N);
          naive_map<T, N, HashType, allow_hash_check> ht{};
          constexpr size_t m = naive_bucket_size<N>();
@@ -256,14 +251,8 @@ namespace glz
             }
             const auto index = table[k];
             const auto& item = items[index];
-            if (std::is_constant_evaluated()) {
-               if (item.first != key) [[unlikely]]
-                  throw std::runtime_error("Invalid key");
-            }
-            else {
-               if (!string_cmp(item.first, key)) [[unlikely]]
-                  throw std::runtime_error("Invalid key");
-            }
+            if (!string_cmp(item.first, key)) [[unlikely]]
+               throw std::runtime_error("Invalid key");
             return item.second;
          }
          
@@ -278,14 +267,8 @@ namespace glz
             }
             const auto index = table[k];
             const auto& item = items[index];
-            if (std::is_constant_evaluated()) {
-               if (item.first != key) [[unlikely]]
-                  return items.end();
-            }
-            else {
-               if (!string_cmp(item.first, key)) [[unlikely]]
-                  return items.end();
-            }
+            if (!string_cmp(item.first, key)) [[unlikely]]
+               return items.end();
             return items.begin() + index;
          }
       };
@@ -321,41 +304,21 @@ namespace glz
          
          constexpr decltype(auto) at(auto&& key) const
          {
-            if (std::is_constant_evaluated()) {
-               if (items[0].first == key) {
-                  return items[0].second;
-               }
-               else {
-                  throw std::runtime_error("Invalid key");
-               }
+            if (string_cmp(items[0].first, key)) {
+               return items[0].second;
             }
             else {
-               if (string_cmp(items[0].first, key)) {
-                  return items[0].second;
-               }
-               else {
-                  throw std::runtime_error("Invalid key");
-               }
+               throw std::runtime_error("Invalid key");
             }
          }
          
          constexpr decltype(auto) find(auto&& key) const
          {
-            if (std::is_constant_evaluated()) {
-               if (items[0].first == key) {
-                  return items.begin();
-               }
-               else {
-                  return items.end();
-               }
+            if (string_cmp(items[0].first, key)) {
+               return items.begin();
             }
             else {
-               if (string_cmp(items[0].first, key)) {
-                  return items.begin();
-               }
-               else {
-                  return items.end();
-               }
+               return items.end();
             }
          }
       };
@@ -370,53 +333,27 @@ namespace glz
          
          constexpr decltype(auto) at(auto&& key) const
          {
-            if (std::is_constant_evaluated()) {
-               if (items[0].first == key) {
-                  return items[0].second;
-               }
-               else if (items[1].first == key) {
-                  return items[1].second;
-               }
-               else {
-                  throw std::runtime_error("Invalid key");
-               }
+            if (string_cmp(items[0].first, key)) {
+               return items[0].second;
+            }
+            else if (string_cmp(items[1].first, key)) {
+               return items[1].second;
             }
             else {
-               if (string_cmp(items[0].first, key)) {
-                  return items[0].second;
-               }
-               else if (string_cmp(items[1].first, key)) {
-                  return items[1].second;
-               }
-               else {
-                  throw std::runtime_error("Invalid key");
-               }
+               throw std::runtime_error("Invalid key");
             }
          }
          
          constexpr decltype(auto) find(auto&& key) const
          {
-            if (std::is_constant_evaluated()) {
-               if (items[0].first == key) {
-                  return items.begin();
-               }
-               else if (items[1].first == key) {
-                  return items.begin() + 1;
-               }
-               else {
-                  return items.end();
-               }
+            if (string_cmp(items[0].first, key)) {
+               return items.begin();
+            }
+            else if (string_cmp(items[1].first, key)) {
+               return items.begin() + 1;
             }
             else {
-               if (string_cmp(items[0].first, key)) {
-                  return items.begin();
-               }
-               else if (string_cmp(items[1].first, key)) {
-                  return items.begin() + 1;
-               }
-               else {
-                  return items.end();
-               }
+               return items.end();
             }
          }
       };
