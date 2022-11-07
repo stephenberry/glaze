@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/util/string_view.hpp"
+#include "glaze/util/for_each.hpp"
 
 #include <tuple>
 
@@ -36,53 +37,30 @@ namespace glz
    
    
    // group builder code
-   template <auto >
-   struct value {
-   };
-
-   template <auto... Vals>
-   struct value_sequence {
-       using index_sequence = std::index_sequence<Vals...>;
-
-       static constexpr auto to_array() {
-           return std::to_array({Vals...});
-       }
-   };
-
-   template <size_t...Is>
-   constexpr auto make_value_sequence(std::index_sequence<Is...>)
+   template <size_t N>
+   constexpr auto shrink_index_array(auto&& arr)
    {
-       return value_sequence<Is...>{};
-   }
-
-   template <auto... As, auto... Bs>
-   constexpr value_sequence<As..., Bs...> operator+(value_sequence<As...>,
-                                                   value_sequence<Bs...> )
-   {
-       return {};
-   }
-
-   template <auto& Tuple, auto Val>
-   constexpr auto filter_single(value<Val>) {
-      using V = std::decay_t<decltype(std::get<Val>(Tuple))>;
-      if constexpr (!std::convertible_to<V, std::string_view>) {
-         static_assert(Val != 0, "member pointer cannot be the first item");
-         return value_sequence<Val - 1>{}; // shift backwards as group starts with the name
+      std::array<size_t, N> res{};
+      for (size_t i = 0; i < N; ++i) {
+         res[i] = arr[i];
       }
-      else {
-         return value_sequence<>{};
-      }
+      return res;
    }
 
-   template <auto& Tuple, auto... Vals>
-   constexpr auto filter(value_sequence<Vals...>) {
-       return (filter_single<Tuple>(value<Vals>{}) + ...);
-   }
-
-   template <auto Val0, auto Val1>
-   constexpr auto difference(value<Val0>, value<Val1>)
-   {
-       return Val1 - Val0;
+   template <class Tuple>
+   constexpr auto filter() {
+      constexpr auto n = std::tuple_size_v<Tuple>;
+      std::array<size_t, n> indices{};
+      size_t i = 0;
+      for_each<n>(
+         [&](auto I) {
+            using V = std::decay_t<std::tuple_element_t<I, Tuple>>;
+            if constexpr (!std::convertible_to<V, std::string_view>) {
+               indices[i++] = I - 1;
+            }
+         }
+      );
+      return std::make_pair(indices, i);
    }
    
    template <class M>
@@ -110,16 +88,15 @@ namespace glz
                        "third element should be a string comment");
    };
 
-   template <size_t TotalSize, auto... Vals>
-   constexpr auto group_sizes(value_sequence<Vals...>) {
-       constexpr auto indices = std::to_array({Vals...});
-       constexpr auto N = sizeof...(Vals);
-       std::array<size_t, N> diffs;
+   template <size_t n_groups>
+   constexpr auto group_sizes(const std::array<size_t, n_groups>& indices, size_t n_total)
+   {
+       std::array<size_t, n_groups> diffs;
        
-       for (size_t i = 0; i < N - 1; ++i) {
+       for (size_t i = 0; i < n_groups - 1; ++i) {
            diffs[i] = indices[i + 1] - indices[i];
        }
-       diffs[N - 1] = TotalSize - indices[N - 1];
+       diffs[n_groups - 1] = n_total - indices[n_groups - 1];
        return diffs;
    }
 
@@ -137,16 +114,14 @@ namespace glz
        return std::make_tuple(make_group<std::get<GroupNumber>(GroupStartArr)>(t, std::make_index_sequence<std::get<GroupNumber>(GroupSizeArr)>{})...);
    }
 
-   template <auto& Tuple>
+   template <class Tuple>
    constexpr auto make_groups_helper()
    {
-       constexpr auto N = std::tuple_size_v<std::decay_t<decltype(Tuple)>>;
+       constexpr auto N = std::tuple_size_v<Tuple>;
 
-       constexpr auto filtered = filter<Tuple>(
-       make_value_sequence(std::make_index_sequence<N>()));
-
-       constexpr auto sizes = group_sizes<N>(filtered);
-       constexpr auto starts = filtered.to_array();
+       constexpr auto filtered = filter<Tuple>();
+       constexpr auto starts = shrink_index_array<filtered.second>(filtered.first);
+       constexpr auto sizes = group_sizes(starts, N);
 
        return std::tuple{ starts, sizes };
    }
@@ -154,8 +129,7 @@ namespace glz
    template <class Tuple>
    struct group_builder
    {
-      static constexpr auto default_tuple = Tuple{};
-      static constexpr auto h = make_groups_helper<default_tuple>();
+      static constexpr auto h = make_groups_helper<Tuple>();
       static constexpr auto starts = std::get<0>(h);
       static constexpr auto sizes = std::get<1>(h);
 
