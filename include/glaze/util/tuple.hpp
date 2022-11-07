@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "glaze/util/string_view.hpp"
+
 #include <tuple>
 
 namespace glz
@@ -82,6 +84,31 @@ namespace glz
    {
        return Val1 - Val0;
    }
+   
+   template <class M>
+   inline constexpr void check_member()
+   {
+      constexpr auto N = std::tuple_size_v<M>;
+      
+      static_assert(N == 0 || N > 1,
+                    "members need at least a name and a member pointer");
+      static_assert(N < 4,
+         "only member_ptr (or enum, or lambda), name, and comment are supported at the momment");
+      
+      
+      if constexpr (N > 0)
+         static_assert(sv_convertible<std::tuple_element_t<0, M>>,
+                       "first element should be the name");
+      /*if constexpr (N > 1) {
+       TODO: maybe someday add better error messaging that handles lambdas
+         using E = std::tuple_element_t<1, M>;
+         static_assert(std::is_member_pointer_v<E> || std::is_enum_v<E>>,
+                       "second element should be the member pointer");
+      }*/
+      if constexpr (N > 2)
+         static_assert(sv_convertible<std::tuple_element_t<2, M>>,
+                       "third element should be a string comment");
+   };
 
    template <size_t TotalSize, auto... Vals>
    constexpr auto group_sizes(value_sequence<Vals...>) {
@@ -99,7 +126,9 @@ namespace glz
    template <size_t Start, class Tuple, size_t... Is>
    constexpr auto make_group(Tuple&& t, std::index_sequence<Is...>)
    {
-       return std::make_tuple(std::get<Start + Is>(t)...);
+      auto r = std::make_tuple(std::get<Start + Is>(t)...);
+      check_member<decltype(r)>();
+      return r;
    }
 
    template <auto& GroupStartArr, auto& GroupSizeArr, class Tuple, size_t... GroupNumber>

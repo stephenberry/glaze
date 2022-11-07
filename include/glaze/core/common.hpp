@@ -456,25 +456,6 @@ namespace glz
          return runtime_getter[index](t);
       }
 
-      template <class M>
-      inline constexpr void check_member()
-      {
-         static_assert(std::tuple_size_v<M> == 0 || std::tuple_size_v<M> > 1,
-                       "members need at least a name and a member pointer");
-         static_assert(
-            std::tuple_size_v<M> < 4,
-            "only member_ptr, name, and comment are supported at the momment");
-         if constexpr (std::tuple_size_v < M >> 0)
-            static_assert(str_t<std::tuple_element_t<0, M>>,
-                          "first element should be the name");
-         if constexpr (std::tuple_size_v < M >> 1)
-            static_assert(std::is_member_pointer_v<std::tuple_element_t<1, M>>,
-                          "second element should be the member pointer");
-         if constexpr (std::tuple_size_v < M >> 2)
-            static_assert(str_t<std::tuple_element_t<2, M>>,
-                          "third element should be a string comment");
-      };
-
       template <class T, bool allow_hash_check, size_t... I>
       constexpr auto make_map_impl(std::index_sequence<I...>)
       {
