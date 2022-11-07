@@ -49,7 +49,7 @@ namespace glz
          }
          else {
             const auto shift = 64 - 8 * n;
-            return (to_uint64(s0.data()) << shift) == (to_uint64(s1.data()) << shift);
+            return (to_uint64(s0.data(), n) << shift) == (to_uint64(s1.data(), n) << shift);
          }
       }
 
