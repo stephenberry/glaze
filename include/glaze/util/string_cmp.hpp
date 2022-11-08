@@ -45,7 +45,7 @@ namespace glz
             [[unlikely]] {
             // Buffer over-read may cross page boundary
             // There are faster things we could do here but this branch is unlikely
-            return std::memcmp(s0.data(), s1.data(), n);
+            return std::memcmp(s0.data(), s1.data(), n) == 0;
          }
          else {
             const auto shift = 64 - 8 * n;
