@@ -338,7 +338,7 @@ namespace glz
       } && !glaze_t<T>;
 
       template <class... T>
-      constexpr bool all_member_ptr(std::tuple<T...>)
+      constexpr bool all_member_ptr(glz::tuplet::tuple<T...>)
       {
          return std::conjunction_v<std::is_member_pointer<std::decay_t<T>>...>;
       }
@@ -393,14 +393,14 @@ namespace glz
       struct tuple_variant;
 
       template <class... Ts>
-      struct tuple_variant<std::tuple<Ts...>> : unique<std::variant<>, Ts...>
+      struct tuple_variant<glz::tuplet::tuple<Ts...>> : unique<std::variant<>, Ts...>
       {};
 
       template <class T>
       struct tuple_ptr_variant;
 
       template <class... Ts>
-      struct tuple_ptr_variant<std::tuple<Ts...>>
+      struct tuple_ptr_variant<glz::tuplet::tuple<Ts...>>
          : unique<std::variant<>, std::add_pointer_t<Ts>...>
       {};
 
@@ -412,7 +412,7 @@ namespace glz
       struct value_tuple_variant<Tuple, std::index_sequence<I...>>
       {
          using type = typename tuple_variant<decltype(std::tuple_cat(
-            std::declval<std::tuple<std::tuple_element_t<
+            std::declval<glz::tuplet::tuple<std::tuple_element_t<
                1, std::tuple_element_t<I, Tuple>>>>()...))>::type;
       };
 
@@ -639,10 +639,10 @@ namespace glz
       template <class T, size_t... I>
       inline constexpr auto members_from_meta_impl() {
          if constexpr (std::is_enum_v<std::decay_t<T>>) {
-            return std::tuple{};
+            return glz::tuplet::tuple{};
          }
          else {
-            return std::tuple<
+            return glz::tuplet::tuple<
             std::decay_t<member_check_t<T, std::tuple_element_t<
                               1, std::tuple_element_t<I, meta_t<T>>>>>...>{};
          }
@@ -660,23 +660,23 @@ namespace glz
 
    constexpr auto array(auto&&... args)
    {
-      return detail::Array{ std::make_tuple(args...) };
+      return detail::Array{ glz::tuplet::make_tuple(args...) };
    }
 
    constexpr auto object(auto&&... args)
    {
       if constexpr (sizeof...(args) == 0) {
-         return detail::Object{ std::make_tuple() };
+         return detail::Object{ glz::tuplet::make_tuple() };
       }
       else {
-         return detail::Object{ group_builder<std::decay_t<decltype(std::make_tuple(args...))>>::op(std::make_tuple(args...)) };
+         return detail::Object{ group_builder<std::decay_t<decltype(glz::tuplet::make_tuple(args...))>>::op(glz::tuplet::make_tuple(args...)) };
       }
    }
 
    constexpr auto enumerate(auto &&...args)
    {
       return detail::Enum{
-         group_builder<std::decay_t<decltype(std::make_tuple(args...))>>::op(
-            std::make_tuple(args...))};
+         group_builder<std::decay_t<decltype(glz::tuplet::make_tuple(args...))>>::op(
+                                                                                     glz::tuplet::make_tuple(args...))};
    }
 }  // namespace glaze
