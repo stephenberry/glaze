@@ -32,38 +32,39 @@ namespace glz
    // Gets better perf then memcmp on small strings like keys but worse perf on longer strings (>40 or so)
    constexpr bool string_cmp(auto &&s0, auto &&s1) noexcept
    {
-      const auto n = s0.size();
-      if (s1.size() != n) {
-         return false;
-      }
+      return (s0 == s1);
+      //const auto n = s0.size();
+      //if (s1.size() != n) {
+      //   return false;
+      //}
 
-      if (n < 8) {
-         // TODO add option to skip page checks when we know they are not needed like the compile time known keys or
-         // stringviews in the middle of the buffer
-         if (!std::is_constant_evaluated() && (((reinterpret_cast<std::uintptr_t>(s0.data()) & 4095) > 4088) ||
-                                               ((reinterpret_cast<std::uintptr_t>(s1.data()) & 4095) > 4088)))
-            [[unlikely]] {
-            // Buffer over-read may cross page boundary
-            // There are faster things we could do here but this branch is unlikely
-            return std::memcmp(s0.data(), s1.data(), n);
-         }
-         else {
-            const auto shift = 64 - 8 * n;
-            return (to_uint64(s0.data(), n) << shift) == (to_uint64(s1.data(), n) << shift);
-         }
-      }
+      //if (n < 8) {
+      //   // TODO add option to skip page checks when we know they are not needed like the compile time known keys or
+      //   // stringviews in the middle of the buffer
+      //   if (!std::is_constant_evaluated() && (((reinterpret_cast<std::uintptr_t>(s0.data()) & 4095) > 4088) ||
+      //                                         ((reinterpret_cast<std::uintptr_t>(s1.data()) & 4095) > 4088)))
+      //      [[unlikely]] {
+      //      // Buffer over-read may cross page boundary
+      //      // There are faster things we could do here but this branch is unlikely
+      //      return std::memcmp(s0.data(), s1.data(), n);
+      //   }
+      //   else {
+      //      const auto shift = 64 - 8 * n;
+      //      return (to_uint64(s0.data(), n) << shift) == (to_uint64(s1.data(), n) << shift);
+      //   }
+      //}
 
-      const char *b0 = s0.data();
-      const char *b1 = s1.data();
-      const char *end7 = s0.data() + n - 7;
+      //const char *b0 = s0.data();
+      //const char *b1 = s1.data();
+      //const char *end7 = s0.data() + n - 7;
 
-      for (; b0 < end7; b0 += 8, b1 += 8) {
-         if (to_uint64(b0) != to_uint64(b1)) {
-            return false;
-         }
-      }
+      //for (; b0 < end7; b0 += 8, b1 += 8) {
+      //   if (to_uint64(b0) != to_uint64(b1)) {
+      //      return false;
+      //   }
+      //}
 
-      const uint64_t nm8 = n - 8;
-      return (to_uint64(s0.data() + nm8) == to_uint64(s1.data() + nm8));
+      //const uint64_t nm8 = n - 8;
+      //return (to_uint64(s0.data() + nm8) == to_uint64(s1.data() + nm8));
    }
 }
