@@ -106,7 +106,7 @@ namespace glz
             if (index == N) return seed;
          }
 
-         return std::numeric_limits<size_t>::max();
+         return std::numeric_limits<HashType>::max();
       }
 
       inline bool sv_neq(const std::string_view s0, const std::string_view s1) noexcept { return s0 != s1; }
