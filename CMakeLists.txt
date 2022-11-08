@@ -56,7 +56,7 @@ CPMFindPackage(
 CPMFindPackage(
    NAME FastFloat
    GIT_REPOSITORY https://github.com/fastfloat/fast_float.git
-   GIT_TAG main # waiting for new release, need latest
+   GIT_TAG v3.6.0
 )
 
 CPMAddPackage(
