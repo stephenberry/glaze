@@ -16,7 +16,7 @@
 namespace glz
 {
    namespace detail
-   {      
+   {
       template <class T = void>
       struct to_binary {};
 
@@ -29,7 +29,7 @@ namespace glz
             return to_binary<std::decay_t<T>>::template op<Opts>(
                std::forward<T>(value), std::forward<B>(b));
          }
-         
+
          template <auto Opts, class T, class B, class IX>
          static auto op(T&& value, B&& b, IX&& ix)
          {
@@ -37,7 +37,7 @@ namespace glz
                std::forward<T>(value), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
-      
+
       template <class T>
       requires (std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> || std::same_as<T, std::vector<bool>::const_reference>)
       struct to_binary<T> final
@@ -61,13 +61,13 @@ namespace glz
          static auto op(auto&& /*value*/, Args&&... args) noexcept
          { return error{}; }
       };
-      
+
       template <class... Args>
       auto dump_type(auto&& value, Args&&... args) noexcept
       {
          return dump(std::as_bytes(std::span{ &value, 1 }), std::forward<Args>(args)...);
       }
-      
+
       template <uint64_t i, class... Args>
       [[nodiscard]] auto dump_int(Args&&... args) noexcept
       {
@@ -92,7 +92,7 @@ namespace glz
                           "size not supported");
          }
       }
-      
+
       template <auto Opts, class... Args>
       [[nodiscard]] auto dump_int(size_t i, Args&&... args) noexcept(Opts.no_except)
       {
@@ -117,7 +117,7 @@ namespace glz
             }
          }
       }
-      
+
       template <class T>
       requires num_t<T> || char_t<T> || glaze_enum_t<T>
       struct to_binary<T> final
@@ -128,7 +128,7 @@ namespace glz
             return dump_type(value, std::forward<Args>(args)...);
          }
       };
-      
+
       template <str_t T>
       struct to_binary<T> final
       {
@@ -139,7 +139,7 @@ namespace glz
             dump(std::as_bytes(std::span{ value.data(), value.size() }), std::forward<Args>(args)...);
          }
       };
-      
+
       template <array_t T>
       struct to_binary<T> final
       {
@@ -154,7 +154,7 @@ namespace glz
             }
          }
       };
-      
+
       template <map_t T>
       struct to_binary<T> final
       {
@@ -168,7 +168,7 @@ namespace glz
             }
          }
       };
-      
+
       template <nullable_t T>
       struct to_binary<T> final
       {
@@ -184,7 +184,7 @@ namespace glz
             }
          }
       };
-      
+
       template <class T>
       requires glaze_object_t<T>
       struct to_binary<T> final
@@ -195,7 +195,7 @@ namespace glz
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
             dump_int<N>(std::forward<Args>(args)...); // even though N is known at compile time in this case, it is not known for partial cases, so we still use a compressed integer
-            
+
             for_each<N>([&](auto I) {
                static constexpr auto item = std::get<I>(meta_v<V>);
                dump_int<Opts>(I, std::forward<Args>(args)...); // dump the known key as an integer
@@ -224,19 +224,19 @@ namespace glz
          }
       };
    }
-   
+
    template <class T, class Buffer>
    inline auto write_binary(T&& value, Buffer&& buffer) {
       return write<opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
-   
+
    template <class T>
    inline auto write_binary(T&& value) {
       std::string buffer{};
       write<opts{.format = binary}>(std::forward<T>(value), buffer);
       return buffer;
    }
-   
+
    template <auto& Partial, opts Opts, class T, class Buffer>
    requires nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char))
    inline auto write(T&& value, Buffer& buffer) noexcept
@@ -260,10 +260,9 @@ namespace glz
          if constexpr (detail::glaze_object_t<std::decay_t<T>>) {
             static constexpr auto key_to_int = detail::make_key_int_map<T>();
             glz::for_each<N>([&](auto I) {
-               using index_t = decltype(I);
-               static constexpr auto group = []() {
-                  return std::get<index_t::value>(groups);
-               }();  // MSVC internal compiler error workaround
+               static constexpr auto group = [](auto I) {
+                  return std::get<decltype(I)::value>(groups);
+               }(I);  // MSVC internal compiler error workaround
                static constexpr auto key = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
                static constexpr auto frozen_map = detail::make_map<T>();
@@ -299,12 +298,12 @@ namespace glz
                else {
                   throw std::runtime_error(
                      "Invalid key for map when writing out partial message");
-               }      
+               }
             });
          }
       }
    }
-   
+
    template <auto& Partial, class T, class Buffer>
    inline auto write_binary(T&& value, Buffer&& buffer) {
       return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
