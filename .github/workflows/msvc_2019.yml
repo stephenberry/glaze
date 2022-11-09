@@ -1,4 +1,4 @@
-name: msvc
+name: msvc_2019
 
 on:
   push:
