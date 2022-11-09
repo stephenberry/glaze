@@ -276,10 +276,10 @@ namespace glz
 
                detail::dump_int<Opts>(key_to_int.find(key)->second, buffer);
                if constexpr (std::is_member_pointer_v<std::decay_t<decltype(member_ptr)>>) {
-                  //write<sub_partial, Opts>(value.*member_ptr, buffer);
+                  write<sub_partial, Opts>(value.*member_ptr, buffer);
                }
                else {
-                  //write<sub_partial, Opts>(member_ptr(value), buffer);
+                  write<sub_partial, Opts>(member_ptr(value), buffer);
                }
             });
          }
