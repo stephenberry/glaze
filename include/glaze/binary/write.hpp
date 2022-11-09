@@ -260,9 +260,11 @@ namespace glz
          if constexpr (detail::glaze_object_t<std::decay_t<T>>) {
             static constexpr auto key_to_int = detail::make_key_int_map<T>();
             glz::for_each<N>([&](auto I) {
-               static constexpr auto group = [I]() {
-                  return std::get<decltype(I)::value>(groups);
-               }();  // MSVC internal compiler error workaround
+               using index_t = decltype(I);
+               using group_t = std::tuple_element_t<I, decltype(groups)>;
+               static constexpr auto group = [](index_t Index) constexpr -> group_t {
+                  return std::get<Index>(groups);
+               }({}); // MSVC internal compiler error workaround
                static constexpr auto key = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
                static constexpr auto frozen_map = detail::make_map<T>();
@@ -274,16 +276,16 @@ namespace glz
 
                detail::dump_int<Opts>(key_to_int.find(key)->second, buffer);
                if constexpr (std::is_member_pointer_v<std::decay_t<decltype(member_ptr)>>) {
-                  write<sub_partial, Opts>(value.*member_ptr, buffer);
+                  //write<sub_partial, Opts>(value.*member_ptr, buffer);
                }
                else {
-                  write<sub_partial, Opts>(member_ptr(value), buffer);
+                  //write<sub_partial, Opts>(member_ptr(value), buffer);
                }
             });
          }
          else if constexpr (detail::map_t<std::decay_t<T>>) {
             glz::for_each<N>([&](auto I) {
-               static constexpr auto group = [I]() {
+               static constexpr auto group = []() {
                   return std::get<decltype(I)::value>(groups);
                }();  // MSVC internal compiler error workaround
                static constexpr auto key_value = std::get<0>(group);
