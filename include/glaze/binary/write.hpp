@@ -260,8 +260,9 @@ namespace glz
          if constexpr (detail::glaze_object_t<std::decay_t<T>>) {
             static constexpr auto key_to_int = detail::make_key_int_map<T>();
             glz::for_each<N>([&](auto I) {
+               using index_t = decltype(I);
                static constexpr auto group = []() {
-                  return std::get<decltype(I)::value>(groups);
+                  return std::get<index_t::value>(groups);
                }();  // MSVC internal compiler error workaround
                static constexpr auto key = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
