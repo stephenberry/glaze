@@ -212,11 +212,12 @@ namespace glz {
             return *this;
          }
          
-         template <assignable_to<T>... U>
+         // TODO: currently segfaults clang
+         /*template <assignable_to<T>... U>
          constexpr auto& assign(U&&... values) {
             assign_impl(base_list(), static_cast<U&&>(values)...);
             return *this;
-         }
+         }*/
          
          auto operator<=>(tuple const&) const = default;
          bool operator==(tuple const&) const = default;
