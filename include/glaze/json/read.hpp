@@ -416,7 +416,7 @@ namespace glz
             
             // growing
             if constexpr (emplace_backable<T>) {
-               for (size_t i = 0; it < end; ++i) {
+               while (it < end) {
                   read<json>::op<ws_handled<Opts>()>(value.emplace_back(), it, end);
                   skip_ws(it, end);
                   if (*it == ',') [[likely]] {

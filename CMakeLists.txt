@@ -17,6 +17,8 @@ add_library(glaze::glaze ALIAS glaze_glaze)
 if (MSVC)
    # for a C++ standards compliant preprocessor:
    target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor")
+else()
+   target_compile_options(glaze_glaze INTERFACE "-Wno-missing-braces")
 endif()
 
 set_property(TARGET glaze_glaze PROPERTY EXPORT_NAME glaze)

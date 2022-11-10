@@ -58,7 +58,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         static auto op(auto&& /*value*/, Args&&... args) noexcept
+         static auto op(auto&& /*value*/, Args&&...) noexcept
          { return error{}; }
       };
       
