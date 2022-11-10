@@ -470,24 +470,6 @@ namespace glz
          using value_t = value_tuple_variant_t<meta_t<T>>;
          constexpr auto n = std::tuple_size_v<meta_t<T>>;
          
-         auto naive_or_normal_hash = [&]
-         {
-            // these variables needed for MSVC
-            constexpr bool n_20 = n <= 20;
-            if constexpr (n_20) {
-               return glz::detail::make_naive_map<value_t, n, uint32_t, allow_hash_check>(
-                  {std::make_pair<sv, value_t>(
-                     sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                               glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
-            }
-            else {
-               return frozen::make_unordered_map<frozen::string, value_t, n>(
-                  {std::make_pair<frozen::string, value_t>(
-                     frozen::string(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                                           glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
-            }
-         };
-         
          // these variables needed for MSVC
          constexpr bool n_3 = n < 3;
          constexpr bool n_128 = n < 128;
@@ -507,11 +489,37 @@ namespace glz
                                                                                          glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
             }
             else {
-               return naive_or_normal_hash();
+               // these variables needed for MSVC
+               constexpr bool n_20 = n <= 20;
+               if constexpr (n_20) {
+                  return glz::detail::make_naive_map<value_t, n, uint32_t, allow_hash_check>(
+                     {std::make_pair<sv, value_t>(
+                        sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                                  glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
+               }
+               else {
+                  return frozen::make_unordered_map<frozen::string, value_t, n>(
+                     {std::make_pair<frozen::string, value_t>(
+                        frozen::string(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                                              glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
+               }
             }
          }
          else {
-            return naive_or_normal_hash();
+            // these variables needed for MSVC
+            constexpr bool n_20 = n <= 20;
+            if constexpr (n_20) {
+               return glz::detail::make_naive_map<value_t, n, uint32_t, allow_hash_check>(
+                  {std::make_pair<sv, value_t>(
+                     sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                               glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
+            }
+            else {
+               return frozen::make_unordered_map<frozen::string, value_t, n>(
+                  {std::make_pair<frozen::string, value_t>(
+                     frozen::string(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                                           glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
+            }
          }
       }
 
