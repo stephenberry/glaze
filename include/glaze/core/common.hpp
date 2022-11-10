@@ -538,10 +538,11 @@ namespace glz
       template <class T, size_t... I>
       constexpr auto make_key_int_map_impl(std::index_sequence<I...>)
       {
+         using namespace glz::tuplet;
          return frozen::make_unordered_map<frozen::string, size_t,
                                            std::tuple_size_v<meta_t<T>>>(
             {std::make_pair<frozen::string, size_t>(
-               frozen::string(std::get<0>(std::get<I>(meta_v<T>))),
+               frozen::string(get<0>(get<I>(meta_v<T>))),
                                                     I)...});
       }
       
@@ -556,12 +557,14 @@ namespace glz
       template <class T, size_t... I>
       constexpr auto make_enum_to_string_map_impl(std::index_sequence<I...>)
       {
+         using namespace glz::tuplet;
+
          using key_t = std::underlying_type_t<T>;
          return frozen::make_unordered_map<key_t, frozen::string,
                                            std::tuple_size_v<meta_t<T>>>(
             {std::make_pair<key_t, frozen::string>(
-               static_cast<key_t>(std::get<1>(std::get<I>(meta_v<T>))),
-               frozen::string(std::get<0>(std::get<I>(meta_v<T>))))...});
+               static_cast<key_t>(get<1>(get<I>(meta_v<T>))),
+               frozen::string(get<0>(get<I>(meta_v<T>))))...});
       }
 
       template <class T>
@@ -575,11 +578,12 @@ namespace glz
       template <class T, size_t... I>
       constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>)
       {
+         using namespace glz::tuplet;
          return frozen::make_unordered_map<frozen::string, T,
                                            std::tuple_size_v<meta_t<T>>>(
             {std::make_pair<frozen::string, T>(
-               frozen::string(std::get<0>(std::get<I>(meta_v<T>))),
-               T(std::get<1>(std::get<I>(meta_v<T>))))...});
+               frozen::string(get<0>(get<I>(meta_v<T>))),
+               T(get<1>(get<I>(meta_v<T>))))...});
       }
 
       template <class T>
@@ -669,18 +673,19 @@ namespace glz
 
    constexpr auto object(auto&&... args)
    {
+      using namespace glz::tuplet;
       if constexpr (sizeof...(args) == 0) {
-         return detail::Object{ glz::tuplet::make_tuple() };
+         return detail::Object{ make_tuple() };
       }
       else {
-         return detail::Object{ group_builder<std::decay_t<decltype(glz::tuplet::make_tuple(args...))>>::op(glz::tuplet::make_tuple(args...)) };
+         return detail::Object{ group_builder<std::decay_t<decltype(make_tuple(args...))>>::op(make_tuple(args...)) };
       }
    }
 
-   constexpr auto enumerate(auto &&...args)
+   constexpr auto enumerate(auto&&... args)
    {
+      using namespace glz::tuplet;
       return detail::Enum{
-         group_builder<std::decay_t<decltype(glz::tuplet::make_tuple(args...))>>::op(
-                                                                                     glz::tuplet::make_tuple(args...))};
+         group_builder<std::decay_t<decltype(make_tuple(args...))>>::op(make_tuple(args...))};
    }
 }  // namespace glaze
