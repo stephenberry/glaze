@@ -442,7 +442,12 @@ namespace glz
          using getter_t = value_t (*)(tuple_ref);
          return std::array<getter_t, std::tuple_size_v<Tuple>>{
             +[](tuple_ref t) -> value_t {
+            if constexpr (is_std_tuple<Tuple>) {
                return &std::get<Is>(t);
+            }
+            else {
+               return &glz::tuplet::get<Is>(t);
+            }
             }...};
       }
 
