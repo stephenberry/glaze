@@ -115,7 +115,7 @@ namespace glz
             return std::string_view(glz::tuplet::get<Start + I>(t));
          }
       };
-      auto r = glz::tuplet::tuple{get_elem(std::integral_constant<size_t, Is>{})...};
+      auto r = glz::tuplet::make_tuple(get_elem(std::integral_constant<size_t, Is>{})...);
       //check_member<decltype(r)>();
       return r;
    }
@@ -123,8 +123,8 @@ namespace glz
    template <auto& GroupStartArr, auto& GroupSizeArr, class Tuple, size_t... GroupNumber>
    constexpr auto make_groups_impl(Tuple&& t, std::index_sequence<GroupNumber...>)
    {
-      return glz::tuplet::tuple{ make_group<get<GroupNumber>(GroupStartArr)>(
-                                                                             t, std::make_index_sequence<std::get<GroupNumber>(GroupSizeArr)>{})... };
+      return glz::tuplet::make_tuple(make_group<get<GroupNumber>(GroupStartArr)>(
+                                                                             t, std::make_index_sequence<std::get<GroupNumber>(GroupSizeArr)>{})...);
    }
 
    template <class Tuple>

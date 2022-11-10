@@ -668,7 +668,7 @@ namespace glz
 
    constexpr auto array(auto&&... args)
    {
-      return detail::Array{ glz::tuplet::tuple{ args... } };
+      return detail::Array{ glz::tuplet::make_tuple(args...) };
    }
 
    constexpr auto object(auto&&... args)
@@ -677,13 +677,13 @@ namespace glz
          return glz::detail::Object{ glz::tuplet::tuple{} };
       }
       else {
-         return glz::detail::Object{ group_builder<std::decay_t<decltype(glz::tuplet::tuple{ args... })>>::op(glz::tuplet::make_tuple(args...)) };
+         return glz::detail::Object{ group_builder<std::decay_t<decltype(glz::tuplet::make_tuple(args...))>>::op(glz::tuplet::make_tuple(args...)) };
       }
    }
 
    constexpr auto enumerate(auto&&... args)
    {
       return glz::detail::Enum{
-         group_builder<std::decay_t<decltype(glz::tuplet::tuple{ args... })>>::op(glz::tuplet::tuple{ args... })};
+         group_builder<std::decay_t<decltype(glz::tuplet::make_tuple(args...))>>::op(glz::tuplet::make_tuple(args...))};
    }
 }  // namespace glaze
