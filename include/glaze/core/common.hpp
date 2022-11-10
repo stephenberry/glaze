@@ -467,8 +467,6 @@ namespace glz
       template <class T, bool allow_hash_check, size_t... I>
       constexpr auto make_map_impl(std::index_sequence<I...>)
       {
-         using namespace glz::tuplet;
-
          using value_t = value_tuple_variant_t<meta_t<T>>;
          constexpr auto n = std::tuple_size_v<meta_t<T>>;
          
@@ -479,14 +477,14 @@ namespace glz
             if constexpr (n_20) {
                return glz::detail::make_naive_map<value_t, n, uint32_t, allow_hash_check>(
                   {std::make_pair<sv, value_t>(
-                     sv(get<0>(get<I>(meta_v<T>))),
-                     get<1>(get<I>(meta_v<T>)))...});
+                     sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                               glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
             }
             else {
                return frozen::make_unordered_map<frozen::string, value_t, n>(
                   {std::make_pair<frozen::string, value_t>(
-                     frozen::string(get<0>(get<I>(meta_v<T>))),
-                     get<1>(get<I>(meta_v<T>)))...});
+                     frozen::string(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                                           glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
             }
          };
          
@@ -495,20 +493,20 @@ namespace glz
          constexpr bool n_128 = n < 128;
          if constexpr (n_3) {
             return make_micro_map<value_t, n>({std::make_pair<sv, value_t>(
-                                                                           sv(get<0>(get<I>(meta_v<T>))),
-                                                                           get<1>(get<I>(meta_v<T>)))...});
+                                                                           sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                                                           glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
          }
          else if constexpr (n_128) // don't even attempt a first character hash if we have too many keys
          {
-            /*constexpr auto f1_desc = first_char_hash<n>(std::array<sv, n>{sv{get<0>(get<I>(meta_v<T>))}...});
+            constexpr auto f1_desc = first_char_hash<n>(std::array<sv, n>{sv{get<0>(get<I>(meta_v<T>))}...});
             
             if constexpr (f1_desc.valid) {
                return make_first_char_map<value_t, f1_desc>(
                                                             {std::make_pair<sv, value_t>(
-                                                                                         sv(get<0>(get<I>(meta_v<T>))),
-                                                                                         get<1>(get<I>(meta_v<T>)))...});
+                                                                                         sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                                                                         glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
             }
-            else*/ {
+            else {
                return naive_or_normal_hash();
             }
          }
@@ -528,10 +526,9 @@ namespace glz
       template <class T, size_t... I>
       constexpr auto make_int_storage_impl(std::index_sequence<I...>)
       {
-         using namespace glz::tuplet;
          using value_t = value_tuple_variant_t<meta_t<T>>;
          return std::array<value_t, std::tuple_size_v<meta_t<T>>>(
-            {get<1>(get<I>(meta_v<T>))...});
+            {glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))...});
       }
       
       template <class T>
@@ -545,11 +542,10 @@ namespace glz
       template <class T, size_t... I>
       constexpr auto make_key_int_map_impl(std::index_sequence<I...>)
       {
-         using namespace glz::tuplet;
          return frozen::make_unordered_map<frozen::string, size_t,
                                            std::tuple_size_v<meta_t<T>>>(
             {std::make_pair<frozen::string, size_t>(
-               frozen::string(get<0>(get<I>(meta_v<T>))),
+               frozen::string(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
                                                     I)...});
       }
       
@@ -564,14 +560,12 @@ namespace glz
       template <class T, size_t... I>
       constexpr auto make_enum_to_string_map_impl(std::index_sequence<I...>)
       {
-         using namespace glz::tuplet;
-
          using key_t = std::underlying_type_t<T>;
          return frozen::make_unordered_map<key_t, frozen::string,
                                            std::tuple_size_v<meta_t<T>>>(
             {std::make_pair<key_t, frozen::string>(
-               static_cast<key_t>(get<1>(get<I>(meta_v<T>))),
-               frozen::string(get<0>(get<I>(meta_v<T>))))...});
+               static_cast<key_t>(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))),
+               frozen::string(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))))...});
       }
 
       template <class T>
@@ -585,12 +579,11 @@ namespace glz
       template <class T, size_t... I>
       constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>)
       {
-         using namespace glz::tuplet;
          return frozen::make_unordered_map<frozen::string, T,
                                            std::tuple_size_v<meta_t<T>>>(
             {std::make_pair<frozen::string, T>(
-               frozen::string(get<0>(get<I>(meta_v<T>))),
-               T(get<1>(get<I>(meta_v<T>))))...});
+               frozen::string(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+               T(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))))...});
       }
 
       template <class T>
