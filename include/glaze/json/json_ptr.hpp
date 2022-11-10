@@ -408,6 +408,8 @@ namespace glz
    //TODO support custom types
    template <class Root_t, detail::string_literal ptr, class Expected_t = void>
    constexpr bool valid() {
+      using namespace glz::tuplet;
+
       using V = std::decay_t<Root_t>;
       if constexpr (ptr.sv() == sv{""}) {
          return std::same_as<Expected_t, void> ||
@@ -423,7 +425,7 @@ namespace glz
             if constexpr (G::member_it != G::frozen_map.end()) {
                constexpr auto& element = G::member_it->second;
                constexpr auto I = element.index();
-               constexpr auto& member_ptr = std::get<I>(element);
+               constexpr auto& member_ptr = get<I>(element);
                using mptr_t = std::decay_t<decltype(member_ptr)>;
                if constexpr (std::is_member_pointer_v<mptr_t>) {
                   using sub_t = decltype(std::declval<V>().*member_ptr);
