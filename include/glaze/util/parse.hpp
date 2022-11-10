@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <bit>
+
 namespace glz::detail
 {
    template <char c>
