@@ -571,6 +571,12 @@ namespace glz {
          return tuple<unwrap_ref_decay_t<Ts>...> {static_cast<Ts&&>(args)...};
       }
       
+      // TODO: This version is needed for older versions of gcc, fixed in 12.2
+      template <class... Ts>
+      constexpr auto make_copy_tuple(Ts... args) {
+          return tuple<Ts...>{args...};
+      }
+      
       template <typename... T>
       constexpr auto forward_as_tuple(T&&... a) noexcept {
          return tuple<T&&...> {static_cast<T&&>(a)...};
