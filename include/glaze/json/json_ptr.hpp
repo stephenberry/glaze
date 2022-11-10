@@ -17,8 +17,8 @@ namespace glz
    namespace detail
    {
       template <class F, class T>
-      requires array_t<std::decay_t<T>> || glaze_array_t<std::decay_t<T>> ||
-         tuple_t<std::decay_t<T>>
+      requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
+         is_std_tuple<std::decay_t<T>>
       bool seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
@@ -122,8 +122,8 @@ namespace glz
       }
 
       template <class F, class T>
-      requires array_t<std::decay_t<T>> || glaze_array_t<std::decay_t<T>> ||
-         tuple_t<std::decay_t<T>>
+      requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
+         is_std_tuple<std::decay_t<T>>
       bool seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
@@ -149,7 +149,7 @@ namespace glz
                },
                member_array[index]);
          }
-         else if constexpr (tuple_t<std::decay_t<T>>) {
+         else if constexpr (tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>) {
             if (index >= std::tuple_size_v<std::decay_t<T>>) return false;
             auto tuple_element_ptr = get_runtime(value, index);
             return std::visit(
@@ -353,13 +353,13 @@ namespace glz
          n_items_per_group[i] = nano::ranges::count(first_keys, unique_keys[i]);
       }
       
-      return std::tuple{ n_items_per_group, n_unique, unique_keys };
+      return glz::tuplet::tuple{ n_items_per_group, n_unique, unique_keys };
    }
    
    template <auto Arr, std::size_t...Is>
    inline constexpr auto make_arrays(std::index_sequence<Is...>)
    {
-      return std::make_tuple(std::pair{ sv{}, std::array<sv, Arr[Is]>{} }...);
+      return glz::tuplet::make_tuple(std::pair{ sv{}, std::array<sv, Arr[Is]>{} }...);
    };
 
    template <size_t N, auto& Arr>
@@ -377,9 +377,9 @@ namespace glz
       constexpr auto arr =
          Arr;  // Msvc currently generates an internal compiler error otherwise
       constexpr auto group_info = group_json_ptrs_impl(arr);
-      constexpr auto n_items_per_group = std::get<0>(group_info);
-      constexpr auto n_unique = std::get<1>(group_info);
-      constexpr auto unique_keys = std::get<2>(group_info);
+      constexpr auto n_items_per_group = glz::tuplet::get<0>(group_info);
+      constexpr auto n_unique = glz::tuplet::get<1>(group_info);
+      constexpr auto unique_keys = glz::tuplet::get<2>(group_info);
       
       auto arrs = make_arrays<n_items_per_group>(std::make_index_sequence<n_unique>{});
       size_t start{};
@@ -387,11 +387,10 @@ namespace glz
       for_each<n_unique>([&](auto I) {
          // NOTE: VS 2019 wont let us grab n_items_per_group as constexpr unless
          // its static but this is a constexpr func This is fixed in VS 2022
-         constexpr size_t n_items =
-            std::tuple_size_v<std::decay_t<decltype(std::get<I>(arrs).second)>>;
+         constexpr size_t n_items = std::tuple_size_v<std::decay_t<decltype(glz::tuplet::get<I>(arrs).second)>>;
 
-         std::get<I>(arrs).first = unique_keys[I];
-         std::get<I>(arrs).second = glz::sub_group<n_items, Arr>(start);
+         glz::tuplet::get<I>(arrs).first = unique_keys[I];
+         glz::tuplet::get<I>(arrs).second = glz::sub_group<n_items, Arr>(start);
          start += n_items_per_group[I];
       });
       
@@ -417,13 +416,13 @@ namespace glz
          constexpr auto tokens = tokenize_json_ptr(ptr.sv());
          constexpr auto key_str = tokens.first;
          constexpr auto rem_ptr =
-            detail::string_literal_from_view<tokens.second.size()>(tokens.second);
-         if constexpr (detail::glaze_object_t<V>) {
-            using G = member_getter<V, detail::string_literal_from_view<key_str.size()>(key_str)>;
+            glz::detail::string_literal_from_view<tokens.second.size()>(tokens.second);
+         if constexpr (glz::detail::glaze_object_t<V>) {
+            using G = member_getter<V, glz::detail::string_literal_from_view<key_str.size()>(key_str)>;
             if constexpr (G::member_it != G::frozen_map.end()) {
                constexpr auto& element = G::member_it->second;
                constexpr auto I = element.index();
-               constexpr auto& member_ptr = std::get<I>(element);
+               constexpr auto& member_ptr = get<I>(element);
                using mptr_t = std::decay_t<decltype(member_ptr)>;
                if constexpr (std::is_member_pointer_v<mptr_t>) {
                   using sub_t = decltype(std::declval<V>().*member_ptr);
@@ -441,10 +440,10 @@ namespace glz
                return false;
             }
          }
-         else if constexpr (detail::map_t<V>) {
+         else if constexpr (glz::detail::map_t<V>) {
             return valid<typename V::mapped_type, rem_ptr, Expected_t>();
          }
-         else if constexpr (detail::glaze_array_t<V>) {
+         else if constexpr (glz::detail::glaze_array_t<V>) {
             constexpr auto member_array =
                glz::detail::make_array<std::decay_t<V>>();
             constexpr auto index = glz::detail::stoui(key_str); //TODO: Will not build if not int
@@ -458,11 +457,11 @@ namespace glz
                return false;
             }
          }
-         else if constexpr (detail::array_t<V>) {
+         else if constexpr (glz::detail::array_t<V>) {
             glz::detail::stoui(key_str);
             return valid<typename V::value_type, rem_ptr, Expected_t>();
          }
-         else if constexpr (detail::nullable_t<V>) {
+         else if constexpr (glz::detail::nullable_t<V>) {
             using sub_t = decltype(*std::declval<V>());
             return valid<sub_t, ptr, Expected_t>();
          }

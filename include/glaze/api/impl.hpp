@@ -14,6 +14,7 @@
 #include "glaze/api/std/list.hpp"
 #include "glaze/api/std/optional.hpp"
 #include "glaze/api/std/shared_ptr.hpp"
+#include "glaze/api/tuplet.hpp"
 #include "glaze/api/type_support.hpp"
 #include "glaze/api/api.hpp"
 #include "glaze/core/format.hpp"

@@ -605,7 +605,7 @@ void user_types() {
 
    "complex user obect member names"_test = [] {
       expect(
-         glz::name_v<glz::detail::member_tuple_t<Thing>> == "std::tuple<sub_thing,std::array<sub_thing2,1>,V3,std::list<int32_t>,std::deque<double>,std::vector<V3>,int32_t,double,bool,char,Color,std::vector<bool>,std::shared_ptr<sub_thing>,std::optional<V3>,std::array<std::string,4>,std::map<std::string,int32_t>,std::map<int32_t,double>,sub_thing*>"
+         glz::name_v<glz::detail::member_tuple_t<Thing>> == "glz::tuplet::tuple<sub_thing,std::array<sub_thing2,1>,V3,std::list<int32_t>,std::deque<double>,std::vector<V3>,int32_t,double,bool,char,Color,std::vector<bool>,std::shared_ptr<sub_thing>,std::optional<V3>,std::array<std::string,4>,std::map<std::string,int32_t>,std::map<int32_t,double>,sub_thing*>"
       );
    };
 }
@@ -652,6 +652,16 @@ void json_pointer() {
       expect(thing.thing_ptr->a == 42.0);
       expect(thing.thing_ptr->b == "Value was set.");
    };
+
+   /*"set tuplet"_test = [] {
+      auto tuple = glz::tuplet::make_tuple(3, 2.7, std::string("curry"));
+      glz::set(tuple, "/0", 5);
+      glz::set(tuple, "/1", 42.0);
+      glz::set(tuple, "/2", "fish");
+      expect(glz::tuplet::get<0>(tuple) == 5.0);
+      expect(glz::tuplet::get<1>(tuple) == 42.0);
+      expect(glz::tuplet::get<2>(tuple) == "fish");
+   };*/
 
    "set tuple"_test = [] {
       auto tuple = std::make_tuple(3, 2.7, std::string("curry"));
@@ -1369,7 +1379,8 @@ struct glz::meta<Named>
 {
    static constexpr std::string_view name = "Named";
    using n = Named;
-   static constexpr auto glaze =
+   static constexpr auto
+      glaze =
       glz::object("name", &n::name, "value", &n::value);
 };
 

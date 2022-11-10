@@ -51,7 +51,7 @@ namespace glz
    }
    
    template <bool RowWise = true, class Buffer, class Tuple>
-   inline void write_csv(Buffer& buffer, Tuple&& tuple) requires is_tuple<Tuple>
+   inline void write_csv(Buffer& buffer, Tuple&& tuple) requires is_std_tuple<Tuple>
    {
       const auto tuples = tuple_split(std::forward<Tuple>(tuple));
       static constexpr auto N = std::tuple_size_v<Tuple> / 2;
@@ -284,7 +284,7 @@ namespace glz
    }
 
    template <bool RowWise = true>
-   inline void read_csv(std::fstream& file, is_tuple auto&& items)
+   inline void read_csv(std::fstream& file, is_std_tuple auto&& items)
    {
        static constexpr auto N = size_v<decltype(items)>;
 

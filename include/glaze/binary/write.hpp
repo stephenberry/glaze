@@ -58,7 +58,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         static auto op(auto&& /*value*/, Args&&... args) noexcept
+         static auto op(auto&& /*value*/, Args&&...) noexcept
          { return error{}; }
       };
 
@@ -197,14 +197,14 @@ namespace glz
             dump_int<N>(std::forward<Args>(args)...); // even though N is known at compile time in this case, it is not known for partial cases, so we still use a compressed integer
 
             for_each<N>([&](auto I) {
-               static constexpr auto item = std::get<I>(meta_v<V>);
+               static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                dump_int<Opts>(I, std::forward<Args>(args)...); // dump the known key as an integer
                if constexpr (std::is_member_pointer_v<
                                 std::tuple_element_t<1, decltype(item)>>) {
-                  write<binary>::op<Opts>(value.*std::get<1>(item), std::forward<Args>(args)...);
+                  write<binary>::op<Opts>(value.*glz::tuplet::get<1>(item), std::forward<Args>(args)...);
                }
                else {
-                  write<binary>::op<Opts>(std::get<1>(item)(value), std::forward<Args>(args)...);
+                  write<binary>::op<Opts>(glz::tuplet::get<1>(item)(value), std::forward<Args>(args)...);
                }
             });
          }
@@ -219,7 +219,7 @@ namespace glz
          {
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-               write<binary>::op<Opts>(value.*std::get<I>(meta_v<V>), std::forward<Args>(args)...);
+               write<binary>::op<Opts>(value.*glz::tuplet::get<I>(meta_v<V>), std::forward<Args>(args)...);
             });
          }
       };
@@ -263,8 +263,9 @@ namespace glz
                using index_t = decltype(I);
                using group_t = std::tuple_element_t<I, decltype(groups)>;
                static constexpr auto group = [](index_t Index) constexpr -> group_t {
-                  return std::get<Index>(groups);
+                  return glz::tuplet::get<decltype(I)::value>(groups);
                }({}); // MSVC internal compiler error workaround
+               
                static constexpr auto key = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
                static constexpr auto frozen_map = detail::make_map<T>();
@@ -286,7 +287,7 @@ namespace glz
          else if constexpr (detail::map_t<std::decay_t<T>>) {
             glz::for_each<N>([&](auto I) {
                static constexpr auto group = []() {
-                  return std::get<decltype(I)::value>(groups);
+                  return glz::tuplet::get<decltype(I)::value>(groups);
                }();  // MSVC internal compiler error workaround
                static constexpr auto key_value = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);

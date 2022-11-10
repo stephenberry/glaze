@@ -5,13 +5,14 @@
 
 #include "glaze/util/string_view.hpp"
 #include "glaze/util/for_each.hpp"
+#include "glaze/tuplet/tuple.hpp"
 
 #include <tuple>
 
 namespace glz
 {
    template <class T>
-   concept is_tuple = is_specialization_v<T, std::tuple>;
+   concept is_std_tuple = is_specialization_v<T, std::tuple>;
    
    inline constexpr auto size_impl(auto&& t) {
        return std::tuple_size_v<std::decay_t<decltype(t)>>;
@@ -19,17 +20,19 @@ namespace glz
 
    template <class T>
    inline constexpr size_t size_v = std::tuple_size_v<std::decay_t<T>>;
-   
+
    namespace detail
    {
-      template <size_t Offset, class Tuple, std::size_t...Is>
-      auto tuple_split_impl(Tuple&& tuple, std::index_sequence<Is...>) {
+      template <size_t Offset, class Tuple, std::size_t... Is>
+      auto tuple_split_impl(Tuple&& tuple, std::index_sequence<Is...>)
+      {
          return std::make_tuple(std::get<Is * 2 + Offset>(tuple)...);
       }
    }
-   
-   template <class Tuple, std::size_t...Is>
-   auto tuple_split(Tuple&& tuple) {
+
+   template <class Tuple, std::size_t... Is>
+   auto tuple_split(Tuple&& tuple)
+   {
       static constexpr auto N = std::tuple_size_v<Tuple>;
       static constexpr auto is = std::make_index_sequence<N / 2>{};
       return std::make_pair(detail::tuple_split_impl<0>(tuple, is), detail::tuple_split_impl<1>(tuple, is));
@@ -103,15 +106,25 @@ namespace glz
    template <size_t Start, class Tuple, size_t... Is>
    constexpr auto make_group(Tuple&& t, std::index_sequence<Is...>)
    {
-      auto r = std::make_tuple(std::get<Start + Is>(t)...);
-      check_member<decltype(r)>();
+      auto get_elem = [&](auto i) {
+         constexpr auto I = decltype(i)::value;
+         if constexpr (I == 1) {
+            return glz::tuplet::get<Start + I>(t);
+         }
+         else {
+            return std::string_view(glz::tuplet::get<Start + I>(t));
+         }
+      };
+      auto r = glz::tuplet::make_copy_tuple(get_elem(std::integral_constant<size_t, Is>{})...);
+      //check_member<decltype(r)>();
       return r;
    }
 
    template <auto& GroupStartArr, auto& GroupSizeArr, class Tuple, size_t... GroupNumber>
    constexpr auto make_groups_impl(Tuple&& t, std::index_sequence<GroupNumber...>)
    {
-       return std::make_tuple(make_group<std::get<GroupNumber>(GroupStartArr)>(t, std::make_index_sequence<std::get<GroupNumber>(GroupSizeArr)>{})...);
+      return glz::tuplet::make_copy_tuple(make_group<get<GroupNumber>(GroupStartArr)>(
+                                                                             t, std::make_index_sequence<std::get<GroupNumber>(GroupSizeArr)>{})...);
    }
 
    template <class Tuple>
@@ -123,15 +136,15 @@ namespace glz
        constexpr auto starts = shrink_index_array<filtered.second>(filtered.first);
        constexpr auto sizes = group_sizes(starts, N);
 
-       return std::tuple{ starts, sizes };
+       return glz::tuplet::tuple{ starts, sizes };
    }
 
    template <class Tuple>
    struct group_builder
    {
       static constexpr auto h = make_groups_helper<Tuple>();
-      static constexpr auto starts = std::get<0>(h);
-      static constexpr auto sizes = std::get<1>(h);
+      static constexpr auto starts = glz::tuplet::get<0>(h);
+      static constexpr auto sizes = glz::tuplet::get<1>(h);
 
       static constexpr auto op(Tuple&& t)
       {

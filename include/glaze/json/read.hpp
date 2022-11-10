@@ -358,7 +358,7 @@ namespace glz
             
             // growing
             if constexpr (emplace_backable<T>) {
-               for (size_t i = 0; it < end; ++i) {
+               while (it < end) {
                   read<json>::op<ws_handled<Opts>()>(value.emplace_back(), it, end);
                   skip_ws(it, end);
                   if (*it == ',') [[likely]] {
@@ -451,6 +451,52 @@ namespace glz
                   skip_ws(it, end);
                }
                if constexpr (glaze_array_t<T>) {
+                  read<json>::op<ws_handled<Opts>()>(value.*glz::tuplet::get<I>(meta_v<T>), it, end);
+               }
+               else {
+                  read<json>::op<ws_handled<Opts>()>(glz::tuplet::get<I>(value), it, end);
+               }
+               skip_ws(it, end);
+            });
+            
+            match<']'>(it, end);
+         }
+      };
+
+      template <class T>
+      requires is_std_tuple<T>
+      struct from_json<T>
+      {
+         template <auto Opts>
+         static void op(auto& value, auto&& it, auto&& end)
+         {
+            static constexpr auto N = []() constexpr
+            {
+               if constexpr (glaze_array_t<T>) {
+                  return std::tuple_size_v<meta_t<T>>;
+               }
+               else {
+                  return std::tuple_size_v<T>;
+               }
+            }
+            ();
+
+            if constexpr (!Opts.whitespace_handled) {
+               skip_ws(it, end);
+            }
+
+            match<'['>(it, end);
+            skip_ws(it, end);
+
+            for_each<N>([&](auto I) {
+               if (it == end || *it == ']') {
+                  return;
+               }
+               if constexpr (I != 0) {
+                  match<','>(it, end);
+                  skip_ws(it, end);
+               }
+               if constexpr (glaze_array_t<T>) {
                   read<json>::op<ws_handled<Opts>()>(value.*std::get<I>(meta_v<T>), it, end);
                }
                else {
@@ -458,7 +504,7 @@ namespace glz
                }
                skip_ws(it, end);
             });
-            
+
             match<']'>(it, end);
          }
       };

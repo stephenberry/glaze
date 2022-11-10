@@ -18,6 +18,6 @@ if (Eigen3_ADDED)
    target_include_directories(Eigen3 INTERFACE ${Eigen3_SOURCE_DIR})
 endif()
 
-target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze Boost::ut Eigen3::Eigen)
+target_link_libraries(${PROJECT_NAME} PRIVATE Boost::ut glaze::glaze Eigen3::Eigen)
 
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})

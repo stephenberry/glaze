@@ -464,7 +464,8 @@ struct glz::meta<some_struct>
    static constexpr std::string_view name = "some_struct";
    using T = some_struct;
    static constexpr auto value = object(
-      "i", [](auto&& v) -> auto& { return v.i; },  //
+      //"i", [](auto&& v) -> auto& { return v.i; },  //
+                                        "i", &T::i,
                                         "d", &T::d,     //
                                         "c", &T::c,
                                                "hello", &T::hello,  //
@@ -480,7 +481,7 @@ struct glz::meta<some_struct>
 
 void test_partial()
 {
-   expect(glz::name_v<glz::detail::member_tuple_t<some_struct>> == R"(std::tuple<int32_t,double,Color,std::string,std::array<uint64_t,3>,sub,std::map<std::string,int32_t>>)");
+   expect(glz::name_v<glz::detail::member_tuple_t<some_struct>> == R"(glz::tuplet::tuple<int32_t,double,Color,std::string,std::array<uint64_t,3>,sub,std::map<std::string,int32_t>>)");
    
    some_struct s{};
    some_struct s2{};
@@ -502,7 +503,7 @@ void test_partial()
       
       static constexpr auto N = std::tuple_size_v<decltype(groups)>;
       glz::for_each<N>([&](auto I){
-         const auto group = std::get<I>(groups);
+         const auto group = glz::tuplet::get<I>(groups);
          std::cout << std::get<0>(group) << ": ";
          for (auto& rest : std::get<1>(group)) {
             std::cout << rest << ", ";

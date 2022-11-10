@@ -4,6 +4,7 @@
 #pragma once
 
 #include <array>
+#include "glaze/tuplet/tuple.hpp"
 
 namespace glz
 {   
@@ -28,7 +29,7 @@ namespace glz
 
    struct empty
    {
-      static constexpr std::tuple<> value{};
+      static constexpr glz::tuplet::tuple<> value{};
    };
    
    template <class T>
