@@ -1369,7 +1369,8 @@ struct glz::meta<Named>
 {
    static constexpr std::string_view name = "Named";
    using n = Named;
-   static constexpr auto glaze =
+   static constexpr auto
+      glaze =
       glz::object("name", &n::name, "value", &n::value);
 };
 

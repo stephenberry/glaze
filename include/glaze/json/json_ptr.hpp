@@ -446,7 +446,7 @@ namespace glz
          else if constexpr (glz::detail::map_t<V>) {
             return valid<typename V::mapped_type, rem_ptr, Expected_t>();
          }
-         else if constexpr (detail::glaze_array_t<V>) {
+         else if constexpr (glz::detail::glaze_array_t<V>) {
             constexpr auto member_array =
                glz::detail::make_array<std::decay_t<V>>();
             constexpr auto index = glz::detail::stoui(key_str); //TODO: Will not build if not int

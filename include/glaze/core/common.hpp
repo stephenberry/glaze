@@ -319,7 +319,7 @@ namespace glz
       concept tuple_t = requires(T t)
       {
          std::tuple_size<T>::value;
-         std::get<0>(t);
+         glz::tuplet::get<0>(t);
       }
       &&!complex_t<T> && !nano::ranges::range<T>;
 
@@ -411,7 +411,7 @@ namespace glz
       template <class Tuple, size_t... I>
       struct value_tuple_variant<Tuple, std::index_sequence<I...>>
       {
-         using type = typename tuple_variant<decltype(tuple_cat(
+         using type = typename tuple_variant<decltype(glz::tuplet::tuple_cat(
             std::declval<glz::tuplet::tuple<std::tuple_element_t<
                1, std::tuple_element_t<I, Tuple>>>>()...))>::type;
       };
@@ -423,8 +423,7 @@ namespace glz
       inline constexpr auto make_array_impl(std::index_sequence<I...>)
       {
          using value_t = typename tuple_variant<meta_t<T>>::type;
-         return std::array<value_t, std::tuple_size_v<meta_t<T>>>{
-            std::get<I>(meta_v<T>)...};
+         return std::array<value_t, std::tuple_size_v<meta_t<T>>>{glz::tuplet::get<I>(meta_v<T>)...};
       }
 
       template <class T>
