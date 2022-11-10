@@ -106,7 +106,7 @@ namespace glz
    template <size_t Start, class Tuple, size_t... Is>
    constexpr auto make_group(Tuple&& t, std::index_sequence<Is...>)
    {
-      auto r = glz::tuplet::make_tuple(glz::tuplet::get<Start + Is>(t)...);
+      auto r = glz::tuplet::tuple{glz::tuplet::get<Start + Is>(t)...};
       check_member<decltype(r)>();
       return r;
    }
