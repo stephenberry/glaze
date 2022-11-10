@@ -464,7 +464,8 @@ struct glz::meta<some_struct>
    static constexpr std::string_view name = "some_struct";
    using T = some_struct;
    static constexpr auto value = object(
-      "i", [](auto&& v) -> auto& { return v.i; },  //
+      //"i", [](auto&& v) -> auto& { return v.i; },  //
+                                        "i", &T::i,
                                         "d", &T::d,     //
                                         "c", &T::c,
                                                "hello", &T::hello,  //
