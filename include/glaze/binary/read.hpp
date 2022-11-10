@@ -260,7 +260,7 @@ namespace glz
          {
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-               read<binary>::op<Opts>(value.*std::get<I>(meta_v<V>), it, end);
+               read<binary>::op<Opts>(value.*glz::tuplet::get<I>(meta_v<V>), it, end);
             });
          }
       };

@@ -502,7 +502,7 @@ void test_partial()
       
       static constexpr auto N = std::tuple_size_v<decltype(groups)>;
       glz::for_each<N>([&](auto I){
-         const auto group = std::get<I>(groups);
+         const auto group = glz::tuplet::get<I>(groups);
          std::cout << std::get<0>(group) << ": ";
          for (auto& rest : std::get<1>(group)) {
             std::cout << rest << ", ";
