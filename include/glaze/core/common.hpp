@@ -498,7 +498,7 @@ namespace glz
          }
          else if constexpr (n_128) // don't even attempt a first character hash if we have too many keys
          {
-            constexpr auto f1_desc = first_char_hash<n>(std::array<sv, n>{sv{get<0>(get<I>(meta_v<T>))}...});
+            constexpr auto f1_desc = first_char_hash<n>(std::array<sv, n>{sv{glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))}...});
             
             if constexpr (f1_desc.valid) {
                return make_first_char_map<value_t, f1_desc>(
