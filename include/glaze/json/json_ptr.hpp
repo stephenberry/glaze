@@ -353,13 +353,13 @@ namespace glz
          n_items_per_group[i] = nano::ranges::count(first_keys, unique_keys[i]);
       }
       
-      return std::tuple{ n_items_per_group, n_unique, unique_keys };
+      return glz::tuplet::tuple{ n_items_per_group, n_unique, unique_keys };
    }
    
    template <auto Arr, std::size_t...Is>
    inline constexpr auto make_arrays(std::index_sequence<Is...>)
    {
-      return std::make_tuple(std::pair{ sv{}, std::array<sv, Arr[Is]>{} }...);
+      return glz::tuplet::make_tuple(std::pair{ sv{}, std::array<sv, Arr[Is]>{} }...);
    };
 
    template <size_t N, auto& Arr>
