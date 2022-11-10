@@ -95,6 +95,42 @@ namespace glz::detail
       }
    }
 
+   inline void skip_till_escape_or_qoute(auto&& it, auto&& end)
+   {
+      static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
+
+      auto has_zero = [](uint64_t chunk) { return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080); };
+
+      auto has_qoute = [&](uint64_t chunk) {
+         return has_zero(chunk ^ 0b0010001000100010001000100010001000100010001000100010001000100010);
+      };
+
+      auto has_escape = [&](uint64_t chunk) {
+         return has_zero(chunk ^ 0b0101110001011100010111000101110001011100010111000101110001011100);
+      };
+
+      const auto end_m7 = end - 7;
+      for (; it < end_m7; it += 8) {
+         const auto chunk = *reinterpret_cast<const uint64_t*>(&*it);
+         uint64_t test = has_qoute(chunk) | has_escape(chunk);
+         if (test != 0) {
+            it += (std::countr_zero(test) >> 3);
+            return;
+         }
+      }
+
+      // Tail end of buffer. Should be rare we even get here
+      while (it < end) {
+         switch (*it) {
+         case '\\':
+         case '"':
+            return;
+         }
+         ++it;
+      }
+      throw std::runtime_error("Expected \"");
+   }
+
    inline void skip_string(auto&& it, auto&& end) noexcept
    {
       ++it;

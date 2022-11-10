@@ -168,60 +168,7 @@ namespace glz
             
             // overwrite portion
             
-            if constexpr (nano::contiguous_iterator<std::decay_t<It>>
-                          && nano::contiguous_iterator<std::decay_t<End>>) {
-               const auto n_buffer = static_cast<size_t>(std::distance(it, end));
-               const auto n_value = value.size();
-               
-               // must use 2 * n_value to handle potential escape characters
-               if (2 * n_value < n_buffer) {
-                  // we don't have to check if we are reaching our end iterator
-                  
-                  for (size_t i = 0; i < n_value; ++i, ++it) {
-                     switch (*it) {
-                        [[unlikely]] case '\\':
-                        {
-                           ++it;
-                           value[i] = *it;
-                           break;
-                        }
-                        [[unlikely]] case '"':
-                        {
-                           ++it;
-                           value.resize(i);
-                           return;
-                        }
-                        [[likely]] default : value[i] = *it;
-                     }
-                  }
-               }
-               else {
-                  for (size_t i = 0; i < n_value; ++i, ++it)
-                  {
-                     if (it == end) [[unlikely]]
-                        throw std::runtime_error(R"(Expected ")");
-                     switch (*it) {
-                        [[unlikely]] case '\\':
-                        {
-                           if (++it == end) [[unlikely]]
-                              throw std::runtime_error(R"(Expected ")");
-                           else [[likely]] {
-                              value[i] = *it;
-                           }
-                           break;
-                        }
-                        [[unlikely]] case '"':
-                        {
-                           ++it;
-                           value.resize(i);
-                           return;
-                        }
-                        [[likely]] default : value[i] = *it;
-                     }
-                  }
-               }
-            }
-            else {
+            if constexpr (!std::contiguous_iterator<std::decay_t<It>>) {
                const auto cend = value.cend();
                for (auto c = value.begin(); c < cend; ++c, ++it)
                {
@@ -249,30 +196,25 @@ namespace glz
             }
             
             // growth portion
-            if constexpr (nano::contiguous_iterator<std::decay_t<It>>
-                          && nano::contiguous_iterator<std::decay_t<End>>) {
+            if constexpr (std::contiguous_iterator<std::decay_t<It>>) {
+               value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
                auto start = it;
-
                while (it < end) {
-                  switch (*it) {
-                     case '\\': {
-                        value.append(start, it);
-                        ++it; // skip first escape
-                        value.push_back(*it); // add the escaped character
-                        ++it;
-                        start = it;
-                        break;
-                     }
-                     case '"': {
-                        value.append(start, it);
-                        ++it;
-                        return;
-                     }
-                     default:
-                        break;
+                  skip_till_escape_or_qoute(it, end);
+                  if (*it == '"') {
+                     value.append(&*start, static_cast<size_t>(std::distance(start, it)));
+                     ++it;
+                     return;
                   }
-                  
-                  ++it;
+                  else {
+                     // Must be an escape
+                     // TODO propperly handle this
+                     value.append(&*start, static_cast<size_t>(std::distance(start, it)));
+                     ++it; // skip first escape
+                     value.push_back(*it); // add the escaped character
+                     ++it;
+                     start = it;
+                  }
                }
             }
             else {
@@ -554,24 +496,10 @@ namespace glz
                      skip_ws(it, end);
                      match<'"'>(it, end);
                      auto start = it;
-                     bool escaped = false;
-                     while (true) {
-                        if (it == end) [[unlikely]] {
-                           throw std::runtime_error("Expected \"");
-                        }
-                        if (*it == '\\') [[unlikely]] {
-                           escaped = true;
-                           it = start;
-                           break;
-                        }
-                        else if (*it == '"') {
-                           break;
-                        }
-                        ++it;
-                     }
-                     
-                     if (escaped) [[unlikely]] {
+                     skip_till_escape_or_qoute(it, end);
+                     if (*it == '\\') [[unlikely]] {
                         // we dont' optimize this currently because it would increase binary size significantly with the complexity of generating escaped compile time versions of keys
+                        it = start;
                         static thread_local std::string static_key{};
                         read<json>::op<ws_and_opening_handled<Opts>()>(static_key, it, end);
                         key = static_key;
