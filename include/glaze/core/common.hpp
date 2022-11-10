@@ -404,6 +404,10 @@ namespace glz
          : unique<std::variant<>, std::add_pointer_t<Ts>...>
       {};
 
+      template <class... Ts>
+      struct tuple_ptr_variant<std::tuple<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
+      {};
+
       template <class Tuple,
                 class = std::make_index_sequence<std::tuple_size<Tuple>::value>>
       struct value_tuple_variant;
