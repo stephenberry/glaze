@@ -407,8 +407,6 @@ namespace glz
    //TODO support custom types
    template <class Root_t, detail::string_literal ptr, class Expected_t = void>
    constexpr bool valid() {
-      using namespace glz::tuplet;
-
       using V = std::decay_t<Root_t>;
       if constexpr (ptr.sv() == sv{""}) {
          return std::same_as<Expected_t, void> ||
