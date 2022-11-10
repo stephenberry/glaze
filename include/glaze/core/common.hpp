@@ -411,9 +411,8 @@ namespace glz
       template <class Tuple, size_t... I>
       struct value_tuple_variant<Tuple, std::index_sequence<I...>>
       {
-         using namespace glz::tuplet;
          using type = typename tuple_variant<decltype(tuple_cat(
-            std::declval<tuple<std::tuple_element_t<
+            std::declval<glz::tuplet::tuple<std::tuple_element_t<
                1, std::tuple_element_t<I, Tuple>>>>()...))>::type;
       };
 
@@ -675,17 +674,17 @@ namespace glz
    {
       using namespace glz::tuplet;
       if constexpr (sizeof...(args) == 0) {
-         return detail::Object{ make_tuple() };
+         return glz::detail::Object{ make_tuple() };
       }
       else {
-         return detail::Object{ group_builder<std::decay_t<decltype(make_tuple(args...))>>::op(make_tuple(args...)) };
+         return glz::detail::Object{ group_builder<std::decay_t<decltype(make_tuple(args...))>>::op(make_tuple(args...)) };
       }
    }
 
    constexpr auto enumerate(auto&&... args)
    {
       using namespace glz::tuplet;
-      return detail::Enum{
+      return glz::detail::Enum{
          group_builder<std::decay_t<decltype(make_tuple(args...))>>::op(make_tuple(args...))};
    }
 }  // namespace glaze
