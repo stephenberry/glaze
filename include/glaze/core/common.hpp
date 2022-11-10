@@ -483,7 +483,7 @@ namespace glz
             constexpr auto f1_desc = first_char_hash<n>(std::array<sv, n>{sv{glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))}...});
             
             if constexpr (f1_desc.valid) {
-               return make_first_char_map<value_t, f1_desc>(
+               return make_first_char_map<value_t, first_char_hash<n>(std::array<sv, n>{sv{glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))}...})>(
                                                             {std::make_pair<sv, value_t>(
                                                                                          sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
                                                                                          glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
