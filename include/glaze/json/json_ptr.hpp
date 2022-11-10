@@ -419,9 +419,9 @@ namespace glz
          constexpr auto tokens = tokenize_json_ptr(ptr.sv());
          constexpr auto key_str = tokens.first;
          constexpr auto rem_ptr =
-            detail::string_literal_from_view<tokens.second.size()>(tokens.second);
-         if constexpr (detail::glaze_object_t<V>) {
-            using G = member_getter<V, detail::string_literal_from_view<key_str.size()>(key_str)>;
+            glz::detail::string_literal_from_view<tokens.second.size()>(tokens.second);
+         if constexpr (glz::detail::glaze_object_t<V>) {
+            using G = member_getter<V, glz::detail::string_literal_from_view<key_str.size()>(key_str)>;
             if constexpr (G::member_it != G::frozen_map.end()) {
                constexpr auto& element = G::member_it->second;
                constexpr auto I = element.index();
@@ -443,7 +443,7 @@ namespace glz
                return false;
             }
          }
-         else if constexpr (detail::map_t<V>) {
+         else if constexpr (glz::detail::map_t<V>) {
             return valid<typename V::mapped_type, rem_ptr, Expected_t>();
          }
          else if constexpr (detail::glaze_array_t<V>) {
@@ -460,11 +460,11 @@ namespace glz
                return false;
             }
          }
-         else if constexpr (detail::array_t<V>) {
+         else if constexpr (glz::detail::array_t<V>) {
             glz::detail::stoui(key_str);
             return valid<typename V::value_type, rem_ptr, Expected_t>();
          }
-         else if constexpr (detail::nullable_t<V>) {
+         else if constexpr (glz::detail::nullable_t<V>) {
             using sub_t = decltype(*std::declval<V>());
             return valid<sub_t, ptr, Expected_t>();
          }
