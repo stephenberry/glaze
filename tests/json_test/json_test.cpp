@@ -1895,6 +1895,49 @@ suite variant_tests = [] {
    };
 };
 
+struct holder0_t {
+   int i{};
+};
+
+template <>
+struct glz::meta<holder0_t>
+{
+   using T = holder0_t;
+   static constexpr auto value = object("i", &T::i);
+};
+
+struct holder1_t {
+   holder0_t a{};
+};
+
+template <>
+struct glz::meta<holder1_t>
+{
+   using T = holder1_t;
+   static constexpr auto value = object("a", &T::a);
+};
+
+struct holder2_t {
+   std::vector<holder1_t> vec{};
+};
+
+template <>
+struct glz::meta<holder2_t>
+{
+   using T = holder2_t;
+   static constexpr auto value = object("vec", &T::vec);
+};
+
+suite array_of_objects = [] {
+   "array_of_objects_tests"_test = [] {
+      std::string s = R"({"vec": [{"a": {"i":5}}, {"a":{ "i":2 }}]})";
+      holder2_t arr{};
+      expect(nothrow([&] {
+         glz::read_json(arr, s);
+      }));
+   };
+};
+
 struct macro_t
 {
    double x = 5.0;

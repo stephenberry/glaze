@@ -18,7 +18,6 @@ namespace glz
       bool allow_hash_check = false; // Will replace some string equality checks with hash checks
       
       // meant for internal use
-      bool whitespace_handled = false;
       bool opening_handled = false; // the opening character has been handled
    };
    
@@ -26,23 +25,6 @@ namespace glz
    constexpr auto opening_handled()
    {
       opts ret = Opts;
-      ret.opening_handled = true;
-      return ret;
-   };
-   
-   template <opts Opts>
-   constexpr auto ws_handled()
-   {
-      opts ret = Opts;
-      ret.whitespace_handled = true;
-      return ret;
-   };
-   
-   template <opts Opts>
-   constexpr auto ws_and_opening_handled()
-   {
-      opts ret = Opts;
-      ret.whitespace_handled = true;
       ret.opening_handled = true;
       return ret;
    };
