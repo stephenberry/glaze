@@ -24,7 +24,7 @@ namespace glz
        return std::visit([](auto&& x) -> size_t {
           using Container = std::decay_t<decltype(x)>;
           if constexpr (std::same_as<Container, std::monostate>) {
-             throw std::runtime_error("container_size constainer is monostate");
+             throw std::runtime_error("container_size: container is monostate");
           }
           else {
              return x.size();
