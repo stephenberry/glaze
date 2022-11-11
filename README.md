@@ -6,6 +6,7 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from C++ 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 - Simple registration
+- Standard C++ library support
 - Direct to memory serialization/deserialization
 - Compile time maps with constant time lookups and perfect hashing
 - Nearly zero intermediate allocations
@@ -25,9 +26,9 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
-*Note: [simdjson](https://github.com/simdjson/simdjson) is fantastic for JSON parsing, but has a few caveats. simdjson (on demand) can experience major performance losses for files where the data is not in the expected sequence (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user.*
+*Note: [simdjson](https://github.com/simdjson/simdjson) (on demand) is great for parsing, but can experience major performance losses when the data is not in the expected sequence (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user.*
 
-[ABC Test](https://github.com/stephenberry/json_performance) shows how simdjson can have poor performance when keys are not in the expected sequence:
+[ABC Test](https://github.com/stephenberry/json_performance) shows how simdjson (ondemand) has poor performance when keys are not in the expected sequence:
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
@@ -55,7 +56,7 @@ Binary message size: 350 bytes
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc_2022.yml/badge.svg)
 
-### Example
+## Example
 
 ```c++
 struct my_struct
