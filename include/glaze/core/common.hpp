@@ -190,7 +190,12 @@ namespace glz
                    unsigned int, long, unsigned long, double,
                    long long, unsigned long long, std::string>;
    
-   using basic_ptr = decltype(to_variant_pointer(std::declval<basic>()));
+   // Explicitly defining basic_ptr to avoid additional template instantiations
+   using basic_ptr =
+      std::variant<bool*, char*, char8_t*, unsigned char*, signed char*, char16_t*,
+                   short*, unsigned short*, wchar_t*, char32_t*, float*, int*,
+                   unsigned int*, long*, unsigned long*, double*,
+                   long long*, unsigned long long*, std::string*>;
 
    namespace detail
    {
