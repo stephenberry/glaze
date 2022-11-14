@@ -1974,6 +1974,38 @@ suite macro_tests = [] {
    };
 };
 
+struct includer_struct
+{
+   std::string str{};
+   int i;
+};
+
+template <>
+struct glz::meta<includer_struct>
+{
+   using T = includer_struct;
+   static constexpr auto value = object("#include", glz::file_include{}, "str", &T::str, "i", &T::i);
+};
+
+void file_include_test()
+{
+   std::ofstream file{"../alabastar.json" };
+   
+   std::string s = R"({"#include": "../alabastar.json", "i": 100})";
+   
+   includer_struct obj{};
+   
+   if (file) {
+      file << R"({"str": "Hello", "i": 55})";
+      file.close();
+      
+      glz::read_json(obj, s);
+   }
+   
+   expect(obj.str == "Hello") << obj.str;
+   expect(obj.i == 100) << obj.i;
+}
+
 int main()
 {
    using namespace boost::ut;
@@ -1994,4 +2026,5 @@ int main()
    read_tests();
    write_tests();
    study_tests();
+   file_include_test();
 }

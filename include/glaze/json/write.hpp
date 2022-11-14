@@ -430,7 +430,7 @@ namespace glz
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                using mptr_t = std::tuple_element_t<1, decltype(item)>;
-               using val_t = member_check_t<V, mptr_t>;
+               using val_t = member_t<V, mptr_t>;
 
                if constexpr (nullable_t<val_t> && Opts.skip_null_members) {
                   auto is_null = [&]() {
@@ -491,7 +491,7 @@ namespace glz
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                using mptr_t = std::tuple_element_t<1, decltype(item)>;
-               using val_t = member_check_t<V, mptr_t>;
+               using val_t = member_t<V, mptr_t>;
 
                if constexpr (nullable_t<val_t> && Opts.skip_null_members) {
                   auto is_null = [&]()
