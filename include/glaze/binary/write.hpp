@@ -271,7 +271,7 @@ namespace glz
                static constexpr decltype(auto) member_ptr = std::get<ix>(member_it->second);
 
                detail::dump_int<Opts>(key_to_int.find(key)->second, buffer);
-               write<sub_partial, Opts>(get_thing(value, member_ptr), buffer);
+               write<sub_partial, Opts>(glz::detail::get_thing(value, member_ptr), buffer);
             });
          }
          else if constexpr (detail::map_t<std::decay_t<T>>) {
