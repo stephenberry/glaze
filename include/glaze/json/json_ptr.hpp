@@ -423,17 +423,14 @@ namespace glz
                constexpr auto& element = G::member_it->second;
                constexpr auto I = element.index();
                constexpr auto& member_ptr = get<I>(element);
+               
                using mptr_t = std::decay_t<decltype(member_ptr)>;
-               if constexpr (std::is_member_pointer_v<mptr_t>) {
-                  using sub_t = decltype(std::declval<V>().*member_ptr);
-                  return valid<sub_t, rem_ptr, Expected_t>();
-               }
-               else if constexpr (std::invocable<decltype(member_ptr), V>) {
-                   using sub_t = std::invoke_result_t<decltype(member_ptr),V>;
-                   return valid<sub_t, rem_ptr, Expected_t>();
+               using T = detail::member_t<V, mptr_t>;
+               if constexpr (is_specialization_v<T, includer>) {
+                  return valid<file_include, rem_ptr, Expected_t>();
                }
                else {
-                  return false;
+                  return valid<T, rem_ptr, Expected_t>();
                }
             }
             else {

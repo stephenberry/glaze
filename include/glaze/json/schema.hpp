@@ -234,7 +234,7 @@ namespace glz
             for_each<N>([&](auto I) {
                static constexpr auto item = std::get<I>(meta_v<V>);
                using mptr_t = std::tuple_element_t<1, decltype(item)>;
-               using val_t = std::decay_t<member_check_t<V, mptr_t>>;
+               using val_t = std::decay_t<member_t<V, mptr_t>>;
                auto& def = defs[name_v<val_t>];
                if (def.type.empty()) {
                   to_json_schema<val_t>::template op<Opts>(def, defs);

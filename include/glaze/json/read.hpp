@@ -492,6 +492,36 @@ namespace glz
       };
       
       template <class T>
+      struct from_json<includer<T>>
+      {
+         template <auto Opts>
+         static void op(auto&& value, auto&& it, auto&& end)
+         {
+            static thread_local std::string path{};
+            read<json>::op<Opts>(path, it, end);
+            
+            try {
+               // TODO: change this to streaming
+               std::string buffer{};
+               std::ifstream file{ path };
+               if (file) {
+                  file.seekg(0, std::ios::end);
+                  buffer.resize(file.tellg());
+                  file.seekg(0);
+                  file.read(buffer.data(), buffer.size());
+                  
+                  glz::read<Opts>(value.value, buffer);
+               }
+               else {
+                  throw std::runtime_error("could not open file: " + path);
+               }
+            } catch (const std::exception& e) {
+               throw std::runtime_error("include error for " + path + std::string(" | ") + e.what());
+            }
+         }
+      };
+      
+      template <class T>
       requires map_t<T> || glaze_object_t<T>
       struct from_json<T>
       {
@@ -548,13 +578,7 @@ namespace glz
                   if (member_it != frozen_map.end()) {
                      std::visit(
                         [&](auto&& member_ptr) {
-                           using V = std::decay_t<decltype(member_ptr)>;
-                           if constexpr (std::is_member_pointer_v<V>) {
-                              read<json>::op<Opts>(value.*member_ptr, it, end);
-                           }
-                           else {
-                              read<json>::op<Opts>(member_ptr(value), it, end);
-                           }
+                           read<json>::op<Opts>(get_thing(value, member_ptr), it, end);
                         },
                         member_it->second);
                   }

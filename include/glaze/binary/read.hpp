@@ -224,6 +224,26 @@ namespace glz
       };
       
       template <class T>
+      struct from_binary<includer<T>>
+      {
+         template <auto Opts>
+         static void op(auto&& value, auto&& it, auto&& end) noexcept
+         {
+            static thread_local std::string path{};
+            read<binary>::op<Opts>(path, it, end);
+            
+            static thread_local std::string buffer{};
+            std::fstream file{ buffer };
+            file.seekg(0, std::ios::end);
+            buffer.resize(file.tellg());
+            file.seekg(0);
+            file.read(buffer.data(), buffer.size());
+            
+            read<binary>::op<Opts>(value.value, it, end);
+         }
+      };
+      
+      template <class T>
       requires glaze_object_t<T>
       struct from_binary<T> final
       {
@@ -239,12 +259,7 @@ namespace glz
                std::visit(
                   [&](auto&& member_ptr) {
                      using V = std::decay_t<decltype(member_ptr)>;
-                     if constexpr (std::is_member_pointer_v<V>) {
-                        read<binary>::op<Opts>(value.*member_ptr, it, end);
-                     }
-                     else {
-                        read<binary>::op<Opts>(member_ptr(value), it, end);
-                     }
+                     read<binary>::op<Opts>(get_thing(value, member_ptr), it, end);
                   },
                           storage[key]);
             }

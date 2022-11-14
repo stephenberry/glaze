@@ -8,6 +8,10 @@
 #include <tuple>
 #include <utility>
 
+// TODO: optionally include with a templated struct
+#include <filesystem>
+#include <fstream>
+
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
 
@@ -23,6 +27,15 @@
 
 namespace glz
 {
+   // Register this with an object to allow file including (direct writes) to the meta object
+   struct file_include {};
+   
+   template <class T>
+   struct includer
+   {
+      T& value;
+   };
+   
    namespace detail
    {
       template <class T>
@@ -342,12 +355,6 @@ namespace glz
          std::function(t);
       } && !glaze_t<T>;
 
-      template <class... T>
-      constexpr bool all_member_ptr(glz::tuplet::tuple<T...>)
-      {
-         return std::conjunction_v<std::is_member_pointer<std::decay_t<T>>...>;
-      }
-
       template <class T>
       concept glaze_array_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Array>;
 
@@ -599,35 +606,6 @@ namespace glz
          return make_string_to_enum_map_impl<T>(indices);
       }
       
-      template <class, class>
-      struct member_check;
-
-      template <class T, class mptr_t>
-      requires std::is_member_pointer_v<std::decay_t<mptr_t>>
-      struct member_check<T, mptr_t>
-      {
-         using type = decltype(std::declval<T>().*std::decay_t<mptr_t>{});
-      };
-
-      template <class T, class mptr_t>
-      requires(!std::is_member_pointer_v<std::decay_t<mptr_t>> &&
-               std::is_enum_v<std::decay_t<T>>)
-      struct member_check<T, mptr_t>
-      {
-         using type = T;
-      };
-
-      template <class T, class mptr_t>
-      requires(!std::is_member_pointer_v<std::decay_t<mptr_t>> &&
-               !std::is_enum_v<std::decay_t<T>>)
-      struct member_check<T, mptr_t>
-      {
-         using type = std::invoke_result_t<mptr_t, T>;
-      };
-      
-      template <class T, class mptr_t>
-      using member_check_t = typename member_check<T, mptr_t>::type;
-      
       // this function approach does not work with gcc
       /*template <class T, class mptr_t>
       constexpr decltype(auto) member_check()
@@ -644,6 +622,37 @@ namespace glz
             //return mptr_type{}(std::declval<T>());
          }
       }*/
+      
+      inline decltype(auto) get_thing(auto&& value, auto&& member_ptr)
+      {
+         using V = std::decay_t<decltype(member_ptr)>;
+         if constexpr (std::is_same_v<V, file_include>) {
+            return includer<std::decay_t<decltype(value)>>{ value };
+         }
+         else if constexpr (std::is_member_pointer_v<V>) {
+            return value.*member_ptr;
+         }
+         else {
+            return member_ptr(value);
+         }
+      }
+      
+      inline decltype(auto) get_thing_(auto&& value, auto&& member_ptr)
+      {
+         using V = std::decay_t<decltype(member_ptr)>;
+         if constexpr (std::is_same_v<V, file_include>) {
+            return file_include{};
+         }
+         else if constexpr (std::is_member_pointer_v<V>) {
+            return value.*member_ptr;
+         }
+         else {
+            return member_ptr(value);
+         }
+      }
+      
+      template <class T, class mptr_t>
+      using member_t = decltype(get_thing(std::declval<T>(), std::declval<mptr_t>()));
 
       template <class T,
                 class = std::make_index_sequence<std::tuple_size<meta_t<T>>::value>>
@@ -656,7 +665,7 @@ namespace glz
          }
          else {
             return glz::tuplet::tuple<
-            std::decay_t<member_check_t<T, std::tuple_element_t<
+            std::decay_t<member_t<T, std::tuple_element_t<
                               1, std::tuple_element_t<I, meta_t<T>>>>>...>{};
          }
       }
