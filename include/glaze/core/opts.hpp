@@ -9,15 +9,16 @@ namespace glz
 {
    struct opts
    {
-      // user configurable options
+      // USER CONFIGURABLE
       uint32_t format = json;
       bool comments = false; // write out comments
       bool error_on_unknown_keys = true; // error when an unknown key is encountered
       bool skip_null_members = true; // skip writing out params in an object if the value is null
       bool no_except = false; // turn off and on throwing exceptions
       bool allow_hash_check = false; // Will replace some string equality checks with hash checks
+      bool prettify = false; // write out prettified JSON
       
-      // meant for internal use
+      // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled
    };
    

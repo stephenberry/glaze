@@ -3,13 +3,21 @@
 
 #pragma once
 
+#include <string_view>
+
 namespace glz
 {
    // Runtime context for configuration
    // We do not template the context on iterators so that it can be easily shared across buffer implementations
    struct context final
-   {      
-      bool prettify = false; // write out prettified JSON
+   {
+      // USER CONFIGURABLE
+      char indentation_char = ' ';
+      uint8_t indentation_width = 3;
+      std::string_view file_path;
+      
+      // INTERNAL USE
+      uint32_t indentation_level{};
    };
    
    template <class T>
