@@ -200,7 +200,7 @@ namespace glz
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                dump_int<Opts>(I, std::forward<Args>(args)...); // dump the known key as an integer
                using V = std::tuple_element_t<1, decltype(item)>;
-               write<binary>::op<Opts>(get_thing(value, glz::tuplet::get<1>(item)), std::forward<Args>(args)...);
+               write<binary>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), std::forward<Args>(args)...);
             });
          }
       };
@@ -271,7 +271,7 @@ namespace glz
                static constexpr decltype(auto) member_ptr = std::get<ix>(member_it->second);
 
                detail::dump_int<Opts>(key_to_int.find(key)->second, buffer);
-               write<sub_partial, Opts>(glz::detail::get_thing(value, member_ptr), buffer);
+               write<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), buffer);
             });
          }
          else if constexpr (detail::map_t<std::decay_t<T>>) {

@@ -623,7 +623,7 @@ namespace glz
          }
       }*/
       
-      inline decltype(auto) get_thing(auto&& value, auto&& member_ptr)
+      inline decltype(auto) get_member(auto&& value, auto&& member_ptr)
       {
          using V = std::decay_t<decltype(member_ptr)>;
          if constexpr (std::is_same_v<V, file_include>) {
@@ -637,22 +637,8 @@ namespace glz
          }
       }
       
-      inline decltype(auto) get_thing_(auto&& value, auto&& member_ptr)
-      {
-         using V = std::decay_t<decltype(member_ptr)>;
-         if constexpr (std::is_same_v<V, file_include>) {
-            return file_include{};
-         }
-         else if constexpr (std::is_member_pointer_v<V>) {
-            return value.*member_ptr;
-         }
-         else {
-            return member_ptr(value);
-         }
-      }
-      
       template <class T, class mptr_t>
-      using member_t = decltype(get_thing(std::declval<T>(), std::declval<mptr_t>()));
+      using member_t = decltype(get_member(std::declval<T>(), std::declval<mptr_t>()));
 
       template <class T,
                 class = std::make_index_sequence<std::tuple_size<meta_t<T>>::value>>

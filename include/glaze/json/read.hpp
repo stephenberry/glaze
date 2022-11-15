@@ -578,7 +578,7 @@ namespace glz
                   if (member_it != frozen_map.end()) {
                      std::visit(
                         [&](auto&& member_ptr) {
-                           read<json>::op<Opts>(get_thing(value, member_ptr), it, end);
+                           read<json>::op<Opts>(get_member(value, member_ptr), it, end);
                         },
                         member_it->second);
                   }

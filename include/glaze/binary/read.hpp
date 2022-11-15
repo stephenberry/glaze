@@ -259,7 +259,7 @@ namespace glz
                std::visit(
                   [&](auto&& member_ptr) {
                      using V = std::decay_t<decltype(member_ptr)>;
-                     read<binary>::op<Opts>(get_thing(value, member_ptr), it, end);
+                     read<binary>::op<Opts>(get_member(value, member_ptr), it, end);
                   },
                           storage[key]);
             }
