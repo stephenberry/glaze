@@ -51,7 +51,7 @@ namespace glz
    inline size_t write(T&& value, Buffer&& buffer) noexcept
    {
       context ctx{};
-      write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);
+      return write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);
    }
 
    // For writing json to std::ofstream, std::cout, or other streams

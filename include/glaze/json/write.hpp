@@ -44,7 +44,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(const bool value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(const bool value, is_context auto&&, Args&&... args) noexcept
          {
             if (value) {
                dump<"true">(std::forward<Args>(args)...);
