@@ -495,10 +495,10 @@ struct opts {
 
 # More Features
 
-- [Tagged binary messaging](#Tagged Binary Messages (Crusher)) for maximum performance
-- [Comma Separated Value](#Comma Separated Values (CSV)) files (CSV)
-- [A data recorder](#Data Recorder) (logging) (`recorder.hpp`)
-- [A generic library API](#Glaze Interfaces (Generic Library API))
+- Tagged binary messaging for maximum performance
+- Comma Separated Value files (CSV)
+- A data recorder (logging) (`recorder.hpp`)
+- A generic library API
 - A simple thread pool
 - Studies based on JSON structures
 - A JSON file include system
@@ -548,7 +548,7 @@ std::vector<std::byte> out;
 glz::write_binary<partial>(s, out);
 ```
 
-# Comma Separated Values (CSV)
+# Comma Separated Value Format (CSV)
 
 Glaze by default writes row wise files, as this is more efficient for in memory data that is written once to file. Column wise output is also supported for logging use cases.
 
