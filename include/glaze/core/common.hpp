@@ -15,6 +15,7 @@
 #include "frozen/string.h"
 #include "frozen/unordered_map.h"
 
+#include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/api/name.hpp"
 #include "glaze/util/string_view.hpp"

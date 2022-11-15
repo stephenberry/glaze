@@ -28,14 +28,14 @@ namespace glz
       template <>
       struct write<json>
       {
-         template <auto Opts, class T, class B>
-         static void op(T&& value, B&& b) {
-            to_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<B>(b));
+         template <auto Opts, class T,  is_context Ctx, class B>
+         static void op(T&& value, Ctx&& ctx, B&& b) {
+            to_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b));
          }
          
-         template <auto Opts, class T, class B, class IX>
-         static void op(T&& value, B&& b, IX&& ix) {
-            to_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<B>(b), std::forward<IX>(ix));
+         template <auto Opts, class T, is_context Ctx, class B, class IX>
+         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+            to_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
       
@@ -44,7 +44,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(const bool value, Args&&... args) noexcept
+         static void op(const bool value, is_context auto&&, Args&&... args) noexcept
          {
             if (value) {
                dump<"true">(std::forward<Args>(args)...);
@@ -59,7 +59,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class B>
-         static void op(auto&& value, B&& b) noexcept
+         static void op(auto&& value, is_context auto&& ctx, B&& b) noexcept
          {
             if constexpr (std::same_as<std::decay_t<B>, char*>) {
                b = fmt::format_to(std::forward<B>(b), FMT_COMPILE("{}"), value);
@@ -70,7 +70,7 @@ namespace glz
          }
          
          template <auto Opts, class B>
-         static void op(auto&& value, B&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {
                // more efficient strings in C++23:
@@ -105,7 +105,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& b) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& b) noexcept
          {
             dump<'"'>(b);
             const auto write_char = [&](auto&& c) {
@@ -130,7 +130,7 @@ namespace glz
          }
          
          template <auto Opts>
-         static void op(auto&& value, auto&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             if constexpr (char_t<T>) {
                dump<'"'>(b, ix);
@@ -175,7 +175,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using key_t = std::underlying_type_t<T>;
             static constexpr auto frozen_map =
@@ -196,7 +196,7 @@ namespace glz
                // What do we want to happen if the value doesnt have a mapped
                // string
                write<json>::op<Opts>(
-                  static_cast<std::underlying_type_t<T>>(value), std::forward<Args>(args)...);
+                  static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
             }
          }
       };
@@ -214,12 +214,12 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& b) noexcept {
+         static void op(auto&& value, is_context auto&&, auto&& b) noexcept {
             dump(value.str, b);
          }
          
          template <auto Opts>
-         static void op(auto&& value, auto&& b, auto&& ix) noexcept {
+         static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept {
             dump(value.str, b, ix);
          }
       };
@@ -228,7 +228,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<'['>(std::forward<Args>(args)...);
             const auto is_empty = [&]() -> bool {
@@ -242,12 +242,12 @@ namespace glz
             
             if (!is_empty) {
                auto it = value.begin();
-               write<json>::op<Opts>(*it, std::forward<Args>(args)...);
+               write<json>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
                ++it;
                const auto end = value.end();
                for (; it != end; ++it) {
                   dump<','>(std::forward<Args>(args)...);
-                  write<json>::op<Opts>(*it, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
                }
             }
             dump<']'>(std::forward<Args>(args)...);
@@ -258,7 +258,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<'{'>(std::forward<Args>(args)...);
             if (!value.empty()) {
@@ -266,15 +266,15 @@ namespace glz
                auto write_pair = [&] {
                   using Key = decltype(it->first);
                   if constexpr (str_t<Key> || char_t<Key>) {
-                     write<json>::op<Opts>(it->first, std::forward<Args>(args)...);
+                     write<json>::op<Opts>(it->first, ctx, std::forward<Args>(args)...);
                   }
                   else {
                      dump<'"'>(std::forward<Args>(args)...);
-                     write<json>::op<Opts>(it->first, std::forward<Args>(args)...);
+                     write<json>::op<Opts>(it->first, ctx, std::forward<Args>(args)...);
                      dump<'"'>(std::forward<Args>(args)...);
                   }
                   dump<':'>(std::forward<Args>(args)...);
-                  write<json>::op<Opts>(it->second, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(it->second, ctx, std::forward<Args>(args)...);
                };
                write_pair();
                ++it;
@@ -297,10 +297,10 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if (value)
-               write<json>::op<Opts>(*value, std::forward<Args>(args)...);
+               write<json>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
             else {
                dump<"null">(std::forward<Args>(args)...);
             }
@@ -314,9 +314,9 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            std::visit([&](auto&& val) { write<json>::op<Opts>(val, std::forward<Args>(args)...); }, value);
+            std::visit([&](auto&& val) { write<json>::op<Opts>(val, ctx, std::forward<Args>(args)...); }, value);
          }
       };
 
@@ -325,7 +325,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             static constexpr auto N = []() constexpr
             {
@@ -342,10 +342,10 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(value.*glz::tuplet::get<I>(meta_v<V>), std::forward<Args>(args)...);
+                  write<json>::op<Opts>(value.*glz::tuplet::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
                }
                else {
-                  write<json>::op<Opts>(glz::tuplet::get<I>(value), std::forward<Args>(args)...);
+                  write<json>::op<Opts>(glz::tuplet::get<I>(value), ctx, std::forward<Args>(args)...);
                }
                // MSVC bug if this logic is in the `if constexpr`
                // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
@@ -363,7 +363,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             static constexpr auto N = []() constexpr
             {
@@ -380,10 +380,10 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(value.*std::get<I>(meta_v<V>), std::forward<Args>(args)...);
+                  write<json>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
                }
                else {
-                  write<json>::op<Opts>(std::get<I>(value), std::forward<Args>(args)...);
+                  write<json>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...);
                }
                // MSVC bug if this logic is in the `if constexpr`
                // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
@@ -421,7 +421,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& b) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& b) noexcept
          {
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
@@ -455,18 +455,18 @@ namespace glz
 
                using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
                if constexpr (str_t<Key> || char_t<Key>) {
-                  write<json>::op<Opts>(glz::tuplet::get<0>(item), b);
+                  write<json>::op<Opts>(glz::tuplet::get<0>(item), ctx, b);
                   dump<':'>(b);
                }
                else {
                   static constexpr auto quoted = concat_arrays(concat_arrays("\"", glz::tuplet::get<0>(item)), "\":");
-                  write<json>::op<Opts>(quoted, b);
+                  write<json>::op<Opts>(quoted, ctx, b);
                }
                if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {
-                  write<json>::op<Opts>(value.*glz::tuplet::get<1>(item), b);
+                  write<json>::op<Opts>(value.*glz::tuplet::get<1>(item), ctx, b);
                }
                else {
-                  write<json>::op<Opts>(glz::tuplet::get<1>(item)(value), b);
+                  write<json>::op<Opts>(glz::tuplet::get<1>(item)(value), ctx, b);
                }
                constexpr auto S = std::tuple_size_v<decltype(item)>;
                if constexpr (Opts.comments && S > 2) {
@@ -482,7 +482,7 @@ namespace glz
          }
          
          template <auto Opts>
-         static void op(auto&& value, auto&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
@@ -520,7 +520,7 @@ namespace glz
                if constexpr (str_t<Key> || char_t<Key>) {
                   static constexpr sv key = glz::tuplet::get<0>(item);
                   if constexpr (needs_escaping(key)) {
-                     write<json>::op<Opts>(key, b, ix);
+                     write<json>::op<Opts>(key, ctx, b, ix);
                      dump<':'>(b, ix);
                   }
                   else {
@@ -530,13 +530,13 @@ namespace glz
                }
                else {
                   static constexpr auto quoted = concat_arrays(concat_arrays("\"", glz::tuplet::get<0>(item)), "\":");
-                  write<json>::op<Opts>(quoted, b, ix);
+                  write<json>::op<Opts>(quoted, ctx, b, ix);
                }
                if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {
-                  write<json>::op<Opts>(value.*glz::tuplet::get<1>(item), b, ix);
+                  write<json>::op<Opts>(value.*glz::tuplet::get<1>(item), ctx, b, ix);
                }
                else {
-                  write<json>::op<Opts>(glz::tuplet::get<1>(item)(value), b, ix);
+                  write<json>::op<Opts>(glz::tuplet::get<1>(item)(value), ctx, b, ix);
                }
                constexpr auto S = std::tuple_size_v<decltype(item)>;
                if constexpr (Opts.comments && S > 2) {

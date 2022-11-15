@@ -13,36 +13,59 @@ namespace glz
    // the like
    template <opts Opts, class T, class Buffer>
    requires nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char))
-   inline void write(T&& value, Buffer& buffer) noexcept
+   inline void write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
    {
       if constexpr (std::same_as<Buffer, std::string> || std::same_as<Buffer, std::vector<std::byte>>) {
          if (buffer.empty()) {
             buffer.resize(128);
          }
          size_t ix = 0; // overwrite index
-         detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), buffer, ix);
+         detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
          buffer.resize(ix);
       }
       else {
          buffer.clear();
-         detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), std::back_inserter(buffer));
+         detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, std::back_inserter(buffer));
       }
+   }
+   
+   template <opts Opts, class T, class Buffer>
+   requires nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char))
+   inline void write(T&& value, Buffer& buffer) noexcept
+   {
+      context ctx{};
+      write<Opts>(std::forward<T>(value), buffer, ctx);
+   }
+   
+   template <opts Opts, class T, class Buffer>
+   requires std::same_as<std::decay_t<Buffer>, char*>
+   inline size_t write(T&& value, Buffer&& buffer, is_context auto&& ctx) noexcept
+   {
+      auto start = buffer;
+      detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, buffer);
+      return static_cast<size_t>(std::distance(start, buffer));
    }
    
    template <opts Opts, class T, class Buffer>
    requires std::same_as<std::decay_t<Buffer>, char*>
    inline size_t write(T&& value, Buffer&& buffer) noexcept
    {
-      auto start = buffer;
-      detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), buffer);
-      return static_cast<size_t>(std::distance(start, buffer));
+      context ctx{};
+      return write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);
    }
 
    // For writing json to std::ofstream, std::cout, or other streams
    template <opts Opts, class T>
+   inline void write(T&& value, std::ostream& os, is_context auto&& ctx) noexcept
+   {
+      detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx,
+                        std::ostreambuf_iterator<char>(os));
+   }
+   
+   template <opts Opts, class T>
    inline void write(T&& value, std::ostream& os) noexcept
    {
-      detail::write<Opts.format>::template op<Opts>(std::forward<T>(value),
-                        std::ostreambuf_iterator<char>(os));
+      context ctx{};
+      write<Opts>(std::forward<T>(value), os, ctx);
    }
 }

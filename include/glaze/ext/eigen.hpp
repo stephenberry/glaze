@@ -39,10 +39,10 @@ namespace glz
                        "Does not handle dynamic matrices");
 
          template <auto Opts>
-         static void op(auto &value, auto&& it, auto&& end)
+         static void op(auto &value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::read<binary>::op<Opts>(view, it, end);
+            detail::read<binary>::op<Opts>(view, ctx, it, end);
          }
       };
       
@@ -53,10 +53,10 @@ namespace glz
                        "Does not handle dynamic matrices");
          
          template <auto Opts, class... Args>
-         static void op(auto&& value, Args&&... args) noexcept
+         static void op(auto&& value,  is_context auto&& ctx, Args&&... args) noexcept
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::write<binary>::op<Opts>(view, std::forward<Args>(args)...);
+            detail::write<binary>::op<Opts>(view, ctx, std::forward<Args>(args)...);
          }
       };
       
@@ -67,10 +67,10 @@ namespace glz
                        "Does not handle dynamic matrices");
 
          template <auto Opts>
-         static void op(auto &value, auto&& it, auto&& end)
+         static void op(auto &value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::read<json>::op<Opts>(view, it, end);
+            detail::read<json>::op<Opts>(view, ctx, it, end);
          }
       };
 
@@ -81,17 +81,17 @@ namespace glz
                        "Does not handle dynamic matrices");
 
          template <auto Opts>
-         static void op(auto &&value, auto &&b) noexcept
+         static void op(auto &&value,  is_context auto&& ctx, auto &&b) noexcept
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::write<json>::op<Opts>(view, b);
+            detail::write<json>::op<Opts>(view, ctx, b);
          }
          
          template <auto Opts>
-         static void op(auto &&value, auto &&b, auto&& ix) noexcept
+         static void op(auto &&value, is_context auto&& ctx, auto &&b, auto&& ix) noexcept
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::write<json>::op<Opts>(view, b, ix);
+            detail::write<json>::op<Opts>(view, ctx, b, ix);
          }
       };
    }  // namespace detail
