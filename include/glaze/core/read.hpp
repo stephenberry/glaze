@@ -11,7 +11,7 @@ namespace glz
    template <opts Opts, class Buffer>
    requires nano::ranges::input_range<std::decay_t<Buffer>> &&
       std::same_as<std::byte, nano::ranges::range_value_t<std::decay_t<Buffer>>>
-   inline void read(auto& value, Buffer&& buffer)
+   inline void read(auto& value, Buffer&& buffer, auto&& ctx)
    {
       auto b = std::ranges::begin(buffer);
       auto e = std::ranges::end(buffer);
@@ -19,7 +19,7 @@ namespace glz
          throw std::runtime_error("No input provided to read");
       }
       try {
-         detail::read<Opts.format>::template op<Opts>(value, b, e);
+         detail::read<Opts.format>::template op<Opts>(value, b, e, ctx);
       }
       catch (const std::exception& e) {
          // TODO: Implement good error message
@@ -27,11 +27,19 @@ namespace glz
       }
    }
    
+   template <opts Opts, class Buffer>
+   requires nano::ranges::input_range<std::decay_t<Buffer>> &&
+      std::same_as<std::byte, nano::ranges::range_value_t<std::decay_t<Buffer>>>
+   inline void read(auto& value, Buffer&& buffer) {
+      context ctx{};
+      read<Opts>(value, std::forward<Buffer>(buffer), ctx);
+   }
+   
    // For reading json from a std::vector<char>, std::deque<char> and the like
    template <opts Opts, class Buffer>
    requires nano::ranges::input_range<std::decay_t<Buffer>> &&
       std::same_as<char, nano::ranges::range_value_t<std::decay_t<Buffer>>>
-   inline void read(auto& value, Buffer&& buffer)
+   inline void read(auto& value, Buffer&& buffer, auto&& ctx)
    {
       auto b = std::ranges::begin(buffer);
       auto e = std::ranges::end(buffer);
@@ -39,7 +47,7 @@ namespace glz
          throw std::runtime_error("No input provided to read");
       }
       try {
-         detail::read<Opts.format>::template op<Opts>(value, b, e);
+         detail::read<Opts.format>::template op<Opts>(value, b, e, ctx);
       }
       catch (const std::exception& e) {
          auto index = std::distance(std::ranges::begin(buffer), b);
@@ -49,16 +57,32 @@ namespace glz
          throw std::runtime_error(error);
       }
    }
+   
+   template <opts Opts, class Buffer>
+   requires nano::ranges::input_range<std::decay_t<Buffer>> &&
+      std::same_as<char, nano::ranges::range_value_t<std::decay_t<Buffer>>>
+   inline void read(auto& value, Buffer&& buffer)
+   {
+      context ctx{};
+      read<Opts>(value, std::forward<Buffer>(buffer), ctx);
+   }
 
    // For reading json from std::ofstream, std::cout, or other streams
    template <opts Opts>
-   inline void read(auto& value, detail::stream_t auto& is)
+   inline void read(auto& value, detail::stream_t auto& is, auto&& ctx)
    {
       std::istreambuf_iterator<char> b{is}, e{};
       if (b == e) {
          throw std::runtime_error("No input provided to read");
       }
-      detail::read<Opts.format>::template op<Opts>(value, b, e);
+      detail::read<Opts.format>::template op<Opts>(value, b, e, ctx);
+   }
+   
+   template <opts Opts>
+   inline void read(auto& value, detail::stream_t auto& is)
+   {
+      context ctx{};
+      read<Opts>(value, is, ctx);
    }
 
    // For reading json from stuff convertable to a std::string_view
@@ -66,12 +90,22 @@ namespace glz
    requires(std::convertible_to<std::decay_t<Buffer>, std::string_view> &&
             !nano::ranges::input_range<
                std::decay_t<Buffer>>) inline void read(T& value,
-                                                            Buffer&& buffer)
+                                                            Buffer&& buffer, auto&& ctx)
    {
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
       if (str.empty()) {
          throw std::runtime_error("No input provided to read");
       }
-      read<Opts>(value, str);
+      read<Opts>(value, str, ctx);
+   }
+   
+   template <opts Opts, class T, class Buffer>
+   requires(std::convertible_to<std::decay_t<Buffer>, std::string_view> &&
+            !nano::ranges::input_range<
+               std::decay_t<Buffer>>) inline void read(T& value,
+                                                            Buffer&& buffer)
+   {
+      context ctx{};
+      read<Opts>(value, std::forward<Buffer>(buffer), ctx);
    }
 }
