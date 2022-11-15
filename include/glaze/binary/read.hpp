@@ -18,9 +18,9 @@ namespace glz
       template <>
       struct read<binary>
       {
-         template <auto Opts, class T, class It0, class It1>
-         static void op(T&& value, It0&& it, It1&& end) noexcept {
-            from_binary<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<It0>(it), std::forward<It1>(end));
+         template <auto Opts, class T, is_context Ctx, class It0, class It1>
+         static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept {
+            from_binary<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
       
@@ -29,7 +29,7 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using V = std::decay_t<T>;
             std::memcpy(&value, &(*it), sizeof(V));
@@ -41,7 +41,7 @@ namespace glz
       requires(std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>) struct from_binary<T>
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& /* end */) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& /* end */) noexcept
          {
             value = static_cast<bool>(*it);
             ++it;
@@ -52,7 +52,7 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         static void op(auto&& /*value*/, auto&& /*it*/, auto&& /*end*/) noexcept
+         static void op(auto&& /*value*/, is_context auto&& /*ctx*/, auto&& /*it*/, auto&& /*end*/) noexcept
          {
          }
       };
@@ -125,7 +125,7 @@ namespace glz
       struct from_binary<T> final
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto n = int_from_header(it, end);
             using V = typename std::decay_t<T>::value_type;
@@ -147,11 +147,11 @@ namespace glz
       struct from_binary<T> final
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (has_static_size<T>) {
                for (auto&& item : value) {
-                  read<binary>::op<Opts>(item, it, end);
+                  read<binary>::op<Opts>(item, ctx, it, end);
                }
             }
             else {
@@ -162,7 +162,7 @@ namespace glz
                }
 
                for (auto&& item: value) {
-                  read<binary>::op<Opts>(item, it, end);
+                  read<binary>::op<Opts>(item, ctx, it, end);
                }
             }
          }
@@ -172,22 +172,22 @@ namespace glz
       struct from_binary<T> final
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto n = int_from_header(it, end);
             
             if constexpr (std::is_arithmetic_v<std::decay_t<typename T::key_type>>) {
                typename T::key_type key;
                for (size_t i = 0; i < n; ++i) {
-                  read<binary>::op<Opts>(key, it, end);
-                  read<binary>::op<Opts>(value[key], it, end);
+                  read<binary>::op<Opts>(key, ctx, it, end);
+                  read<binary>::op<Opts>(value[key], ctx, it, end);
                }
             }
             else {
                static thread_local typename T::key_type key;
                for (size_t i = 0; i < n; ++i) {
-                  read<binary>::op<Opts>(key, it, end);
-                  read<binary>::op<Opts>(value[key], it, end);
+                  read<binary>::op<Opts>(key, ctx, it, end);
+                  read<binary>::op<Opts>(value[key], ctx, it, end);
                }
             }
          };
@@ -197,7 +197,7 @@ namespace glz
       struct from_binary<T> final
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto has_value = static_cast<bool>(*it);
             ++it;
@@ -210,7 +210,7 @@ namespace glz
                else if constexpr (is_specialization_v<T, std::shared_ptr>)
                   value = std::make_shared<typename T::element_type>();
 
-               read<binary>::op<Opts>(*value, it, end);
+               read<binary>::op<Opts>(*value, ctx, it, end);
             }
             else {
                if constexpr (is_specialization_v<T, std::optional>)
@@ -227,7 +227,7 @@ namespace glz
       struct from_binary<includer<T>>
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             static thread_local std::string path{};
             read<binary>::op<Opts>(path, it, end);
@@ -239,7 +239,7 @@ namespace glz
             file.seekg(0);
             file.read(buffer.data(), buffer.size());
             
-            read<binary>::op<Opts>(value.value, it, end);
+            read<binary>::op<Opts>(value.value, ctx, it, end);
          }
       };
       
@@ -248,7 +248,7 @@ namespace glz
       struct from_binary<T> final
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto n_keys = int_from_header(it, end);
             
@@ -259,7 +259,7 @@ namespace glz
                std::visit(
                   [&](auto&& member_ptr) {
                      using V = std::decay_t<decltype(member_ptr)>;
-                     read<binary>::op<Opts>(get_member(value, member_ptr), it, end);
+                     read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
                   },
                           storage[key]);
             }
@@ -271,11 +271,11 @@ namespace glz
       struct from_binary<T> final
       {
          template <auto Opts>
-         static void op(auto&& value, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-               read<binary>::op<Opts>(value.*glz::tuplet::get<I>(meta_v<V>), it, end);
+               read<binary>::op<Opts>(value.*glz::tuplet::get<I>(meta_v<V>), ctx, it, end);
             });
          }
       };
