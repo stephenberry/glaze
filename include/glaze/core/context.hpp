@@ -13,4 +13,7 @@ namespace glz
       
       bool prettify = false; // write out prettified JSON
    };
+   
+   template <class T>
+   concept is_context = std::same_as<std::decay_t<T>, context>;
 }
