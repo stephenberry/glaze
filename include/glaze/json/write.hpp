@@ -96,7 +96,7 @@ namespace glz
             else if constexpr (std::same_as<V, int32_t> || std::same_as<V, uint32_t> ||
                                std::same_as<V, int64_t> || std::same_as<V, uint64_t>) {
                auto start = b.data() + ix;
-               auto end = to_chars(start, value);
+               auto end = glz::to_chars(start, value);
                ix += std::distance(start, end);
             }
             else {
