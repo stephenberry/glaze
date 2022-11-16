@@ -42,8 +42,8 @@ Tagged binary specification: [Crusher](https://github.com/stephenberry/crusher)
 
 | Metric                | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | --------------------- | ------------------ | ------------ | ----------- |
-| Raw performance       | **0.40**           | **1,795**    | **1,703**   |
-| Equivalent JSON data* | **0.40**           | **3,164**    | **3,002**   |
+| Raw performance       | **0.37**           | **1864**     | **2035**    |
+| Equivalent JSON data* | **0.37**           | **3286**     | **3587**    |
 
 JSON message size: 617 bytes
 
