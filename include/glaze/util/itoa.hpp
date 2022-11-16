@@ -146,7 +146,7 @@ namespace glz
 
    template <class T>
    requires std::same_as<T, int32_t>
-   inline constexpr char* to_chars(char *buf, T val) noexcept {
+   inline char* to_chars(char *buf, T val) noexcept {
       uint32_t neg = (uint32_t)-val;
       std::size_t sign = val < 0;
       *buf = '-';
@@ -179,7 +179,7 @@ namespace glz
        return buf + 4;
    }
    
-   inline constexpr char* to_chars_u64_len_1_8(char *buf, uint32_t val) noexcept {
+   inline char* to_chars_u64_len_1_8(char *buf, uint32_t val) noexcept {
        uint32_t aa, bb, cc, dd, aabb, bbcc, ccdd, lz;
        
        if (val < 100) { /* 1-2 digits: aa */
@@ -227,7 +227,7 @@ namespace glz
        }
    }
 
-   inline constexpr char* to_chars_u64_len_5_8(char *buf, uint32_t val) noexcept {
+   inline char* to_chars_u64_len_5_8(char *buf, uint32_t val) noexcept {
        uint32_t aa, bb, cc, dd, aabb, bbcc, ccdd, lz;
        
        if (val < 1000000) { /* 5-6 digits: aabbcc */
@@ -262,7 +262,7 @@ namespace glz
    
    template <class T>
    requires std::same_as<T, uint64_t>
-   inline constexpr char* to_chars(char *buf, T val) noexcept {
+   inline char* to_chars(char *buf, T val) noexcept {
        uint64_t tmp, hgh;
        uint32_t mid, low;
        
@@ -291,7 +291,7 @@ namespace glz
    
    template <class T>
    requires std::same_as<T, int64_t>
-   inline constexpr char* to_chars(char *buf, T val) noexcept {
+   inline char* to_chars(char *buf, T val) noexcept {
        uint64_t neg = (uint64_t)-val;
        std::size_t sign = val < 0;
        *buf = '-';
