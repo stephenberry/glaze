@@ -17,6 +17,7 @@
 #include "glaze/json/from_ptr.hpp"
 
 #include "glaze/util/to_chars.hpp"
+#include "glaze/util/itoa.hpp"
 
 namespace glz
 {
@@ -90,6 +91,12 @@ namespace glz
                const auto end = glz::dragonbox::to_chars(value, start);
                // Faster but only scientific notation
                // const auto end = jkj::dragonbox::to_chars_n(value, start);
+               ix += std::distance(start, end);
+            }
+            else if constexpr (std::same_as<V, int32_t> || std::same_as<V, uint32_t> ||
+                               std::same_as<V, int64_t> || std::same_as<V, uint64_t>) {
+               auto start = b.data() + ix;
+               auto end = glz::to_chars(start, value);
                ix += std::distance(start, end);
             }
             else {
