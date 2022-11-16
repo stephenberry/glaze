@@ -194,7 +194,7 @@ namespace glz
                value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
                auto start = it;
                while (it < end) {
-                  skip_till_escape_or_qoute(it, end);
+                  skip_till_escape_or_quote(it, end);
                   if (*it == '"') {
                      value.append(&*start, static_cast<size_t>(std::distance(start, it)));
                      ++it;
@@ -551,7 +551,7 @@ namespace glz
                      skip_ws(it, end);
                      match<'"'>(it, end);
                      auto start = it;
-                     skip_till_escape_or_qoute(it, end);
+                     skip_till_escape_or_quote(it, end);
                      if (*it == '\\') [[unlikely]] {
                         // we dont' optimize this currently because it would increase binary size significantly with the complexity of generating escaped compile time versions of keys
                         it = start;
