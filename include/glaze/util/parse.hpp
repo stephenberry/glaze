@@ -4,6 +4,7 @@
 #pragma once
 
 #include <bit>
+#include <iterator>
 
 namespace glz::detail
 {
@@ -97,9 +98,16 @@ namespace glz::detail
       }
    }
 
-   inline void skip_till_escape_or_qoute(auto&& it, auto&& end)
+   inline void skip_till_escape_or_quote(auto&& it, auto&& end)
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
+
+      if (it == end) [[unlikely]]
+         throw std::runtime_error("Unexpected end, expected escape or quote");
+
+      const char* start = &(*it);
+      const char* current = start;
+      const char* stop = start + std::distance(it, end);
 
       auto has_zero = [](uint64_t chunk) { return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080); };
 
@@ -111,25 +119,29 @@ namespace glz::detail
          return has_zero(chunk ^ 0b0101110001011100010111000101110001011100010111000101110001011100);
       };
 
-      const auto end_m7 = end - 7;
-      for (; it < end_m7; it += 8) {
-         const auto chunk = *reinterpret_cast<const uint64_t*>(&*it);
+      const auto end_m7 = stop - 7;
+      for (; current < end_m7; current += 8) {
+         // TODO: Change to memcpy
+         const auto chunk = *reinterpret_cast<const uint64_t*>(&*current);
          uint64_t test = has_qoute(chunk) | has_escape(chunk);
          if (test != 0) {
-            it += (std::countr_zero(test) >> 3);
+            current += (std::countr_zero(test) >> 3);
+            it += current - start;
             return;
          }
       }
 
       // Tail end of buffer. Should be rare we even get here
-      while (it < end) {
-         switch (*it) {
+      while (current < stop) {
+         switch (*current) {
          case '\\':
          case '"':
+            it += current - start;
             return;
          }
-         ++it;
+         ++current;
       }
+      it += current - start;
       throw std::runtime_error("Expected \"");
    }
 
