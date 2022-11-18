@@ -194,19 +194,56 @@ namespace glz
                value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
                auto start = it;
                while (it < end) {
-                  skip_till_escape_or_qoute(it, end);
+                  skip_till_escape_or_quote(it, end);
                   if (*it == '"') {
                      value.append(&*start, static_cast<size_t>(std::distance(start, it)));
                      ++it;
                      return;
                   }
                   else {
-                     // Must be an escape
-                     // TODO propperly handle this
                      value.append(&*start, static_cast<size_t>(std::distance(start, it)));
-                     ++it; // skip first escape
-                     value.push_back(*it); // add the escaped character
+                     auto esc = *it;
                      ++it;
+
+                     switch (*it)
+                     {
+                     case '"':
+                     case '\\':
+                     case '/':
+                        value.push_back(*it);
+                        ++it;
+                        break;
+                     case 'b':
+                     case 'f':
+                     case 'n':
+                     case 'r':
+                     case 't':
+                        value.push_back(esc);
+                        value.push_back(*it);
+                        ++it;
+                        break;
+                     case 'u': {
+                        value.push_back(esc);
+                        value.push_back(*it);
+                        ++it;
+
+                        std::string_view temp(it, it + 4);
+                        if (std::all_of(temp.begin(), temp.end(), ::isxdigit)) {
+                           value.append(&*it, 4);
+                           it += 4;
+                        }
+                        else
+                           throw std::runtime_error("Invalid hex value for unicode escape.");
+
+                        break;
+                     }
+                     default:
+                        throw std::runtime_error("Unknown escape character " + esc);
+                     }
+
+                     //++it; // skip first escape
+                     //value.push_back(*it); // add the escaped character
+                     //++it;
                      start = it;
                   }
                }
@@ -551,7 +588,7 @@ namespace glz
                      skip_ws(it, end);
                      match<'"'>(it, end);
                      auto start = it;
-                     skip_till_escape_or_qoute(it, end);
+                     skip_till_escape_or_quote(it, end);
                      if (*it == '\\') [[unlikely]] {
                         // we dont' optimize this currently because it would increase binary size significantly with the complexity of generating escaped compile time versions of keys
                         it = start;

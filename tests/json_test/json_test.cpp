@@ -194,13 +194,15 @@ struct Escaped
 {
    int escaped_key{};
    std::string escaped_key2{ "hi" };
+   std::string escape_chars{""};
 };
 
 template <>
 struct glz::meta<Escaped> {
    using T = Escaped;
    static constexpr auto value = object(R"(escaped"key)", &T::escaped_key, //
-                                        R"(escaped""key2)", &T::escaped_key2);
+                                        R"(escaped""key2)", &T::escaped_key2,
+                                        R"(escape_chars)", &T::escape_chars);
 };
 
 suite escaping_tests = [] {
@@ -215,6 +217,15 @@ suite escaping_tests = [] {
       glz::read_json(obj, in);
       expect(obj.escaped_key == 5);
       expect(obj.escaped_key2 == "bye");
+   };
+
+   "escaped_characters"_test = [] {
+      std::string in = R"({"escape_chars":"\\b\\f\\n\\r\\t\\u11FF"})";
+      Escaped obj{};
+
+      glz::read_json(obj, in);
+
+      expect(obj.escape_chars == "\\b\\f\\n\\r\\t\\u11FF");
    };
 };
 
