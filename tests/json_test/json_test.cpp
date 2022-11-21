@@ -211,7 +211,7 @@ suite escaping_tests = [] {
       Escaped obj{};
       glz::write_json(obj, out);
       
-      expect(out == R"({"escaped\"key":0,"escaped\"\"key2":"hi"})");
+      expect(out == R"({"escaped\"key":0,"escaped\"\"key2":"hi","escape_chars":""})");
       
       std::string in = R"({"escaped\"key":5,"escaped\"\"key2":"bye"})";
       glz::read_json(obj, in);
@@ -1297,12 +1297,16 @@ void read_tests() {
    };
 
    "Read string"_test = [] {
-      std::string in =
-         R"("asljl{}121231212441[]123::,,;,;,,::,Q~123\a13dqwdwqwq")";
+      std::string in_nothrow = R"("asljl{}121231212441[]123::,,;,;,,::,Q~123\\a13dqwdwqwq")";
       std::string res{};
-      glz::read_json(res, in);
-//*   function fails, does not recognize '\'
-      //expect(res == "asljl{}121231212441[]123::,,;,;,,::,Q~123\\a13dqwdwqwq");
+
+      glz::read_json(res, in_nothrow);
+      expect(res == "asljl{}121231212441[]123::,,;,;,,::,Q~123\\a13dqwdwqwq");
+
+      std::string in_throw = R"("asljl{}121231212441[]123::,,;,;,,::,Q~123\a13dqwdwqwq")";
+      res.clear();
+
+      expect(throws([&] { glz::read_json(res, in_throw); }));
    };
 
    "Nested array"_test = [] {

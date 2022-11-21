@@ -238,12 +238,9 @@ namespace glz
                         break;
                      }
                      default:
-                        throw std::runtime_error("Unknown escape character " + esc);
+                        throw std::runtime_error("Unknown escape character.");
                      }
 
-                     //++it; // skip first escape
-                     //value.push_back(*it); // add the escaped character
-                     //++it;
                      start = it;
                   }
                }
