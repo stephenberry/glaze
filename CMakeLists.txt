@@ -15,8 +15,11 @@ add_library(glaze_glaze INTERFACE)
 add_library(glaze::glaze ALIAS glaze_glaze)
 
 if (MSVC)
-   # for a C++ standards compliant preprocessor:
-   target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor")
+   string(REGEX MATCH "\/cl(.exe)?$" matched_cl ${CMAKE_CXX_COMPILER})
+   if (matched_cl)
+      # for a C++ standards compliant preprocessor, not needed for clang-cl
+      target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor")
+   endif()
 else()
    target_compile_options(glaze_glaze INTERFACE "-Wno-missing-braces")
 endif()
