@@ -36,7 +36,7 @@ namespace glz
    
    inline constexpr uint32_t murmur3_32(auto&& key) noexcept
    {
-      uint32_t h = 0; // We always use a seed of 0 for Crusher
+      uint32_t h = 31; // We always use a seed of 31 for Crusher
       uint32_t k;
       const auto n = key.size();
       auto* data = key.data();
