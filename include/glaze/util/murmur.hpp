@@ -37,32 +37,32 @@ namespace glz
    inline constexpr uint32_t murmur3_32(auto&& key) noexcept
    {
       uint32_t h = 0; // We always use a seed of 0 for Crusher
-       uint32_t k;
-       const auto n = key.size();
-       auto* data = key.data();
-       /* Read in groups of 4. */
-       for (size_t i = n >> 2; i; i--) {
-           // Here is a source of differing results across endiannesses.
-           // A swap here has no effects on hash properties though.
-           k = to_uint32(data);
-
-           data += sizeof(uint32_t);
-           h ^= murmur_32_scramble(k);
-           h = (h << 13) | (h >> 19);
-           h = h * 5 + 0xe6546b64;
-       }
-       /* Read the rest. */
-       k = 0;
-       for (size_t i = n & 3; i; i--) {
-           k <<= 8;
-           k |= key[i - 1];
-       }
-       // A swap is *not* necessary here because the preceding loop already
-       // places the low bytes in the low places according to whatever endianness
-       // we use. Swaps only apply when the memory is copied in a chunk.
-       h ^= murmur_32_scramble(k);
-       /* Finalize. */
-      h ^= n;
+      uint32_t k;
+      const auto n = key.size();
+      auto* data = key.data();
+      /* Read in groups of 4. */
+      for (size_t i = n >> 2; i; i--) {
+         // Here is a source of differing results across endiannesses.
+         // A swap here has no effects on hash properties though.
+         k = to_uint32(data);
+         
+         data += sizeof(uint32_t);
+         h ^= murmur_32_scramble(k);
+         h = (h << 13) | (h >> 19);
+         h = h * 5 + 0xe6546b64;
+      }
+      /* Read the rest. */
+      k = 0;
+      for (size_t i = n & 3; i; i--) {
+         k <<= 8;
+         k |= key[i - 1];
+      }
+      // A swap is *not* necessary here because the preceding loop already
+      // places the low bytes in the low places according to whatever endianness
+      // we use. Swaps only apply when the memory is copied in a chunk.
+      h ^= murmur_32_scramble(k);
+      /* Finalize. */
+      h ^= static_cast<uint32_t>(n); // static_cast needed for MSVC 2019
       h ^= h >> 16;
       h *= 0x85ebca6b;
       h ^= h >> 13;
