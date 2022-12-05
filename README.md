@@ -42,12 +42,12 @@ Tagged binary specification: [Crusher](https://github.com/stephenberry/crusher)
 
 | Metric                | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | --------------------- | ------------------ | ------------ | ----------- |
-| Raw performance       | **0.37**           | **1864**     | **2035**    |
-| Equivalent JSON data* | **0.37**           | **3286**     | **3587**    |
+| Raw performance       | **0.37**           | **2199**     | **1949**    |
+| Equivalent JSON data* | **0.37**           | **3261**     | **2891**    |
 
 JSON message size: 617 bytes
 
-Binary message size: 350 bytes
+Binary message size: 416 bytes
 
 *Binary data packs more efficiently than JSON, so transporting the same amount of information is even faster.
 
