@@ -163,7 +163,6 @@ Will automaticlly fetch missing dependencies with FetchContent/CPM if not found 
 - [dragonbox](https://github.com/jk-jeon/dragonbox)
 - [fast_float](https://github.com/fastfloat/fast_float)
 - [fmt](https://github.com/fmtlib/fmt)
-- [frozen](https://github.com/serge-sans-paille/frozen.git)
 - [NanoRange](https://github.com/tcbrindle/NanoRange)
 
 ## Unit Test Dependencies
