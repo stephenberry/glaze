@@ -165,12 +165,10 @@ Will automaticlly fetch missing dependencies with FetchContent/CPM if not found 
 - [fmt](https://github.com/fmtlib/fmt)
 - [NanoRange](https://github.com/tcbrindle/NanoRange)
 
-## Unit Test Dependencies
-
-*Only required for building tests.*
-
-- [UT](https://github.com/boost-ext/ut)
-- [Eigen](https://gitlab.com/libeigen/eigen)
+>*Only required for building tests:*
+>
+>- [UT](https://github.com/boost-ext/ut)
+>- [Eigen](https://gitlab.com/libeigen/eigen)
 
 ## See [Wiki](https://github.com/stephenberry/glaze/wiki) for [Frequently Asked Questions](https://github.com/stephenberry/glaze/wiki)
 
