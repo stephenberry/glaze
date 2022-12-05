@@ -1,3 +1,6 @@
+// Glaze Library
+// For the license information refer to glaze.hpp
+
 /*
  * Frozen
  * Copyright 2016 QuarksLab
