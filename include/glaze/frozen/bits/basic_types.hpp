@@ -196,7 +196,6 @@ namespace glz::frozen
 
      // Constructors
      constexpr carray(void) = default;
-
    };
 
    } // namespace bits
