@@ -515,8 +515,6 @@ Integers and integer keys are locally compressed for efficiency. Elements are by
 
 Most classes use `std::memcpy` for maximum performance.
 
-Compile time known objects use integer mapping for JSON equivalent keys, significantly reducing message sizes and increasing performance.
-
 **Write Binary**
 
 ```c++
