@@ -12,7 +12,7 @@
 
 namespace glz
 {
-   constexpr uint32_t to_uint32(const char* bytes) noexcept
+   constexpr uint32_t to_uint32(const auto* bytes) noexcept
    {
       uint32_t res{};
       if (std::is_constant_evaluated()) {
@@ -34,19 +34,19 @@ namespace glz
        return k;
    }
    
-   inline constexpr uint32_t murmur3_32(auto&& key) noexcept
+   inline constexpr uint32_t murmur3_32(auto&& value) noexcept
    {
       uint32_t h = 31; // We always use a seed of 31 for Crusher
       uint32_t k;
-      const auto n = key.size();
-      auto* data = key.data();
+      const auto n = value.size();
+      auto* key = value.data();
       /* Read in groups of 4. */
       for (size_t i = n >> 2; i; i--) {
          // Here is a source of differing results across endiannesses.
          // A swap here has no effects on hash properties though.
-         k = to_uint32(data);
+         k = to_uint32(key);
          
-         data += sizeof(uint32_t);
+         key += sizeof(uint32_t);
          h ^= murmur_32_scramble(k);
          h = (h << 13) | (h >> 19);
          h = h * 5 + 0xe6546b64;
