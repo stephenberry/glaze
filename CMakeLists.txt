@@ -53,12 +53,6 @@ if (nanorange_ADDED)
 endif()
 
 CPMFindPackage(
-   NAME frozen
-   GIT_REPOSITORY https://github.com/serge-sans-paille/frozen.git
-   GIT_TAG 1.1.1
-)
-
-CPMFindPackage(
    NAME FastFloat
    GIT_REPOSITORY https://github.com/fastfloat/fast_float.git
    GIT_TAG v3.6.0
@@ -75,7 +69,6 @@ target_link_libraries(
     fmt::fmt-header-only
     dragonbox::dragonbox_to_chars
     nanorange::nanorange
-    frozen::frozen
     FastFloat::fast_float
 )
 

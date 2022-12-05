@@ -12,8 +12,8 @@
 #include <filesystem>
 #include <fstream>
 
-#include "frozen/string.h"
-#include "frozen/unordered_map.h"
+#include "glaze/frozen/string.hpp"
+#include "glaze/frozen/unordered_map.hpp"
 
 #include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
