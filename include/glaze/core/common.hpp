@@ -23,6 +23,7 @@
 #include "glaze/util/tuple.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/hash_map.hpp"
+#include "glaze/util/murmur.hpp"
 
 #include <nanorange.hpp>
 
@@ -568,6 +569,26 @@ namespace glz
          constexpr auto indices =
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_key_int_map_impl<T>(indices);
+      }
+      
+      template <class T, size_t... I>
+      constexpr auto make_crusher_map_impl(std::index_sequence<I...>)
+      {
+         using value_t = value_tuple_variant_t<meta_t<T>>;
+         constexpr auto n = std::tuple_size_v<meta_t<T>>;
+         
+         return frozen::make_unordered_map<uint32_t, value_t, n>(
+            {std::make_pair<uint32_t, value_t>(
+               murmur3_32(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                                     glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
+      }
+      
+      template <class T>
+      constexpr auto make_crusher_map()
+      {
+         constexpr auto indices =
+            std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
+         return make_crusher_map_impl<T>(indices);
       }
 
       template <class T, size_t... I>

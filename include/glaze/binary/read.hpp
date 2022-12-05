@@ -92,35 +92,6 @@ namespace glz
          }
       }
       
-      template <size_t N>
-      inline constexpr size_t int_from_raw(auto&& it, auto&& /*end*/) noexcept
-      {
-         if constexpr (N < 256) {
-            uint8_t i;
-            std::memcpy(&i, &(*it), 1);
-            ++it;
-            return i;
-         }
-         else if constexpr (N < 65536) {
-            uint16_t i;
-            std::memcpy(&i, &(*it), 2);
-            ++it;
-            return i;
-         }
-         else if constexpr (N < 4294967296) {
-            uint32_t i;
-            std::memcpy(&i, &(*it), 4);
-            ++it;
-            return i;
-         }
-         else {
-            uint64_t i;
-            std::memcpy(&i, &(*it), 8);
-            ++it;
-            return i;
-         }
-      }
-      
       template <str_t T>
       struct from_binary<T> final
       {
@@ -252,16 +223,23 @@ namespace glz
          {
             const auto n_keys = int_from_header(it, end);
             
-            static constexpr auto storage = detail::make_int_storage<T>();
+            static constexpr auto storage = detail::make_crusher_map<T>();
             
             for (size_t i = 0; i < n_keys; ++i) {
-               const auto key = int_from_header(it, end);
-               std::visit(
-                  [&](auto&& member_ptr) {
-                     using V = std::decay_t<decltype(member_ptr)>;
-                     read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
-                  },
-                          storage[key]);
+               uint32_t key;
+               std::memcpy(&key, &(*it), 4);
+               std::advance(it, 4);
+               
+               const auto& p = storage.find(key);
+               
+               if (p != storage.end()) {
+                  std::visit(
+                             [&](auto&& member_ptr) {
+                                using V = std::decay_t<decltype(member_ptr)>;
+                                read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
+                             },
+                     p->second);
+               }
             }
          }
       };
