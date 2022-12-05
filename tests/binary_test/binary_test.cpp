@@ -492,6 +492,7 @@ void test_partial()
       std::vector<std::byte> out;
       static constexpr auto partial = glz::json_ptrs("/i",
                                                        "/d",
+                                                       "/hello",
                                                        "/sub/x",
                                                        "/sub/y",
                                                        "/map/fish",
@@ -519,6 +520,12 @@ void test_partial()
       s2.sub.x = 0.0;
       s2.sub.y = 20;
       glz::read_binary(s2, out);
+      
+      expect(s2.i == 2);
+      expect(s2.d == 3.14);
+      expect(s2.hello == "Hello World");
+      expect(s2.sub.x == 400.0);
+      expect(s2.sub.y == 200.0);
    }
    catch (const std::exception& e) {
       std::cout << e.what() << '\n';

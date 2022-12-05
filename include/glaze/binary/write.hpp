@@ -10,6 +10,7 @@
 #include "glaze/core/write.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/util/error.hpp"
+#include "glaze/util/murmur.hpp"
 
 #include <utility>
 
@@ -194,13 +195,14 @@ namespace glz
          {
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
-            dump_int<N>(std::forward<Args>(args)...); // even though N is known at compile time in this case, it is not known for partial cases, so we still use a compressed integer
+            dump_int<N>(args...); // even though N is known at compile time in this case, it is not known for partial cases, so we still use a compressed integer
 
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
-               dump_int<Opts>(I, std::forward<Args>(args)...); // dump the known key as an integer
+               static constexpr uint32_t hash = murmur3_32(glz::tuplet::get<0>(item));
+               dump_type(hash, args...);
                using V = std::tuple_element_t<1, decltype(item)>;
-               write<binary>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, std::forward<Args>(args)...);
+               write<binary>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, args...);
             });
          }
       };
@@ -253,7 +255,6 @@ namespace glz
          detail::dump_int<N>(buffer);
 
          if constexpr (detail::glaze_object_t<std::decay_t<T>>) {
-            static constexpr auto key_to_int = detail::make_key_int_map<T>();
             glz::for_each<N>([&](auto I) {
                using index_t = decltype(I);
                using group_t = std::tuple_element_t<I, decltype(groups)>;
@@ -269,8 +270,9 @@ namespace glz
                              "Invalid key passed to partial write");
                static constexpr auto ix = member_it->second.index();
                static constexpr decltype(auto) member_ptr = std::get<ix>(member_it->second);
-
-               detail::dump_int<Opts>(key_to_int.find(key)->second, buffer);
+               
+               static constexpr uint32_t hash = murmur3_32(key);
+               detail::dump_type(hash, buffer);
                write<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), buffer, ctx);
             });
          }

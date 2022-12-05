@@ -25,6 +25,9 @@
 
 #include <cstdint>
 
+// https://github.com/Cyan4973/xxHash
+// http://cyan4973.github.io/xxHash/
+
 struct xxh64 {
     static constexpr uint64_t hash (const char *p, uint64_t len, uint64_t seed) {
         return finalize ((len >= 32 ? h32bytes (p, len, seed) : seed + PRIME5) + len, p + (len & ~0x1F), len & 0x1F);
