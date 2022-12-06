@@ -21,7 +21,7 @@ namespace glz
    !nano::ranges::input_range<std::decay_t<Buffer>>;
    
    template <opts Opts, byte_buffer Buffer>
-   inline void read(auto& value, Buffer&& buffer, auto&& ctx)
+   inline void read(auto& value, Buffer&& buffer, is_context auto&& ctx)
    {
       auto b = std::ranges::begin(buffer);
       auto e = std::ranges::end(buffer);
@@ -45,7 +45,7 @@ namespace glz
    
    // For reading json from a std::vector<char>, std::deque<char> and the like
    template <opts Opts, char_buffer Buffer>
-   inline void read(auto& value, Buffer&& buffer, auto&& ctx)
+   inline void read(auto& value, Buffer&& buffer, is_context auto&& ctx)
    {
       auto b = std::ranges::begin(buffer);
       auto e = std::ranges::end(buffer);
@@ -75,7 +75,7 @@ namespace glz
 
    // For reading json from std::ofstream, std::cout, or other streams
    template <opts Opts>
-   inline void read(auto& value, detail::stream_t auto& is, auto&& ctx)
+   inline void read(auto& value, detail::stream_t auto& is, is_context auto&& ctx)
    {
       std::istreambuf_iterator<char> b{is}, e{};
       if (b == e) {
