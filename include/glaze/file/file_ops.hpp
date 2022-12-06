@@ -3,20 +3,22 @@
 
 #pragma once
 
-#include <fstream>  // for ifstream, basic_istream...
+#include <fstream>
 #include <string>
 #include <filesystem>
+
+#include "glaze/core/context.hpp"
 
 namespace glz
 {
    template <class T>
-   void file_to_buffer(T &buffer, const std::string &file_name)
+   void file_to_buffer(T& buffer, const std::string_view file_name)
    {
       std::ifstream file(file_name);
 
       if (!file) {
          throw std::runtime_error("glaze::file_to_buffer: File with path (" +
-                                  file_name +
+                                  std::string(file_name) +
                                   ") could not be loaded. Ensure that file "
                                   "exists at the given path.");
       }
@@ -38,8 +40,8 @@ namespace glz
    }
 
    inline std::filesystem::path relativize_if_not_absolute(
-      std::filesystem::path const &working_directory,
-      std::filesystem::path const &filepath)
+      const std::filesystem::path& working_directory,
+      const std::filesystem::path& filepath)
    {
       if (filepath.is_absolute()) {
          return filepath;
@@ -47,4 +49,4 @@ namespace glz
 
       return working_directory / filepath;
    }
-}  // namespace glaze
+}
