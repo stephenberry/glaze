@@ -598,7 +598,7 @@ namespace glz
       
       write<opts{}>(std::forward<T>(value), buffer);
       
-      std::ofstream file{ file_name };
+      std::ofstream file(file_name);
       
       if (file) {
          file << buffer;
