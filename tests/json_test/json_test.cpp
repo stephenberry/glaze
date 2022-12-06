@@ -1993,13 +1993,19 @@ void file_include_test()
    
    glz::write_file_json(obj, "../alabastar.json");
    
-   obj.str = "nonsense";
+   obj.str = "";
    
    std::string s = R"({"#include": "../alabastar.json", "i": 100})";
    glz::read_json(obj, s);
    
    expect(obj.str == "Hello") << obj.str;
    expect(obj.i == 100) << obj.i;
+   
+   obj.str = "";
+   
+   glz::read_file(obj, "../alabastar.json");
+   expect(obj.str == "Hello") << obj.str;
+   expect(obj.i == 55) << obj.i;
 }
 
 int main()
