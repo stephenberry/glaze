@@ -7,6 +7,7 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/binary/header.hpp"
 #include "glaze/core/read.hpp"
+#include "glaze/file/file_ops.hpp"
 
 namespace glz
 {
@@ -198,19 +199,7 @@ namespace glz
       struct from_binary<includer<T>>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
-         {
-            static thread_local std::string path{};
-            read<binary>::op<Opts>(path, it, end);
-            
-            static thread_local std::string buffer{};
-            std::fstream file{ buffer };
-            file.seekg(0, std::ios::end);
-            buffer.resize(file.tellg());
-            file.seekg(0);
-            file.read(buffer.data(), buffer.size());
-            
-            read<binary>::op<Opts>(value.value, ctx, it, end);
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept {
          }
       };
       
@@ -271,5 +260,20 @@ namespace glz
       T value{};
       read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
       return value;
+   }
+   
+   template <class T>
+   inline void read_file_binary(T& value, const sv file_name) {
+      
+      const auto path = relativize_if_not_absolute(std::filesystem::current_path(), std::filesystem::path{ file_name });
+      const auto str = path.string(); // must maintain local memory as file_path is a string_view
+      
+      context ctx{};
+      ctx.file_path = str;
+      
+      std::string buffer;
+      file_to_buffer(buffer, ctx.file_path);
+      
+      read<opts{.format = binary}>(value, buffer, ctx);
    }
 }

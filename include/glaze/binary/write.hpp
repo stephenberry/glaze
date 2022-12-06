@@ -38,6 +38,14 @@ namespace glz
                std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
+      
+      template <class T>
+      struct to_binary<includer<T>>
+      {
+         template <auto Opts, class... Args>
+         static void op(auto&& /*value*/, is_context auto&&, Args&&... args) noexcept {
+         }
+      };
 
       template <class T>
       requires (std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> || std::same_as<T, std::vector<bool>::const_reference>)
@@ -309,6 +317,23 @@ namespace glz
 
    template <auto& Partial, class T, class Buffer>
    inline auto write_binary(T&& value, Buffer&& buffer) {
-      return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<Partial, opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+   }
+   
+   template <class T>
+   inline void write_file_binary(T&& value, const sv file_name) {
+      
+      std::string buffer{};
+      
+      write<opts{.format = binary}>(std::forward<T>(value), buffer);
+      
+      std::ofstream file{ file_name };
+      
+      if (file) {
+         file << buffer;
+      }
+      else {
+         throw std::runtime_error("could not write file: " + std::string(file_name));
+      }
    }
 }
