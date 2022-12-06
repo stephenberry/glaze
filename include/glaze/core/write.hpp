@@ -9,10 +9,15 @@
 
 namespace glz
 {
+   template <class Buffer>
+   concept raw_buffer = std::same_as<std::decay_t<Buffer>, char*>;
+   
+   template <class Buffer>
+   concept output_buffer = nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char));
+   
    // For writing to a std::string, std::vector<char>, std::deque<char> and
    // the like
-   template <opts Opts, class T, class Buffer>
-   requires nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char))
+   template <opts Opts, class T, output_buffer Buffer>
    inline void write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
    {
       if constexpr (std::same_as<Buffer, std::string> || std::same_as<Buffer, std::vector<std::byte>>) {
@@ -29,16 +34,14 @@ namespace glz
       }
    }
    
-   template <opts Opts, class T, class Buffer>
-   requires nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char))
+   template <opts Opts, class T, output_buffer Buffer>
    inline void write(T&& value, Buffer& buffer) noexcept
    {
       context ctx{};
       write<Opts>(std::forward<T>(value), buffer, ctx);
    }
    
-   template <opts Opts, class T, class Buffer>
-   requires std::same_as<std::decay_t<Buffer>, char*>
+   template <opts Opts, class T, raw_buffer Buffer>
    inline size_t write(T&& value, Buffer&& buffer, is_context auto&& ctx) noexcept
    {
       auto start = buffer;
@@ -46,8 +49,7 @@ namespace glz
       return static_cast<size_t>(std::distance(start, buffer));
    }
    
-   template <opts Opts, class T, class Buffer>
-   requires std::same_as<std::decay_t<Buffer>, char*>
+   template <opts Opts, class T, raw_buffer Buffer>
    inline size_t write(T&& value, Buffer&& buffer) noexcept
    {
       context ctx{};
