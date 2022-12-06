@@ -1976,8 +1976,8 @@ suite macro_tests = [] {
 
 struct includer_struct
 {
-   std::string str{};
-   int i;
+   std::string str = "Hello";
+   int i = 55;
 };
 
 template <>
@@ -1989,21 +1989,23 @@ struct glz::meta<includer_struct>
 
 void file_include_test()
 {
-   std::ofstream file{"../alabastar.json" };
-   
-   std::string s = R"({"#include": "../alabastar.json", "i": 100})";
-   
    includer_struct obj{};
    
-   if (file) {
-      file << R"({"str": "Hello", "i": 55})";
-      file.close();
-      
-      glz::read_json(obj, s);
-   }
+   glz::write_file_json(obj, "../alabastar.json");
+   
+   obj.str = "";
+   
+   std::string s = R"({"#include": "../alabastar.json", "i": 100})";
+   glz::read_json(obj, s);
    
    expect(obj.str == "Hello") << obj.str;
    expect(obj.i == 100) << obj.i;
+   
+   obj.str = "";
+   
+   glz::read_file(obj, "../alabastar.json");
+   expect(obj.str == "Hello") << obj.str;
+   expect(obj.i == 55) << obj.i;
 }
 
 int main()

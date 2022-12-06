@@ -532,6 +532,35 @@ void test_partial()
    }
 }
 
+struct includer_struct
+{
+   std::string str = "Hello";
+   int i = 55;
+};
+
+template <>
+struct glz::meta<includer_struct>
+{
+   using T = includer_struct;
+   static constexpr auto value = object("#include", glz::file_include{}, "str", &T::str, "i", &T::i);
+};
+
+
+void file_include_test()
+{
+   includer_struct obj{};
+   
+   glz::write_file_binary(obj, "../alabastar.crush");
+   
+   obj.str = "";
+   obj.i = 0;
+   
+   glz::read_file_binary(obj, "../alabastar.crush");
+   
+   expect(obj.str == "Hello") << obj.str;
+   expect(obj.i == 55) << obj.i;
+}
+
 int main()
 {
    using namespace boost::ut;
@@ -539,4 +568,5 @@ int main()
    write_tests();
    bench();
    test_partial();
+   file_include_test();
 }

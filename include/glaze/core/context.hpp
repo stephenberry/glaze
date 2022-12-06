@@ -14,7 +14,7 @@ namespace glz
       // USER CONFIGURABLE
       char indentation_char = ' ';
       uint8_t indentation_width = 3;
-      std::string_view file_path;
+      std::string_view file_path; // top level file path
       
       // INTERNAL USE
       uint32_t indentation_level{};

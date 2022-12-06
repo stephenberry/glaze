@@ -14,7 +14,7 @@ namespace glz
    template <class T>
    void file_to_buffer(T& buffer, const std::string_view file_name)
    {
-      std::ifstream file(file_name);
+      std::ifstream file{ std::string(file_name) };
 
       if (!file) {
          throw std::runtime_error("glaze::file_to_buffer: File with path (" +

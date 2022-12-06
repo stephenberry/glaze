@@ -13,6 +13,7 @@
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/parse.hpp"
 #include "glaze/util/for_each.hpp"
+#include "glaze/file/file_ops.hpp"
 
 namespace glz
 {
@@ -664,4 +665,20 @@ namespace glz
       read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
       return value;
    }
-}  // namespace glaze
+   
+   template <class T>
+   inline void read_file_json(T& value, const sv file_name) {
+      
+      const auto path = relativize_if_not_absolute(std::filesystem::current_path(), std::filesystem::path{ file_name });
+      const auto str = path.string(); // must maintain local memory as file_path is a string_view
+      
+      context ctx{};
+      ctx.file_path = str;
+      
+      std::string buffer;
+      
+      file_to_buffer(buffer, ctx.file_path);
+      
+      read<opts{}>(value, buffer, ctx);
+   }
+}
