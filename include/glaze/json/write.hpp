@@ -364,6 +364,14 @@ namespace glz
             dump<']'>(std::forward<Args>(args)...);
          }
       };
+      
+      template <class T>
+      struct to_json<includer<T>>
+      {
+         template <auto Opts, class... Args>
+         static void op(auto&& /*value*/, is_context auto&& /*ctx*/, Args&&... args) noexcept {
+         }
+      };      
 
       template <class T>
       requires is_std_tuple<std::decay_t<T>>
@@ -469,12 +477,9 @@ namespace glz
                   static constexpr auto quoted = concat_arrays(concat_arrays("\"", glz::tuplet::get<0>(item)), "\":");
                   write<json>::op<Opts>(quoted, ctx, b);
                }
-               if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {
-                  write<json>::op<Opts>(value.*glz::tuplet::get<1>(item), ctx, b);
-               }
-               else {
-                  write<json>::op<Opts>(glz::tuplet::get<1>(item)(value), ctx, b);
-               }
+               
+               write<json>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, b);
+               
                constexpr auto S = std::tuple_size_v<decltype(item)>;
                if constexpr (Opts.comments && S > 2) {
                   constexpr sv comment = glz::tuplet::get<2>(item);
@@ -512,11 +517,16 @@ namespace glz
                   }();
                   if (is_null) return;
                }
+               
+               // skip file_include
+               if constexpr (std::is_same_v<val_t, includer<std::decay_t<V>>>) {
+                  return;
+               }
 
                if (first) {
                   first = false;
                }
-               else  {
+               else {
                   // Null members may be skipped so we cant just write it out for all but the last member unless
                   // trailing commas are allowed
                   dump<','>(b, ix);
@@ -539,12 +549,9 @@ namespace glz
                   static constexpr auto quoted = concat_arrays(concat_arrays("\"", glz::tuplet::get<0>(item)), "\":");
                   write<json>::op<Opts>(quoted, ctx, b, ix);
                }
-               if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {
-                  write<json>::op<Opts>(value.*glz::tuplet::get<1>(item), ctx, b, ix);
-               }
-               else {
-                  write<json>::op<Opts>(glz::tuplet::get<1>(item)(value), ctx, b, ix);
-               }
+               
+               write<json>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, b, ix);
+               
                constexpr auto S = std::tuple_size_v<decltype(item)>;
                if constexpr (Opts.comments && S > 2) {
                   constexpr sv comment = glz::tuplet::get<2>(item);
@@ -583,4 +590,21 @@ namespace glz
       write<opts{.comments = true}>(std::forward<T>(value), buffer);
       return buffer;
    }
-}  // namespace glaze
+   
+   template <class T>
+   inline void write_file_json(T&& value, const sv file_name) {
+      
+      std::string buffer{};
+      
+      write<opts{}>(std::forward<T>(value), buffer);
+      
+      std::ofstream file{ file_name };
+      
+      if (file) {
+         file << buffer;
+      }
+      else {
+         throw std::runtime_error("could not write file: " + std::string(file_name));
+      }
+   }
+}
