@@ -320,8 +320,9 @@ namespace glz
       return write<Partial, opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
    
+   // std::string file_name needed for std::ofstream
    template <class T>
-   inline void write_file_binary(T&& value, const sv file_name) {
+   inline void write_file_binary(T&& value, const std::string& file_name) {
       
       std::string buffer{};
       
@@ -333,7 +334,7 @@ namespace glz
          file << buffer;
       }
       else {
-         throw std::runtime_error("could not write file: " + std::string(file_name));
+         throw std::runtime_error("could not write file: " + file_name);
       }
    }
 }

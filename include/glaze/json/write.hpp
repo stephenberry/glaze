@@ -591,8 +591,9 @@ namespace glz
       return buffer;
    }
    
+   // std::string file_name needed for std::ofstream
    template <class T>
-   inline void write_file_json(T&& value, const sv file_name) {
+   inline void write_file_json(T&& value, const std::string& file_name) {
       
       std::string buffer{};
       
@@ -604,7 +605,7 @@ namespace glz
          file << buffer;
       }
       else {
-         throw std::runtime_error("could not write file: " + std::string(file_name));
+         throw std::runtime_error("could not write file: " + file_name);
       }
    }
 }
