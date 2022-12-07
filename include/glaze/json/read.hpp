@@ -515,7 +515,7 @@ namespace glz
                   file.read(buffer.data(), buffer.size());
                   
                   const auto current_file = ctx.current_file;
-                  ctx.current_file = file_path;
+                  ctx.current_file = file_path.string();
                   
                   glz::read<Opts>(value.value, buffer, ctx);
                   
