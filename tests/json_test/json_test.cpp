@@ -2008,6 +2008,48 @@ void file_include_test()
    expect(obj.i == 55) << obj.i;
 }
 
+struct nested0
+{
+   includer_struct a{};
+   includer_struct b{};
+};
+
+template <>
+struct glz::meta<nested0>
+{
+   using T = nested0;
+   static constexpr auto value = object("#include", glz::file_include{}, "a", &T::a, "b", &T::b);
+};
+
+void nested_file_include_test()
+{
+   nested0 obj;
+   
+   std::string a = R"({"#include": "../b/b.json"})";
+   {
+      std::filesystem::create_directory("a");
+      std::ofstream a_file{ "./a/a.json" };
+      
+      a_file << a;
+   }
+   
+   {
+      std::filesystem::create_directory("b");
+      
+      obj.b.i = 13;
+      
+      glz::write_file_json(obj.b, "./b/b.json");
+   }
+   
+   obj.b.i = 0;
+   
+   std::string s = R"({ "a": { "#include": "./a/a.json" }, "b": { "#include": "./b/b.json" } })";
+   
+   glz::read_json(obj, s);
+   
+   expect(obj.a.i == 13);
+}
+
 int main()
 {
    using namespace boost::ut;
@@ -2029,4 +2071,5 @@ int main()
    write_tests();
    study_tests();
    file_include_test();
+   nested_file_include_test();
 }

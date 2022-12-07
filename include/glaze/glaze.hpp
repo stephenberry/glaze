@@ -42,15 +42,14 @@ namespace glz
    template <class T>
    inline void read_file(T& value, const sv file_name) {
       
-      const auto path = relativize_if_not_absolute(std::filesystem::current_path(), std::filesystem::path{ file_name });
-      const auto str = path.string(); // must maintain local memory as file_path is a string_view
-      
       context ctx{};
-      ctx.file_path = str;
+      ctx.current_file = file_name;
       
       std::string buffer;
       
-      file_to_buffer(buffer, ctx.file_path);
+      std::filesystem::path path{ file_name };
+      
+      file_to_buffer(buffer, ctx.current_file);
       
       if (path.has_extension()) {
          const auto extension = path.extension().string();
