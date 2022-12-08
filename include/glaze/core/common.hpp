@@ -305,6 +305,9 @@ namespace glz
       };
       
       template <class T>
+      concept boolean_like = std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> || std::same_as<T, std::vector<bool>::const_reference>;
+      
+      template <class T>
       concept vector_like = resizeable<T> && accessible<T> && has_data<T>;
       
       template <class T>

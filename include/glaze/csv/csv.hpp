@@ -73,8 +73,7 @@ namespace glz
          }
       };
       
-      template <class T>
-      requires (std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> || std::same_as<T, std::vector<bool>::const_reference>)
+      template <boolean_like T>
       struct to_csv<T>
       {         
          template <auto Opts, class... Args>
