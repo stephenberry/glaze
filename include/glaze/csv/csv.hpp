@@ -212,15 +212,12 @@ namespace glz
             auto& map = rec.data;
 
             const auto N = map.size();
-
+            
+            // write out minimum dimensions
             size_t n = std::numeric_limits<size_t>::max();
             for (auto& [title, data] : map) {
-                if (n == std::numeric_limits<size_t>::max()) {
-                    n = variant_container_size(data.first);
-                }
-                else if (n != variant_container_size(data.first)) {
-                    throw std::runtime_error("csv | mismatching dimensions");
-                }
+               const auto m = variant_container_size(data.first);
+               n = m < n ? m : n;
             }
 
             if constexpr (Opts.rowwise) {
