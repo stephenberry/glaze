@@ -460,10 +460,6 @@ const auto n = glz::write_json(obj, buffer.data());
 buffer.resize(n);
 ```
 
-## JSON Caveats
-
-- Not all control characters are handled in strings.
-
 ## Compile Time Options
 
 The `glz::opts` struct defines compile time optional settings for reading/writing.
