@@ -110,21 +110,15 @@ suite csv_write = [] {
         for (int i = 0; i < 100; i++)
         {
             data["x"].emplace_back(i);
-            if (i % 2)
-                data["y"].emplace_back(i);
+           if (i % 2) {
+              data["y"].emplace_back(i);
+           }
         }
-
-        try
-        {
-            std::string buffer;
-           write_csv(buffer, data);
-
-            expect(false);
-        }
-        catch (std::exception&)
-        {
-            expect(true);
-        }
+       
+       expect(nothrow([&] {
+          std::string buffer;
+         write_csv(buffer, data);
+       }));
     };
 };
 

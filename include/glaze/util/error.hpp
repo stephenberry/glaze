@@ -11,5 +11,6 @@ namespace glz
       read,
       write,
       maximum_size_exceeded,
+      mismatching_dimensions
    };
 }
