@@ -18,213 +18,269 @@
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/core/common.hpp"
+#include "glaze/core/format.hpp"
+#include "glaze/core/opts.hpp"
+#include "glaze/core/write.hpp"
+#include "glaze/util/dump.hpp"
+#include "glaze/util/error.hpp"
+#include "glaze/core/write_chars.hpp"
 
 namespace glz
 {
-   template <class Buffer>
-   inline void write_csv(Buffer& buffer, const std::string_view sv) {
-      buffer.append(sv);
-   }
-   
-   template <class Buffer, class T>
-   inline void write_csv(Buffer& buffer,
-                         const T x) requires std::is_floating_point_v<T>
+   namespace detail
    {
-      fmt::format_to(std::back_inserter(buffer), FMT_COMPILE("{}"), x);
-   }
-   
-   template <class Buffer, class T>
-   inline void write_csv(Buffer& buffer,
-                         const T x) requires std::is_integral_v<T>
-   {
-      if constexpr (std::is_same_v<T, bool>) {
-         if (x) {
-            buffer.append("1");
-         }
-         else {
-            buffer.append("0");
-         }
-      }
-      else {
-         fmt::format_to(std::back_inserter(buffer), FMT_COMPILE("{}"), x);
-      }
-   }
-   
-   template <bool RowWise = true, class Buffer, class Tuple>
-   inline void write_csv(Buffer& buffer, Tuple&& tuple) requires is_std_tuple<Tuple>
-   {
-      const auto tuples = tuple_split(std::forward<Tuple>(tuple));
-      static constexpr auto N = std::tuple_size_v<Tuple> / 2;
+      template <class T = void>
+      struct to_csv {};
       
-      const auto& data = std::get<1>(tuples);
-      const auto n = std::get<0>(data).size();
-      
-      for_each<N>([&](auto I) {
-         if (n != std::get<I>(data).size()) {
-            throw std::runtime_error("csv::to_file | mismatching dimensions");
+      template <>
+      struct write<csv>
+      {
+         template <auto Opts, class T,  is_context Ctx, class B>
+         static void op(T&& value, Ctx&& ctx, B&& b) {
+            to_csv<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b));
          }
-      });
-      
-      // write titles
-      const auto& titles = std::get<0>(tuples);
-      if constexpr (RowWise) {
-         for_each<N>([&](auto I) {
-            write_csv(buffer, std::get<I>(titles));
-            write_csv(buffer, ",");
-            
-            const auto& x = std::get<I>(data);
-            for (size_t i = 0; i < n; ++i) {
-               write_csv(buffer, x[i]);
-               write_csv(buffer, ",");
-            }
-            buffer.append("\n");
-         });
-      }
-      else {
-         for_each<N>([&](auto I) {
-            write_csv(buffer, std::get<I>(titles));
-            if constexpr (I != N - 1) {
-               write_csv(buffer, ",");
-            }
-         });
-         buffer.append("\n");
          
-         // write out columns of data
-         for (size_t i = 0; i < n; ++i) {
+         template <auto Opts, class T, is_context Ctx, class B, class IX>
+         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+            to_csv<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+         }
+      };
+      
+      template <class T>
+      requires str_t<T> || char_t<T>
+      struct to_csv<T>
+      {
+         template <auto Opts, class... Args>
+         static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
+         {
+            dump(value, std::forward<Args>(args)...);
+         }
+      };
+      
+      template <num_t T>
+      struct to_csv<T>
+      {
+         template <auto Opts, class B>
+         static void op(auto&& value, is_context auto&& ctx, B&& b) noexcept
+         {
+            write_chars::op<Opts>(value, ctx, b);
+         }
+         
+         template <auto Opts, class B>
+         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+         {
+            write_chars::op<Opts>(value, ctx, b, ix);
+         }
+      };
+      
+      template <class T>
+      requires (std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> || std::same_as<T, std::vector<bool>::const_reference>)
+      struct to_csv<T>
+      {         
+         template <auto Opts, class... Args>
+         static void op(const bool value, is_context auto&&, Args&&... args) noexcept
+         {
+            if (value) {
+               dump<"1">(std::forward<Args>(args)...);
+            }
+            else {
+               dump<"0">(std::forward<Args>(args)...);
+            }
+         }
+      };
+      
+      template <is_std_tuple T>
+      struct to_csv<T>
+      {
+         template <auto Opts, class... Args>
+         static void op(T&& tuple, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            const auto tuples = tuple_split(std::forward<T>(tuple));
+            static constexpr auto N = std::tuple_size_v<T> / 2;
+            
+            const auto& data = std::get<1>(tuples);
+            auto n = std::get<0>(data).size();
+            
+            // output minimum dimension
             for_each<N>([&](auto I) {
-               write_csv(buffer, std::get<I>(data)[i]);
-               if constexpr (I != N - 1) {
-                  write_csv(buffer, ",");
-               }
+               const auto m = std::get<I>(data).size();
+               n = m < n ? m : n;
             });
-            buffer.append("\n");
-         }
-      }
-   }
-
-   template <class Map>
-   concept is_map = std::same_as<typename Map::value_type, std::pair<const typename Map::key_type, typename Map::mapped_type>>;
-   
-   template <bool RowWise = true, class Buffer, class Map>
-   inline void write_csv(Buffer& buffer, Map&& map) requires is_map<std::decay_t<Map>>
-   {
-      const auto N = map.size();
-
-      size_t n = std::numeric_limits<size_t>::max();
-      for (auto& [title, data] : map) {
-         if (n == std::numeric_limits<size_t>::max()) {
-            n = data.size();
-         }
-         else if (n != data.size()) {
-            throw std::runtime_error("csv::to_file | mismatching dimensions");
-         }
-      }
-
-      if constexpr (RowWise) {
-         for (auto& [title, data] : map) {
-            write_csv(buffer, title);
-            write_csv(buffer, ",");
-
-            for (size_t i = 0; i < n; ++i) {
-               write_csv(buffer, data[i]);
-               write_csv(buffer, ",");
+            
+            // write titles
+            const auto& titles = std::get<0>(tuples);
+            if constexpr (Opts.rowwise) {
+               for_each<N>([&](auto I) {
+                  write<csv>::op<Opts>(std::get<I>(titles), ctx, args...);
+                  dump<",">(args...);
+                  
+                  const auto& x = std::get<I>(data);
+                  for (size_t i = 0; i < n; ++i) {
+                     write<csv>::op<Opts>(x[i], ctx, args...);
+                     dump<",">(args...);
+                  }
+                  dump<"\n">(args...);
+               });
             }
-            buffer.append("\n");
-         }
-      }
-      else {
-         size_t I = 0;
-         for (auto& [title, data] : map) {
-            write_csv(buffer, title);
-            if (I != N - 1) {
-               write_csv(buffer, ",");
-            }
-            ++I;
-         }
-         buffer.append("\n");
-
-         // write out columns of data
-         for (size_t i = 0; i < n; ++i) {
-            I = 0;
-            for (auto& [title, data] : map) {
-               write_csv(buffer, data[i]);
-               if (I != N - 1) {
-                  write_csv(buffer, ",");
+            else {
+               for_each<N>([&](auto I) {
+                  write<csv>::op<Opts>(std::get<I>(titles), ctx, args...);
+                  if constexpr (I != N - 1) {
+                     dump<",">(args...);
+                  }
+               });
+               dump<"\n">(args...);
+               
+               // write out columns of data
+               for (size_t i = 0; i < n; ++i) {
+                  for_each<N>([&](auto I) {
+                     write<csv>::op<Opts>(std::get<I>(data)[i], ctx, args...);
+                     if constexpr (I != N - 1) {
+                        dump<",">(args...);
+                     }
+                  });
+                  dump<"\n">(args...);
                }
-               ++I;
             }
-            buffer.append("\n");
          }
-      }
+      };
+      
+      template <class Map>
+      concept is_map = std::same_as<typename Map::value_type, std::pair<const typename Map::key_type, typename Map::mapped_type>>;
+      
+      template <class T>
+      requires is_map<std::decay_t<T>>
+      struct to_csv<T>
+      {
+         template <auto Opts, class... Args>
+         static void op(auto&& map, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            const auto N = map.size();
+
+            // write out minimum dimensions
+            size_t n = std::numeric_limits<size_t>::max();
+            for (auto& [title, data] : map) {
+               n = data.size() < n ? data.size() : n;
+            }
+
+            if constexpr (Opts.rowwise) {
+               for (auto& [title, data] : map) {
+                  write<csv>::op<Opts>(title, ctx, args...);
+                  dump<",">(args...);
+
+                  for (size_t i = 0; i < n; ++i) {
+                     write<csv>::op<Opts>(data[i], ctx, args...);
+                     dump<",">(args...);
+                  }
+                  dump<"\n">(args...);
+               }
+            }
+            else {
+               size_t I = 0;
+               for (auto& [title, data] : map) {
+                  write<csv>::op<Opts>(title, ctx, args...);
+                  if (I != N - 1) {
+                     dump<",">(args...);
+                  }
+                  ++I;
+               }
+               dump<"\n">(args...);
+
+               // write out columns of data
+               for (size_t i = 0; i < n; ++i) {
+                  I = 0;
+                  for (auto& [title, data] : map) {
+                     write<csv>::op<Opts>(data[i], ctx, args...);
+                     if (I != N - 1) {
+                        dump<",">(args...);
+                     }
+                     ++I;
+                  }
+                  dump<"\n">(args...);
+               }
+            }
+         }
+      };
+      
+      template <class T>
+      requires is_specialization_v<std::decay_t<T>, recorder>
+      struct to_csv<T>
+      {
+         template <auto Opts, class... Args>
+         static void op(auto&& rec, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            auto& map = rec.data;
+
+            const auto N = map.size();
+
+            size_t n = std::numeric_limits<size_t>::max();
+            for (auto& [title, data] : map) {
+                if (n == std::numeric_limits<size_t>::max()) {
+                    n = variant_container_size(data.first);
+                }
+                else if (n != variant_container_size(data.first)) {
+                    throw std::runtime_error("csv | mismatching dimensions");
+                }
+            }
+
+            if constexpr (Opts.rowwise) {
+                for (auto& [title, data] : map) {
+                   write<csv>::op<Opts>(title, ctx, args...);
+                   dump<",">(args...);
+
+                    std::visit([&](auto&& arg) {
+                       for (size_t i = 0; i < n; ++i) {
+                          write<csv>::op<Opts>(arg[i], ctx, args...);
+                          dump<",">(args...);
+                       }
+                    }, data.first);
+                   dump<"\n">(args...);
+                }
+            }
+            else {
+                size_t I = 0;
+                for (auto& [title, data] : map) {
+                   write<csv>::op<Opts>(title, ctx, args...);
+                    if (I != N - 1) {
+                       dump<",">(args...);
+                    }
+                    ++I;
+                }
+               dump<"\n">(args...);
+
+                const auto n = map.size();
+                for (size_t i = 0; i < n; ++i) {
+                    I = 0;
+                    for (auto& [title, data] : map) {
+                       std::visit([&](auto&& arg) { write<csv>::op<Opts>(arg[i], ctx, args...); }, data.first);
+                        if (I != N - 1) {
+                           dump<",">(args...);
+                        }
+                        ++I;
+                    }
+                   dump<"\n">(args...);
+                }
+            }
+         }
+      };
    }
    
    template <bool RowWise = true, class Buffer, class... Args> requires (sizeof...(Args) > 1)
      inline void write_csv(Buffer& buffer, Args&&... args)
    {
-      write_csv<RowWise>(buffer, std::make_tuple(std::forward<Args>(args)...));
+      return write<opts{.format = csv, .rowwise = RowWise}>(std::make_tuple(std::forward<Args>(args)...), buffer);
+   }
+   
+   template <bool RowWise = true, class Buffer, class T>
+     inline void write_csv(Buffer& buffer, T&& value)
+   {
+      return write<opts{.format = csv, .rowwise = RowWise}>(std::forward<T>(value), buffer);
    }
    
    template <bool RowWise = true, class Buffer, class... Ts>
-   inline void write_csv(Buffer& buffer, recorder<Ts...>& rec)
+     inline void write_csv(Buffer& buffer, recorder<Ts...>& rec)
    {
-       auto& map = rec.data;
-
-       const auto N = map.size();
-
-       size_t n = std::numeric_limits<size_t>::max();
-       for (auto& [title, data] : map) {
-           if (n == std::numeric_limits<size_t>::max()) {
-               n = variant_container_size(data.first);
-           }
-           else if (n != variant_container_size(data.first)) {
-               throw std::runtime_error("csv::to_file | mismatching dimensions");
-           }
-       }
-
-       if constexpr (RowWise) {
-           for (auto& [title, data] : map) {
-             write_csv(buffer, title);
-              write_csv(buffer, ",");
-
-               std::visit([&](auto&& arg) {
-                  using ContainerType = std::decay_t<decltype(arg)>;
-                  if constexpr (std::same_as<ContainerType, std::monostate>) {
-                     throw std::runtime_error("write_csv container is monostate");
-                  }
-                  else {
-                     for (size_t i = 0; i < n; ++i) {
-                        write_csv(buffer, arg[i]);
-                        write_csv(buffer, ",");
-                     }
-                  }
-               }, data.first);
-               buffer.append("\n");
-           }
-       }
-       else {
-           size_t I = 0;
-           for (auto& [title, data] : map) {
-              write_csv(buffer, title);
-               if (I != N - 1) {
-                 write_csv(buffer, ",");
-               }
-               ++I;
-           }
-           buffer.append("\n");
-
-           const auto n = map.size();
-           for (size_t i = 0; i < n; ++i) {
-               I = 0;
-               for (auto& [title, data] : map) {
-                   std::visit([&](auto&& arg) { write(buffer, arg[i]); }, data.first);
-                   if (I != N - 1) {
-                      write_csv(buffer, ",");
-                   }
-                   ++I;
-               }
-               buffer.append("\n");
-           }
-       }
+      return write<opts{.format = csv, .rowwise = RowWise}>(rec, buffer);
    }
    
    template <bool RowWise = true, class... Args>
@@ -237,7 +293,7 @@ namespace glz
       std::fstream file(std::string{file_name} + ".csv", std::ios::out);
       
       if (!file) {
-         throw std::runtime_error(fmt::format("csv::to_file | file '{}' could not be created", file_name));
+         throw std::runtime_error(fmt::format("csv | file '{}' could not be created", file_name));
       }
       
       file.write(buffer.data(), buffer.size());
@@ -277,7 +333,7 @@ namespace glz
        convert_value(convert, temp);
 
        if (!convert) {
-          throw std::runtime_error("csv::from_file | could not convert to type");
+          throw std::runtime_error("csv | could not convert to type");
        }
 
        container.push_back(temp);

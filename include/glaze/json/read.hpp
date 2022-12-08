@@ -228,7 +228,7 @@ namespace glz
                         value.push_back(*it);
                         ++it;
 
-                        std::string_view temp(it, it + 4);
+                        std::string_view temp{ &*it, 4 };
                         if (std::all_of(temp.begin(), temp.end(), ::isxdigit)) {
                            value.append(&*it, 4);
                            it += 4;

@@ -14,26 +14,22 @@ namespace glz
 {
    namespace detail
    {
-      template <class... T>
-      auto to_variant_deque()
-      {
-         return std::variant<std::monostate, std::deque<T>...>{};
-      }
-      
       template <class Data>
       struct recorder_assigner
       {
-         recorder_assigner(Data& data) : data(data) {}
+         /*recorder_assigner(Data& data) : data(data) {}
          recorder_assigner(const recorder_assigner&) = default;
          recorder_assigner(recorder_assigner&&) = default;
          recorder_assigner& operator=(const recorder_assigner&) = default;
-         recorder_assigner& operator=(recorder_assigner&&) = default;
+         recorder_assigner& operator=(recorder_assigner&&) = default;*/
          
          Data& data;
+         sv name{};
          
          template <class T>
          void operator=(T& ref) {
-            data = std::make_pair(typename Data::first_type{std::deque<T>{}}, &ref);
+            using container_type = std::decay_t<decltype(data[0].second.first)>;
+            data.emplace_back(std::pair{ name, std::make_pair(container_type{std::deque<T>{}}, &ref) });
          }
       };
    }
@@ -45,14 +41,13 @@ namespace glz
    template <class... Ts>
    struct recorder
    {
-      using container_type = decltype(detail::to_variant_deque<Ts...>());
+      using container_type = std::variant<std::deque<Ts>...>;
 
       std::deque<std::pair<std::string, std::pair<container_type, void*>>>
          data;
       
       auto operator[](const sv name) {
-         auto& d = data.emplace_back(name, std::make_pair(std::monostate{}, nullptr));
-         return detail::recorder_assigner<std::pair<container_type, void*>>{ d.second };
+         return detail::recorder_assigner<decltype(data)>{ data, name };
       }
 
       void update()
@@ -62,14 +57,9 @@ namespace glz
             std::visit(
                [&](auto&& container) {
                   using ContainerType = std::decay_t<decltype(container)>;
-                  if constexpr (std::same_as<ContainerType, std::monostate>) {
-                     throw std::runtime_error("recorder::update container is monostate");
-                  }
-                  else {
-                     using T = typename ContainerType::value_type;
+                  using T = typename ContainerType::value_type;
 
-                     container.emplace_back(*static_cast<T*>(ptr));
-                  }
+                  container.emplace_back(*static_cast<T*>(ptr));
                },
                value.first);
          }

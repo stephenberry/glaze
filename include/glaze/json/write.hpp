@@ -18,6 +18,7 @@
 
 #include "glaze/util/to_chars.hpp"
 #include "glaze/util/itoa.hpp"
+#include "glaze/core/write_chars.hpp"
 
 namespace glz
 {
@@ -62,48 +63,13 @@ namespace glz
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b) noexcept
          {
-            if constexpr (std::same_as<std::decay_t<B>, char*>) {
-               b = fmt::format_to(std::forward<B>(b), FMT_COMPILE("{}"), value);
-            }
-            else {
-               fmt::format_to(std::back_inserter(b), FMT_COMPILE("{}"), value);
-            }
+            write_chars::op<Opts>(value, ctx, b);
          }
          
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {
-               // more efficient strings in C++23:
-             https://en.cppreference.com/w/cpp/string/basic_string/resize_and_overwrite
-             }*/
-            
-            // https://stackoverflow.com/questions/1701055/what-is-the-maximum-length-in-chars-needed-to-represent-any-double-value
-            // maximum length for a double should be 24 chars, we use 64 to be sufficient
-            if (ix + 64 > b.size()) [[unlikely]] {
-               b.resize(std::max(b.size() * 2, ix + 64));
-            }
-            
-            using V = std::decay_t<decltype(value)>;
-            if constexpr (std::same_as<V, float> || std::same_as<V, double>) {
-               auto start = b.data() + ix;
-               //TODO: We should be able to improve this
-               const auto end = glz::dragonbox::to_chars(value, start);
-               // Faster but only scientific notation
-               // const auto end = jkj::dragonbox::to_chars_n(value, start);
-               ix += std::distance(start, end);
-            }
-            else if constexpr (std::same_as<V, int32_t> || std::same_as<V, uint32_t> ||
-                               std::same_as<V, int64_t> || std::same_as<V, uint64_t>) {
-               auto start = b.data() + ix;
-               auto end = glz::to_chars(start, value);
-               ix += std::distance(start, end);
-            }
-            else {
-               auto start = b.data() + ix;
-               auto end = fmt::format_to(start, FMT_COMPILE("{}"), value);
-               ix += std::distance(start, end);
-            }
+            write_chars::op<Opts>(value, ctx, b, ix);
          }
       };
 
