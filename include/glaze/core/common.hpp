@@ -628,23 +628,6 @@ namespace glz
          return make_string_to_enum_map_impl<T>(indices);
       }
       
-      // this function approach does not work with gcc
-      /*template <class T, class mptr_t>
-      constexpr decltype(auto) member_check()
-      {
-         using mptr_type = std::decay_t<mptr_t>;
-         if constexpr (std::is_member_pointer_v<mptr_type>) {
-            return std::declval<T>().*mptr_type{};
-         }
-         else if constexpr (std::is_enum_v<std::decay_t<T>>) {
-            return std::declval<T>();
-         }
-         else { // is a lambda function
-            return std::declval<std::invoke_result_t<mptr_t, T>>();
-            //return mptr_type{}(std::declval<T>());
-         }
-      }*/
-      
       inline decltype(auto) get_member(auto&& value, auto&& member_ptr)
       {
          using V = std::decay_t<decltype(member_ptr)>;
@@ -708,4 +691,4 @@ namespace glz
       return glz::detail::Enum{
          group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(args...))>>::op(glz::tuplet::make_copy_tuple(args...))};
    }
-}  // namespace glaze
+}
