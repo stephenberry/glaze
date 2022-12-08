@@ -194,13 +194,15 @@ struct Escaped
 {
    int escaped_key{};
    std::string escaped_key2{ "hi" };
+   std::string escape_chars{""};
 };
 
 template <>
 struct glz::meta<Escaped> {
    using T = Escaped;
    static constexpr auto value = object(R"(escaped"key)", &T::escaped_key, //
-                                        R"(escaped""key2)", &T::escaped_key2);
+                                        R"(escaped""key2)", &T::escaped_key2,
+                                        R"(escape_chars)", &T::escape_chars);
 };
 
 suite escaping_tests = [] {
@@ -209,12 +211,21 @@ suite escaping_tests = [] {
       Escaped obj{};
       glz::write_json(obj, out);
       
-      expect(out == R"({"escaped\"key":0,"escaped\"\"key2":"hi"})");
+      expect(out == R"({"escaped\"key":0,"escaped\"\"key2":"hi","escape_chars":""})");
       
       std::string in = R"({"escaped\"key":5,"escaped\"\"key2":"bye"})";
       glz::read_json(obj, in);
       expect(obj.escaped_key == 5);
       expect(obj.escaped_key2 == "bye");
+   };
+
+   "escaped_characters"_test = [] {
+      std::string in = R"({"escape_chars":"\\b\\f\\n\\r\\t\\u11FF"})";
+      Escaped obj{};
+
+      glz::read_json(obj, in);
+
+      expect(obj.escape_chars == "\\b\\f\\n\\r\\t\\u11FF");
    };
 };
 
@@ -1286,12 +1297,16 @@ void read_tests() {
    };
 
    "Read string"_test = [] {
-      std::string in =
-         R"("asljl{}121231212441[]123::,,;,;,,::,Q~123\a13dqwdwqwq")";
+      std::string in_nothrow = R"("asljl{}121231212441[]123::,,;,;,,::,Q~123\\a13dqwdwqwq")";
       std::string res{};
-      glz::read_json(res, in);
-//*   function fails, does not recognize '\'
-      //expect(res == "asljl{}121231212441[]123::,,;,;,,::,Q~123\\a13dqwdwqwq");
+
+      glz::read_json(res, in_nothrow);
+      expect(res == "asljl{}121231212441[]123::,,;,;,,::,Q~123\\a13dqwdwqwq");
+
+      std::string in_throw = R"("asljl{}121231212441[]123::,,;,;,,::,Q~123\a13dqwdwqwq")";
+      res.clear();
+
+      expect(throws([&] { glz::read_json(res, in_throw); }));
    };
 
    "Nested array"_test = [] {

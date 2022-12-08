@@ -202,12 +202,46 @@ namespace glz
                      return;
                   }
                   else {
-                     // Must be an escape
-                     // TODO propperly handle this
                      value.append(&*start, static_cast<size_t>(std::distance(start, it)));
-                     ++it; // skip first escape
-                     value.push_back(*it); // add the escaped character
+                     auto esc = *it;
                      ++it;
+
+                     switch (*it)
+                     {
+                     case '"':
+                     case '\\':
+                     case '/':
+                        value.push_back(*it);
+                        ++it;
+                        break;
+                     case 'b':
+                     case 'f':
+                     case 'n':
+                     case 'r':
+                     case 't':
+                        value.push_back(esc);
+                        value.push_back(*it);
+                        ++it;
+                        break;
+                     case 'u': {
+                        value.push_back(esc);
+                        value.push_back(*it);
+                        ++it;
+
+                        std::string_view temp(it, it + 4);
+                        if (std::all_of(temp.begin(), temp.end(), ::isxdigit)) {
+                           value.append(&*it, 4);
+                           it += 4;
+                        }
+                        else
+                           throw std::runtime_error("Invalid hex value for unicode escape.");
+
+                        break;
+                     }
+                     default:
+                        throw std::runtime_error("Unknown escape character.");
+                     }
+
                      start = it;
                   }
                }
