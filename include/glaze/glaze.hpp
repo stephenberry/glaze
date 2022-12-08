@@ -96,7 +96,7 @@ namespace glz
          throw std::runtime_error("Could not determine extension for: " + std::string(file_name));
       }
       
-      std::ofstream file(file_name);
+      std::ofstream file(std::string{ file_name });
       
       if (file) {
          file << buffer;
