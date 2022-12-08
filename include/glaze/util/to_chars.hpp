@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#pragma once
+
 #include "dragonbox/dragonbox_to_chars.h"
 #include "fmt/format.h"
 
