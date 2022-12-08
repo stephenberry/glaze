@@ -275,13 +275,13 @@ namespace glz
    }
    
    template <bool RowWise = true, class... Args>
-   inline void to_csv_file(const std::string_view file_name, Args&&... args)
+   inline void write_file_csv(const std::string_view file_name, Args&&... args)
    {
       std::string buffer;
       write_csv<RowWise>(buffer, std::forward<Args>(args)...);
       
       std::ios_base::sync_with_stdio(false);
-      std::fstream file(std::string{file_name} + ".csv", std::ios::out);
+      std::fstream file(std::string{file_name}, std::ios::out);
       
       if (!file) {
          throw std::runtime_error(fmt::format("csv | file '{}' could not be created", file_name));

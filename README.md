@@ -620,7 +620,7 @@ for (int i = 0; i < 100; ++i) {
    rec.update(); // saves the current state of x and y
 }
 
-to_csv_file("recorder_out", rec);
+write_file_csv("recorder_out.csv", rec);
 ```
 
 # Glaze Interfaces (Generic Library API)
