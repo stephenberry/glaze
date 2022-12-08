@@ -2018,7 +2018,28 @@ void file_include_test()
    
    obj.str = "";
    
-   glz::read_file(obj, "../alabastar.json");
+   glz::read_file_json(obj, "../alabastar.json");
+   expect(obj.str == "Hello") << obj.str;
+   expect(obj.i == 55) << obj.i;
+}
+
+void file_include_test_auto()
+{
+   includer_struct obj{};
+   
+   glz::write_file(obj, "./auto.json");
+   
+   obj.str = "";
+   
+   std::string s = R"({"#include": "./auto.json", "i": 100})";
+   glz::read_json(obj, s);
+   
+   expect(obj.str == "Hello") << obj.str;
+   expect(obj.i == 100) << obj.i;
+   
+   obj.str = "";
+   
+   glz::read_file(obj, "./auto.json");
    expect(obj.str == "Hello") << obj.str;
    expect(obj.i == 55) << obj.i;
 }
@@ -2086,5 +2107,6 @@ int main()
    write_tests();
    study_tests();
    file_include_test();
+   file_include_test_auto();
    nested_file_include_test();
 }

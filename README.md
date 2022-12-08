@@ -129,6 +129,16 @@ glz::read_json(s, buffer);
 // populates s from JSON
 ```
 
+### Read/Write From File
+
+```c++
+glz::read_file(obj, "./obj.json"); // reads as JSON from the extension
+glz::read_file_json(obj, ".obj.txt"); // reads some text file as JSON
+
+glz::write_file(obj, "./obj.json"); // writes file based on extension
+glz::write_file_json(obj, ".obj.txt"); // explicit JSON write
+```
+
 ## How To Use Glaze
 
 ### [CPM](https://github.com/cpm-cmake/CPM.cmake)

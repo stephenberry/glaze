@@ -68,4 +68,41 @@ namespace glz
          throw std::runtime_error("Could not determine extension for: " + std::string(file_name));
       }
    }
+   
+   template <class T>
+   inline void write_file(T& value, const sv file_name) {
+      
+      context ctx{};
+      ctx.current_file = file_name;
+      
+      std::string buffer;
+      
+      std::filesystem::path path{ file_name };
+      
+      if (path.has_extension()) {
+         const auto extension = path.extension().string();
+         
+         if (extension == ".json" || extension == ".jsonc") {
+            write<opts{}>(value, buffer, ctx);
+         }
+         else if (extension == ".crush") {
+            write<opts{.format = binary}>(value, buffer, ctx);
+         }
+         else {
+            throw std::runtime_error("Extension not supported for glz::read_file: " + extension);
+         }
+      }
+      else {
+         throw std::runtime_error("Could not determine extension for: " + std::string(file_name));
+      }
+      
+      std::ofstream file(file_name);
+      
+      if (file) {
+         file << buffer;
+      }
+      else {
+         throw std::runtime_error("could not write file: " + std::string(file_name));
+      }
+   }
 }
