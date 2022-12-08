@@ -3,4 +3,5 @@
 
 #pragma once
 
-#include "glaze/csv/csv.hpp"
+#include "glaze/csv/read.hpp"
+#include "glaze/csv/write.hpp"
