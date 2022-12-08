@@ -1,7 +1,7 @@
 // Distributed under the MIT license
 // Developed by Anyar Inc.
 
-#include "glaze/csv/csv.hpp"
+#include "glaze/csv.hpp"
 #include "glaze/record/recorder.hpp"
 
 #define BOOST_UT_DISABLE_MODULE 1
@@ -32,7 +32,7 @@ suite csv_write = [] {
             z.emplace_back(i % 2 == 0);
         }
 
-        to_csv_file("rowwise_to_file_test", "x", x, "y", y, "z", z);
+        write_file_csv("rowwise_to_file_test.csv", "x", x, "y", y, "z", z);
     };
 
     "colwise_to_file"_test = [] {
@@ -45,7 +45,7 @@ suite csv_write = [] {
             z.emplace_back(i % 2 == 0);
         }
 
-        to_csv_file<false>("colwise_to_file_test", "z", z, "y", y, "x", x);
+        write_file_csv<false>("colwise_to_file_test.csv", "z", z, "y", y, "x", x);
     };
 
     "vector_to_buffer"_test = [] {
@@ -153,7 +153,7 @@ suite csv_read = [] {
                                                "f", "g", "h", "i", "j",
                                                "k", "l", "m", "n", "o"};
 
-        to_csv_file("letters_file", "letters", letters);
+        write_file_csv("letters_file.csv", "letters", letters);
 
         std::vector<double> not_letters;
 
@@ -189,7 +189,7 @@ suite csv_recorder = [] {
          rec.update();
       }
       
-      to_csv_file("recorder_out", rec);
+      write_file_csv("recorder_out.csv", rec);
    };
 };
 
