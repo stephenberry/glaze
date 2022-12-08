@@ -596,10 +596,8 @@ for (auto i = 0; i < 100; ++i) {
   z.emplace_back(i % 2 == 0);
 }
 
-to_csv_file("rowwise_to_file_test", "x", x, "y", y, "z", z);
+write_file_csv("rowwise_to_file_test.csv", "x", x, "y", y, "z", z);
 ```
-
-[TODO: expand]
 
 # Data Recorder
 
