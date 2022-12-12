@@ -4,25 +4,25 @@
 #pragma once
 
 #include "glaze/core/opts.hpp"
+#include "glaze/core/read.hpp"
+#include "glaze/core/write.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/json/json_ptr.hpp"
-#include "glaze/json/read.hpp"
-#include "glaze/json/write.hpp"
 
 namespace glz
 {
-   template <class T, class B>
-   bool write_from(T&& root_value, const sv json_ptr, B&& buffer) {
+   template <opts Opts, class T, class B>
+   bool read_as(T&& root_value, const sv json_ptr, B&& buffer) {
       return detail::seek_impl(
         [&](auto&& val) {
-          read_json(val, buffer);
+          read<Opts>(val, buffer);
         },
         std::forward<T>(root_value), json_ptr
     );
    }
-
+   
    template <opts Opts, class T, class B>
-   bool read_from(T&& root_value, const sv json_ptr, B& buffer)
+   bool write_as(T&& root_value, const sv json_ptr, B& buffer)
    {
       return detail::seek_impl([&](auto&& val) { write<Opts>(val, buffer); },
                        std::forward<T>(root_value), json_ptr);

@@ -61,7 +61,7 @@ namespace glz
       void overwrite(auto& state, const std::unordered_map<std::string, raw_json> &overwrites)
       {
          for (auto&& [json_ptr, raw_json_str] : overwrites) {
-            write_from(state, json_ptr, raw_json_str.str);
+            read_as_json(state, json_ptr, raw_json_str.str);
          }
       }
 

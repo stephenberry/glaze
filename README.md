@@ -264,19 +264,21 @@ glz::set(tuple, "/0", 5);
 expect(std::get<0>(tuple) == 5.0);
 ```
 
-### write_from
+### read_as
 
-`write_from` allows you to write to a JSON pointer via a JSON input buffer.
+`read_as` allows you to read into an object from a JSON pointer and an input buffer.
 
 ```c++
 Thing thing{};
-glz::write_from(thing, "/vec3", "[7.6, 1292.1, 0.333]");
+glz::read_as_json(thing, "/vec3", "[7.6, 1292.1, 0.333]");
 expect(thing.vec3.x == 7.6 && thing.vec3.y == 1292.1 &&
 thing.vec3.z == 0.333);
 
-glz::write_from(thing, "/vec3/2", "999.9");
+glz::read_as_json(thing, "/vec3/2", "999.9");
 expect(thing.vec3.z == 999.9);
 ```
+
+`read_as_binary` is also supported.
 
 ## JSON With Comments (JSONC)
 

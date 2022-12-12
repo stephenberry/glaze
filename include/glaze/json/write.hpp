@@ -14,7 +14,7 @@
 #include "glaze/core/format.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/dump.hpp"
-#include "glaze/json/from_ptr.hpp"
+#include "glaze/json/ptr.hpp"
 
 #include "glaze/util/to_chars.hpp"
 #include "glaze/util/itoa.hpp"
