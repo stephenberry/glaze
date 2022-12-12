@@ -17,7 +17,7 @@ namespace glz
    namespace detail
    {
       template <class F, class T>
-      requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
+      requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
          is_std_tuple<std::decay_t<T>>
       bool seek_impl(F&& func, T&& value, sv json_ptr);
 
@@ -122,7 +122,7 @@ namespace glz
       }
 
       template <class F, class T>
-      requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
+      requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
          is_std_tuple<std::decay_t<T>>
       bool seek_impl(F&& func, T&& value, sv json_ptr)
       {
