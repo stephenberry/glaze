@@ -1516,26 +1516,22 @@ void write_tests() {
       }
    };
 
-//* write_json cannot handle type variant by itself, need to use std::get. Do we need to add variant support?
    "Write variant"_test = [] {
       std::variant<int, double, Geodetic> var;
 
       var = 1;
-      auto i = std::get<0>(var);
-      std::string ibuf;
-      glz::write_json(i, ibuf);
+      std::string ibuf{};
+      glz::write_json(var, ibuf);
       expect(ibuf == R"(1)");
 
       var = 2.2;
-      auto d = std::get<1>(var);
-      std::string dbuf;
-      glz::write_json(d, dbuf);
+      std::string dbuf{};
+      glz::write_json(var, dbuf);
       expect(dbuf == R"(2.2)");
 
       var = Geodetic{1.0, 2.0, 5.0};
-      auto g = std::get<2>(var);
-      std::string gbuf;
-      glz::write_json(g, gbuf);
+      std::string gbuf{};
+      glz::write_json(var, gbuf);
       expect(gbuf == R"([1,2,5])");
    };
 
