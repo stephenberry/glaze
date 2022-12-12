@@ -11,6 +11,7 @@
 
 namespace glz
 {
+   // Given a JSON pointer path, reads from the buffer into the object
    template <opts Opts, class T, class B>
    bool read_as(T&& root_value, const sv json_ptr, B&& buffer) {
       return detail::seek_impl(
@@ -21,6 +22,13 @@ namespace glz
     );
    }
    
+   // Given a JSON pointer path, find the value in the buffer and reads only that sub value
+   /*template <opts Opts, class T, class B>
+   bool read_sub(T&& root_value, const sv json_ptr, B&& buffer) {
+      
+   }*/
+   
+   // Given a JSON pointer path, writes into a buffer the specified value
    template <opts Opts, class T, class B>
    bool write_as(T&& root_value, const sv json_ptr, B& buffer)
    {
