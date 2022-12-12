@@ -14,7 +14,7 @@
 #include "glaze/core/macros.hpp"
 #include "boost/ut.hpp"
 #include "glaze/json/json_ptr.hpp"
-#include "glaze/json/from_ptr.hpp"
+#include "glaze/json/ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/json/prettify.hpp"
@@ -684,13 +684,13 @@ void json_pointer() {
       expect(std::get<2>(tuple) == "fish");
    };
 
-   "overwrite"_test = [] {
+   "read_as_json"_test = [] {
       Thing thing{};
-      glz::write_from(thing, "/vec3", "[7.6, 1292.1, 0.333]");
+      glz::read_as_json(thing, "/vec3", "[7.6, 1292.1, 0.333]");
       expect(thing.vec3.x == 7.6 && thing.vec3.y == 1292.1 &&
              thing.vec3.z == 0.333);
 
-      glz::write_from(thing, "/vec3/2", "999.9");
+      glz::read_as_json(thing, "/vec3/2", "999.9");
       expect(thing.vec3.z == 999.9);
    };
 
