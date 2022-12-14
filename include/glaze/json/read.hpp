@@ -149,10 +149,12 @@ namespace glz
       template <num_t T>
       struct from_json<T>
       {
-         template <auto Opts, class It>
+         template <auto Options, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            skip_ws(it, end);
+            if constexpr (!Options.ws_handled) {
+               skip_ws(it, end);
+            }
             
             if (it == end) [[unlikely]] {
                throw std::runtime_error("Unexpected end of buffer");
@@ -204,7 +206,9 @@ namespace glz
          {
             // TODO: this does not handle control chars like \t and \n
             
-            skip_ws(it, end);
+            if constexpr (!Opts.ws_handled) {
+               skip_ws(it, end);
+            }
             
             if constexpr (!Opts.opening_handled) {
                match<'"'>(it, end);
@@ -387,10 +391,14 @@ namespace glz
        !resizeable<T>)
       struct from_json<T>
       {
-         template <auto Opts>
+         template <auto Options>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            skip_ws(it, end);
+            if constexpr (!Options.ws_handled) {
+               skip_ws(it, end);
+            }
+            static constexpr auto Opts = ws_handled_off<Options>();
+            
             match<'['>(it, end);
             skip_ws(it, end);
             if (it == end) {
@@ -410,7 +418,7 @@ namespace glz
             auto value_it = value.begin();
             
             for (size_t i = 0; i < n; ++i) {
-               read<json>::op<Opts>(*value_it++, ctx, it, end);
+               read<json>::op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
                skip_ws(it, end);
                if (it == end) {
                   throw std::runtime_error("Unexpected end");
@@ -434,7 +442,7 @@ namespace glz
             // growing
             if constexpr (emplace_backable<T>) {
                while (it < end) {
-                  read<json>::op<Opts>(value.emplace_back(), ctx, it, end);
+                  read<json>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
                   skip_ws(it, end);
                   if (*it == ',') [[likely]] {
                      ++it;
@@ -460,14 +468,18 @@ namespace glz
        resizeable<T>)
       struct from_json<T>
       {
-         template <auto Opts>
+         template <auto Options>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             using value_t = nano::ranges::range_value_t<T>;
             static thread_local std::vector<value_t> buffer{};
             buffer.clear();
 
-            skip_ws(it, end);
+            if constexpr (!Options.ws_handled) {
+               skip_ws(it, end);
+            }
+            static constexpr auto Opts = ws_handled_off<Options>();
+            
             match<'['>(it, end);
             skip_ws(it, end);
             for (size_t i = 0; it < end; ++i) {
@@ -493,7 +505,7 @@ namespace glz
       template <class T> requires glaze_array_t<T> || tuple_t<T>
       struct from_json<T>
       {
-         template <auto Opts>
+         template <auto Options>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             static constexpr auto N = []() constexpr
@@ -507,11 +519,16 @@ namespace glz
             }
             ();
             
-            skip_ws(it, end);
+            if constexpr (!Options.ws_handled) {
+               skip_ws(it, end);
+            }
+            
             match<'['>(it, end);
             skip_ws(it, end);
             
             for_each<N>([&](auto I) {
+               static constexpr auto Opts = ws_handled_off<Options>();
+               
                if (it == end || *it == ']') {
                   return;
                }
@@ -520,10 +537,10 @@ namespace glz
                   skip_ws(it, end);
                }
                if constexpr (glaze_array_t<T>) {
-                  read<json>::op<Opts>(value.*glz::tuplet::get<I>(meta_v<T>), ctx, it, end);
+                  read<json>::op<ws_handled<Opts>()>(value.*glz::tuplet::get<I>(meta_v<T>), ctx, it, end);
                }
                else {
-                  read<json>::op<Opts>(glz::tuplet::get<I>(value), ctx, it, end);
+                  read<json>::op<ws_handled<Opts>()>(glz::tuplet::get<I>(value), ctx, it, end);
                }
                skip_ws(it, end);
             });
@@ -549,12 +566,16 @@ namespace glz
                }
             }
             ();
+            
+            if constexpr (!Opts.ws_handled) {
+               skip_ws(it, end);
+            }
 
-            skip_ws(it, end);
             match<'['>(it, end);
             skip_ws(it, end);
 
             for_each<N>([&](auto I) {
+               
                if (it == end || *it == ']') {
                   return;
                }
@@ -563,10 +584,10 @@ namespace glz
                   skip_ws(it, end);
                }
                if constexpr (glaze_array_t<T>) {
-                  read<json>::op<Opts>(value.*std::get<I>(meta_v<T>), ctx, it, end);
+                  read<json>::op<ws_handled<Opts>()>(value.*std::get<I>(meta_v<T>), ctx, it, end);
                }
                else {
-                  read<json>::op<Opts>(std::get<I>(value), ctx, it, end);
+                  read<json>::op<ws_handled<Opts>()>(std::get<I>(value), ctx, it, end);
                }
                skip_ws(it, end);
             });
