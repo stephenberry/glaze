@@ -235,11 +235,9 @@ struct local_macro_t {
 };
 ```
 
-**Note: MSVC requires the compiler flag `/Zc:preprocessor` for a standards compliant preprocessor.**
-
 ## JSON Pointer Syntax
 
-[Here is a simple JSON pointer syntax explanation](https://github.com/stephenberry/JSON-Pointer)
+[Link to simple JSON pointer syntax explanation](https://github.com/stephenberry/JSON-Pointer)
 
 Glaze supports JSON pointer syntax access in a C++ context. This is extremely helpful for building generic APIs, which allows components of complex arguments to be accessed without needed know the encapsulating class.
 
@@ -277,8 +275,6 @@ thing.vec3.z == 0.333);
 glz::read_as_json(thing, "/vec3/2", "999.9");
 expect(thing.vec3.z == 999.9);
 ```
-
-`read_as_binary` is also supported.
 
 ## JSON With Comments (JSONC)
 
@@ -405,6 +401,7 @@ This can be used for autocomplete, linting, and validation of user input/config 
 Array types logically convert to JSON array values. Concepts are used to allow various containers and even user containers if they match standard library interfaces.
 
 - `glz::array` (compile time mixed types)
+- `std::tuple`
 - `std::array`
 - `std::vector`
 - `std::deque`
@@ -518,7 +515,7 @@ struct glz::meta<includer_struct> {
 };
 ```
 
-When this object is parsed, if the key `#include` is encountered the associated file will be read into the local object.
+When this object is parsed, when the key `#include` is encountered the associated file will be read into the local object.
 
 ```c++
 includer_struct obj{};
@@ -534,7 +531,7 @@ This will read the `./obj.json` file into the `obj` as it is parsed. Since glaze
 
 - Tagged binary messaging for maximum performance
 - Comma Separated Value files (CSV)
-- A data recorder (logging) (`recorder.hpp`)
+- A data recorder (`recorder.hpp`)
 - A generic library API
 - A simple thread pool
 - Studies based on JSON structures
