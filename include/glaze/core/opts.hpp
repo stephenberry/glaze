@@ -16,9 +16,11 @@ namespace glz
       bool skip_null_members = true; // skip writing out params in an object if the value is null
       bool no_except = false; // turn off and on throwing exceptions
       bool allow_hash_check = false; // Will replace some string equality checks with hash checks
-      bool prettify = false; // write out prettified JSON
       bool rowwise = true; // rowwise output for csv, false is column wise
-      
+      bool prettify = false;         // write out prettified JSON
+      char indentation_char = ' ';   // prettified JSON indentation char
+      uint8_t indentation_width = 3; // prettified JSON indentation size
+
       // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled
       bool ws_handled = false; // whitespace has already been parsed
