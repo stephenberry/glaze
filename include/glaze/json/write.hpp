@@ -478,13 +478,13 @@ namespace glz
             if constexpr (!Options.opening_handled) {
                dump<'{'>(b, ix);
             }
-            static constexpr auto Opts = opening_handled_off<Options>();
             
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
             
             bool first = true;
             for_each<N>([&](auto I) {
+               static constexpr auto Opts = opening_handled_off<Options>();
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                using mptr_t = std::tuple_element_t<1, decltype(item)>;
                using val_t = member_t<V, mptr_t>;
