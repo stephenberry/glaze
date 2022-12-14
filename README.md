@@ -18,12 +18,12 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.55**           | **972**      | **637**     |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1249**    |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.86**           | **374**      | **469**     |
-| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.27**           | **303**      | **620**     |
-| [**json_struct**](https://github.com/jorgen/json_struct)     | **4.46**           | **230**      | **315**     |
-| [**nlohmann**](https://github.com/nlohmann/json)             | **17.32**          | **87**       | **71**      |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.42**           | **978**      | **732**     |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1227**    |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.79**           | **376**      | **481**     |
+| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.28**           | **302**      | **620**     |
+| [**json_struct**](https://github.com/jorgen/json_struct)     | **4.33**           | **242**      | **336**     |
+| [**nlohmann**](https://github.com/nlohmann/json)             | **16.81**          | **89**       | **73**      |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
@@ -33,8 +33,8 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **3.40**           | **1334**     | **361**     |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **111**     |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **3.10**           | **1346**     | **404**     |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **113**     |
 
 ## Binary Performance
 
