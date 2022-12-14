@@ -30,4 +30,12 @@ namespace glz
       ret.opening_handled = true;
       return ret;
    };
+   
+   template <opts Opts>
+   constexpr auto opening_handled_off()
+   {
+      opts ret = Opts;
+      ret.opening_handled = false;
+      return ret;
+   };
 }

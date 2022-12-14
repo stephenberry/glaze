@@ -63,6 +63,57 @@ namespace glz
          }
       };
       
+      template <is_variant T>
+      constexpr auto variant_type_names() {
+         constexpr auto N = std::variant_size_v<T>;
+         std::array<sv, N> ret{};
+         
+         for_each<N>([&](auto I) {
+            ret[I] = glz::name_v<std::decay_t<std::variant_alternative_t<I, T>>>;
+         });
+         
+         return ret;
+      }
+      
+      template <is_variant T>
+      struct from_json<T>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         {
+            skip_ws(it, end);
+            match<'{'>(it, end);
+            skip_ws(it, end);
+            
+            match<R"("type")">(it, end);
+            skip_ws(it, end);
+            match<':'>(it, end);
+            
+            using V = std::decay_t<decltype(value)>;
+            
+            static constexpr auto names = variant_type_names<V>();
+            static constexpr auto N = names.size();
+            
+            // TODO: Change from linear search to map?
+            static thread_local std::string type{};
+            read<json>::op<Opts>(type, ctx, it, end);
+            skip_ws(it, end);
+            match<','>(it, end);
+            
+            for_each<N>([&](auto I) {
+               if (string_cmp(type, names[I])) {
+                  using V = std::variant_alternative_t<I, T>;
+                  if (!std::holds_alternative<V>(value)) {
+                     // default construct the value if not matching
+                     value = V{};
+                  }
+                  read<json>::op<opening_handled<Opts>()>(std::get<I>(value), ctx, it, end);
+                  return;
+               }
+            });
+         }
+      };
+      
       template <bool_t T>
       struct from_json<T>
       {
@@ -293,7 +344,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            //Could do better key parsing for enums since we know we cant have escapes and we know the max size
+            // Could do better key parsing for enums since we know we cant have escapes and we know the max size
             static thread_local std::string key{};
             read<json>::op<Opts>(key, ctx, it, end);
 
@@ -566,12 +617,18 @@ namespace glz
       requires map_t<T> || glaze_object_t<T>
       struct from_json<T>
       {
-         template <auto Opts, class It>
+         template <auto Options, class It>
          static void op(auto& value, is_context auto&& ctx, It&& it, auto&& end)
          {
+            if constexpr (!Options.opening_handled) {
+               skip_ws(it, end);
+               match<'{'>(it, end);
+            }
+            
             skip_ws(it, end);
-            match<'{'>(it, end);
-            skip_ws(it, end);
+            
+            static constexpr auto Opts = opening_handled_off<Options>();
+            
             bool first = true;
             while (it != end) {
                if (*it == '}') [[unlikely]] {
