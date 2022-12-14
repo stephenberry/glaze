@@ -1943,8 +1943,16 @@ struct glz::meta<variant_custom>
 };
 
 suite custom_variant_tests = [] {
-   /*"custom_variant_write_tests"_test = [] {
-   };*/
+   "custom_variant_write_tests"_test = [] {
+      variant_custom obj{};
+      obj.v = var1_t{ 5.5 };
+      
+      std::string s{};
+      
+      glz::write_json(obj, s);
+      
+      expect(s == R"({"v":{"type":"var1_t","x":5.5}})");
+   };
    
    "custom_variant_read_tests"_test = [] {
       variant_custom obj{};
