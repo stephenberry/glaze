@@ -14,6 +14,7 @@
 #include "glaze/util/parse.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/file/file_ops.hpp"
+#include "glaze/util/strod.hpp"
 
 namespace glz
 {
@@ -108,26 +109,22 @@ namespace glz
             
             if constexpr (std::contiguous_iterator<std::decay_t<It>>)
             {
-               if constexpr (std::is_floating_point_v<T>)
-               {
-                  const auto size = std::distance(it, end);
-                  const auto start = &*it;
-                  auto [p, ec] = fast_float::from_chars(start, start + size, value);
-                  if (ec != std::errc{}) [[unlikely]]
-                     throw std::runtime_error("Failed to parse number");
-                  it += (p - &*it);
-               }
-               else
-               {
-                  double temp;
-                  const auto size = std::distance(it, end);
-                  const auto start = &*it;
-                  auto [p, ec] = fast_float::from_chars(start, start + size, temp);
-                  if (ec != std::errc{}) [[unlikely]]
-                     throw std::runtime_error("Failed to parse number");
-                  it += (p - &*it);
-                  value = static_cast<T>(temp);
-               }
+               auto start = reinterpret_cast<const uint8_t *>(&*it);
+               auto s = parse_number(value, start);
+               if (!s) [[unlikely]]
+                  throw std::runtime_error("Failed to parse number");
+               //if constexpr (std::floating_point<std::decay_t<T>>) {
+               //   std::string ts = "2.2861746047729334,";
+               //   double val2{};
+               //   auto start2 = reinterpret_cast<const uint8_t*>(ts.data());
+               //   auto s = parse_number(val2, start2);
+
+               //   std::cout << "\nnum:" << value << ", " << val2 <<
+               //      ", '"
+               //             << std::string_view{&*it, std::size_t(start - reinterpret_cast<const uint8_t*>(&*it))}
+               //             << "'\n";
+               //}
+               it += (start - reinterpret_cast<const uint8_t *>(&*it));
             }
             else {
                double num;
@@ -139,10 +136,11 @@ namespace glz
                   buffer[i] = *it++;
                   ++i;
                }
-               auto [p, ec] = fast_float::from_chars(buffer, buffer + i, num);
-               if (ec != std::errc{}) [[unlikely]]
+               buffer[i] = '\0';
+               auto start = reinterpret_cast<const uint8_t*>(buffer);
+               auto s = parse_number(value, start);
+               if (!s) [[unlikely]]
                   throw std::runtime_error("Failed to parse number");
-               value = static_cast<T>(num);
             }
          }
       };

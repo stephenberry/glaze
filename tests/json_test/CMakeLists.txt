@@ -2,6 +2,10 @@ project(json_test)
 
 add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 
+if (MSVC)
+   target_compile_options(${PROJECT_NAME} PRIVATE "/bigobj")
+endif()
+
 target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE Boost::ut glaze::glaze)

@@ -284,6 +284,9 @@ void basic_types() {
       expect(num == 999);
       glz::read_json(num, "1e4");
       expect(num == 10000);
+      uint64_t num64{};
+      glz::read_json(num64, "32948729483739289");
+      expect(num64 == 32948729483739289);
    };
 
    "bool write"_test = [] {
@@ -328,6 +331,18 @@ void container_types() {
       for (auto& item : vec) item = rand();
       std::string buffer{};
       std::vector<int> vec2{};
+      glz::write_json(vec, buffer);
+      glz::read_json(vec2, buffer);
+      expect(vec == vec2);
+   };
+   "vector uint64_t roundtrip"_test = [] {
+      std::uniform_int_distribution<uint64_t> dist(std::numeric_limits<uint64_t>::min(),
+                                                             std::numeric_limits<uint64_t>::max());
+      std::mt19937 gen{};
+      std::vector<uint64_t> vec(100);
+      for (auto& item : vec) item = dist(gen);
+      std::string buffer{};
+      std::vector<uint64_t> vec2{};
       glz::write_json(vec, buffer);
       glz::read_json(vec2, buffer);
       expect(vec == vec2);
