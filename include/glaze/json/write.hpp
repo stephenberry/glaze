@@ -279,16 +279,26 @@ namespace glz
          }
       };
 
-      template <class T>
-      concept variant_t = is_specialization_v<T, std::variant>;
-
-      template <variant_t T>
+      template <is_variant T>
       struct to_json<T>
       {
          template <auto Opts, class... Args>
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            std::visit([&](auto&& val) { write<json>::op<Opts>(val, ctx, std::forward<Args>(args)...); }, value);
+            std::visit([&](auto&& val) {
+               using V = std::decay_t<decltype(val)>;
+               if constexpr (glaze_object_t<V>) {
+                  // must first write out type
+                  dump<R"({"type":")">(std::forward<Args>(args)...);
+                  dump(name_v<V>, std::forward<Args>(args)...);
+                  dump<R"(",)">(std::forward<Args>(args)...);
+                  
+                  write<json>::op<opening_handled<Opts>()>(val, ctx, std::forward<Args>(args)...);
+               }
+               else {
+                  write<json>::op<Opts>(val, ctx, std::forward<Args>(args)...);
+               }
+            }, value);
          }
       };
 
@@ -400,14 +410,18 @@ namespace glz
       requires glaze_object_t<T>
       struct to_json<T>
       {
-         template <auto Opts>
+         template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& b) noexcept
          {
+            if constexpr (!Options.opening_handled) {
+               dump<'{'>(b);
+            }
+            
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
-            dump<'{'>(b);
             bool first = true;
             for_each<N>([&](auto I) {
+               static constexpr auto Opts = opening_handled_off<Options>();
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                using mptr_t = std::tuple_element_t<1, decltype(item)>;
                using val_t = member_t<V, mptr_t>;
@@ -458,14 +472,19 @@ namespace glz
             dump<'}'>(b);
          }
          
-         template <auto Opts>
+         template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
+            if constexpr (!Options.opening_handled) {
+               dump<'{'>(b, ix);
+            }
+            
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
-            dump<'{'>(b, ix);
+            
             bool first = true;
             for_each<N>([&](auto I) {
+               static constexpr auto Opts = opening_handled_off<Options>();
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                using mptr_t = std::tuple_element_t<1, decltype(item)>;
                using val_t = member_t<V, mptr_t>;

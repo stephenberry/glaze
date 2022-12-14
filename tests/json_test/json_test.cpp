@@ -1906,6 +1906,75 @@ suite nan_tests = [] {
    };
 };
 
+struct var1_t {
+   double x{};
+};
+
+template <>
+struct glz::meta<var1_t>
+{
+   using T = var1_t;
+   static constexpr std::string_view name = "var1_t";
+   static constexpr auto value = object("x", &T::x);
+};
+
+struct var2_t {
+   double y{};
+};
+
+template <>
+struct glz::meta<var2_t>
+{
+   using T = var2_t;
+   static constexpr std::string_view name = "var2_t";
+   static constexpr auto value = object("y", &T::y);
+};
+
+struct variant_custom
+{
+   std::variant<var1_t, var2_t> v{};
+};
+
+template <>
+struct glz::meta<variant_custom>
+{
+   using T = variant_custom;
+   static constexpr auto value = object("v", &T::v);
+};
+
+suite custom_variant_tests = [] {
+   "custom_variant_write_tests"_test = [] {
+      variant_custom obj{};
+      obj.v = var1_t{ 5.5 };
+      
+      std::string s{};
+      
+      glz::write_json(obj, s);
+      
+      expect(s == R"({"v":{"type":"var1_t","x":5.5}})");
+   };
+   
+   "custom_variant_read_tests"_test = [] {
+      variant_custom obj{};
+      
+      glz::read_json(obj, R"({"v": { "type": "var1_t", "x": 5.5 }})");
+      
+      expect(std::get<var1_t>(obj.v).x == 5.5);
+   };
+};
+
+struct variant_obj
+{
+   std::variant<double, std::string> v{};
+};
+
+template <>
+struct glz::meta<variant_obj>
+{
+   using T = variant_obj;
+   static constexpr auto value = object("v", &T::v);
+};
+
 suite variant_tests = [] {
    "variant_write_tests"_test = [] {
       std::variant<double, std::string> d = "not_a_fish";
@@ -1919,6 +1988,15 @@ suite variant_tests = [] {
       glz::write_json(d, s);
       expect(s == "5.7");
    };
+   
+   // TODO:
+   /*"variant_read_tests"_test = [] {
+      variant_obj obj{};
+      
+      glz::read_json(obj, R"({"v": 5.5})");
+      
+      expect(std::get<double>(obj.v) == 5.5);
+   };*/
 };
 
 struct holder0_t {
