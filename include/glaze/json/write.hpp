@@ -203,6 +203,11 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<'['>(std::forward<Args>(args)...);
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level += Opts.indentation_width;
+               dump<'\n'>(std::forward<Args>(args)...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+            }
             const auto is_empty = [&]() -> bool {
                if constexpr (nano::ranges::sized_range<T>) {
                   return value.size() ? false : true;
@@ -219,7 +224,16 @@ namespace glz
                const auto end = value.end();
                for (; it != end; ++it) {
                   dump<','>(std::forward<Args>(args)...);
+                  if constexpr (Opts.prettify) {
+                     dump<'\n'>(std::forward<Args>(args)...);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                  }
                   write<json>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
+               }
+               if constexpr (Opts.prettify) {
+                  ctx.indentation_level -= Opts.indentation_width;
+                  dump<'\n'>(std::forward<Args>(args)...);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
                }
             }
             dump<']'>(std::forward<Args>(args)...);
@@ -233,6 +247,11 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<'{'>(std::forward<Args>(args)...);
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level += Opts.indentation_width;
+               dump<'\n'>(std::forward<Args>(args)...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+            }
             if (!value.empty()) {
                auto it = value.cbegin();
                auto write_pair = [&] {
@@ -246,6 +265,9 @@ namespace glz
                      dump<'"'>(std::forward<Args>(args)...);
                   }
                   dump<':'>(std::forward<Args>(args)...);
+                  if constexpr (Opts.prettify) {
+                     dump<' '>(std::forward<Args>(args)...);
+                  }
                   write<json>::op<Opts>(it->second, ctx, std::forward<Args>(args)...);
                };
                write_pair();
@@ -258,7 +280,16 @@ namespace glz
                      if (!bool(it->second)) continue;
                   }
                   dump<','>(std::forward<Args>(args)...);
+                  if constexpr (Opts.prettify) {
+                     dump<'\n'>(std::forward<Args>(args)...);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                  }
                   write_pair();
+               }
+               if constexpr (Opts.prettify) {
+                  ctx.indentation_level -= Opts.indentation_width;
+                  dump<'\n'>(std::forward<Args>(args)...);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
                }
             }
             dump<'}'>(std::forward<Args>(args)...);
@@ -321,6 +352,11 @@ namespace glz
             ();
             
             dump<'['>(std::forward<Args>(args)...);
+            if constexpr (N > 0 && Opts.prettify) {
+               ctx.indentation_level += Opts.indentation_width;
+               dump<'\n'>(std::forward<Args>(args)...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+            }
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
@@ -334,8 +370,17 @@ namespace glz
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
                   dump<','>(std::forward<Args>(args)...);
+                  if constexpr (Opts.prettify) {
+                     dump<'\n'>(std::forward<Args>(args)...);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                  }
                }
             });
+            if constexpr (N > 0 && Opts.prettify) {
+               ctx.indentation_level -= Opts.indentation_width;
+               dump<'\n'>(std::forward<Args>(args)...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+            }
             dump<']'>(std::forward<Args>(args)...);
          }
       };
@@ -367,6 +412,11 @@ namespace glz
             ();
 
             dump<'['>(std::forward<Args>(args)...);
+            if constexpr (N > 0 && Opts.prettify) {
+               ctx.indentation_level += Opts.indentation_width;
+               dump<'\n'>(std::forward<Args>(args)...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+            }
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
@@ -380,8 +430,17 @@ namespace glz
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
                   dump<','>(std::forward<Args>(args)...);
+                  if constexpr (Opts.prettify) {
+                     dump<'\n'>(std::forward<Args>(args)...);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                  }
                }
             });
+            if constexpr (N > 0 && Opts.prettify) {
+               ctx.indentation_level -= Opts.indentation_width;
+               dump<'\n'>(std::forward<Args>(args)...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+            }
             dump<']'>(std::forward<Args>(args)...);
          }
       };
@@ -415,6 +474,11 @@ namespace glz
          {
             if constexpr (!Options.opening_handled) {
                dump<'{'>(b);
+               if constexpr (Options.prettify) {
+                  ctx.indentation_level += Options.indentation_width;
+                  dump<'\n'>(b);
+                  dumpn<Options.indentation_char>(ctx.indentation_level, b);
+               }
             }
             
             using V = std::decay_t<T>;
@@ -445,15 +509,22 @@ namespace glz
                   // Null members may be skipped so we cant just write it out for all but the last member unless
                   // trailing commas are allowed
                   dump<','>(b);
+                  if constexpr (Opts.prettify) {
+                     dump<'\n'>(b);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, b);
+                  }
                }
 
                using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
                if constexpr (str_t<Key> || char_t<Key>) {
                   write<json>::op<Opts>(glz::tuplet::get<0>(item), ctx, b);
                   dump<':'>(b);
+                  if constexpr (Opts.prettify) {
+                     dump<' '>(b);
+                  }
                }
                else {
-                  static constexpr auto quoted = concat_arrays(concat_arrays("\"", glz::tuplet::get<0>(item)), "\":");
+                  static constexpr auto quoted = concat_arrays(concat_arrays("\"", glz::tuplet::get<0>(item)), "\":", Opts.prettify ? " " : "");
                   write<json>::op<Opts>(quoted, ctx, b);
                }
                
@@ -463,12 +534,20 @@ namespace glz
                if constexpr (Opts.comments && S > 2) {
                   constexpr sv comment = glz::tuplet::get<2>(item);
                   if constexpr (comment.size() > 0) {
+                     if constexpr (Opts.prettify) {
+                        dump<' '>(b);
+                     }
                      dump<"/*">(b);
                      dump(comment, b);
                      dump<"*/">(b);
                   }
                }
             });
+            if constexpr (Options.prettify) {
+               ctx.indentation_level -= Options.indentation_width;
+               dump<'\n'>(b);
+               dumpn<Options.indentation_char>(ctx.indentation_level, b);
+            }
             dump<'}'>(b);
          }
          
@@ -477,6 +556,11 @@ namespace glz
          {
             if constexpr (!Options.opening_handled) {
                dump<'{'>(b, ix);
+               if constexpr (Options.prettify) {
+                  ctx.indentation_level += Options.indentation_width;
+                  dump<'\n'>(b, ix);
+                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+               }
             }
             
             using V = std::decay_t<T>;
@@ -514,6 +598,10 @@ namespace glz
                   // Null members may be skipped so we cant just write it out for all but the last member unless
                   // trailing commas are allowed
                   dump<','>(b, ix);
+                  if constexpr (Opts.prettify) {
+                     dump<'\n'>(b, ix);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                  }
                }
 
                using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
@@ -523,14 +611,24 @@ namespace glz
                   if constexpr (needs_escaping(key)) {
                      write<json>::op<Opts>(key, ctx, b, ix);
                      dump<':'>(b, ix);
+                     if constexpr (Opts.prettify) {
+                        dump<' '>(b, ix);
+                     }
                   }
                   else {
-                     static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\":">>;
-                     dump<quoted>(b, ix);
+                     if constexpr (Opts.prettify) {
+                        static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\": ">>;
+                        dump<quoted>(b, ix);
+                     }
+                     else {
+                        static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\":">>;
+                        dump<quoted>(b, ix);
+                     }
                   }
                }
                else {
-                  static constexpr auto quoted = concat_arrays(concat_arrays("\"", glz::tuplet::get<0>(item)), "\":");
+                  static constexpr auto quoted =
+                     concat_arrays(concat_arrays("\"", glz::tuplet::get<0>(item)), "\":", Opts.prettify ? " " : "");
                   write<json>::op<Opts>(quoted, ctx, b, ix);
                }
                
@@ -540,12 +638,20 @@ namespace glz
                if constexpr (Opts.comments && S > 2) {
                   constexpr sv comment = glz::tuplet::get<2>(item);
                   if constexpr (comment.size() > 0) {
+                     if constexpr (Opts.prettify) {
+                        dump<' '>(b, ix);
+                     }
                      dump<"/*">(b, ix);
                      dump(comment, b, ix);
                      dump<"*/">(b, ix);
                   }
                }
             });
+            if constexpr (Options.prettify) {
+               ctx.indentation_level -= Options.indentation_width;
+               dump<'\n'>(b, ix);
+               dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+            }
             dump<'}'>(b, ix);
          }
       };

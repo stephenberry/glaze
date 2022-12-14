@@ -66,6 +66,12 @@ namespace glz::detail
    inline void dump(std::output_iterator<char> auto&& it) noexcept {
       std::copy(str.value, str.value + str.size, it);
    }
+
+   template <char c>
+   inline void dumpn(size_t n, std::output_iterator<char> auto&& it) noexcept
+   {
+      std::fill_n(it, n, c);
+   }
    
    template <const sv& str>
    inline void dump(std::output_iterator<char> auto&& it) noexcept {
@@ -80,6 +86,12 @@ namespace glz::detail
          ++b;
       }
    }
+
+   template <char c>
+   inline void dumpn(size_t n, char*& b) noexcept
+   {
+      std::fill_n(b, n, c);
+   }
    
    template <string_literal str>
    inline void dump(vector_like auto& b, auto&& ix) noexcept {
@@ -91,6 +103,17 @@ namespace glz::detail
       }
       
       std::memcpy(b.data() + ix, s.data(), n);
+      ix += n;
+   }
+
+   template <char c>
+   inline void dumpn(size_t n, vector_like auto& b, auto&& ix) noexcept
+   {
+      if (ix + n > b.size()) [[unlikely]] {
+         b.resize(std::max(b.size() * 2, ix + n));
+      }
+
+      std::fill_n(b.data() + ix, n, c);
       ix += n;
    }
    
