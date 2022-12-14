@@ -540,7 +540,7 @@ namespace glz
                   read<json>::op<ws_handled<Opts>()>(value.*glz::tuplet::get<I>(meta_v<T>), ctx, it, end);
                }
                else {
-                  read<json>::op<Opts>(glz::tuplet::get<I>(value), ctx, it, end);
+                  read<json>::op<ws_handled<Opts>()>(glz::tuplet::get<I>(value), ctx, it, end);
                }
                skip_ws(it, end);
             });
@@ -553,7 +553,7 @@ namespace glz
       requires is_std_tuple<T>
       struct from_json<T>
       {
-         template <auto Options>
+         template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             static constexpr auto N = []() constexpr
@@ -567,7 +567,7 @@ namespace glz
             }
             ();
             
-            if constexpr (!Options.ws_handled) {
+            if constexpr (!Opts.ws_handled) {
                skip_ws(it, end);
             }
 
@@ -575,7 +575,6 @@ namespace glz
             skip_ws(it, end);
 
             for_each<N>([&](auto I) {
-               static constexpr auto Opts = ws_handled_off<Options>();
                
                if (it == end || *it == ']') {
                   return;
@@ -585,10 +584,10 @@ namespace glz
                   skip_ws(it, end);
                }
                if constexpr (glaze_array_t<T>) {
-                  read<json>::op<Opts>(value.*std::get<I>(meta_v<T>), ctx, it, end);
+                  read<json>::op<ws_handled<Opts>()>(value.*std::get<I>(meta_v<T>), ctx, it, end);
                }
                else {
-                  read<json>::op<Opts>(std::get<I>(value), ctx, it, end);
+                  read<json>::op<ws_handled<Opts>()>(std::get<I>(value), ctx, it, end);
                }
                skip_ws(it, end);
             });
