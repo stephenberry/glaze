@@ -170,8 +170,6 @@ target_link_libraries(main PRIVATE glaze::glaze)
 
 ## Dependencies
 Will automaticlly fetch missing dependencies with FetchContent/CPM if not found with find_package.
-- [dragonbox](https://github.com/jk-jeon/dragonbox)
-- [fast_float](https://github.com/fastfloat/fast_float)
 - [fmt](https://github.com/fmtlib/fmt)
 - [NanoRange](https://github.com/tcbrindle/NanoRange)
 

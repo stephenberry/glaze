@@ -7,7 +7,6 @@
 #include <ranges>
 #include <charconv>
 
-#include "fast_float/fast_float.h"
 #include "glaze/core/read.hpp"
 #include "glaze/core/format.hpp"
 #include "glaze/util/type_traits.hpp"
@@ -166,21 +165,9 @@ namespace glz
                auto s = parse_number(value, start);
                if (!s) [[unlikely]]
                   throw std::runtime_error("Failed to parse number");
-               //if constexpr (std::floating_point<std::decay_t<T>>) {
-               //   std::string ts = "2.2861746047729334,";
-               //   double val2{};
-               //   auto start2 = reinterpret_cast<const uint8_t*>(ts.data());
-               //   auto s = parse_number(val2, start2);
-
-               //   std::cout << "\nnum:" << value << ", " << val2 <<
-               //      ", '"
-               //             << std::string_view{&*it, std::size_t(start - reinterpret_cast<const uint8_t*>(&*it))}
-               //             << "'\n";
-               //}
                it += (start - reinterpret_cast<const uint8_t *>(&*it));
             }
             else {
-               double num;
                char buffer[256];
                size_t i{};
                while (it != end && is_numeric(*it)) {

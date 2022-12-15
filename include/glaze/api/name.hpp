@@ -16,17 +16,17 @@ namespace glz
    {
 #ifdef _MSC_VER
       // Workaround for problems with MSVC and passing refrences to stringviews as template params
-      struct string_view_wrapper
+      struct svw
       {
          const char* start{};
          size_t n{};
-         constexpr string_view_wrapper(std::string_view sv) : start(sv.data()), n(sv.size()) {}
+         constexpr svw(std::string_view sv) : start(sv.data()), n(sv.size()) {}
          constexpr auto data() const { return start; }
          constexpr auto begin() const { return data(); }
          constexpr auto end() const { return data() + n; }
          constexpr auto size() const { return n; }
       };
-      template <string_view_wrapper... Strs>
+      template <svw... Strs>
 #else
       template <const std::string_view&... Strs>
 #endif
@@ -52,7 +52,7 @@ namespace glz
       };
 // Helper to get the value out
 #ifdef _MSC_VER
-      template <string_view_wrapper... Strs>
+      template <svw... Strs>
 #else
       template <const std::string_view&... Strs>
 #endif
