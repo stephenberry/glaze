@@ -131,6 +131,10 @@ namespace glz
 
                if constexpr (resizeable<T>) {
                   value.resize(n);
+                  
+                  if constexpr (Opts.shrink_to_fit) {
+                     value.shrink_to_fit();
+                  }
                }
 
                for (auto&& item: value) {
