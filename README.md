@@ -504,6 +504,7 @@ struct opts {
    bool prettify = false;         // write out prettified JSON
    char indentation_char = ' ';   // prettified JSON indentation char
    uint8_t indentation_width = 3; // prettified JSON indentation size
+   bool shrink_to_fit = false; // shrinks dynamic containers to new size to save memory
 };
 ```
 
