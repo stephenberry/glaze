@@ -409,6 +409,10 @@ namespace glz
                ++it;
                if constexpr (resizeable<T>) {
                   value.clear();
+                  
+                  if constexpr (Opts.shrink_to_fit) {
+                     value.shrink_to_fit();
+                  }
                }
                return;
             }
@@ -431,6 +435,10 @@ namespace glz
                   ++it;
                   if constexpr (resizeable<T>) {
                      value.resize(i + 1);
+                     
+                     if constexpr (Opts.shrink_to_fit) {
+                        value.shrink_to_fit();
+                     }
                   }
                   return;
                }
@@ -486,6 +494,11 @@ namespace glz
                if (*it == ']') [[unlikely]] {
                   ++it;
                   value.resize(i);
+                  
+                  if constexpr (Opts.shrink_to_fit) {
+                     value.shrink_to_fit();
+                  }
+                  
                   auto value_it = std::ranges::begin(value);
                   for (size_t j = 0; j < i; ++j) {
                      *value_it++ = buffer[j];

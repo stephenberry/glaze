@@ -2266,6 +2266,23 @@ void nested_file_include_test()
    expect(obj.a.i == 13);
 }
 
+suite shrink_to_fit = [] {
+   "shrink_to_fit"_test = [] {
+      std::vector<int> v = { 1, 2, 3, 4, 5, 6 };
+      std::string b = R"([1,2,3])";
+      glz::read_json(v, b);
+      
+      expect(v.size() == 3);
+      expect(v.capacity() > 3);
+      
+      v = { 1, 2, 3, 4, 5, 6 };
+      
+      glz::read<glz::opts{.shrink_to_fit = true}>(v, b);
+      expect(v.size() == 3);
+      expect(v.capacity() == 3);
+   };
+};
+
 int main()
 {
    using namespace boost::ut;
