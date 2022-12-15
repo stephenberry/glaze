@@ -241,8 +241,7 @@ namespace glz
       return buffer;
    }
 
-   template <auto& Partial, opts Opts, class T, class Buffer>
-   requires nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char))
+   template <auto& Partial, opts Opts, class T, output_buffer Buffer>
    inline auto write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
    {
       static constexpr auto partial = Partial;  // MSVC 16.11 hack
@@ -306,8 +305,7 @@ namespace glz
       }
    }
    
-   template <auto& Partial, opts Opts, class T, class Buffer>
-   requires nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char))
+   template <auto& Partial, opts Opts, class T, output_buffer Buffer>
    inline auto write(T&& value, Buffer& buffer) noexcept
    {
       context ctx{};
