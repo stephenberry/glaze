@@ -25,7 +25,7 @@ namespace glz
    inline void u128_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo)
    {
    #ifdef __SIZEOF_INT128__
-      u128 m = (u128)a * b;
+      unsigned __int128 m = (unsigned __int128)a * b;
       *hi = (uint64_t)(m >> 64);
       *lo = (uint64_t)(m);
    #elif defined(_M_X64)
@@ -52,7 +52,7 @@ namespace glz
    inline void u128_mul_add(uint64_t a, uint64_t b, uint64_t c, uint64_t *hi, uint64_t *lo)
    {
    #ifdef __SIZEOF_INT128__
-      u128 m = (u128)a * b + c;
+      unsigned __int128 m = (unsigned __int128)a * b + c;
       *hi = (uint64_t)(m >> 64);
       *lo = (uint64_t)(m);
    #else
