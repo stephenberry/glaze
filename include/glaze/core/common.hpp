@@ -379,17 +379,6 @@ namespace glz
          To{from};
 #endif
       };
-      
-      template <class T>
-      concept stream_t = requires(T t) {
-         typename T::char_type;
-         typename T::traits_type;
-         typename T::int_type;
-         t.get();
-         t.peek();
-         t.unget();
-         t.gcount();
-      };
 
       // from
       // https://stackoverflow.com/questions/55941964/how-to-filter-duplicate-types-from-tuple-c
