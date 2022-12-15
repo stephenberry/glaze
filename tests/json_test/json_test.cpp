@@ -20,6 +20,7 @@
 #include "glaze/json/prettify.hpp"
 #include "glaze/util/progress_bar.hpp"
 #include "glaze/api/impl.hpp"
+#include "glaze/record/recorder.hpp"
 
 using namespace boost::ut;
 
@@ -2280,6 +2281,33 @@ suite shrink_to_fit = [] {
       glz::read<glz::opts{.shrink_to_fit = true}>(v, b);
       expect(v.size() == 3);
       expect(v.capacity() == 3);
+   };
+};
+
+suite recorder_test = [] {
+   "recorder_to_file"_test = [] {
+      
+      glz::recorder<double, float> rec;
+      
+      double x = 0.0;
+      float y = 0.f;
+      
+      rec["x"] = x;
+      rec["y"] = y;
+      
+      for (int i = 0; i < 100; ++i)
+      {
+         x += 1.5;
+         y += static_cast<float>(i);
+         rec.update();
+      }
+      
+      std::string s{};
+      glz::write_json(rec, s);
+      
+      glz::read_json(rec, s);
+      
+      glz::write_file_json(rec, "recorder_out.json");
    };
 };
 
