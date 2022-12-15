@@ -73,7 +73,13 @@ namespace glz
          {
             dump<'{'>(std::forward<Args>(args)...);
             
-            // TODO: needs prettify handling
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level += Opts.indentation_width;
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            }
+            
+            // TODO: More prettify handling
             
             const size_t n = value.data.size();
             for (size_t i = 0; i < n; ++i) {
@@ -86,6 +92,11 @@ namespace glz
                }
             }
             
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level -= Opts.indentation_width;
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            }
             dump<'}'>(std::forward<Args>(args)...);
          }
       };
