@@ -498,7 +498,6 @@ struct opts {
    bool skip_null_members = true; // skip writing out params in an object if the value is null
    bool no_except = false; // turn off and on throwing exceptions
    bool allow_hash_check = false; // Will replace some string equality checks with hash checks
-   bool rowwise = true; // rowwise output for csv, false is column wise
    bool prettify = false;         // write out prettified JSON
    char indentation_char = ' ';   // prettified JSON indentation char
    uint8_t indentation_width = 3; // prettified JSON indentation size
@@ -540,7 +539,6 @@ This will read the `./obj.json` file into the `obj` as it is parsed. Since glaze
 # More Features
 
 - Tagged binary messaging for maximum performance
-- Comma Separated Value files (CSV)
 - A data recorder (`recorder.hpp`)
 - A generic library API
 - A simple thread pool
@@ -589,25 +587,6 @@ std::vector<std::byte> out;
 glz::write_binary<partial>(s, out);
 ```
 
-# Comma Separated Value Format (CSV)
-
-Glaze by default writes row wise files, as this is more efficient for in memory data that is written once to file. Column wise output is also supported for logging use cases.
-
-### Row wise
-
-```c++
-std::vector<double> x, y;
-std::deque<bool> z;
-for (auto i = 0; i < 100; ++i) {
-  const auto a = static_cast<double>(i);
-  x.emplace_back(a);
-  y.emplace_back(std::sin(a));
-  z.emplace_back(i % 2 == 0);
-}
-
-write_file_csv("rowwise_to_file_test.csv", "x", x, "y", y, "z", z);
-```
-
 # Data Recorder
 
 `record/recorder.hpp` provides an efficient recorder for mixed data types. The template argument takes all the supported types. The recorder stores the data as a variant of deques of those types. `std::deque` is used to avoid the cost of reallocating when a `std::vector` would grow, and typically a recorder is used in cases when the length is unknown.
@@ -627,7 +606,7 @@ for (int i = 0; i < 100; ++i) {
    rec.update(); // saves the current state of x and y
 }
 
-write_file_csv("recorder_out.csv", rec);
+glz::write_file_json(rec, "recorder_out.json");
 ```
 
 # Glaze Interfaces (Generic Library API)

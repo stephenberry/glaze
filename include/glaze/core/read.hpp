@@ -73,24 +73,6 @@ namespace glz
       read<Opts>(value, std::forward<Buffer>(buffer), ctx);
    }
 
-   // For reading json from std::ofstream, std::cout, or other streams
-   template <opts Opts>
-   inline void read(auto& value, detail::stream_t auto& is, is_context auto&& ctx)
-   {
-      std::istreambuf_iterator<char> b{is}, e{};
-      if (b == e) {
-         throw std::runtime_error("No input provided to read");
-      }
-      detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
-   }
-   
-   template <opts Opts>
-   inline void read(auto& value, detail::stream_t auto& is)
-   {
-      context ctx{};
-      read<Opts>(value, is, ctx);
-   }
-
    template <opts Opts, class T, string_viewable Buffer>
    inline void read(T& value, Buffer&& buffer, auto&& ctx)
    {

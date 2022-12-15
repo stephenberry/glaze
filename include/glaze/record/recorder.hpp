@@ -9,6 +9,7 @@
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/string_view.hpp"
 #include "glaze/util/variant.hpp"
+#include "glaze/core/common.hpp"
 
 namespace glz
 {
@@ -17,12 +18,6 @@ namespace glz
       template <class Data>
       struct recorder_assigner
       {
-         /*recorder_assigner(Data& data) : data(data) {}
-         recorder_assigner(const recorder_assigner&) = default;
-         recorder_assigner(recorder_assigner&&) = default;
-         recorder_assigner& operator=(const recorder_assigner&) = default;
-         recorder_assigner& operator=(recorder_assigner&&) = default;*/
-         
          Data& data;
          sv name{};
          
@@ -43,8 +38,7 @@ namespace glz
    {
       using container_type = std::variant<std::deque<Ts>...>;
 
-      std::deque<std::pair<std::string, std::pair<container_type, void*>>>
-         data;
+      std::deque<std::pair<std::string, std::pair<container_type, void*>>> data;
       
       auto operator[](const sv name) {
          return detail::recorder_assigner<decltype(data)>{ data, name };
@@ -65,4 +59,104 @@ namespace glz
          }
       }
    };
+   
+   namespace detail
+   {
+      template <class T>
+      concept is_recorder = is_specialization_v<T, recorder>;
+      
+      template <is_recorder T>
+      struct to_json<T>
+      {
+         template <auto Opts, class... Args>
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            dump<'{'>(std::forward<Args>(args)...);
+            
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level += Opts.indentation_width;
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            }
+            
+            const size_t n = value.data.size();
+            for (size_t i = 0; i < n; ++i) {
+               auto& [name, v] = value.data[i];
+               write<json>::op<Opts>(name, ctx, std::forward<Args>(args)...); // write name as key
+               
+               dump<':'>(std::forward<Args>(args)...);
+               if constexpr (Opts.prettify) {
+                  dump<' '>(args...);
+               }
+               
+               write<json>::op<Opts>(v.first, ctx, std::forward<Args>(args)...); // write deque
+               if (i < n - 1) {
+                  dump<','>(std::forward<Args>(args)...);
+               }
+               
+               if constexpr (Opts.prettify) {
+                  dump<'\n'>(args...);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               }
+            }
+            
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level -= Opts.indentation_width;
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            }
+            dump<'}'>(std::forward<Args>(args)...);
+         }
+      };
+      
+      template <is_recorder T>
+      struct from_json<T>
+      {
+         template <auto Options>
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         {
+            if constexpr (!Options.opening_handled) {
+               skip_ws(it, end);
+               match<'{'>(it, end);
+            }
+            
+            skip_ws(it, end);
+            
+            static constexpr auto Opts = opening_handled_off<Options>();
+            
+            // we read into available containers, we do not intialize here
+            const size_t n = value.data.size();
+            for (size_t i = 0; i < n; ++i) {
+               if (*it == '}') [[unlikely]] {
+                  throw std::runtime_error(R"(Unexpected })");
+               }
+               
+               // find the string, escape characters are not supported for recorders
+               const auto name = parse_key(it, end);
+               
+               auto& [str, v] = value.data[i];
+               if (name != str) {
+                  throw std::runtime_error("Recorder read of name does not match initialized state");
+               }
+               
+               skip_ws(it, end);
+               match<':'>(it, end);
+               skip_ws(it, end);
+               
+               std::visit([&](auto&& deq) {
+                  read<json>::op<Opts>(deq, ctx, it, end);
+               }, v.first);
+               
+               if (i < n - 1) {
+                  skip_ws(it, end);
+                  match<','>(it, end);
+                  skip_ws(it, end);
+               }
+            }
+            
+            skip_ws(it, end);
+            match<'}'>(it, end);
+         }
+      };
+   }
 }
