@@ -18,7 +18,7 @@ if (MSVC)
    string(REGEX MATCH "\/cl(.exe)?$" matched_cl ${CMAKE_CXX_COMPILER})
    if (matched_cl)
       # for a C++ standards compliant preprocessor, not needed for clang-cl
-      target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor")
+      target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /GL /permissive- /Zc:lambda)
    endif()
 else()
    target_compile_options(glaze_glaze INTERFACE "-Wno-missing-braces")
@@ -52,24 +52,10 @@ if (nanorange_ADDED)
    add_library(nanorange::nanorange ALIAS nanorange)
 endif()
 
-CPMFindPackage(
-   NAME FastFloat
-   GIT_REPOSITORY https://github.com/fastfloat/fast_float.git
-   GIT_TAG v3.6.0
-)
-
-CPMAddPackage(
-   NAME dragonbox
-   GIT_REPOSITORY https://github.com/jk-jeon/dragonbox
-   GIT_TAG 1.1.3
-)
-
 target_link_libraries(
     glaze_glaze INTERFACE
     fmt::fmt-header-only
-    dragonbox::dragonbox_to_chars
     nanorange::nanorange
-    FastFloat::fast_float
 )
 
 if(NOT CMAKE_SKIP_INSTALL_RULES)

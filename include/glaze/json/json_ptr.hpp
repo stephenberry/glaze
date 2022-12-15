@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <charconv>
 
-#include "fast_float/fast_float.h"
 #include "glaze/core/common.hpp"
 #include "glaze/util/string_view.hpp"
 #include "glaze/util/parse.hpp"
@@ -83,10 +82,10 @@ namespace glz
             json_ptr = json_ptr.substr(i);
          }
          else if constexpr (std::is_floating_point_v<key_t>) {
-            auto [p, ec] = fast_float::from_chars(
-               &json_ptr[1], json_ptr.data() + json_ptr.size(), key);
-            if (ec != std::errc{}) return false;
-            json_ptr = json_ptr.substr(p - json_ptr.data());
+            auto it = reinterpret_cast<const uint8_t*>(json_ptr.data());
+            auto s = parse_number(key, it);
+            if (!s) return false;
+            json_ptr = json_ptr.substr(reinterpret_cast<const char*>(it) - json_ptr.data());
          }
          else {
             auto [p, ec] = std::from_chars(

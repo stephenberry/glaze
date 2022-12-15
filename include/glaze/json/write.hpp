@@ -16,7 +16,6 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/json/ptr.hpp"
 
-#include "glaze/util/to_chars.hpp"
 #include "glaze/util/itoa.hpp"
 #include "glaze/core/write_chars.hpp"
 

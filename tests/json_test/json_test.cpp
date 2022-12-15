@@ -1638,7 +1638,7 @@ void write_tests() {
       var = Geodetic{1.0, 2.0, 5.0};
       std::string gbuf{};
       glz::write_json(var, gbuf);
-      expect(gbuf == R"([1,2,5])");
+      expect(gbuf == R"([1,2,5])") << gbuf;
    };
 
    "Write empty array structure"_test = [] {
