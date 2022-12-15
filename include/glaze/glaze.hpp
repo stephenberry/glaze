@@ -33,7 +33,6 @@
 #pragma once
 
 #include "glaze/binary.hpp"
-#include "glaze/csv.hpp"
 #include "glaze/json.hpp"
 #include "glaze/file/file_ops.hpp"
 
@@ -82,8 +81,11 @@ namespace glz
       if (path.has_extension()) {
          const auto extension = path.extension().string();
          
-         if (extension == ".json" || extension == ".jsonc") {
+         if (extension == ".json") {
             write<opts{}>(value, buffer, ctx);
+         }
+         else if (extension == ".jsonc") {
+            write<opts{.comments = true}>(value, buffer, ctx);
          }
          else if (extension == ".crush") {
             write<opts{.format = binary}>(value, buffer, ctx);

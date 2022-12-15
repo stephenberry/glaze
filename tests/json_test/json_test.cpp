@@ -20,6 +20,7 @@
 #include "glaze/json/prettify.hpp"
 #include "glaze/util/progress_bar.hpp"
 #include "glaze/api/impl.hpp"
+#include "glaze/record/recorder.hpp"
 
 using namespace boost::ut;
 
@@ -924,17 +925,16 @@ struct glz::meta<oob>
 void read_tests() {
    using namespace boost::ut;
    
-   "stringstream read"_test = [] {
-      std::stringstream ss{};
-      ss << "3958713";
+   "string read"_test = [] {
+      std::string s{"3958713"};
       int i{};
-      glz::read_json(i, ss);
+      glz::read_json(i, s);
       expect(i == 3958713);
       
-      ss.clear();
-      ss << R"({"v":[0.1, 0.2, 0.3]})";
+      s.clear();
+      s = R"({"v":[0.1, 0.2, 0.3]})";
       oob obj{};
-      glz::read_json(obj, ss);
+      glz::read_json(obj, s);
       expect(obj.v == v3{ 0.1, 0.2, 0.3 });
    };
    
@@ -2283,13 +2283,39 @@ suite shrink_to_fit = [] {
    };
 };
 
+suite recorder_test = [] {
+   "recorder_to_file"_test = [] {
+      
+      glz::recorder<double, float> rec;
+      
+      double x = 0.0;
+      float y = 0.f;
+      
+      rec["x"] = x;
+      rec["y"] = y;
+      
+      for (int i = 0; i < 100; ++i)
+      {
+         x += 1.5;
+         y += static_cast<float>(i);
+         rec.update();
+      }
+      
+      std::string s{};
+      glz::write_json(rec, s);
+      
+      glz::read_json(rec, s);
+      
+      glz::write_file_json(rec, "recorder_out.json");
+   };
+};
+
 int main()
 {
    using namespace boost::ut;
    // TODO:
    // *Valid but with combinations of comments and whitespace to validate that code is working correctly.
    // *More complex string and json pointer tests.
-   // *Stream tests.
    // *Test other buffer types.
 
    basic_types();
