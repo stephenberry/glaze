@@ -342,11 +342,11 @@ namespace glz::detail
 
       void mul_pow10(uint32_t pow10)
       {
-         for (; pow10 >= 8; pow10 -= 8) {
-            mul_u32(powers_of_ten_int[8]);
+         for (; pow10 >= 9; pow10 -= 9) {
+            mul_u32(powers_of_ten_int[9]);
          }
          if (pow10) {
-            mul_u32(powers_of_ten_int[pow10]);
+            mul_u32(static_cast<uint32_t>(powers_of_ten_int[pow10]));
          }
       }
 
@@ -354,7 +354,7 @@ namespace glz::detail
       {
          uint32_t shft = exp % 32;
          uint32_t move = exp / 32;
-         uint32_t idx = data.size() - 1;
+         uint32_t idx = static_cast<uint32_t>(data.size()) - 1;
          if (shft == 0) {
             data.resize(data.size() + move);
             for (; idx > 0; idx--) {
@@ -435,7 +435,7 @@ namespace glz::detail
 #undef expr_intg
       cur += 19; /* skip continuous 19 digits */
       if (!digi_is_digit_or_fp(*cur)) {
-         val = sign ? -(T)sig : sig;
+         val = sign ? -T(sig) : T(sig);
          return true;
       }
       goto digi_intg_more; /* read more digits in integral part */
@@ -444,7 +444,7 @@ namespace glz::detail
    digi_sepr_##i : if ((!digi_is_fp(cur[i]))) [[likely]]               \
    {                                                                   \
       cur += i;                                                        \
-      val = sign ? -(T)sig : sig;                                      \
+      val = sign ? -T(sig) : T(sig);                                   \
       return true;                                                     \
    }                                                                   \
    dot_pos = cur + i;                                                  \
@@ -605,7 +605,7 @@ digi_intg_more :
    digi_finish:
 
       if constexpr (std::integral<T>) {
-         val = sig;
+         val = static_cast<T>(sig);
          if constexpr (!std::is_unsigned_v<T>) {
             val *= sign ? -1 : 1;
          }

@@ -131,17 +131,8 @@ namespace glz
                   throw std::runtime_error(R"(Unexpected })");
                }
                
-               std::string_view name{};
                // find the string, escape characters are not supported for recorders
-               skip_ws(it, end);
-               match<'"'>(it, end);
-               auto start = it;
-               while (it != end && *it != '"') { ++it; }
-               if (it == end) {
-                  throw std::runtime_error(R"(Expected: ")");
-               }
-               name = sv{ &*start, static_cast<size_t>(std::distance(start, it)) };
-               ++it;
+               const auto name = parse_key(it, end);
                
                auto& [str, v] = value.data[i];
                if (name != str) {

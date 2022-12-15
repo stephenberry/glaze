@@ -348,16 +348,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            std::string_view key{};
-            skip_ws(it, end);
-            match<'"'>(it, end);
-            auto start = it;
-            while (it != end && *it != '"') { ++it; }
-            if (it == end) {
-               throw std::runtime_error(R"(Expected: ")");
-            }
-            key = sv{ &*start, static_cast<size_t>(std::distance(start, it)) };
-            ++it;
+            const auto key = parse_key(it, end);
 
             static constexpr auto frozen_map = detail::make_string_to_enum_map<T>();
             const auto& member_it = frozen_map.find(frozen::string(key));

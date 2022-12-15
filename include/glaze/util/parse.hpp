@@ -144,6 +144,49 @@ namespace glz::detail
       it += current - start;
       throw std::runtime_error("Expected \"");
    }
+   
+   inline void skip_till_quote(auto&& it, auto&& end)
+   {
+      static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
+
+      if (it == end) [[unlikely]]
+         throw std::runtime_error("Unexpected end, expected escape or quote");
+
+      const char* start = &(*it);
+      const char* current = start;
+      const char* stop = start + std::distance(it, end);
+
+      auto has_zero = [](uint64_t chunk) { return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080); };
+
+      auto has_qoute = [&](uint64_t chunk) {
+         return has_zero(chunk ^ 0b0010001000100010001000100010001000100010001000100010001000100010);
+      };
+
+      const auto end_m7 = stop - 7;
+      for (; current < end_m7; current += 8) {
+         // TODO: Change to memcpy
+         const auto chunk = *reinterpret_cast<const uint64_t*>(&*current);
+         uint64_t test = has_qoute(chunk);
+         if (test != 0) {
+            current += (std::countr_zero(test) >> 3);
+            it += current - start;
+            return;
+         }
+      }
+
+      // Tail end of buffer. Should be rare we even get here
+      while (current < stop) {
+         switch (*current) {
+         case '\\':
+         case '"':
+            it += current - start;
+            return;
+         }
+         ++current;
+      }
+      it += current - start;
+      throw std::runtime_error("Expected \"");
+   }
 
    inline void skip_string(auto&& it, auto&& end) noexcept
    {
@@ -215,5 +258,14 @@ namespace glz::detail
       else {
          throw std::runtime_error("not a digit");
       }
+   }
+   
+   inline std::string_view parse_key(auto&& it, auto&& end)
+   {
+      skip_ws(it, end);
+      match<'"'>(it, end);
+      auto start = it;
+      skip_till_quote(it, end);
+      return { &*start, static_cast<size_t>(std::distance(start, it++)) };
    }
 }
