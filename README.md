@@ -354,7 +354,13 @@ expect(buffer == "\"Red\"");
 
 ## Prettify
 
-`glz::prettify` formats JSON text for easier reading.
+Formatted JSON can be written out directly via a compile time option:
+
+```c++
+glz::write<glz::opts{.prettify = true}>(obj, buffer);
+```
+
+Or, JSON text can be formatted with the `glz::prettify` function:
 
 ```c++
 std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
@@ -482,17 +488,22 @@ For example: `glz::read<glz::opts{.error_on_unknown_keys = false}>(...)` will tu
 - `glz::read<glz::opts{.format = glz::binary}>(...)` -> `glz::read_binary(...)`
 - `glz::read<glz::opts{.format = glz::json}>(...)` -> `glz::read_json(...)`
 
-## Available Options
+## Available Compile Time Options
 
 The struct below shows the available options and the default behavior.
 
 ```c++
 struct opts {
-  uint32_t format = json;
-  bool comments = false; // write out comments
-  bool error_on_unknown_keys = true; // error when an unknown key is encountered
-  bool skip_null_members = true; // skip writing out params in an object if the value is null
-  bool no_except = false; // turn off and on throwing exceptions (work in progress)
+   uint32_t format = json;
+   bool comments = false; // write out comments
+   bool error_on_unknown_keys = true; // error when an unknown key is encountered
+   bool skip_null_members = true; // skip writing out params in an object if the value is null
+   bool no_except = false; // turn off and on throwing exceptions
+   bool allow_hash_check = false; // Will replace some string equality checks with hash checks
+   bool rowwise = true; // rowwise output for csv, false is column wise
+   bool prettify = false;         // write out prettified JSON
+   char indentation_char = ' ';   // prettified JSON indentation char
+   uint8_t indentation_width = 3; // prettified JSON indentation size
 };
 ```
 
