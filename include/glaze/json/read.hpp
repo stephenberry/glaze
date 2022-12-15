@@ -348,9 +348,16 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            // Could do better key parsing for enums since we know we cant have escapes and we know the max size
-            static thread_local std::string key{};
-            read<json>::op<Opts>(key, ctx, it, end);
+            std::string_view key{};
+            skip_ws(it, end);
+            match<'"'>(it, end);
+            auto start = it;
+            while (it != end && *it != '"') { ++it; }
+            if (it == end) {
+               throw std::runtime_error(R"(Expected: ")");
+            }
+            key = sv{ &*start, static_cast<size_t>(std::distance(start, it)) };
+            ++it;
 
             static constexpr auto frozen_map = detail::make_string_to_enum_map<T>();
             const auto& member_it = frozen_map.find(frozen::string(key));
@@ -358,7 +365,7 @@ namespace glz
                value = member_it->second;
             }
             else [[unlikely]] {
-               throw std::runtime_error("Enexpected enum value '" + key + "'");
+               throw std::runtime_error("Enexpected enum value '" + std::string(key) + "'");
             }
          }
       };
