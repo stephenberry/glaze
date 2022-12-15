@@ -515,55 +515,8 @@ namespace glz
          }
       };
 
-      template <class T> requires glaze_array_t<T> || tuple_t<T>
-      struct from_json<T>
-      {
-         template <auto Options>
-         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
-         {
-            static constexpr auto N = []() constexpr
-            {
-               if constexpr (glaze_array_t<T>) {
-                  return std::tuple_size_v<meta_t<T>>;
-               }
-               else {
-                  return std::tuple_size_v<T>;
-               }
-            }
-            ();
-            
-            if constexpr (!Options.ws_handled) {
-               skip_ws(it, end);
-            }
-            
-            match<'['>(it, end);
-            skip_ws(it, end);
-            
-            for_each<N>([&](auto I) {
-               static constexpr auto Opts = ws_handled_off<Options>();
-               
-               if (it == end || *it == ']') {
-                  return;
-               }
-               if constexpr (I != 0) {
-                  match<','>(it, end);
-                  skip_ws(it, end);
-               }
-               if constexpr (glaze_array_t<T>) {
-                  read<json>::op<ws_handled<Opts>()>(value.*glz::tuplet::get<I>(meta_v<T>), ctx, it, end);
-               }
-               else {
-                  read<json>::op<ws_handled<Opts>()>(glz::tuplet::get<I>(value), ctx, it, end);
-               }
-               skip_ws(it, end);
-            });
-            
-            match<']'>(it, end);
-         }
-      };
-
       template <class T>
-      requires is_std_tuple<T>
+      requires glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>
       struct from_json<T>
       {
          template <auto Opts>
@@ -583,12 +536,11 @@ namespace glz
             if constexpr (!Opts.ws_handled) {
                skip_ws(it, end);
             }
-
+            
             match<'['>(it, end);
             skip_ws(it, end);
-
+            
             for_each<N>([&](auto I) {
-               
                if (it == end || *it == ']') {
                   return;
                }
@@ -596,15 +548,18 @@ namespace glz
                   match<','>(it, end);
                   skip_ws(it, end);
                }
-               if constexpr (glaze_array_t<T>) {
-                  read<json>::op<ws_handled<Opts>()>(value.*std::get<I>(meta_v<T>), ctx, it, end);
+               if constexpr (is_std_tuple<T>) {
+                  read<json>::op<ws_handled<Opts>()>(std::get<I>(value), ctx, it, end);
+               }
+               else if constexpr (glaze_array_t<T>) {
+                  read<json>::op<ws_handled<Opts>()>(value.*glz::tuplet::get<I>(meta_v<T>), ctx, it, end);
                }
                else {
-                  read<json>::op<ws_handled<Opts>()>(std::get<I>(value), ctx, it, end);
+                  read<json>::op<ws_handled<Opts>()>(glz::tuplet::get<I>(value), ctx, it, end);
                }
                skip_ws(it, end);
             });
-
+            
             match<']'>(it, end);
          }
       };
