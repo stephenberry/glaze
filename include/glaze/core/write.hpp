@@ -15,22 +15,30 @@ namespace glz
    template <class Buffer>
    concept output_buffer = nano::ranges::input_range<Buffer> && (sizeof(nano::ranges::range_value_t<Buffer>) == sizeof(char));
    
+   template <class T>
+   inline auto data_ptr(T& buffer) {
+      if constexpr (detail::resizeable<T>) {
+         return buffer.data();
+      }
+      else {
+         return buffer;
+      }
+   }
+   
    // For writing to a std::string, std::vector<char>, std::deque<char> and
    // the like
    template <opts Opts, class T, output_buffer Buffer>
    inline void write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
    {
-      if constexpr (std::same_as<Buffer, std::string> || std::same_as<Buffer, std::vector<std::byte>>) {
+      if constexpr (detail::resizeable<Buffer>) {
          if (buffer.empty()) {
             buffer.resize(128);
          }
-         size_t ix = 0; // overwrite index
-         detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
-         buffer.resize(ix);
       }
-      else {
-         buffer.clear();
-         detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, std::back_inserter(buffer));
+      size_t ix = 0; // overwrite index
+      detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
+      if constexpr (detail::resizeable<Buffer>) {
+         buffer.resize(ix);
       }
    }
    
@@ -44,9 +52,9 @@ namespace glz
    template <opts Opts, class T, raw_buffer Buffer>
    inline size_t write(T&& value, Buffer&& buffer, is_context auto&& ctx) noexcept
    {
-      auto start = buffer;
-      detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, buffer);
-      return static_cast<size_t>(std::distance(start, buffer));
+      size_t ix = 0;
+      detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
+      return ix;
    }
    
    template <opts Opts, class T, raw_buffer Buffer>

@@ -29,11 +29,6 @@ namespace glz
       template <>
       struct write<json>
       {
-         template <auto Opts, class T,  is_context Ctx, class B>
-         static void op(T&& value, Ctx&& ctx, B&& b) {
-            to_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b));
-         }
-         
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
             to_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
@@ -70,12 +65,6 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class B>
-         static void op(auto&& value, is_context auto&& ctx, B&& b) noexcept
-         {
-            write_chars::op<Opts>(value, ctx, b);
-         }
-         
-         template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             write_chars::op<Opts>(value, ctx, b, ix);
@@ -86,51 +75,8 @@ namespace glz
       requires str_t<T> || char_t<T>
       struct to_json<T>
       {
-         template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& b) noexcept
-         {
-            dump<'"'>(b);
-            const auto write_char = [&](auto&& c) {
-               switch (c) {
-               case '"':
-                  dump<"\\\"">(b);
-                  break;
-               case '\\':
-                  dump<"\\\\">(b);
-                  break;
-               case '\b':
-                  dump<"\\b">(b);
-                  break;
-               case '\f':
-                  dump<"\\f">(b);
-                  break;
-               case '\n':
-                  dump<"\\n">(b);
-                  break;
-               case '\r':
-                  dump<"\\r">(b);
-                  break;
-               case '\t':
-                  dump<"\\t">(b);
-                  break;
-               default:
-                  dump(c, b);
-               }
-            };
-            if constexpr (char_t<T>) {
-               write_char(value);
-            }
-            else {
-               const sv str = value;
-               for (auto&& c : str) {
-                  write_char(c);
-               }
-            }
-            dump<'"'>(b);
-         }
-         
-         template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         template <auto Opts, class B>
+         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             if constexpr (char_t<T>) {
                dump<'"'>(b, ix);
@@ -166,8 +112,10 @@ namespace glz
                const auto n = str.size();
                
                // we use 4 * n to handle potential escape characters and quoted bounds (excessive safety)
-               if ((ix + 4 * n) >= b.size()) [[unlikely]] {
-                  b.resize(std::max(b.size() * 2, ix + 4 * n));
+               if constexpr (detail::resizeable<B>) {
+                  if ((ix + 4 * n) >= b.size()) [[unlikely]] {
+                     b.resize(std::max(b.size() * 2, ix + 4 * n));
+                  }
                }
                
                dump_unchecked<'"'>(b, ix);
@@ -254,11 +202,6 @@ namespace glz
       requires std::same_as<std::decay_t<T>, raw_json>
       struct to_json<T>
       {
-         template <auto Opts>
-         static void op(auto&& value, is_context auto&&, auto&& b) noexcept {
-            dump(value.str, b);
-         }
-         
          template <auto Opts>
          static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept {
             dump(value.str, b, ix);
@@ -548,88 +491,6 @@ namespace glz
       requires glaze_object_t<T>
       struct to_json<T>
       {
-         template <auto Options>
-         static void op(auto&& value, is_context auto&& ctx, auto&& b) noexcept
-         {
-            if constexpr (!Options.opening_handled) {
-               dump<'{'>(b);
-               if constexpr (Options.prettify) {
-                  ctx.indentation_level += Options.indentation_width;
-                  dump<'\n'>(b);
-                  dumpn<Options.indentation_char>(ctx.indentation_level, b);
-               }
-            }
-            
-            using V = std::decay_t<T>;
-            static constexpr auto N = std::tuple_size_v<meta_t<V>>;
-            bool first = true;
-            for_each<N>([&](auto I) {
-               static constexpr auto Opts = opening_handled_off<Options>();
-               static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
-               using mptr_t = std::tuple_element_t<1, decltype(item)>;
-               using val_t = member_t<V, mptr_t>;
-
-               if constexpr (nullable_t<val_t> && Opts.skip_null_members) {
-                  auto is_null = [&]() {
-                     if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {
-                        return !bool(value.*glz::tuplet::get<1>(item));
-                     }
-                     else {
-                        return !bool(glz::tuplet::get<1>(item)(value));
-                     }
-                  }();
-                  if (is_null) return;
-               }
-
-               if (first) {
-                  first = false;
-               }
-               else {
-                  // Null members may be skipped so we cant just write it out for all but the last member unless
-                  // trailing commas are allowed
-                  dump<','>(b);
-                  if constexpr (Opts.prettify) {
-                     dump<'\n'>(b);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, b);
-                  }
-               }
-
-               using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
-               if constexpr (str_t<Key> || char_t<Key>) {
-                  write<json>::op<Opts>(glz::tuplet::get<0>(item), ctx, b);
-                  dump<':'>(b);
-                  if constexpr (Opts.prettify) {
-                     dump<' '>(b);
-                  }
-               }
-               else {
-                  static constexpr auto quoted = concat_arrays(concat_arrays("\"", glz::tuplet::get<0>(item)), "\":", Opts.prettify ? " " : "");
-                  write<json>::op<Opts>(quoted, ctx, b);
-               }
-               
-               write<json>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, b);
-               
-               constexpr auto S = std::tuple_size_v<decltype(item)>;
-               if constexpr (Opts.comments && S > 2) {
-                  constexpr sv comment = glz::tuplet::get<2>(item);
-                  if constexpr (comment.size() > 0) {
-                     if constexpr (Opts.prettify) {
-                        dump<' '>(b);
-                     }
-                     dump<"/*">(b);
-                     dump(comment, b);
-                     dump<"*/">(b);
-                  }
-               }
-            });
-            if constexpr (Options.prettify) {
-               ctx.indentation_level -= Options.indentation_width;
-               dump<'\n'>(b);
-               dumpn<Options.indentation_char>(ctx.indentation_level, b);
-            }
-            dump<'}'>(b);
-         }
-         
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
