@@ -10,10 +10,6 @@
 
 namespace glz::detail
 {
-   inline void dump(const char c, push_backable auto& b) noexcept {
-      b.push_back(c);
-   }
-   
    inline void dump(const char c, vector_like auto& b, auto&& ix) noexcept {
       if (ix == b.size()) [[unlikely]] {
          b.resize(b.size() * 2);
@@ -29,11 +25,6 @@ namespace glz::detail
    }
    
    template <char c>
-   inline void dump(push_backable auto& b) noexcept {
-      b.push_back(c);
-   }
-   
-   template <char c>
    inline void dump(vector_like auto& b, auto&& ix) noexcept {
       if (ix == b.size()) [[unlikely]] {
          b.resize(b.size() * 2);
@@ -44,7 +35,19 @@ namespace glz::detail
    }
    
    template <char c>
+   inline void dump(auto* b, auto&& ix) noexcept {
+      b[ix] = c;
+      ++ix;
+   }
+   
+   template <char c>
    inline void dump_unchecked(vector_like auto& b, auto&& ix) noexcept {
+      b[ix] = c;
+      ++ix;
+   }
+   
+   template <char c>
+   inline void dump_unchecked(auto* b, auto&& ix) noexcept {
       b[ix] = c;
       ++ix;
    }
@@ -82,6 +85,15 @@ namespace glz::detail
       std::memcpy(b.data() + ix, s.data(), n);
       ix += n;
    }
+   
+   template <string_literal str>
+   inline void dump(auto* b, auto&& ix) noexcept {
+      static constexpr auto s = str.sv();
+      static constexpr auto n = s.size();
+      
+      std::memcpy(b + ix, s.data(), n);
+      ix += n;
+   }
 
    template <char c>
    inline void dumpn(size_t n, vector_like auto& b, auto&& ix) noexcept
@@ -107,6 +119,15 @@ namespace glz::detail
       ix += n;
    }
    
+   template <const sv& str>
+   inline void dump(auto* b, auto&& ix) noexcept {
+      static constexpr auto s = str;
+      static constexpr auto n = s.size();
+      
+      std::memcpy(b + ix, s.data(), n);
+      ix += n;
+   }
+   
    inline void dump(const sv str, vector_like auto& b, auto&& ix) noexcept {
       const auto n = str.size();
       if (ix + n > b.size()) [[unlikely]] {
@@ -114,6 +135,13 @@ namespace glz::detail
       }
       
       std::memcpy(b.data() + ix, str.data(), n);
+      ix += n;
+   }
+   
+   inline void dump(const sv str, auto* b, auto&& ix) noexcept {
+      const auto n = str.size();
+      
+      std::memcpy(b + ix, str.data(), n);
       ix += n;
    }
    

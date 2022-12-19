@@ -60,20 +60,22 @@ namespace glz::detail
          
          // https://stackoverflow.com/questions/1701055/what-is-the-maximum-length-in-chars-needed-to-represent-any-double-value
          // maximum length for a double should be 24 chars, we use 64 to be sufficient
-         if (ix + 64 > b.size()) [[unlikely]] {
-            b.resize(std::max(b.size() * 2, ix + 64));
+         if constexpr (detail::resizeable<B>) {
+            if (ix + 64 > b.size()) [[unlikely]] {
+               b.resize(std::max(b.size() * 2, ix + 64));
+            }
          }
          
          using V = std::decay_t<decltype(value)>;
          
          if constexpr (is_any_of<V, float, double, int32_t, uint32_t, int64_t, uint64_t>) {
-            auto start = b.data() + ix;
+            auto start = data_ptr(b) + ix;
             auto end = glz::to_chars(start, value);
             ix += std::distance(start, end);
          }
          else if constexpr (std::integral<V>) {
             using X = std::decay_t<decltype(sized_integer_conversion<V>())>;
-            auto start = b.data() + ix;
+            auto start = data_ptr(b) + ix;
             auto end = glz::to_chars(start, static_cast<X>(value));
             ix += std::distance(start, end);
          }
