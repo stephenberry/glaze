@@ -6,6 +6,7 @@
 #include <iterator>
 #include <ranges>
 #include <charconv>
+#include <sstream>
 
 #include "glaze/core/read.hpp"
 #include "glaze/core/format.hpp"
@@ -237,17 +238,22 @@ namespace glz
                   if (std::distance(it, end) < 4) [[unlikely]] {
                      throw std::runtime_error("\\u should be followed by 4 hex digits.");
                   }
-                  double codepoint_double;
-                  auto [ptr, ec] = from_chars(&*it, &*it + 4, codepoint_double, std::chars_format::hex);
-                  if (ec != std::errc() || ptr - &*it != 4) {
-                     throw std::runtime_error("Invalid hex value for unicode escape.");
-                  }
-                  char32_t codepoint = static_cast<uint32_t>(codepoint_double);
-                  char buffer[4];
-                  auto& f = std::use_facet<std::codecvt<char32_t, char, mbstate_t>>(std::locale());
+                  uint32_t codepoint_integer;
+                  std::stringstream ss;
+                  ss << std::hex << sv{ &*it, 4 };
+                  ss >> codepoint_integer;
+                  
+                  //auto [ptr, ec] = std::from_chars(&*it, &*it + 4, codepoint_double, std::chars_format::hex);
+                  //if (ec != std::errc() || ptr - &*it != 4) {
+                  //   throw std::runtime_error("Invalid hex value for unicode escape.");
+                  //}
+                  
+                  char32_t codepoint = codepoint_integer;
+                  char8_t buffer[4];
+                  auto& f = std::use_facet<std::codecvt<char32_t, char8_t, mbstate_t>>(std::locale());
                   std::mbstate_t mb{};
                   const char32_t* from_next;
-                  char* to_next;
+                  char8_t* to_next;
                   const auto result = f.out(mb, &codepoint, &codepoint + 1, from_next, buffer, buffer + 4, to_next);
                   if (result == std::codecvt_base::noconv) {
                      std::memcpy(buffer, &codepoint, 4);
@@ -255,7 +261,7 @@ namespace glz
                   else if (result != std::codecvt_base::ok) {
                      throw std::runtime_error("Could not convert unicode escape.");
                   }
-                  value.append(buffer, to_next-buffer);
+                  value.append(reinterpret_cast<char*>(buffer), to_next - buffer);
                   std::advance(it, 4);
                   break;
                }
@@ -381,24 +387,54 @@ namespace glz
                      if (std::distance(it, end) < 4) [[unlikely]] {
                         throw std::runtime_error("\\u should be followed by 4 hex digits.");
                      }
-                     double codepoint_double;
-                     auto [ptr, ec] = from_chars(&*it, &*it + 4, codepoint_double, std::chars_format::hex);
-                     if (ec != std::errc() || ptr - &*it != 4) {
-                        throw std::runtime_error("Invalid hex value for unicode escape.");
-                     }
-                     char32_t codepoint = static_cast<uint32_t>(codepoint_double);
-
-                     auto& f = std::use_facet<std::codecvt<char32_t, T, mbstate_t>>(std::locale());
-                     std::mbstate_t mb{};
-                     const char32_t* from_next;
-                     T* to_next;
-                     const auto result = f.out(mb, &codepoint, &codepoint + 1, from_next, &value, &value + 1, to_next);
-                     if (result == std::codecvt_base::noconv) {
+                     //double codepoint_double;
+                     //auto [ptr, ec] = from_chars(&*it, &*it + 4, codepoint_double, std::chars_format::hex);
+                     //if (ec != std::errc() || ptr - &*it != 4) {
+                     //   throw std::runtime_error("Invalid hex value for unicode escape.");
+                     //}
+                     //char32_t codepoint = static_cast<uint32_t>(codepoint_double);
+                     
+                     uint32_t codepoint_integer;
+                     std::stringstream ss;
+                     ss << std::hex << sv{ &*it, 4 };
+                     ss >> codepoint_integer;
+                     
+                     char32_t codepoint = codepoint_integer;
+                     
+                     if constexpr (std::is_same_v<T, char32_t>) {
                         value = codepoint;
                      }
-                     else if (result != std::codecvt_base::ok) {
-                        throw std::runtime_error("Could not convert unicode escape.");
+                     else {
+                        char32_t codepoint = codepoint_integer;
+                        char8_t buffer[4];
+                        auto& f = std::use_facet<std::codecvt<char32_t, char8_t, mbstate_t>>(std::locale());
+                        std::mbstate_t mb{};
+                        const char32_t* from_next;
+                        char8_t* to_next;
+                        const auto result = f.out(mb, &codepoint, &codepoint + 1, from_next, buffer, buffer + 4, to_next);
+                        if (result != std::codecvt_base::ok) {
+                           throw std::runtime_error("Could not convert unicode escape.");
+                        }
+                        
+                        const auto n = to_next - buffer;
+                        
+                        if constexpr (sizeof(T) == 1) {
+                           std::memcpy(&value, buffer, 1);
+                        }
+                        else {
+                           using buffer_type = std::conditional_t<std::is_same_v<T, wchar_t>, char, char8_t>;
+                           auto& f = std::use_facet<std::codecvt<T, buffer_type, mbstate_t>>(std::locale());
+                           std::mbstate_t mb{};
+                           const buffer_type* from_next;
+                           T* to_next;
+                           auto* rbuf = reinterpret_cast<buffer_type*>(buffer);
+                           const auto result = f.in(mb, rbuf, rbuf + n, from_next, &value, &value + 1, to_next);
+                           if (result != std::codecvt_base::ok) {
+                              throw std::runtime_error("Could not convert unicode escape.");
+                           }
+                        }
                      }
+                     
                      std::advance(it, 4);
                      break;
                   }
