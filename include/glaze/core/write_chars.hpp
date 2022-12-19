@@ -10,6 +10,33 @@
 
 namespace glz::detail
 {
+   template <class T>
+   inline constexpr auto sized_integer_conversion() noexcept
+   {
+      if constexpr (std::is_signed_v<T>) {
+         if constexpr (sizeof(T) <= 32) {
+            return int32_t{};
+         }
+         else if constexpr (sizeof(T) <= 64) {
+            return int64_t{};
+         }
+         else {
+            static_assert(false_v<T>, "type is not supported");
+         }
+      }
+      else {
+         if constexpr (sizeof(T) <= 32) {
+            return uint32_t{};
+         }
+         else if constexpr (sizeof(T) <= 64) {
+            return uint64_t{};
+         }
+         else {
+            static_assert(false_v<T>, "type is not supported");
+         }
+      }
+   }
+   
    struct write_chars
    {
       template <auto Opts, class B>
@@ -38,24 +65,16 @@ namespace glz::detail
          }
          
          using V = std::decay_t<decltype(value)>;
+         
          if constexpr (is_any_of<V, float, double, int32_t, uint32_t, int64_t, uint64_t>) {
             auto start = b.data() + ix;
             auto end = glz::to_chars(start, value);
             ix += std::distance(start, end);
          }
-         else if constexpr (is_any_of<V, uint8_t, int8_t, uint16_t, int16_t>) {
+         else if constexpr (std::integral<V>) {
+            using X = std::decay_t<decltype(sized_integer_conversion<V>())>;
             auto start = b.data() + ix;
-            auto end = glz::to_chars(start, static_cast<int32_t>(value));
-            ix += std::distance(start, end);
-         }
-         else if constexpr (std::same_as<V, long>) {
-            auto start = b.data() + ix;
-            auto end = glz::to_chars(start, static_cast<int64_t>(value));
-            ix += std::distance(start, end);
-         }
-         else if constexpr (std::same_as<V, unsigned long>) {
-            auto start = b.data() + ix;
-            auto end = glz::to_chars(start, static_cast<uint64_t>(value));
+            auto end = glz::to_chars(start, static_cast<X>(value));
             ix += std::distance(start, end);
          }
          else {
