@@ -343,7 +343,7 @@ namespace glz::detail
       void mul_pow10(uint32_t pow10)
       {
          for (; pow10 >= 9; pow10 -= 9) {
-            mul_u32(powers_of_ten_int[9]);
+            mul_u32(static_cast<uint32_t>(powers_of_ten_int[9]));
          }
          if (pow10) {
             mul_u32(static_cast<uint32_t>(powers_of_ten_int[pow10]));
@@ -621,7 +621,7 @@ digi_intg_more :
          if constexpr (std::is_same_v<double, T>) {
             // numbers must be exactly representable in this fast path
             if (sig < (uint64_t(1) << 53) && std::abs(exp) <= 22) {
-               val = sig;
+               val = static_cast<T>(sig);
                if constexpr (!std::is_unsigned_v<T>) {
                   val *= sign ? -1 : 1;
                }
