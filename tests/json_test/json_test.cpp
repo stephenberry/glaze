@@ -2127,6 +2127,10 @@ suite variant_tests = [] {
       s.clear();
       glz::write_json(d, s);
       expect(s == "5.7");
+      
+      std::variant<std::monostate, int, std::string> m{};
+      glz::write_json(m, s);
+      expect(s == "null") << s;
    };
    
    "variant_read_"_test = [] {
@@ -2135,6 +2139,13 @@ suite variant_tests = [] {
       glz::read_json(x, "33");
       
       expect(std::get<int32_t>(x) == 33);
+      
+      std::variant<std::monostate, int, std::string> m{};
+      glz::read_json(m, "null");
+      expect(std::holds_alternative<std::monostate>(m) == true);
+      
+      m = 44;
+      expect(throws([&]{ glz::read_json(m, "null"); }));
    };
    
    "variant_read_obj"_test = [] {

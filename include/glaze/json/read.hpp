@@ -74,6 +74,16 @@ namespace glz
          };
       };
       
+      template <>
+      struct from_json<std::monostate>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
+         {
+            match<"null">(args...);
+         };
+      };
+      
       template <is_variant T>
       constexpr auto variant_type_names() {
          constexpr auto N = std::variant_size_v<T>;

@@ -378,6 +378,16 @@ namespace glz
             }
          }
       };
+      
+      template <>
+      struct to_json<std::monostate>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         {
+            dump<"null">(args...);
+         };
+      };
 
       template <is_variant T>
       struct to_json<T>
