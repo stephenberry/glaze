@@ -38,17 +38,28 @@ namespace glz::detail
          }
          
          using V = std::decay_t<decltype(value)>;
-         if constexpr (std::same_as<V, float> || std::same_as<V, double> || std::same_as<V, int32_t> ||
-                       std::same_as<V, uint32_t> ||
-                            std::same_as<V, int64_t> || std::same_as<V, uint64_t>) {
+         if constexpr (is_any_of<V, float, double, int32_t, uint32_t, int64_t, uint64_t>) {
             auto start = b.data() + ix;
             auto end = glz::to_chars(start, value);
             ix += std::distance(start, end);
          }
-         else {
+         else if constexpr (is_any_of<V, uint8_t, int8_t, uint16_t, int16_t>) {
             auto start = b.data() + ix;
-            auto end = fmt::format_to(start, FMT_COMPILE("{}"), value);
+            auto end = glz::to_chars(start, static_cast<int32_t>(value));
             ix += std::distance(start, end);
+         }
+         else if constexpr (std::same_as<V, long>) {
+            auto start = b.data() + ix;
+            auto end = glz::to_chars(start, static_cast<int64_t>(value));
+            ix += std::distance(start, end);
+         }
+         else if constexpr (std::same_as<V, unsigned long>) {
+            auto start = b.data() + ix;
+            auto end = glz::to_chars(start, static_cast<uint64_t>(value));
+            ix += std::distance(start, end);
+         }
+         else {
+            static_assert(false_v<V>, "type is not supported");
          }
       }
    };

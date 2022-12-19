@@ -1022,13 +1022,6 @@ void read_tests() {
          glz::read_json(f, s);
          expect(f == 0.96875);
       }
-      {
-         // TODO: Maybe support long doubles at some point
-         //std::string s = "0.96875";
-         //long double f{};
-         //glaze::read_json(f, s);
-         //expect(f == 0.96875L);
-      }
    };
 
    "Read integral types"_test = [] {
@@ -1588,12 +1581,6 @@ void write_tests() {
       {
          std::string s;
          double f{0.96875};
-         glz::write_json(f, s);
-         expect(s == "0.96875") << s;
-      }
-      {
-         std::string s;
-         long double f{0.96875L};
          glz::write_json(f, s);
          expect(s == "0.96875") << s;
       }
@@ -2402,6 +2389,19 @@ suite reference_wrapper_test = [] {
       
       glz::read_json(ref, R"(66)");
       expect(x == 66);
+   };
+};
+
+suite small_chars = [] {
+   "small_chars"_test = [] {
+      
+      uint8_t x = 5;
+      std::string s = glz::write_json(x);
+      
+      expect(s == "5");
+      
+      glz::read_json(x, "10");
+      expect(x == 10);
    };
 };
 

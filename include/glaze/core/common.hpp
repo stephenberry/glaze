@@ -341,6 +341,9 @@ namespace glz
    
       template <class T>
       concept is_reference_wrapper = is_specialization_v<T, std::reference_wrapper>;
+      
+      template <class T, class... U>
+      concept is_any_of = (std::same_as<T, U> || ...);
 
       template <class T>
       concept tuple_t = requires(T t)
