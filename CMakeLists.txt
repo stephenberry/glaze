@@ -19,6 +19,7 @@ if (MSVC)
    if (matched_cl)
       # for a C++ standards compliant preprocessor, not needed for clang-cl
       target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /GL /permissive- /Zc:lambda)
+      target_link_options(glaze_glaze INTERFACE /LTCG /INCREMENTAL:NO)
    endif()
 else()
    target_compile_options(glaze_glaze INTERFACE "-Wno-missing-braces")

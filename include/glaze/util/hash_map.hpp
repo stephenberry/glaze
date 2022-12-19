@@ -186,7 +186,7 @@ namespace glz
             if constexpr (allow_hash_check) {
                ht.hashes[i] = hash;
             }
-            ht.table[hash % m] = i;
+            ht.table[hash % m] = static_cast<uint8_t>(i);
          }
 
          return ht;
