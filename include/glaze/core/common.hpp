@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <functional>
 #include <string>
 #include <type_traits>
 #include <tuple>
@@ -337,6 +338,9 @@ namespace glz
             return std::decay_t<T>{}.size();
          }
       };
+   
+      template <class T>
+      concept is_reference_wrapper = is_specialization_v<T, std::reference_wrapper>;
 
       template <class T>
       concept tuple_t = requires(T t)

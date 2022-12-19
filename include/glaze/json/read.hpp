@@ -62,6 +62,17 @@ namespace glz
          }
       };
       
+      template <is_reference_wrapper T>
+      struct from_json<T>
+      {
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args)
+         {
+            using V = std::decay_t<decltype(value.get())>;
+            from_json<V>::template op<Opts>(value.get(), std::forward<Args>(args)...);
+         };
+      };
+      
       template <is_variant T>
       constexpr auto variant_type_names() {
          constexpr auto N = std::variant_size_v<T>;

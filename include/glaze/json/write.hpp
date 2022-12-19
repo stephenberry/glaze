@@ -40,6 +40,17 @@ namespace glz
          }
       };
       
+      template <is_reference_wrapper T>
+      struct to_json<T>
+      {
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args)
+         {
+            using V = std::decay_t<decltype(value.get())>;
+            to_json<V>::template op<Opts>(value.get(), std::forward<Args>(args)...);
+         };
+      };
+      
       template <boolean_like T>
       struct to_json<T>
       {

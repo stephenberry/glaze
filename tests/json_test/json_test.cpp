@@ -2310,6 +2310,21 @@ suite recorder_test = [] {
    };
 };
 
+suite reference_wrapper_test = [] {
+   "reference_wrapper"_test = [] {
+      
+      int x = 55;
+      std::reference_wrapper<int> ref = x;
+      
+      std::string s = glz::write_json(ref);
+      
+      expect(s == "55");
+      
+      glz::read_json(ref, R"(66)");
+      expect(x == 66);
+   };
+};
+
 int main()
 {
    using namespace boost::ut;
