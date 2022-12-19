@@ -35,6 +35,7 @@
 #include "glaze/binary.hpp"
 #include "glaze/json.hpp"
 #include "glaze/file/file_ops.hpp"
+#include "glaze/record/recorder.hpp"
 
 namespace glz
 {
