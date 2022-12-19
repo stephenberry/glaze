@@ -73,19 +73,6 @@ namespace glz
       struct to_json_schema
       {};
 
-      template <>
-      struct write<json_schema>
-      {
-         template <class T, auto Opts, class B>
-         static void op(B&& b)
-         {
-            schema s{};
-            s.defs = std::map<std::string_view, schema, std::less<>>{};
-            to_json_schema<std::decay_t<T>>::template op<Opts>(s, *s.defs);
-            write<opts{}>(s, std::forward<B>(b));
-         }
-      };
-
       template <class T>
       requires(std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> ||
                std::same_as<T, std::vector<bool>::const_reference>)
