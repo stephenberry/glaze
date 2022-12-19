@@ -91,36 +91,54 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            skip_ws(it, end);
-            match<'{'>(it, end);
-            skip_ws(it, end);
-            
-            match<R"("type")">(it, end);
-            skip_ws(it, end);
-            match<':'>(it, end);
-            
-            using V = std::decay_t<decltype(value)>;
-            
-            static constexpr auto names = variant_type_names<V>();
-            static constexpr auto N = names.size();
-            
-            // TODO: Change from linear search to map?
-            static thread_local std::string type{};
-            read<json>::op<Opts>(type, ctx, it, end);
-            skip_ws(it, end);
-            match<','>(it, end);
-            
-            for_each<N>([&](auto I) {
-               if (string_cmp(type, names[I])) {
-                  using V = std::variant_alternative_t<I, T>;
-                  if (!std::holds_alternative<V>(value)) {
-                     // default construct the value if not matching
-                     value = V{};
-                  }
-                  read<json>::op<opening_handled<Opts>()>(std::get<I>(value), ctx, it, end);
-                  return;
+            const auto is_glaze_object = std::visit([](auto&& v) {
+               using V = std::decay_t<decltype(v)>;
+               if constexpr (glaze_object_t<V>) {
+                  return true;
                }
-            });
+               else {
+                  return false;
+               }
+            }, value);
+            
+            if (is_glaze_object) {
+               skip_ws(it, end);
+               match<'{'>(it, end);
+               skip_ws(it, end);
+               
+               match<R"("type")">(it, end);
+               skip_ws(it, end);
+               match<':'>(it, end);
+               
+               using V = std::decay_t<decltype(value)>;
+               
+               static constexpr auto names = variant_type_names<V>();
+               static constexpr auto N = names.size();
+               
+               // TODO: Change from linear search to map?
+               static thread_local std::string type{};
+               read<json>::op<Opts>(type, ctx, it, end);
+               skip_ws(it, end);
+               match<','>(it, end);
+               
+               for_each<N>([&](auto I) {
+                  if (string_cmp(type, names[I])) {
+                     using V = std::variant_alternative_t<I, T>;
+                     if (!std::holds_alternative<V>(value)) {
+                        // default construct the value if not matching
+                        value = V{};
+                     }
+                     read<json>::op<opening_handled<Opts>()>(std::get<I>(value), ctx, it, end);
+                     return;
+                  }
+               });
+            }
+            else {
+               std::visit([&](auto&& v) {
+                  using V = std::decay_t<decltype(v)>;
+                  read<json>::op<Opts>(v, ctx, it, end);
+               }, value);
+            }
          }
       };
       

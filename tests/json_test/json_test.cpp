@@ -2080,14 +2080,34 @@ suite variant_tests = [] {
       expect(s == "5.7");
    };
    
-   // TODO:
-   /*"variant_read_tests"_test = [] {
+   "variant_read_"_test = [] {
+      std::variant<int32_t, double> x = 44;
+      
+      glz::read_json(x, "33");
+      
+      expect(std::get<int32_t>(x) == 33);
+   };
+   
+   "variant_read_obj"_test = [] {
       variant_obj obj{};
       
+      obj.v = double{};
       glz::read_json(obj, R"({"v": 5.5})");
       
       expect(std::get<double>(obj.v) == 5.5);
-   };*/
+   };
+   
+   "variant_request"_test = [] {
+      std::map<std::string, std::variant<std::string, int, bool>> request;
+
+      request["username"] = "paulo";
+      request["password"] = "123456";
+      request["remember"] = true;
+
+      auto str = glz::write_json(request);
+      
+      expect(str == R"({"password":"123456","remember":true,"username":"paulo"})") << str;
+   };
 };
 
 struct holder0_t {
