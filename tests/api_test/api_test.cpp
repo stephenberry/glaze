@@ -49,9 +49,9 @@ void tests()
 {
    using namespace boost::ut;
    
-   std::unique_ptr<glz::iface> interface{ glaze_interface() };
-   auto io = (*interface)["my_api"]();
-   auto io2 = (*interface)["my_api2"]();
+   std::unique_ptr<glz::iface> iface{ glaze_interface() };
+   auto io = (*iface)["my_api"]();
+   auto io2 = (*iface)["my_api2"]();
    
    "bool type name"_test = [] {
       {

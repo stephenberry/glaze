@@ -22,6 +22,7 @@ if (MSVC)
    endif()
 else()
    target_compile_options(glaze_glaze INTERFACE "-Wno-missing-braces")
+   target_link_options(glaze_glaze INTERFACE /LTCG /INCREMENTAL:NO)
 endif()
 
 set_property(TARGET glaze_glaze PROPERTY EXPORT_NAME glaze)
