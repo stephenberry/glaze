@@ -199,29 +199,11 @@ namespace glz
                throw std::runtime_error("Unexpected end of buffer");
             }
             
-            if constexpr (std::contiguous_iterator<std::decay_t<It>>)
-            {
-               auto start = reinterpret_cast<const uint8_t *>(&*it);
-               auto s = parse_number(value, start);
-               if (!s) [[unlikely]]
-                  throw std::runtime_error("Failed to parse number");
-               it += (start - reinterpret_cast<const uint8_t *>(&*it));
-            }
-            else {
-               char buffer[256];
-               size_t i{};
-               while (it != end && is_numeric(*it)) {
-                  if (i > 254) [[unlikely]]
-                     throw std::runtime_error("Number is too long");
-                  buffer[i] = *it++;
-                  ++i;
-               }
-               buffer[i] = '\0';
-               auto start = reinterpret_cast<const uint8_t*>(buffer);
-               auto s = parse_number(value, start);
-               if (!s) [[unlikely]]
-                  throw std::runtime_error("Failed to parse number");
-            }
+            auto start = reinterpret_cast<const uint8_t *>(&*it);
+            auto s = parse_number(value, start);
+            if (!s) [[unlikely]]
+               throw std::runtime_error("Failed to parse number");
+            it += (start - reinterpret_cast<const uint8_t *>(&*it));
          }
       };
 
@@ -308,73 +290,23 @@ namespace glz
                   throw std::runtime_error("Invalid escape.");
                }
             };
-
-            if constexpr (!std::contiguous_iterator<std::decay_t<It>>) {
-               const auto cend = value.cend();
-               for (auto c = value.begin(); c < cend; ++c, ++it)
-               {
-                  if (it == end) [[unlikely]]
-                     throw std::runtime_error(R"(Expected ")");
-                  switch (*it) {
-                     [[unlikely]] case '\\':
-                     {
-                        if (++it == end) [[unlikely]]
-                           throw std::runtime_error(R"(Expected ")");
-                        else [[likely]] {
-                           *c = *it;
-                        }
-                        break;
-                     }
-                     [[unlikely]] case '"':
-                     {
-                        ++it;
-                        value.resize(std::distance(value.begin(), c));
-                        return;
-                     }
-                     [[likely]] default : *c = *it;
-                  }
-               }
-            }
             
             // growth portion
-            if constexpr (std::contiguous_iterator<std::decay_t<It>>) {
-               value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
-               auto start = it;
-               while (it < end) {
-                  skip_till_escape_or_quote(it, end);
-                  if (*it == '"') {
-                     value.append(&*start, static_cast<size_t>(std::distance(start, it)));
-                     ++it;
-                     return;
-                  }
-                  else {
-                     value.append(&*start, static_cast<size_t>(std::distance(start, it)));
-                     if (++it == end) [[unlikely]]
-                        throw std::runtime_error(R"(Expected ")");
-                     handle_escaped();
-                     start = it;
-                  }
+            value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
+            auto start = it;
+            while (it < end) {
+               skip_till_escape_or_quote(it, end);
+               if (*it == '"') {
+                  value.append(&*start, static_cast<size_t>(std::distance(start, it)));
+                  ++it;
+                  return;
                }
-            }
-            else {
-               while (it != end) {
-                  switch (*it) {
-                     [[unlikely]] case '\\':
-                     {
-                        if (++it == end) [[unlikely]]
-                           throw std::runtime_error(R"(Expected ")");
-                        else [[likely]] {
-                           handle_escaped();
-                        }
-                        break;
-                     }
-                     [[unlikely]] case '"':
-                     {
-                        ++it;
-                        return;
-                     }
-                     [[likely]] default : value.push_back(*it++);
-                  }
+               else {
+                  value.append(&*start, static_cast<size_t>(std::distance(start, it)));
+                  if (++it == end) [[unlikely]]
+                     throw std::runtime_error(R"(Expected ")");
+                  handle_escaped();
+                  start = it;
                }
             }
          }
@@ -774,29 +706,21 @@ namespace glz
                
                if constexpr (glaze_object_t<T>) {
                   std::string_view key;
-                  if constexpr (std::contiguous_iterator<std::decay_t<It>>)
-                  {
-                     // skip white space and escape characters and find the string
-                     skip_ws(it, end);
-                     match<'"'>(it, end);
-                     auto start = it;
-                     skip_till_escape_or_quote(it, end);
-                     if (*it == '\\') [[unlikely]] {
-                        // we dont' optimize this currently because it would increase binary size significantly with the complexity of generating escaped compile time versions of keys
-                        it = start;
-                        static thread_local std::string static_key{};
-                        read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
-                        key = static_key;
-                     }
-                     else [[likely]] {
-                        key = sv{ &*start, static_cast<size_t>(std::distance(start, it)) };
-                        ++it;
-                     }
-                  }
-                  else {
+                  // skip white space and escape characters and find the string
+                  skip_ws(it, end);
+                  match<'"'>(it, end);
+                  auto start = it;
+                  skip_till_escape_or_quote(it, end);
+                  if (*it == '\\') [[unlikely]] {
+                     // we dont' optimize this currently because it would increase binary size significantly with the complexity of generating escaped compile time versions of keys
+                     it = start;
                      static thread_local std::string static_key{};
-                     read<json>::op<Opts>(static_key, ctx, it, end);
+                     read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
                      key = static_key;
+                  }
+                  else [[likely]] {
+                     key = sv{ &*start, static_cast<size_t>(std::distance(start, it)) };
+                     ++it;
                   }
                   
                   skip_ws(it, end);
