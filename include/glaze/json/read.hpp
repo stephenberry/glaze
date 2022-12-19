@@ -6,6 +6,7 @@
 #include <iterator>
 #include <ranges>
 #include <charconv>
+#include <cuchar>
 
 #include "glaze/core/read.hpp"
 #include "glaze/core/format.hpp"
@@ -229,6 +230,62 @@ namespace glz
                   }
                }
             }
+
+            auto handle_escaped = [&]() {
+               switch (*it) {
+               case '"':
+               case '\\':
+               case '/':
+                  value.push_back(*it);
+                  ++it;
+                  break;
+               case 'b':
+                  value.push_back('\b');
+                  ++it;
+                  break;
+               case 'f':
+                  value.push_back('\f');
+                  ++it;
+                  break;
+               case 'n':
+                  value.push_back('\n');
+                  ++it;
+                  break;
+               case 'r':
+                  value.push_back('\r');
+                  ++it;
+                  break;
+               case 't':
+                  value.push_back('\t');
+                  ++it;
+                  break;
+               case 'u':
+                  {
+                  // TODO: this is slow
+                  ++it;
+                  if (std::distance(it, end) < 4) [[unlikely]] {
+                     throw std::runtime_error("\\u should be followed by 4 hex digits.");
+                  }
+                  double codepoint_double;
+                  auto [ptr, ec] = from_chars(&*it, &*it + 4, codepoint_double, std::chars_format::hex);
+                  if (ec != std::errc() || ptr - &*it != 4) {
+                     throw std::runtime_error("Invalid hex value for unicode escape.");
+                  }
+                  char32_t codepoint = static_cast<uint32_t>(codepoint_double);
+                  char buffer[4];
+                  std::mbstate_t state{};
+                  std::size_t len = std::c32rtomb(buffer, codepoint, &state);
+                  if (len == -1) [[unlikely]] {
+                     throw std::runtime_error("Invalid hex value for unicode escape.");
+                  }
+                  value.append(buffer, len);
+                  std::advance(it, 4);
+                  break;
+                  }
+               default:
+                  throw std::runtime_error("Invalid escape.");
+               }
+            };
             
             // growth portion
             if constexpr (std::contiguous_iterator<std::decay_t<It>>) {
@@ -243,45 +300,9 @@ namespace glz
                   }
                   else {
                      value.append(&*start, static_cast<size_t>(std::distance(start, it)));
-                     auto esc = *it;
-                     ++it;
-
-                     switch (*it)
-                     {
-                     case '"':
-                     case '\\':
-                     case '/':
-                        value.push_back(*it);
-                        ++it;
-                        break;
-                     case 'b':
-                     case 'f':
-                     case 'n':
-                     case 'r':
-                     case 't':
-                        value.push_back(esc);
-                        value.push_back(*it);
-                        ++it;
-                        break;
-                     case 'u': {
-                        value.push_back(esc);
-                        value.push_back(*it);
-                        ++it;
-
-                        std::string_view temp{ &*it, 4 };
-                        if (std::all_of(temp.begin(), temp.end(), ::isxdigit)) {
-                           value.append(&*it, 4);
-                           it += 4;
-                        }
-                        else
-                           throw std::runtime_error("Invalid hex value for unicode escape.");
-
-                        break;
-                     }
-                     default:
-                        throw std::runtime_error("Unknown escape character.");
-                     }
-
+                     if (++it == end) [[unlikely]]
+                        throw std::runtime_error(R"(Expected ")");
+                     handle_escaped();
                      start = it;
                   }
                }
@@ -294,7 +315,7 @@ namespace glz
                         if (++it == end) [[unlikely]]
                            throw std::runtime_error(R"(Expected ")");
                         else [[likely]] {
-                           value.push_back(*it);
+                           handle_escaped();
                         }
                         break;
                      }
@@ -303,9 +324,8 @@ namespace glz
                         ++it;
                         return;
                      }
-                     [[likely]] default : value.push_back(*it);
+                     [[likely]] default : value.push_back(*it++);
                   }
-                  ++it;
                }
             }
          }
@@ -321,10 +341,69 @@ namespace glz
             match<'"'>(it, end);
             if (it == end) [[unlikely]]
                throw std::runtime_error("Unxpected end of buffer");
-            if (*it == '\\') [[unlikely]]
+            if (*it == '\\') [[unlikely]] {
                if (++it == end) [[unlikely]]
                   throw std::runtime_error("Unxpected end of buffer");
-            value = *it++;
+               switch (*it) {
+               case '"':
+               case '\\':
+               case '/':
+                  value = *it++;
+                  break;
+               case 'b':
+                  value = '\b';
+                  ++it;
+                  break;
+               case 'f':
+                  value = '\f';
+                  ++it;
+                  break;
+               case 'n' :
+                  value = '\n';
+                  ++it;
+                  break;
+               case 'r':
+                  value = '\r';
+                  ++it;
+                  break;
+               case 't':
+                  value = '\t';
+                  ++it;
+                  break;
+               case 'u':
+                  {
+                     //TODO: this is slow
+                     ++it;
+                     if (std::distance(it, end) < 4) [[unlikely]] {
+                        throw std::runtime_error("\\u should be followed by 4 hex digits.");
+                     }
+                     double codepoint_double;
+                     auto [ptr, ec] = from_chars(&*it, &*it + 4, codepoint_double, std::chars_format::hex);
+                     if (ec != std::errc() || ptr - &*it != 4) {
+                        throw std::runtime_error("Invalid hex value for unicode escape.");
+                     }
+                     char32_t codepoint = static_cast<uint32_t>(codepoint_double);
+
+
+                     auto& f = std::use_facet<std::codecvt<char32_t, T, mbstate_t>>(std::locale());
+                     std::mbstate_t mb{};
+                     const char32_t* from_next;
+                     T* to_next;
+                     const auto result = f.out(mb, &codepoint, &codepoint + 1, from_next, &value, &value + 1, to_next);
+                     if (result == std::codecvt_base::noconv) {
+                        value = codepoint;
+                     }
+                     else if (result != std::codecvt_base::ok) {
+                        throw std::runtime_error("Could not convert unicode escape.");
+                     }
+                     std::advance(it, 4);
+                     break;
+                  }
+               }
+            }
+            else {
+               value = *it++;
+            }
             match<'"'>(it, end);
          }
       };
