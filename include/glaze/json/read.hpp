@@ -6,7 +6,6 @@
 #include <iterator>
 #include <ranges>
 #include <charconv>
-#include <cuchar>
 
 #include "glaze/core/read.hpp"
 #include "glaze/core/format.hpp"
@@ -203,33 +202,6 @@ namespace glz
             }
             
             // overwrite portion
-            
-            if constexpr (!std::contiguous_iterator<std::decay_t<It>>) {
-               const auto cend = value.cend();
-               for (auto c = value.begin(); c < cend; ++c, ++it)
-               {
-                  if (it == end) [[unlikely]]
-                     throw std::runtime_error(R"(Expected ")");
-                  switch (*it) {
-                     [[unlikely]] case '\\':
-                     {
-                        if (++it == end) [[unlikely]]
-                           throw std::runtime_error(R"(Expected ")");
-                        else [[likely]] {
-                           *c = *it;
-                        }
-                        break;
-                     }
-                     [[unlikely]] case '"':
-                     {
-                        ++it;
-                        value.resize(std::distance(value.begin(), c));
-                        return;
-                     }
-                     [[likely]] default : *c = *it;
-                  }
-               }
-            }
 
             auto handle_escaped = [&]() {
                switch (*it) {
@@ -259,8 +231,7 @@ namespace glz
                   value.push_back('\t');
                   ++it;
                   break;
-               case 'u':
-                  {
+               case 'u': {
                   // TODO: this is slow
                   ++it;
                   if (std::distance(it, end) < 4) [[unlikely]] {
@@ -273,19 +244,52 @@ namespace glz
                   }
                   char32_t codepoint = static_cast<uint32_t>(codepoint_double);
                   char buffer[4];
-                  std::mbstate_t state{};
-                  std::size_t len = std::c32rtomb(buffer, codepoint, &state);
-                  if (len == -1) [[unlikely]] {
-                     throw std::runtime_error("Invalid hex value for unicode escape.");
+                  auto& f = std::use_facet<std::codecvt<char32_t, char, mbstate_t>>(std::locale());
+                  std::mbstate_t mb{};
+                  const char32_t* from_next;
+                  char* to_next;
+                  const auto result = f.out(mb, &codepoint, &codepoint + 1, from_next, buffer, buffer + 4, to_next);
+                  if (result == std::codecvt_base::noconv) {
+                     std::memcpy(buffer, &codepoint, 4);
                   }
-                  value.append(buffer, len);
+                  else if (result != std::codecvt_base::ok) {
+                     throw std::runtime_error("Could not convert unicode escape.");
+                  }
+                  value.append(buffer, to_next-buffer);
                   std::advance(it, 4);
                   break;
-                  }
+               }
                default:
                   throw std::runtime_error("Invalid escape.");
                }
             };
+
+            if constexpr (!std::contiguous_iterator<std::decay_t<It>>) {
+               const auto cend = value.cend();
+               for (auto c = value.begin(); c < cend; ++c, ++it)
+               {
+                  if (it == end) [[unlikely]]
+                     throw std::runtime_error(R"(Expected ")");
+                  switch (*it) {
+                     [[unlikely]] case '\\':
+                     {
+                        if (++it == end) [[unlikely]]
+                           throw std::runtime_error(R"(Expected ")");
+                        else [[likely]] {
+                           *c = *it;
+                        }
+                        break;
+                     }
+                     [[unlikely]] case '"':
+                     {
+                        ++it;
+                        value.resize(std::distance(value.begin(), c));
+                        return;
+                     }
+                     [[likely]] default : *c = *it;
+                  }
+               }
+            }
             
             // growth portion
             if constexpr (std::contiguous_iterator<std::decay_t<It>>) {
@@ -383,7 +387,6 @@ namespace glz
                         throw std::runtime_error("Invalid hex value for unicode escape.");
                      }
                      char32_t codepoint = static_cast<uint32_t>(codepoint_double);
-
 
                      auto& f = std::use_facet<std::codecvt<char32_t, T, mbstate_t>>(std::locale());
                      std::mbstate_t mb{};
