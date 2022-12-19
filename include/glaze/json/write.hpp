@@ -92,12 +92,30 @@ namespace glz
             dump<'"'>(b);
             const auto write_char = [&](auto&& c) {
                switch (c) {
-               case '\\':
                case '"':
-                  dump<'\\'>(b);
+                  dump<"\\\"">(b);
                   break;
+               case '\\':
+                  dump<"\\\\">(b);
+                  break;
+               case '\b':
+                  dump<"\\b">(b);
+                  break;
+               case '\f':
+                  dump<"\\f">(b);
+                  break;
+               case '\n':
+                  dump<"\\n">(b);
+                  break;
+               case '\r':
+                  dump<"\\r">(b);
+                  break;
+               case '\t':
+                  dump<"\\t">(b);
+                  break;
+               default:
+                  dump(c, b);
                }
-               dump(c, b);
             };
             if constexpr (char_t<T>) {
                write_char(value);
@@ -117,12 +135,30 @@ namespace glz
             if constexpr (char_t<T>) {
                dump<'"'>(b, ix);
                switch (value) {
-               case '\\':
                case '"':
-                  dump<'\\'>(b, ix);
+                  dump<"\\\"">(b, ix);
                   break;
+               case '\\':
+                  dump<"\\\\">(b, ix);
+                  break;
+               case '\b':
+                  dump<"\\b">(b, ix);
+                  break;
+               case '\f':
+                  dump<"\\f">(b, ix);
+                  break;
+               case '\n':
+                  dump<"\\n">(b, ix);
+                  break;
+               case '\r':
+                  dump<"\\r">(b, ix);
+                  break;
+               case '\t':
+                  dump<"\\t">(b, ix);
+                  break;
+               default:
+                  dump(value, b, ix);
                }
-               dump(value, b, ix);
                dump<'"'>(b, ix);
             }
             else {
@@ -139,14 +175,37 @@ namespace glz
                // now we don't have to check writing
                for (auto&& c : str) {
                   switch (c) {
-                  case '\\':
                   case '"':
-                     b[ix] = '\\';
-                     ++ix;
+                     b[ix++] = '\\';
+                     b[ix++] = '\"';
                      break;
+                  case '\\':
+                     b[ix++] = '\\';
+                     b[ix++] = '\\';
+                     break;
+                  case '\b':
+                     b[ix++] = '\\';
+                     b[ix++] = 'b';
+                     break;
+                  case '\f':
+                     b[ix++] = '\\';
+                     b[ix++] = 'f';
+                     break;
+                  case '\n':
+                     b[ix++] = '\\';
+                     b[ix++] = 'n';
+                     break;
+                  case '\r':
+                     b[ix++] = '\\';
+                     b[ix++] = 'r';
+                     break;
+                  case '\t':
+                     b[ix++] = '\\';
+                     b[ix++] = 't';
+                     break;
+                  default:
+                     b[ix++] = c;
                   }
-                  b[ix] = c;
-                  ++ix;
                }
                dump_unchecked<'"'>(b, ix);
             }

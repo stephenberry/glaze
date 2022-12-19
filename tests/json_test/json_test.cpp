@@ -220,13 +220,77 @@ suite escaping_tests = [] {
       expect(obj.escaped_key2 == "bye");
    };
 
-   "escaped_characters"_test = [] {
-      std::string in = R"({"escape_chars":"\\b\\f\\n\\r\\t\\u11FF"})";
+   "escaped_characters read"_test = [] {
+      std::string in = R"({"escape_chars":"\b\f\n\r\t\u11FF"})";
       Escaped obj{};
 
       glz::read_json(obj, in);
 
-      expect(obj.escape_chars == "\\b\\f\\n\\r\\t\\u11FF");
+      expect(obj.escape_chars == "\b\f\n\r\tᇿ") << obj.escape_chars;
+   };
+
+   "escaped_char read"_test = [] {
+      std::string in = R"("\b")";
+      char c;
+      glz::read_json(c, in);
+      expect(c == '\b');
+
+      in = R"("\f")";
+      glz::read_json(c, in);
+      expect(c == '\f');
+
+      in = R"("\n")";
+      glz::read_json(c, in);
+      expect(c == '\n');
+
+      in = R"("\r")";
+      glz::read_json(c, in);
+      expect(c == '\r');
+
+      in = R"("\t")";
+      glz::read_json(c, in);
+      expect(c == '\t');
+
+      in = R"("\u11FF")";
+      char32_t c32;
+      glz::read_json(c32, in);
+      expect(static_cast<uint32_t>(c32) == 0x11FF);
+
+      in = R"("\u732B")";
+      char16_t c16;
+      glz::read_json(c16, in);
+      char16_t uc = u'\u732b';
+      expect(c16 == uc);
+   };
+
+   "escaped_characters write"_test = [] {
+      std::string str = "\"\\\b\f\n\r\tᇿ";
+      std::string buffer{};
+      glz::write_json(str, buffer);
+      expect(buffer == R"("\"\\\b\f\n\r\tᇿ")");
+   };
+
+   "escaped_char write"_test = [] {
+      std::string out{};
+      char c = '\b';
+      glz::write_json(c, out);
+      expect(out == R"("\b")");
+
+      c = '\f';
+      glz::write_json(c, out);
+      expect(out == R"("\f")");
+
+      c = '\n';
+      glz::write_json(c, out);
+      expect(out == R"("\n")");
+
+      c = '\r';
+      glz::write_json(c, out);
+      expect(out == R"("\r")");
+
+      c = '\t';
+      glz::write_json(c, out);
+      expect(out == R"("\t")");
    };
 };
 
@@ -974,21 +1038,6 @@ void read_tests() {
          glz::read_json(v, s);
          expect(v);
       }
-//*   // TODO add escaped char support for unicode
-      /*{
-         const auto a_num = static_cast<int>('15\u00f8C');
-         std::string s = std::to_string(a_num);
-         char v{};
-         glaze::read_json(v, s);
-         expect(v == a_num);
-      }
-      {
-         const auto a_num = static_cast<int>('15\u00f8C');
-         std::string s = std::to_string(a_num);
-         wchar_t v{};
-         glaze::read_json(v, s);
-         expect(v == a_num);
-      }*/
       {
          std::string s = "1";
          short v;
