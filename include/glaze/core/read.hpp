@@ -12,8 +12,8 @@ namespace glz
    template <opts Opts>
    inline void read(auto& value, detail::contiguous auto&& buffer, is_context auto&& ctx)
    {
-      auto b = std::ranges::begin(buffer);
-      auto e = std::ranges::end(buffer);
+      auto b = buffer.data();
+      auto e = buffer.data() + buffer.size();
       if (b == e) {
          throw std::runtime_error("No input provided to read");
       }
@@ -21,7 +21,7 @@ namespace glz
          detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
       }
       catch (const std::exception& e) {
-         auto index = std::distance(std::ranges::begin(buffer), b);
+         auto index = std::distance(buffer.data(), b);
          auto info = detail::get_source_info(buffer, index);
          std::string error = e.what();
          if (info) {

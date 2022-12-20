@@ -199,11 +199,13 @@ namespace glz
                throw std::runtime_error("Unexpected end of buffer");
             }
             
-            auto start = reinterpret_cast<const uint8_t *>(&*it);
-            auto s = parse_number(value, start);
+            // TODO: fix this
+            using X = std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>, const uint8_t*, uint8_t*>;
+            auto cur = reinterpret_cast<X>(it);
+            auto s = parse_number(value, cur);
             if (!s) [[unlikely]]
                throw std::runtime_error("Failed to parse number");
-            it += (start - reinterpret_cast<const uint8_t *>(&*it));
+            it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
          }
       };
 
@@ -261,11 +263,11 @@ namespace glz
                   }
                   uint32_t codepoint_integer;
                   std::stringstream ss;
-                  ss << std::hex << sv{ &*it, 4 };
+                  ss << std::hex << sv{ it, 4 };
                   ss >> codepoint_integer;
                   
-                  //auto [ptr, ec] = std::from_chars(&*it, &*it + 4, codepoint_double, std::chars_format::hex);
-                  //if (ec != std::errc() || ptr - &*it != 4) {
+                  //auto [ptr, ec] = std::from_chars(it, it + 4, codepoint_double, std::chars_format::hex);
+                  //if (ec != std::errc() || ptr - it != 4) {
                   //   throw std::runtime_error("Invalid hex value for unicode escape.");
                   //}
                   
@@ -297,12 +299,12 @@ namespace glz
             while (it < end) {
                skip_till_escape_or_quote(it, end);
                if (*it == '"') {
-                  value.append(&*start, static_cast<size_t>(std::distance(start, it)));
+                  value.append(start, static_cast<size_t>(it - start));
                   ++it;
                   return;
                }
                else {
-                  value.append(&*start, static_cast<size_t>(std::distance(start, it)));
+                  value.append(start, static_cast<size_t>(it - start));
                   if (++it == end) [[unlikely]]
                      throw std::runtime_error(R"(Expected ")");
                   handle_escaped();
@@ -359,15 +361,15 @@ namespace glz
                         throw std::runtime_error("\\u should be followed by 4 hex digits.");
                      }
                      //double codepoint_double;
-                     //auto [ptr, ec] = from_chars(&*it, &*it + 4, codepoint_double, std::chars_format::hex);
-                     //if (ec != std::errc() || ptr - &*it != 4) {
+                     //auto [ptr, ec] = from_chars(it, it + 4, codepoint_double, std::chars_format::hex);
+                     //if (ec != std::errc() || ptr - it != 4) {
                      //   throw std::runtime_error("Invalid hex value for unicode escape.");
                      //}
                      //char32_t codepoint = static_cast<uint32_t>(codepoint_double);
                      
                      uint32_t codepoint_integer;
                      std::stringstream ss;
-                     ss << std::hex << sv{ &*it, 4 };
+                     ss << std::hex << sv{ it, 4 };
                      ss >> codepoint_integer;
                      
                      char32_t codepoint = codepoint_integer;
@@ -647,9 +649,7 @@ namespace glz
             static thread_local std::string path{};
             read<json>::op<Opts>(path, ctx, it, end);
             
-            try {
-               // TODO: change this to streaming
-               
+            try {               
                const auto file_path = relativize_if_not_absolute(std::filesystem::path(ctx.current_file).parent_path(), std::filesystem::path{ path });
                
                std::string buffer{};
@@ -719,7 +719,7 @@ namespace glz
                      key = static_key;
                   }
                   else [[likely]] {
-                     key = sv{ &*start, static_cast<size_t>(std::distance(start, it)) };
+                     key = sv{ start, static_cast<size_t>(it - start) };
                      ++it;
                   }
                   
@@ -757,7 +757,7 @@ namespace glz
                   }
                   else {
                      static thread_local typename T::key_type key_value{};
-                     read<json>::op<Opts>(key_value, ctx, key.begin(), key.end());
+                     read<json>::op<Opts>(key_value, ctx, key.data(), key.data() + key.size());
                      read<json>::op<Opts>(value[key_value], ctx, it, end);
                   }
                }
