@@ -41,8 +41,6 @@ struct glz::meta<my_struct> {
       "hello", &T::hello, //
       "arr", &T::arr //
    );
-   
-   static constexpr auto api = object();
 };
 
 suite starter = [] {
