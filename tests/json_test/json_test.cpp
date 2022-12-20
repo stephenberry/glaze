@@ -462,7 +462,7 @@ void container_types() {
       std::string str {"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"};
       std::mt19937 g{};
       for (auto i = 0; i < 20; ++i) {
-         nano::ranges::shuffle(str, g);
+         std::shuffle(str.begin(), str.end(), g);
          map[str] = rand();
       }
       std::string buffer{};
@@ -1017,7 +1017,7 @@ void read_tests() {
       }
       {
          std::string str = "0.96875";
-         std::deque<char> s(str.begin(), str.end());
+         std::vector<char> s(str.begin(), str.end());
          double f{};
          glz::read_json(f, s);
          expect(f == 0.96875);
