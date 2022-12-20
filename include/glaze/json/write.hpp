@@ -385,7 +385,7 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            dump<"null">(args...);
+            dump<R"("std::monostate")">(args...);
          };
       };
 

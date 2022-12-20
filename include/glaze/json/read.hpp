@@ -80,7 +80,7 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args)
          {
-            match<"null">(args...);
+            match<R"("std::monostate")">(args...);
          };
       };
       

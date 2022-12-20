@@ -41,6 +41,8 @@ struct glz::meta<my_struct> {
       "hello", &T::hello, //
       "arr", &T::arr //
    );
+   
+   static constexpr auto api = object();
 };
 
 suite starter = [] {
@@ -2117,7 +2119,7 @@ suite variant_tests = [] {
       
       std::variant<std::monostate, int, std::string> m{};
       glz::write_json(m, s);
-      expect(s == "null") << s;
+      expect(s == R"("std::monostate")") << s;
    };
    
    "variant_read_"_test = [] {
@@ -2128,11 +2130,11 @@ suite variant_tests = [] {
       expect(std::get<int32_t>(x) == 33);
       
       std::variant<std::monostate, int, std::string> m{};
-      glz::read_json(m, "null");
+      glz::read_json(m, R"("std::monostate")");
       expect(std::holds_alternative<std::monostate>(m) == true);
       
       m = 44;
-      expect(throws([&]{ glz::read_json(m, "null"); }));
+      expect(throws([&]{ glz::read_json(m, R"("std::monostate")"); }));
    };
    
    "variant_read_obj"_test = [] {
