@@ -2405,6 +2405,31 @@ suite small_chars = [] {
    };
 };
 
+suite char16_test = [] {
+   "char16_test"_test = [] {
+      
+      {
+         char16_t c{};
+         glz::read_json(c, R"("H")");
+         
+         expect(c == u'H');
+      }
+      
+      {
+         // TODO: Support non-ascii
+         /*char16_t c{};
+         glz::read_json(c, R"("∆")");
+         
+         expect(c == u'∆');*/
+      }
+      
+      /*std::basic_string<char16_t> x;
+      glz::read_json(x, "Hello World");
+      
+      expect(x == u"Hello World");*/
+   };
+};
+
 int main()
 {
    using namespace boost::ut;

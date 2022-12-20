@@ -320,7 +320,6 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            // TODO: this does not handle escaped chars
             match<'"'>(it, end);
             if (it == end) [[unlikely]]
                throw std::runtime_error("Unxpected end of buffer");
@@ -454,7 +453,6 @@ namespace glz
          template <auto Opts>
          static void op(raw_json& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            // TODO this will not work for streams where we cant move backward
             auto it_start = it;
             skip_object_value(it, end);
             value.str.clear();
