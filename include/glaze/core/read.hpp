@@ -8,71 +8,48 @@
 
 namespace glz
 {
-   template <class Buffer>
-   concept byte_buffer = nano::ranges::input_range<std::decay_t<Buffer>> &&
-   std::same_as<std::byte, nano::ranges::range_value_t<std::decay_t<Buffer>>>;
-   
-   template <class Buffer>
-   concept char_buffer = nano::ranges::input_range<std::decay_t<Buffer>> &&
-   std::same_as<char, nano::ranges::range_value_t<std::decay_t<Buffer>>>;
-   
-   template <class Buffer>
-   concept string_viewable = std::convertible_to<std::decay_t<Buffer>, std::string_view> &&
-   !nano::ranges::input_range<std::decay_t<Buffer>>;
-   
-   template <opts Opts, byte_buffer Buffer>
-   inline void read(auto& value, Buffer&& buffer, is_context auto&& ctx)
-   {
-      auto b = std::ranges::begin(buffer);
-      auto e = std::ranges::end(buffer);
-      if (b == e) {
-         throw std::runtime_error("No input provided to read");
-      }
-      try {
-         detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
-      }
-      catch (const std::exception& e) {
-         // TODO: Implement good error message
-         throw std::runtime_error("read error:" + std::string(e.what()));
-      }
-   }
-   
-   template <opts Opts, byte_buffer Buffer>
-   inline void read(auto& value, Buffer&& buffer) {
-      context ctx{};
-      read<Opts>(value, std::forward<Buffer>(buffer), ctx);
-   }
-   
    // For reading json from a std::vector<char>, std::deque<char> and the like
-   template <opts Opts, char_buffer Buffer>
-   inline void read(auto& value, Buffer&& buffer, is_context auto&& ctx)
+   template <opts Opts>
+   inline void read(auto& value, detail::contiguous auto&& buffer, is_context auto&& ctx)
    {
-      auto b = std::ranges::begin(buffer);
-      auto e = std::ranges::end(buffer);
+      auto b = buffer.data();
+      auto e = buffer.data() + buffer.size();
       if (b == e) {
          throw std::runtime_error("No input provided to read");
       }
-      try {
+      
+      if constexpr (Opts.format == binary) {
+         // binary exceptions are not formatted
          detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
       }
-      catch (const std::exception& e) {
-         auto index = std::distance(std::ranges::begin(buffer), b);
-         auto info = detail::get_source_info(buffer, index);
-         std::string error = e.what();
-         if (info) {
-            error = detail::generate_error_string(error, *info);
+      else {
+         try {
+            detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
          }
-         throw std::runtime_error(error);
+         catch (const std::exception& e) {
+            
+            auto index = std::distance(buffer.data(), b);
+            auto info = detail::get_source_info(buffer, index);
+            std::string error = e.what();
+            if (info) {
+               error = detail::generate_error_string(error, *info);
+            }
+            throw std::runtime_error(error);
+         }
       }
    }
    
-   template <opts Opts, char_buffer Buffer>
-   inline void read(auto& value, Buffer&& buffer)
+   template <opts Opts>
+   inline void read(auto& value, detail::contiguous auto&& buffer)
    {
       context ctx{};
-      read<Opts>(value, std::forward<Buffer>(buffer), ctx);
+      read<Opts>(value, buffer, ctx);
    }
-
+   
+   template <class T>
+   concept string_viewable = std::convertible_to<std::decay_t<T>, std::string_view> && !detail::has_data<T>;
+   
+   // for char array input
    template <opts Opts, class T, string_viewable Buffer>
    inline void read(T& value, Buffer&& buffer, auto&& ctx)
    {

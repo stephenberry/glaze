@@ -221,7 +221,7 @@ namespace glz
                dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
             }
             const auto is_empty = [&]() -> bool {
-               if constexpr (nano::ranges::sized_range<T>) {
+               if constexpr (has_size<T>) {
                   return value.size() ? false : true;
                }
                else {
@@ -328,7 +328,7 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            dump<"null">(args...);
+            dump<R"("std::monostate")">(args...);
          };
       };
 

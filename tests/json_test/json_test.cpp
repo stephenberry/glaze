@@ -462,7 +462,7 @@ void container_types() {
       std::string str {"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"};
       std::mt19937 g{};
       for (auto i = 0; i < 20; ++i) {
-         nano::ranges::shuffle(str, g);
+         std::shuffle(str.begin(), str.end(), g);
          map[str] = rand();
       }
       std::string buffer{};
@@ -1017,7 +1017,7 @@ void read_tests() {
       }
       {
          std::string str = "0.96875";
-         std::deque<char> s(str.begin(), str.end());
+         std::vector<char> s(str.begin(), str.end());
          double f{};
          glz::read_json(f, s);
          expect(f == 0.96875);
@@ -2117,7 +2117,7 @@ suite variant_tests = [] {
       
       std::variant<std::monostate, int, std::string> m{};
       glz::write_json(m, s);
-      expect(s == "null") << s;
+      expect(s == R"("std::monostate")") << s;
    };
    
    "variant_read_"_test = [] {
@@ -2128,11 +2128,11 @@ suite variant_tests = [] {
       expect(std::get<int32_t>(x) == 33);
       
       std::variant<std::monostate, int, std::string> m{};
-      glz::read_json(m, "null");
+      glz::read_json(m, R"("std::monostate")");
       expect(std::holds_alternative<std::monostate>(m) == true);
       
       m = 44;
-      expect(throws([&]{ glz::read_json(m, "null"); }));
+      expect(throws([&]{ glz::read_json(m, R"("std::monostate")"); }));
    };
    
    "variant_read_obj"_test = [] {
@@ -2402,6 +2402,31 @@ suite small_chars = [] {
       
       glz::read_json(x, "10");
       expect(x == 10);
+   };
+};
+
+suite char16_test = [] {
+   "char16_test"_test = [] {
+      
+      {
+         char16_t c{};
+         glz::read_json(c, R"("H")");
+         
+         expect(c == u'H');
+      }
+      
+      {
+         // TODO: Support non-ascii
+         /*char16_t c{};
+         glz::read_json(c, R"("∆")");
+         
+         expect(c == u'∆');*/
+      }
+      
+      /*std::basic_string<char16_t> x;
+      glz::read_json(x, "Hello World");
+      
+      expect(x == u"Hello World");*/
    };
 };
 
