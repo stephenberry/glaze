@@ -24,7 +24,7 @@ namespace glz
          template <class T>
          void operator=(T& ref) {
             using container_type = std::decay_t<decltype(data[0].second.first)>;
-            data.emplace_back(std::make_pair(name, std::make_pair(container_type{std::deque<T>{}}, &ref)));
+            data.emplace_back(std::make_pair(name, std::make_pair(container_type{std::deque<std::decay_t<T>>{}}, &ref)));
          }
       };
    }
@@ -38,7 +38,7 @@ namespace glz
    {
       using container_type = std::variant<std::deque<Ts>...>;
 
-      std::deque<std::pair<std::string, std::pair<container_type, void*>>> data;
+      std::deque<std::pair<std::string, std::pair<container_type, const void*>>> data;
       
       auto operator[](const sv name) {
          return detail::recorder_assigner<decltype(data)>{ data, name };
@@ -53,7 +53,7 @@ namespace glz
                   using ContainerType = std::decay_t<decltype(container)>;
                   using T = typename ContainerType::value_type;
 
-                  container.emplace_back(*static_cast<T*>(ptr));
+                  container.emplace_back(*static_cast<const T*>(ptr));
                },
                value.first);
          }

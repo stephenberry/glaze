@@ -620,22 +620,20 @@ namespace glz
       write<opts{.comments = true}>(std::forward<T>(value), buffer);
       return buffer;
    }
+
+   void buffer_to_file(auto&& buffer, auto&& file_name) {
+      auto file = std::ofstream(file_name, std::ios::out);
+      if (!file) {
+         throw std::runtime_error("glz::buffer_to_file: Could not create file with path (" + file_name + ").");
+      }
+      file.write(buffer.data(), buffer.size());
+   }
    
    // std::string file_name needed for std::ofstream
    template <class T>
    inline void write_file_json(T&& value, const std::string& file_name) {
-      
       std::string buffer{};
-      
       write<opts{}>(std::forward<T>(value), buffer);
-      
-      std::ofstream file(file_name);
-      
-      if (file) {
-         file << buffer;
-      }
-      else {
-         throw std::runtime_error("could not write file: " + file_name);
-      }
+      buffer_to_file(buffer, file_name);
    }
 }

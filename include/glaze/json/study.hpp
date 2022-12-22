@@ -205,7 +205,7 @@ namespace glz
       concept generator = requires(T g)
       {
          g.generate();
-         g.generate(1);
+         g.done();
       };
 
       void run_study(generator auto& g, auto&& f)
@@ -367,7 +367,7 @@ namespace glz
                      }
                   },
                   result.param_ptr);
-               result.gen() =
+               result.gen =
                   [this, dist = std::uniform_int_distribution<std::size_t>(
                       0, dist.range.size() - 1),
                    elements = std::move(elements)]() mutable {
@@ -392,7 +392,7 @@ namespace glz
                   std::swap(start, stop);
                }
 
-               result.gen() = [this,
+               result.gen = [this,
                                dist = std::uniform_real_distribution<double>(start, stop)]() mutable {
                   return dist(this->engine);
                };
@@ -414,7 +414,7 @@ namespace glz
                   std::swap(start, stop);
                }
 
-               result.gen() = [this,
+               result.gen = [this,
                                dist = std::uniform_real_distribution<double>(
                                   start, stop)]() mutable {
                  return dist(this->engine);
@@ -433,7 +433,7 @@ namespace glz
                read_json(mean, dist.range[0].str);
                read_json(std_dev, dist.range[1].str);
 
-               result.gen() =
+               result.gen =
                   [this, dist = std::normal_distribution<double>(
                                         mean, std_dev)]() mutable {
                   return dist(this->engine);
