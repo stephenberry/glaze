@@ -626,7 +626,7 @@ namespace glz
                   read<json>::op<ws_handled<Opts>()>(std::get<I>(value), ctx, it, end);
                }
                else if constexpr (glaze_array_t<T>) {
-                  read<json>::op<ws_handled<Opts>()>(value.*glz::tuplet::get<I>(meta_v<T>), ctx, it, end);
+                  read<json>::op<ws_handled<Opts>()>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx, it, end);
                }
                else {
                   read<json>::op<ws_handled<Opts>()>(glz::tuplet::get<I>(value), ctx, it, end);

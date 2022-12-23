@@ -223,7 +223,7 @@ namespace glz
          {
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-               write<binary>::op<Opts>(value.*glz::tuplet::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
+               write<binary>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<V>)), ctx, std::forward<Args>(args)...);
             });
          }
       };
