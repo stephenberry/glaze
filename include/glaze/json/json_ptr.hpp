@@ -143,7 +143,7 @@ namespace glz
             if (index >= member_array.size()) return false;
             return std::visit(
                [&](auto&& member_ptr) {
-                  return seek_impl(std::forward<F>(func), value.*member_ptr,
+                  return seek_impl(std::forward<F>(func), get_member(value, member_ptr),
                                    json_ptr);
                },
                member_array[index]);
@@ -446,7 +446,7 @@ namespace glz
             if constexpr (index >= 0 && index < member_array.size()) {
                constexpr auto member = member_array[index];
                constexpr auto member_ptr = std::get<member.index()>(member);
-               using sub_t = decltype(std::declval<V>().*member_ptr);
+               using sub_t = decltype(get_member(std::declval<V>(), member_ptr));
                return valid<sub_t, rem_ptr, Expected_t>();
             }
             else {
