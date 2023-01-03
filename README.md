@@ -536,6 +536,16 @@ This will read the `./obj.json` file into the `obj` as it is parsed. Since glaze
 
 > Paths are always relative to the location of the previously loaded file. For nested includes this means the user only needs to consider the relative path to the file in which the include is written.
 
+## NDJSON Support
+
+Glaze supports [Newline Delimited JSON](http://ndjson.org) for array-like types (e.g. `std::vector` and `std::tuple`).
+
+```c++
+std::vector<std::string> x = { "Hello", "World", "Ice", "Cream" };
+std::string s = glz::write_ndjson(x);
+glz::read_ndjson(x, s);
+```
+
 # More Features
 
 - Tagged binary messaging for maximum performance
