@@ -2430,6 +2430,53 @@ suite char16_test = [] {
    };
 };
 
+suite ndjson_test = [] {
+   "ndjson"_test = [] {
+      
+      std::vector<std::string> x = { "Hello", "World", "Ice", "Cream" };
+      std::string s = glz::write_ndjson(x);
+      
+      expect(s ==
+R"("Hello"
+"World"
+"Ice"
+"Cream")");
+      
+      x.clear();
+      
+      glz::read_ndjson(x, s);
+      expect(x[0] == "Hello");
+      expect(x[1] == "World");
+      expect(x[2] == "Ice");
+      expect(x[3] == "Cream");
+   };
+   
+   "ndjson_object"_test = [] {
+      std::tuple<my_struct, sub_thing> x{};
+      
+      std::string s = glz::write_ndjson(x);
+      
+      expect(s ==
+R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}
+{"a":3.14,"b":"stuff"})");
+      
+      auto& first = std::get<0>(x);
+      auto& second = std::get<1>(x);
+      
+      first.hello.clear();
+      first.arr[0] = 0;
+      second.a = 0.0;
+      second.b.clear();
+      
+      glz::read_ndjson(x, s);
+      
+      expect(first.hello == "Hello World");
+      expect(first.arr[0] = 1);
+      expect(second.a == 3.14);
+      expect(second.b == "stuff");
+   };
+};
+
 int main()
 {
    using namespace boost::ut;
