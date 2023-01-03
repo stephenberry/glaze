@@ -688,7 +688,7 @@ namespace glz
             
             skip_ws(it, end);
             
-            static constexpr auto Opts = opening_handled_off<Options>();
+            static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
             
             bool first = true;
             while (it != end) {
@@ -816,7 +816,7 @@ namespace glz
       return value;
    }
    
-   template <class T>
+   template <auto Opts = opts{}, class T>
    inline void read_file_json(T& value, const sv file_name) {
       
       context ctx{};
@@ -826,6 +826,6 @@ namespace glz
       
       file_to_buffer(buffer, ctx.current_file);
       
-      read<opts{}>(value, buffer, ctx);
+      read<Opts>(value, buffer, ctx);
    }
 }
