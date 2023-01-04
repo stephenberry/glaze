@@ -5,8 +5,6 @@
 #include <array>
 #include <concepts>
 
-#include "fmt/format.h"
-
 #include "glaze/util/itoa.hpp"
 
 namespace glz

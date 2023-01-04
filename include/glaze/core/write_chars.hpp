@@ -40,17 +40,6 @@ namespace glz::detail
    struct write_chars
    {
       template <auto Opts, class B>
-      static void op(num_t auto&& value, is_context auto&& ctx, B&& b) noexcept
-      {
-         if constexpr (std::same_as<std::decay_t<B>, char*>) {
-            b = fmt::format_to(std::forward<B>(b), FMT_COMPILE("{}"), value);
-         }
-         else {
-            fmt::format_to(std::back_inserter(b), FMT_COMPILE("{}"), value);
-         }
-      }
-      
-      template <auto Opts, class B>
       static void op(num_t auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
       {
          /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {

@@ -4,7 +4,7 @@ include(cmake/prelude.cmake)
 
 project(
     glaze
-    VERSION 0.0.9
+    VERSION 0.2.4
     LANGUAGES CXX
 )
 
@@ -35,16 +35,8 @@ target_include_directories(
 
 include(cmake/CPM.cmake)
 
-CPMFindPackage(
-   NAME fmt
-   OPTIONS FMT_INSTALL
-   GIT_REPOSITORY https://github.com/fmtlib/fmt
-   GIT_TAG 9.1.0
-)
-
 target_link_libraries(
     glaze_glaze INTERFACE
-    fmt::fmt-header-only
 )
 
 if(NOT CMAKE_SKIP_INSTALL_RULES)

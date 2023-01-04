@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "fmt/format.h"
+#include <cstring>
 
 namespace glz
 {
