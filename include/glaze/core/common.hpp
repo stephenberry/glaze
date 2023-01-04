@@ -26,8 +26,6 @@
 #include "glaze/util/hash_map.hpp"
 #include "glaze/util/murmur.hpp"
 
-#include <nanorange.hpp>
-
 namespace glz
 {
    template <class T, class... U>
@@ -48,6 +46,12 @@ namespace glz
    
    template <class R>
    using range_value_t = std::iter_value_t<iterator_t<R>>;
+   
+   template <class T>
+   concept range = requires(T& t) {
+      t.begin(); // equality-preserving for forward iterators
+      t.end();
+   };
    
    namespace detail
    {
@@ -273,11 +277,11 @@ namespace glz
 
       template <class T>
       concept map_t =
-         !complex_t<T> && !str_t<T> && nano::ranges::range<T> &&
+         !complex_t<T> && !str_t<T> && range<T> &&
          pair_t<range_value_t<T>> && map_subscriptable<T>;
 
       template <class T>
-      concept array_t = (!complex_t<T> && !str_t<T> && !map_t<T> && nano::ranges::range<T>);
+      concept array_t = (!complex_t<T> && !str_t<T> && !map_t<T> && range<T>);
 
       template <class T>
       concept emplace_backable = requires(T container)
@@ -367,7 +371,7 @@ namespace glz
          std::tuple_size<T>::value;
          glz::tuplet::get<0>(t);
       }
-      &&!complex_t<T> && !nano::ranges::range<T>;
+      &&!complex_t<T> && !range<T>;
 
       template <class T>
       concept nullable_t = !complex_t<T> && !str_t<T> && requires(T t)

@@ -42,21 +42,9 @@ CPMFindPackage(
    GIT_TAG 9.1.0
 )
 
-CPMFindPackage(
-   NAME nanorange
-   OPTIONS USE_SINGLE_HEADER "BUILD_TESTING OFF" DO_INSTALL
-   GIT_REPOSITORY https://github.com/tcbrindle/NanoRange
-   GIT_TAG master # No version tags
-)
-
-if (nanorange_ADDED)
-   add_library(nanorange::nanorange ALIAS nanorange)
-endif()
-
 target_link_libraries(
     glaze_glaze INTERFACE
     fmt::fmt-header-only
-    nanorange::nanorange
 )
 
 if(NOT CMAKE_SKIP_INSTALL_RULES)

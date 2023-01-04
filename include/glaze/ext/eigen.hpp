@@ -30,7 +30,7 @@ namespace glz
          {
             matrix.size()
             } -> std::convertible_to<size_t>;
-      } &&!nano::ranges::range<T>;
+      } &&!range<T>;
       
       template <matrix_t T>
       struct from_binary<T>

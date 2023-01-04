@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <nanorange.hpp>
-
 #include "glaze/core/common.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
@@ -223,7 +221,7 @@ namespace glz
          pool.wait();
       }
       
-      template <class T> requires nano::ranges::range<T>
+      template <class T> requires range<T>
       void run_study(T& states, auto&& f)
       {
          glz::pool pool{};
