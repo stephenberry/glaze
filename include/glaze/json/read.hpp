@@ -585,8 +585,6 @@ namespace glz
          template <auto Options>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            using value_t = range_value_t<T>;
-
             if constexpr (!Options.ws_handled) {
                skip_ws(it, end);
             }
