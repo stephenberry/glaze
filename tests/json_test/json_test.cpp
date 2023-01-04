@@ -2451,6 +2451,27 @@ R"("Hello"
       expect(x[3] == "Cream");
    };
    
+   "ndjson_list"_test = [] {
+      
+      std::list<std::string> x = { "Hello", "World", "Ice", "Cream" };
+      std::string s = glz::write_ndjson(x);
+      
+      expect(s ==
+R"("Hello"
+"World"
+"Ice"
+"Cream")");
+      
+      x.clear();
+      
+      glz::read_ndjson(x, s);
+      auto it = x.begin();
+      expect(*it == "Hello"); ++it;
+      expect(*it == "World"); ++it;
+      expect(*it == "Ice"); ++it;
+      expect(*it == "Cream");
+   };
+   
    "ndjson_object"_test = [] {
       std::tuple<my_struct, sub_thing> x{};
       

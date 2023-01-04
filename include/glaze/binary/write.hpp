@@ -246,7 +246,7 @@ namespace glz
    {
       static constexpr auto partial = Partial;  // MSVC 16.11 hack
 
-      if constexpr (nano::ranges::count(partial, "") > 0) {
+      if constexpr (std::count(partial.begin(), partial.end(), "") > 0) {
          detail::write<binary>::op<Opts>(value, ctx, buffer);
       }
       else {
