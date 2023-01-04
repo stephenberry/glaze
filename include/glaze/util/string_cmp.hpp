@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include "fmt/format.h"
-
 namespace glz
 {
    constexpr uint64_t to_uint64(const char* bytes, size_t n = 8) noexcept

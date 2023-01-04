@@ -7,9 +7,6 @@
 #include <iostream>
 #include <string>
 
-#include "fmt/format.h"
-#include "fmt/compile.h"
-
 namespace glz
 {
    struct progress_bar final

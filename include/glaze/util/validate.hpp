@@ -6,9 +6,6 @@
 #include <string>
 #include <optional>
 
-#include "fmt/format.h"
-#include "fmt/compile.h"
-
 namespace glz
 {
    namespace detail
@@ -48,15 +45,31 @@ namespace glz
                                                const sv filename = "")
       {
          std::string s{};
-         auto it = std::back_inserter(s);
          
+         if (!filename.empty()) {
+            s += filename;
+            s += ":";
+         }
+         
+         s += std::to_string(info.line) + ":" + std::to_string(info.column) + ": ";
+         s += error;
+         s += "\n";
+         s += "   " + info.context + "\n   ";
+         for (size_t i = 0; i < info.column - 1; ++i) {
+            s += " ";
+         }
+         s += "^\n";
+         
+         // TODO: use std::format when available
+         /*
+         auto it = std::back_inserter(s);
          if (!filename.empty()) {
             fmt::format_to(it, FMT_COMPILE("{}:"), filename);
          }
          
          fmt::format_to(it, FMT_COMPILE("{}:{}: {}\n"), info.line, info.column, error);
          fmt::format_to(it, FMT_COMPILE("   {}\n   "), info.context);
-         fmt::format_to(it, FMT_COMPILE("{: <{}}^\n"), "", info.column - 1);
+         fmt::format_to(it, FMT_COMPILE("{: <{}}^\n"), "", info.column - 1);*/
          return s;
       }
    }  // namespace detail
