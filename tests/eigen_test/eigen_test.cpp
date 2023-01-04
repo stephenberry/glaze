@@ -56,4 +56,30 @@ int main()
       const bool boolean = m == e;
       expect(boolean);
    };
+
+   "dynamic array"_test = [] {
+      Eigen::VectorXd m(10);
+      for (int i = 0; i < m.size(); ++i) {
+         m[i] = i;
+      }
+      std::string b;
+      glz::write_json(m, b);
+      Eigen::VectorXd e{};
+      glz::read_json(e, b);
+      const bool boolean = m == e;
+      expect(boolean);
+   };
+
+   "dynamic array binary"_test = [] {
+      Eigen::VectorXd m(10);
+      for (int i = 0; i < m.size(); ++i) {
+         m[i] = i;
+      }
+      std::vector<std::byte> b;
+      glz::write_binary(m, b);
+      Eigen::VectorXd e{};
+      glz::read_binary(e, b);
+      const bool boolean = m == e;
+      expect(boolean);
+   };
 }
