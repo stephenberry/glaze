@@ -510,6 +510,14 @@ void container_types() {
       glz::read_json(tuple2, buffer);
       expect(tuple == tuple2);
    };
+   "pair roundtrip"_test = [] {
+      auto pair = std::make_pair(std::string("water"), 5.2);
+      decltype(pair) pair2{};
+      std::string buffer{};
+      glz::write_json(pair, buffer);
+      glz::read_json(pair2, buffer);
+      expect(pair == pair2);
+   };
 }
 
 void nullable_types() {

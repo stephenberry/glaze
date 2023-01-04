@@ -561,6 +561,129 @@ void file_include_test()
    expect(obj.i == 55) << obj.i;
 }
 
+void container_types()
+{
+   using namespace boost::ut;
+   "vector int roundtrip"_test = [] {
+      std::vector<int> vec(100);
+      for (auto& item : vec) item = rand();
+      std::string buffer{};
+      std::vector<int> vec2{};
+      glz::write_binary(vec, buffer);
+      glz::read_binary(vec2, buffer);
+      expect(vec == vec2);
+   };
+   "vector uint64_t roundtrip"_test = [] {
+      std::uniform_int_distribution<uint64_t> dist(std::numeric_limits<uint64_t>::min(),
+                                                   std::numeric_limits<uint64_t>::max());
+      std::mt19937 gen{};
+      std::vector<uint64_t> vec(100);
+      for (auto& item : vec) item = dist(gen);
+      std::string buffer{};
+      std::vector<uint64_t> vec2{};
+      glz::write_binary(vec, buffer);
+      glz::read_binary(vec2, buffer);
+      expect(vec == vec2);
+   };
+   "vector double roundtrip"_test = [] {
+      std::vector<double> vec(100);
+      for (auto& item : vec) item = rand() / (1.0 + rand());
+      std::string buffer{};
+      std::vector<double> vec2{};
+      glz::write_binary(vec, buffer);
+      glz::read_binary(vec2, buffer);
+      expect(vec == vec2);
+   };
+   "vector bool roundtrip"_test = [] {
+      std::vector<bool> vec(100);
+      for (auto&& item : vec) item = rand() / (1.0 + rand());
+      std::string buffer{};
+      std::vector<bool> vec2{};
+      glz::write_binary(vec, buffer);
+      glz::read_binary(vec2, buffer);
+      expect(vec == vec2);
+   };
+   "deque roundtrip"_test = [] {
+      std::vector<int> deq(100);
+      for (auto& item : deq) item = rand();
+      std::string buffer{};
+      std::vector<int> deq2{};
+      glz::write_binary(deq, buffer);
+      glz::read_binary(deq2, buffer);
+      expect(deq == deq2);
+   };
+   "list roundtrip"_test = [] {
+      std::list<int> lis(100);
+      for (auto& item : lis) item = rand();
+      std::string buffer{};
+      std::list<int> lis2{};
+      glz::write_binary(lis, buffer);
+      glz::read_binary(lis2, buffer);
+      expect(lis == lis2);
+   };
+   "map string keys roundtrip"_test = [] {
+      std::map<std::string, int> map;
+      std::string str{"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"};
+      std::mt19937 g{};
+      for (auto i = 0; i < 20; ++i) {
+         std::shuffle(str.begin(), str.end(), g);
+         map[str] = rand();
+      }
+      std::string buffer{};
+      std::map<std::string, int> map2{};
+      glz::write_binary(map, buffer);
+      glz::read_binary(map2, buffer);
+      // expect(map == map2);
+      for (auto& it : map) {
+         expect(map2[it.first] == it.second);
+      }
+   };
+   "map int keys roundtrip"_test = [] {
+      std::map<int, int> map;
+      for (auto i = 0; i < 20; ++i) {
+         map[rand()] = rand();
+      }
+      std::string buffer{};
+      std::map<int, int> map2{};
+      glz::write_binary(map, buffer);
+      glz::read_binary(map2, buffer);
+      // expect(map == map2);
+      for (auto& it : map) {
+         expect(map2[it.first] == it.second);
+      }
+   };
+   "unordered_map int keys roundtrip"_test = [] {
+      std::unordered_map<int, int> map;
+      for (auto i = 0; i < 20; ++i) {
+         map[rand()] = rand();
+      }
+      std::string buffer{};
+      std::unordered_map<int, int> map2{};
+      glz::write_binary(map, buffer);
+      glz::read_binary(map2, buffer);
+      // expect(map == map2);
+      for (auto& it : map) {
+         expect(map2[it.first] == it.second);
+      }
+   };
+   "tuple roundtrip"_test = [] {
+      auto tuple = std::make_tuple(3, 2.7, std::string("curry"));
+      decltype(tuple) tuple2{};
+      std::string buffer{};
+      glz::write_binary(tuple, buffer);
+      glz::read_binary(tuple2, buffer);
+      expect(tuple == tuple2);
+   };
+   "pair roundtrip"_test = [] {
+      auto pair = std::make_pair(std::string("water"), 5.2);
+      decltype(pair) pair2{};
+      std::string buffer{};
+      glz::write_binary(pair, buffer);
+      glz::read_binary(pair2, buffer);
+      expect(pair == pair2);
+   };
+}
+
 int main()
 {
    using namespace boost::ut;
@@ -569,4 +692,5 @@ int main()
    bench();
    test_partial();
    file_include_test();
+   container_types();
 }

@@ -250,6 +250,20 @@ namespace glz
             });
          }
       };
+
+      template <class T>
+      requires is_std_tuple<T>
+      struct from_binary<T> final
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            using V = std::decay_t<T>;
+            for_each<std::tuple_size_v<V>>([&](auto I) {
+               read<binary>::op<Opts>(std::get<I>(value), ctx, it, end);
+            });
+         }
+      };
    }
    
    template <class T, class Buffer>
