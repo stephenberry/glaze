@@ -171,7 +171,6 @@ target_link_libraries(main PRIVATE glaze::glaze)
 ## Dependencies
 Will automaticlly fetch missing dependencies with FetchContent/CPM if not found with find_package.
 - [fmt](https://github.com/fmtlib/fmt)
-- [NanoRange](https://github.com/tcbrindle/NanoRange)
 
 >*Only required for building tests:*
 >
