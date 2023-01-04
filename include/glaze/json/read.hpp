@@ -573,7 +573,7 @@ namespace glz
                      value.shrink_to_fit();
                   }
                   
-                  auto value_it = std::ranges::begin(value);
+                  auto value_it = value.begin();
                   for (size_t j = 0; j < i; ++j) {
                      *value_it++ = buffer[j];
                   }

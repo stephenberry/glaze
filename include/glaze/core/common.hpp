@@ -40,18 +40,19 @@ namespace glz
       T& value;
    };
    
+   template <class T>
+   concept range = requires(T& t) {
+      typename T::value_type;
+      requires !std::same_as<void, decltype(t.begin())>;
+      requires !std::same_as<void, decltype(t.end())>;
+   };
+   
    // range like
    template <class T>
    using iterator_t = decltype(std::begin(std::declval<T&>()));
    
-   template <class R>
+   template <range R>
    using range_value_t = std::iter_value_t<iterator_t<R>>;
-   
-   template <class T>
-   concept range = requires(T& t) {
-      t.begin(); // equality-preserving for forward iterators
-      t.end();
-   };
    
    namespace detail
    {
