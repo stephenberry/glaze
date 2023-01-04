@@ -349,7 +349,7 @@ namespace glz
       std::array<size_t, N> n_items_per_group{};
       
       for (size_t i = 0; i < n_unique; ++i) {
-         n_items_per_group[i] = nano::ranges::count(first_keys, unique_keys[i]);
+         n_items_per_group[i] = std::count(first_keys.begin(), first_keys.end(), unique_keys[i]);
       }
       
       return glz::tuplet::tuple{ n_items_per_group, n_unique, unique_keys };

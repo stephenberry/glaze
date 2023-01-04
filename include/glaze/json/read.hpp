@@ -553,7 +553,7 @@ namespace glz
          template <auto Options>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            using value_t = nano::ranges::range_value_t<T>;
+            using value_t = range_value_t<T>;
             static thread_local std::vector<value_t> buffer{};
             buffer.clear();
 

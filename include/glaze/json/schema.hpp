@@ -156,7 +156,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& s, auto& defs) noexcept
          {
-            using V = std::decay_t<nano::ranges::range_value_t<std::decay_t<T>>>;
+            using V = std::decay_t<range_value_t<std::decay_t<T>>>;
             s.type = {"array"};
             auto& def = defs[name_v<V>];
             if (def.type.empty()) {
@@ -172,7 +172,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& s, auto& defs) noexcept
          {
-            using V = std::decay_t<std::tuple_element_t<1,nano::ranges::range_value_t<std::decay_t<T>>>>;
+            using V = std::decay_t<std::tuple_element_t<1,range_value_t<std::decay_t<T>>>>;
             s.type = {"object"};
             auto& def = defs[name_v<V>];
             if (def.type.empty()) {

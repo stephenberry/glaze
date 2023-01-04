@@ -156,7 +156,7 @@ namespace glz::detail
    inline void dump(B&& b) noexcept
    {
       // TODO use std::bit_cast when apple clang supports it
-      using value_t = nano::ranges::range_value_t<std::decay_t<B>>;
+      using value_t = range_value_t<std::decay_t<B>>;
       if constexpr (std::same_as<value_t, std::byte>) {
          b.emplace_back(c);
       }
@@ -175,7 +175,7 @@ namespace glz::detail
          b.resize(b.size() * 2);
       }
       
-      using value_t = nano::ranges::range_value_t<std::decay_t<B>>;
+      using value_t = range_value_t<std::decay_t<B>>;
       if constexpr (std::same_as<value_t, std::byte>) {
          b[ix] = c;
       }
@@ -193,7 +193,7 @@ namespace glz::detail
    inline void dump(std::byte c, B&& b) noexcept
    {
       // TODO use std::bit_cast when apple clang supports it
-      using value_t = nano::ranges::range_value_t<std::decay_t<B>>;
+      using value_t = range_value_t<std::decay_t<B>>;
       if constexpr (std::same_as<value_t, std::byte>) {
          b.emplace_back(c);
       }
@@ -211,7 +211,7 @@ namespace glz::detail
          b.resize(b.size() * 2);
       }
       
-      using value_t = nano::ranges::range_value_t<std::decay_t<B>>;
+      using value_t = range_value_t<std::decay_t<B>>;
       if constexpr (std::same_as<value_t, std::byte>) {
          b[ix] = c;
       }

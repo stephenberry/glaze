@@ -42,6 +42,13 @@ namespace glz
       T& value;
    };
    
+   // range like
+   template <class T>
+   using iterator_t = decltype(std::begin(std::declval<T&>()));
+   
+   template <class R>
+   using range_value_t = std::iter_value_t<iterator_t<R>>;
+   
    namespace detail
    {
       template <class T>
@@ -267,7 +274,7 @@ namespace glz
       template <class T>
       concept map_t =
          !complex_t<T> && !str_t<T> && nano::ranges::range<T> &&
-         pair_t<nano::ranges::range_value_t<T>> && map_subscriptable<T>;
+         pair_t<range_value_t<T>> && map_subscriptable<T>;
 
       template <class T>
       concept array_t = (!complex_t<T> && !str_t<T> && !map_t<T> && nano::ranges::range<T>);
