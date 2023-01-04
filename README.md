@@ -168,15 +168,6 @@ find_package(glaze REQUIRED)
 target_link_libraries(main PRIVATE glaze::glaze)
 ```
 
-## Dependencies
-Will automaticlly fetch missing dependencies with FetchContent/CPM if not found with find_package.
-- [fmt](https://github.com/fmtlib/fmt)
-
->*Only required for building tests:*
->
->- [UT](https://github.com/boost-ext/ut)
->- [Eigen](https://gitlab.com/libeigen/eigen)
-
 ## See [Wiki](https://github.com/stephenberry/glaze/wiki) for [Frequently Asked Questions](https://github.com/stephenberry/glaze/wiki)
 
 ## Local Glaze Meta
