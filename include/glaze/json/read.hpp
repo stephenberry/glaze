@@ -545,6 +545,38 @@ namespace glz
          }
       };
       
+      // counts the number of JSON array elements
+      // needed for classes that are resizable, but do not have an emplace_back
+      // it is copied so that it does not actually progress the iterator
+      // expects the opening brace ([) to have already been consumed
+      inline size_t number_of_array_elements(auto it, auto&& end)
+      {
+         skip_ws(it, end);
+         if (*it == ']') [[unlikely]] {
+            return 0;
+         }
+         size_t count = 1;
+         while (it != end) {
+            switch (*it)
+            {
+               case ',': {
+                  ++count;
+                  ++it;
+                  break;
+               }
+               case '/': {
+                  skip_ws(it, end);
+                  break;
+               }
+               case ']': {
+                  return count;
+               }
+               default:
+                  ++it;
+            }
+         }
+      }
+      
       template <class T> requires array_t<T> &&
       (!emplace_backable<T> &&
        resizeable<T>)
@@ -553,39 +585,24 @@ namespace glz
          template <auto Options>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            using value_t = range_value_t<T>;
-            static thread_local std::vector<value_t> buffer{};
-            buffer.clear();
-
             if constexpr (!Options.ws_handled) {
                skip_ws(it, end);
             }
             static constexpr auto Opts = ws_handled_off<Options>();
             
             match<'['>(it, end);
-            skip_ws(it, end);
-            for (size_t i = 0; it < end; ++i) {
-               if (*it == ']') [[unlikely]] {
-                  ++it;
-                  value.resize(i);
-                  
-                  if constexpr (Opts.shrink_to_fit) {
-                     value.shrink_to_fit();
-                  }
-                  
-                  auto value_it = value.begin();
-                  for (size_t j = 0; j < i; ++j) {
-                     *value_it++ = buffer[j];
-                  }
-                  return;
-               }
-               if (i > 0) [[likely]] {
+            const auto n = number_of_array_elements(it, end);
+            value.resize(n);
+            size_t i = 0;
+            for (auto& x : value) {
+               read<json>::op<Opts>(x, ctx, it, end);
+               skip_ws(it, end);
+               if (i < n - 1) {
                   match<','>(it, end);
                }
-               read<json>::op<Opts>(buffer.emplace_back(), ctx, it, end);
-               skip_ws(it, end);
+               ++i;
             }
-            throw std::runtime_error("Expected ]");
+            match<']'>(it, end);
          }
       };
 
