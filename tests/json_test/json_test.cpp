@@ -2521,6 +2521,43 @@ suite std_function_handling = []
    };
 };
 
+struct hide_struct
+{
+  int i = 287;
+  double d = 3.14;
+  std::string hello = "Hello World";
+};
+
+template <>
+struct glz::meta<hide_struct>
+{
+   using T = hide_struct;
+   static constexpr auto value = object("i", &T::i,  //
+                                        "d", &T::d, //
+                                        "hello", hide{&T::hello}
+                                        );
+};
+
+suite hide_tests = []
+{
+   "hide_write"_test = [] {
+      hide_struct s{};
+      std::string b{};
+      glz::write_json(s, b);
+      
+      expect(b == R"({"i":287,"d":3.14})");
+   };
+   
+   "hide_read"_test = [] {
+      
+      std::string b = R"({"i":287,"d":3.14,"hello":"Hello World"})";
+      
+      hide_struct s{};
+      
+      expect(throws([&]{ glz::read_json(s, b); }));
+   };
+};
+
 int main()
 {
    using namespace boost::ut;

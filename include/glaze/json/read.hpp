@@ -75,6 +75,16 @@ namespace glz
       };
       
       template <>
+      struct from_json<hidden>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&&, auto&&... args)
+         {
+            throw std::runtime_error("hidden type attempted to be read");
+         };
+      };
+      
+      template <>
       struct from_json<std::monostate>
       {
          template <auto Opts>

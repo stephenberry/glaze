@@ -31,6 +31,18 @@ namespace glz
    template <class T, class... U>
    concept is_any_of = (std::same_as<T, U> || ...);
    
+   // hide class is a wrapper to denote that the exposed variable should be excluded or hidden for serialization output
+   template <class T>
+   struct hide final
+   {
+      T value;
+   };
+   
+   template <class T>
+   hide(T) -> hide<T>;
+   
+   struct hidden {};
+   
    // Register this with an object to allow file including (direct writes) to the meta object
    struct file_include {};
    
@@ -660,6 +672,9 @@ namespace glz
          }
          else if constexpr (std::is_member_pointer_v<V>) {
             return value.*member_ptr;
+         }
+         else if constexpr (is_specialization_v<V, hide>) {
+            return hidden{};
          }
          else {
             return member_ptr(value);

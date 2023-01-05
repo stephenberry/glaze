@@ -32,6 +32,18 @@ namespace glz
          }
       };
       
+      template <>
+      struct to_json<hidden>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&&, auto&&... args)
+         {
+            dump<'"'>(args...);
+            dump("hidden type should not have been written", args...);
+            dump<'"'>(args...);
+         };
+      };
+      
       template <is_reference_wrapper T>
       struct to_json<T>
       {
@@ -529,6 +541,10 @@ namespace glz
                
                // skip file_include
                if constexpr (std::is_same_v<val_t, includer<std::decay_t<V>>>) {
+                  return;
+               }
+               
+               if constexpr (std::is_same_v<val_t, hidden>) {
                   return;
                }
 
