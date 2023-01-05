@@ -74,6 +74,6 @@ namespace glz
       }
       
       static constexpr auto arr = impl(); // Give the joined string static storage
-      static constexpr std::string_view name {arr.data(), arr.size() - 1};
+      static constexpr std::string_view name {arr.data(), arr.size()};
    };
 }

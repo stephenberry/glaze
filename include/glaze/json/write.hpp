@@ -191,8 +191,12 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& /*value*/, Args&&...) noexcept
-         {}
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            dump<'"'>(args...);
+            dump(name_v<std::decay_t<decltype(value)>>, args...);
+            dump<'"'>(args...);
+         }
       };
 
       template <class T>

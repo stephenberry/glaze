@@ -140,7 +140,7 @@ void tests()
    "function type name"_test = [] {
       std::string_view f =
          glz::name_v<std::function<double(const int&, const double&)>>;
-      expect(f == "std::function<double(const int32_t&,const double&)");
+      expect(f == "std::function<double(const int32_t&,const double&)>");
    };
 
    "function type io"_test = [&] {

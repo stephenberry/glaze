@@ -442,8 +442,12 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         static void op(auto& /*value*/, is_context auto&& /*ctx*/, auto&& /*it*/, auto&& /*end*/)
+         static void op(auto& /*value*/, is_context auto&& /*ctx*/, auto&& it, auto&& end)
          {
+            skip_ws(it, end);
+            match<'"'>(it, end);
+            skip_till_quote(it, end);
+            match<'"'>(it, end);
          }
       };
       

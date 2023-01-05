@@ -2506,6 +2506,21 @@ R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}
    };
 };
 
+suite std_function_handling = []
+{
+   "std_function"_test = [] {
+      
+      int x = 1;
+      std::function<void()> increment = [&]{ ++x; };
+      std::string s{};
+      glz::write_json(increment, s);
+      
+      expect(s == R"("std::function<void()>")") << s;
+      
+      expect(nothrow([&] { glz::read_json(increment, s); }));
+   };
+};
+
 int main()
 {
    using namespace boost::ut;
