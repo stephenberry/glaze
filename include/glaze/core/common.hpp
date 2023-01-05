@@ -675,13 +675,12 @@ namespace glz
 
       template <class T, size_t... I>
       inline constexpr auto members_from_meta_impl() {
-         if constexpr (std::is_enum_v<std::decay_t<T>>) {
-            return glz::tuplet::tuple{};
+         if constexpr (glaze_object_t<std::decay_t<T>>) {
+            return glz::tuplet::tuple<
+               std::decay_t<member_t<T, std::tuple_element_t<1, std::tuple_element_t<I, meta_t<T>>>>>...>{};
          }
          else {
-            return glz::tuplet::tuple<
-            std::decay_t<member_t<T, std::tuple_element_t<
-                              1, std::tuple_element_t<I, meta_t<T>>>>>...>{};
+            return glz::tuplet::tuple{};
          }
       }
 

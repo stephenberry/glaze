@@ -70,6 +70,17 @@ namespace glz
          { return error{}; }
       };
 
+      template <class T>
+      requires std::same_as<std::decay_t<T>, raw_json>
+      struct to_binary<T> final
+      {
+         template <auto Opts, class... Args>
+         static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            write<binary>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
+         }
+      };
+
       template <class... Args>
       auto dump_type(auto&& value, Args&&... args) noexcept
       {

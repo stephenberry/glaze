@@ -57,7 +57,18 @@ namespace glz
          {
          }
       };
-      
+
+      template <class T>
+      requires std::same_as<std::decay_t<T>, raw_json>
+      struct from_binary<T>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            read<binary>::op<Opts>(value.str, ctx, it, end);
+         }
+      };
+
       inline constexpr size_t int_from_header(auto&& it, auto&& /*end*/) noexcept
       {
          header8 h8;
