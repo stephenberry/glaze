@@ -2558,6 +2558,97 @@ suite hide_tests = []
    };
 };
 
+struct mem_f_struct
+{
+   int i = 0;
+   int& access() {
+      return i;
+   }
+};
+
+template <>
+struct glz::meta<mem_f_struct>
+{
+   using T = mem_f_struct;
+   static constexpr auto value = object("i", &T::i,  //
+                                        "access", &T::access
+                                        );
+};
+
+suite member_function_tests = []
+{
+   "member_function2"_test = []
+   {
+      mem_f_struct s{};
+      
+      using T = mem_f_struct;
+      auto& i = glz::call<int&>(s, "/access");
+      ++i;
+      
+      expect(s.i == 1);
+   };
+};
+
+struct dog
+{
+   int age{};
+   void eat() {
+      ++age;
+   };
+};
+
+template <>
+struct glz::meta<dog>
+{
+   using T = dog;
+   static constexpr auto value = object("age", &T::age, "eat", &T::eat);
+};
+
+struct cat
+{
+   int age{};
+   void eat() {
+      ++age;
+   };
+   
+   void purr() {
+      
+   }
+};
+
+template <>
+struct glz::meta<cat>
+{
+   using T = cat;
+   static constexpr auto value = object("age", &T::age, "eat", &T::eat, "purr", &T::purr);
+};
+
+struct animal
+{
+   int age{};
+   void eat() {}
+};
+
+template <>
+struct glz::meta<animal>
+{
+   using T = animal;
+   static constexpr auto value = object("age", &T::age, "eat", &T::eat);
+};
+
+suite any_tests = []
+{
+   "any"_test = []
+   {
+      std::array<glz::any<animal>, 2> a{ dog{}, cat{} };
+      
+      a[0].call<"eat">();
+      a[1].call<"eat">();
+      
+      //expect(a.get<"age">() == 1);
+   };
+};
+
 int main()
 {
    using namespace boost::ut;

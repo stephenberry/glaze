@@ -10,6 +10,7 @@
 #include "glaze/core/common.hpp"
 #include "glaze/util/string_view.hpp"
 #include "glaze/util/parse.hpp"
+#include "glaze/util/any.hpp"
 
 namespace glz
 {
@@ -101,9 +102,12 @@ namespace glz
                return std::visit(
                   [&](auto&& member_ptr) {
                      using V = std::decay_t<decltype(member_ptr)>;
-                     if constexpr (std::is_member_pointer_v<V>) {
+                     if constexpr (std::is_member_object_pointer_v<V>) {
                         return seek_impl(std::forward<F>(func),
                                          value.*member_ptr, json_ptr);
+                     }
+                     else if constexpr (std::is_member_function_pointer_v<V>) {
+                        return seek_impl(std::forward<F>(func), member_ptr, json_ptr);
                      }
                      else {
                         return seek_impl(std::forward<F>(func),
@@ -184,6 +188,77 @@ namespace glz
       return detail::seek_impl(std::forward<F>(func), std::forward<T>(value),
                                json_ptr);
    }
+   
+   // call a member function
+   /*template <string_literal json_ptr, class T, class... Args>
+   decltype(auto) call(T&& root_value, Args&&... args)
+   {
+      static constexpr auto frozen_map = detail::make_map<T, false>();
+      static constexpr sv key = chars<json_ptr>;
+      static constexpr auto member_it = frozen_map.find(key);
+      if constexpr (member_it != frozen_map.end()) {
+         static constexpr auto member_ptr = std::get<member_it->second.index()>(member_it->second);
+         static constexpr auto f = std::mem_fn(member_ptr);
+         using F = decltype(f);
+         if constexpr (std::is_invocable_v<F, T, Args...>) {
+            return f(root_value, std::forward<Args>(args)...);
+         }
+         else {
+            throw std::runtime_error("call: function not invocable");
+         }
+      }
+      else {
+         throw std::runtime_error("call: invalid json_ptr path");
+      }
+   }*/
+   
+   // call a member function
+   template <class R, class T, class... Args>
+   decltype(auto) call(T&& root_value, sv json_ptr, Args&&... args)
+   {
+      std::conditional_t<std::is_reference_v<R> || std::is_pointer_v<R>, std::decay_t<R>*, R> result;
+      
+      const auto valid = detail::seek_impl(
+         [&result, &root_value, ...args = std::forward<Args>(args)](auto&& val) {
+            using V = std::decay_t<decltype(val)>;
+            if constexpr (std::is_member_function_pointer_v<V>) {
+               auto f = std::mem_fn(val);
+               using F = decltype(f);
+               if constexpr (std::is_invocable_v<F, T, Args...>) {
+                  if constexpr (!std::is_assignable_v<R, std::invoke_result_t<F, T, Args...>>) {
+                     throw std::runtime_error("call: type not assignable");
+                  }
+                  else {
+                     if constexpr (std::is_reference_v<R>) {
+                        result = &f(root_value, std::forward<Args>(args)...);
+                     }
+                     else {
+                        result = f(root_value, std::forward<Args>(args)...);
+                     }
+                  }
+               }
+               else {
+                  throw std::runtime_error("call: not invocable with given inputs");
+               }
+            }
+            else {
+               throw std::runtime_error("call: seek did not find a function");
+            }
+         },
+         std::forward<T>(root_value), json_ptr);
+      
+      if (!valid) {
+         throw std::runtime_error("call: \"" + std::string(json_ptr) +
+                                  "\" doesn't exist");
+      }
+      
+      if constexpr (std::is_reference_v<R>) {
+         return *result;
+      }
+      else {
+         return result;
+      }
+   }
 
    // Get a refrence to a value at the location of a json_ptr. Will throw if
    // value doesnt exist or is wrong type
@@ -205,9 +280,10 @@ namespace glz
                result = &val;
          },
          std::forward<T>(root_value), json_ptr);
-      if (!result)
+      if (!result) {
          throw std::runtime_error("Called get on \"" + std::string(json_ptr) +
-                                  "\" which doesnt exist");
+                                  "\" which doesn't exist");
+      }
       return *result;
    }
 
