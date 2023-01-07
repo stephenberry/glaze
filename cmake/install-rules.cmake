@@ -37,13 +37,6 @@ set(
 mark_as_advanced(glaze_INSTALL_CMAKEDIR)
 
 install(
-    FILES cmake/install-config.cmake
-    DESTINATION "${glaze_INSTALL_CMAKEDIR}"
-    RENAME "${package}Config.cmake"
-    COMPONENT glaze_Development
-)
-
-install(
     FILES "${PROJECT_BINARY_DIR}/${package}ConfigVersion.cmake"
     DESTINATION "${glaze_INSTALL_CMAKEDIR}"
     COMPONENT glaze_Development
