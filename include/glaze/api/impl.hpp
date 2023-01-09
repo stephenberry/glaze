@@ -81,6 +81,73 @@ namespace glz
          return get_void_fn(user, path, type_hash);
       }
       
+      template <class F, class Parent, size_t... Is>
+      decltype(auto) call_args(F&& f, Parent&& parent, std::span<void*> args, std::index_sequence<Is...>)
+      {
+         return f(parent, args[Is]...);
+      }
+      
+      bool caller(const sv path, const sv type_hash, void* ret, std::span<void*> args) noexcept override
+      {
+         auto p = parent_last_json_ptrs(path);
+         const auto parent_ptr = p.first;
+         const auto last_ptr = p.second;
+         
+         bool found = false;
+         
+         detail::seek_impl(
+            [&](auto&& parent) {
+               using P = std::decay_t<decltype(parent)>;
+               
+               detail::seek_impl([&](auto&& val) {
+                  using V = std::decay_t<decltype(val)>;
+                  if constexpr (std::is_member_function_pointer_v<V>) {
+                     using Parent = typename parent_of_fn<V>::type;
+                     
+                     if constexpr (std::same_as<P, Parent>) {
+                        using F = typename std_function_signature<V>::type;
+                        static constexpr auto h = glz::hash<F>();
+                        using Ret = typename return_type<V>::type;
+                        using Tuple = typename inputs_as_tuple<V>::type;
+                        static constexpr auto N = std::tuple_size_v<Tuple>;
+                        
+                        if (h == type_hash) [[likely]] {
+                           if constexpr (std::is_pointer_v<Ret>) {
+                              ret = call_args(std::mem_fn(val), parent, args, std::make_index_sequence<N>{});
+                           }
+                           else {
+                              auto x = call_args(std::mem_fn(val), parent, args, std::make_index_sequence<N>{});
+                              *static_cast<Ret*>(ret) = x;
+                           }
+                           found = true;
+                        }
+                        else [[unlikely]] {
+                           error = "mismatching types";
+                           error += ", expected: " + std::string(glz::name_v<UserType>);
+                        }
+                     }
+                     else {
+                        error = "invalid parent type";
+                     }
+                  }
+                  else {
+                     error = "caller: type is not a member function";
+                  }
+               }, parent, last_ptr);
+            },
+            user, parent_ptr); // seek to parent
+         
+         if (found) {
+            return true;
+         }
+         
+         if (error.empty()) {
+            error = "invalid path";
+         }
+         
+         return false;
+      }
+      
       protected:
       // Get a pointer to a value at the location of a json_ptr. Will return
       // nullptr if value doesnt exist or is wrong type

@@ -85,6 +85,7 @@ void tests()
       auto f = io->get_fn<std::function<int()>>("/func");
       expect(f() == 5);
       
+      expect(5 == io->call<int>("/func"));
    };
    
    "bool type name"_test = [] {

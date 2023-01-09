@@ -34,6 +34,24 @@ namespace glz
    };
    
    template <class T>
+   struct return_type;
+   
+   template <class ClassType, class Result, class... Args>
+   struct return_type<Result(ClassType::*)(Args...)>
+   {
+      using type = Result;
+   };
+   
+   template <class T>
+   struct inputs_as_tuple;
+   
+   template <class ClassType, class Result, class... Args>
+   struct inputs_as_tuple<Result(ClassType::*)(Args...)>
+   {
+      using type = std::tuple<Args...>;
+   };
+   
+   template <class T>
    struct parent_of_fn;
    
    template <class ClassType, class Result, class... Args>
