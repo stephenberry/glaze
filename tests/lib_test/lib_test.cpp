@@ -9,7 +9,10 @@
 #include "glaze/api/api.hpp"
 #include "glaze/api/lib.hpp"
 
-DLL_EXPORT glz::iface* glaze_interface() noexcept { return {}; }
+glz::iface_fn glz_iface() noexcept
+{
+   return glz::make_iface<>();
+}
 
 void tests()
 {
@@ -98,7 +101,7 @@ void tests()
    "function type name"_test = [] {
       std::string_view f =
          glz::name_v<std::function<double(const int&, const double&)>>;
-      expect(f == "std::function<double(const int32_t&,const double&)");
+      expect(f == "std::function<double(const int32_t&,const double&)>");
    };
 
    "function type io"_test = [&] {

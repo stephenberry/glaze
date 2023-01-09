@@ -5,7 +5,7 @@
 
 #include <utility>
 
-namespace glaze
+namespace glz
 {
    template <class To, class From>
    std::enable_if_t<

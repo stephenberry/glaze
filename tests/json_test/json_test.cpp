@@ -2506,6 +2506,149 @@ R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}
    };
 };
 
+suite std_function_handling = []
+{
+   "std_function"_test = [] {
+      
+      int x = 1;
+      std::function<void()> increment = [&]{ ++x; };
+      std::string s{};
+      glz::write_json(increment, s);
+      
+      expect(s == R"("std::function<void()>")") << s;
+      
+      expect(nothrow([&] { glz::read_json(increment, s); }));
+   };
+};
+
+struct hide_struct
+{
+  int i = 287;
+  double d = 3.14;
+  std::string hello = "Hello World";
+};
+
+template <>
+struct glz::meta<hide_struct>
+{
+   using T = hide_struct;
+   static constexpr auto value = object("i", &T::i,  //
+                                        "d", &T::d, //
+                                        "hello", hide{&T::hello}
+                                        );
+};
+
+suite hide_tests = []
+{
+   "hide_write"_test = [] {
+      hide_struct s{};
+      std::string b{};
+      glz::write_json(s, b);
+      
+      expect(b == R"({"i":287,"d":3.14})");
+   };
+   
+   "hide_read"_test = [] {
+      
+      std::string b = R"({"i":287,"d":3.14,"hello":"Hello World"})";
+      
+      hide_struct s{};
+      
+      expect(throws([&]{ glz::read_json(s, b); }));
+   };
+};
+
+struct mem_f_struct
+{
+   int i = 0;
+   int& access() {
+      return i;
+   }
+};
+
+template <>
+struct glz::meta<mem_f_struct>
+{
+   using T = mem_f_struct;
+   static constexpr auto value = object("i", &T::i,  //
+                                        "access", &T::access
+                                        );
+};
+
+suite member_function_tests = []
+{
+   "member_function2"_test = []
+   {
+      mem_f_struct s{};
+      
+      using T = mem_f_struct;
+      auto& i = glz::call<int&>(s, "/access");
+      ++i;
+      
+      expect(s.i == 1);
+   };
+};
+
+struct dog
+{
+   int age{};
+   void eat() {
+      ++age;
+   };
+};
+
+template <>
+struct glz::meta<dog>
+{
+   using T = dog;
+   static constexpr auto value = object("age", &T::age, "eat", &T::eat);
+};
+
+struct cat
+{
+   int age{};
+   void eat() {
+      ++age;
+   };
+   
+   void purr() {
+      
+   }
+};
+
+template <>
+struct glz::meta<cat>
+{
+   using T = cat;
+   static constexpr auto value = object("age", &T::age, "eat", &T::eat, "purr", &T::purr);
+};
+
+struct animal
+{
+   int age{};
+   void eat() {}
+};
+
+template <>
+struct glz::meta<animal>
+{
+   using T = animal;
+   static constexpr auto value = object("age", &T::age, "eat", &T::eat);
+};
+
+suite any_tests = []
+{
+   "any"_test = []
+   {
+      std::array<glz::any<animal>, 2> a{ dog{}, cat{} };
+      
+      a[0].call<"eat">();
+      a[1].call<"eat">();
+      
+      expect(a[0].get<"age">() == 1);
+   };
+};
+
 int main()
 {
    using namespace boost::ut;

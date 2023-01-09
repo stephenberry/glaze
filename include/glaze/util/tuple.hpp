@@ -66,6 +66,22 @@ namespace glz
       return std::make_pair(indices, i);
    }
    
+   namespace detail
+   {
+      template <class Func, class Tuple, std::size_t... Is>
+      inline constexpr auto map_tuple(Func&& f, Tuple&& tuple, std::index_sequence<Is...>)
+      {
+         return tuplet::make_tuple(f(tuplet::get<Is>(tuple))...);
+      }
+   }
+   
+   template <class Func, class Tuple>
+   inline constexpr auto map_tuple(Func&& f, Tuple&& tuple)
+   {
+      constexpr auto N = std::tuple_size_v<std::decay_t<Tuple>>;
+      return detail::map_tuple(f, tuple, std::make_index_sequence<N>{});
+   }
+   
    template <class M>
    inline constexpr void check_member()
    {

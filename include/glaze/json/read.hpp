@@ -63,6 +63,16 @@ namespace glz
          }
       };
       
+      template <is_member_function_pointer T>
+      struct from_json<T>
+      {
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args)
+         {
+            throw std::runtime_error("attempted to read into member function pointer");
+         }
+      };
+      
       template <is_reference_wrapper T>
       struct from_json<T>
       {
@@ -71,6 +81,16 @@ namespace glz
          {
             using V = std::decay_t<decltype(value.get())>;
             from_json<V>::template op<Opts>(value.get(), std::forward<Args>(args)...);
+         };
+      };
+      
+      template <>
+      struct from_json<hidden>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&&, auto&&... args)
+         {
+            throw std::runtime_error("hidden type attempted to be read");
          };
       };
       
@@ -442,8 +462,12 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         static void op(auto& /*value*/, is_context auto&& /*ctx*/, auto&& /*it*/, auto&& /*end*/)
+         static void op(auto& /*value*/, is_context auto&& /*ctx*/, auto&& it, auto&& end)
          {
+            skip_ws(it, end);
+            match<'"'>(it, end);
+            skip_till_quote(it, end);
+            match<'"'>(it, end);
          }
       };
       
@@ -575,6 +599,7 @@ namespace glz
                   ++it;
             }
          }
+         return {}; // should never be reached
       }
       
       template <class T> requires array_t<T> &&

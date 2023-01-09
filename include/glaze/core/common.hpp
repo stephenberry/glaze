@@ -31,6 +31,18 @@ namespace glz
    template <class T, class... U>
    concept is_any_of = (std::same_as<T, U> || ...);
    
+   // hide class is a wrapper to denote that the exposed variable should be excluded or hidden for serialization output
+   template <class T>
+   struct hide final
+   {
+      T value;
+   };
+   
+   template <class T>
+   hide(T) -> hide<T>;
+   
+   struct hidden {};
+   
    // Register this with an object to allow file including (direct writes) to the meta object
    struct file_include {};
    
@@ -53,6 +65,9 @@ namespace glz
    
    template <range R>
    using range_value_t = std::iter_value_t<iterator_t<R>>;
+   
+   template <class T>
+   concept is_member_function_pointer = std::is_member_function_pointer_v<T>;
    
    namespace detail
    {
@@ -652,14 +667,20 @@ namespace glz
          return make_string_to_enum_map_impl<T>(indices);
       }
       
-      inline decltype(auto) get_member(auto&& value, auto&& member_ptr)
+      inline decltype(auto) get_member(auto&& value, auto& member_ptr)
       {
          using V = std::decay_t<decltype(member_ptr)>;
          if constexpr (std::is_same_v<V, file_include>) {
             return includer<std::decay_t<decltype(value)>>{ value };
          }
-         else if constexpr (std::is_member_pointer_v<V>) {
+         else if constexpr (std::is_member_object_pointer_v<V>) {
             return value.*member_ptr;
+         }
+         else if constexpr (std::is_member_function_pointer_v<V>) {
+            return member_ptr;
+         }
+         else if constexpr (is_specialization_v<V, hide>) {
+            return hidden{};
          }
          else {
             return member_ptr(value);
@@ -667,7 +688,7 @@ namespace glz
       }
       
       template <class T, class mptr_t>
-      using member_t = decltype(get_member(std::declval<T>(), std::declval<mptr_t>()));
+      using member_t = decltype(get_member(std::declval<T>(), std::declval<std::decay_t<mptr_t>&>()));
 
       template <class T,
                 class = std::make_index_sequence<std::tuple_size<meta_t<T>>::value>>
