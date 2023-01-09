@@ -39,6 +39,14 @@ namespace glz
          }
       };
       
+      template <is_member_function_pointer T>
+      struct to_binary<T>
+      {
+         template <auto Opts, class... Args>
+         static void op(auto&& /*value*/, is_context auto&&, Args&&... args) noexcept {
+         }
+      };
+      
       template <class T>
       struct to_binary<includer<T>>
       {

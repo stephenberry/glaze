@@ -44,6 +44,14 @@ namespace glz
          };
       };
       
+      template <is_member_function_pointer T>
+      struct to_json<T>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&&, auto&&... args) {
+         }
+      };
+      
       template <is_reference_wrapper T>
       struct to_json<T>
       {

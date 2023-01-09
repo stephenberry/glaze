@@ -24,6 +24,24 @@ namespace glz
       using type = Result(*)(void*, Args...);
    };
    
+   template <class T>
+   struct std_function_signature;
+   
+   template <class ClassType, class Result, class... Args>
+   struct std_function_signature<Result(ClassType::*)(Args...)>
+   {
+      using type = std::function<Result(Args...)>;
+   };
+   
+   template <class T>
+   struct parent_of_fn;
+   
+   template <class ClassType, class Result, class... Args>
+   struct parent_of_fn<Result(ClassType::*)(Args...)>
+   {
+      using type = ClassType;
+   };
+   
    template <auto MemPtr, class T>
    struct arguments;
    

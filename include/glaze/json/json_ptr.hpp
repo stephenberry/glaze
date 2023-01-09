@@ -384,6 +384,20 @@ namespace glz
       return tokenize_json_ptr(s).second;
    }
    
+   inline constexpr std::pair<sv, sv> parent_last_json_ptrs(const sv s) {
+      const auto i = s.find_last_of('/');
+      return { s.substr(0, i), s.substr(i, s.size()) };
+   }
+   
+   inline auto split_json_ptr(sv s, std::vector<sv>& v)
+   {
+      const auto n = std::count(s.begin(), s.end(), '/');
+      v.resize(n);
+      for (auto i = 0; i < n; ++i) {
+          std::tie(v[i], s) = tokenize_json_ptr(s);
+      }
+   }
+   
    // TODO: handle ~ and / characters for full JSON pointer support
    template <auto& Str>
    inline constexpr auto split_json_ptr()

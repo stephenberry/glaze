@@ -14,10 +14,10 @@
 
 namespace glz
 {
-   inline namespace v0_0_1
+   inline namespace v0_0_2
    {
       struct api
-      {         
+      {
          api() noexcept = default;
          api(const api&) noexcept = default;
          api(api&&) noexcept = default;
@@ -30,7 +30,10 @@ namespace glz
          
          template <class T>
          [[nodiscard]] T* get_if(const sv path) noexcept;
-
+         
+         template <class T>
+         [[nodiscard]] T get_fn(const sv path);
+         
          virtual bool read(const uint32_t /*format*/, const sv /*path*/,
                            const sv /*data*/) noexcept = 0;
 
@@ -43,6 +46,8 @@ namespace glz
       protected:
          /// unchecked void* access
          virtual void* get(const sv path, const sv type_hash) noexcept = 0;
+         
+         virtual std::shared_ptr<void> get_fn(const sv path, const sv type_hash) noexcept = 0;
 
          std::string error{};
       };
@@ -78,6 +83,25 @@ namespace glz
             return static_cast<T*>(ptr);
          }
          return nullptr;
+      }
+      
+      template <class T>
+      T api::get_fn(const sv path) {
+         static constexpr auto hash = glz::hash<T>();
+         auto d = get_fn(path, hash);
+         if (d) {
+            T copy = *static_cast<T*>(d.get());
+            return copy;
+         }
+         else {
+            error = "\n api: glaze::get<" + std::string(glz::name_v<T>) + ">(\"" + std::string(path) + "\") | " + error;
+   #ifdef __cpp_exceptions
+            throw std::runtime_error(error);
+   #else
+            static T x{};
+            return x;
+   #endif
+         }
       }
    }
 }

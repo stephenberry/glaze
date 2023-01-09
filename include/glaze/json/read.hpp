@@ -63,6 +63,16 @@ namespace glz
          }
       };
       
+      template <is_member_function_pointer T>
+      struct from_json<T>
+      {
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args)
+         {
+            throw std::runtime_error("attempted to read into member function pointer");
+         }
+      };
+      
       template <is_reference_wrapper T>
       struct from_json<T>
       {

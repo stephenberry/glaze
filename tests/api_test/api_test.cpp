@@ -18,6 +18,7 @@ struct my_api
    std::span<double> s = z;
    std::function<double(const int&, const double&)> f = [](const auto& i, const auto& d) { return i * d; };
    std::function<void()> init = []{ std::cout << "init!\n"; };
+   int func() { return 5; };
 };
 
 template <>
@@ -30,7 +31,8 @@ struct glz::meta<my_api>
       "z", &T::z, //
       "s", &T::s, //
       "f", &T::f, //
-      "init", &T::init);
+      "init", &T::init, //
+      "func", &T::func);
    
    static constexpr std::string_view name = "my_api";
    
@@ -52,6 +54,12 @@ void tests()
    std::unique_ptr<glz::iface> iface{ glaze_interface() };
    auto io = (*iface)["my_api"]();
    auto io2 = (*iface)["my_api2"]();
+   
+   "calling functions"_test = [&] {
+      auto f = io->get_fn<std::function<int()>>("/func");
+      expect(f() == 5);
+      
+   };
    
    "bool type name"_test = [] {
       {
