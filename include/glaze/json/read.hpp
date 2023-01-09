@@ -589,6 +589,7 @@ namespace glz
                   ++it;
             }
          }
+         return {}; // should never be reached
       }
       
       template <class T> requires array_t<T> &&

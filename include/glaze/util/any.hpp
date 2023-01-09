@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <any>
+
 #include "glaze/core/common.hpp"
 
 namespace glz
