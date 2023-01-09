@@ -104,6 +104,8 @@ namespace glz
    #endif
          }
       }
+      
+      using iface_fn = std::shared_ptr<glz::iface>(*)();
    }
 }
 
@@ -113,4 +115,4 @@ namespace glz
 #define DLL_EXPORT
 #endif
 
-extern "C" DLL_EXPORT std::shared_ptr<glz::iface> glaze_interface() noexcept;
+extern "C" DLL_EXPORT glz::iface_fn glz_iface() noexcept;

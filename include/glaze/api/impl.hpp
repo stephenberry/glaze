@@ -173,4 +173,21 @@ namespace glz
    inline constexpr auto make_api() {
       return std::shared_ptr<impl<T>>{ new impl<T>{}, [](impl<T>* ptr){ delete ptr; } };
    }
+   
+   template <class... Args>
+   iface_fn make_iface() {
+      return [] {
+         std::shared_ptr<iface> ptr{ new iface{}, [](auto* ptr) { delete ptr; } };
+         
+         using T = std::tuple<Args...>;
+         
+         constexpr auto N = sizeof...(Args);
+         for_each<N>([&](auto I) {
+            using V = std::tuple_element_t<I, T>;
+            ptr->emplace(name_v<V>, make_api<V>);
+         });
+         
+         return ptr;
+      };
+   }
 }

@@ -39,19 +39,45 @@ struct glz::meta<my_api>
    static constexpr glz::version_t version{ 0, 0, 1 };
 };
 
-DLL_EXPORT std::shared_ptr<glz::iface> glaze_interface() noexcept
+struct my_api2
 {
-   return std::shared_ptr<glz::iface>{ new glz::iface{
-      {"my_api", glz::make_api<my_api>},
-      {"my_api2", glz::make_api<my_api>}
-   }, [](auto* ptr) { delete ptr; }};
+   int x = 7;
+   double y = 5.5;
+   std::vector<double> z = { 1.0, 2.0 };
+   std::span<double> s = z;
+   std::function<double(const int&, const double&)> f = [](const auto& i, const auto& d) { return i * d; };
+   std::function<void()> init = []{ std::cout << "init!\n"; };
+   int func() { return 5; };
+};
+
+template <>
+struct glz::meta<my_api2>
+{
+   using T = my_api2;
+   static constexpr auto value = glz::object(
+      "x", &T::x, //
+      "y", &T::y, //
+      "z", &T::z, //
+      "s", &T::s, //
+      "f", &T::f, //
+      "init", &T::init, //
+      "func", &T::func);
+   
+   static constexpr std::string_view name = "my_api2";
+   
+   static constexpr glz::version_t version{ 0, 0, 1 };
+};
+
+glz::iface_fn glz_iface() noexcept
+{
+   return glz::make_iface<my_api, my_api2>();
 }
 
 void tests()
 {
    using namespace boost::ut;
    
-   std::shared_ptr<glz::iface> iface{ glaze_interface() };
+   std::shared_ptr<glz::iface> iface{ glz_iface()() };
    auto io = (*iface)["my_api"]();
    auto io2 = (*iface)["my_api2"]();
    

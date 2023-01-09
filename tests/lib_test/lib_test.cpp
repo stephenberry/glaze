@@ -9,7 +9,10 @@
 #include "glaze/api/api.hpp"
 #include "glaze/api/lib.hpp"
 
-DLL_EXPORT std::shared_ptr<glz::iface> glaze_interface() noexcept { return {}; }
+glz::iface_fn glz_iface() noexcept
+{
+   return glz::make_iface<>();
+}
 
 void tests()
 {
