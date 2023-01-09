@@ -14,12 +14,7 @@ DLL_EXPORT glz::iface* glaze_interface() noexcept { return {}; }
 void tests()
 {
    using namespace boost::ut;
-#ifdef GLAZE_API_ON_WINDOWS
-   glz::lib_loader lib("../../../bin");
-#else
-   glz::lib_loader lib("../../../../bin");
-#endif
-   
+   glz::lib_loader lib(TEST_LIB_INTERFACE_LOCATION);
    auto io = lib["my_api"]();
    
    "bool type name"_test = [] {
