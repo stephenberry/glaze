@@ -140,7 +140,7 @@ namespace glz
                static constexpr auto member_ptr = std::get<member_it->second.index()>(member_it->second);
                using X = std::decay_t<decltype(member_ptr)>;
                if constexpr (std::is_member_object_pointer_v<X>) {
-                  map.at(key) = &(v.*member_ptr);
+                  map.at(key) = &((*static_cast<T*>(data)).*member_ptr);
                }
                else {
                   map.at(key) = arguments<member_ptr, X>::op;
@@ -171,6 +171,20 @@ namespace glz
             else {
                throw std::runtime_error("call: invalid arguments to call");
             }
+         }
+         else {
+            throw std::runtime_error("call: invalid name");
+         }
+      }
+      
+      template <string_literal name>
+      decltype(auto) get() {
+         static constexpr sv key = chars<name>;
+         static constexpr auto member_it = cmap.find(key);
+         
+         if constexpr (member_it != cmap.end()) {
+            auto& value = std::get<member_it->second.index()>(map.at(key));
+            return *value;
          }
          else {
             throw std::runtime_error("call: invalid name");

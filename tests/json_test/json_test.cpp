@@ -2645,7 +2645,7 @@ suite any_tests = []
       a[0].call<"eat">();
       a[1].call<"eat">();
       
-      //expect(a.get<"age">() == 1);
+      expect(a[0].get<"age">() == 1);
    };
 };
 

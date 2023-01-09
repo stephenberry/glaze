@@ -43,7 +43,7 @@ namespace glz
 
          virtual bool write(const uint32_t /*format*/, const sv /*path*/, std::string& /*data*/) = 0;
          
-         virtual const sv last_error() const noexcept {
+         [[nodiscard]] virtual const sv last_error() const noexcept {
             return error;
          }
          
