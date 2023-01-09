@@ -17,12 +17,7 @@ glz::iface_fn glz_iface() noexcept
 void tests()
 {
    using namespace boost::ut;
-#ifdef GLAZE_API_ON_WINDOWS
-   glz::lib_loader lib("../../../bin");
-#else
-   glz::lib_loader lib("../../../../bin");
-#endif
-   
+   glz::lib_loader lib(TEST_LIB_INTERFACE_LOCATION);
    auto io = lib["my_api"]();
    
    "bool type name"_test = [] {
@@ -86,7 +81,7 @@ void tests()
 
    "deque type name"_test = [] {
       std::string_view d = glz::name_v<std::deque<bool>>;
-      expect(d == "std::vector<bool>");
+      expect(d == "std::deque<bool>");
    };
 
    "span type name"_test = [] {
@@ -119,8 +114,7 @@ void tests()
 
 int main()
 {
-   // TODO: Enable testing after figuring out how to make pathing generic
-   //tests();
+   tests();
    
    return 0;
 }
