@@ -83,7 +83,7 @@ void tests()
 
    "deque type name"_test = [] {
       std::string_view d = glz::name_v<std::deque<bool>>;
-      expect(d == "std::vector<bool>");
+      expect(d == "std::deque<bool>");
    };
 
    "span type name"_test = [] {
@@ -116,8 +116,7 @@ void tests()
 
 int main()
 {
-   // TODO: Enable testing after figuring out how to make pathing generic
-   //tests();
+   tests();
    
    return 0;
 }
