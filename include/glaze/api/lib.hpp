@@ -42,7 +42,7 @@ namespace glz
 
    struct lib_loader final
    {
-      using create = glz::iface*(*)(void);
+      using create = glz::iface_fn(*)(void);
 
       iface api_map{};
       std::vector<lib_t> loaded_libs{};
@@ -106,14 +106,18 @@ namespace glz
             loaded_libs.emplace_back(loaded_lib);
 
 #ifdef GLAZE_API_ON_WINDOWS
-            auto* ptr = (create)GetProcAddress(loaded_lib, "glaze_interface");
+            auto* ptr = (create)GetProcAddress(loaded_lib, "glz_iface");
 #else
-            auto* ptr = (create)dlsym(dlopen(path.c_str(), RTLD_NOW), "glaze_interface");
+            auto* ptr = (create)dlsym(dlopen(path.c_str(), RTLD_NOW), "glz_iface");
 #endif
 
             if (ptr) {
-               api_map.merge(*ptr());
+               std::shared_ptr<glz::iface> shared_iface_ptr = (*ptr)()();
+               api_map.merge(*shared_iface_ptr);
                return true;
+            }
+            else {
+               throw std::runtime_error("load_lib: glz_iface could not be loaded");
             }
          }
 
