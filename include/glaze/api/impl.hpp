@@ -76,7 +76,7 @@ namespace glz
          }
       }
       
-      std::shared_ptr<void> get_fn(const sv path, const sv type_hash) noexcept override
+      std::unique_ptr<void, void(*)(void*)> get_fn(const sv path, const sv type_hash) noexcept override
       {
          return get_void_fn(user, path, type_hash);
       }
@@ -118,7 +118,7 @@ namespace glz
       template <class T>
       auto get_void_fn(T&& root_value, const sv json_ptr, const sv type_hash)
       {
-         std::shared_ptr<void> result{};
+         std::unique_ptr<void, void(*)(void*)> result{ nullptr, nullptr };
          
          auto p = parent_last_json_ptrs(json_ptr);
          const auto parent_ptr = p.first;
@@ -141,7 +141,7 @@ namespace glz
                            *f = [&](auto&&... args) {
                               return (parent.*val)(args...);
                            };
-                           result = std::shared_ptr<void>{ f, [](void* ptr){
+                           result = std::unique_ptr<void, void(*)(void*)>{ f, [](void* ptr){
                               delete static_cast<F*>(ptr);
                            } };
                         }

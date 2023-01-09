@@ -31,6 +31,7 @@ namespace glz
          template <class T>
          [[nodiscard]] T* get_if(const sv path) noexcept;
          
+         // Get a std::function from a member function across the API
          template <class T>
          [[nodiscard]] T get_fn(const sv path);
          
@@ -47,7 +48,7 @@ namespace glz
          /// unchecked void* access
          virtual void* get(const sv path, const sv type_hash) noexcept = 0;
          
-         virtual std::shared_ptr<void> get_fn(const sv path, const sv type_hash) noexcept = 0;
+         virtual std::unique_ptr<void, void(*)(void*)> get_fn(const sv path, const sv type_hash) noexcept = 0;
 
          std::string error{};
       };
@@ -94,7 +95,7 @@ namespace glz
             return copy;
          }
          else {
-            error = "\n api: glaze::get<" + std::string(glz::name_v<T>) + ">(\"" + std::string(path) + "\") | " + error;
+            error = "\n api: glaze::get_fn<" + std::string(glz::name_v<T>) + ">(\"" + std::string(path) + "\") | " + error;
    #ifdef __cpp_exceptions
             throw std::runtime_error(error);
    #else
