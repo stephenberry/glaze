@@ -85,12 +85,13 @@ namespace glz
       any(T&& v) : value(std::forward<T>(v)) {
          data = std::any_cast<T>(&value);
          
-         static constexpr auto m = meta_v<Spec>;
          static constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
          
-         static constexpr auto frozen_map = detail::make_map<T, false>();
-         
          for_each<N>([&](auto I) {
+            // TODO: move "m" and "frozen_map" out of for_each when MSVC 2019 is fixed or deprecated
+            static constexpr auto m = meta_v<Spec>;
+            static constexpr auto frozen_map = detail::make_map<T, false>();
+            
             static constexpr sv key = tuplet::get<0>(tuplet::get<I>(m));
             static constexpr auto member_it = frozen_map.find(key);
             if constexpr (member_it != frozen_map.end()) {
