@@ -113,5 +113,4 @@ namespace glz
 #define DLL_EXPORT
 #endif
 
-// IMPORTANT: unmanged memory returned
-extern "C" DLL_EXPORT glz::iface* glaze_interface() noexcept;
+extern "C" DLL_EXPORT std::shared_ptr<glz::iface> glaze_interface() noexcept;

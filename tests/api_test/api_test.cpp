@@ -39,19 +39,19 @@ struct glz::meta<my_api>
    static constexpr glz::version_t version{ 0, 0, 1 };
 };
 
-DLL_EXPORT glz::iface* glaze_interface() noexcept
+DLL_EXPORT std::shared_ptr<glz::iface> glaze_interface() noexcept
 {
-   return new glz::iface{
+   return std::shared_ptr<glz::iface>{ new glz::iface{
       {"my_api", glz::make_api<my_api>},
       {"my_api2", glz::make_api<my_api>}
-   };
+   }, [](auto* ptr) { delete ptr; }};
 }
 
 void tests()
 {
    using namespace boost::ut;
    
-   std::unique_ptr<glz::iface> iface{ glaze_interface() };
+   std::shared_ptr<glz::iface> iface{ glaze_interface() };
    auto io = (*iface)["my_api"]();
    auto io2 = (*iface)["my_api2"]();
    
