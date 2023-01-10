@@ -3,192 +3,230 @@
 
 #pragma once
 
-#include <any>
+// originally from: https://codereview.stackexchange.com/questions/219075/implementation-of-stdany
 
-#include "glaze/core/common.hpp"
+#include <concepts>
+#include <memory>
+#include <utility>
+#include <typeinfo>
 
 namespace glz
 {
    template <class T>
-   struct function_signature;
-   
-   template <class ClassType, class T>
-   struct function_signature<T ClassType::*>
-   {
-      using type = T*;
-   };
-   
-   template <class ClassType, class Result, class... Args>
-   struct function_signature<Result(ClassType::*)(Args...)>
-   {
-      using type = Result(*)(void*, Args...);
-   };
+   struct is_in_place_type_t : std::false_type {};
+
+   template <class T>
+   struct is_in_place_type_t<std::in_place_type_t<T>> : std::true_type {};
    
    template <class T>
-   struct std_function_signature;
+   concept is_in_place_type = is_in_place_type_t<T>::value;
    
-   template <class ClassType, class Result, class... Args>
-   struct std_function_signature<Result(ClassType::*)(Args...)>
-   {
-      using type = std::function<Result(Args...)>;
-   };
+   template <class T, class List, class... Args>
+   concept init_list_constructible = std::constructible_from<std::decay_t<T>, std::initializer_list<List>&, Args...>;
    
    template <class T>
-   struct return_type;
-   
-   template <class ClassType, class Result, class... Args>
-   struct return_type<Result(ClassType::*)(Args...)>
-   {
-      using type = Result;
-   };
-   
-   template <class T>
-   struct inputs_as_tuple;
-   
-   template <class ClassType, class Result, class... Args>
-   struct inputs_as_tuple<Result(ClassType::*)(Args...)>
-   {
-      using type = std::tuple<Args...>;
-   };
-   
-   template <class T>
-   struct parent_of_fn;
-   
-   template <class ClassType, class Result, class... Args>
-   struct parent_of_fn<Result(ClassType::*)(Args...)>
-   {
-      using type = ClassType;
-   };
-   
-   template <auto MemPtr, class T>
-   struct arguments;
-   
-   template <auto MemPtr, class ClassType, class T>
-   struct arguments<MemPtr, T ClassType::*>
-   {
-      using type = T*;
-   };
-   
-   template <auto MemPtr, class T, class R, class... Args>
-   struct arguments<MemPtr, R(T::*)(Args...)>
-   {
-      static constexpr decltype(auto) op(void* ptr, Args&&... args) {
-         return (reinterpret_cast<T*>(ptr)->*MemPtr)(std::forward<Args>(args)...);
-      }
-   };
-   
-   template <auto MemPtr>
-   inline constexpr auto get_argument()
-   {
-      using Type = std::decay_t<decltype(MemPtr)>;
-      if constexpr (std::is_member_function_pointer_v<Type>) {
-         return arguments<MemPtr, Type>::op;
-      }
-      else {
-         return typename arguments<MemPtr, Type>::type{};
-      }
-   }
-   
-   template <class Spec>
-   inline constexpr auto fn_tuple() {
-      return map_tuple([](auto& v){
-         using mem_fn_t = std::decay_t<decltype(tuplet::get<1>(v))>;
-         return typename function_signature<mem_fn_t>::type{};
-      }, meta_v<Spec>);
-   }
-   
-   template <class Spec>
-   using fn_variant = typename detail::tuple_variant<decltype(fn_tuple<Spec>())>::type;
-   
-   template <class Spec, size_t... I>
-   inline constexpr auto make_mem_fn_wrapper_map_impl(std::index_sequence<I...>) {
-      constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
-      return frozen::make_unordered_map<frozen::string, fn_variant<Spec>, N>({
-         std::make_pair<frozen::string, fn_variant<Spec>>(tuplet::get<0>(tuplet::get<I>(meta_v<Spec>)), get_argument<tuplet::get<1>(tuplet::get<I>(meta_v<Spec>))>())...
-      });
-   }
-   
-   template <class Spec>
-   inline constexpr auto make_mem_fn_wrapper_map() {
-      constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
-      return make_mem_fn_wrapper_map_impl<Spec>(std::make_index_sequence<N>{});
-   }
-   
-   template <class Spec>
+   concept copy_constructible = std::copy_constructible<std::decay_t<T>>;
+
    struct any
    {
+     constexpr any() noexcept = default;
+      ~any() = default;
+
+     any(const any& other) {
+       if (other.instance) {
+         instance = other.instance->clone();
+       }
+     }
+
+     any(any&& other) noexcept
+       : instance(std::move(other.instance)) {}
+
+     template <class T>
+      requires (!std::same_as<std::decay_t<T>, any> && !is_in_place_type<T> && copy_constructible<T>)
+     any(T&& value) {
+       emplace<std::decay_t<T>>(std::forward<T>(value));
+     }
+
+     template <class T, class... Args>
+      requires (std::constructible_from<std::decay_t<T>, Args...> && copy_constructible<T>)
+     explicit any(std::in_place_type_t<T>, Args&&... args) {
+       emplace<std::decay_t<T>>(std::forward<Args>(args)...);
+     }
+
+     template <class T, class List, class... Args>
+      requires (init_list_constructible<T, List, Args...> && copy_constructible<T>)
+     explicit any(std::in_place_type_t<T>, std::initializer_list<List> list, Args &&... args) {
+       emplace<std::decay_t<T>>(list, std::forward<Args>(args)...);
+     }
+
+     any& operator=(const any &rhs) {
+       any(rhs).swap(*this);
+       return *this;
+     }
+
+     any& operator=(any&& rhs) noexcept {
+       any(std::move(rhs)).swap(*this);
+       return *this;
+     }
+
+     template <class T>
+     requires (!std::is_same_v<std::decay_t<T>, any> && copy_constructible<T>)
+     any& operator=(T&& rhs) {
+       any(std::forward<T>(rhs)).swap(*this);
+       return *this;
+     }
+
+     template <class T, class... Args>
+     requires (std::constructible_from<std::decay_t<T>, Args...> && copy_constructible<T>)
+      std::decay_t<T>& emplace(Args&&... args) {
+         using D = std::decay_t<T>;
+         auto new_inst = std::make_unique<storage_impl<D>>(std::forward<Args>(args)...);
+         D& value = new_inst->value;
+         instance = std::move(new_inst);
+         return value;
+     }
+
+     template <class T, class List, class... Args>
+     requires (init_list_constructible<T, List, Args...> && copy_constructible<T>)
+      std::decay_t<T>& emplace(std::initializer_list<List> list, Args&&... args) {
+         using D = std::decay_t<T>;
+         auto new_inst = std::make_unique<storage_impl<D>>(list, std::forward<Args>(args)...);
+         D& value = new_inst->value;
+         instance = std::move(new_inst);
+         return value;
+     }
+      
+     void reset() noexcept {
+       instance.reset();
+     }
+      
+      void* data() {
+         return instance->data();
+      }
+
+     void swap(any &other) noexcept {
+       std::swap(instance, other.instance);
+     }
+      
+     bool has_value() const noexcept {
+       return static_cast<bool>(instance);
+     }
+
+     const std::type_info &type() const noexcept {
+       return instance ? instance->type() : typeid(void);
+     }
+      
+      friend void swap(any& lhs, any& rhs) {
+         lhs.swap(rhs);
+      }
+
+   private:
       template <class T>
-      any(T&& v) : value(std::forward<T>(v)) {
-         data = std::any_cast<T>(&value);
+      friend const T* any_cast(const any*) noexcept;
+
+      template <class T>
+      friend T* any_cast(any*) noexcept;
+      
+      struct storage_base {
+         virtual ~storage_base() = default;
          
-         static constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
+         virtual const std::type_info &type() const noexcept = 0;
+         virtual std::unique_ptr<storage_base> clone() const = 0;
+         virtual void* data() noexcept = 0;
+     };
+      
+      std::unique_ptr<storage_base> instance;
+      
+      template <class T>
+      struct storage_impl final : storage_base
+      {
+       template <class... Args>
+       storage_impl(Args&&... args) : value(std::forward<Args>(args)...) {}
+
+       const std::type_info& type() const noexcept override {
+         return typeid(T);
+       }
+
+       std::unique_ptr<storage_base> clone() const override {
+         return std::make_unique<storage_impl<T>>(value);
+       }
          
-         for_each<N>([&](auto I) {
-            // TODO: move "m" and "frozen_map" out of for_each when MSVC 2019 is fixed or deprecated
-            static constexpr auto m = meta_v<Spec>;
-            static constexpr auto frozen_map = detail::make_map<T, false>();
-            
-            static constexpr sv key = tuplet::get<0>(tuplet::get<I>(m));
-            static constexpr auto member_it = frozen_map.find(key);
-            if constexpr (member_it != frozen_map.end()) {
-               /*if constexpr (std::holds_alternative<decltype(tuplet::get<1>(tuplet::get<I>(m)))>(member_it->second)) {
-               }
-               else {
-                  throw std::runtime_error("invalid");
-               }*/
-               
-               static constexpr auto member_ptr = std::get<member_it->second.index()>(member_it->second);
-               using X = std::decay_t<decltype(member_ptr)>;
-               if constexpr (std::is_member_object_pointer_v<X>) {
-                  map.at(key) = &((*static_cast<T*>(data)).*member_ptr);
-               }
-               else {
-                  map.at(key) = arguments<member_ptr, X>::op;
-               }
+         void* data() noexcept override {
+            if constexpr (std::is_pointer_v<T>) {
+               return value;
             }
             else {
-               throw std::runtime_error("spec key does not match meta");
-            }
-         });
-      }
-      
-      void* data{};
-      std::any value;
-      static constexpr auto cmap = make_mem_fn_wrapper_map<Spec>();
-      std::decay_t<decltype(cmap)> map = cmap;
-      
-      template <string_literal name, class... Args>
-      decltype(auto) call(Args&&... args) {
-         static constexpr sv key = chars<name>;
-         static constexpr auto member_it = cmap.find(key);
-         
-         if constexpr (member_it != cmap.end()) {
-            auto& value = std::get<member_it->second.index()>(map.at(key));
-            using V = std::decay_t<decltype(value)>;
-            if constexpr (std::is_invocable_v<V, void*, Args...>) {
-               return value(data, std::forward<Args>(args)...);
-            }
-            else {
-               throw std::runtime_error("call: invalid arguments to call");
+               return &value;
             }
          }
-         else {
-            throw std::runtime_error("call: invalid name");
-         }
-      }
-      
-      template <string_literal name>
-      decltype(auto) get() {
-         static constexpr sv key = chars<name>;
-         static constexpr auto member_it = cmap.find(key);
-         
-         if constexpr (member_it != cmap.end()) {
-            auto& value = std::get<member_it->second.index()>(map.at(key));
-            return *value;
-         }
-         else {
-            throw std::runtime_error("call: invalid name");
-         }
-      }
+
+       T value;
+     };
    };
+   
+   class bad_any_cast : public std::bad_cast {
+     const char *what() const noexcept {
+       return "bad any cast";
+     }
+   };
+
+   // C++20
+   template <class T>
+   using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
+
+   template <class T>
+   requires (std::constructible_from<T, const remove_cvref_t<T>&>)
+   T any_cast(const any& a) {
+     using V = remove_cvref_t<T>;
+     if (auto *value = any_cast<V>(&a)) {
+       return static_cast<T>(*value);
+     } else {
+       throw bad_any_cast();
+     }
+   }
+
+   template <class T>
+   requires (std::constructible_from<T, remove_cvref_t<T>&>)
+   T any_cast(any& a) {
+     using V = remove_cvref_t<T>;
+     if (auto *value = any_cast<V>(&a)) {
+       return static_cast<T>(*value);
+     } else {
+       throw bad_any_cast();
+     }
+   }
+
+   template <class T>
+   requires (std::constructible_from<T, remove_cvref_t<T>>)
+   T any_cast(any&& a) {
+     using V = remove_cvref_t<T>;
+     if (auto *value = any_cast<V>(&a)) {
+       return static_cast<T>(std::move(*value));
+     } else {
+       throw bad_any_cast();
+     }
+   }
+
+   template <class T>
+   const T* any_cast(const any* a) noexcept {
+      if (!a) { return nullptr; }
+      auto* storage = dynamic_cast<any::storage_impl<T>*>(a->instance.get());
+      if (!storage) { return nullptr; }
+      return &storage->value;
+   }
+
+   template <class T>
+   T* any_cast(any* a) noexcept {
+      return const_cast<T*>(any_cast<T>(static_cast<const any*>(a)));
+   }
+   
+   template <class T, class... Args>
+   any make_any(Args&&... args) {
+     return any(std::in_place_type<T>, std::forward<Args>(args)...);
+   }
+
+   template <class T, class List, class... Args>
+   any make_any(std::initializer_list<List> list, Args&&... args) {
+     return any(std::in_place_type<T>, list, std::forward<Args>(args)...);
+   }
 }
