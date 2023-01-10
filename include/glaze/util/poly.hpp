@@ -35,10 +35,10 @@ namespace glz
    }
    
    template <class Spec>
-   struct any
+   struct poly
    {
       template <class T>
-      any(T&& v) : value(std::forward<T>(v)) {
+      poly(T&& v) : value(std::forward<T>(v)) {
          data = std::any_cast<T>(&value);
          
          static constexpr auto N = std::tuple_size_v<meta_t<Spec>>;

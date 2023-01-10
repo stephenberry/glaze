@@ -2640,7 +2640,7 @@ suite any_tests = []
 {
    "any"_test = []
    {
-      std::array<glz::any<animal>, 2> a{ dog{}, cat{} };
+      std::array<glz::poly<animal>, 2> a{ dog{}, cat{} };
       
       a[0].call<"eat">();
       a[1].call<"eat">();
