@@ -2636,9 +2636,9 @@ struct glz::meta<animal>
    static constexpr auto value = object("age", &T::age, "eat", &T::eat);
 };
 
-suite any_tests = []
+suite poly_tests = []
 {
-   "any"_test = []
+   "poly"_test = []
    {
       std::array<glz::poly<animal>, 2> a{ dog{}, cat{} };
       
@@ -2646,6 +2646,21 @@ suite any_tests = []
       a[1].call<"eat">();
       
       expect(a[0].get<"age">() == 1);
+   };
+};
+
+suite any_tests = []
+{
+   "any"_test = []
+   {
+      glz::any a = 5.5;
+      
+      expect(glz::any_cast<double>(a) == 5.5);
+      
+      auto* data = a.data();
+      *static_cast<double*>(data) = 6.6;
+      
+      expect(glz::any_cast<double>(a) == 6.6);
    };
 };
 

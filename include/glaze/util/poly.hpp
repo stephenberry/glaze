@@ -6,6 +6,7 @@
 #include <any>
 
 #include "glaze/core/common.hpp"
+#include "glaze/util/any.hpp"
 
 namespace glz
 {
@@ -39,7 +40,6 @@ namespace glz
    {
       template <class T>
       poly(T&& v) : value(std::forward<T>(v)) {
-         data = std::any_cast<T>(&value);
          
          static constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
          
@@ -60,7 +60,7 @@ namespace glz
                static constexpr auto member_ptr = std::get<member_it->second.index()>(member_it->second);
                using X = std::decay_t<decltype(member_ptr)>;
                if constexpr (std::is_member_object_pointer_v<X>) {
-                  map.at(key) = &((*static_cast<T*>(data)).*member_ptr);
+                  map.at(key) = &((*static_cast<T*>(value.data())).*member_ptr);
                }
                else {
                   map.at(key) = arguments<member_ptr, X>::op;
@@ -72,8 +72,7 @@ namespace glz
          });
       }
       
-      void* data{};
-      std::any value;
+      glz::any value;
       static constexpr auto cmap = make_mem_fn_wrapper_map<Spec>();
       std::decay_t<decltype(cmap)> map = cmap;
       
@@ -83,10 +82,10 @@ namespace glz
          static constexpr auto member_it = cmap.find(key);
          
          if constexpr (member_it != cmap.end()) {
-            auto& value = std::get<member_it->second.index()>(map.at(key));
-            using V = std::decay_t<decltype(value)>;
+            auto& v = std::get<member_it->second.index()>(map.at(key));
+            using V = std::decay_t<decltype(v)>;
             if constexpr (std::is_invocable_v<V, void*, Args...>) {
-               return value(data, std::forward<Args>(args)...);
+               return v(value.data(), std::forward<Args>(args)...);
             }
             else {
                throw std::runtime_error("call: invalid arguments to call");
