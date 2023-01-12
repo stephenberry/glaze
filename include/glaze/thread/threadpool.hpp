@@ -65,9 +65,38 @@ namespace glz
       }
 
       template <class F>
+      std::future<std::invoke_result_t<std::decay_t<F>>> emplace_back(F&& func)
+      {
+         using result_type = std::invoke_result_t<std::decay_t<F>>;
+
+         std::lock_guard lock(mtx);
+
+         auto promise = std::make_shared<std::promise<result_type>>();
+
+         queue.emplace(last_index++, [=, f = std::forward<F>(func)](const size_t thread_number) {
+            try {
+               if constexpr (std::is_void<result_type>::value) {
+                  f();
+               }
+               else {
+                  promise->set_value(f());
+               }
+            }
+            catch (...) {
+               promise->set_exception(std::current_exception());
+            }
+         });
+
+         work_cv.notify_one();
+
+         return promise->get_future();
+      }
+      
+      template <class F>
+      requires std::is_invocable_v<std::decay_t<F>, size_t>
       std::future<std::invoke_result_t<std::decay_t<F>, size_t>> emplace_back(F&& func)
       {
-         using result_type = decltype(func(size_t{}));
+         using result_type = std::invoke_result_t<std::decay_t<F>, size_t>;
 
          std::lock_guard lock(mtx);
 

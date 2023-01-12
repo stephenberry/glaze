@@ -1972,6 +1972,45 @@ suite thread_pool = [] {
       
       expect(x == 1000);
    };
+   
+   "thread pool no thread number"_test = [] {
+      glz::pool pool(4);
+      
+      std::atomic<int> x = 0;
+      
+      auto f = [&] {
+         ++x;
+      };
+      
+      for (auto i = 0; i < 1000; ++i) {
+         pool.emplace_back(f);
+      }
+      
+      pool.wait();
+      
+      expect(x == 1000);
+   };
+   
+   "generate_random_numbers"_test = [] {
+      glz::pool pool;
+      
+      auto f = [] {
+         std::mt19937_64 generator{};
+         std::uniform_int_distribution<size_t> dist{ 0, 100 };
+         
+         return dist(generator);
+      };
+      
+      std::vector<std::future<size_t>> numbers;
+      
+      for (auto i = 0; i < 1000; ++i) {
+         numbers.emplace_back(pool.emplace_back(f));
+      }
+      
+      pool.wait();
+      
+      expect(numbers.size() == 1000);
+   };
 };
 
 suite progress_bar_tests = [] {
