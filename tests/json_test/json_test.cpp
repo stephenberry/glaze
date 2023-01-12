@@ -2737,10 +2737,6 @@ suite poly_tests = []
    
    "complex_function"_test = []
    {
-      /*auto f = std::mem_fn(&string_t::string);
-      
-      std::cout << typeid(decltype(f)).name() << '\n';*/
-      
       glz::poly<string_t> p{ complex_function_call_t{} };
       
       expect(p.call<"string">("x", 5) == "x:5");
