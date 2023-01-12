@@ -135,6 +135,11 @@ namespace glz::frozen
      constexpr Value &at(KeyType const &key) {
        return at(key, hash_function(), key_eq());
      }
+      
+      template <class KeyType>
+      constexpr Value &unsafe_at(KeyType const &key) {
+        return unsafe_at_impl(*this, key, hash_function());
+      }
 
      template <class KeyType, class Hasher, class Equal>
      constexpr const_iterator find(KeyType const &key, Hasher const &hash, Equal const &equal) const {
@@ -188,6 +193,11 @@ namespace glz::frozen
           throw std::out_of_range("unknown key");
        }
      }
+      
+      template <class This, class KeyType, class Hasher>
+      static inline constexpr auto& unsafe_at_impl(This&& self, KeyType const &key, Hasher const &hash) {
+        return self.lookup(key, hash).second;
+      }
 
      template <class This, class KeyType, class Hasher, class Equal>
      static inline constexpr auto find_impl(This&& self, KeyType const &key, Hasher const &hash, Equal const &equal) {
