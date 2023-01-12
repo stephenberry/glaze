@@ -3,8 +3,6 @@
 
 #pragma once
 
-#include <any>
-
 #include "glaze/core/common.hpp"
 #include "glaze/util/any.hpp"
 
