@@ -61,10 +61,10 @@ namespace glz
                using X = std::decay_t<decltype(member_ptr)>;
                if constexpr (std::is_member_object_pointer_v<X>) {
                   if constexpr (std::is_pointer_v<T>) {
-                     map[index].ptr = &((*static_cast<T>(anything.data())).*member_ptr);
+                     map[index].ptr = &((*static_cast<T>(raw_ptr)).*member_ptr);
                   }
                   else {
-                     map[index].ptr = &((*static_cast<T*>(anything.data())).*member_ptr);
+                     map[index].ptr = &((*static_cast<T*>(raw_ptr)).*member_ptr);
                   }
                }
                else {
@@ -95,11 +95,11 @@ namespace glz
                return v(raw_ptr, std::forward<Args>(args)...);
             }
             else {
-               throw std::runtime_error("call: invalid arguments to call");
+               static_assert(false_v<decltype(name)>, "call: invalid arguments to call");
             }
          }
          else {
-            throw std::runtime_error("call: invalid name");
+            static_assert(false_v<decltype(name)>, "call: invalid name");
          }
       }
       
@@ -115,7 +115,7 @@ namespace glz
             return *v;
          }
          else {
-            throw std::runtime_error("call: invalid name");
+            static_assert(false_v<decltype(name)>, "call: invalid name");
          }
       }
       
