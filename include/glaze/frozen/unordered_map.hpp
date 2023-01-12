@@ -136,6 +136,7 @@ namespace glz::frozen
        return at(key, hash_function(), key_eq());
      }
       
+      // does not check key equality
       template <class KeyType>
       constexpr Value &unsafe_at(KeyType const &key) {
         return unsafe_at_impl(*this, key, hash_function());
@@ -188,6 +189,7 @@ namespace glz::frozen
         return tables_.lookup(key, hash_function());
       }
       
+      // access value directly based on index
       constexpr auto& unsafe_value_access(const size_t i) {
          return items_[i].second;
       }
