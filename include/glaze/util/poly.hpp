@@ -82,7 +82,8 @@ namespace glz
          static constexpr auto member_it = cmap.find(key);
          
          if constexpr (member_it != cmap.end()) {
-            auto& v = std::get<member_it->second.index()>(map.unsafe_at(key));
+            static constexpr auto index = cmap.table_lookup(key);
+            auto& v = std::get<member_it->second.index()>(map.unsafe_value_access(index));
             using V = std::decay_t<decltype(v)>;
             if constexpr (std::is_invocable_v<V, void*, Args...>) {
                return v(value.data(), std::forward<Args>(args)...);
@@ -102,7 +103,8 @@ namespace glz
          static constexpr auto member_it = cmap.find(key);
          
          if constexpr (member_it != cmap.end()) {
-            auto& value = std::get<member_it->second.index()>(map.at(key));
+            static constexpr auto index = cmap.table_lookup(key);
+            auto& value = std::get<member_it->second.index()>(map.unsafe_value_access(index));
             return *value;
          }
          else {

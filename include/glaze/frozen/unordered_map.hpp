@@ -182,6 +182,15 @@ namespace glz::frozen
      /* observers*/
      constexpr const hasher& hash_function() const { return tables_.hash_; }
      constexpr const key_equal& key_eq() const { return equal_; }
+      
+      template <class KeyType>
+      constexpr size_t table_lookup(KeyType const &key) const {
+        return tables_.lookup(key, hash_function());
+      }
+      
+      constexpr auto& unsafe_value_access(const size_t i) {
+         return items_[i].second;
+      }
 
    private:
      template <class This, class KeyType, class Hasher, class Equal>
