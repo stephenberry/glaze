@@ -50,7 +50,7 @@ namespace glz
          for_each<N>([&](auto I) {
             // TODO: move "m" and "frozen_map" out of for_each when MSVC 2019 is fixed or deprecated
             static constexpr auto m = meta_v<Spec>;
-            static constexpr auto frozen_map = detail::make_map<T, false>();
+            static constexpr auto frozen_map = detail::make_map<std::remove_pointer_t<T>, false>();
             
             static constexpr sv key = tuplet::get<0>(tuplet::get<I>(m));
             static constexpr auto member_it = frozen_map.find(key);
@@ -59,7 +59,12 @@ namespace glz
                static constexpr auto index = cmap.table_lookup(key);
                using X = std::decay_t<decltype(member_ptr)>;
                if constexpr (std::is_member_object_pointer_v<X>) {
-                  map[index].ptr = &((*static_cast<T*>(anything.data())).*member_ptr);
+                  if constexpr (std::is_pointer_v<T>) {
+                     map[index].ptr = &((*static_cast<T>(anything.data())).*member_ptr);
+                  }
+                  else {
+                     map[index].ptr = &((*static_cast<T*>(anything.data())).*member_ptr);
+                  }
                }
                else {
                   map[index].fptr = reinterpret_cast<void(*)()>(arguments<member_ptr, X>::op);
