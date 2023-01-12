@@ -44,6 +44,7 @@ namespace glz
    {
       template <class T>
       poly(T&& v) : anything(std::forward<T>(v)) {
+         raw_ptr = anything.data();
          
          static constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
          
@@ -91,7 +92,7 @@ namespace glz
             auto* v = reinterpret_cast<X>(map[index].fptr);
             using V = std::decay_t<decltype(v)>;
             if constexpr (std::is_invocable_v<V, void*, Args...>) {
-               return v(anything.data(), std::forward<Args>(args)...);
+               return v(raw_ptr, std::forward<Args>(args)...);
             }
             else {
                throw std::runtime_error("call: invalid arguments to call");
@@ -117,5 +118,8 @@ namespace glz
             throw std::runtime_error("call: invalid name");
          }
       }
+      
+   private:
+      void* raw_ptr;
    };
 }
