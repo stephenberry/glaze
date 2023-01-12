@@ -2735,6 +2735,17 @@ suite poly_tests = []
       expect(a[0].get<"age">() == 1);
    };
    
+   "poly pointer"_test = []
+   {
+      dog d{};
+      glz::poly<animal> a{ &d };
+      
+      a.call<"eat">();
+      
+      expect(d.age == 1);
+      expect(&a.get<"age">() == &d.age);
+   };
+   
    "complex_function"_test = []
    {
       glz::poly<string_t> p{ complex_function_call_t{} };
