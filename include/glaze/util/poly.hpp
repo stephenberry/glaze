@@ -35,11 +35,17 @@ namespace glz
       return make_mem_fn_wrapper_map_impl<Spec>(std::make_index_sequence<N>{});
    }
    
+   union void_union
+   {
+      void* ptr;
+      void(*fptr)();
+   };
+   
    template <class Spec>
    struct poly
    {
       template <class T>
-      poly(T&& v) : value(std::forward<T>(v)) {
+      poly(T&& v) : anything(std::forward<T>(v)) {
          
          static constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
          
@@ -58,12 +64,13 @@ namespace glz
                }*/
                
                static constexpr auto member_ptr = std::get<member_it->second.index()>(member_it->second);
+               static constexpr auto index = cmap.table_lookup(key);
                using X = std::decay_t<decltype(member_ptr)>;
                if constexpr (std::is_member_object_pointer_v<X>) {
-                  map.at(key) = &((*static_cast<T*>(value.data())).*member_ptr);
+                  map[index].ptr = &((*static_cast<T*>(anything.data())).*member_ptr);
                }
                else {
-                  map.at(key) = arguments<member_ptr, X>::op;
+                  map[index].fptr = reinterpret_cast<void(*)()>(arguments<member_ptr, X>::op);
                }
             }
             else {
@@ -72,9 +79,10 @@ namespace glz
          });
       }
       
-      glz::any value;
+      glz::any anything;
       static constexpr auto cmap = make_mem_fn_wrapper_map<Spec>();
-      std::decay_t<decltype(cmap)> map = cmap;
+      //std::decay_t<decltype(cmap)> map = cmap;
+      std::array<void_union, cmap.size()> map;
       
       template <string_literal name, class... Args>
       decltype(auto) call(Args&&... args) {
@@ -83,10 +91,12 @@ namespace glz
          
          if constexpr (member_it != cmap.end()) {
             static constexpr auto index = cmap.table_lookup(key);
-            auto& v = std::get<member_it->second.index()>(map.unsafe_value_access(index));
+            //auto& v = std::get<member_it->second.index()>(map.unsafe_value_access(index));
+            using X = std::decay_t<decltype(std::get<member_it->second.index()>(cmap.at(key)))>;
+            auto* v = reinterpret_cast<X>(map[index].fptr);
             using V = std::decay_t<decltype(v)>;
             if constexpr (std::is_invocable_v<V, void*, Args...>) {
-               return v(value.data(), std::forward<Args>(args)...);
+               return v(anything.data(), std::forward<Args>(args)...);
             }
             else {
                throw std::runtime_error("call: invalid arguments to call");
@@ -104,8 +114,9 @@ namespace glz
          
          if constexpr (member_it != cmap.end()) {
             static constexpr auto index = cmap.table_lookup(key);
-            auto& value = std::get<member_it->second.index()>(map.unsafe_value_access(index));
-            return *value;
+            using X = decltype(std::get<member_it->second.index()>(cmap.at(key)));
+            auto* v = reinterpret_cast<X>(map[index].ptr);
+            return *v;
          }
          else {
             throw std::runtime_error("call: invalid name");
