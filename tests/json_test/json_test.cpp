@@ -1908,7 +1908,7 @@ void study_tests()
 {
    "study"_test = [] {
       glz::study::design design;
-      design.params = { { "/x", "linspace", { "0", "1", "10" } } };
+      design.params = { {.ptr = "/x", .distribution = "linspace", .range = { "0", "1", "10" } } };
       
       glz::study::full_factorial generator{ study_obj{}, design };
       
@@ -1953,6 +1953,26 @@ void study_tests()
       expect(results == results2);
    };
 }
+
+suite thread_pool = [] {
+   "thread pool"_test = [] {
+      glz::pool pool(2);
+      
+      std::atomic<int> x = 0;
+      
+      auto f = [&](auto thread_number) {
+         ++x;
+      };
+      
+      for (auto i = 0; i < 1000; ++i) {
+         pool.emplace_back(f);
+      }
+      
+      pool.wait();
+      
+      expect(x == 1000);
+   };
+};
 
 suite progress_bar_tests = [] {
 
@@ -2661,17 +2681,14 @@ suite any_tests = []
       *static_cast<double*>(data) = 6.6;
       
       expect(glz::any_cast<double>(a) == 6.6);
+      expect(throws([&]{ glz::any_cast<int>(a); }));
    };
 };
 
 int main()
 {
    using namespace boost::ut;
-   // TODO:
-   // *Valid but with combinations of comments and whitespace to validate that code is working correctly.
-   // *More complex string and json pointer tests.
-   // *Test other buffer types.
-
+   
    basic_types();
    container_types();
    nullable_types();

@@ -205,7 +205,8 @@ namespace glz
          g.generate();
          g.done();
       };
-
+      
+      // Takes a state generator and a function on which to invoke the state
       void run_study(generator auto& g, auto&& f)
       {
          glz::pool pool{};
@@ -444,5 +445,5 @@ namespace glz
             }
          }
       };
-   }  // namespace study
-}  // namespace glaze
+   }
+}
