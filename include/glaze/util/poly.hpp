@@ -56,10 +56,19 @@ namespace glz
             static constexpr sv key = tuplet::get<0>(tuplet::get<I>(m));
             static constexpr auto member_it = frozen_map.find(key);
             if constexpr (member_it != frozen_map.end()) {
-               static constexpr auto member_ptr = std::get<member_it->second.index()>(member_it->second);
                static constexpr auto index = cmap.table_lookup(key);
+               static constexpr auto member_ptr = std::get<member_it->second.index()>(member_it->second);
+               
+               using SpecElement = std::decay_t<decltype(tuplet::get<1>(tuplet::get<I>(m)))>;
+               
                using X = std::decay_t<decltype(member_ptr)>;
                if constexpr (std::is_member_object_pointer_v<X>) {
+                  using SpecMember = typename member_value<SpecElement>::type;
+                  using XMember = typename member_value<X>::type;
+                  if constexpr (!std::same_as<SpecMember, XMember>) {
+                     static_assert(false_v<SpecMember, XMember>, "spec and type do not match for member object");
+                  }
+                  
                   if constexpr (std::is_pointer_v<T>) {
                      map[index].ptr = &((*static_cast<T>(raw_ptr)).*member_ptr);
                   }
@@ -68,11 +77,19 @@ namespace glz
                   }
                }
                else {
+                  using SpecF = typename std_function_signature<SpecElement>::type;
+                  using F = typename std_function_signature<std::decay_t<decltype(member_ptr)>>::type;
+                  
+                  if constexpr (!std::same_as<SpecF, F>) {
+                     static_assert(false_v<SpecF, F>, "spec and type function signatures do not match");
+                  }
+                  
                   map[index].fptr = reinterpret_cast<void(*)()>(arguments<member_ptr, X>::op);
                }
             }
             else {
                throw std::runtime_error("spec key does not match meta");
+               //static_assert(false_v<T>, "spec key does not match meta");
             }
          });
       }

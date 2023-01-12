@@ -5,14 +5,14 @@
 
 namespace glz
 {
-   template<class T> struct false_t : std::false_type {};
+   template <class... Args> struct false_t : std::false_type {};
    namespace detail {
        struct aggressive_unicorn_type; // Do not unleash
    }
    template<> struct false_t<detail::aggressive_unicorn_type> : std::true_type {};
    
-   template <class T>
-   inline constexpr bool false_v = false_t<T>::value;
+   template <class... Args>
+   inline constexpr bool false_v = false_t<Args...>::value;
    
    // from
    // https://stackoverflow.com/questions/16337610/how-to-know-if-a-type-is-a-specialization-of-stdvector
@@ -21,6 +21,15 @@ namespace glz
    
    template <template<class...> class T, class... Args>
    inline constexpr bool is_specialization_v<T<Args...>, T> = true;
+   
+   template <class T>
+   struct member_value;
+   
+   template <class ClassType, class T>
+   struct member_value<T ClassType::*>
+   {
+      using type = T;
+   };
    
    // Member object and function pointer type traits
    template <class T>

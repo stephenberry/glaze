@@ -2682,6 +2682,14 @@ struct glz::meta<cat>
    static constexpr auto value = object("age", &T::age, "eat", &T::eat, "purr", &T::purr);
 };
 
+struct person {
+   void eat(const std::string& thing) {};
+};
+
+template <> struct glz::meta<person> {
+   static constexpr auto value = object("eat", &person::eat);
+};
+
 struct animal
 {
    int age{};
@@ -2711,7 +2719,7 @@ struct glz::meta<complex_function_call_t>
 
 struct string_t
 {
-   std::string string(const std::string_view& s, const int y) {
+   std::string string(const std::string_view s, const int y) {
       return "";
    }
 };
@@ -2733,6 +2741,12 @@ suite poly_tests = []
       a[1].call<"eat">();
       
       expect(a[0].get<"age">() == 1);
+   };
+   
+   "poly person"_test = []
+   {
+      //std::array<glz::poly<animal>, 2> a{ dog{}, person{} };
+      // This should static_assert
    };
    
    "poly pointer"_test = []
