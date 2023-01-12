@@ -771,7 +771,7 @@ for (auto i = 0; i < 1000; ++i) {
 
 See the `ext` directory for extensions.
 
-- [Eigen](https://gitlab.com/libeigen/eigen). Supports fixed size matrices and vectors.
+- [Eigen](https://gitlab.com/libeigen/eigen). Supports reading and writing from Eigen Vector types.
 
 # License
 
