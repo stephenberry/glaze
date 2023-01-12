@@ -57,12 +57,6 @@ namespace glz
             static constexpr sv key = tuplet::get<0>(tuplet::get<I>(m));
             static constexpr auto member_it = frozen_map.find(key);
             if constexpr (member_it != frozen_map.end()) {
-               /*if constexpr (std::holds_alternative<decltype(tuplet::get<1>(tuplet::get<I>(m)))>(member_it->second)) {
-               }
-               else {
-                  throw std::runtime_error("invalid");
-               }*/
-               
                static constexpr auto member_ptr = std::get<member_it->second.index()>(member_it->second);
                static constexpr auto index = cmap.table_lookup(key);
                using X = std::decay_t<decltype(member_ptr)>;
@@ -81,7 +75,6 @@ namespace glz
       
       glz::any anything;
       static constexpr auto cmap = make_mem_fn_wrapper_map<Spec>();
-      //std::decay_t<decltype(cmap)> map = cmap;
       std::array<void_union, cmap.size()> map;
       
       template <string_literal name, class... Args>
@@ -91,7 +84,6 @@ namespace glz
          
          if constexpr (member_it != cmap.end()) {
             static constexpr auto index = cmap.table_lookup(key);
-            //auto& v = std::get<member_it->second.index()>(map.unsafe_value_access(index));
             using X = std::decay_t<decltype(std::get<member_it->second.index()>(cmap.at(key)))>;
             auto* v = reinterpret_cast<X>(map[index].fptr);
             using V = std::decay_t<decltype(v)>;
