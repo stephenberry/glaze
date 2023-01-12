@@ -44,6 +44,7 @@ namespace glz
    {
       template <class T>
       poly(T&& v) : anything(std::forward<T>(v)) {
+         raw_ptr = anything.data();
          
          static constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
          
@@ -60,10 +61,10 @@ namespace glz
                using X = std::decay_t<decltype(member_ptr)>;
                if constexpr (std::is_member_object_pointer_v<X>) {
                   if constexpr (std::is_pointer_v<T>) {
-                     map[index].ptr = &((*static_cast<T>(anything.data())).*member_ptr);
+                     map[index].ptr = &((*static_cast<T>(raw_ptr)).*member_ptr);
                   }
                   else {
-                     map[index].ptr = &((*static_cast<T*>(anything.data())).*member_ptr);
+                     map[index].ptr = &((*static_cast<T*>(raw_ptr)).*member_ptr);
                   }
                }
                else {
@@ -91,14 +92,14 @@ namespace glz
             auto* v = reinterpret_cast<X>(map[index].fptr);
             using V = std::decay_t<decltype(v)>;
             if constexpr (std::is_invocable_v<V, void*, Args...>) {
-               return v(anything.data(), std::forward<Args>(args)...);
+               return v(raw_ptr, std::forward<Args>(args)...);
             }
             else {
-               throw std::runtime_error("call: invalid arguments to call");
+               static_assert(false_v<decltype(name)>, "call: invalid arguments to call");
             }
          }
          else {
-            throw std::runtime_error("call: invalid name");
+            static_assert(false_v<decltype(name)>, "call: invalid name");
          }
       }
       
@@ -114,8 +115,11 @@ namespace glz
             return *v;
          }
          else {
-            throw std::runtime_error("call: invalid name");
+            static_assert(false_v<decltype(name)>, "call: invalid name");
          }
       }
+      
+   private:
+      void* raw_ptr;
    };
 }
