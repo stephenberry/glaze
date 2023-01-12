@@ -35,7 +35,7 @@ namespace glz
    template <class ClassType, class Result, class... Args>
    struct function_signature<Result(ClassType::*)(Args...)>
    {
-      using type = Result(*)(void*, Args...);
+      using type = Result(*)(void*, std::decay_t<Args>&&...);
    };
    
    template <class T>
@@ -86,7 +86,7 @@ namespace glz
    template <auto MemPtr, class T, class R, class... Args>
    struct arguments<MemPtr, R(T::*)(Args...)>
    {
-      static constexpr decltype(auto) op(void* ptr, Args&&... args) {
+      static constexpr decltype(auto) op(void* ptr, std::decay_t<Args>&&... args) {
          return (reinterpret_cast<T*>(ptr)->*MemPtr)(std::forward<Args>(args)...);
       }
    };

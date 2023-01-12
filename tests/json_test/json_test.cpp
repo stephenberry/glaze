@@ -2695,6 +2695,34 @@ struct glz::meta<animal>
    static constexpr auto value = object("age", &T::age, "eat", &T::eat);
 };
 
+struct complex_function_call_t
+{
+   std::string string(const std::string_view s, const int y) {
+      return std::string(s) + ":" + std::to_string(y);
+   }
+};
+
+template <>
+struct glz::meta<complex_function_call_t>
+{
+   using T = complex_function_call_t;
+   static constexpr auto value = object("string", &T::string);
+};
+
+struct string_t
+{
+   std::string string(const std::string_view& s, const int y) {
+      return "";
+   }
+};
+
+template <>
+struct glz::meta<string_t>
+{
+   using T = string_t;
+   static constexpr auto value = object("string", &T::string);
+};
+
 suite poly_tests = []
 {
    "poly"_test = []
@@ -2705,6 +2733,17 @@ suite poly_tests = []
       a[1].call<"eat">();
       
       expect(a[0].get<"age">() == 1);
+   };
+   
+   "complex_function"_test = []
+   {
+      /*auto f = std::mem_fn(&string_t::string);
+      
+      std::cout << typeid(decltype(f)).name() << '\n';*/
+      
+      glz::poly<string_t> p{ complex_function_call_t{} };
+      
+      expect(p.call<"string">("x", 5) == "x:5");
    };
 };
 
