@@ -745,7 +745,7 @@ pool.wait(); // wait until all jobs are completed
 expect(x == 1000);
 ```
 
-The thread pool holds a queue of jobs, which is executes in parallel up to the number of threads designated by the pool's constructor.  If the number of threads is not specified then it uses all threads available.
+The thread pool holds a queue of jobs, which are executed in parallel up to the number of threads designated by the pool's constructor.  If the number of threads is not specified then it uses all threads available.
 
 The example below shows how results can be returned from a worker function and stored with `std::future`.
 
