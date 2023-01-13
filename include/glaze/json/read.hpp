@@ -768,7 +768,7 @@ namespace glz
                   
                   static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
                   const auto& member_it = frozen_map.find(key);
-                  if (member_it != frozen_map.end()) {
+                  if (member_it != frozen_map.end()) [[likely]] {
                      std::visit(
                         [&](auto&& member_ptr) {
                            read<json>::op<Opts>(get_member(value, member_ptr), ctx, it, end);

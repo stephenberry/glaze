@@ -516,6 +516,12 @@ namespace glz
          static constexpr auto runtime_getter = tuple_runtime_getter<T>(indices);
          return runtime_getter[index](t);
       }
+      
+      template <class T, size_t I>
+      struct meta_sv
+      {
+         static constexpr sv value = glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>));
+      };
 
       template <class T, bool allow_hash_check, size_t... I>
       constexpr auto make_map_impl(std::index_sequence<I...>)
@@ -542,12 +548,19 @@ namespace glz
          };
          
          // these variables needed for MSVC
-         constexpr bool n_3 = n < 3;
          constexpr bool n_128 = n < 128;
-         if constexpr (n_3) {
-            return make_micro_map<value_t, n>({std::make_pair<sv, value_t>(
-                                                                           sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                                                           glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
+         if constexpr (n == 0) {
+            static_assert(false_v<T>, "empty object in glz::meta");
+         }
+         else if constexpr (n == 1) {
+            return micro_map1<value_t, meta_sv<T, I>::value...>{ std::make_pair<sv, value_t>(
+                                                                                             sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                                                                             glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))... };
+         }
+         else if constexpr (n == 2) {
+            return micro_map2<value_t, meta_sv<T, I>::value...>{ std::make_pair<sv, value_t>(
+                                                                                             sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                                                                             glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))... };
          }
          else if constexpr (n_128) // don't even attempt a first character hash if we have too many keys
          {
