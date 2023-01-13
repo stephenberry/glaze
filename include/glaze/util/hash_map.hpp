@@ -188,17 +188,18 @@ namespace glz
          return ht;
       }
       
-      struct first_char_hash_desc
+      struct single_char_hash_desc
       {
          size_t N{};
          bool valid{};
          uint8_t min_diff{};
          uint8_t front{};
          uint8_t back{};
+         bool is_front_hash = true;
       };
 
-      template <size_t N>
-      inline constexpr first_char_hash_desc first_char_hash(const std::array<std::string_view, N>& v) noexcept
+      template <size_t N, bool IsFrontHash = true>
+      inline constexpr single_char_hash_desc single_char_hash(const std::array<std::string_view, N>& v) noexcept
       {
          if (N > 255) {
             return {};
@@ -209,7 +210,12 @@ namespace glz
             if (v[i].size() == 0) {
                return {};
             }
-            hashes[i] = static_cast<uint8_t>(v[i][0]);
+            if constexpr (IsFrontHash) {
+               hashes[i] = static_cast<uint8_t>(v[i][0]);
+            }
+            else {
+               hashes[i] = static_cast<uint8_t>(v[i].back());
+            }
          }
          
          std::sort(hashes.begin(), hashes.end());
@@ -221,11 +227,11 @@ namespace glz
             }
          }
          
-         return first_char_hash_desc{ N, min_diff > 0, min_diff, hashes.front(), hashes.back() };
+         return single_char_hash_desc{ N, .valid = min_diff > 0, min_diff, hashes.front(), hashes.back(), IsFrontHash };
       }
 
-      template <class T, first_char_hash_desc D>
-      struct first_char_map
+      template <class T, single_char_hash_desc D>
+      struct single_char_map
       {
          static constexpr auto N = D.N;
          static_assert(N < 256);
@@ -241,15 +247,29 @@ namespace glz
             if (key.size() == 0) [[unlikely]] {
                throw std::runtime_error("Invalid key");
             }
-            const auto k = static_cast<uint8_t>(key[0]) - D.front;
-            if (k > N_table) [[unlikely]] {
-               throw std::runtime_error("Invalid key");
+            
+            if constexpr (D.is_front_hash) {
+               const auto k = static_cast<uint8_t>(key[0]) - D.front;
+               if (k > N_table) [[unlikely]] {
+                  throw std::runtime_error("Invalid key");
+               }
+               const auto index = table[k];
+               const auto& item = items[index];
+               if (!string_cmp(item.first, key)) [[unlikely]]
+                  throw std::runtime_error("Invalid key");
+               return item.second;
             }
-            const auto index = table[k];
-            const auto& item = items[index];
-            if (!string_cmp(item.first, key)) [[unlikely]]
-               throw std::runtime_error("Invalid key");
-            return item.second;
+            else {
+               const auto k = static_cast<uint8_t>(key.back()) - D.front;
+               if (k > N_table) [[unlikely]] {
+                  throw std::runtime_error("Invalid key");
+               }
+               const auto index = table[k];
+               const auto& item = items[index];
+               if (!string_cmp(item.first, key)) [[unlikely]]
+                  throw std::runtime_error("Invalid key");
+               return item.second;
+            }
          }
          
          constexpr decltype(auto) find(auto&& key) const
@@ -257,30 +277,49 @@ namespace glz
             if (key.size() == 0) [[unlikely]] {
                return items.end();
             }
-            const auto k = static_cast<uint8_t>(key[0]) - D.front;
-            if (k > N_table) [[unlikely]] {
-               return items.end();
+            
+            if constexpr (D.is_front_hash) {
+               const auto k = static_cast<uint8_t>(key[0]) - D.front;
+               if (k > N_table) [[unlikely]] {
+                  return items.end();
+               }
+               const auto index = table[k];
+               const auto& item = items[index];
+               if (!string_cmp(item.first, key)) [[unlikely]]
+                  return items.end();
+               return items.begin() + index;
             }
-            const auto index = table[k];
-            const auto& item = items[index];
-            if (!string_cmp(item.first, key)) [[unlikely]]
-               return items.end();
-            return items.begin() + index;
+            else {
+               const auto k = static_cast<uint8_t>(key.back()) - D.front;
+               if (k > N_table) [[unlikely]] {
+                  return items.end();
+               }
+               const auto index = table[k];
+               const auto& item = items[index];
+               if (!string_cmp(item.first, key)) [[unlikely]]
+                  return items.end();
+               return items.begin() + index;
+            }
          }
       };
 
-      template <class T, first_char_hash_desc D>
-      constexpr auto make_first_char_map(std::initializer_list<std::pair<std::string_view, T>> pairs)
+      template <class T, single_char_hash_desc D>
+      constexpr auto make_single_char_map(std::initializer_list<std::pair<std::string_view, T>> pairs)
       {
          constexpr auto N = D.N;
          static_assert(N < 256);
          assert(pairs.size() == N);
-         first_char_map<T, D> ht{};
+         single_char_map<T, D> ht{};
          
          uint8_t i = 0;
          for (const auto& pair : pairs) {
             ht.items[i] = pair;
-            ht.table[static_cast<uint8_t>(pair.first[0]) - D.front] = i;
+            if constexpr (D.is_front_hash) {
+               ht.table[static_cast<uint8_t>(pair.first[0]) - D.front] = i;
+            }
+            else {
+               ht.table[static_cast<uint8_t>(pair.first.back()) - D.front] = i;
+            }
             ++i;
          }
          

@@ -564,16 +564,26 @@ namespace glz
          }
          else if constexpr (n_128) // don't even attempt a first character hash if we have too many keys
          {
-            constexpr auto f1_desc = first_char_hash<n>(std::array<sv, n>{sv{glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))}...});
+            constexpr auto front_desc = single_char_hash<n>(std::array<sv, n>{sv{glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))}...});
             
-            if constexpr (f1_desc.valid) {
-               return make_first_char_map<value_t, f1_desc>(
+            if constexpr (front_desc.valid) {
+               return make_single_char_map<value_t, front_desc>(
                                                             {std::make_pair<sv, value_t>(
                                                                                          sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
                                                                                          glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
             }
             else {
-               return naive_or_normal_hash();
+               constexpr auto back_desc = single_char_hash<n, false>(std::array<sv, n>{sv{glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))}...});
+               
+               if constexpr (back_desc.valid) {
+                  return make_single_char_map<value_t, back_desc>(
+                                                               {std::make_pair<sv, value_t>(
+                                                                                            sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                                                                            glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
+               }
+               else {
+                  return naive_or_normal_hash();
+               }
             }
          }
          else {
