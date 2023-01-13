@@ -169,7 +169,7 @@ find_package(glaze REQUIRED)
 target_link_libraries(main PRIVATE glaze::glaze)
 ```
 
-## See [Wiki](https://github.com/stephenberry/glaze/wiki) for [Frequently Asked Questions](https://github.com/stephenberry/glaze/wiki)
+## See [Wiki](https://github.com/stephenberry/glaze/wiki) for Frequently Asked Questions
 
 ## Local Glaze Meta
 
