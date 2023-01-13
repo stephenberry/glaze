@@ -629,18 +629,29 @@ struct api {
   template <class T>
     [[nodiscard]] T* get_if(const sv path) noexcept;
 
+  // Get a std::function from a member function across the API
+  template <class T>
+    [[nodiscard]] T get_fn(const sv path);
+
+  template <class Ret, class... Args>
+  [[nodiscard]] Ret call(const sv path, Args&&... args);
+
   virtual bool read(const uint32_t /*format*/, const sv /*path*/,
                     const sv /*data*/) noexcept = 0;
 
   virtual bool write(const uint32_t /*format*/, const sv /*path*/, std::string& /*data*/) = 0;
 
-  virtual const sv last_error() const noexcept {
+  [[nodiscard]] virtual const sv last_error() const noexcept {
     return error;
   }
 
   protected:
   /// unchecked void* access
   virtual void* get(const sv path, const sv type_hash) noexcept = 0;
+
+  virtual bool caller(const sv path, const sv type_hash, void* ret, std::span<void*> args) noexcept = 0;
+
+  virtual std::unique_ptr<void, void(*)(void*)> get_fn(const sv path, const sv type_hash) noexcept = 0;
 
   std::string error{};
 };
