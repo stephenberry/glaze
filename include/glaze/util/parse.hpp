@@ -8,16 +8,28 @@
 
 namespace glz::detail
 {
-   template <char c>
+   template <char c, bool is_null_terminated = false>
    inline void match(auto&& it, auto&& end)
    {
-      if (it == end || *it != c) [[unlikely]] {
-         static constexpr char b[] = {c, '\0'};
-         static constexpr auto error = concat_arrays("Expected:", b);
-         throw std::runtime_error(error.data());
+      if constexpr (is_null_terminated) {
+         if (*it != c) [[unlikely]] {
+            static constexpr char b[] = {c, '\0'};
+            static constexpr auto error = concat_arrays("Expected:", b);
+            throw std::runtime_error(error.data());
+         }
+         else [[likely]] {
+            ++it;
+         }
       }
-      else [[likely]] {
-         ++it;
+      else {
+         if (it == end || *it != c) [[unlikely]] {
+            static constexpr char b[] = {c, '\0'};
+            static constexpr auto error = concat_arrays("Expected:", b);
+            throw std::runtime_error(error.data());
+         }
+         else [[likely]] {
+            ++it;
+         }
       }
    }
 
