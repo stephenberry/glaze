@@ -767,19 +767,22 @@ namespace glz
                   match<':'>(it, end);
                   
                   static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
-                  const auto& member_it = frozen_map.find(key);
-                  if (member_it != frozen_map.end()) {
+                  if constexpr (Opts.error_on_unknown_keys) {
                      std::visit(
                         [&](auto&& member_ptr) {
                            read<json>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
-                        },
-                        member_it->second);
+                        }, frozen_map.at(key));
                   }
-                  else [[unlikely]] {
-                     if constexpr (Opts.error_on_unknown_keys) {
-                        throw std::runtime_error("Unknown key: " + std::string(key));
+                  else {
+                     const auto& member_it = frozen_map.find(key);
+                     if (member_it != frozen_map.end()) [[likely]] {
+                        std::visit(
+                           [&](auto&& member_ptr) {
+                              read<json>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
+                           },
+                           member_it->second);
                      }
-                     else {
+                     else [[unlikely]] {
                         skip_object_value(it, end);
                      }
                   }

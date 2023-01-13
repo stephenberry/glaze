@@ -13,18 +13,20 @@ namespace glz
       //  * Alignment or page boundary checks should probably be done before calling this function
       //  * Garbage bits should be handled by caller. Ignore them shift them its up to you.
       // https://stackoverflow.com/questions/37800739/is-it-safe-to-read-past-the-end-of-a-buffer-within-the-same-page-on-x86-and-x64
-      uint64_t res{};
       if (std::is_constant_evaluated()) {
+         uint64_t res{};
          assert(n <= 8);
          for (size_t i = 0; i < n; ++i) {
             res |= static_cast<uint64_t>(bytes[i]) << (8 * i);
          }
+         return res;
       }
       else {
          // Note: memcpy is way faster with compiletime known length
+         uint64_t res; // no need to default initialize
          std::memcpy(&res, bytes, 8);
+         return res;
       }
-      return res;
    }
 
    // Note: This relies on undefined behavior but should generally be ok
@@ -66,4 +68,12 @@ namespace glz
       const uint64_t nm8 = n - 8;
       return (to_uint64(s0.data() + nm8) == to_uint64(s1.data() + nm8));
    }
+   
+   struct string_cmp_equal_to final
+   {
+      template <class T0, class T1>
+      constexpr bool operator()(T0&& lhs, T1&& rhs) const noexcept {
+         return string_cmp(std::forward<T0>(lhs), std::forward<T1>(rhs));
+      }
+   };
 }

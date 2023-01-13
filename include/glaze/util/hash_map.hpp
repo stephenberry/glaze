@@ -109,7 +109,7 @@ namespace glz
          return std::numeric_limits<HashType>::max();
       }
 
-      inline bool sv_neq(const std::string_view s0, const std::string_view s1) noexcept { return s0 != s1; }
+      inline bool sv_neq(const sv s0, const sv s1) noexcept { return s0 != s1; }
 
       template <class Value, std::size_t N, class HashType, bool allow_hash_check = false>
       struct naive_map
@@ -117,7 +117,7 @@ namespace glz
          static_assert(N <= 20);
          static constexpr size_t m = naive_bucket_size<N>();
          HashType seed{};
-         std::array<std::pair<std::string_view, Value>, N> items{};
+         std::array<std::pair<sv, Value>, N> items{};
          std::array<HashType, N * allow_hash_check> hashes{};
          std::array<uint8_t, m> table{};
 
@@ -127,21 +127,15 @@ namespace glz
          constexpr decltype(auto) at(auto &&key) const
          {
             const auto hash = xsm1<HashType>{}(key, seed);
-            const auto index = table[hash % m];
+            const auto index = table[hash % m]; // modulus should be fast because m is known compile time
             const auto& item = items[index];
             if constexpr (allow_hash_check) {
                if (hashes[index] != hash) [[unlikely]]
                   throw std::runtime_error("Invalid key");
             }
             else {
-               if (std::is_constant_evaluated()) {
-                  if (item.first != key) [[unlikely]]
-                     throw std::runtime_error("Invalid key");
-               }
-               else {
-                  if (!string_cmp(item.first, key)) [[unlikely]]
-                     throw std::runtime_error("Invalid key");
-               }
+               if (!string_cmp(item.first, key)) [[unlikely]]
+                  throw std::runtime_error("Invalid key");
             }
             return item.second;
          }
@@ -164,7 +158,7 @@ namespace glz
       };
 
       template <class T, size_t N, class HashType, bool allow_hash_check = false>
-      constexpr auto make_naive_map(std::initializer_list<std::pair<std::string_view, T>> pairs)
+      constexpr auto make_naive_map(std::initializer_list<std::pair<sv, T>> pairs)
       {
          static_assert(N <= 20);
          assert(pairs.size() == N);
@@ -179,7 +173,9 @@ namespace glz
             ++i;
          }
          ht.seed = naive_perfect_hash<N, HashType>(keys);
-         if (ht.seed == std::numeric_limits<HashType>::max()) throw std::runtime_error("Unable to find perfect hash.");
+         if (ht.seed == std::numeric_limits<HashType>::max()) {
+            throw std::runtime_error("Unable to find perfect hash.");
+         }
 
          for (size_t i = 0; i < N; ++i) {
             const auto hash = xsm1<HashType>{}(keys[i], ht.seed);
@@ -242,11 +238,11 @@ namespace glz
          
          constexpr decltype(auto) at(auto&& key) const
          {
-            if (key.size() == 0) {
+            if (key.size() == 0) [[unlikely]] {
                throw std::runtime_error("Invalid key");
             }
             const auto k = static_cast<uint8_t>(key[0]) - D.front;
-            if (k > N_table) {
+            if (k > N_table) [[unlikely]] {
                throw std::runtime_error("Invalid key");
             }
             const auto index = table[k];
@@ -258,11 +254,11 @@ namespace glz
          
          constexpr decltype(auto) find(auto&& key) const
          {
-            if (key.size() == 0) {
+            if (key.size() == 0) [[unlikely]] {
                return items.end();
             }
             const auto k = static_cast<uint8_t>(key[0]) - D.front;
-            if (k > N_table) {
+            if (k > N_table) [[unlikely]] {
                return items.end();
             }
             const auto index = table[k];
@@ -291,86 +287,85 @@ namespace glz
          return ht;
       }
       
-      template <class T, size_t N>
-      struct micro_map {};
+      template <const sv& S>
+      inline constexpr bool cx_string_cmp(const sv key) noexcept {
+         constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
+         constexpr auto n = s.size();
+         if (std::is_constant_evaluated()) {
+            return key == s;
+         }
+         else {
+            return (key.size() == n) && (std::memcmp(key.data(), s.data(), n) == 0);
+         }
+      }
       
-      template <class T>
-      struct micro_map<T, 1>
+      template <class T, const sv& S>
+      struct micro_map1
       {
-         std::array<std::pair<std::string_view, T>, 1> items{};
+         std::array<std::pair<sv, T>, 1> items{};
+         
+         static constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
          
          constexpr decltype(auto) begin() const { return items.begin(); }
          constexpr decltype(auto) end() const { return items.end(); }
          
          constexpr decltype(auto) at(auto&& key) const
          {
-            if (string_cmp(items[0].first, key)) {
+            if (cx_string_cmp<s>(key)) [[likely]] {
                return items[0].second;
             }
-            else {
+            else [[unlikely]] {
                throw std::runtime_error("Invalid key");
             }
          }
          
          constexpr decltype(auto) find(auto&& key) const
          {
-            if (string_cmp(items[0].first, key)) {
+            if (cx_string_cmp<s>(key)) [[likely]] {
                return items.begin();
             }
-            else {
+            else [[unlikely]] {
                return items.end();
             }
          }
       };
       
-      template <class T>
-      struct micro_map<T, 2>
+      template <class T, const sv& S0, const sv& S1>
+      struct micro_map2
       {
-         std::array<std::pair<std::string_view, T>, 2> items{};
+         std::array<std::pair<sv, T>, 2> items{};
+         
+         static constexpr auto s0 = S0; // Needed for MSVC to avoid an internal compiler error
+         static constexpr auto s1 = S1; // Needed for MSVC to avoid an internal compiler error
          
          constexpr decltype(auto) begin() const { return items.begin(); }
          constexpr decltype(auto) end() const { return items.end(); }
          
          constexpr decltype(auto) at(auto&& key) const
          {
-            if (string_cmp(items[0].first, key)) {
+            if (cx_string_cmp<s0>(key)) {
                return items[0].second;
             }
-            else if (string_cmp(items[1].first, key)) {
+            else if (cx_string_cmp<s1>(key)) {
                return items[1].second;
             }
-            else {
+            else [[unlikely]] {
                throw std::runtime_error("Invalid key");
             }
          }
          
          constexpr decltype(auto) find(auto&& key) const
          {
-            if (string_cmp(items[0].first, key)) {
+            if (cx_string_cmp<s0>(key)) {
                return items.begin();
             }
-            else if (string_cmp(items[1].first, key)) {
+            else if (cx_string_cmp<s1>(key)) {
                return items.begin() + 1;
             }
-            else {
+            else [[unlikely]] {
                return items.end();
             }
          }
       };
-      
-      template <class T, size_t N>
-      constexpr auto make_micro_map(std::initializer_list<std::pair<std::string_view, T>> pairs)
-      {
-         assert(pairs.size() == N);
-         micro_map<T, N> ht{};
-         
-         size_t i = 0;
-         for (const auto& pair : pairs) {
-            ht.items[i] = pair;
-            ++i;
-         }
-         
-         return ht;
-      }
    }
 }
