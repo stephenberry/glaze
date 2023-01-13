@@ -68,4 +68,12 @@ namespace glz
       const uint64_t nm8 = n - 8;
       return (to_uint64(s0.data() + nm8) == to_uint64(s1.data() + nm8));
    }
+   
+   struct string_cmp_equal_to final
+   {
+      template <class T0, class T1>
+      constexpr bool operator()(T0&& lhs, T1&& rhs) const noexcept {
+         return string_cmp(std::forward<T0>(lhs), std::forward<T1>(rhs));
+      }
+   };
 }

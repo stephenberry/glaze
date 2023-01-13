@@ -540,7 +540,7 @@ namespace glz
                                                glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
             }
             else {
-               return frozen::make_unordered_map<frozen::string, value_t, n>(
+               return frozen::make_unordered_map<frozen::string, value_t, n, frozen::anna<frozen::string>, string_cmp_equal_to>(
                   {std::make_pair<frozen::string, value_t>(
                      frozen::string(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
                                                            glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
