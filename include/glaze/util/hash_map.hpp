@@ -227,7 +227,7 @@ namespace glz
             }
          }
          
-         return single_char_hash_desc{ N, .valid = min_diff > 0, min_diff, hashes.front(), hashes.back(), IsFrontHash };
+         return single_char_hash_desc{ N, min_diff > 0, min_diff, hashes.front(), hashes.back(), IsFrontHash };
       }
 
       template <class T, single_char_hash_desc D>
