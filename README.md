@@ -657,6 +657,55 @@ struct api {
 };
 ```
 
+## Member Functions
+
+Member functions can be registered with the metadata, which allows the function to be called across the API.
+
+```c++
+struct my_api {
+  int func() { return 5; };
+};
+
+template <>
+struct glz::meta<my_api> {
+   using T = my_api;
+   static constexpr auto value = object("func", &T::func);
+   static constexpr std::string_view name = "my_api";
+};
+```
+
+In use:
+
+```c++
+std::shared_ptr<glz::iface> iface{ glz_iface()() };
+auto io = (*iface)["my_api"]();
+
+expect(5 == io->call<int>("/func"));
+```
+
+`call` invokes the function across the API. Arguments are also allowed in the call function:
+
+```c++
+auto str = io->call<std::string>("/concat", "Hello", "World");
+```
+
+`get_fn` provides a means of getting a `std::function` from a member function across the API. This can be more efficient if you intend to call the same function multiple times.
+
+```c++
+auto f = io->get_fn<std::function<int()>>("/func");
+```
+
+## std::function
+
+Glaze allows `std::function` types to be added to objects and arrays in order to use them across Glaze APIs.
+
+```c++
+int x = 7;
+double y = 5.5;
+auto& f = io->get<std::function<double(int, double)>>("/f");
+expect(f(x, y) == 38.5);
+```
+
 ## Type Safety
 
 A valid interface concern is binary compatibility between types. Glaze uses compile time hashing of types that is able to catch a wide range of changes to classes or types that would cause binary incompatibility. These compile time hashes are checked when accessing across the interface and provide a safeguard, much like a `std::any_cast`, but working across compilations.`std::any_cast` does not guarantee any safety between separately compiled code, whereas Glaze adds significant type checking across compilations and versions of compilers.
@@ -728,17 +777,6 @@ Glaze catches the following changes:
 - `std::is_polymorphic`
 - `std::has_virtual_destructor`
 - `std::is_aggregate`
-
-## Functions
-
-Functions do not make sense in a JSON or binary context (and are ignored in those contexts). However, Glaze allows `std::function` types to be added to objects and arrays in order to use them across Glaze APIs.
-
-```c++
-int x = 7;
-double y = 5.5;
-auto& f = io->get<std::function<double(int, double)>>("/f");
-expect(f(x, y) == 38.5);
-```
 
 # Thread Pool
 
