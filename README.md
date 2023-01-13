@@ -18,13 +18,13 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.49**           | **885**      | **735**     |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1229**    |
-| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.78**           | **633**      | **1045**    |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.78**           | **383**      | **494**     |
-| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.20**           | **309**      | **633**     |
-| [**json_struct**](https://github.com/jorgen/json_struct)     | **4.27**           | **243**      | **331**     |
-| [**nlohmann**](https://github.com/nlohmann/json)             | **16.53**          | **90**       | **74**      |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.45**           | **903**      | **756**     |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1259**    |
+| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.73**           | **639**      | **1037**    |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.80**           | **381**      | **487**     |
+| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.20**           | **312**      | **630**     |
+| [**json_struct**](https://github.com/jorgen/json_struct)     | **4.24**           | **243**      | **334**     |
+| [**nlohmann**](https://github.com/nlohmann/json)             | **16.66**          | **89**       | **73**      |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
