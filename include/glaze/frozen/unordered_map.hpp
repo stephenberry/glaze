@@ -249,11 +249,11 @@ namespace glz::frozen
      return unordered_map<T, U, N>{items};
    }
 
-   template <typename T, typename U, std::size_t N, typename Hasher, typename Equal>
+   template <typename T, typename U, std::size_t N, typename Hasher, typename Equal = std::equal_to<T>>
    constexpr auto make_unordered_map(
            std::pair<T, U> const (&items)[N],
            Hasher const &hash = elsa<T>{},
-           Equal const &equal = std::equal_to<T>{}) {
+           Equal const &equal = Equal{}) {
      return unordered_map<T, U, N, Hasher, Equal>{items, hash, equal};
    }
 
