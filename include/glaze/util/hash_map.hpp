@@ -324,7 +324,7 @@ namespace glz
          return ht;
       }
       
-      template <const sv& S>
+      template <const sv& S, bool CheckSize = true>
       inline constexpr bool cx_string_cmp(const sv key) noexcept {
          constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
          constexpr auto n = s.size();
@@ -332,7 +332,12 @@ namespace glz
             return key == s;
          }
          else {
-            return (key.size() == n) && (std::memcmp(key.data(), s.data(), n) == 0);
+            if constexpr (CheckSize) {
+               return (key.size() == n) && (std::memcmp(key.data(), s.data(), n) == 0);
+            }
+            else {
+               return std::memcmp(key.data(), s.data(), n) == 0;
+            }
          }
       }
       
@@ -375,6 +380,8 @@ namespace glz
          static constexpr auto s0 = S0; // Needed for MSVC to avoid an internal compiler error
          static constexpr auto s1 = S1; // Needed for MSVC to avoid an internal compiler error
          
+         static constexpr bool check_size = s0.size() != s1.size(); // if we need to check the size again on the second compare
+         
          constexpr decltype(auto) begin() const { return items.begin(); }
          constexpr decltype(auto) end() const { return items.end(); }
          
@@ -383,7 +390,7 @@ namespace glz
             if (cx_string_cmp<s0>(key)) {
                return items[0].second;
             }
-            else if (cx_string_cmp<s1>(key)) {
+            else if (cx_string_cmp<s1, check_size>(key)) {
                return items[1].second;
             }
             else [[unlikely]] {
@@ -396,7 +403,7 @@ namespace glz
             if (cx_string_cmp<s0>(key)) {
                return items.begin();
             }
-            else if (cx_string_cmp<s1>(key)) {
+            else if (cx_string_cmp<s1, check_size>(key)) {
                return items.begin() + 1;
             }
             else [[unlikely]] {
