@@ -153,7 +153,9 @@ namespace glz
                match<','>(it, end);
                
                for_each<N>([&](auto I) {
-                  constexpr auto N = names[I].size();
+                  constexpr auto N = [] {
+                     return names[decltype(I)::value].size();
+                  }(); // MSVC internal compiler error workaround
                   if (string_cmp_n<N>(type, names[I])) {
                      using V = std::variant_alternative_t<I, T>;
                      if (!std::holds_alternative<V>(value)) {
