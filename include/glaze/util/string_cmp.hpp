@@ -29,6 +29,7 @@ namespace glz
       }
    }
 
+    /*
    // Note: This relies on undefined behavior but should generally be ok
    // https://stackoverflow.com/questions/37800739/is-it-safe-to-read-past-the-end-of-a-buffer-within-the-same-page-on-x86-and-x64
    // Gets better perf then memcmp on small strings like keys but worse perf on longer strings (>40 or so)
@@ -67,6 +68,36 @@ namespace glz
 
       const uint64_t nm8 = n - 8;
       return (to_uint64(s0.data() + nm8) == to_uint64(s1.data() + nm8));
+   }*/
+   
+   constexpr bool string_cmp(auto &&s0, auto &&s1) noexcept
+   {
+      if (std::is_constant_evaluated()) {
+         return s0 == s1;
+      }
+      else {
+         const auto n = s0.size();
+         if (s1.size() != n) {
+            return false;
+         }
+         
+         return std::memcmp(s0.data(), s1.data(), n) == 0;
+      }
+   }
+   
+   template <size_t N>
+   constexpr bool string_cmp_n(auto &&s0, auto &&s1) noexcept
+   {
+      if (std::is_constant_evaluated()) {
+         return s0 == s1;
+      }
+      else {
+         if (s0.size() != N) {
+            return false;
+         }
+         
+         return std::memcmp(s0.data(), s1.data(), N) == 0;
+      }
    }
    
    struct string_cmp_equal_to final
