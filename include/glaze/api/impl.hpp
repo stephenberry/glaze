@@ -81,10 +81,10 @@ namespace glz
          return get_void_fn(user, path, type_hash);
       }
       
-      template <class F, class Parent, size_t... Is>
+      template <class Arg_tuple, class F, class Parent, size_t... Is>
       decltype(auto) call_args(F&& f, Parent&& parent, std::span<void*> args, std::index_sequence<Is...>)
       {
-         return f(parent, args[Is]...);
+         return f(parent, std::move(*reinterpret_cast<std::add_pointer_t<std::decay_t<std::tuple_element_t<Is, Arg_tuple>>>>(args[Is]))...);
       }
       
       bool caller(const sv path, const sv type_hash, void* ret, std::span<void*> args) noexcept override
@@ -105,25 +105,28 @@ namespace glz
                      using Parent = typename parent_of_fn<V>::type;
                      
                      if constexpr (std::same_as<P, Parent>) {
-                        using F = typename std_function_signature<V>::type;
+                        using F = typename std_function_signature_decayed<V>::type;
                         static constexpr auto h = glz::hash<F>();
-                        using Ret = typename return_type<V>::type;
+                        using Ret = typename std::decay_t<return_type<V>::type>;
                         using Tuple = typename inputs_as_tuple<V>::type;
                         static constexpr auto N = std::tuple_size_v<Tuple>;
                         
                         if (h == type_hash) [[likely]] {
-                           if constexpr (std::is_pointer_v<Ret>) {
-                              ret = call_args(std::mem_fn(val), parent, args, std::make_index_sequence<N>{});
+                           if constexpr (std::is_void_v<Ret>) {
+                              call_args<Tuple>(std::mem_fn(val), parent, args, std::make_index_sequence<N>{});
+                           }
+                           else if constexpr (std::is_pointer_v<Ret>) {
+                              ret = call_args<Tuple>(std::mem_fn(val), parent, args, std::make_index_sequence<N>{});
                            }
                            else {
-                              auto x = call_args(std::mem_fn(val), parent, args, std::make_index_sequence<N>{});
+                              auto x = call_args<Tuple>(std::mem_fn(val), parent, args, std::make_index_sequence<N>{});
                               *static_cast<Ret*>(ret) = x;
                            }
                            found = true;
                         }
                         else [[unlikely]] {
                            error = "mismatching types";
-                           error += ", expected: " + std::string(glz::name_v<UserType>);
+                           error += ", expected: " + std::string(glz::name_v<F>);
                         }
                      }
                      else {
@@ -149,6 +152,24 @@ namespace glz
       }
       
       protected:
+      template <class T>
+      decltype(auto) unwrap(T &&val)
+      {
+         using V = std::decay_t<T>;
+         if constexpr (detail::nullable_t<V>) {
+            if (val) {
+               return unwrap(*val);
+            }
+            else {
+               error = "Cannot unwrap null value.";
+               return decltype(unwrap(*val)){nullptr};
+            }
+         }
+         else {
+            return &val;
+         }
+      }
+
       // Get a pointer to a value at the location of a json_ptr. Will return
       // nullptr if value doesnt exist or is wrong type
       template <class T>
@@ -158,18 +179,18 @@ namespace glz
          
          detail::seek_impl(
             [&](auto&& val) {
-               using V = std::decay_t<decltype(val)>;
+               using V = std::decay_t<decltype(*unwrap(val))>;
                if constexpr (std::is_member_function_pointer_v<V>) {
                   error = "get called on member function pointer";
                }
                else {
                   static constexpr auto h = glz::hash<V>();
                   if (h == type_hash) [[likely]] {
-                     result = &val;
+                     result = unwrap(val);
                   }
                   else [[unlikely]] {
                      error = "mismatching types";
-                     error += ", expected: " + std::string(glz::name_v<T>);
+                     error += ", expected: " + std::string(glz::name_v<V>);
                   }
                }
             },
@@ -206,7 +227,7 @@ namespace glz
                         if (h == type_hash) [[likely]] {
                            auto* f = new F{};
                            *f = [&](auto&&... args) {
-                              return (parent.*val)(args...);
+                              return (parent.*val)(std::forward<decltype(args)>(args)...);
                            };
                            result = std::unique_ptr<void, void(*)(void*)>{ f, [](void* ptr){
                               delete static_cast<F*>(ptr);

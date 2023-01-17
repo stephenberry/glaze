@@ -143,7 +143,7 @@ namespace glz
             }
          }
          else {
-            Ret value{};
+            std::decay_t<Ret> value{};
             const auto success = caller(path, hash, &value, arguments);
             
             if (success) {
