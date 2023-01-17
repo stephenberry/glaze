@@ -235,7 +235,7 @@ namespace glz
                         }
                         else [[unlikely]] {
                            error = "mismatching types";
-                           error += ", expected: " + std::string(glz::name_v<T>);
+                           error += ", expected: " + std::string(glz::name_v<F>);
                         }
                      }
                      else {

@@ -101,25 +101,25 @@ void tests()
    
    "calling functions"_test = [&] {
       auto f = io->get_fn<std::function<int()>>("/func");
-      expect(f() == 5);
+      expect(f && f() == 5) << io->last_error();
       
-      expect(5 == io->call<int>("/func"));
+      expect(5 == io->call<int>("/func")) << io->last_error();
 
       auto func_ref = io->get_fn<std::function<const int&()>>("/func_ref");
-      expect(func_ref() == 5);
-      expect(5 == io->call<int>("/func_ref"));
+      expect(func_ref && func_ref() == 5);
+      expect(5 == io->call<int>("/func_ref")) << io->last_error();
 
       auto sum = io->get_fn<std::function<double(double, double)>>("/sum");
-      expect(sum(7, 2) == 9);
-      expect(9 == io->call<double>("/sum", 7.0, 2.0));
+      expect(sum && sum(7, 2) == 9) << io->last_error();
+      expect(9 == io->call<double>("/sum", 7.0, 2.0)) << io->last_error();
 
       auto sum_lref = io->get_fn<std::function<double(const double&, const double&)>>("/sum_lref");
-      expect(sum_lref(7, 2) == 9);
-      expect(9 == io->call<double>("/sum_lref", 7.0, 2.0));
+      expect(sum_lref && sum_lref(7, 2) == 9) << io->last_error();
+      expect(9 == io->call<double>("/sum_lref", 7.0, 2.0)) << io->last_error();
 
       auto sum_rref = io->get_fn<std::function<double(double&&, double&&)>>("/sum_rref");
-      expect(sum_rref(7, 2) == 9);
-      expect(9 == io->call<double>("/sum_rref", 7.0, 2.0));
+      expect(sum_rref && sum_rref(7, 2) == 9) << io->last_error();
+      expect(9 == io->call<double>("/sum_rref", 7.0, 2.0)) << io->last_error();
    };
    
    "bool type name"_test = [] {
