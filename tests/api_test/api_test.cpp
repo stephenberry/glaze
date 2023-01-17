@@ -107,7 +107,7 @@ void tests()
 
       auto func_ref = io->get_fn<std::function<const int&()>>("/func_ref");
       expect(func_ref() == 5);
-      expect(5 == io->call<const int&>("/func_ref"));
+      expect(5 == io->call<int>("/func_ref"));
 
       auto sum = io->get_fn<std::function<double(double, double)>>("/sum");
       expect(sum(7, 2) == 9);

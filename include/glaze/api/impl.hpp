@@ -107,7 +107,7 @@ namespace glz
                      if constexpr (std::same_as<P, Parent>) {
                         using F = typename std_function_signature_decayed<V>::type;
                         static constexpr auto h = glz::hash<F>();
-                        using Ret = typename std::decay_t<return_type<V>::type>;
+                        using Ret = std::decay_t<typename return_type<V>::type>;
                         using Tuple = typename inputs_as_tuple<V>::type;
                         static constexpr auto N = std::tuple_size_v<Tuple>;
                         
