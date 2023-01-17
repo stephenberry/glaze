@@ -29,9 +29,7 @@ namespace glz
 
             if (n < 8) {
                const auto shift = 64 - 8 * n;
-               h ^= (!std::is_constant_evaluated() && ((reinterpret_cast<std::uintptr_t>(value.data()) & 4095) > 4088))
-                       ? ((to_uint64(value.data() - 8 + n, n) >> shift) << shift)
-                       : (to_uint64(value.data(), n) << shift);
+               h ^= to_uint64(value.data(), n) << shift;
                h ^= h >> 33;
                h *= fnv64_prime;
                return h;
@@ -40,13 +38,13 @@ namespace glz
             const char* d0 = value.data();
             const char* end7 = value.data() + n - 7;
             for (; d0 < end7; d0 += 8) {
-               h ^= to_uint64(d0);
+               h ^= to_uint64_n<8>(d0);
                h ^= h >> 33;
                h *= fnv64_prime;
             }
 
             const uint64_t nm8 = n - 8;
-            h ^= to_uint64(value.data() + nm8);
+            h ^= to_uint64_n<8>(value.data() + nm8);
             h ^= h >> 33;
             h *= fnv64_prime;
             return h;
