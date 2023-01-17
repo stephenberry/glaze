@@ -226,8 +226,8 @@ namespace glz
                         static constexpr auto h = glz::hash<F>();
                         if (h == type_hash) [[likely]] {
                            auto* f = new F{};
-                           *f = [&](auto&&... args) {
-                              return (parent.*val)(std::forward<decltype(args)>(args)...);
+                           *f = [parent = &parent, val = &val](auto&&... args) {
+                              return ((*parent).*(*val))(std::forward<decltype(args)>(args)...);
                            };
                            result = std::unique_ptr<void, void(*)(void*)>{ f, [](void* ptr){
                               delete static_cast<F*>(ptr);
