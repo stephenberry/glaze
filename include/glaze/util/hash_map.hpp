@@ -380,14 +380,22 @@ namespace glz
          static constexpr auto s0 = S0; // Needed for MSVC to avoid an internal compiler error
          static constexpr auto s1 = S1; // Needed for MSVC to avoid an internal compiler error
          
-         static constexpr bool check_size = s0.size() != s1.size(); // if we need to check the size again on the second compare
+         static constexpr bool same_size = s0.size() == s1.size(); // if we need to check the size again on the second compare
+         static constexpr bool check_size = !same_size;
          
          constexpr decltype(auto) begin() const { return items.begin(); }
          constexpr decltype(auto) end() const { return items.end(); }
          
          constexpr decltype(auto) at(auto&& key) const
          {
-            if (cx_string_cmp<s0>(key)) {
+            if constexpr (same_size) {
+               constexpr auto n = s0.size();
+               if (key.size() != n) {
+                  throw std::runtime_error("Invalid key");
+               }
+            }
+            
+            if (cx_string_cmp<s0, check_size>(key)) {
                return items[0].second;
             }
             else if (cx_string_cmp<s1, check_size>(key)) {
@@ -400,7 +408,14 @@ namespace glz
          
          constexpr decltype(auto) find(auto&& key) const
          {
-            if (cx_string_cmp<s0>(key)) {
+            if constexpr (same_size) {
+               constexpr auto n = s0.size();
+               if (key.size() != n) {
+                  throw std::runtime_error("Invalid key");
+               }
+            }
+            
+            if (cx_string_cmp<s0, check_size>(key)) {
                return items.begin();
             }
             else if (cx_string_cmp<s1, check_size>(key)) {
