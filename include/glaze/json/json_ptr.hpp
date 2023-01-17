@@ -84,7 +84,7 @@ namespace glz
          }
          else if constexpr (std::is_floating_point_v<key_t>) {
             auto it = reinterpret_cast<const uint8_t*>(json_ptr.data());
-            auto s = parse_number(key, it);
+            auto s = parse_number<false>(key, it, reinterpret_cast<const uint8_t*>(json_ptr.data() + json_ptr.size()));
             if (!s) return false;
             json_ptr = json_ptr.substr(reinterpret_cast<const char*>(it) - json_ptr.data());
          }

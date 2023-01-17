@@ -396,8 +396,8 @@ namespace glz::detail
       }
    };
 
-   template <class T>
-   inline bool parse_number(T &val, auto*& cur) noexcept
+   template <bool is_null_terminated, class T>
+   inline bool parse_number(T &val, auto*& cur, auto* end) noexcept
    {
 
       const uint8_t *sig_cut = nullptr; /* significant part cutting position for long number */

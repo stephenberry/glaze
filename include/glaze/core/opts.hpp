@@ -24,6 +24,7 @@ namespace glz
       // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled
       bool ws_handled = false; // whitespace has already been parsed
+      bool is_null_terminated = false; // whether the input buffer is null terminated
    };
    
    template <opts Opts>

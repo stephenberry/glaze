@@ -225,9 +225,11 @@ namespace glz
             // TODO: fix this
             using X = std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>, const uint8_t*, uint8_t*>;
             auto cur = reinterpret_cast<X>(it);
-            auto s = parse_number(value, cur);
+            
+            auto s = parse_number<Options.is_null_terminated>(value, cur, reinterpret_cast<X>(end));
             if (!s) [[unlikely]]
                throw std::runtime_error("Failed to parse number");
+            
             it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
          }
       };

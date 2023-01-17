@@ -2942,7 +2942,7 @@ int main()
    enum_types();
    user_types();
    json_pointer();
-   early_end(); 
+   early_end();
    bench();
    read_tests();
    write_tests();
