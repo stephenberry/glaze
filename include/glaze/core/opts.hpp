@@ -58,4 +58,12 @@ namespace glz
       ret.ws_handled = false;
       return ret;
    };
+   
+   template <opts Opts>
+   constexpr auto null_terminated()
+   {
+      opts ret = Opts;
+      ret.is_null_terminated = true;
+      return ret;
+   };
 }

@@ -9,9 +9,12 @@
 namespace glz
 {
    // For reading json from a std::vector<char>, std::deque<char> and the like
-   template <opts Opts>
+   template <opts Options>
    inline void read(auto& value, detail::contiguous auto&& buffer, is_context auto&& ctx)
    {
+      // add null terminated flag if buffer is a std::string
+      constexpr auto Opts = std::same_as<std::decay_t<decltype(buffer)>, std::string> ? null_terminated<Options>() : Options;
+      
       auto b = buffer.data();
       auto e = buffer.data() + buffer.size();
       if (b == e) {

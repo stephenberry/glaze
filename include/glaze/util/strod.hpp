@@ -399,7 +399,12 @@ namespace glz::detail
    template <bool is_null_terminated, class T>
    inline bool parse_number(T &val, auto*& cur, auto* end) noexcept
    {
-
+      if constexpr (!is_null_terminated) {
+         if (cur == end) {
+            return false;
+         }
+      }
+      
       const uint8_t *sig_cut = nullptr; /* significant part cutting position for long number */
       const uint8_t *sig_end = nullptr;  /* significant part ending position */
       const uint8_t *dot_pos = nullptr;  /* decimal point position */
@@ -418,12 +423,41 @@ namespace glz::detail
       /* begin with non-zero digit */
       sig = (uint64_t)(*cur - '0');
       if (sig > 9) {
-         if (*cur == 'n' && *++cur == 'a' && *++cur == 'n') {
-            val = sign ? -std::numeric_limits<T>::quiet_NaN() : std::numeric_limits<T>::quiet_NaN();
-            return true;
+         if constexpr (!is_null_terminated) {
+            if (cur == end) {
+               return false;
+            }
+            else {
+               if (*cur == 'n' ) {
+                  ++cur;
+                  if (cur == end) {
+                     return false;
+                  }
+                  if (*cur == 'a') {
+                     ++cur;
+                     if (cur == end) {
+                        return false;
+                     }
+                     if (*cur == 'n') {
+                        ++cur;
+                        
+                        val = sign ? -std::numeric_limits<T>::quiet_NaN() : std::numeric_limits<T>::quiet_NaN();
+                        return true;
+                     }
+                  }
+               }
+               
+               return false;
+            }
          }
          else {
-            return false;
+            if (*cur == 'n' && *++cur == 'a' && *++cur == 'n') {
+               val = sign ? -std::numeric_limits<T>::quiet_NaN() : std::numeric_limits<T>::quiet_NaN();
+               return true;
+            }
+            else {
+               return false;
+            }
          }
       }
       static constexpr auto zero = (uint8_t)'0';
@@ -484,7 +518,7 @@ digi_intg_more :
             /* this number is an integer consisting of 20 digits */
             if ((sig < (U64_MAX / 10)) || (sig == (U64_MAX / 10) && num_tmp <= (U64_MAX % 10))) {
                sig = num_tmp + sig * 10;
-               cur++;
+               ++cur;
                val = sign ? -T(sig) : T(sig);
                return true;
             }
