@@ -80,14 +80,24 @@ namespace glz
       {
          return get_void_fn(user, path, type_hash);
       }
+
+      template <class T>
+      using ref_t = typename std::conditional_t<!std::is_const_v<std::remove_reference_t<T>> && std::is_lvalue_reference_v<T>, std::add_lvalue_reference_t<std::decay_t<T>>, std::add_rvalue_reference_t<std::decay_t<T>>>;
+
+      template<class T>
+      ref_t<T> to_ref(void* t)
+      {
+         using V = ref_t<T>;
+         return static_cast<V>(*reinterpret_cast<std::add_pointer_t<std::decay_t<T>>>(t));
+      }
       
       template <class Arg_tuple, class F, class Parent, size_t... Is>
       decltype(auto) call_args(F&& f, Parent&& parent, std::span<void*> args, std::index_sequence<Is...>)
       {
-         return f(parent, std::move(*reinterpret_cast<std::add_pointer_t<std::decay_t<std::tuple_element_t<Is, Arg_tuple>>>>(args[Is]))...);
+         return f(parent, to_ref<std::tuple_element_t<Is, Arg_tuple>>(args[Is])...);
       }
       
-      bool caller(const sv path, const sv type_hash, void* ret, std::span<void*> args) noexcept override
+      bool caller(const sv path, const sv type_hash, void*& ret, std::span<void*> args) noexcept override
       {
          auto p = parent_last_json_ptrs(path);
          const auto parent_ptr = p.first;
@@ -105,9 +115,9 @@ namespace glz
                      using Parent = typename parent_of_fn<V>::type;
                      
                      if constexpr (std::same_as<P, Parent>) {
-                        using F = typename std_function_signature_decayed<V>::type;
+                        using F = typename std_function_signature_decayed_keep_non_const_ref<V>::type;
                         static constexpr auto h = glz::hash<F>();
-                        using Ret = std::decay_t<typename return_type<V>::type>;
+                        using Ret = typename return_type<V>::type;
                         using Tuple = typename inputs_as_tuple<V>::type;
                         static constexpr auto N = std::tuple_size_v<Tuple>;
                         
@@ -115,12 +125,16 @@ namespace glz
                            if constexpr (std::is_void_v<Ret>) {
                               call_args<Tuple>(std::mem_fn(val), parent, args, std::make_index_sequence<N>{});
                            }
-                           else if constexpr (std::is_pointer_v<Ret>) {
+                           else if constexpr (std::is_pointer_v<std::decay_t<Ret>>) {
                               ret = call_args<Tuple>(std::mem_fn(val), parent, args, std::make_index_sequence<N>{});
                            }
+                           else if constexpr (std::is_lvalue_reference_v<Ret>) {
+                              //TODO remove const cast
+                              ret = const_cast<std::decay_t<Ret>*>(
+                                 &call_args<Tuple>(std::mem_fn(val), parent, args, std::make_index_sequence<N>{}));
+                           }
                            else {
-                              auto x = call_args<Tuple>(std::mem_fn(val), parent, args, std::make_index_sequence<N>{});
-                              *static_cast<Ret*>(ret) = x;
+                              *static_cast<Ret*>(ret) = call_args<Tuple>(std::mem_fn(val), parent, args, std::make_index_sequence<N>{});
                            }
                            found = true;
                         }
