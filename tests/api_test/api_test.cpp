@@ -26,6 +26,10 @@ struct my_api
       static int a = 5;
       return a;
    };
+   void inc(int& a)
+   {
+      ++a;
+   };
    double sum(double a, double b) { return a + b; };
    double sum_lref(const double& a, const double& b) { return a + b; };
    double sum_rref(double&& a, double&& b) { return a + b; };
@@ -46,6 +50,7 @@ struct glz::meta<my_api>
       "init", &T::init, //
       "func", &T::func,
       "func_ref", &T::func_ref,//
+      "inc", &T::inc, //
       "sum", &T::sum,          //
       "sum_lref", &T::sum_lref,//
       "sum_rref", &T::sum_rref //
@@ -107,7 +112,7 @@ void tests()
 
       //auto func_ref = io->get_fn<std::function<const int&()>>("/func_ref");
       //expect(func_ref() == 5);
-      expect(5 == io->call<int>("/func_ref"));
+      expect(5 == io->call<const int&>("/func_ref"));
 
       auto sum = io->get_fn<std::function<double(double, double)>>("/sum");
       expect(sum(7, 2) == 9);
@@ -120,6 +125,13 @@ void tests()
       auto sum_rref = io->get_fn<std::function<double(double&&, double&&)>>("/sum_rref");
       expect(sum_rref(7, 2) == 9);
       expect(9 == io->call<double>("/sum_rref", 7.0, 2.0));
+
+      auto inc = io->get_fn<std::function<void(int&)>>("/inc");
+      int i = 0;
+      inc(i);
+      expect(i == 1);
+      io->call<void>("/inc", i);
+      expect(i == 2);
    };
    
    "bool type name"_test = [] {

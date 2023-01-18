@@ -57,12 +57,21 @@ namespace glz
    };
 
    template <class T>
-   struct std_function_signature_decayed;
+   struct keep_non_const_ref
+   {
+      using type = std::conditional_t<!std::is_const_v<std::remove_reference_t<T>> && std::is_lvalue_reference_v<T>, std::add_lvalue_reference_t<std::decay_t<T>>, std::decay_t<T>>;
+   };
+
+   template< class T >
+   using keep_non_const_ref_t = typename keep_non_const_ref<T>::type;
+
+   template <class T>
+   struct std_function_signature_decayed_keep_non_const_ref;
 
    template <class ClassType, class Result, class... Args>
-   struct std_function_signature_decayed<Result (ClassType::*)(Args...)>
+   struct std_function_signature_decayed_keep_non_const_ref<Result (ClassType::*)(Args...)>
    {
-      using type = std::function<std::decay_t<Result>(std::decay_t<Args>...)>;
+      using type = std::function<Result(keep_non_const_ref_t<Args>...)>;
    };
    
    template <class T>

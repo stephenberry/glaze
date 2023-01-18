@@ -51,7 +51,7 @@ namespace glz
          /// unchecked void* access
          virtual void* get(const sv path, const sv type_hash) noexcept = 0;
          
-         virtual bool caller(const sv path, const sv type_hash, void* ret, std::span<void*> args) noexcept = 0;
+         virtual bool caller(const sv path, const sv type_hash, void*& ret, std::span<void*> args) noexcept = 0;
          
          virtual std::unique_ptr<void, void(*)(void*)> get_fn(const sv path, const sv type_hash) noexcept = 0;
 
@@ -119,14 +119,15 @@ namespace glz
          static constexpr auto N = sizeof...(Args);
          std::array<void*, N> arguments;
          
-         auto tuple = std::make_tuple(std::forward<Args>(args)...);
+         //auto tuple = std::make_tuple(std::forward<Args>(args)...);
+         auto tuple = std::forward_as_tuple(std::forward<Args>(args)...);
          
          for_each<N>([&](auto I) {
             std::get<I>(arguments) = &std::get<I>(tuple);
          });
          
          if constexpr (std::is_pointer_v<Ret>) {
-            Ret ptr{};
+            void* ptr{};
             const auto success = caller(path, hash, ptr, arguments);
             
             if (success) {
@@ -142,9 +143,45 @@ namespace glz
       #endif
             }
          }
+         else if constexpr (std::is_void_v<Ret>) {
+            void* ptr = nullptr;
+            const auto success = caller(path, hash, ptr, arguments);
+
+            if (success) {
+               return;
+            }
+            else {
+               error = "\n api: glaze::call<" + std::string(glz::name_v<Ret>) + ">(\"" + std::string(path) + "\") | " +
+                       error;
+#ifdef __cpp_exceptions
+               throw std::runtime_error(error);
+#else
+               return;
+#endif
+            }
+         }
+         else if constexpr (std::is_lvalue_reference_v<Ret>) {
+            void* ptr{};
+            const auto success = caller(path, hash, ptr, arguments);
+
+            if (success) {
+               return *static_cast<std::decay_t<Ret>*>(ptr);
+            }
+            else {
+               error = "\n api: glaze::call<" + std::string(glz::name_v<Ret>) + ">(\"" + std::string(path) + "\") | " +
+                       error;
+#ifdef __cpp_exceptions
+               throw std::runtime_error(error);
+#else
+               static T x{};
+               return x;
+#endif
+            }
+         }
          else {
-            Ret value{}; //TODO: makes a potentially uneeded copy and does not allow returning refrences
-            const auto success = caller(path, hash, &value, arguments);
+            Ret value{};
+            void* ptr = &value;
+            const auto success = caller(path, hash, ptr, arguments);
             
             if (success) {
                return value;
