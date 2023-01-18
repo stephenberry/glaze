@@ -143,7 +143,7 @@ namespace glz
             }
          }
          else {
-            Ret value{};
+            Ret value{}; //TODO: makes a potentially uneeded copy and does not allow returning refrences
             const auto success = caller(path, hash, &value, arguments);
             
             if (success) {

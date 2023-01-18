@@ -55,6 +55,15 @@ namespace glz
    {
       using type = std::function<Result(Args...)>;
    };
+
+   template <class T>
+   struct std_function_signature_decayed;
+
+   template <class ClassType, class Result, class... Args>
+   struct std_function_signature_decayed<Result (ClassType::*)(Args...)>
+   {
+      using type = std::function<std::decay_t<Result>(std::decay_t<Args>...)>;
+   };
    
    template <class T>
    struct return_type;

@@ -15,10 +15,20 @@ struct my_api
    int x = 7;
    double y = 5.5;
    std::vector<double> z = { 1.0, 2.0 };
+   int* x_ptr = &x;
+   std::unique_ptr<double> uptr = std::make_unique<double>(5.5);
    std::span<double> s = z;
    std::function<double(const int&, const double&)> f = [](const auto& i, const auto& d) { return i * d; };
    std::function<void()> init = []{ std::cout << "init!\n"; };
    int func() { return 5; };
+   const int& func_ref()
+   {
+      static int a = 5;
+      return a;
+   };
+   double sum(double a, double b) { return a + b; };
+   double sum_lref(const double& a, const double& b) { return a + b; };
+   double sum_rref(double&& a, double&& b) { return a + b; };
 };
 
 template <>
@@ -29,10 +39,17 @@ struct glz::meta<my_api>
       "x", &T::x, //
       "y", &T::y, //
       "z", &T::z, //
+      "x_ptr", &T::x_ptr, //
+      "uptr", &T::uptr, //
       "s", &T::s, //
       "f", &T::f, //
       "init", &T::init, //
-      "func", &T::func);
+      "func", &T::func,
+      "func_ref", &T::func_ref,//
+      "sum", &T::sum,          //
+      "sum_lref", &T::sum_lref,//
+      "sum_rref", &T::sum_rref //
+   );
    
    static constexpr std::string_view name = "my_api";
    
@@ -61,7 +78,8 @@ struct glz::meta<my_api2>
       "s", &T::s, //
       "f", &T::f, //
       "init", &T::init, //
-      "func", &T::func);
+      "func", &T::func//
+      );
    
    static constexpr std::string_view name = "my_api2";
    
@@ -86,6 +104,22 @@ void tests()
       expect(f() == 5);
       
       expect(5 == io->call<int>("/func"));
+
+      //auto func_ref = io->get_fn<std::function<const int&()>>("/func_ref");
+      //expect(func_ref() == 5);
+      expect(5 == io->call<int>("/func_ref"));
+
+      auto sum = io->get_fn<std::function<double(double, double)>>("/sum");
+      expect(sum(7, 2) == 9);
+      expect(9 == io->call<double>("/sum", 7.0, 2.0));
+
+      auto sum_lref = io->get_fn<std::function<double(const double&, const double&)>>("/sum_lref");
+      expect(sum_lref(7, 2) == 9);
+      expect(9 == io->call<double>("/sum_lref", 7.0, 2.0));
+
+      auto sum_rref = io->get_fn<std::function<double(double&&, double&&)>>("/sum_rref");
+      expect(sum_rref(7, 2) == 9);
+      expect(9 == io->call<double>("/sum_rref", 7.0, 2.0));
    };
    
    "bool type name"_test = [] {
@@ -170,6 +204,13 @@ void tests()
       expect(x == 7);
       expect(y == 5.5);
       expect(z == std::vector<double>{1.0,2.0});
+   };
+
+   "my_api type ptr unwrap io"_test = [&] {
+      auto& x = io->get<int>("/x_ptr");
+      auto& y = io->get<double>("/uptr");
+      expect(x == 7);
+      expect(y == 5.5);
    };
 
    "function type name"_test = [] {
