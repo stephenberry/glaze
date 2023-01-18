@@ -1,9 +1,18 @@
-CPMFindPackage(
-  NAME ut
-  OPTIONS "BOOST_UT_ENABLE_RUN_AFTER_BUILD OFF" "BOOST_UT_DISABLE_MODULE ON"
+include(FetchContent)
+
+Set(FETCHCONTENT_QUIET FALSE)
+
+set(BOOST_UT_ENABLE_RUN_AFTER_BUILD OFF CACHE INTERNAL "")
+set(BOOST_UT_DISABLE_MODULE ON CACHE INTERNAL "")
+
+FetchContent_Declare(
+  ut
   GIT_REPOSITORY https://github.com/boost-ext/ut.git
-  GIT_TAG v1.1.9
+  GIT_TAG 265199e173b16a75670fae62fc2446b9dffad39e
+  FIND_PACKAGE_ARGS
 )
+
+FetchContent_MakeAvailable(ut)
 
 add_subdirectory(api_test)
 add_subdirectory(binary_test)

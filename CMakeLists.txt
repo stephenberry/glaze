@@ -33,12 +33,6 @@ target_include_directories(
     INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
 )
 
-include(cmake/CPM.cmake)
-
-target_link_libraries(
-    glaze_glaze INTERFACE
-)
-
 if(NOT CMAKE_SKIP_INSTALL_RULES)
   include(cmake/install-rules.cmake)
 endif()

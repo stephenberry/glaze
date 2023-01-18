@@ -26,20 +26,8 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Install Conan
-      uses: turtlebrowser/get-conan@main
-
-    - name: Configure Conan
-      run: |
-        conan profile new default
-        cp .github/gcc-11.profile ~/.conan/profiles/default
-        conan profile update settings.build_type=${{env.BUILD_TYPE}} default
-
-    - name: Install dependencies
-      run: conan install . -b missing
-
     - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_TOOLCHAIN_FILE="./conan/conan_toolchain.cmake"
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
     - name: Build
       run: cmake --build build -j 2
