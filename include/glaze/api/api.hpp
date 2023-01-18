@@ -114,7 +114,6 @@ namespace glz
       Ret api::call(const sv path, Args&&... args)
       {
          using F = std::function<Ret(Args...)>;
-         std::cout << glz::name_v<F> << "\n";
          static constexpr auto hash = glz::hash<F>();
          
          static constexpr auto N = sizeof...(Args);
