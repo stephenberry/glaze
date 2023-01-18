@@ -10,6 +10,7 @@
 #include "glaze/api/std/vector.hpp"
 #include "glaze/api/std/array.hpp"
 #include "glaze/api/std/tuple.hpp"
+#include "glaze/api/std/variant.hpp"
 #include "glaze/api/std/deque.hpp"
 #include "glaze/api/std/list.hpp"
 #include "glaze/api/std/optional.hpp"

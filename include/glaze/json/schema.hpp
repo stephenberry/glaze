@@ -21,30 +21,17 @@ namespace glz
          };
       };
 
-      struct enum_val
-      {
-         std::string_view _const{};
-         std::optional<std::string_view> description{};
-
-         struct glaze
-         {
-            using T = enum_val;
-            static constexpr auto value = glz::object("const", &T::_const,             //
-                                                      "description", &T::description  //
-            );
-         };
-      };
-
       struct schema
       {
-         std::vector<std::string_view> type{};
+         std::optional<std::vector<std::string_view>> type{};
+         std::optional<std::string_view> _const{};
          std::optional<std::string_view> description{};
          std::optional<std::map<std::string_view, schema_ref, std::less<>>> properties{};  // glaze_object
          std::optional<schema_ref> items{};                                        // array
-         std::optional<std::variant<schema_ref, bool>> additionalProperties{};                         // map
+         std::optional<std::variant<bool, schema_ref>> additionalProperties{};               // map
          std::optional<std::map<std::string_view, schema, std::less<>>> defs{};
          std::optional<std::vector<std::string_view>> _enum{};  // enum
-         std::optional<std::vector<enum_val>> oneOf{};
+         std::optional<std::vector<schema>> oneOf{};
       };
 
    }
@@ -62,7 +49,8 @@ struct glz::meta<glz::detail::schema>
                                              "additionalProperties", &T::additionalProperties,  //
                                              "$defs", &T::defs,                                 //
                                              "enum", &T::_enum,                                 //
-                                             "oneOf", &T::oneOf);
+                                             "oneOf", &T::oneOf,                                //
+                                             "const", &T::_const);
 };
 
 namespace glz
@@ -127,11 +115,11 @@ namespace glz
             //   static constexpr auto item = std::get<I>(meta_v<V>);
             //   (*s._enum)[I.value] = std::get<0>(item);
             //});
-            s.oneOf = std::vector<enum_val>(N);
+            s.oneOf = std::vector<schema>(N);
             for_each<N>([&](auto I) {
-               static constexpr auto item = std::get<I>(meta_v<V>);
+               static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                auto& _enum = (*s.oneOf)[I.value];
-               _enum._const = std::get<0>(item);
+               _enum._const = glz::tuplet::get<0>(item);
                if constexpr (std::tuple_size_v < decltype(item) >> 2) {
                   _enum.description = std::get<2>(item);
                }
@@ -159,7 +147,7 @@ namespace glz
             using V = std::decay_t<range_value_t<std::decay_t<T>>>;
             s.type = {"array"};
             auto& def = defs[name_v<V>];
-            if (def.type.empty()) {
+            if (!def.type) {
                to_json_schema<V>::template op<Opts>(def, defs);
             }
             s.items = schema_ref{join_v<chars<"#/$defs/">, name_v<V>>};
@@ -175,7 +163,7 @@ namespace glz
             using V = std::decay_t<std::tuple_element_t<1,range_value_t<std::decay_t<T>>>>;
             s.type = {"object"};
             auto& def = defs[name_v<V>];
-            if (def.type.empty()) {
+            if (!def.type) {
                to_json_schema<V>::template op<Opts>(def, defs);
             }
             s.additionalProperties = schema_ref{join_v<chars<"#/$defs/">, name_v<V>>};
@@ -186,11 +174,39 @@ namespace glz
       struct to_json_schema<T>
       {
          template <auto Opts>
-         static void op(auto& s, auto&) noexcept
+         static void op(auto& s, auto& defs) noexcept
          {
-            using V = decltype(*std::declval<std::decay_t<T>>());
-            to_json_schema<V>::template op<Opts>(s);
-            s.type.emplace_back("null");
+            using V = std::decay_t<decltype(*std::declval<std::decay_t<T>>())>;
+            to_json_schema<V>::template op<Opts>(s, defs);
+            (*s.type).emplace_back("null");
+         }
+      };
+
+      template <class... Ts>
+      struct to_json_schema<std::variant<Ts...>>
+      {
+         template <auto Opts>
+         static void op(auto& s, auto& defs) noexcept
+         {
+            using tuple_t = glz::tuplet::tuple<Ts...>;
+            static constexpr auto N = std::tuple_size_v<tuple_t>;
+            s.type = {"number", "string", "boolean", "object", "array", "null"};
+            s.oneOf = std::vector<schema>(N);
+            for_each<N>([&](auto I) {
+               using V = std::decay_t<std::tuple_element_t<I, tuple_t>>;
+               auto& schema_val = (*s.oneOf)[I.value];
+               //TODO use ref to avoid duplication in schema
+               to_json_schema<V>::template op<Opts>(schema_val, defs);
+               if constexpr (glaze_object_t<V>) {
+                  //TODO validate type name
+                  auto& def = defs[name_v<std::string>];
+                  if (!def.type) {
+                     to_json_schema<std::string>::template op<Opts>(def, defs);
+                  }
+                  (*schema_val.properties)["type"] =
+                     schema_ref{join_v<chars<"#/$defs/">, name_v<std::string>>};
+               }
+            });
          }
       };
 
@@ -219,20 +235,19 @@ namespace glz
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
             s.properties = std::map<std::string_view, schema_ref, std::less<>>();
             for_each<N>([&](auto I) {
-               static constexpr auto item = std::get<I>(meta_v<V>);
-               using mptr_t = std::tuple_element_t<1, decltype(item)>;
+               static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
+               using mptr_t = decltype(glz::tuplet::get<1>(item));
                using val_t = std::decay_t<member_t<V, mptr_t>>;
                auto& def = defs[name_v<val_t>];
-               if (def.type.empty()) {
+               if (!def.type) {
                   to_json_schema<val_t>::template op<Opts>(def, defs);
                }
                auto ref_val = schema_ref{join_v<chars<"#/$defs/">, name_v<val_t>>};
-               if constexpr (std::tuple_size_v < decltype(item) >> 2) {
-                  ref_val.description = std::get<2>(item);
+               if constexpr (std::tuple_size_v<decltype(item)> > 2) {
+                  ref_val.description = glz::tuplet::get<2>(item);
                }
-               (*s.properties)[std::get<0>(item)] = ref_val;
+               (*s.properties)[glz::tuplet::get<0>(item)] = ref_val;
             });
-            (*s.properties)["$schema"];
             s.additionalProperties = false;
          }
       };
@@ -255,7 +270,7 @@ namespace glz
       detail::schema s{};
       s.defs = std::map<std::string_view, detail::schema, std::less<>>{};
       detail::to_json_schema<std::decay_t<T>>::template op<opts{}>(s, *s.defs);
-      write<opts{}>(std::move(s), buffer);
+      write<opts{.write_type_info = false}>(std::move(s), buffer);
       return buffer;
    }
 }
