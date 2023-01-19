@@ -88,4 +88,4 @@ namespace glz
          }
       };
    }  // namespace detail
-}  // namespace glaze
+}

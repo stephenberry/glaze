@@ -609,9 +609,9 @@ namespace glz
                
                write<json>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, b, ix);
                
-               constexpr auto S = std::tuple_size_v<decltype(item)>;
+               static constexpr auto S = std::tuple_size_v<decltype(item)>;
                if constexpr (Opts.comments && S > 2) {
-                  constexpr sv comment = glz::tuplet::get<2>(item);
+                  static constexpr sv comment = glz::tuplet::get<2>(item);
                   if constexpr (comment.size() > 0) {
                      if constexpr (Opts.prettify) {
                         dump<' '>(b, ix);
