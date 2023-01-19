@@ -79,13 +79,6 @@ namespace glz
       {
          static_assert(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0,
                        "Does not handle dynamic matrices");
-
-         template <auto Opts>
-         static void op(auto &&value,  is_context auto&& ctx, auto &&b) noexcept
-         {
-            std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::write<json>::op<Opts>(view, ctx, b);
-         }
          
          template <auto Opts>
          static void op(auto &&value, is_context auto&& ctx, auto &&b, auto&& ix) noexcept
