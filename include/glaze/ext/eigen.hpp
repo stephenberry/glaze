@@ -9,8 +9,11 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
+#include "glaze/api/name.hpp"
+#include "glaze/api/std/array.hpp"
 
 #include <span>
+#include <Eigen/Core> //Note: You are expected to provide eigen if including this header
 
 namespace glz
 {
@@ -96,3 +99,12 @@ namespace glz
       };
    }  // namespace detail
 }  // namespace glaze
+
+template <class Scalar, int Rows, int Cols>
+struct glz::meta<Eigen::Matrix<Scalar, Rows, Cols>>
+{
+   static constexpr std::string_view name = detail::join_v<chars<"Eigen::Matrix<">, name_v<Scalar>, chars<",">,  //
+                                                         chars<num_to_string<Rows>::value>, chars<",">,        //
+                                                         chars<num_to_string<Cols>::value>, chars<",">,        //
+                                                         chars<">">>;
+};
