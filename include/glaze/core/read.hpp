@@ -16,7 +16,7 @@ namespace glz
       auto e = buffer.data(); // to be incrementd
       
       using Buffer = std::decay_t<decltype(buffer)>;
-      if constexpr (is_specialization_v<Buffer, std::basic_string> || std::same_as<Buffer, std::string_view>) {
+      if constexpr (is_specialization_v<Buffer, std::basic_string> || std::same_as<Buffer, std::string_view> || Opts.format == binary) {
          e += buffer.size();
          
          if (b == e) {
@@ -25,6 +25,7 @@ namespace glz
       }
       else {
          // if not a std::string or a std::string_view, check that the last character is a null character
+         // this is not required for binary specification reading, because we require the data to be properly formatted
          if (buffer.empty()) {
             throw std::runtime_error("No input provided to read");
          }
