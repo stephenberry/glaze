@@ -182,10 +182,11 @@ namespace glz
          template <auto Opts>
          static void op(bool_t auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            skip_ws(it, end);
+            if constexpr (!Opts.ws_handled) {
+               skip_ws(it, end);
+            }
             
-            if (it < end) [[likely]] {
-               switch (*it) {
+            switch (*it) {
                case 't': {
                   ++it;
                   match<"rue">(it, end);
@@ -200,10 +201,6 @@ namespace glz
                }
                   [[unlikely]] default
                      : throw std::runtime_error("Expected true or false");
-               }
-            }
-            else [[unlikely]] {
-               throw std::runtime_error("Expected true or false");
             }
          }
       };
@@ -770,7 +767,7 @@ namespace glz
                   skip_ws(it, end);
                   match<'"'>(it);
                   auto start = it;
-                                    
+                  
                   if constexpr (keys_may_contain_escape<T>()) {
                      skip_till_escape_or_quote(it, end);
                      if (*it == '\\') [[unlikely]] {
