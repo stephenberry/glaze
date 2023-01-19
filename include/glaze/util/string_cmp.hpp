@@ -142,4 +142,21 @@ namespace glz
          return string_cmp(std::forward<T0>(lhs), std::forward<T1>(rhs));
       }
    };
+   
+   template <const sv& S, bool CheckSize = true>
+   inline constexpr bool cx_string_cmp(const sv key) noexcept {
+      constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
+      constexpr auto n = s.size();
+      if (std::is_constant_evaluated()) {
+         return key == s;
+      }
+      else {
+         if constexpr (CheckSize) {
+            return (key.size() == n) && (std::memcmp(key.data(), s.data(), n) == 0);
+         }
+         else {
+            return std::memcmp(key.data(), s.data(), n) == 0;
+         }
+      }
+   }
 }
