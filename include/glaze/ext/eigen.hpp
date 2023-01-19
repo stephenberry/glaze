@@ -97,16 +97,14 @@ namespace glz
             detail::write<json>::op<Opts>(view, ctx, b, ix);
          }
       };
-
-      template <class Scalar, int Rows, int Cols>
-      struct meta<Eigen::Matrix<Scalar, Rows, Cols>>
-      {
-         static constexpr std::string_view name = detail::join_v<chars<"Eigen::Matrix<">,
-            name_v<Scalar>, chars<",">, //
-            chars<num_to_string<Rows>::value>, chars<",">, //
-            chars<num_to_string<Cols>::value>, chars<",">,        //
-            chars<">">
-         >;
-      };
    }  // namespace detail
 }  // namespace glaze
+
+template <class Scalar, int Rows, int Cols>
+struct glz::meta<Eigen::Matrix<Scalar, Rows, Cols>>
+{
+   static constexpr std::string_view name = detail::join_v<chars<"Eigen::Matrix<">, name_v<Scalar>, chars<",">,  //
+                                                         chars<num_to_string<Rows>::value>, chars<",">,        //
+                                                         chars<num_to_string<Cols>::value>, chars<",">,        //
+                                                         chars<">">>;
+};
