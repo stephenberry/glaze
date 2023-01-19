@@ -8,6 +8,20 @@
 
 namespace glz::detail
 {
+   // assumes null terminated
+   template <char c>
+   inline void match(auto&& it)
+   {
+      if (*it != c) [[unlikely]] {
+         static constexpr char b[] = {c, '\0'};
+         static constexpr auto error = concat_arrays("Expected:", b);
+         throw std::runtime_error(error.data());
+      }
+      else [[likely]] {
+         ++it;
+      }
+   }
+   
    // assumes null terminated by default
    template <char c, bool is_null_terminated = true>
    inline void match(auto&& it, auto&& end)

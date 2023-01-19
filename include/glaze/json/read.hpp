@@ -218,10 +218,6 @@ namespace glz
                skip_ws(it, end);
             }
             
-            if (it == end) [[unlikely]] {
-               throw std::runtime_error("Unexpected end of buffer");
-            }
-            
             // TODO: fix this
             using X = std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>, const uint8_t*, uint8_t*>;
             auto cur = reinterpret_cast<X>(it);
