@@ -51,6 +51,12 @@ namespace glz
    {
       T& value;
    };
+
+   template <class T>
+   struct meta<includer<T>>
+   {
+      static constexpr std::string_view name = detail::join_v<chars<"includer<">, name_v<T>, chars<">">>;
+   };
    
    template <class T>
    concept range = requires(T& t) {
