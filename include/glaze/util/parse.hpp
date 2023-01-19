@@ -89,15 +89,20 @@ namespace glz::detail
    inline void skip_ws(auto&& it, auto&& end)
    {
       while (it != end) {
-         // assuming ascii
-         if (static_cast<uint8_t>(*it) < 33) {
-            ++it;
-         }
-         else if (*it == '/') {
-            skip_comment(it, end);
-         }
-         else {
-            break;
+         switch (*it)
+         {
+            case '\t':
+            case '\n':
+            case '\r':
+            case ' ':
+               ++it;
+               break;
+            case '/': {
+               skip_comment(it, end);
+               break;
+            }
+            default:
+               return;
          }
       }
    }
@@ -105,12 +110,16 @@ namespace glz::detail
    inline void skip_ws_no_comments(auto&& it, auto&& end)
    {
       while (it != end) {
-         // assuming ascii
-         if (static_cast<uint8_t>(*it) < 33) {
-            ++it;
-         }
-         else {
-            break;
+         switch (*it)
+         {
+            case '\t':
+            case '\n':
+            case '\r':
+            case ' ':
+               ++it;
+               break;
+            default:
+               return;
          }
       }
    }
