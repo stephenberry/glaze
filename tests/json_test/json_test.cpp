@@ -34,6 +34,7 @@ struct my_struct
 
 template <>
 struct glz::meta<my_struct> {
+   static constexpr std::string_view name = "my_struct";
    using T = my_struct;
    static constexpr auto value = object(
       "i", [](auto&& v) { return v.i; },  //
@@ -228,6 +229,7 @@ struct Escaped
 
 template <>
 struct glz::meta<Escaped> {
+   static constexpr std::string_view name = "Escaped";
    using T = Escaped;
    static constexpr auto value = object(R"(escaped"key)", &T::escaped_key, //
                                         R"(escaped""key2)", &T::escaped_key2,
@@ -1941,6 +1943,7 @@ struct study_obj
 template <>
 struct glz::meta<study_obj>
 {
+   static constexpr std::string_view name = "study_obj";
    using T = study_obj;
    static constexpr auto value = object("x", &T::x, "y", &T::y);
 };
@@ -2149,6 +2152,7 @@ struct variant_custom
 template <>
 struct glz::meta<variant_custom>
 {
+   static constexpr std::string_view name = "variant_custom";
    using T = variant_custom;
    static constexpr auto value = object("v", &T::v);
 };
@@ -2182,6 +2186,7 @@ struct variant_obj
 template <>
 struct glz::meta<variant_obj>
 {
+   static constexpr std::string_view name = "variant_obj";
    using T = variant_obj;
    static constexpr auto value = object("v", &T::v);
 };
@@ -2248,6 +2253,7 @@ struct holder0_t {
 template <>
 struct glz::meta<holder0_t>
 {
+   static constexpr std::string_view name = "holder0_t";
    using T = holder0_t;
    static constexpr auto value = object("i", &T::i);
 };
@@ -2259,6 +2265,7 @@ struct holder1_t {
 template <>
 struct glz::meta<holder1_t>
 {
+   static constexpr std::string_view name = "holder1_t";
    using T = holder1_t;
    static constexpr auto value = object("a", &T::a);
 };
@@ -2270,6 +2277,7 @@ struct holder2_t {
 template <>
 struct glz::meta<holder2_t>
 {
+   static constexpr std::string_view name = "holder2_t";
    using T = holder2_t;
    static constexpr auto value = object("vec", &T::vec);
 };
@@ -2329,6 +2337,7 @@ struct includer_struct
 template <>
 struct glz::meta<includer_struct>
 {
+   static constexpr std::string_view name = "includer_struct";
    using T = includer_struct;
    static constexpr auto value = object("#include", glz::file_include{}, "str", &T::str, "i", &T::i);
 };
@@ -2384,6 +2393,7 @@ struct nested0
 template <>
 struct glz::meta<nested0>
 {
+   static constexpr std::string_view name = "nested0";
    using T = nested0;
    static constexpr auto value = object("#include", glz::file_include{}, "a", &T::a, "b", &T::b);
 };
@@ -2607,6 +2617,7 @@ struct hide_struct
 template <>
 struct glz::meta<hide_struct>
 {
+   static constexpr std::string_view name = "hide_struct";
    using T = hide_struct;
    static constexpr auto value = object("i", &T::i,  //
                                         "d", &T::d, //
@@ -2645,6 +2656,7 @@ struct mem_f_struct
 template <>
 struct glz::meta<mem_f_struct>
 {
+   static constexpr std::string_view name = "mem_f_struct";
    using T = mem_f_struct;
    static constexpr auto value = object("i", &T::i,  //
                                         "access", &T::access
@@ -2676,6 +2688,7 @@ struct dog
 template <>
 struct glz::meta<dog>
 {
+   static constexpr std::string_view name = "dog";
    using T = dog;
    static constexpr auto value = object("age", &T::age, "eat", &T::eat);
 };
@@ -2695,6 +2708,7 @@ struct cat
 template <>
 struct glz::meta<cat>
 {
+   static constexpr std::string_view name = "cat";
    using T = cat;
    static constexpr auto value = object("age", &T::age, "eat", &T::eat, "purr", &T::purr);
 };
@@ -2704,6 +2718,7 @@ struct person {
 };
 
 template <> struct glz::meta<person> {
+   static constexpr std::string_view name = "person";
    static constexpr auto value = object("eat", &person::eat);
 };
 
@@ -2716,6 +2731,7 @@ struct animal
 template <>
 struct glz::meta<animal>
 {
+   static constexpr std::string_view name = "animal";
    using T = animal;
    static constexpr auto value = object("age", &T::age, "eat", &T::eat);
 };
@@ -2730,6 +2746,7 @@ struct complex_function_call_t
 template <>
 struct glz::meta<complex_function_call_t>
 {
+   static constexpr std::string_view name = "complex_function_call_t";
    using T = complex_function_call_t;
    static constexpr auto value = object("string", &T::string);
 };
@@ -2744,6 +2761,7 @@ struct string_t
 template <>
 struct glz::meta<string_t>
 {
+   static constexpr std::string_view name = "string_t";
    using T = string_t;
    static constexpr auto value = object("string", &T::string);
 };
@@ -2878,6 +2896,7 @@ struct obj_t
 
 template <>
 struct glz::meta<fixed_object_t> {
+   static constexpr std::string_view name = "fixed_object_t";
    using T = fixed_object_t;
    static constexpr auto value = object(
       "int_array", &T::int_array,
@@ -2888,6 +2907,7 @@ struct glz::meta<fixed_object_t> {
 
 template <>
 struct glz::meta<fixed_name_object_t> {
+   static constexpr std::string_view name = "fixed_name_object_t";
    using T = fixed_name_object_t;
    static constexpr auto value = object(
       "name0", &T::name0,
@@ -2900,6 +2920,7 @@ struct glz::meta<fixed_name_object_t> {
 
 template <>
 struct glz::meta<nested_object_t> {
+   static constexpr std::string_view name = "nested_object_t";
    using T = nested_object_t;
    static constexpr auto value = object(
       "v3s", &T::v3s,
@@ -2909,6 +2930,7 @@ struct glz::meta<nested_object_t> {
 
 template <>
 struct glz::meta<another_object_t> {
+   static constexpr std::string_view name = "another_object_t";
    using T = another_object_t;
    static constexpr auto value = object(
       "string", &T::string,
@@ -2920,6 +2942,7 @@ struct glz::meta<another_object_t> {
 
 template <>
 struct glz::meta<obj_t> {
+   static constexpr std::string_view name = "obj_t";
    using T = obj_t;
    static constexpr auto value = object(
       "fixed_object", &T::fixed_object,

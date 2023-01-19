@@ -34,6 +34,16 @@ namespace glz
       using V = std::remove_reference_t<T>;
       static constexpr std::string_view name = detail::join_v<name_v<V>, chars<"&">>;
    };
+
+   template <class T>
+   concept rvalue_reference = std::is_rvalue_reference_v<T>;
+
+   template <rvalue_reference T>
+   struct meta<T>
+   {
+      using V = std::remove_reference_t<T>;
+      static constexpr std::string_view name = detail::join_v<name_v<V>, chars<"&&">>;
+   };
    
    template <class T>
    concept constant = std::is_const_v<T>;
@@ -51,5 +61,12 @@ namespace glz
    struct meta<T> {
       using V = std::remove_pointer_t<T>;
       static constexpr std::string_view name = detail::join_v<name_v<V>, chars<"*">>;
+   };
+
+   template <typename Ret, typename Obj, class... Args>
+   struct meta<Ret (Obj::*)(Args...)>
+   {
+   static constexpr std::string_view name =
+         detail::join_v<name_v<Ret>, chars<" (">, name_v<Obj>, chars<"::*)(">, name_v<Args>..., chars<")">>;
    };
 }
