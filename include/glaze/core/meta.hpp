@@ -66,13 +66,13 @@ namespace glz
       if constexpr (named<T>) {
          if constexpr (detail::local_meta_t<T>) {
             if constexpr (fail_on_unknown) {
-               static_assert(T::glaze::name.find("glz::unknown") == std::string::npos, "name_v used on unnamed type");
+               static_assert(T::glaze::name.find("glz::unknown") == std::string_view::npos, "name_v used on unnamed type");
             }
             return T::glaze::name;
          }
          else {
             if constexpr (fail_on_unknown) {
-               static_assert(meta<T>::name.find("glz::unknown") == std::string::npos, "name_v used on unnamed type");
+               static_assert(meta<T>::name.find("glz::unknown") == std::string_view::npos, "name_v used on unnamed type");
             }
             return meta<T>::name;
          }
