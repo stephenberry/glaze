@@ -34,4 +34,10 @@ namespace glz
       static constexpr std::string_view name =
          detail::variant_name_impl<T>(std::make_index_sequence<std::variant_size_v<T>>());
    };
+
+   template <>
+   struct meta<std::monostate>
+   {
+      static constexpr std::string_view name = "std::monostate";
+   };
 }
