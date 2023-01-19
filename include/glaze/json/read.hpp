@@ -525,9 +525,6 @@ namespace glz
             for (size_t i = 0; i < n; ++i) {
                read<json>::op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
                skip_ws(it, end);
-               if (it == end) {
-                  throw std::runtime_error("Unexpected end");
-               }
                if (*it == ',') [[likely]] {
                   ++it;
                   skip_ws(it, end);
