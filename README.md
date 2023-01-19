@@ -142,21 +142,21 @@ glz::write_file_json(obj, "./obj.txt"); // explicit JSON write
 
 ## How To Use Glaze
 
-### [CPM](https://github.com/cpm-cmake/CPM.cmake)
-
+### [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html)
 ```cmake
-include(cmake/CPM.cmake)
+include(FetchContent)
 
-CPMFindPackage(
-   NAME glaze
-   GIT_REPOSITORY https://github.com/stephenberry/glaze
-   GIT_TAG main
+FetchContent_Declare(
+  glaze
+  GIT_REPOSITORY https://github.com/stephenberry/glaze.git
+  GIT_TAG main
+  GIT_SHALLOW TRUE
 )
 
-target_link_libraries(${PROJECT_NAME} glaze::glaze)
-```
+FetchContent_MakeAvailable(glaze)
 
-> CPM will search via `find_package` first, to see if dependencies have been installed. If not, CPM will automatically pull the dependencies into your project.
+target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze)
+```
 
 ### [Conan](https://conan.io)
 
