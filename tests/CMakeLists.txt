@@ -1,7 +1,5 @@
 include(FetchContent)
 
-Set(FETCHCONTENT_QUIET FALSE)
-
 set(BOOST_UT_ENABLE_RUN_AFTER_BUILD OFF CACHE INTERNAL "")
 set(BOOST_UT_DISABLE_MODULE ON CACHE INTERNAL "")
 
@@ -12,7 +10,11 @@ FetchContent_Declare(
   FIND_PACKAGE_ARGS
 )
 
+message(STATUS "Fetching dependencies...")
+
 FetchContent_MakeAvailable(ut)
+
+message(STATUS "...finished fetching dependencies.")
 
 add_subdirectory(api_test)
 add_subdirectory(binary_test)
