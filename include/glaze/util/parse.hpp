@@ -8,7 +8,8 @@
 
 namespace glz::detail
 {
-   template <char c, bool is_null_terminated = false>
+   // assumes null terminated by default
+   template <char c, bool is_null_terminated = true>
    inline void match(auto&& it, auto&& end)
    {
       if constexpr (is_null_terminated) {
