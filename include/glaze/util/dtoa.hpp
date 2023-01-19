@@ -906,9 +906,11 @@ namespace glz
       buf[0] = (uint8_t)(a + '0');
       buf += a > 0;
       lz = bb < 10 && a == 0;
-      ((uint16_t *)buf)[0] = *(const uint16_t *)(char_table + (bb * 2 + lz));
+      //((uint16_t *)buf)[0] = *(const uint16_t *)(char_table + (bb * 2 + lz));
+      std::memcpy(buf, char_table + (bb * 2 + lz), 2);
       buf -= lz;
-      ((uint16_t *)buf)[1] = ((const uint16_t *)char_table)[cc];
+      //((uint16_t *)buf)[1] = ((const uint16_t *)char_table)[cc];
+      std::memcpy(buf + 2, char_table + 2*cc, 2);
 
       if (ffgghhii) {
          uint32_t dd = (ddee * 5243) >> 19;                        /* (ddee / 100) */
@@ -917,15 +919,21 @@ namespace glz
          uint32_t hhii = ffgghhii - ffgg * 10000;                  /* (val % 10000) */
          uint32_t ff = (ffgg * 5243) >> 19;                        /* (aabb / 100) */
          uint32_t gg = ffgg - ff * 100;                            /* (aabb % 100) */
-         ((uint16_t *)buf)[2] = ((const uint16_t *)char_table)[dd];
-         ((uint16_t *)buf)[3] = ((const uint16_t *)char_table)[ee];
-         ((uint16_t *)buf)[4] = ((const uint16_t *)char_table)[ff];
-         ((uint16_t *)buf)[5] = ((const uint16_t *)char_table)[gg];
+         //((uint16_t *)buf)[2] = ((const uint16_t *)char_table)[dd];
+         std::memcpy(buf + 4, char_table + 2*dd, 2);
+         //((uint16_t *)buf)[3] = ((const uint16_t *)char_table)[ee];
+         std::memcpy(buf + 6, char_table + 2*ee, 2);
+         //((uint16_t *)buf)[4] = ((const uint16_t *)char_table)[ff];
+         std::memcpy(buf + 8, char_table + 2*ff, 2);
+         //((uint16_t *)buf)[5] = ((const uint16_t *)char_table)[gg];
+         std::memcpy(buf + 10, char_table + 2*gg, 2);
          if (hhii) {
             uint32_t hh = (hhii * 5243) >> 19; /* (ccdd / 100) */
             uint32_t ii = hhii - hh * 100;     /* (ccdd % 100) */
-            ((uint16_t *)buf)[6] = ((const uint16_t *)char_table)[hh];
-            ((uint16_t *)buf)[7] = ((const uint16_t *)char_table)[ii];
+            //((uint16_t *)buf)[6] = ((const uint16_t *)char_table)[hh];
+            std::memcpy(buf + 12, char_table + 2*hh, 2);
+            //((uint16_t *)buf)[7] = ((const uint16_t *)char_table)[ii];
+            std::memcpy(buf + 14, char_table + 2*ii, 2);
             tz1 = dec_trailing_zero_table[hh];
             tz2 = dec_trailing_zero_table[ii];
             tz = ii ? tz2 : (tz1 + 2);
@@ -944,8 +952,10 @@ namespace glz
          if (ddee) {
             uint32_t dd = (ddee * 5243) >> 19; /* (ddee / 100) */
             uint32_t ee = ddee - dd * 100;     /* (ddee % 100) */
-            ((uint16_t *)buf)[2] = ((const uint16_t *)char_table)[dd];
-            ((uint16_t *)buf)[3] = ((const uint16_t *)char_table)[ee];
+            //((uint16_t *)buf)[2] = ((const uint16_t *)char_table)[dd];
+            std::memcpy(buf + 4, char_table + 2*dd, 2);
+            //((uint16_t *)buf)[3] = ((const uint16_t *)char_table)[ee];
+            std::memcpy(buf + 6, char_table + 2*ee, 2);
             tz1 = dec_trailing_zero_table[dd];
             tz2 = dec_trailing_zero_table[ee];
             tz = ee ? tz2 : (tz1 + 2);
@@ -1075,7 +1085,8 @@ namespace glz
             exp_dec = std::abs(exp_dec);
             if (exp_dec < 100) {
                uint32_t lz = exp_dec < 10;
-               *(uint16_t *)buffer = *(const uint16_t *)(char_table + (exp_dec * 2 + lz));
+               //*(uint16_t *)buffer = *(const uint16_t *)(char_table + (exp_dec * 2 + lz));
+               std::memcpy(buffer, char_table + (exp_dec * 2 + lz), 2);
                return buffer + 2 - lz;
             }
             else {

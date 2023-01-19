@@ -8,7 +8,22 @@
 
 namespace glz::detail
 {
-   template <char c, bool is_null_terminated = false>
+   // assumes null terminated
+   template <char c>
+   inline void match(auto&& it)
+   {
+      if (*it != c) [[unlikely]] {
+         static constexpr char b[] = {c, '\0'};
+         static constexpr auto error = concat_arrays("Expected:", b);
+         throw std::runtime_error(error.data());
+      }
+      else [[likely]] {
+         ++it;
+      }
+   }
+   
+   // assumes null terminated by default
+   template <char c, bool is_null_terminated = true>
    inline void match(auto&& it, auto&& end)
    {
       if constexpr (is_null_terminated) {
@@ -133,8 +148,8 @@ namespace glz::detail
 
       const auto end_m7 = stop - 7;
       for (; current < end_m7; current += 8) {
-         // TODO: Change to memcpy
-         const auto chunk = *reinterpret_cast<const uint64_t*>(current);
+         uint64_t chunk;
+         std::memcpy(&chunk, current, 8);
          uint64_t test = has_qoute(chunk) | has_escape(chunk);
          if (test != 0) {
             current += (std::countr_zero(test) >> 3);
@@ -176,8 +191,8 @@ namespace glz::detail
 
       const auto end_m7 = stop - 7;
       for (; current < end_m7; current += 8) {
-         // TODO: Change to memcpy
-         const auto chunk = *reinterpret_cast<const uint64_t*>(current);
+         uint64_t chunk;
+         std::memcpy(&chunk, current, 8);
          uint64_t test = has_qoute(chunk);
          if (test != 0) {
             current += (std::countr_zero(test) >> 3);
@@ -275,7 +290,7 @@ namespace glz::detail
    inline std::string_view parse_key(auto&& it, auto&& end)
    {
       skip_ws(it, end);
-      match<'"'>(it, end);
+      match<'"'>(it);
       auto start = it;
       skip_till_quote(it, end);
       return { start, static_cast<size_t>(it++ - start) };

@@ -1060,6 +1060,7 @@ void read_tests() {
       {
          std::string str = "0.96875";
          std::vector<char> s(str.begin(), str.end());
+         s.emplace_back('\0'); // null terminate buffer
          double f{};
          glz::read_json(f, s);
          expect(f == 0.96875);
