@@ -1,3 +1,7 @@
+// Glaze Library
+// For the license information refer to glaze.hpp
+#pragma once
+
 #include "glaze/json/write.hpp"
 #include "glaze/api/impl.hpp"
 
