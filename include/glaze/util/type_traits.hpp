@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <functional>
+
 namespace glz
 {
    template <class... Args> struct false_t : std::false_type {};

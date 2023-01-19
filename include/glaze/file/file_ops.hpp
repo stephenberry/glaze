@@ -32,7 +32,7 @@ namespace glz
    }
 
    template <class T>
-   T file_to_buffer(T&& file_name)
+   std::string file_to_buffer(T&& file_name)
    {
       std::string buffer{};
       file_to_buffer(buffer, std::forward<T>(file_name));
