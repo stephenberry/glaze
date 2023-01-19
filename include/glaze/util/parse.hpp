@@ -201,7 +201,6 @@ namespace glz::detail
       // Tail end of buffer. Should be rare we even get here
       while (current < stop) {
          switch (*current) {
-         case '\\':
          case '"':
             it += current - start;
             return;
