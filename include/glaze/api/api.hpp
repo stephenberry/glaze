@@ -39,7 +39,7 @@ namespace glz
          template <class Ret, class... Args>
          [[nodiscard]] Ret call(const sv path, Args&&... args);
          
-         [[nodiscard]] bool contains(const sv path) noexcept = 0;
+         [[nodiscard]] virtual bool contains(const sv path) noexcept = 0;
 
          virtual bool read(const uint32_t /*format*/, const sv /*path*/,
                            const sv /*data*/) noexcept = 0;
