@@ -86,7 +86,7 @@ namespace glz::detail
 
    inline void skip_ws(auto&& it, auto&& end)
    {
-      while (it != end) {
+      while (true) {
          switch (*it)
          {
             case '\t':
