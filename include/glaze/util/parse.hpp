@@ -173,9 +173,6 @@ namespace glz::detail
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
-      if (it == end) [[unlikely]]
-         throw std::runtime_error("Unexpected end, expected escape or quote");
-
       const char* start = &(*it);
       const char* current = start;
       const char* stop = start + std::distance(it, end);
@@ -201,7 +198,6 @@ namespace glz::detail
       // Tail end of buffer. Should be rare we even get here
       while (current < stop) {
          switch (*current) {
-         case '\\':
          case '"':
             it += current - start;
             return;

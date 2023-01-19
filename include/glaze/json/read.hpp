@@ -713,6 +713,30 @@ namespace glz
       };
       
       template <class T>
+      inline constexpr bool keys_may_contain_escape()
+      {
+         auto is_unicode = [](const auto c) {
+            return (static_cast<uint8_t>(c) >> 7) > 0;
+         };
+         
+         bool may_escape = false;
+         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         for_each<N>([&](auto I) {
+            constexpr auto s = [] {
+               return glz::tuplet::get<0>(glz::tuplet::get<decltype(I)::value>(meta_v<T>));
+            }(); // MSVC internal compiler error workaround
+            for (auto& c : s) {
+               if (c == '\\' || c == '"' || is_unicode(c)) {
+                  may_escape = true;
+                  return;
+               }
+            }
+         });
+         
+         return may_escape;
+      }
+      
+      template <class T>
       requires map_t<T> || glaze_object_t<T>
       struct from_json<T>
       {
@@ -746,15 +770,23 @@ namespace glz
                   skip_ws(it, end);
                   match<'"'>(it);
                   auto start = it;
-                  skip_till_escape_or_quote(it, end);
-                  if (*it == '\\') [[unlikely]] {
-                     // we dont' optimize this currently because it would increase binary size significantly with the complexity of generating escaped compile time versions of keys
-                     it = start;
-                     static thread_local std::string static_key{};
-                     read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
-                     key = static_key;
+                                    
+                  if constexpr (keys_may_contain_escape<T>()) {
+                     skip_till_escape_or_quote(it, end);
+                     if (*it == '\\') [[unlikely]] {
+                        // we dont' optimize this currently because it would increase binary size significantly with the complexity of generating escaped compile time versions of keys
+                        it = start;
+                        static thread_local std::string static_key{};
+                        read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
+                        key = static_key;
+                     }
+                     else [[likely]] {
+                        key = sv{ start, static_cast<size_t>(it - start) };
+                        ++it;
+                     }
                   }
-                  else [[likely]] {
+                  else {
+                     skip_till_quote(it, end);
                      key = sv{ start, static_cast<size_t>(it - start) };
                      ++it;
                   }
