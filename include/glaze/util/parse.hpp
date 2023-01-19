@@ -53,10 +53,8 @@ namespace glz::detail
    {
       const auto n = static_cast<size_t>(std::distance(it, end));
       if ((n < str.size) || (std::memcmp(it, str.value, str.size) != 0)) [[unlikely]] {
-         // TODO: compile time generate this message, currently borken with
-         // MSVC
-         static constexpr auto error = "Unexpected end of buffer. Expected:";
-         throw std::runtime_error(error);
+         static constexpr auto error = join_v<chars<"Expected:">, chars<str>>;
+         throw std::runtime_error(error.data());
       }
       it += str.size;
    }
@@ -107,9 +105,9 @@ namespace glz::detail
       }
    }
    
-   inline void skip_ws_no_comments(auto&& it, auto&& end)
+   inline void skip_ws_no_comments(auto&& it) noexcept
    {
-      while (it != end) {
+      while (true) {
          switch (*it)
          {
             case '\t':
