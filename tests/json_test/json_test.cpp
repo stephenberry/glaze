@@ -398,6 +398,12 @@ void basic_types() {
       glz::read_json(val, "false");
       expect(val == false);
    };
+   
+   "bool read invalid"_test = [] {
+      bool val{};
+      expect(throws([&]{ glz::read_json(val, "tru"); }));
+      expect(throws([&]{ glz::read_json(val, "alse"); }));
+   };
 
    "string write"_test = [] {
       std::string buffer{};

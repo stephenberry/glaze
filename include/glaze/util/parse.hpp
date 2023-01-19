@@ -52,23 +52,13 @@ namespace glz::detail
    inline void match(auto&& it, auto&& end)
    {
       const auto n = static_cast<size_t>(std::distance(it, end));
-      if (n < str.size) [[unlikely]] {
+      if ((n < str.size) || (std::memcmp(it, str.value, str.size) != 0)) [[unlikely]] {
          // TODO: compile time generate this message, currently borken with
          // MSVC
          static constexpr auto error = "Unexpected end of buffer. Expected:";
          throw std::runtime_error(error);
       }
-      size_t i{};
-      // clang and gcc will vectorize this loop
-      for (auto* c = str.value; c < str.end(); ++it, ++c) {
-         i += *it != *c;
-      }
-      if (i != 0) [[unlikely]] {
-         // TODO: compile time generate this message, currently borken with
-         // MSVC
-         static constexpr auto error = "Expected: ";
-         throw std::runtime_error(error);
-      }
+      it += str.size;
    }
 
    inline void skip_comment(auto&& it, auto&& end)
