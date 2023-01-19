@@ -133,8 +133,8 @@ namespace glz::detail
 
       const auto end_m7 = stop - 7;
       for (; current < end_m7; current += 8) {
-         // TODO: Change to memcpy
-         const auto chunk = *reinterpret_cast<const uint64_t*>(current);
+         uint64_t chunk;
+         std::memcpy(&chunk, current, 8);
          uint64_t test = has_qoute(chunk) | has_escape(chunk);
          if (test != 0) {
             current += (std::countr_zero(test) >> 3);
@@ -176,8 +176,8 @@ namespace glz::detail
 
       const auto end_m7 = stop - 7;
       for (; current < end_m7; current += 8) {
-         // TODO: Change to memcpy
-         const auto chunk = *reinterpret_cast<const uint64_t*>(current);
+         uint64_t chunk;
+         std::memcpy(&chunk, current, 8);
          uint64_t test = has_qoute(chunk);
          if (test != 0) {
             current += (std::countr_zero(test) >> 3);
