@@ -28,7 +28,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
-*Note: [simdjson](https://github.com/simdjson/simdjson) (on demand) is great for parsing, but can experience major performance losses when the data is not in the expected sequence (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user.*
+*Note: [simdjson](https://github.com/simdjson/simdjson) (on demand) is great for parsing, but can experience major performance losses when the data is not in the expected sequence (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user. Also, this benchmark does not consider the cost of populating the padded_string for simdjson.*
 
 [ABC Test](https://github.com/stephenberry/json_performance) shows how simdjson (ondemand) has poor performance when keys are not in the expected sequence:
 
