@@ -160,7 +160,6 @@ namespace glz
 
          constexpr string_literal() = default;
 
-
          constexpr string_literal(const char (&str)[N])
          {
             std::copy_n(str, N, value);

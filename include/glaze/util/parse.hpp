@@ -52,23 +52,11 @@ namespace glz::detail
    inline void match(auto&& it, auto&& end)
    {
       const auto n = static_cast<size_t>(std::distance(it, end));
-      if (n < str.size) [[unlikely]] {
-         // TODO: compile time generate this message, currently borken with
-         // MSVC
-         static constexpr auto error = "Unexpected end of buffer. Expected:";
-         throw std::runtime_error(error);
+      if ((n < str.size) || (std::memcmp(it, str.value, str.size) != 0)) [[unlikely]] {
+         static constexpr auto error = join_v<chars<"Expected:">, chars<str>>;
+         throw std::runtime_error(error.data());
       }
-      size_t i{};
-      // clang and gcc will vectorize this loop
-      for (auto* c = str.value; c < str.end(); ++it, ++c) {
-         i += *it != *c;
-      }
-      if (i != 0) [[unlikely]] {
-         // TODO: compile time generate this message, currently borken with
-         // MSVC
-         static constexpr auto error = "Expected: ";
-         throw std::runtime_error(error);
-      }
+      it += str.size;
    }
 
    inline void skip_comment(auto&& it, auto&& end)
@@ -98,29 +86,38 @@ namespace glz::detail
 
    inline void skip_ws(auto&& it, auto&& end)
    {
-      while (it != end) {
-         // assuming ascii
-         if (static_cast<uint8_t>(*it) < 33) {
-            ++it;
-         }
-         else if (*it == '/') {
-            skip_comment(it, end);
-         }
-         else {
-            break;
+      while (true) {
+         switch (*it)
+         {
+            case '\t':
+            case '\n':
+            case '\r':
+            case ' ':
+               ++it;
+               break;
+            case '/': {
+               skip_comment(it, end);
+               break;
+            }
+            default:
+               return;
          }
       }
    }
    
-   inline void skip_ws_no_comments(auto&& it, auto&& end)
+   inline void skip_ws_no_comments(auto&& it) noexcept
    {
-      while (it != end) {
-         // assuming ascii
-         if (static_cast<uint8_t>(*it) < 33) {
-            ++it;
-         }
-         else {
-            break;
+      while (true) {
+         switch (*it)
+         {
+            case '\t':
+            case '\n':
+            case '\r':
+            case ' ':
+               ++it;
+               break;
+            default:
+               return;
          }
       }
    }

@@ -400,6 +400,12 @@ void basic_types() {
       glz::read_json(val, "false");
       expect(val == false);
    };
+   
+   "bool read invalid"_test = [] {
+      bool val{};
+      expect(throws([&]{ glz::read_json(val, "tru"); }));
+      expect(throws([&]{ glz::read_json(val, "alse"); }));
+   };
 
    "string write"_test = [] {
       std::string buffer{};
@@ -938,7 +944,8 @@ void early_end()
       std::string_view buffer = buffer_data;
       while (buffer.size() > 0)
       {
-         buffer = buffer.substr(0, buffer.size() - 1);
+         buffer_data.pop_back();
+         buffer = buffer_data;
          // This is mainly to check if all our end checks are in place. In debug mode it should check if we try to read past the end and abort.
          expect(throws([&] { glz::read_json(obj, buffer); }));
       }
