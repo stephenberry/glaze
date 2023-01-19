@@ -134,12 +134,12 @@ namespace glz
             
             if (is_glaze_object) {
                skip_ws(it, end);
-               match<'{'>(it, end);
+               match<'{'>(it);
                skip_ws(it, end);
                
                match<R"("type")">(it, end);
                skip_ws(it, end);
-               match<':'>(it, end);
+               match<':'>(it);
                
                using V = std::decay_t<decltype(value)>;
                
@@ -150,7 +150,7 @@ namespace glz
                static thread_local std::string type{};
                read<json>::op<Opts>(type, ctx, it, end);
                skip_ws(it, end);
-               match<','>(it, end);
+               match<','>(it);
                
                for_each<N>([&](auto I) {
                   constexpr auto N = [] {
@@ -241,7 +241,7 @@ namespace glz
             }
             
             if constexpr (!Opts.opening_handled) {
-               match<'"'>(it, end);
+               match<'"'>(it);
             }
             
             // overwrite portion
@@ -339,7 +339,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            match<'"'>(it, end);
+            match<'"'>(it);
             if (it == end) [[unlikely]]
                throw std::runtime_error("Unxpected end of buffer");
             if (*it == '\\') [[unlikely]] {
@@ -434,7 +434,7 @@ namespace glz
             else {
                value = *it++;
             }
-            match<'"'>(it, end);
+            match<'"'>(it);
          }
       };
 
@@ -464,9 +464,9 @@ namespace glz
          static void op(auto& /*value*/, is_context auto&& /*ctx*/, auto&& it, auto&& end)
          {
             skip_ws(it, end);
-            match<'"'>(it, end);
+            match<'"'>(it);
             skip_till_quote(it, end);
-            match<'"'>(it, end);
+            match<'"'>(it);
          }
       };
       
@@ -496,7 +496,7 @@ namespace glz
             }
             static constexpr auto Opts = ws_handled_off<Options>();
             
-            match<'['>(it, end);
+            match<'['>(it);
             skip_ws(it, end);
             if (it == end) {
                throw std::runtime_error("Unexpected end");
@@ -611,7 +611,7 @@ namespace glz
             }
             static constexpr auto Opts = ws_handled_off<Options>();
             
-            match<'['>(it, end);
+            match<'['>(it);
             const auto n = number_of_array_elements(it, end);
             value.resize(n);
             size_t i = 0;
@@ -619,11 +619,11 @@ namespace glz
                read<json>::op<Opts>(x, ctx, it, end);
                skip_ws(it, end);
                if (i < n - 1) {
-                  match<','>(it, end);
+                  match<','>(it);
                }
                ++i;
             }
-            match<']'>(it, end);
+            match<']'>(it);
          }
       };
 
@@ -649,7 +649,7 @@ namespace glz
                skip_ws(it, end);
             }
             
-            match<'['>(it, end);
+            match<'['>(it);
             skip_ws(it, end);
             
             for_each<N>([&](auto I) {
@@ -657,7 +657,7 @@ namespace glz
                   return;
                }
                if constexpr (I != 0) {
-                  match<','>(it, end);
+                  match<','>(it);
                   skip_ws(it, end);
                }
                if constexpr (is_std_tuple<T>) {
@@ -672,7 +672,7 @@ namespace glz
                skip_ws(it, end);
             });
             
-            match<']'>(it, end);
+            match<']'>(it);
          }
       };
       
@@ -721,7 +721,7 @@ namespace glz
          {
             if constexpr (!Options.opening_handled) {
                skip_ws(it, end);
-               match<'{'>(it, end);
+               match<'{'>(it);
             }
             
             skip_ws(it, end);
@@ -737,14 +737,14 @@ namespace glz
                else if (first) [[unlikely]]
                   first = false;
                else [[likely]] {
-                  match<','>(it, end);
+                  match<','>(it);
                }
                
                if constexpr (glaze_object_t<T>) {
                   std::string_view key;
                   // skip white space and escape characters and find the string
                   skip_ws(it, end);
-                  match<'"'>(it, end);
+                  match<'"'>(it);
                   auto start = it;
                   skip_till_escape_or_quote(it, end);
                   if (*it == '\\') [[unlikely]] {
@@ -760,7 +760,7 @@ namespace glz
                   }
                   
                   skip_ws(it, end);
-                  match<':'>(it, end);
+                  match<':'>(it);
                   
                   static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
                   if constexpr (Opts.error_on_unknown_keys) {
@@ -788,7 +788,7 @@ namespace glz
                   read<json>::op<Opts>(key, ctx, it, end);
                   
                   skip_ws(it, end);
-                  match<':'>(it, end);
+                  match<':'>(it);
                   
                   if constexpr (std::is_same_v<typename T::key_type,
                                                std::string>) {

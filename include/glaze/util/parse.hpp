@@ -290,7 +290,7 @@ namespace glz::detail
    inline std::string_view parse_key(auto&& it, auto&& end)
    {
       skip_ws(it, end);
-      match<'"'>(it, end);
+      match<'"'>(it);
       auto start = it;
       skip_till_quote(it, end);
       return { start, static_cast<size_t>(it++ - start) };
