@@ -15,6 +15,7 @@
 #include "glaze/util/for_each.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/strod.hpp"
+#include "glaze/json/generic_json.hpp"
 
 namespace glz
 {
@@ -115,6 +116,38 @@ namespace glz
          
          return ret;
       }
+
+      template <is_variant T>
+      constexpr auto variant_is_auto_deducible()
+      {
+         //Contains at most one each of the basic json types bool, numeric, string, object, array
+         int bools{}, numbers{}, strings{}, objects{}, arrays{};
+         constexpr auto N = std::variant_size_v<T>;
+         for_each<N>([&](auto I) {
+            using V = std::decay_t<std::variant_alternative_t<I, T>>;
+            if constexpr (bool_t<V>) ++bools;
+            if constexpr (num_t<V>) ++numbers;
+            if constexpr (str_t<V> || glaze_enum_t<V>) ++strings;
+            if constexpr (map_t<V> || glaze_object_t<V>) ++objects;
+            if constexpr (array_t<V> || glaze_array_t<V>)++ arrays;
+         });
+         return bools < 2 && numbers < 2 && strings < 2 && objects < 2 && arrays < 2;
+      }
+
+      template <typename>
+      struct variant_types;
+
+      template <typename... Ts>
+      struct variant_types<std::variant<Ts...>>
+      {
+         //TODO this way of filtering types is compile time intensive.
+         using bool_types = decltype(std::tuple_cat(std::conditional_t<bool_t<Ts>,std::tuple<Ts>,std::tuple<>>{}...));
+         using number_types = decltype(std::tuple_cat(std::conditional_t<num_t<Ts>,std::tuple<Ts>,std::tuple<>>{}...));
+         using string_types = decltype(std::tuple_cat(std::conditional_t<str_t<Ts> || glaze_enum_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+         using object_types = decltype(std::tuple_cat(std::conditional_t<map_t<Ts> || glaze_object_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+         using array_types = decltype(std::tuple_cat(std::conditional_t<array_t<Ts> || glaze_array_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+         using nullable_types = decltype(std::tuple_cat(std::conditional_t<nullable_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+      };
       
       template <is_variant T>
       struct from_json<T>
@@ -122,56 +155,130 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            const auto is_glaze_object = std::visit([](auto&& v) {
-               using V = std::decay_t<decltype(v)>;
-               if constexpr (glaze_object_t<V>) {
-                  return true;
-               }
-               else {
-                  return false;
-               }
-            }, value);
-            
-            if (is_glaze_object) {
+            if constexpr (variant_is_auto_deducible<T>()) {
                skip_ws(it, end);
-               match<'{'>(it);
-               skip_ws(it, end);
-               
-               match<R"("type")">(it, end);
-               skip_ws(it, end);
-               match<':'>(it);
-               
-               using V = std::decay_t<decltype(value)>;
-               
-               static constexpr auto names = variant_type_names<V>();
-               static constexpr auto N = names.size();
-               
-               // TODO: Change from linear search to map?
-               static thread_local std::string type{};
-               read<json>::op<Opts>(type, ctx, it, end);
-               skip_ws(it, end);
-               match<','>(it);
-               
-               for_each<N>([&](auto I) {
-                  constexpr auto N = [] {
-                     return names[decltype(I)::value].size();
-                  }(); // MSVC internal compiler error workaround
-                  if (string_cmp_n<N>(type, names[I])) {
-                     using V = std::variant_alternative_t<I, T>;
-                     if (!std::holds_alternative<V>(value)) {
-                        // default construct the value if not matching
-                        value = V{};
+               switch (*it) {
+                  case '{':
+                     using object_types = variant_types<T>::object_types;
+                     if constexpr (std::tuple_size_v<object_types> < 1) {
+                        throw std::runtime_error("Encounted object in variant with no object type");
                      }
-                     read<json>::op<opening_handled<Opts>()>(std::get<I>(value), ctx, it, end);
-                     return;
+                     else {
+                        ++it;
+                        using V = std::tuple_element_t<0, object_types>;
+                        value = V{};
+                        read<json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     }
+                     break;
+                  case '[':
+                     using array_types = variant_types<T>::array_types;
+                     if constexpr (std::tuple_size_v<array_types> < 1) {
+                        throw std::runtime_error("Encountered array in variant with no array type");
+                     }
+                     else {
+                        using V = std::tuple_element_t<0, array_types>;
+                        value = V{};
+                        read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     }
+                     break;
+                  case '"': {
+                     using string_types = variant_types<T>::string_types;
+                     if constexpr (std::tuple_size_v<string_types> < 1) {
+                        throw std::runtime_error("Encountered string in variant with no string type");
+                     }
+                     else {
+                        using V = std::tuple_element_t<0, string_types>;
+                        value = V{};
+                        read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     }
+                     break;
                   }
-               });
+                  case 't':
+                  case 'f': {
+                     using bool_types = variant_types<T>::bool_types;
+                     if constexpr (std::tuple_size_v<bool_types> < 1) {
+                        throw std::runtime_error("No matching type in variant");
+                     }
+                     else {
+                        using V = std::tuple_element_t<0, bool_types>;
+                        value = V{};
+                        read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     }
+                     break;
+                  }
+                  //TODO handle nullable
+                  //case 'n':
+                  //   break;
+                  default: {
+                     // Not bool, string, object, or array so must be number or null
+                     using number_types = variant_types<T>::number_types;
+                     if constexpr (std::tuple_size_v<number_types> < 1) {
+                        throw std::runtime_error("No matching type in variant");
+                     }
+                     else {
+                        using V = std::tuple_element_t<0, number_types>;
+                        value = V{};
+                        read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     }
+                  }
+               }
             }
             else {
-               std::visit([&](auto&& v) {
-                  using V = std::decay_t<decltype(v)>;
-                  read<json>::op<Opts>(v, ctx, it, end);
-               }, value);
+               const auto is_glaze_object = std::visit(
+                  [](auto&& v) {
+                     using V = std::decay_t<decltype(v)>;
+                     if constexpr (glaze_object_t<V>) {
+                        return true;
+                     }
+                     else {
+                        return false;
+                     }
+                  },
+                  value);
+
+               if (is_glaze_object) {
+                  skip_ws(it, end);
+                  match<'{'>(it);
+                  skip_ws(it, end);
+
+                  match<R"("type")">(it, end);
+                  skip_ws(it, end);
+                  match<':'>(it);
+
+                  using V = std::decay_t<decltype(value)>;
+
+                  static constexpr auto names = variant_type_names<V>();
+                  static constexpr auto N = names.size();
+
+                  // TODO: Change from linear search to map?
+                  static thread_local std::string type{};
+                  read<json>::op<Opts>(type, ctx, it, end);
+                  skip_ws(it, end);
+                  match<','>(it);
+
+                  for_each<N>([&](auto I) {
+                     constexpr auto N = [] {
+                        return names[decltype(I)::value].size();
+                     }();  // MSVC internal compiler error workaround
+                     if (string_cmp_n<N>(type, names[I])) {
+                        using V = std::variant_alternative_t<I, T>;
+                        if (!std::holds_alternative<V>(value)) {
+                           // default construct the value if not matching
+                           value = V{};
+                        }
+                        read<json>::op<opening_handled<Opts>()>(std::get<I>(value), ctx, it, end);
+                        return;
+                     }
+                  });
+               }
+               else {
+                  std::visit(
+                     [&](auto&& v) {
+                        using V = std::decay_t<decltype(v)>;
+                        read<json>::op<Opts>(v, ctx, it, end);
+                     },
+                     value);
+               }
             }
          }
       };
@@ -849,7 +956,7 @@ namespace glz
             if (*it == 'n') {
                ++it;
                match<"ull">(it, end);
-               if constexpr (!std::is_pointer_v<T>) {
+               if constexpr (!std::is_pointer_v<T> && !std::same_as<T, generic_json>) {
                   value.reset();
                }
             }
@@ -861,6 +968,8 @@ namespace glz
                      value = std::make_unique<typename T::element_type>();
                   else if constexpr (is_specialization_v<T, std::shared_ptr>)
                      value = std::make_shared<typename T::element_type>();
+                  else if constexpr (std::same_as<T, generic_json>)
+                     value = {};
                   else
                      throw std::runtime_error(
                         "Cannot read into unset nullable that is not "
