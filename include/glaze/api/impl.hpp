@@ -40,6 +40,10 @@ namespace glz
          return get_void(user, path, type_hash);
       }
 
+      [[nodiscard]] bool contains(const sv path) noexcept override {
+        return detail::seek_impl([&](auto&& val) {}, user, path);
+      }
+
       bool read(const uint32_t format, const sv path,
                  const sv data) noexcept override
       {
