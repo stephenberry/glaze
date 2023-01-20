@@ -2212,17 +2212,32 @@ suite variant_tests = [] {
    
    "variant_read_"_test = [] {
       std::variant<int32_t, double> x = 44;
-      
       glz::read_json(x, "33");
-      
       expect(std::get<int32_t>(x) == 33);
-      
-      std::variant<std::monostate, int, std::string> m{};
-      glz::read_json(m, R"("std::monostate")");
-      expect(std::holds_alternative<std::monostate>(m) == true);
-      
-      m = 44;
-      expect(throws([&]{ glz::read_json(m, R"("std::monostate")"); }));
+   };
+
+   "variant_read_auto"_test = [] {
+      // Auto deduce variant with no conflicting basic types
+      std::variant<int, std::string, bool, std::map<std::string, double>, std::vector<std::string>> m{};
+      glz::read_json(m, R"("Hello World")");
+      expect(std::holds_alternative<std::string>(m) == true);
+      expect(std::get<std::string>(m) == "Hello World");
+
+      glz::read_json(m, R"(872)");
+      expect(std::holds_alternative<int>(m) == true);
+      expect(std::get<int>(m) == 872);
+
+      glz::read_json(m, R"({"pi":3.14})");
+      expect(std::holds_alternative<std::map<std::string, double>>(m) == true);
+      expect(std::get<std::map<std::string, double>>(m)["pi"] == 3.14);
+
+      glz::read_json(m, R"(true)");
+      expect(std::holds_alternative<bool>(m) == true);
+      expect(std::get<bool>(m) == true);
+
+      glz::read_json(m, R"(["a", "b", "c"])");
+      expect(std::holds_alternative<std::vector<std::string>>(m) == true);
+      expect(std::get<std::vector<std::string>>(m)[1] == "b");
    };
    
    "variant_read_obj"_test = [] {
@@ -2244,6 +2259,24 @@ suite variant_tests = [] {
       auto str = glz::write_json(request);
       
       expect(str == R"({"password":"123456","remember":true,"username":"paulo"})") << str;
+   };
+};
+
+suite generic_json_tests = [] {
+   "generic_json_write"_test = [] {
+      glz::json_t json = {glz::json_t::array_t{{5.0}, {"Hello World"}, {glz::json_t::object_t{{"pi", {3.14}}}}}};
+      std::string buffer{};
+      glz::write_json(json, buffer);
+      expect(buffer == R"([5,"Hello World",{"pi":3.14}])");
+   };
+
+   "generic_json_read"_test = [] {
+      glz::json_t json{};
+      std::string buffer = R"([5,"Hello World",{"pi":3.14}])";
+      glz::read_json(json, buffer);
+      expect(json[0].get<double>() == 5.0);
+      expect(json[1].get<std::string>() == "Hello World");
+      expect(json[2]["pi"].get<double>() == 3.14);
    };
 };
 
