@@ -2264,15 +2264,14 @@ suite variant_tests = [] {
 
 suite generic_json_tests = [] {
    "generic_json_write"_test = [] {
-      glz::generic_json json = {
-         glz::generic_json::array_t{{5.0}, {"Hello World"}, {glz::generic_json::object_t{{"pi", {3.14}}}}}};
+      glz::json_t json = {glz::json_t::array_t{{5.0}, {"Hello World"}, {glz::json_t::object_t{{"pi", {3.14}}}}}};
       std::string buffer{};
       glz::write_json(json, buffer);
       expect(buffer == R"([5,"Hello World",{"pi":3.14}])");
    };
 
    "generic_json_read"_test = [] {
-      glz::generic_json json{};
+      glz::json_t json{};
       std::string buffer = R"([5,"Hello World",{"pi":3.14}])";
       glz::read_json(json, buffer);
       expect(json[0].get<double>() == 5.0);

@@ -15,7 +15,7 @@
 #include "glaze/util/for_each.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/strod.hpp"
-#include "glaze/json/generic_json.hpp"
+#include "glaze/json/json_t.hpp"
 
 namespace glz
 {
@@ -159,7 +159,7 @@ namespace glz
                skip_ws(it, end);
                switch (*it) {
                   case '{':
-                     using object_types = variant_types<T>::object_types;
+                     using object_types = typename variant_types<T>::object_types;
                      if constexpr (std::tuple_size_v<object_types> < 1) {
                         throw std::runtime_error("Encounted object in variant with no object type");
                      }
@@ -171,7 +171,7 @@ namespace glz
                      }
                      break;
                   case '[':
-                     using array_types = variant_types<T>::array_types;
+                     using array_types = typename variant_types<T>::array_types;
                      if constexpr (std::tuple_size_v<array_types> < 1) {
                         throw std::runtime_error("Encountered array in variant with no array type");
                      }
@@ -182,7 +182,7 @@ namespace glz
                      }
                      break;
                   case '"': {
-                     using string_types = variant_types<T>::string_types;
+                     using string_types = typename variant_types<T>::string_types;
                      if constexpr (std::tuple_size_v<string_types> < 1) {
                         throw std::runtime_error("Encountered string in variant with no string type");
                      }
@@ -195,7 +195,7 @@ namespace glz
                   }
                   case 't':
                   case 'f': {
-                     using bool_types = variant_types<T>::bool_types;
+                     using bool_types = typename variant_types<T>::bool_types;
                      if constexpr (std::tuple_size_v<bool_types> < 1) {
                         throw std::runtime_error("No matching type in variant");
                      }
@@ -211,7 +211,7 @@ namespace glz
                   //   break;
                   default: {
                      // Not bool, string, object, or array so must be number or null
-                     using number_types = variant_types<T>::number_types;
+                     using number_types = typename variant_types<T>::number_types;
                      if constexpr (std::tuple_size_v<number_types> < 1) {
                         throw std::runtime_error("No matching type in variant");
                      }
@@ -956,7 +956,7 @@ namespace glz
             if (*it == 'n') {
                ++it;
                match<"ull">(it, end);
-               if constexpr (!std::is_pointer_v<T> && !std::same_as<T, generic_json>) {
+               if constexpr (!std::is_pointer_v<T> && !std::same_as<T, json_t>) {
                   value.reset();
                }
             }
@@ -968,7 +968,7 @@ namespace glz
                      value = std::make_unique<typename T::element_type>();
                   else if constexpr (is_specialization_v<T, std::shared_ptr>)
                      value = std::make_shared<typename T::element_type>();
-                  else if constexpr (std::same_as<T, generic_json>)
+                  else if constexpr (std::same_as<T, json_t>)
                      value = {};
                   else
                      throw std::runtime_error(
