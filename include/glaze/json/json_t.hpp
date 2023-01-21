@@ -72,6 +72,8 @@ namespace glz
 
       const val_t& operator*() const { return data; }
 
+      void reset() { data = null_t{}; }
+
       json_t() = default;
 
       template <class T>

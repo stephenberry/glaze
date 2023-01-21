@@ -24,7 +24,7 @@ namespace glz
       inline void skip_object_value(auto&& it, auto&& end)
       {
          skip_ws(it, end);
-         while (it != end) {
+         while (true) {
             switch (*it) {
                case '{':
                   skip_until_closed<'{', '}'>(it, end);
@@ -41,6 +41,8 @@ namespace glz
                case ',':
                case '}':
                case ']':
+                  break;
+               case '\0':
                   break;
                default: {
                   ++it;
@@ -337,9 +339,7 @@ namespace glz
       {
          template <auto Opts, class It, class End>
          static void op(auto& value, is_context auto&& ctx, It&& it, End&& end)
-         {
-            // TODO: this does not handle control chars like \t and \n
-            
+         {            
             if constexpr (!Opts.ws_handled) {
                skip_ws(it, end);
             }
@@ -428,8 +428,7 @@ namespace glz
                }
                else {
                   value.append(start, static_cast<size_t>(it - start));
-                  if (++it == end) [[unlikely]]
-                     throw std::runtime_error(R"(Expected ")");
+                  ++it;
                   handle_escaped();
                   start = it;
                }
@@ -444,12 +443,11 @@ namespace glz
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             match<'"'>(it);
-            if (it == end) [[unlikely]]
-               throw std::runtime_error("Unxpected end of buffer");
             if (*it == '\\') [[unlikely]] {
-               if (++it == end) [[unlikely]]
-                  throw std::runtime_error("Unxpected end of buffer");
+               ++it;
                switch (*it) {
+               case '\0':
+                  throw std::runtime_error("Unxpected end of buffer");
                case '"':
                case '\\':
                case '/':
@@ -536,6 +534,8 @@ namespace glz
                }
             }
             else {
+               if (it == end) [[unlikely]]
+                  throw std::runtime_error("Unxpected end of buffer");
                value = *it++;
             }
             match<'"'>(it);
@@ -602,9 +602,6 @@ namespace glz
             
             match<'['>(it);
             skip_ws(it, end);
-            if (it == end) {
-               throw std::runtime_error("Unexpected end");
-            }
             
             if (*it == ']') [[unlikely]] {
                ++it;
@@ -680,7 +677,7 @@ namespace glz
             return 0;
          }
          size_t count = 1;
-         while (it != end) {
+         while (true) {
             switch (*it)
             {
                case ',': {
@@ -694,6 +691,9 @@ namespace glz
                }
                case ']': {
                   return count;
+               }
+               case '\0': {
+                  throw std::runtime_error("Unxpected end of buffer");
                }
                default:
                   ++it;
@@ -757,7 +757,7 @@ namespace glz
             skip_ws(it, end);
             
             for_each<N>([&](auto I) {
-               if (it == end || *it == ']') {
+               if (*it == ']') {
                   return;
                }
                if constexpr (I != 0) {
@@ -857,7 +857,7 @@ namespace glz
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
             
             bool first = true;
-            while (it != end) {
+            while (true) {
                if (*it == '}') [[unlikely]] {
                   ++it;
                   return;
@@ -950,13 +950,10 @@ namespace glz
          {
             skip_ws(it, end);
             
-            if (it == end) {
-               throw std::runtime_error("Unexexpected eof");
-            }
             if (*it == 'n') {
                ++it;
                match<"ull">(it, end);
-               if constexpr (!std::is_pointer_v<T> && !std::same_as<T, json_t>) {
+               if constexpr (!std::is_pointer_v<T>) {
                   value.reset();
                }
             }
