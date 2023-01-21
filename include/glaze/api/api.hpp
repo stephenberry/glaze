@@ -11,6 +11,7 @@
 #include <memory>
 #include <functional>
 #include <map>
+#include <span>
 
 namespace glz
 {
@@ -24,35 +25,37 @@ namespace glz
          api& operator=(const api&) noexcept = default;
          api& operator=(api&&) noexcept = default;
          virtual ~api() noexcept {}
-         
+
          template <class T>
          [[nodiscard]] T& get(const sv path);
-         
+
          template <class T>
          [[nodiscard]] T* get_if(const sv path) noexcept;
-         
+
          // Get a std::function from a member function across the API
          template <class T>
          [[nodiscard]] T get_fn(const sv path);
-         
+
          template <class Ret, class... Args>
          [[nodiscard]] Ret call(const sv path, Args&&... args);
          
+         [[nodiscard]] virtual bool contains(const sv path) noexcept = 0;
+
          virtual bool read(const uint32_t /*format*/, const sv /*path*/,
                            const sv /*data*/) noexcept = 0;
 
          virtual bool write(const uint32_t /*format*/, const sv /*path*/, std::string& /*data*/) = 0;
-         
+
          [[nodiscard]] virtual const sv last_error() const noexcept {
             return error;
          }
-         
-      protected:
+
          /// unchecked void* access
          virtual void* get(const sv path, const sv type_hash) noexcept = 0;
-         
+      protected:
+
          virtual bool caller(const sv path, const sv type_hash, void*& ret, std::span<void*> args) noexcept = 0;
-         
+
          virtual std::unique_ptr<void, void(*)(void*)> get_fn(const sv path, const sv type_hash) noexcept = 0;
 
          std::string error{};
@@ -61,7 +64,7 @@ namespace glz
       using iface =
          std::map<std::string, std::function<std::shared_ptr<api>()>,
                   std::less<>>;
-      
+
       /// access reference via JSON pointer path
       template <class T>
       T& api::get(const sv path) {
@@ -80,7 +83,7 @@ namespace glz
    #endif
          }
       }
-      
+
       template <class T>
       T* api::get_if(const sv path) noexcept {
          static constexpr auto hash = glz::hash<T>();
@@ -90,7 +93,7 @@ namespace glz
          }
          return nullptr;
       }
-      
+
       template <class T>
       T api::get_fn(const sv path) {
          static constexpr auto hash = glz::hash<T>();
@@ -109,27 +112,27 @@ namespace glz
    #endif
          }
       }
-      
+
       template <class Ret, class... Args>
       Ret api::call(const sv path, Args&&... args)
       {
          using F = std::function<Ret(Args...)>;
          static constexpr auto hash = glz::hash<F>();
-         
+
          static constexpr auto N = sizeof...(Args);
          std::array<void*, N> arguments;
-         
+
          //auto tuple = std::make_tuple(std::forward<Args>(args)...);
          auto tuple = std::forward_as_tuple(std::forward<Args>(args)...);
-         
+
          for_each<N>([&](auto I) {
             std::get<I>(arguments) = &std::get<I>(tuple);
          });
-         
+
          if constexpr (std::is_pointer_v<Ret>) {
             void* ptr{};
             const auto success = caller(path, hash, ptr, arguments);
-            
+
             if (success) {
                return static_cast<Ret>(ptr);
             }
@@ -182,7 +185,7 @@ namespace glz
             Ret value{};
             void* ptr = &value;
             const auto success = caller(path, hash, ptr, arguments);
-            
+
             if (success) {
                return value;
             }
@@ -197,7 +200,7 @@ namespace glz
             }
          }
       }
-      
+
       using iface_fn = std::shared_ptr<glz::iface>(*)();
    }
 }
