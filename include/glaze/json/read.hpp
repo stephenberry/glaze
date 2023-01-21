@@ -840,6 +840,38 @@ namespace glz
          return may_escape;
       }
       
+      struct key_stats_t
+      {
+         uint32_t min_length = std::numeric_limits<uint32_t>::max();
+         uint32_t max_length{};
+         uint32_t length_range{};
+      };
+      
+      // only use this if the keys cannot contain escape characters
+      template <class T>
+      inline constexpr auto key_stats()
+      {
+         key_stats_t stats{};
+         
+         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         for_each<N>([&](auto I) {
+            constexpr auto s = [] {
+               return glz::tuplet::get<0>(glz::tuplet::get<decltype(I)::value>(meta_v<T>));
+            }(); // MSVC internal compiler error workaround
+            const auto n = s.size();
+            if (n < stats.min_length) {
+               stats.min_length = n;
+            }
+            if (n > stats.max_length) {
+               stats.max_length = n;
+            }
+         });
+         
+         stats.length_range = stats.max_length - stats.min_length;
+         
+         return stats;
+      }
+      
       template <class T>
       requires map_t<T> || glaze_object_t<T>
       struct from_json<T>
@@ -890,9 +922,37 @@ namespace glz
                      }
                   }
                   else {
-                     skip_till_quote(it, end);
-                     key = sv{ start, static_cast<size_t>(it - start) };
-                     ++it;
+                     static constexpr auto stats = key_stats<T>();
+                     if constexpr (stats.length_range < 8) {
+                        if ((it + stats.max_length) < end) [[likely]] {
+                           
+                           if constexpr (stats.length_range == 0) {
+                              key = sv{ start, stats.max_length };
+                              it += stats.max_length;
+                              match<'"'>(it);
+                           }
+                           else {
+                              it += stats.min_length;
+                              for (uint32_t i = 0; i < stats.length_range; ++it) {
+                                 if (*it == '"') {
+                                    break;
+                                 }
+                              }
+                              key = sv{ start, static_cast<size_t>(it - start) };
+                              match<'"'>(it);
+                           }
+                        }
+                        else [[unlikely]] {
+                           skip_till_quote(it, end);
+                           key = sv{ start, static_cast<size_t>(it - start) };
+                           ++it;
+                        }
+                     }
+                     else {
+                        skip_till_quote(it, end);
+                        key = sv{ start, static_cast<size_t>(it - start) };
+                        ++it;
+                     }
                   }
                   
                   skip_ws(it, end);
