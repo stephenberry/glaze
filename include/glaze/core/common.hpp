@@ -275,7 +275,7 @@ namespace glz
       concept complex_t = glaze_t<std::decay_t<T>>;
 
       template <class T>
-      concept str_t = !complex_t<T> && std::convertible_to<std::decay_t<T>, std::string_view>;
+      concept str_t = !complex_t<T> && !std::same_as<std::nullptr_t, T> && std::convertible_to<std::decay_t<T>, std::string_view>;
 
       template <class T>
       concept pair_t = requires(T pair)
