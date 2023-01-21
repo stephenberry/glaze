@@ -166,7 +166,7 @@ namespace glz
                      else {
                         ++it;
                         using V = std::tuple_element_t<0, object_types>;
-                        value = V{};
+                        if (!std::holds_alternative<V>(value)) value = V{};
                         read<json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
                      }
                      break;
@@ -177,7 +177,7 @@ namespace glz
                      }
                      else {
                         using V = std::tuple_element_t<0, array_types>;
-                        value = V{};
+                        if (!std::holds_alternative<V>(value)) value = V{};
                         read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
                      }
                      break;
@@ -188,7 +188,7 @@ namespace glz
                      }
                      else {
                         using V = std::tuple_element_t<0, string_types>;
-                        value = V{};
+                        if (!std::holds_alternative<V>(value)) value = V{};
                         read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
                      }
                      break;
@@ -201,7 +201,7 @@ namespace glz
                      }
                      else {
                         using V = std::tuple_element_t<0, bool_types>;
-                        value = V{};
+                        if (!std::holds_alternative<V>(value)) value = V{};
                         read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
                      }
                      break;
@@ -217,7 +217,7 @@ namespace glz
                      }
                      else {
                         using V = std::tuple_element_t<0, number_types>;
-                        value = V{};
+                        if (!std::holds_alternative<V>(value)) value = V{};
                         read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
                      }
                   }
