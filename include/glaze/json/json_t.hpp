@@ -15,9 +15,9 @@ namespace glz
    // Generic json type.
    struct json_t
    {
-      using null_t = std::monostate;
       using array_t = std::vector<json_t>;
       using object_t = std::map<std::string, json_t, std::less<>>;
+      using null_t = double*;
       using val_t = std::variant<null_t, double, std::string, bool, array_t, object_t>;
       val_t data{};
 
@@ -44,6 +44,7 @@ namespace glz
       json_t& operator[](std::convertible_to<std::string_view> auto&& key)
       {
          //[] operator for maps does not support heterogeneous lookups yet
+         if (holds<null_t>()) data = object_t{};
          auto& object = std::get<object_t>(data);
          auto iter = object.find(key);
          if (iter == object.end()) {
@@ -70,5 +71,23 @@ namespace glz
       val_t& operator*() { return data; }
 
       const val_t& operator*() const { return data; }
+
+      json_t() = default;
+
+      template <class T>
+      requires std::convertible_to<T, val_t> && (!std::same_as<json_t, std::decay_t<T>>)
+      json_t(T&& val)
+      {
+         data = val;
+      }
+
+      json_t(std::initializer_list<std::pair<const std::string, json_t>>&& obj) { data = object_t(obj); }
+
+      // Prevent conflict with object initializer list
+      template <bool deprioritize = true>
+      json_t(std::initializer_list<json_t>&& arr)
+      {
+         data = array_t(arr);
+      }
    };
 }
