@@ -3083,6 +3083,69 @@ suite date_test = []
    };
 };
 
+struct unicode_keys_t
+{
+   std::string happy{};
+};
+
+template <>
+struct glz::meta<unicode_keys_t>
+{
+   using T = unicode_keys_t;
+   static constexpr auto value = object("😀", &T::happy);
+};
+
+struct question_t
+{
+   std::string text{};
+};
+
+template <>
+struct glz::meta<question_t>
+{
+   using T = question_t;
+   static constexpr auto value = object("ᇿ", &T::text);
+};
+
+suite unicode_tests = []
+{
+   "unicode"_test = [] {
+      std::string str = "😀😃😄🍌💐🌹🥀🌺🌷🌸💮🏵️🌻🌼";
+      
+      std::string buffer{};
+      glz::write_json(str, buffer);
+      
+      str.clear();
+      glz::read_json(str, buffer);
+      
+      expect(str == "😀😃😄🍌💐🌹🥀🌺🌷🌸💮🏵️🌻🌼");
+   };
+   
+   "unicode_unescaped_smile"_test = [] {
+      std::string str = R"({"😀":"smile"})";
+      unicode_keys_t obj{};
+      glz::read_json(obj, str);
+      
+      expect(obj.happy == "smile");
+   };
+   
+   "unicode_unescaped"_test = [] {
+      std::string str = R"({"ᇿ":"ᇿ"})";
+      question_t obj{};
+      glz::read_json(obj, str);
+      
+      expect(obj.text == "ᇿ");
+   };
+   
+   "unicode_escaped"_test = [] {
+      std::string str = R"({"\u11FF":"\u11FF"})";
+      question_t obj{};
+      glz::read_json(obj, str);
+      
+      expect(obj.text == "ᇿ");
+   };
+};
+
 int main()
 {
    using namespace boost::ut;
