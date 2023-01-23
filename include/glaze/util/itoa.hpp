@@ -65,7 +65,7 @@ namespace glz
    
    template <class T>
    requires std::same_as<T, uint32_t>
-   inline char* to_chars(char *buf, T val) noexcept {
+   inline auto* to_chars(auto *buf, T val) noexcept {
        
        /* The maximum value of uint32_t is 4294967295 (10 digits), */
        /* these digits are named as 'aabbccddee' here.             */
@@ -146,14 +146,14 @@ namespace glz
 
    template <class T>
    requires std::same_as<T, int32_t>
-   inline char* to_chars(char *buf, T val) noexcept {
+   inline auto* to_chars(auto *buf, T val) noexcept {
       uint32_t neg = (uint32_t)-val;
       std::size_t sign = val < 0;
       *buf = '-';
       return to_chars(buf + sign, sign ? (uint32_t)neg : (uint32_t)val);
    }
    
-   inline char* to_chars_u64_len_8(char *buf, uint32_t val) noexcept {
+   inline auto* to_chars_u64_len_8(auto *buf, uint32_t val) noexcept {
        /* 8 digits: aabbccdd */
        uint32_t aa, bb, cc, dd, aabb, ccdd;
        aabb = (uint32_t)(((uint64_t)val * 109951163) >> 40); /* (val / 10000) */
@@ -169,7 +169,7 @@ namespace glz
        return buf + 8;
    }
    
-   inline char* to_chars_u64_len_4(char *buf, uint32_t val) noexcept {
+   inline auto* to_chars_u64_len_4(auto *buf, uint32_t val) noexcept {
        /* 4 digits: aabb */
        uint32_t aa, bb;
        aa = (val * 5243) >> 19; /* (val / 100) */
@@ -179,7 +179,7 @@ namespace glz
        return buf + 4;
    }
    
-   inline char* to_chars_u64_len_1_8(char *buf, uint32_t val) noexcept {
+   inline auto* to_chars_u64_len_1_8(auto *buf, uint32_t val) noexcept {
        uint32_t aa, bb, cc, dd, aabb, bbcc, ccdd, lz;
        
        if (val < 100) { /* 1-2 digits: aa */
@@ -227,7 +227,7 @@ namespace glz
        }
    }
 
-   inline char* to_chars_u64_len_5_8(char *buf, uint32_t val) noexcept {
+   inline auto* to_chars_u64_len_5_8(auto *buf, uint32_t val) noexcept {
        uint32_t aa, bb, cc, dd, aabb, bbcc, ccdd, lz;
        
        if (val < 1000000) { /* 5-6 digits: aabbcc */
@@ -262,7 +262,7 @@ namespace glz
    
    template <class T>
    requires std::same_as<T, uint64_t>
-   inline char* to_chars(char *buf, T val) noexcept {
+   inline auto* to_chars(auto *buf, T val) noexcept {
        uint64_t tmp, hgh;
        uint32_t mid, low;
        
@@ -291,7 +291,7 @@ namespace glz
    
    template <class T>
    requires std::same_as<T, int64_t>
-   inline char* to_chars(char *buf, T val) noexcept {
+   inline auto* to_chars(auto *buf, T val) noexcept {
        uint64_t neg = (uint64_t)-val;
        std::size_t sign = val < 0;
        *buf = '-';

@@ -3203,6 +3203,78 @@ suite value_test = []
    };
 };
 
+struct TestMsg {
+   uint64_t id{};
+   std::string val{};
+};
+
+template <>
+struct glz::meta<TestMsg> {
+    static constexpr std::string_view name = "TestMsg";
+    using T = TestMsg;
+    static constexpr auto value = object(
+            "id", &T::id,
+            "val", &T::val
+    );
+};
+
+suite byte_buffer = []
+{
+   "uint8_t buffer"_test = []
+   {
+      TestMsg msg{};
+      msg.id = 5;
+      msg.val = "hello";
+      std::vector<uint8_t> buffer{};
+      glz::write_json(msg, buffer);
+      
+      buffer.emplace_back('\0');
+      
+      msg.id = 0;
+      msg.val = "";
+      
+      glz::read_json(msg, buffer);
+      expect(msg.id == 5);
+      expect(msg.val == "hello");
+   };
+   
+   /*"std::byte buffer"_test = []
+   {
+      TestMsg msg{};
+      msg.id = 5;
+      msg.val = "hello";
+      std::vector<std::byte> buffer{};
+      glz::write_json(msg, buffer);
+      
+      buffer.emplace_back('\0');
+      
+      msg.id = 0;
+      msg.val = "";
+      
+      glz::read_json(msg, buffer);
+      expect(msg.id == 5);
+      expect(msg.val == "hello");
+   };*/
+   
+   "char8_t buffer"_test = []
+   {
+      TestMsg msg{};
+      msg.id = 5;
+      msg.val = "hello";
+      std::vector<char8_t> buffer{};
+      glz::write_json(msg, buffer);
+      
+      buffer.emplace_back('\0');
+      
+      msg.id = 0;
+      msg.val = "";
+      
+      glz::read_json(msg, buffer);
+      expect(msg.id == 5);
+      expect(msg.val == "hello");
+   };
+};
+
 int main()
 {
    using namespace boost::ut;
