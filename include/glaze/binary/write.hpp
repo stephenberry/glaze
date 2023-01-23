@@ -39,6 +39,16 @@ namespace glz
          }
       };
       
+      template <glaze_value_t T>
+      struct to_binary<T>
+      {
+         template <auto Opts, class... Args>
+         static void op(auto&& value, Args&&... args) {
+            using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
+            to_binary<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Args>(args)...);
+         }
+      };
+      
       template <is_member_function_pointer T>
       struct to_binary<T>
       {

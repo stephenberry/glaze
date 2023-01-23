@@ -3153,6 +3153,56 @@ suite unicode_tests = []
    };
 };
 
+struct value_t
+{
+   int x{};
+};
+
+template <>
+struct glz::meta<value_t>
+{
+   using T = value_t;
+   static constexpr auto value{ &T::x };
+};
+
+struct lambda_value_t
+{
+   int x{};
+};
+
+template <>
+struct glz::meta<lambda_value_t>
+{
+   static constexpr auto value = [](auto& self) -> auto& { return self.x; };
+};
+
+suite value_test = []
+{
+   "value"_test = [] {
+      std::string s = "5";
+      value_t v{};
+      
+      glz::read_json(v, s);
+      expect(v.x == 5);
+      
+      s.clear();
+      glz::write_json(v, s);
+      expect(s == "5");
+   };
+   
+   "lambda value"_test = [] {
+      std::string s = "5";
+      lambda_value_t v{};
+      
+      glz::read_json(v, s);
+      expect(v.x == 5);
+      
+      s.clear();
+      glz::write_json(v, s);
+      expect(s == "5");
+   };
+};
+
 int main()
 {
    using namespace boost::ut;

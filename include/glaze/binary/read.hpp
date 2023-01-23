@@ -25,6 +25,16 @@ namespace glz
          }
       };
       
+      template <glaze_value_t T>
+      struct from_binary<T>
+      {
+         template <auto Opts, is_context Ctx, class It0, class It1>
+         static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) {
+            using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
+            from_binary<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+         }
+      };
+      
       template <class T>
       requires(num_t<T> || char_t<T> || glaze_enum_t<T>)
       struct from_binary<T>

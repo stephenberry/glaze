@@ -66,6 +66,16 @@ namespace glz
          }
       };
       
+      template <glaze_value_t T>
+      struct from_json<T>
+      {
+         template <auto Opts, is_context Ctx, class It0, class It1>
+         static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) {
+            using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
+            from_json<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+         }
+      };
+      
       template <is_member_function_pointer T>
       struct from_json<T>
       {

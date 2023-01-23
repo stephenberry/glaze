@@ -436,6 +436,30 @@ glz::read_json(ptr, "null");
 expect(!bool(ptr));
 ```
 
+## Value Types
+
+A class can be treated as an underlying value as follows:
+
+```c++
+struct S {
+  int x{};
+};
+
+template <>
+struct glz::meta<S> {
+  static constexpr auto value{ &S::x };
+};
+```
+
+or using a lambda:
+
+```c++
+template <>
+struct glz::meta<S> {
+  static constexpr auto value = [](auto& self) -> auto& { return self.x; };
+};
+```
+
 ## Error Handling
 
 Glaze is safe to use with untrusted messages. Exceptions are thrown on errors, which can be caught and handled however you want.
