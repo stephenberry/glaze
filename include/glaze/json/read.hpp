@@ -1037,6 +1037,9 @@ namespace glz
                      value = std::make_shared<typename T::element_type>();
                   else if constexpr (std::same_as<T, json_t>)
                      value = {};
+                  else if constexpr (constructible<T>) {
+                     value = meta_construct_v<T>();
+                  }
                   else
                      throw std::runtime_error(
                         "Cannot read into unset nullable that is not "

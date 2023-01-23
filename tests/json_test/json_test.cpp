@@ -3275,6 +3275,62 @@ suite byte_buffer = []
    };
 };
 
+template <class T>
+struct custom_unique
+{
+   std::unique_ptr<T> x{};
+   
+   custom_unique(std::unique_ptr<T>&& in) : x(std::move(in)) {}
+   
+   operator bool() {
+      return static_cast<bool>(x);
+   }
+   
+   T& operator*() {
+      return *x;
+   }
+   
+   void reset() {
+      x.reset();
+   }
+};
+
+template <class T, class... Args>
+inline auto make_custom_unique(Args&&... args) {
+   return custom_unique{ std::make_unique<T>(std::forward<Args>(args)...) };
+}
+
+template <class T>
+struct glz::meta<custom_unique<T>>
+{
+   static constexpr auto construct = [] { return make_custom_unique<T>(); };
+};
+
+suite custom_unique_tests = []
+{
+   "custom unique"_test = [] {
+      auto c = make_custom_unique<int>(5);
+      
+      std::string s = "5";
+      glz::read_json(c, s);
+      
+      expect(*c.x == 5);
+      
+      s.clear();
+      glz::write_json(c, s);
+      expect(s == "5");
+      
+      s = "null";
+      glz::read_json(c, s);
+      expect(!c);
+      
+      s = "5";
+      glz::read_json(c, s);
+      
+      expect(*c.x == 5);
+   };
+};
+
 int main()
 {
    using namespace boost::ut;
