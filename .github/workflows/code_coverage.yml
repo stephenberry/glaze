@@ -25,6 +25,7 @@ jobs:
     - name: Set up enviroment
       run: |
         echo "CXX=clang++-14" >> "$GITHUB_ENV"
+        echo "CC=clang-14" >> "$GITHUB_ENV"
         echo "CXXFLAGS="-fprofile-instr-generate -fcoverage-mapping"" >> "$GITHUB_ENV"
         echo "LDFLAGS="-fprofile-instr-generate"" >> "$GITHUB_ENV"
         echo "LLVM_PROFILE_FILE="code-%p.profraw"" >> "$GITHUB_ENV"
