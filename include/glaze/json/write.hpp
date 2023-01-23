@@ -147,41 +147,82 @@ namespace glz
                
                dump_unchecked<'"'>(b, ix);
                
-               // now we don't have to check writing
-               for (auto&& c : str) {
-                  switch (c) {
-                  case '"':
-                     b[ix++] = '\\';
-                     b[ix++] = '\"';
-                     break;
-                  case '\\':
-                     b[ix++] = '\\';
-                     b[ix++] = '\\';
-                     break;
-                  case '\b':
-                     b[ix++] = '\\';
-                     b[ix++] = 'b';
-                     break;
-                  case '\f':
-                     b[ix++] = '\\';
-                     b[ix++] = 'f';
-                     break;
-                  case '\n':
-                     b[ix++] = '\\';
-                     b[ix++] = 'n';
-                     break;
-                  case '\r':
-                     b[ix++] = '\\';
-                     b[ix++] = 'r';
-                     break;
-                  case '\t':
-                     b[ix++] = '\\';
-                     b[ix++] = 't';
-                     break;
-                  default:
-                     b[ix++] = c;
+               using V = std::decay_t<decltype(b[0])>;
+               if constexpr (std::same_as<V, std::byte>) {
+                  // now we don't have to check writing
+                  for (auto&& c : str) {
+                     switch (c) {
+                     case '"':
+                        b[ix++] = static_cast<std::byte>('\\');
+                        b[ix++] = static_cast<std::byte>('\"');
+                        break;
+                     case '\\':
+                        b[ix++] = static_cast<std::byte>('\\');
+                        b[ix++] = static_cast<std::byte>('\\');
+                        break;
+                     case '\b':
+                        b[ix++] = static_cast<std::byte>('\\');
+                        b[ix++] = static_cast<std::byte>('b');
+                        break;
+                     case '\f':
+                        b[ix++] = static_cast<std::byte>('\\');
+                        b[ix++] = static_cast<std::byte>('f');
+                        break;
+                     case '\n':
+                        b[ix++] = static_cast<std::byte>('\\');
+                        b[ix++] = static_cast<std::byte>('n');
+                        break;
+                     case '\r':
+                        b[ix++] = static_cast<std::byte>('\\');
+                        b[ix++] = static_cast<std::byte>('r');
+                        break;
+                     case '\t':
+                        b[ix++] = static_cast<std::byte>('\\');
+                        b[ix++] = static_cast<std::byte>('t');
+                        break;
+                     default:
+                        b[ix++] = static_cast<std::byte>(c);
+                     }
                   }
                }
+               else {
+                  // now we don't have to check writing
+                  for (auto&& c : str) {
+                     switch (c) {
+                     case '"':
+                        b[ix++] = '\\';
+                        b[ix++] = '\"';
+                        break;
+                     case '\\':
+                        b[ix++] = '\\';
+                        b[ix++] = '\\';
+                        break;
+                     case '\b':
+                        b[ix++] = '\\';
+                        b[ix++] = 'b';
+                        break;
+                     case '\f':
+                        b[ix++] = '\\';
+                        b[ix++] = 'f';
+                        break;
+                     case '\n':
+                        b[ix++] = '\\';
+                        b[ix++] = 'n';
+                        break;
+                     case '\r':
+                        b[ix++] = '\\';
+                        b[ix++] = 'r';
+                        break;
+                     case '\t':
+                        b[ix++] = '\\';
+                        b[ix++] = 't';
+                        break;
+                     default:
+                        b[ix++] = c;
+                     }
+                  }
+               }
+               
                dump_unchecked<'"'>(b, ix);
             }
          }

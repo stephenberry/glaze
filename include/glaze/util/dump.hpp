@@ -30,7 +30,13 @@ namespace glz::detail
          b.resize(b.size() * 2);
       }
       
-      b[ix] = c;
+      using V = std::decay_t<decltype(b[0])>;
+      if constexpr (std::same_as<V, char>) {
+         b[ix] = c;
+      }
+      else {
+         b[ix] = static_cast<V>(c);
+      }
       ++ix;
    }
    
@@ -42,7 +48,13 @@ namespace glz::detail
    
    template <char c>
    inline void dump_unchecked(vector_like auto& b, auto&& ix) noexcept {
-      b[ix] = c;
+      using V = std::decay_t<decltype(b[0])>;
+      if constexpr (std::same_as<V, char>) {
+         b[ix] = c;
+      }
+      else {
+         b[ix] = static_cast<V>(c);
+      }
       ++ix;
    }
    
