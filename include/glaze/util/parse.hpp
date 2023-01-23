@@ -126,13 +126,6 @@ namespace glz::detail
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
-      if (it == end) [[unlikely]]
-         throw std::runtime_error("Unexpected end, expected escape or quote");
-
-      const char* start = &(*it);
-      const char* current = start;
-      const char* stop = start + std::distance(it, end);
-
       auto has_zero = [](uint64_t chunk) { return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080); };
 
       auto has_qoute = [&](uint64_t chunk) {
@@ -143,29 +136,26 @@ namespace glz::detail
          return has_zero(chunk ^ 0b0101110001011100010111000101110001011100010111000101110001011100);
       };
 
-      const auto end_m7 = stop - 7;
-      for (; current < end_m7; current += 8) {
+      const auto end_m7 = end - 7;
+      for (; it < end_m7; it += 8) {
          uint64_t chunk;
-         std::memcpy(&chunk, current, 8);
+         std::memcpy(&chunk, it, 8);
          uint64_t test = has_qoute(chunk) | has_escape(chunk);
          if (test != 0) {
-            current += (std::countr_zero(test) >> 3);
-            it += current - start;
+            it += (std::countr_zero(test) >> 3);
             return;
          }
       }
 
       // Tail end of buffer. Should be rare we even get here
-      while (current < stop) {
-         switch (*current) {
+      while (it < end) {
+         switch (*it) {
          case '\\':
          case '"':
-            it += current - start;
             return;
          }
-         ++current;
+         ++it;
       }
-      it += current - start;
       throw std::runtime_error("Expected \"");
    }
    
@@ -173,38 +163,31 @@ namespace glz::detail
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
-      const char* start = &(*it);
-      const char* current = start;
-      const char* stop = start + std::distance(it, end);
-
       auto has_zero = [](uint64_t chunk) { return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080); };
 
       auto has_qoute = [&](uint64_t chunk) {
          return has_zero(chunk ^ 0b0010001000100010001000100010001000100010001000100010001000100010);
       };
 
-      const auto end_m7 = stop - 7;
-      for (; current < end_m7; current += 8) {
+      const auto end_m7 = end - 7;
+      for (; it < end_m7; it += 8) {
          uint64_t chunk;
-         std::memcpy(&chunk, current, 8);
+         std::memcpy(&chunk, it, 8);
          uint64_t test = has_qoute(chunk);
          if (test != 0) {
-            current += (std::countr_zero(test) >> 3);
-            it += current - start;
+            it += (std::countr_zero(test) >> 3);
             return;
          }
       }
 
       // Tail end of buffer. Should be rare we even get here
-      while (current < stop) {
-         switch (*current) {
+      while (it < end) {
+         switch (*it) {
          case '"':
-            it += current - start;
             return;
          }
-         ++current;
+         ++it;
       }
-      it += current - start;
       throw std::runtime_error("Expected \"");
    }
 
