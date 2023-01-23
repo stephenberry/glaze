@@ -923,7 +923,7 @@ namespace glz
                   }
                   else {
                      static constexpr auto stats = key_stats<T>();
-                     if constexpr (stats.length_range < 8) {
+                     if constexpr (stats.length_range < 8 && Opts.error_on_unknown_keys) {
                         if ((it + stats.max_length) < end) [[likely]] {
                            
                            if constexpr (stats.length_range == 0) {
