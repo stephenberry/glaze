@@ -12,8 +12,10 @@ namespace glz
    template <opts Opts>
    inline void read(auto& value, detail::contiguous auto&& buffer, is_context auto&& ctx)
    {
-      auto b = buffer.data();
-      auto e = buffer.data(); // to be incrementd
+      static_assert(sizeof(decltype(*buffer.data())) == 1);
+      
+      auto b = reinterpret_cast<const char*>(buffer.data());
+      auto e = reinterpret_cast<const char*>(buffer.data()); // to be incrementd
       
       using Buffer = std::decay_t<decltype(buffer)>;
       if constexpr (is_specialization_v<Buffer, std::basic_string> || std::same_as<Buffer, std::string_view> || Opts.format == binary) {
@@ -45,7 +47,7 @@ namespace glz
          }
          catch (const std::exception& e) {
             
-            auto index = std::distance(buffer.data(), b);
+            auto index = std::distance(reinterpret_cast<const char*>(buffer.data()), b);
             auto info = detail::get_source_info(buffer, index);
             std::string error = e.what();
             if (info) {
