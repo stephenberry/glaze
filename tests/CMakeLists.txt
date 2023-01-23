@@ -16,6 +16,9 @@ FetchContent_MakeAvailable(ut)
 
 message(STATUS "...finished fetching dependencies.")
 
+include(cmake/code-coverage.cmake)
+add_code_coverage_all_targets()
+
 add_subdirectory(api_test)
 add_subdirectory(binary_test)
 add_subdirectory(eigen_test)

@@ -14,3 +14,4 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE TEST_LIB_INTERFACE_LOCATION="
 
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
+target_code_coverage(${PROJECT_NAME} AUTO ALL)
