@@ -684,6 +684,56 @@ void container_types()
    };
 }
 
+struct value_t
+{
+   int x{};
+};
+
+template <>
+struct glz::meta<value_t>
+{
+   using T = value_t;
+   static constexpr auto value{ &T::x };
+};
+
+struct lambda_value_t
+{
+   int x{};
+};
+
+template <>
+struct glz::meta<lambda_value_t>
+{
+   static constexpr auto value = [](auto& self) -> auto& { return self.x; };
+};
+
+suite value_test = []
+{
+   "value"_test = [] {
+      std::string s{};
+      
+      value_t v{};
+      v.x = 5;
+      glz::write_binary(v, s);
+      v.x = 0;
+      
+      glz::read_binary(v, s);
+      expect(v.x == 5);
+   };
+   
+   "lambda value"_test = [] {
+      std::string s{};
+      
+      lambda_value_t v{};
+      v.x = 5;
+      glz::write_binary(v, s);
+      v.x = 0;
+      
+      glz::read_binary(v, s);
+      expect(v.x == 5);
+   };
+};
+
 int main()
 {
    using namespace boost::ut;

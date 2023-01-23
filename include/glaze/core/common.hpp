@@ -416,6 +416,9 @@ namespace glz
 
       template <class T>
       concept glaze_enum_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Enum>;
+      
+      template <class T>
+      concept glaze_value_t = glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T>);
 
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to)
