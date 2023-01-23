@@ -3238,7 +3238,7 @@ suite byte_buffer = []
       expect(msg.val == "hello");
    };
    
-   /*"std::byte buffer"_test = []
+   "std::byte buffer"_test = []
    {
       TestMsg msg{};
       msg.id = 5;
@@ -3246,7 +3246,7 @@ suite byte_buffer = []
       std::vector<std::byte> buffer{};
       glz::write_json(msg, buffer);
       
-      buffer.emplace_back('\0');
+      buffer.emplace_back(static_cast<std::byte>('\0'));
       
       msg.id = 0;
       msg.val = "";
@@ -3254,7 +3254,7 @@ suite byte_buffer = []
       glz::read_json(msg, buffer);
       expect(msg.id == 5);
       expect(msg.val == "hello");
-   };*/
+   };
    
    "char8_t buffer"_test = []
    {

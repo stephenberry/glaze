@@ -23,21 +23,32 @@ namespace glz
          if (index >= buffer.size()) {
             return std::nullopt;
          }
-
+         
+         using V = std::decay_t<decltype(buffer[0])>;
          const std::size_t r_index = buffer.size() - index - 1;
          const auto start = std::begin(buffer) + index;
-         const auto count = std::count(std::begin(buffer), start, '\n');
+         const auto count = std::count(std::begin(buffer), start, static_cast<V>('\n'));
          const auto rstart = std::rbegin(buffer) + r_index;
-         const auto pnl = std::find(rstart, std::rend(buffer), '\n');
+         const auto pnl = std::find(rstart, std::rend(buffer), static_cast<V>('\n'));
          const auto dist = std::distance(rstart, pnl);
-         const auto nnl = std::find(start, std::end(buffer), '\n');
-
-         std::string context{
-            std::begin(buffer) +
-               (pnl == std::rend(buffer) ? 0 : index - dist + 1),
-            nnl};
-         return source_info{static_cast<std::size_t>(count + 1),
-                           static_cast<std::size_t>(dist), context};
+         const auto nnl = std::find(start, std::end(buffer), static_cast<V>('\n'));
+         
+         if constexpr (std::same_as<V, std::byte>) {
+            std::string context{
+               reinterpret_cast<const char*>(buffer.data()) +
+                  (pnl == std::rend(buffer) ? 0 : index - dist + 1),
+               reinterpret_cast<const char*>(&(*nnl))};
+            return source_info{static_cast<std::size_t>(count + 1),
+                              static_cast<std::size_t>(dist), context};
+         }
+         else {
+            std::string context{
+               std::begin(buffer) +
+                  (pnl == std::rend(buffer) ? 0 : index - dist + 1),
+               nnl};
+            return source_info{static_cast<std::size_t>(count + 1),
+                              static_cast<std::size_t>(dist), context};
+         }
       }
 
       inline std::string generate_error_string(const sv error,
