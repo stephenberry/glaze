@@ -3129,6 +3129,13 @@ suite unicode_tests = []
       expect(obj.happy == "smile");
    };
    
+   "unicode_escaped_smile"_test = [] {
+      // more than 4 characters in unicode is not valid JSON
+      std::string str = R"({"\u1F600":"smile"})";
+      unicode_keys_t obj{};
+      expect(throws([&]{ glz::read_json(obj, str); }));
+   };
+   
    "unicode_unescaped"_test = [] {
       std::string str = R"({"ᇿ":"ᇿ"})";
       question_t obj{};
