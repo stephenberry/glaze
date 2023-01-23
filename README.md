@@ -140,8 +140,6 @@ glz::write_file(obj, "./obj.json"); // writes file based on extension
 glz::write_file_json(obj, "./obj.txt"); // explicit JSON write
 ```
 
----
-
 ## How To Use Glaze
 
 ### [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html)
@@ -173,9 +171,9 @@ target_link_libraries(main PRIVATE glaze::glaze)
 
 ### See this [Example Repository](https://github.com/stephenberry/glaze_example) for how to use Glaze in a new project
 
-## See [Wiki](https://github.com/stephenberry/glaze/wiki) for Frequently Asked Questions
-
 ---
+
+## See [Wiki](https://github.com/stephenberry/glaze/wiki) for Frequently Asked Questions
 
 ## Local Glaze Meta
 
