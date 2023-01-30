@@ -262,8 +262,19 @@ namespace glz
                         error = "invalid parent type";
                      }
                   }
+                  else if constexpr (is_specialization_v<V, std::function> ) {
+                     static constexpr auto h = glz::hash<V>();
+                     if (h == type_hash) [[likely]] {
+                        result =
+                           std::unique_ptr<void, void (*)(void*)>{&val, [](void* ptr) {}};
+                     }
+                     else [[unlikely]] {
+                        error = "mismatching types";
+                        error += ", expected: " + std::string(glz::name_v<V>);
+                     }
+                  }
                   else {
-                     error = "get_fn: type is not a member function";
+                     error = "get_fn: type" + std::string(glz::name_v<V>) +" is not a member function or std::function";
                   }
                }, parent, last_ptr);
             },
