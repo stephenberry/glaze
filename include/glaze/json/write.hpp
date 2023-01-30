@@ -42,6 +42,35 @@ namespace glz
          }
       };
       
+      template <glaze_flags_t T>
+      struct to_json<T>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) {
+            static constexpr auto N = std::tuple_size_v<meta_t<T>>;
+            
+            dump<'['>(b, ix);
+            
+            for_each<N>([&](auto I) {
+               static constexpr auto item = glz::tuplet::get<I>(meta_v<T>);
+               
+               if (get_member(value, glz::tuplet::get<1>(item))) {
+                  dump<'"'>(b, ix);
+                  dump(glz::tuplet::get<0>(item), b, ix);
+                  dump<'"'>(b, ix);
+                  dump<','>(b, ix);
+               }
+            });
+            
+            if (b[ix - 1] == ',') {
+               b[ix - 1] = ']';
+            }
+            else {
+               dump<']'>(b, ix);
+            }
+         }
+      };
+      
       template <>
       struct to_json<hidden>
       {

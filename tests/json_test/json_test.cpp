@@ -3376,6 +3376,41 @@ suite sets = []
    };
 };
 
+struct flags_t
+{
+   bool x{ true };
+   bool y{};
+   bool z{ true };
+};
+
+template <>
+struct glz::meta<flags_t>
+{
+   using T = flags_t;
+   static constexpr auto value = flags("x", &T::x, "y", &T::y, "z", &T::z);
+};
+
+suite flag_test = []
+{
+   "flags"_test = []
+   {
+      flags_t s{};
+      
+      std::string b{};
+      glz::write_json(s, b);
+      
+      expect(b == R"(["x","z"])");
+      
+      s.x = false;
+      s.z = false;
+      
+      glz::read_json(s, b);
+      
+      expect(s.x);
+      expect(s.z);
+   };
+};
+
 int main()
 {
    using namespace boost::ut;

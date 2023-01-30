@@ -829,6 +829,45 @@ namespace glz
          }
       };
       
+      template <glaze_flags_t T>
+      struct from_json<T>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         {
+            if constexpr (!Opts.ws_handled) {
+               skip_ws(it, end);
+            }
+            
+            match<'['>(it);
+            
+            static thread_local std::string s{};
+            
+            static constexpr auto map = make_map<T>();
+            
+            while (true) {
+               read<json>::op<Opts>(s, ctx, it, end);
+               
+               auto itr = map.find(s);
+               if (itr != map.end()) {
+                  std::visit([&](auto&& x) {
+                     get_member(value, x) = true;
+                  }, itr->second);
+               }
+               else {
+                  throw std::runtime_error("Invalid flag input: " + s);
+               }
+               
+               skip_ws(it, end);
+               if (*it == ']') {
+                  ++it;
+                  return;
+               }
+               match<','>(it);
+            }
+         }
+      };
+      
       template <class T>
       struct from_json<includer<T>>
       {
