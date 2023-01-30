@@ -320,6 +320,14 @@ namespace glz
       };
       
       template <class T>
+      concept emplaceable = requires(T container)
+      {
+         {
+            container.emplace(std::declval<typename T::value_type>())
+         };
+      };
+      
+      template <class T>
       concept push_backable = requires(T container)
       {
          {

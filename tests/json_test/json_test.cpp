@@ -3331,6 +3331,51 @@ suite custom_unique_tests = []
    };
 };
 
+#include <set>
+#include <unordered_set>
+
+static_assert(glz::detail::emplaceable<std::set<std::string>>);
+
+suite sets = []
+{
+   "std::unordered_set"_test = [] {
+      std::unordered_set<std::string> set;
+      set.emplace("hello");
+      set.emplace("world");
+      
+      std::string b{};
+      
+      glz::write_json(set, b);
+      
+      expect(b == R"(["hello","world"])" || b == R"(["world","hello"])");
+      
+      set.clear();
+      
+      glz::read_json(set, b);
+      
+      expect(set.count("hello") == 1);
+      expect(set.count("world") == 1);
+   };
+   
+   "std::set"_test = [] {
+      std::set<int> set = { 5, 4, 3, 2, 1 };
+      std::string b{};
+      glz::write_json(set, b);
+      
+      expect(b == R"([1,2,3,4,5])");
+      
+      set.clear();
+      
+      glz::read_json(set, b);
+      
+      expect(set.count(1) == 1);
+      expect(set.count(2) == 1);
+      expect(set.count(3) == 1);
+      expect(set.count(4) == 1);
+      expect(set.count(5) == 1);
+   };
+};
+
 int main()
 {
    using namespace boost::ut;
