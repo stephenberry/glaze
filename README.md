@@ -407,6 +407,8 @@ Array types logically convert to JSON array values. Concepts are used to allow v
 - `std::list`
 - `std::forward_list`
 - `std::span`
+- `std::set`
+- `std::unordered_set`
 
 ## Object Types
 
@@ -459,6 +461,35 @@ struct glz::meta<S> {
   static constexpr auto value = [](auto& self) -> auto& { return self.x; };
 };
 ```
+
+## Boolean Flags
+
+Glaze supports registering a set of boolean flags that behave as an array of string options:
+
+```c++
+struct flags_t {
+   bool x{ true };
+   bool y{};
+   bool z{ true };
+};
+
+template <>
+struct glz::meta<flags_t> {
+   using T = flags_t;
+   static constexpr auto value = flags("x", &T::x, "y", &T::y, "z", &T::z);
+};
+```
+
+Example:
+
+```c++
+flags_t s{};
+expect(glz::write_json(s) == R"(["x","z"])");
+```
+
+Only `"x"` and `"z"` are written out, because they are true. Reading in the buffer will set the appropriate booleans.
+
+> When writing binary, `flags` only uses one bit per boolean (byte aligned).
 
 ## Error Handling
 
