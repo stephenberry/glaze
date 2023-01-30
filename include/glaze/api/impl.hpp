@@ -274,7 +274,7 @@ namespace glz
                      }
                   }
                   else {
-                     error = "get_fn: type" + glz::name_v<F> +" is not a member function";
+                     error = "get_fn: type" + glz::name_v<V> +" is not a member function or std::function";
                   }
                }, parent, last_ptr);
             },
