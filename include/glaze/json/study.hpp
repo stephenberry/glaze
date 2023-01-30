@@ -8,7 +8,7 @@
 #include "glaze/json/write.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/thread/threadpool.hpp"
-#include "glaze/util/macros.hpp"
+#include "glaze/util/windows_nominmax.hpp"
 #include "glaze/util/type_traits.hpp"
 
 #include <random>

@@ -479,6 +479,24 @@ struct glz::meta<some_struct>
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/api/impl.hpp"
 
+suite no_cx_tag_test = [] {
+   "no_cx_tags"_test = [] {
+      some_struct s{};
+      
+      std::string b{};
+      
+      glz::write<glz::opts{.format = glz::binary, .use_cx_tags = false}>(s, b);
+      
+      s.i = 0;
+      s.d = 0.0;
+      
+      glz::read<glz::opts{.format = glz::binary, .use_cx_tags = false}>(s, b);
+      
+      expect(s.i == 287);
+      expect(s.d = 3.14);
+   };
+};
+
 void test_partial()
 {
    expect(glz::name_v<glz::detail::member_tuple_t<some_struct>> == R"(glz::tuplet::tuple<int32_t,double,Color,std::string,std::array<uint64_t,3>,sub,std::map<std::string,int32_t>>)");
