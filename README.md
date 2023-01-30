@@ -205,7 +205,7 @@ struct my_struct
 
 Glaze provides macros to more efficiently register your C++ structs.
 
-> These macros are included in the header: `glaze/core/macros.hpp`
+**Macros must be explicitly included via: `#include "glaze/core/macros.hpp"`**
 
 - GLZ_META is for external registration
 - GLZ_LOCAL_META is for internal registration
