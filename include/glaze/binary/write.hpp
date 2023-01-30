@@ -231,11 +231,13 @@ namespace glz
          {
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
-            dump_int<N>(args...); // even though N is known at compile time in this case, it is not known for partial cases, so we still use a compressed integer
+            if constexpr (Opts.use_cx_tags) {
+               dump_int<N>(args...); // even though N is known at compile time in this case, it is not known for partial cases, so we still use a compressed integer
+            }
 
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
-               if constexpr (Opts.write_cx_tags) {
+               if constexpr (Opts.use_cx_tags) {
                   static constexpr uint32_t hash = murmur3_32(glz::tuplet::get<0>(item));
                   dump_type(hash, args...);
                }

@@ -244,25 +244,33 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            const auto n_keys = int_from_header(it, end);
-            
-            static constexpr auto storage = detail::make_crusher_map<T>();
-            
-            for (size_t i = 0; i < n_keys; ++i) {
-               uint32_t key;
-               std::memcpy(&key, &(*it), 4);
-               std::advance(it, 4);
+            if constexpr (Opts.use_cx_tags) {
+               const auto n_keys = int_from_header(it, end);
                
-               const auto& p = storage.find(key);
+               static constexpr auto storage = detail::make_crusher_map<T>();
                
-               if (p != storage.end()) {
-                  std::visit(
-                             [&](auto&& member_ptr) {
-                                using V = std::decay_t<decltype(member_ptr)>;
-                                read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
-                             },
-                     p->second);
+               for (size_t i = 0; i < n_keys; ++i) {
+                  uint32_t key;
+                  std::memcpy(&key, &(*it), 4);
+                  std::advance(it, 4);
+                  
+                  const auto& p = storage.find(key);
+                  
+                  if (p != storage.end()) {
+                     std::visit(
+                                [&](auto&& member_ptr) {
+                                   using V = std::decay_t<decltype(member_ptr)>;
+                                   read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
+                                },
+                        p->second);
+                  }
                }
+            }
+            else {
+               using V = std::decay_t<T>;
+               for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
+                  read<binary>::op<Opts>(get_member(value, glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<V>))), ctx, it, end);
+               });
             }
          }
       };
