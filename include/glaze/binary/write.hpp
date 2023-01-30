@@ -200,7 +200,9 @@ namespace glz
          {
             dump_int<Opts>(value.size(), std::forward<Args>(args)...);
             for (auto&& [k, v] : value) {
-               write<binary>::op<Opts>(k, ctx, std::forward<Args>(args)...);
+               if constexpr (Opts.write_tags) {
+                  write<binary>::op<Opts>(k, ctx, std::forward<Args>(args)...);
+               }
                write<binary>::op<Opts>(v, ctx, std::forward<Args>(args)...);
             }
          }
@@ -235,8 +237,10 @@ namespace glz
 
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
-               static constexpr uint32_t hash = murmur3_32(glz::tuplet::get<0>(item));
-               dump_type(hash, args...);
+               if constexpr (Opts.write_tags) {
+                  static constexpr uint32_t hash = murmur3_32(glz::tuplet::get<0>(item));
+                  dump_type(hash, args...);
+               }
                using V = std::tuple_element_t<1, decltype(item)>;
                write<binary>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, args...);
             });
