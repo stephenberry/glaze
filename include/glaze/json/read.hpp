@@ -596,10 +596,49 @@ namespace glz
             value.str.insert(value.str.begin(), it_start, it);
          }
       };
+      
+      // for set types
+      template <class T> requires (array_t<T> && !emplace_backable<T> && !resizeable<T> && emplaceable<T>)
+      struct from_json<T>
+      {
+         template <auto Options>
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+         {
+            if constexpr (!Options.ws_handled) {
+               skip_ws(it, end);
+            }
+            static constexpr auto Opts = ws_handled_off<Options>();
+            
+            match<'['>(it);
+            skip_ws(it, end);
+            
+            value.clear();
+            
+            while (true) {
+               using V = typename T::value_type;
+               if constexpr (sizeof(V) > 8) {
+                  static thread_local V v;
+                  read<json>::op<Opts>(v, ctx, it, end);
+                  value.emplace(v);
+               }
+               else {
+                  V v;
+                  read<json>::op<Opts>(v, ctx, it, end);
+                  value.emplace(std::move(v));
+               }
+               skip_ws(it, end);
+               if (*it == ']') {
+                  ++it;
+                  return;
+               }
+               match<','>(it);
+            }
+         }
+      };
 
-      template <class T> requires array_t<T> &&
+      template <class T> requires (array_t<T> &&
       (emplace_backable<T> ||
-       !resizeable<T>)
+       !resizeable<T>) && !emplaceable<T>)
       struct from_json<T>
       {
          template <auto Options>
@@ -787,6 +826,45 @@ namespace glz
             });
             
             match<']'>(it);
+         }
+      };
+      
+      template <glaze_flags_t T>
+      struct from_json<T>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         {
+            if constexpr (!Opts.ws_handled) {
+               skip_ws(it, end);
+            }
+            
+            match<'['>(it);
+            
+            static thread_local std::string s{};
+            
+            static constexpr auto map = make_map<T>();
+            
+            while (true) {
+               read<json>::op<Opts>(s, ctx, it, end);
+               
+               auto itr = map.find(s);
+               if (itr != map.end()) {
+                  std::visit([&](auto&& x) {
+                     get_member(value, x) = true;
+                  }, itr->second);
+               }
+               else {
+                  throw std::runtime_error("Invalid flag input: " + s);
+               }
+               
+               skip_ws(it, end);
+               if (*it == ']') {
+                  ++it;
+                  return;
+               }
+               match<','>(it);
+            }
          }
       };
       

@@ -256,4 +256,28 @@ namespace glz::detail
       std::memcpy(b.data() + ix, bytes.data(), n);
       ix += n;
    }
+   
+   template <size_t N, class B>
+   inline void dump(const std::array<uint8_t, N>& bytes, B&& b, auto&& ix) noexcept
+   {
+      if (ix + N > b.size()) [[unlikely]] {
+         b.resize(std::max(b.size() * 2, ix + N));
+      }
+      
+      std::memcpy(b.data() + ix, bytes.data(), N);
+      ix += N;
+   }
+   
+   template <glaze_flags_t T>
+   inline constexpr auto byte_length()
+   {
+      constexpr auto N = std::tuple_size_v<meta_t<T>>;
+      
+      if constexpr (N % 8 == 0) {
+         return N / 8;
+      }
+      else {
+         return (N / 8) + 1;
+      }
+   }
 }

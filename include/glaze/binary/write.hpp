@@ -49,6 +49,25 @@ namespace glz
          }
       };
       
+      template <glaze_flags_t T>
+      struct to_binary<T>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) {
+            static constexpr auto N = std::tuple_size_v<meta_t<T>>;
+            
+            std::array<uint8_t, byte_length<T>()> data{};
+            
+            for_each<N>([&](auto I) {
+               static constexpr auto item = glz::tuplet::get<I>(meta_v<T>);
+               
+               data[I / 8] |= static_cast<uint8_t>(get_member(value, glz::tuplet::get<1>(item))) << (7 - (I % 8));
+            });
+            
+            dump(data, b, ix);
+         }
+      };
+      
       template <is_member_function_pointer T>
       struct to_binary<T>
       {

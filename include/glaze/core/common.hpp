@@ -102,6 +102,15 @@ namespace glz
       template <class T>
       Enum(T) -> Enum<T>;
       
+      template <class T>
+      struct Flags
+      {
+         T value;
+      };
+      
+      template <class T>
+      Flags(T) -> Flags<T>;
+      
       template <int... I>
       using is = std::integer_sequence<int, I...>;
       template <int N>
@@ -320,6 +329,14 @@ namespace glz
       };
       
       template <class T>
+      concept emplaceable = requires(T container)
+      {
+         {
+            container.emplace(std::declval<typename T::value_type>())
+         };
+      };
+      
+      template <class T>
       concept push_backable = requires(T container)
       {
          {
@@ -425,7 +442,10 @@ namespace glz
       concept glaze_enum_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Enum>;
       
       template <class T>
-      concept glaze_value_t = glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T>);
+      concept glaze_flags_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Flags>;
+      
+      template <class T>
+      concept glaze_value_t = glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || glaze_flags_t<T>);
 
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to)
@@ -771,6 +791,12 @@ namespace glz
    constexpr auto enumerate(auto&&... args)
    {
       return glz::detail::Enum{
+         group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(args...))>>::op(glz::tuplet::make_copy_tuple(args...))};
+   }
+   
+   constexpr auto flags(auto&&... args)
+   {
+      return glz::detail::Flags{
          group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(args...))>>::op(glz::tuplet::make_copy_tuple(args...))};
    }
 }
