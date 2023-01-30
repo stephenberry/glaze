@@ -105,9 +105,8 @@ void tests()
    auto io2 = (*iface)["my_api2"]();
    
    "calling functions"_test = [&] {
-      auto f = io->get_fn<std::function<int()>>("/func");
-      expect(f() == 5);
-      
+      auto func = io->get_fn<std::function<int()>>("/func");
+      expect(func() == 5);
       expect(5 == io->call<int>("/func"));
 
       //auto func_ref = io->get_fn<std::function<const int&()>>("/func_ref");
@@ -132,6 +131,9 @@ void tests()
       expect(i == 1);
       io->call<void>("/inc", i);
       expect(i == 2);
+      
+      auto f = io->get_fn<std::function<double(const int&, const double&)>>("/f");
+      expect(f(7, 2) == 14);
    };
    
    "bool type name"_test = [] {
