@@ -12,7 +12,7 @@
 #include <thread>
 #include <vector>
 
-#include "glaze/util/macros.hpp"
+#include "glaze/util/windows_nominmax.hpp"
 
 namespace glz
 {
