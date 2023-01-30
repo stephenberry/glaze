@@ -156,11 +156,11 @@ namespace glz
          {
             using V = std::decay_t<range_value_t<std::decay_t<T>>>;
             s.type = {"array"};
-            auto& def = defs[name_v<V, true>];
+            auto& def = defs[name_v<V>];
             if (!def.type) {
                to_json_schema<V>::template op<Opts>(def, defs);
             }
-            s.items = schema_ref{join_v<chars<"#/$defs/">, name_v<V, true>>};
+            s.items = schema_ref{join_v<chars<"#/$defs/">, name_v<V>>};
          }
       };
 
@@ -172,11 +172,11 @@ namespace glz
          {
             using V = std::decay_t<std::tuple_element_t<1,range_value_t<std::decay_t<T>>>>;
             s.type = {"object"};
-            auto& def = defs[name_v<V, true>];
+            auto& def = defs[name_v<V>];
             if (!def.type) {
                to_json_schema<V>::template op<Opts>(def, defs);
             }
-            s.additionalProperties = schema_ref{join_v<chars<"#/$defs/">, name_v<V, true>>};
+            s.additionalProperties = schema_ref{join_v<chars<"#/$defs/">, name_v<V>>};
          }
       };
 
@@ -209,11 +209,11 @@ namespace glz
                to_json_schema<V>::template op<Opts>(schema_val, defs);
                if constexpr (glaze_object_t<V>) {
                   //TODO validate type name
-                  auto& def = defs[name_v<std::string, true>];
+                  auto& def = defs[name_v<std::string>];
                   if (!def.type) {
                      to_json_schema<std::string>::template op<Opts>(def, defs);
                   }
-                  (*schema_val.properties)["type"] = schema_ref{join_v<chars<"#/$defs/">, name_v<std::string, true>>};
+                  (*schema_val.properties)["type"] = schema_ref{join_v<chars<"#/$defs/">, name_v<std::string>>};
                }
             });
          }
@@ -247,11 +247,11 @@ namespace glz
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                using mptr_t = decltype(glz::tuplet::get<1>(item));
                using val_t = std::decay_t<member_t<V, mptr_t>>;
-               auto& def = defs[name_v<val_t, true>];
+               auto& def = defs[name_v<val_t>];
                if (!def.type) {
                   to_json_schema<val_t>::template op<Opts>(def, defs);
                }
-               auto ref_val = schema_ref{join_v<chars<"#/$defs/">, name_v<val_t, true>>};
+               auto ref_val = schema_ref{join_v<chars<"#/$defs/">, name_v<val_t>>};
                if constexpr (std::tuple_size_v<decltype(item)> > 2) {
                   ref_val.description = glz::tuplet::get<2>(item);
                }
