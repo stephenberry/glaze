@@ -1,4 +1,4 @@
-name: gcc
+name: gcc12
 
 on:
   push:
