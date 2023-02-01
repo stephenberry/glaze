@@ -3426,7 +3426,6 @@ struct glz::meta<xy_t>
 
 struct bomb_t
 {
-   std::string action{};
    xy_t data{};
 };
 
@@ -3434,7 +3433,7 @@ template <>
 struct glz::meta<bomb_t>
 {
    using T = bomb_t;
-   static constexpr auto value = object("action", &T::action, "data", &T::data);
+   static constexpr auto value = object("action", skip{}, "data", &T::data);
 };
 
 suite get_sv = []
@@ -3468,7 +3467,6 @@ suite get_sv = []
       expect(action == R"("DELETE")");
       if (action == R"("DELETE")") {
          auto bomb = glz::read_json<bomb_t>(buffer);
-         expect(bomb.action == "DELETE");
          expect(bomb.data.x == 10);
          expect(bomb.data.y == 200);
       }

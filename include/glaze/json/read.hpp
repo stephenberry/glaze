@@ -53,6 +53,16 @@ namespace glz
          }
       };
       
+      template <>
+      struct from_json<skip>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&&, auto&&... args)
+         {
+            skip_value(args...);
+         }
+      };
+      
       template <is_reference_wrapper T>
       struct from_json<T>
       {
