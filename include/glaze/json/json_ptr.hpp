@@ -405,13 +405,14 @@ namespace glz
    template <auto& Str>
    inline constexpr auto split_json_ptr()
    {
-       constexpr auto N = std::count(Str.begin(), Str.end(), '/');
-       std::array<sv, N> arr;
-       sv s = Str;
-       for (auto i = 0; i < N; ++i) {
-           std::tie(arr[i], s) = tokenize_json_ptr(s);
-       }
-       return arr;
+      constexpr auto str = Str;
+      constexpr auto N = std::count(str.begin(), str.end(), '/');
+      std::array<sv, N> arr;
+      sv s = str;
+      for (auto i = 0; i < N; ++i) {
+         std::tie(arr[i], s) = tokenize_json_ptr(s);
+      }
+      return arr;
    }
    
    inline constexpr auto json_ptrs(auto&&... args)
@@ -589,7 +590,7 @@ namespace glz
          for_each<N>([&](auto I) {
             static constexpr auto key = [] {
                return std::get<decltype(I)::value>(tokens);
-            }();  // MSVC internal compiler error workaround
+            }(); // MSVC internal compiler error workaround
             if constexpr (maybe_numeric_key(key)) {
                switch (*it)
                {
