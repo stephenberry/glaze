@@ -132,6 +132,7 @@ namespace glz
                }
                
                // find the string, escape characters are not supported for recorders
+               skip_ws(it, end);
                const auto name = parse_key(it, end);
                
                auto& [str, v] = value.data[i];

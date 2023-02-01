@@ -6,6 +6,7 @@
 #include <span>
 
 #include "glaze/api/name.hpp"
+#include "glaze/api/hash.hpp"
 
 namespace glz
 {

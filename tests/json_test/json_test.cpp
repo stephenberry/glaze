@@ -3411,6 +3411,70 @@ suite flag_test = []
    };
 };
 
+struct xy_t
+{
+   int x{};
+   int y{};
+};
+
+template <>
+struct glz::meta<xy_t>
+{
+   using T = xy_t;
+   static constexpr auto value = object("x", &T::x, "y", &T::y);
+};
+
+struct bomb_t
+{
+   std::string action{};
+   xy_t data{};
+};
+
+template <>
+struct glz::meta<bomb_t>
+{
+   using T = bomb_t;
+   static constexpr auto value = object("action", &T::action, "data", &T::data);
+};
+
+suite get_sv = []
+{
+   "get_sv"_test = []
+   {
+      std::string s = R"({"obj":{"x":5.5}})";
+      const auto x = glz::get_view_json<"/obj/x">(s);
+      
+      auto str = glz::sv{x.data(), x.size()};
+      expect(str == "5.5");
+      
+      double y;
+      glz::read_json(y, x);
+      
+      auto z = glz::get_as_json<double, "/obj/x">(s);
+      
+      expect(z == 5.5);
+      
+      auto view = glz::get_sv_json<"/obj/x">(s);
+      
+      expect(view == "5.5");
+   };
+   
+   "action"_test = []
+   {
+      std::string buffer = R"( { "action": "DELETE", "data": { "x": 10, "y": 200 }})";
+      
+      auto action = glz::get_sv_json<"/action">(buffer);
+      
+      expect(action == R"("DELETE")");
+      if (action == R"("DELETE")") {
+         auto bomb = glz::read_json<bomb_t>(buffer);
+         expect(bomb.action == "DELETE");
+         expect(bomb.data.x == 10);
+         expect(bomb.data.y == 200);
+      }
+   };
+};
+
 int main()
 {
    using namespace boost::ut;

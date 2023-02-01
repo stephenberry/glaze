@@ -5,9 +5,43 @@
 
 #include "glaze/core/common.hpp"
 #include "glaze/util/validate.hpp"
+#include "glaze/api/std/span.hpp"
+
+#include <span>
 
 namespace glz
 {
+   template <opts Opts>
+   inline auto read_iterators(detail::contiguous auto&& buffer)
+   {
+      static_assert(sizeof(decltype(*buffer.data())) == 1);
+      
+      auto b = reinterpret_cast<const char*>(buffer.data());
+      auto e = reinterpret_cast<const char*>(buffer.data()); // to be incrementd
+      
+      using Buffer = std::decay_t<decltype(buffer)>;
+      if constexpr (is_specialization_v<Buffer, std::basic_string> || is_specialization_v<Buffer, std::basic_string_view> || span<Buffer> || Opts.format == binary) {
+         e += buffer.size();
+         
+         if (b == e) {
+            throw std::runtime_error("No input provided to read");
+         }
+      }
+      else {
+         // if not a std::string or a std::string_view, check that the last character is a null character
+         // this is not required for binary specification reading, because we require the data to be properly formatted
+         if (buffer.empty()) {
+            throw std::runtime_error("No input provided to read");
+         }
+         e += buffer.size() - 1;
+         if (*e != '\0') {
+            throw std::runtime_error("Data must be null terminated");
+         }
+      }
+      
+      return std::pair{ b, e };
+   }
+   
    // For reading json from a std::vector<char>, std::deque<char> and the like
    template <opts Opts>
    inline void read(auto& value, detail::contiguous auto&& buffer, is_context auto&& ctx)
@@ -18,7 +52,7 @@ namespace glz
       auto e = reinterpret_cast<const char*>(buffer.data()); // to be incrementd
       
       using Buffer = std::decay_t<decltype(buffer)>;
-      if constexpr (is_specialization_v<Buffer, std::basic_string> || std::same_as<Buffer, std::string_view> || Opts.format == binary) {
+      if constexpr (is_specialization_v<Buffer, std::basic_string> || is_specialization_v<Buffer, std::basic_string_view> || span<Buffer> || Opts.format == binary) {
          e += buffer.size();
          
          if (b == e) {

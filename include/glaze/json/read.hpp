@@ -21,39 +21,6 @@ namespace glz
 {
    namespace detail
    {
-      inline void skip_object_value(auto&& it, auto&& end)
-      {
-         skip_ws(it, end);
-         while (true) {
-            switch (*it) {
-               case '{':
-                  skip_until_closed<'{', '}'>(it, end);
-                  break;
-               case '[':
-                  skip_until_closed<'[', ']'>(it, end);
-                  break;
-               case '"':
-                  skip_string(it, end);
-                  break;
-               case '/':
-                  skip_comment(it, end);
-                  continue;
-               case ',':
-               case '}':
-               case ']':
-                  break;
-               case '\0':
-                  break;
-               default: {
-                  ++it;
-                  continue;
-               }
-            }
-            
-            break;
-         }
-      }
-      
       template <class T = void>
       struct from_json {};
       
@@ -558,6 +525,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
+            skip_ws(it, end);
             const auto key = parse_key(it, end);
 
             static constexpr auto frozen_map = detail::make_string_to_enum_map<T>();
@@ -591,7 +559,7 @@ namespace glz
          static void op(raw_json& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             auto it_start = it;
-            skip_object_value(it, end);
+            skip_value(it, end);
             value.str.clear();
             value.str.insert(value.str.begin(), it_start, it);
          }
@@ -1063,7 +1031,7 @@ namespace glz
                            member_it->second);
                      }
                      else [[unlikely]] {
-                        skip_object_value(it, end);
+                        skip_value(it, end);
                      }
                   }
                }
