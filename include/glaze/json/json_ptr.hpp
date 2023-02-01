@@ -587,7 +587,9 @@ namespace glz
          std::span<std::remove_reference_t<decltype(*it)>> ret;
          
          for_each<N>([&](auto I) {
-            static constexpr auto key = std::get<I>(tokens);
+            static constexpr auto key = [] {
+               return std::get<decltype(I)::value>(tokens);
+            }();  // MSVC internal compiler error workaround
             if constexpr (maybe_numeric_key(key)) {
                switch (*it)
                {
