@@ -269,6 +269,26 @@ glz::read_as_json(thing, "/vec3/2", "999.9");
 expect(thing.vec3.z == 999.9);
 ```
 
+### get_as_json
+
+`get_as_json` allows you to get a targeted value from within an input buffer. This is especially useful if you need to change how an object is parsed based on a value within the object.
+
+```c++
+std::string s = R"({"obj":{"x":5.5}})";
+auto z = glz::get_as_json<double, "/obj/x">(s);
+expect(z == 5.5);
+```
+
+### get_sv_json
+
+`get_sv_json` allows you to get a `std::string_view` to a targeted value within an input buffer. This can be more efficient to check values and handle custom parsing than constructing a new value with `get_as_json`.
+
+```c++
+std::string s = R"({"obj":{"x":5.5}})";
+auto view = glz::get_sv_json<"/obj/x">(s);
+expect(view == "5.5");
+```
+
 ## JSON With Comments (JSONC)
 
 Comments are supported with the specification defined here: [JSONC](https://github.com/stephenberry/JSONC)
