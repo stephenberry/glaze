@@ -83,6 +83,18 @@ namespace glz
          };
       };
       
+      template <>
+      struct to_json<skip>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&&, auto&&... args)
+         {
+            dump<'"'>(args...);
+            dump("skip type should not have been written", args...);
+            dump<'"'>(args...);
+         };
+      };
+      
       template <is_member_function_pointer T>
       struct to_json<T>
       {
@@ -642,7 +654,7 @@ namespace glz
                   return;
                }
                
-               if constexpr (std::is_same_v<val_t, hidden>) {
+               if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
                   return;
                }
 

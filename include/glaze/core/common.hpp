@@ -43,6 +43,8 @@ namespace glz
    
    struct hidden {};
    
+   struct skip{}; // to skip a keyed value in input
+   
    // Register this with an object to allow file including (direct writes) to the meta object
    struct file_include {};
    
@@ -739,6 +741,9 @@ namespace glz
          }
          else if constexpr (is_specialization_v<V, hide>) {
             return hidden{};
+         }
+         else if constexpr (std::same_as<V, skip>) {
+            return member_ptr;
          }
          else {
             return member_ptr(value);

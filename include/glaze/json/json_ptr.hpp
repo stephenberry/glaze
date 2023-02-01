@@ -8,9 +8,12 @@
 #include <charconv>
 
 #include "glaze/core/common.hpp"
+#include "glaze/core/opts.hpp"
+#include "glaze/core/read.hpp"
 #include "glaze/util/string_view.hpp"
 #include "glaze/util/parse.hpp"
 #include "glaze/util/poly.hpp"
+#include "glaze/json/read.hpp"
 
 namespace glz
 {
@@ -402,13 +405,14 @@ namespace glz
    template <auto& Str>
    inline constexpr auto split_json_ptr()
    {
-       constexpr auto N = std::count(Str.begin(), Str.end(), '/');
-       std::array<sv, N> arr;
-       sv s = Str;
-       for (auto i = 0; i < N; ++i) {
-           std::tie(arr[i], s) = tokenize_json_ptr(s);
-       }
-       return arr;
+      constexpr auto str = Str;
+      constexpr auto N = std::count(str.begin(), str.end(), '/');
+      std::array<sv, N> arr;
+      sv s = str;
+      for (auto i = 0; i < N; ++i) {
+         std::tie(arr[i], s) = tokenize_json_ptr(s);
+      }
+      return arr;
    }
    
    inline constexpr auto json_ptrs(auto&&... args)
@@ -556,4 +560,120 @@ namespace glz
          }
       }
    }
-}  // namespace glaze
+   
+   inline constexpr bool maybe_numeric_key(const sv key)
+   {
+      return key.find_first_not_of("0123456789") == std::string_view::npos;
+   }
+   
+   template <string_literal Str, auto Opts = opts{}>
+   inline auto get_view_json(detail::contiguous auto&& buffer) {
+      static constexpr auto s = chars<Str>;
+      
+      static constexpr auto tokens = split_json_ptr<s>();
+      static constexpr auto N = tokens.size();
+      
+      auto p = read_iterators<Opts>(buffer);
+      auto& it = p.first;
+      auto& end = p.second;
+      
+      if constexpr (N == 0) {
+         return std::span{ it, end };
+      }
+      else {
+         using namespace glz::detail;
+         
+         skip_ws(it, end);
+         
+         std::span<std::remove_reference_t<decltype(*it)>> ret;
+         
+         for_each<N>([&](auto I) {
+            using index_t = decltype(I);
+            static constexpr auto key = [](index_t Index) constexpr -> sv {
+               return std::get<decltype(I)::value>(tokens);
+            }({}); // MSVC internal compiler error workaround
+            if constexpr (maybe_numeric_key(key)) {
+               switch (*it)
+               {
+                  case '{': {
+                     ++it;
+                     while (true) {
+                        skip_ws(it, end);
+                        const auto k = parse_key(it, end);
+                        if (cx_string_cmp<key>(k)) {
+                           skip_ws(it, end);
+                           match<':'>(it);
+                           skip_ws(it, end);
+                           
+                           if constexpr (I == (N - 1)) {
+                              ret = parse_value(it, end);
+                           }
+                           return;
+                        }
+                        else {
+                           skip_value(it, end);
+                           if (*it != ',') {
+                              throw std::runtime_error("Key not found");
+                           }
+                           ++it;
+                        }
+                     }
+                  }
+                  case '[': {
+                     ++it;
+                     // Could optimize by counting commas
+                     static constexpr auto n = stoui(key);
+                     for_each<n>([&](auto I) {
+                        skip_value(it, end);
+                        if (*it != ',') {
+                           throw std::runtime_error("Array element not found");
+                        }
+                        ++it;
+                     });
+                     ret = parse_value(it, end);
+                  }
+               }
+            }
+            else {
+               match<'{'>(it);
+               
+               while (true) {
+                  skip_ws(it, end);
+                  const auto k = parse_key(it, end);
+                  if (cx_string_cmp<key>(k)) {
+                     skip_ws(it, end);
+                     match<':'>(it);
+                     skip_ws(it, end);
+                     
+                     if constexpr (I == (N - 1)) {
+                        ret = parse_value(it, end);
+                     }
+                     return;
+                  }
+                  else {
+                     skip_value(it, end);
+                     if (*it != ',') {
+                        throw std::runtime_error("Key not found");
+                     }
+                     ++it;
+                  }
+               }
+            }
+         });
+         
+         return ret;
+      }
+   }
+   
+   template <class T, string_literal Str, auto Opts = opts{}>
+   inline auto get_as_json(detail::contiguous auto&& buffer) {
+      const auto str = glz::get_view_json<Str>(buffer);
+      return glz::read_json<T>(str);
+   }
+   
+   template <string_literal Str, auto Opts = opts{}>
+   inline sv get_sv_json(detail::contiguous auto&& buffer) {
+      const auto s = glz::get_view_json<Str>(buffer);
+      return { reinterpret_cast<const char*>(s.data()), s.size() };
+   }
+}

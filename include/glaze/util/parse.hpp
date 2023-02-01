@@ -246,9 +246,9 @@ namespace glz::detail
       return false;
    }
 
-   constexpr bool is_digit(char c) { return c <= '9' && c >= '0'; }
+   inline constexpr bool is_digit(char c) { return c <= '9' && c >= '0'; }
 
-   constexpr size_t stoui(std::string_view s, size_t value = 0)
+   inline constexpr size_t stoui(std::string_view s, size_t value = 0)
    {
       if (s.empty()) {
          return value;
@@ -263,12 +263,53 @@ namespace glz::detail
       }
    }
    
-   inline std::string_view parse_key(auto&& it, auto&& end)
+   // expects opening whitespace to be handled
+   inline sv parse_key(auto&& it, auto&& end)
    {
-      skip_ws(it, end);
       match<'"'>(it);
       auto start = it;
       skip_till_quote(it, end);
       return { start, static_cast<size_t>(it++ - start) };
+   }
+   
+   inline void skip_value(auto&& it, auto&& end)
+   {
+      skip_ws(it, end);
+      while (true) {
+         switch (*it) {
+            case '{':
+               skip_until_closed<'{', '}'>(it, end);
+               break;
+            case '[':
+               skip_until_closed<'[', ']'>(it, end);
+               break;
+            case '"':
+               skip_string(it, end);
+               break;
+            case '/':
+               skip_comment(it, end);
+               continue;
+            case ',':
+            case '}':
+            case ']':
+               break;
+            case '\0':
+               break;
+            default: {
+               ++it;
+               continue;
+            }
+         }
+         
+         break;
+      }
+   }
+   
+   // expects opening whitespace to be handled
+   inline auto parse_value(auto&& it, auto&& end)
+   {
+      auto start = it;
+      skip_value(it, end);
+      return std::span{ start, static_cast<size_t>(std::distance(start, it)) };
    }
 }
