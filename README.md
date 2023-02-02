@@ -606,6 +606,29 @@ This will read the `./obj.json` file into the `obj` as it is parsed. Since glaze
 
 > Paths are always relative to the location of the previously loaded file. For nested includes this means the user only needs to consider the relative path to the file in which the include is written.
 
+## Skip
+
+It can be useful to acknowledge a keys existence in an object to prevent errors, and yet the value may not be needed or exist in C++. These cases are handled by registering a `glz::skip` type with the meta data.
+
+```c++
+struct S {
+  int i{};
+};
+
+template <>
+struct glz::meta<S> {
+  static constexpr auto value = object("key_to_skip", skip{}, "x", &S::i);
+};
+```
+
+```c++
+std::string buffer = R"({"key_to_skip": [1,2,3], "i": 7})";
+S s{};
+glz::read_json(s, buffer);
+// The value [1,2,3] will be skipped
+expect(s.i == 7); // only the value i will be read into
+```
+
 ## NDJSON Support
 
 Glaze supports [Newline Delimited JSON](http://ndjson.org) for array-like types (e.g. `std::vector` and `std::tuple`).
