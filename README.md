@@ -752,7 +752,7 @@ The API is shown below. It is simple, yet incredibly powerful, allowing pretty m
 
 ```c++
 struct api {
-  /*default constructors hidden for brevity*/
+  ...
   
   template <class T>
     [[nodiscard]] T& get(const sv path);
@@ -760,12 +760,14 @@ struct api {
   template <class T>
     [[nodiscard]] T* get_if(const sv path) noexcept;
 
-  // Get a std::function from a member function across the API
+  // Get a std::function from a member function or std::function across the API
   template <class T>
     [[nodiscard]] T get_fn(const sv path);
 
   template <class Ret, class... Args>
   [[nodiscard]] Ret call(const sv path, Args&&... args);
+  
+  [[nodiscard]] virtual bool contains(const sv path) noexcept = 0;
 
   virtual bool read(const uint32_t /*format*/, const sv /*path*/,
                     const sv /*data*/) noexcept = 0;
@@ -776,15 +778,7 @@ struct api {
     return error;
   }
 
-  protected:
-  /// unchecked void* access
-  virtual void* get(const sv path, const sv type_hash) noexcept = 0;
-
-  virtual bool caller(const sv path, const sv type_hash, void* ret, std::span<void*> args) noexcept = 0;
-
-  virtual std::unique_ptr<void, void(*)(void*)> get_fn(const sv path, const sv type_hash) noexcept = 0;
-
-  std::string error{};
+  ...
 };
 ```
 
@@ -843,7 +837,7 @@ A valid interface concern is binary compatibility between types. Glaze uses comp
 
 ## Name
 
-By default custom type names from `glz::name_v` will be `"Unnamed"`. It is best practice to give types the same name as it has in C++, including the namespace (at least the local namespace).
+By default custom type names from `glz::name_v` will be `"glz::unknown"`. It is best practice to give types the same name as it has in C++, including the namespace (at least the local namespace).
 
 Concepts exist for naming `const`, pointer (`*`), and reference (`&`), versions of types as they are used. Many standard library containers are also supported.
 
