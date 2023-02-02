@@ -667,6 +667,39 @@ std::string s = glz::write_ndjson(x);
 glz::read_ndjson(x, s);
 ```
 
+## Generic JSON (glz::json_t)
+
+For use cases where the JSON structure is only known at runtime, Glaze provides `json_t`. This approach is much slower and requires heap allocations, but may be required in some use cases.
+
+```c++
+// Writing example
+glz::json_t json = {
+         {"pi", 3.141},
+         {"happy", true},
+         {"name", "Niels"},
+         {"nothing", nullptr},
+         {"answer", {{"everything", 42.0}}},
+         {"list", {1.0, 0.0, 2.0}},
+         {"object", {
+            {"currency", "USD"},
+            {"value", 42.99}
+         }}
+      };
+std::string buffer{};
+glz::write_json(json, buffer);
+expect(buffer == R"({"answer":{"everything":42},"happy":true,"list":[1,0,2],"name":"Niels","object":{"currency":"USD","value":42.99},"pi":3.141})");
+```
+
+```c++
+// Reading example
+glz::json_t json{};
+std::string buffer = R"([5,"Hello World",{"pi":3.14}])";
+glz::read_json(json, buffer);
+expect(json[0].get<double>() == 5.0);
+expect(json[1].get<std::string>() == "Hello World");
+expect(json[2]["pi"].get<double>() == 3.14);
+```
+
 # More Features
 
 - Tagged binary messaging for maximum performance
@@ -752,7 +785,7 @@ The API is shown below. It is simple, yet incredibly powerful, allowing pretty m
 
 ```c++
 struct api {
-  ...
+  /*default constructors hidden for brevity*/
   
   template <class T>
     [[nodiscard]] T& get(const sv path);
@@ -760,14 +793,12 @@ struct api {
   template <class T>
     [[nodiscard]] T* get_if(const sv path) noexcept;
 
-  // Get a std::function from a member function or std::function across the API
+  // Get a std::function from a member function across the API
   template <class T>
     [[nodiscard]] T get_fn(const sv path);
 
   template <class Ret, class... Args>
   [[nodiscard]] Ret call(const sv path, Args&&... args);
-  
-  [[nodiscard]] virtual bool contains(const sv path) noexcept = 0;
 
   virtual bool read(const uint32_t /*format*/, const sv /*path*/,
                     const sv /*data*/) noexcept = 0;
@@ -778,7 +809,15 @@ struct api {
     return error;
   }
 
-  ...
+  protected:
+  /// unchecked void* access
+  virtual void* get(const sv path, const sv type_hash) noexcept = 0;
+
+  virtual bool caller(const sv path, const sv type_hash, void* ret, std::span<void*> args) noexcept = 0;
+
+  virtual std::unique_ptr<void, void(*)(void*)> get_fn(const sv path, const sv type_hash) noexcept = 0;
+
+  std::string error{};
 };
 ```
 
@@ -837,7 +876,7 @@ A valid interface concern is binary compatibility between types. Glaze uses comp
 
 ## Name
 
-By default custom type names from `glz::name_v` will be `"glz::unknown"`. It is best practice to give types the same name as it has in C++, including the namespace (at least the local namespace).
+By default custom type names from `glz::name_v` will be `"Unnamed"`. It is best practice to give types the same name as it has in C++, including the namespace (at least the local namespace).
 
 Concepts exist for naming `const`, pointer (`*`), and reference (`&`), versions of types as they are used. Many standard library containers are also supported.
 
