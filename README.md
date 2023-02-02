@@ -629,6 +629,34 @@ glz::read_json(s, buffer);
 expect(s.i == 7); // only the value i will be read into
 ```
 
+## Hide
+
+Glaze is designed to help with building generic APIs. Sometimes a value needs to be exposed to the API, but it is not desirable to read in or write out the value in JSON. This is the use case for `glz::hide`.
+
+`glz::hide` hides the value from JSON output while still allowing API access.
+
+```c++
+struct hide_struct {
+  int i = 287;
+  double d = 3.14;
+  std::string hello = "Hello World";
+};
+
+template <>
+struct glz::meta<hide_struct> {
+   using T = hide_struct;
+   static constexpr auto value = object("i", &T::i,  //
+                                        "d", &T::d, //
+                                        "hello", hide{&T::hello});
+};
+```
+
+```c++
+hide_struct s{};
+auto b = glz::write_json(s);
+expect(b == R"({"i":287,"d":3.14})"); // notice that "hello" is hidden from the output
+```
+
 ## NDJSON Support
 
 Glaze supports [Newline Delimited JSON](http://ndjson.org) for array-like types (e.g. `std::vector` and `std::tuple`).
