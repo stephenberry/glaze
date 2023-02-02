@@ -32,7 +32,7 @@ namespace glz
          template <class T>
          [[nodiscard]] T* get_if(const sv path) noexcept;
 
-         // Get a std::function from a member function across the API
+         // Get a std::function from a member function or std::function across the API
          template <class T>
          [[nodiscard]] T get_fn(const sv path);
 
@@ -50,8 +50,8 @@ namespace glz
             return error;
          }
 
-         /// unchecked void* access
-         virtual void* get(const sv path, const sv type_hash) noexcept = 0;
+         /// unchecked `void*` access for low level programming (prefer templated get)
+         [[nodiscard]] virtual void* get(const sv path, const sv type_hash) noexcept = 0;
       protected:
 
          virtual bool caller(const sv path, const sv type_hash, void*& ret, std::span<void*> args) noexcept = 0;
