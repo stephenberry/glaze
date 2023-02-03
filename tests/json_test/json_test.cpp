@@ -3473,6 +3473,17 @@ suite get_sv = []
    };
 };
 
+suite no_except_tests = []
+{
+   "no except"_test = []
+   {
+      my_struct s{};
+      std::string b = R"({"i":5,,})";
+      auto ec = glz::read<glz::opts{.no_except = true}>(s, b);
+      expect(ec == glz::error_code::none) << static_cast<uint32_t>(ec);
+   };
+};
+
 int main()
 {
    using namespace boost::ut;

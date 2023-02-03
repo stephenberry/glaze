@@ -28,7 +28,7 @@ namespace glz
       struct read<json>
       {
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
+         static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept(Opts.no_except) {
             from_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
@@ -37,7 +37,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts, is_context Ctx, class It0, class It1>
-         static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) {
+         static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept(Opts.no_except) {
             using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
             from_json<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
@@ -47,7 +47,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, Args&&... args)
+         static void op(auto&& value, Args&&... args) noexcept(Opts.no_except)
          {
             throw std::runtime_error("attempted to read into member function pointer");
          }
@@ -57,7 +57,7 @@ namespace glz
       struct from_json<skip>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&&, auto&&... args)
+         static void op(auto&& value, is_context auto&&, auto&&... args) noexcept(Opts.no_except)
          {
             skip_value(args...);
          }
@@ -67,7 +67,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, Args&&... args)
+         static void op(auto&& value, Args&&... args) noexcept(Opts.no_except)
          {
             using V = std::decay_t<decltype(value.get())>;
             from_json<V>::template op<Opts>(value.get(), std::forward<Args>(args)...);
@@ -78,7 +78,7 @@ namespace glz
       struct from_json<hidden>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&&, auto&&... args)
+         static void op(auto&& value, is_context auto&&, auto&&... args) noexcept(Opts.no_except)
          {
             throw std::runtime_error("hidden type attempted to be read");
          };
@@ -88,7 +88,7 @@ namespace glz
       struct from_json<std::monostate>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args)
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept(Opts.no_except)
          {
             match<R"("std::monostate")">(args...);
          };
@@ -142,7 +142,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept(Opts.no_except)
          {
             if constexpr (variant_is_auto_deducible<T>()) {
                skip_ws(it, end);
@@ -276,7 +276,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         static void op(bool_t auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(bool_t auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept(Opts.no_except)
          {
             if constexpr (!Opts.ws_handled) {
                skip_ws(it, end);
@@ -305,7 +305,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options, class It>
-         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
+         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept(Options.no_except)
          {
             if constexpr (!Options.ws_handled) {
                skip_ws(it, end);
@@ -315,8 +315,13 @@ namespace glz
             using X = std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>, const uint8_t*, uint8_t*>;
             auto cur = reinterpret_cast<X>(it);
             auto s = parse_number(value, cur);
-            if (!s) [[unlikely]]
-               throw std::runtime_error("Failed to parse number");
+            if constexpr (Options.no_except) {
+               ctx.error = error_code::parse_number_failure;
+            }
+            else {
+               if (!s) [[unlikely]]
+                  throw std::runtime_error("Failed to parse number");
+            }
             it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
          }
       };
@@ -325,7 +330,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts, class It, class End>
-         static void op(auto& value, is_context auto&& ctx, It&& it, End&& end)
+         static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept(Opts.no_except)
          {            
             if constexpr (!Opts.ws_handled) {
                skip_ws(it, end);
@@ -427,7 +432,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept(Opts.no_except)
          {
             match<'"'>(it);
             if (*it == '\\') [[unlikely]] {
@@ -533,7 +538,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept(Opts.no_except)
          {
             skip_ws(it, end);
             const auto key = parse_key(it, end);
@@ -553,7 +558,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         static void op(auto& /*value*/, is_context auto&& /*ctx*/, auto&& it, auto&& end)
+         static void op(auto& /*value*/, is_context auto&& /*ctx*/, auto&& it, auto&& end) noexcept(Opts.no_except)
          {
             skip_ws(it, end);
             match<'"'>(it);
@@ -566,7 +571,7 @@ namespace glz
       struct from_json<raw_json>
       {
          template <auto Opts>
-         static void op(raw_json& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(raw_json& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept(Opts.no_except)
          {
             auto it_start = it;
             skip_value(it, end);
@@ -580,7 +585,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept(Options.no_except)
          {
             if constexpr (!Options.ws_handled) {
                skip_ws(it, end);
@@ -620,7 +625,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept(Options.no_except)
          {
             if constexpr (!Options.ws_handled) {
                skip_ws(it, end);
@@ -665,7 +670,12 @@ namespace glz
                   return;
                }
                else [[unlikely]] {
-                  throw std::runtime_error("Expected ]");
+                  if constexpr (Options.no_except) {
+                     ctx.error = error_code::expected_bracket;
+                  }
+                  else {
+                     throw std::runtime_error("Expected ]");
+                  }
                }
             }
             
@@ -683,12 +693,22 @@ namespace glz
                      return;
                   }
                   else [[unlikely]] {
-                     throw std::runtime_error("Expected ]");
+                     if constexpr (Options.no_except) {
+                        ctx.error = error_code::expected_bracket;
+                     }
+                     else {
+                        throw std::runtime_error("Expected ]");
+                     }
                   }
                }
             }
             else {
-               throw std::runtime_error("Exceeded static array size.");
+               if constexpr (Options.no_except) {
+                  ctx.error = error_code::exceeded_static_array_size;
+               }
+               else {
+                  throw std::runtime_error("Exceeded static array size.");
+               }
             }
          }
       };
@@ -735,7 +755,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept(Options.no_except)
          {
             if constexpr (!Options.ws_handled) {
                skip_ws(it, end);
@@ -763,7 +783,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept(Opts.no_except)
          {
             static constexpr auto N = []() constexpr
             {
@@ -811,7 +831,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept(Opts.no_except)
          {
             if constexpr (!Opts.ws_handled) {
                skip_ws(it, end);
@@ -850,7 +870,7 @@ namespace glz
       struct from_json<includer<T>>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept(Opts.no_except)
          {
             static thread_local std::string path{};
             read<json>::op<Opts>(path, ctx, it, end);
@@ -943,7 +963,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options, class It>
-         static void op(auto& value, is_context auto&& ctx, It&& it, auto&& end)
+         static void op(auto& value, is_context auto&& ctx, It&& it, auto&& end) noexcept(Options.no_except)
          {
             if constexpr (!Options.opening_handled) {
                skip_ws(it, end);
@@ -1072,7 +1092,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept(Opts.no_except)
          {
             skip_ws(it, end);
             

@@ -55,23 +55,45 @@ namespace glz
       if constexpr (is_specialization_v<Buffer, std::basic_string> || is_specialization_v<Buffer, std::basic_string_view> || span<Buffer> || Opts.format == binary) {
          e += buffer.size();
          
-         if (b == e) {
-            throw std::runtime_error("No input provided to read");
+         if constexpr (Opts.no_except) {
+            if (b == e) {
+               ctx.error = error_code::no_read_input;
+               return;
+            }
+         }
+         else {
+            if (b == e) {
+               throw std::runtime_error("No input provided to read");
+            }
          }
       }
       else {
-         // if not a std::string or a std::string_view, check that the last character is a null character
-         // this is not required for binary specification reading, because we require the data to be properly formatted
-         if (buffer.empty()) {
-            throw std::runtime_error("No input provided to read");
+         if constexpr (Opts.no_except) {
+            // if not a std::string or a std::string_view, check that the last character is a null character
+            // this is not required for binary specification reading, because we require the data to be properly formatted
+            if (buffer.empty()) {
+               ctx.error = error_code::no_read_input;
+               return;
+            }
+            e += buffer.size() - 1;
+            if (*e != '\0') {
+               ctx.error = error_code::data_must_be_null_terminated;
+            }
          }
-         e += buffer.size() - 1;
-         if (*e != '\0') {
-            throw std::runtime_error("Data must be null terminated");
+         else {
+            // if not a std::string or a std::string_view, check that the last character is a null character
+            // this is not required for binary specification reading, because we require the data to be properly formatted
+            if (buffer.empty()) {
+               throw std::runtime_error("No input provided to read");
+            }
+            e += buffer.size() - 1;
+            if (*e != '\0') {
+               throw std::runtime_error("Data must be null terminated");
+            }
          }
       }
       
-      if constexpr (Opts.format == binary) {
+      if constexpr (Opts.format == binary || Opts.no_except) {
          // binary exceptions are not formatted
          detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
       }
@@ -93,10 +115,17 @@ namespace glz
    }
    
    template <opts Opts>
-   inline void read(auto& value, detail::contiguous auto&& buffer)
+   inline auto read(auto& value, detail::contiguous auto&& buffer)
    {
-      context ctx{};
-      read<Opts>(value, buffer, ctx);
+      if constexpr (Opts.no_except) {
+         noexcept_context ctx{};
+         read<Opts>(value, buffer, ctx);
+         return ctx.error;
+      }
+      else {
+         context ctx{};
+         read<Opts>(value, buffer, ctx);
+      }
    }
    
    template <class T>
