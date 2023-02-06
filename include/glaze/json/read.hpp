@@ -232,12 +232,12 @@ namespace glz
 
                if (is_glaze_object) {
                   skip_ws(ctx, it, end);
-                  match<'{'>(it);
+                  match<'{'>(ctx, it);
                   skip_ws(ctx, it, end);
 
                   match<R"("type")">(ctx, it, end);
                   skip_ws(ctx, it, end);
-                  match<':'>(it);
+                  match<':'>(ctx, it);
 
                   using V = std::decay_t<decltype(value)>;
 
@@ -248,7 +248,7 @@ namespace glz
                   static thread_local std::string type{};
                   read<json>::op<Opts>(type, ctx, it, end);
                   skip_ws(ctx, it, end);
-                  match<','>(it);
+                  match<','>(ctx, it);
 
                   for_each<N>([&](auto I) {
                      constexpr auto N = [] {
@@ -587,9 +587,9 @@ namespace glz
          static void op(auto& /*value*/, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             skip_ws(ctx, it, end);
-            match<'"'>(it);
+            match<'"'>(ctx, it);
             skip_till_quote(ctx, it, end);
-            match<'"'>(it);
+            match<'"'>(ctx, it);
          }
       };
       
@@ -618,7 +618,7 @@ namespace glz
             }
             static constexpr auto Opts = ws_handled_off<Options>();
             
-            match<'['>(it);
+            match<'['>(ctx, it);
             skip_ws(ctx, it, end);
             
             value.clear();
@@ -640,7 +640,7 @@ namespace glz
                   ++it;
                   return;
                }
-               match<','>(it);
+               match<','>(ctx, it);
             }
          }
       };
@@ -777,7 +777,7 @@ namespace glz
             }
             static constexpr auto Opts = ws_handled_off<Options>();
             
-            match<'['>(it);
+            match<'['>(ctx, it);
             const auto n = number_of_array_elements(ctx, it, end);
             if (n) {
                value.resize(*n);
@@ -786,11 +786,11 @@ namespace glz
                   read<json>::op<Opts>(x, ctx, it, end);
                   skip_ws(ctx, it, end);
                   if (i < *n - 1) {
-                     match<','>(it);
+                     match<','>(ctx, it);
                   }
                   ++i;
                }
-               match<']'>(it);
+               match<']'>(ctx, it);
             }
          }
       };
@@ -854,7 +854,7 @@ namespace glz
                skip_ws(ctx, it, end);
             }
             
-            match<'['>(it);
+            match<'['>(ctx, it);
             
             static thread_local std::string s{};
             
@@ -880,7 +880,7 @@ namespace glz
                   ++it;
                   return;
                }
-               match<','>(it);
+               match<','>(ctx, it);
             }
          }
       };

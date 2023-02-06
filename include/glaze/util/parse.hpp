@@ -9,7 +9,7 @@
 namespace glz::detail
 {
    // assumes null terminated
-   template <char c>
+   /*template <char c>
    inline void match(auto&& it)
    {
       if (*it != c) [[unlikely]] {
@@ -20,7 +20,7 @@ namespace glz::detail
       else [[likely]] {
          ++it;
       }
-   }
+   }*/
    
    template <char c>
    inline void match(is_context auto&& ctx, auto&& it) noexcept
@@ -42,7 +42,7 @@ namespace glz::detail
    }
    
    // assumes null terminated by default
-   template <char c, bool is_null_terminated = true>
+   /*template <char c, bool is_null_terminated = true>
    inline void match(auto&& it, auto&& end)
    {
       if constexpr (is_null_terminated) {
@@ -65,7 +65,7 @@ namespace glz::detail
             ++it;
          }
       }
-   }
+   }*/
 
    template <string_literal str>
    inline void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
