@@ -116,11 +116,11 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             if constexpr (!Options.opening_handled) {
-               skip_ws(it, end);
+               skip_ws(ctx, it, end);
                match<'{'>(it);
             }
             
-            skip_ws(it, end);
+            skip_ws(ctx, it, end);
             
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
             
@@ -132,30 +132,30 @@ namespace glz
                }
                
                // find the string, escape characters are not supported for recorders
-               skip_ws(it, end);
-               const auto name = parse_key(it, end);
+               skip_ws(ctx, it, end);
+               const auto name = parse_key(ctx, it, end);
                
                auto& [str, v] = value.data[i];
                if (name != str) {
                   throw std::runtime_error("Recorder read of name does not match initialized state");
                }
                
-               skip_ws(it, end);
+               skip_ws(ctx, it, end);
                match<':'>(it);
-               skip_ws(it, end);
+               skip_ws(ctx, it, end);
                
                std::visit([&](auto&& deq) {
                   read<json>::op<Opts>(deq, ctx, it, end);
                }, v.first);
                
                if (i < n - 1) {
-                  skip_ws(it, end);
+                  skip_ws(ctx, it, end);
                   match<','>(it);
-                  skip_ws(it, end);
+                  skip_ws(ctx, it, end);
                }
             }
             
-            skip_ws(it, end);
+            skip_ws(ctx, it, end);
             match<'}'>(it);
          }
       };

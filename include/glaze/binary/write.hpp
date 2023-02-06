@@ -150,27 +150,26 @@ namespace glz
       }
 
       template <auto Opts, class... Args>
-      [[nodiscard]] auto dump_int(size_t i, Args&&... args) noexcept(Opts.no_except)
+      [[nodiscard]] bool dump_int(size_t i, Args&&... args) noexcept
       {
          if (i < 64) {
-            return dump_type(header8{ 0, static_cast<uint8_t>(i) }, std::forward<Args>(args)...);
+            dump_type(header8{ 0, static_cast<uint8_t>(i) }, std::forward<Args>(args)...);
+            return true;
          }
          else if (i < 16384) {
-            return dump_type(header16{ 1, static_cast<uint16_t>(i) }, std::forward<Args>(args)...);
+            dump_type(header16{ 1, static_cast<uint16_t>(i) }, std::forward<Args>(args)...);
+            return true;
          }
          else if (i < 1073741824) {
-            return dump_type(header32{ 2, static_cast<uint32_t>(i) }, std::forward<Args>(args)...);
+            dump_type(header32{ 2, static_cast<uint32_t>(i) }, std::forward<Args>(args)...);
+            return true;
          }
          else if (i < 4611686018427387904) {
-            return dump_type(header64{ 3, i }, std::forward<Args>(args)...);
+            dump_type(header64{ 3, i }, std::forward<Args>(args)...);
+            return true;
          }
          else {
-            if constexpr (Opts.no_except) {
-               return error::maximum_size_exceeded;
-            }
-            else {
-               throw std::runtime_error("size not supported");
-            }
+            return false;
          }
       }
 
@@ -189,7 +188,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         static auto op(auto&& value, is_context auto&&, Args&&... args) noexcept(Opts.no_except)
+         static auto op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
             dump_int<Opts>(value.size(), std::forward<Args>(args)...);
             dump(std::as_bytes(std::span{ value.data(), value.size() }), std::forward<Args>(args)...);
@@ -200,7 +199,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept(Opts.no_except)
+         static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if constexpr (!has_static_size<T>) {
                dump_int<Opts>(value.size(), std::forward<Args>(args)...);
@@ -215,7 +214,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept(Opts.no_except)
+         static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump_int<Opts>(value.size(), std::forward<Args>(args)...);
             for (auto&& [k, v] : value) {
@@ -229,7 +228,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept(Opts.no_except)
+         static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if (value) {
                dump<static_cast<std::byte>(1)>(std::forward<Args>(args)...);
@@ -246,7 +245,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept(Opts.no_except)
+         static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;

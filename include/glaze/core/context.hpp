@@ -7,15 +7,6 @@
 
 namespace glz
 {
-   // Runtime context for configuration
-   // We do not template the context on iterators so that it can be easily shared across buffer implementations
-   struct context final
-   {      
-      // INTERNAL USE
-      uint32_t indentation_level{};
-      std::string current_file;  // top level file path
-   };
-   
    enum class error_code : uint32_t
    {
       none,
@@ -24,10 +15,30 @@ namespace glz
       parse_number_failure,
       expected_brace,
       expected_bracket,
-      exceeded_static_array_size
+      expected_quote,
+      exceeded_static_array_size,
+      unexpected_end,
+      expected_end_comment,
+      syntax_error,
+      key_not_found,
+      unexpected_enum,
+      attempt_member_func_read,
+      attempt_read_hidden,
+      invalid_nullable_read,
+      invalid_variant_object,
+      invalid_variant_array,
+      invalid_variant_string,
+      no_matching_variant_type,
+      expected_true_or_false,
+      unknown_key,
+      invalid_flag_input,
+      invalid_escape,
+      u_requires_hex_digits
    };
    
-   struct noexcept_context final
+   // Runtime context for configuration
+   // We do not template the context on iterators so that it can be easily shared across buffer implementations
+   struct context final
    {
       // INTERNAL USE
       uint32_t indentation_level{};
@@ -36,5 +47,5 @@ namespace glz
    };
    
    template <class T>
-   concept is_context = std::same_as<std::decay_t<T>, context> || std::same_as<std::decay_t<T>, noexcept_context>;
+   concept is_context = std::same_as<std::decay_t<T>, context>;
 }

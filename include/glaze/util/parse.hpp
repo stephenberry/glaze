@@ -22,6 +22,25 @@ namespace glz::detail
       }
    }
    
+   template <char c>
+   inline void match(is_context auto&& ctx, auto&& it) noexcept
+   {
+      if (static_cast<bool>(ctx.error)) { return; }
+      
+      if (*it != c) [[unlikely]] {
+         ctx.error = error_code::syntax_error;
+         
+         /*
+          static constexpr char b[] = {c, '\0'};
+          static constexpr auto error = concat_arrays("Expected:", b);
+          throw std::runtime_error(error.data());
+          */
+      }
+      else [[likely]] {
+         ++it;
+      }
+   }
+   
    // assumes null terminated by default
    template <char c, bool is_null_terminated = true>
    inline void match(auto&& it, auto&& end)
@@ -49,21 +68,27 @@ namespace glz::detail
    }
 
    template <string_literal str>
-   inline void match(auto&& it, auto&& end)
+   inline void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
+      if (static_cast<bool>(ctx.error)) { return; }
+      
       const auto n = static_cast<size_t>(std::distance(it, end));
       if ((n < str.size) || (std::memcmp(it, str.value, str.size) != 0)) [[unlikely]] {
-         static constexpr auto error = join_v<chars<"Expected:">, chars<str>>;
-         throw std::runtime_error(error.data());
+         ctx.error = error_code::syntax_error;
+         //static constexpr auto error = join_v<chars<"Expected:">, chars<str>>;
+         //throw std::runtime_error(error.data());
       }
       it += str.size;
    }
-
-   inline void skip_comment(auto&& it, auto&& end)
+   
+   inline void skip_comment(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
+      if (static_cast<bool>(ctx.error)) { return; }
+      
       ++it;
-      if (it == end) [[unlikely]]
-         throw std::runtime_error("Unexpected end, expected comment");
+      if (it == end) [[unlikely]] {
+         ctx.error = error_code::unexpected_end;
+      }
       else if (*it == '/') {
          while (++it != end && *it != '\n')
             ;
@@ -80,12 +105,15 @@ namespace glz::detail
             }
          }
       }
-      else [[unlikely]]
-         throw std::runtime_error("Expected / or * after /");
+      else [[unlikely]] {
+         ctx.error = error_code::expected_end_comment;
+      }
    }
    
-   inline void skip_ws(auto&& it, auto&& end)
+   inline void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
+      if (static_cast<bool>(ctx.error)) { return; }
+      
       while (true) {
          switch (*it)
          {
@@ -96,7 +124,7 @@ namespace glz::detail
                ++it;
                break;
             case '/': {
-               skip_comment(it, end);
+               skip_comment(ctx, it, end);
                break;
             }
             default:
@@ -122,9 +150,11 @@ namespace glz::detail
       }
    }
 
-   inline void skip_till_escape_or_quote(auto&& it, auto&& end)
+   inline void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
+      
+      if (static_cast<bool>(ctx.error)) { return; }
 
       auto has_zero = [](uint64_t chunk) { return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080); };
 
@@ -156,11 +186,14 @@ namespace glz::detail
          }
          ++it;
       }
-      throw std::runtime_error("Expected \"");
+      
+      ctx.error = error_code::expected_quote;
    }
    
-   inline void skip_till_quote(auto&& it, auto&& end)
+   inline void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
+      if (static_cast<bool>(ctx.error)) { return; }
+      
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
       auto has_zero = [](uint64_t chunk) { return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080); };
@@ -188,7 +221,7 @@ namespace glz::detail
          }
          ++it;
       }
-      throw std::runtime_error("Expected \"");
+      ctx.error = error_code::expected_quote;
    }
 
    inline void skip_string(auto&& it, auto&& end) noexcept
@@ -206,7 +239,7 @@ namespace glz::detail
    }
 
    template <char open, char close>
-   inline void skip_until_closed(auto&& it, auto&& end)
+   inline void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
       size_t open_count = 1;
@@ -214,7 +247,7 @@ namespace glz::detail
       while (it < end && open_count > close_count) {
          switch (*it) {
          case '/':
-            skip_comment(it, end);
+            skip_comment(ctx, it, end);
             break;
          case '"':
             skip_string(it, end);
@@ -264,30 +297,33 @@ namespace glz::detail
    }
    
    // expects opening whitespace to be handled
-   inline sv parse_key(auto&& it, auto&& end)
+   inline expect<sv> parse_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      match<'"'>(it);
+      if (static_cast<bool>(ctx.error)) { return unexpected(ctx.error); }
+      
+      match<'"'>(ctx, it);
       auto start = it;
-      skip_till_quote(it, end);
-      return { start, static_cast<size_t>(it++ - start) };
+      skip_till_quote(ctx, it, end);
+      if (static_cast<bool>(ctx.error)) { return unexpected(ctx.error); }
+      return sv{ start, static_cast<size_t>(it++ - start) };
    }
    
-   inline void skip_value(auto&& it, auto&& end)
+   inline void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      skip_ws(it, end);
+      skip_ws(ctx, it, end);
       while (true) {
          switch (*it) {
             case '{':
-               skip_until_closed<'{', '}'>(it, end);
+               skip_until_closed<'{', '}'>(ctx, it, end);
                break;
             case '[':
-               skip_until_closed<'[', ']'>(it, end);
+               skip_until_closed<'[', ']'>(ctx, it, end);
                break;
             case '"':
                skip_string(it, end);
                break;
             case '/':
-               skip_comment(it, end);
+               skip_comment(ctx, it, end);
                continue;
             case ',':
             case '}':
@@ -306,10 +342,10 @@ namespace glz::detail
    }
    
    // expects opening whitespace to be handled
-   inline auto parse_value(auto&& it, auto&& end)
+   inline auto parse_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       auto start = it;
-      skip_value(it, end);
+      skip_value(ctx, it, end);
       return std::span{ start, static_cast<size_t>(std::distance(start, it)) };
    }
 }

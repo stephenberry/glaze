@@ -44,7 +44,7 @@ namespace glz
    
    // For reading json from a std::vector<char>, std::deque<char> and the like
    template <opts Opts>
-   inline void read(auto& value, detail::contiguous auto&& buffer, is_context auto&& ctx)
+   [[nodiscard]] inline error_code read(auto& value, detail::contiguous auto&& buffer, is_context auto&& ctx)
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
       
@@ -55,45 +55,29 @@ namespace glz
       if constexpr (is_specialization_v<Buffer, std::basic_string> || is_specialization_v<Buffer, std::basic_string_view> || span<Buffer> || Opts.format == binary) {
          e += buffer.size();
          
-         if constexpr (Opts.no_except) {
-            if (b == e) {
-               ctx.error = error_code::no_read_input;
-               return;
-            }
-         }
-         else {
-            if (b == e) {
-               throw std::runtime_error("No input provided to read");
-            }
+         if (b == e) {
+            ctx.error = error_code::no_read_input;
+            return;
          }
       }
       else {
-         if constexpr (Opts.no_except) {
-            // if not a std::string or a std::string_view, check that the last character is a null character
-            // this is not required for binary specification reading, because we require the data to be properly formatted
-            if (buffer.empty()) {
-               ctx.error = error_code::no_read_input;
-               return;
-            }
-            e += buffer.size() - 1;
-            if (*e != '\0') {
-               ctx.error = error_code::data_must_be_null_terminated;
-            }
+         // if not a std::string or a std::string_view, check that the last character is a null character
+         // this is not required for binary specification reading, because we require the data to be properly formatted
+         if (buffer.empty()) {
+            ctx.error = error_code::no_read_input;
+            return;
          }
-         else {
-            // if not a std::string or a std::string_view, check that the last character is a null character
-            // this is not required for binary specification reading, because we require the data to be properly formatted
-            if (buffer.empty()) {
-               throw std::runtime_error("No input provided to read");
-            }
-            e += buffer.size() - 1;
-            if (*e != '\0') {
-               throw std::runtime_error("Data must be null terminated");
-            }
+         e += buffer.size() - 1;
+         if (*e != '\0') {
+            ctx.error = error_code::data_must_be_null_terminated;
          }
       }
       
-      if constexpr (Opts.format == binary || Opts.no_except) {
+      detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
+      
+      return ctx.error;
+      
+      /*if constexpr (Opts.format == binary) {
          // binary exceptions are not formatted
          detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
       }
@@ -111,21 +95,15 @@ namespace glz
             }
             throw std::runtime_error(error);
          }
-      }
+      }*/
    }
    
    template <opts Opts>
-   inline auto read(auto& value, detail::contiguous auto&& buffer)
+   [[nodiscard]] inline error_code read(auto& value, detail::contiguous auto&& buffer)
    {
-      if constexpr (Opts.no_except) {
-         noexcept_context ctx{};
-         read<Opts>(value, buffer, ctx);
-         return ctx.error;
-      }
-      else {
-         context ctx{};
-         read<Opts>(value, buffer, ctx);
-      }
+      context ctx{};
+      read<Opts>(value, buffer, ctx);
+      return ctx.error;
    }
    
    template <class T>
@@ -133,19 +111,19 @@ namespace glz
    
    // for char array input
    template <opts Opts, class T, string_viewable Buffer>
-   inline void read(T& value, Buffer&& buffer, auto&& ctx)
+   [[nodiscard]] inline error_code read(T& value, Buffer&& buffer, auto&& ctx)
    {
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
       if (str.empty()) {
-         throw std::runtime_error("No input provided to read");
+         return error_code::no_read_input;
       }
-      read<Opts>(value, str, ctx);
+      return read<Opts>(value, str, ctx);
    }
    
    template <opts Opts, class T, string_viewable Buffer>
-   inline void read(T& value, Buffer&& buffer)
+   [[nodiscard]] inline error_code read(T& value, Buffer&& buffer)
    {
       context ctx{};
-      read<Opts>(value, std::forward<Buffer>(buffer), ctx);
+      return read<Opts>(value, std::forward<Buffer>(buffer), ctx);
    }
 }

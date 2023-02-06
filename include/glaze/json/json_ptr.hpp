@@ -561,13 +561,13 @@ namespace glz
       }
    }
    
-   inline constexpr bool maybe_numeric_key(const sv key)
+   [[nodiscard]] inline constexpr bool maybe_numeric_key(const sv key)
    {
       return key.find_first_not_of("0123456789") == std::string_view::npos;
    }
    
    template <string_literal Str, auto Opts = opts{}>
-   inline auto get_view_json(detail::contiguous auto&& buffer) {
+   [[nodiscard]] inline auto get_view_json(detail::contiguous auto&& buffer) {
       static constexpr auto s = chars<Str>;
       
       static constexpr auto tokens = split_json_ptr<s>();
@@ -577,15 +577,18 @@ namespace glz
       auto& it = p.first;
       auto& end = p.second;
       
+      context ctx{};
+      
       if constexpr (N == 0) {
          return std::span{ it, end };
       }
       else {
          using namespace glz::detail;
          
-         skip_ws(it, end);
+         skip_ws(ctx, it, end);
          
-         std::span<std::remove_reference_t<decltype(*it)>> ret;
+         using span_t = std::span<std::remove_reference_t<decltype(*it)>>;
+         expect<span_t> ret;
          
          for_each<N>([&](auto I) {
             using index_t = decltype(I);
@@ -598,20 +601,20 @@ namespace glz
                   case '{': {
                      ++it;
                      while (true) {
-                        skip_ws(it, end);
-                        const auto k = parse_key(it, end);
+                        skip_ws(ctx, it, end);
+                        const auto k = parse_key(ctx, it, end);
                         if (cx_string_cmp<key>(k)) {
-                           skip_ws(it, end);
+                           skip_ws(ctx, it, end);
                            match<':'>(it);
-                           skip_ws(it, end);
+                           skip_ws(ctx, it, end);
                            
                            if constexpr (I == (N - 1)) {
-                              ret = parse_value(it, end);
+                              ret = parse_value(ctx, it, end);
                            }
                            return;
                         }
                         else {
-                           skip_value(it, end);
+                           skip_value(ctx, it, end);
                            if (*it != ',') {
                               throw std::runtime_error("Key not found");
                            }
@@ -624,13 +627,13 @@ namespace glz
                      // Could optimize by counting commas
                      static constexpr auto n = stoui(key);
                      for_each<n>([&](auto I) {
-                        skip_value(it, end);
+                        skip_value(ctx, it, end);
                         if (*it != ',') {
                            throw std::runtime_error("Array element not found");
                         }
                         ++it;
                      });
-                     ret = parse_value(it, end);
+                     ret = parse_value(ctx, it, end);
                   }
                }
             }
@@ -638,24 +641,31 @@ namespace glz
                match<'{'>(it);
                
                while (true) {
-                  skip_ws(it, end);
-                  const auto k = parse_key(it, end);
-                  if (cx_string_cmp<key>(k)) {
-                     skip_ws(it, end);
-                     match<':'>(it);
-                     skip_ws(it, end);
-                     
-                     if constexpr (I == (N - 1)) {
-                        ret = parse_value(it, end);
+                  skip_ws(ctx, it, end);
+                  const auto k = parse_key(ctx, it, end);
+                  if (k) {
+                     if (cx_string_cmp<key>(*k)) {
+                        skip_ws(ctx, it, end);
+                        match<':'>(ctx, it);
+                        skip_ws(ctx, it, end);
+                        
+                        if constexpr (I == (N - 1)) {
+                           ret = parse_value(ctx, it, end);
+                        }
+                        return;
                      }
-                     return;
+                     else {
+                        skip_value(ctx, it, end);
+                        if (*it != ',') {
+                           ret = unexpected(error_code::key_not_found);
+                           return;
+                        }
+                        ++it;
+                     }
                   }
                   else {
-                     skip_value(it, end);
-                     if (*it != ',') {
-                        throw std::runtime_error("Key not found");
-                     }
-                     ++it;
+                     ret = unexpected(error_code::syntax_error);
+                     return;
                   }
                }
             }
@@ -666,14 +676,20 @@ namespace glz
    }
    
    template <class T, string_literal Str, auto Opts = opts{}>
-   inline auto get_as_json(detail::contiguous auto&& buffer) {
+   [[nodiscard]] inline expect<T> get_as_json(detail::contiguous auto&& buffer) {
       const auto str = glz::get_view_json<Str>(buffer);
-      return glz::read_json<T>(str);
+      if (str) {
+         return glz::read_json<T>(*str);
+      }
+      return unexpected(str.error());
    }
    
    template <string_literal Str, auto Opts = opts{}>
-   inline sv get_sv_json(detail::contiguous auto&& buffer) {
+   [[nodiscard]] inline expect<sv> get_sv_json(detail::contiguous auto&& buffer) {
       const auto s = glz::get_view_json<Str>(buffer);
-      return { reinterpret_cast<const char*>(s.data()), s.size() };
+      if (s) {
+         return sv{ reinterpret_cast<const char*>(s->data()), s->size() };
+      }
+      return unexpected(s.error());
    }
 }

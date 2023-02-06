@@ -25,9 +25,13 @@
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/hash_map.hpp"
 #include "glaze/util/murmur.hpp"
+#include "glaze/util/expected.hpp"
 
 namespace glz
 {
+   template <class T>
+   using expect = expected<T, error_code>;
+   
    template <class T, class... U>
    concept is_any_of = (std::same_as<T, U> || ...);
    
