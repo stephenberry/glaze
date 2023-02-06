@@ -573,11 +573,15 @@ namespace glz
       static constexpr auto tokens = split_json_ptr<s>();
       static constexpr auto N = tokens.size();
       
-      auto p = read_iterators<Opts>(buffer);
+      context ctx{};
+      auto p = read_iterators<Opts>(ctx, buffer);
+      
       auto& it = p.first;
       auto& end = p.second;
       
-      context ctx{};
+      using span_t = std::span<std::remove_reference_t<decltype(*it)>>;
+      
+      if (static_cast<bool>(ctx.error)) { return expect<span_t>{ unexpected(ctx.error) }; }
       
       if constexpr (N == 0) {
          return std::span{ it, end };
@@ -587,7 +591,6 @@ namespace glz
          
          skip_ws(ctx, it, end);
          
-         using span_t = std::span<std::remove_reference_t<decltype(*it)>>;
          expect<span_t> ret;
          
          for_each<N>([&](auto I) {

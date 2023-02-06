@@ -552,7 +552,7 @@ namespace glz
                }
                value = *it++;
             }
-            match<'"'>(it);
+            match<'"'>(ctx, it);
          }
       };
 

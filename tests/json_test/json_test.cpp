@@ -403,8 +403,8 @@ void basic_types() {
    
    "bool read invalid"_test = [] {
       bool val{};
-      expect(throws([&]{ glz::read_json(val, "tru"); }));
-      expect(throws([&]{ glz::read_json(val, "alse"); }));
+      expect(glz::read_json(val, "tru") != glz::error_code::none);
+      expect(glz::read_json(val, "alse") != glz::error_code::none);
    };
 
    "string write"_test = [] {
@@ -3135,7 +3135,7 @@ suite unicode_tests = []
       // more than 4 characters in unicode is not valid JSON
       std::string str = R"({"\u1F600":"smile"})";
       unicode_keys_t obj{};
-      expect(throws([&]{ glz::read_json(obj, str); }));
+      expect(glz::read_json(obj, str) != glz::error_code::none);
    };
    
    "unicode_unescaped"_test = [] {
@@ -3482,7 +3482,7 @@ suite no_except_tests = []
       my_struct s{};
       std::string b = R"({"i":5,,})";
       auto ec = glz::read_json(s, b);
-      expect(ec == glz::error_code::none) << static_cast<uint32_t>(ec);
+      expect(ec != glz::error_code::none) << static_cast<uint32_t>(ec);
    };
 };
 
@@ -3496,7 +3496,7 @@ int main()
    enum_types();
    user_types();
    json_pointer();
-   //early_end(); 
+   early_end(); 
    bench();
    read_tests();
    write_tests();

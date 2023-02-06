@@ -12,7 +12,7 @@
 namespace glz
 {
    template <opts Opts>
-   inline auto read_iterators(detail::contiguous auto&& buffer)
+   inline auto read_iterators(is_context auto&& ctx, detail::contiguous auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
       
@@ -24,18 +24,18 @@ namespace glz
          e += buffer.size();
          
          if (b == e) {
-            throw std::runtime_error("No input provided to read");
+            ctx.error = error_code::no_read_input;
          }
       }
       else {
          // if not a std::string or a std::string_view, check that the last character is a null character
          // this is not required for binary specification reading, because we require the data to be properly formatted
          if (buffer.empty()) {
-            throw std::runtime_error("No input provided to read");
+            ctx.error = error_code::no_read_input;
          }
          e += buffer.size() - 1;
          if (*e != '\0') {
-            throw std::runtime_error("Data must be null terminated");
+            ctx.error = error_code::data_must_be_null_terminated;
          }
       }
       
@@ -70,6 +70,7 @@ namespace glz
          e += buffer.size() - 1;
          if (*e != '\0') {
             ctx.error = error_code::data_must_be_null_terminated;
+            return;
          }
       }
       
