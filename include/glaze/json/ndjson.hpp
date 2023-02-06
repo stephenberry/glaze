@@ -255,21 +255,24 @@ namespace glz
    }  // namespace detail
    
    template <class T, class Buffer>
-   inline void read_ndjson(T& value, Buffer&& buffer) {
+   [[nodiscard]] inline auto read_ndjson(T& value, Buffer&& buffer) {
       context ctx{};
-      read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
+      return read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
    }
    
    template <class T, class Buffer>
-   inline auto read_ndjson(Buffer&& buffer) {
+   [[nodiscard]] inline expect<T> read_ndjson(Buffer&& buffer) {
       T value{};
       context ctx{};
-      read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
-      return value;
+      const auto ec = read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
+      if (ec == error_code::none) {
+         return value;
+      }
+      return unexpected(ec);
    }
    
    template <auto Opts = opts{.format = ndjson}, class T>
-   inline void read_file_ndjson(T& value, const sv file_name) {
+   [[nodiscard]] inline auto read_file_ndjson(T& value, const sv file_name) {
       
       context ctx{};
       ctx.current_file = file_name;
@@ -278,16 +281,16 @@ namespace glz
       
       file_to_buffer(buffer, ctx.current_file);
       
-      read<Opts>(value, buffer, ctx);
+      return read<Opts>(value, buffer, ctx);
    }
    
    template <class T, class Buffer>
-   inline auto write_ndjson(T&& value, Buffer&& buffer) {
+   [[nodiscard]] inline auto write_ndjson(T&& value, Buffer&& buffer) {
       return write<opts{.format = ndjson}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
    
    template <class T>
-   inline auto write_ndjson(T&& value) {
+   [[nodiscard]] inline auto write_ndjson(T&& value) {
       std::string buffer{};
       write<opts{.format = ndjson}>(std::forward<T>(value), buffer);
       return buffer;

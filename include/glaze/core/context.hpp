@@ -33,7 +33,9 @@ namespace glz
       unknown_key,
       invalid_flag_input,
       invalid_escape,
-      u_requires_hex_digits
+      u_requires_hex_digits,
+      file_extension_not_supported,
+      could_not_determine_extension
    };
    
    // Runtime context for configuration

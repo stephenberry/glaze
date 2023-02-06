@@ -40,7 +40,7 @@
 namespace glz
 {
    template <class T>
-   inline void read_file(T& value, const sv file_name) {
+   inline error_code read_file(T& value, const sv file_name) noexcept {
       
       context ctx{};
       ctx.current_file = file_name;
@@ -55,17 +55,19 @@ namespace glz
          const auto extension = path.extension().string();
          
          if (extension == ".json" || extension == ".jsonc") {
-            read<opts{}>(value, buffer, ctx);
+            return read<opts{}>(value, buffer, ctx);
          }
          else if (extension == ".crush") {
-            read<opts{.format = binary}>(value, buffer, ctx);
+            return read<opts{.format = binary}>(value, buffer, ctx);
          }
          else {
-            throw std::runtime_error("Extension not supported for glz::read_file: " + extension);
+            return error_code::file_extension_not_supported;
+            //throw std::runtime_error("Extension not supported for glz::read_file: " + extension);
          }
       }
       else {
-         throw std::runtime_error("Could not determine extension for: " + std::string(file_name));
+         return error_code::could_not_determine_extension;
+         //throw std::runtime_error("Could not determine extension for: " + std::string(file_name));
       }
    }
    
