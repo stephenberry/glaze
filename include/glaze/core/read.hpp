@@ -56,21 +56,18 @@ namespace glz
          e += buffer.size();
          
          if (b == e) {
-            ctx.error = error_code::no_read_input;
-            return;
+            return ctx.error = error_code::no_read_input;
          }
       }
       else {
          // if not a std::string or a std::string_view, check that the last character is a null character
          // this is not required for binary specification reading, because we require the data to be properly formatted
          if (buffer.empty()) {
-            ctx.error = error_code::no_read_input;
-            return;
+            return ctx.error = error_code::no_read_input;
          }
          e += buffer.size() - 1;
          if (*e != '\0') {
-            ctx.error = error_code::data_must_be_null_terminated;
-            return;
+            return ctx.error = error_code::data_must_be_null_terminated;
          }
       }
       
