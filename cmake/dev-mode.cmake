@@ -2,8 +2,6 @@ enable_language(CXX)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS YES)
 
-set(CMAKE_SKIP_INSTALL_RULES True)
-
 include(CTest)
 if(BUILD_TESTING)
   add_subdirectory(tests)

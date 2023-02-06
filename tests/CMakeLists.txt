@@ -12,9 +12,9 @@ FetchContent_Declare(
 )
 
 message(STATUS "Fetching dependencies...")
-set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL YES)
+set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL TRUE)
 FetchContent_MakeAvailable(ut)
-set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL NO)
+set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL FALSE)
 message(STATUS "...finished fetching dependencies.")
 
 add_subdirectory(api_test)
