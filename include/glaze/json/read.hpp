@@ -1165,13 +1165,13 @@ namespace glz
    }  // namespace detail
    
    template <class T, class Buffer>
-   [[nodiscard]] inline auto read_json(T& value, Buffer&& buffer) {
+   [[nodiscard]] inline auto read_json(T& value, Buffer&& buffer) noexcept {
       context ctx{};
       return read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
    }
    
    template <class T, class Buffer>
-   [[nodiscard]] inline expect<T> read_json(Buffer&& buffer) {
+   [[nodiscard]] inline expect<T> read_json(Buffer&& buffer) noexcept {
       T value{};
       context ctx{};
       const auto ec = read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
