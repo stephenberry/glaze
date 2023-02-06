@@ -41,4 +41,4 @@ jobs:
       run: |
         cmake --build . --target install
         cmake -B ${{github.workspace}}/tests/find_package/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
-        cmake --build ${{github.workspace}}/tests/find_package/build -j 2
+        sudo cmake --build ${{github.workspace}}/tests/find_package/build -j 2
