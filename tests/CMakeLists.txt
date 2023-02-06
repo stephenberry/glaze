@@ -1,6 +1,5 @@
 include(FetchContent)
 
-
 set(BOOST_UT_ENABLE_RUN_AFTER_BUILD OFF CACHE INTERNAL "")
 set(BOOST_UT_DISABLE_MODULE ON CACHE INTERNAL "")
 
@@ -13,7 +12,9 @@ FetchContent_Declare(
 
 message(STATUS "Fetching dependencies...")
 set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL TRUE)
+set(CMAKE_SKIP_INSTALL_RULES TRUE)
 FetchContent_MakeAvailable(ut)
+set(CMAKE_SKIP_INSTALL_RULES FALSE)
 set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL FALSE)
 message(STATUS "...finished fetching dependencies.")
 
