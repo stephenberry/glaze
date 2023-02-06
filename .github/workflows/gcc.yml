@@ -35,3 +35,10 @@ jobs:
     - name: Test
       working-directory: build
       run: ctest -j 2 --output-on-failure
+      
+    - name: Test Install/find_package
+      working-directory: build
+      run: |
+        sudo cmake --build . --target install
+        cmake -S ${{github.workspace}}/tests/find_package -B ${{github.workspace}}/tests/find_package/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+        cmake --build ${{github.workspace}}/tests/find_package/build -j 2
