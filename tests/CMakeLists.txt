@@ -1,5 +1,6 @@
 include(FetchContent)
 
+
 set(BOOST_UT_ENABLE_RUN_AFTER_BUILD OFF CACHE INTERNAL "")
 set(BOOST_UT_DISABLE_MODULE ON CACHE INTERNAL "")
 
@@ -11,9 +12,9 @@ FetchContent_Declare(
 )
 
 message(STATUS "Fetching dependencies...")
-
+set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL YES)
 FetchContent_MakeAvailable(ut)
-
+set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL NO)
 message(STATUS "...finished fetching dependencies.")
 
 add_subdirectory(api_test)

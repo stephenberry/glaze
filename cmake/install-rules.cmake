@@ -1,5 +1,5 @@
 if(PROJECT_IS_TOP_LEVEL)
-  set(CMAKE_INSTALL_INCLUDEDIR include/glaze CACHE PATH "")
+  set(CMAKE_INSTALL_INCLUDEDIR include/ CACHE PATH "")
 endif()
 
 # Project is configured with no languages, so tell GNUInstallDirs the lib dir
