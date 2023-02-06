@@ -661,12 +661,11 @@ void user_types() {
    /**/, "a":322})");
       }));
       
-      expect(throws([&] {
-         //glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
-         glz::read_json(obj,
+      //glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
+      auto ec = glz::read_json(obj,
                           R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
    /**/, "a":322})");
-      }));
+      expect(ec != glz::error_code::none);
       expect(obj.a == 322.0 && obj.b == "fox");
    };
 
@@ -1164,7 +1163,7 @@ void read_tests() {
       std::string err;
       {
          char b;
-         expect(throws([&] { glz::read_json(b, err); }));
+         expect(glz::read_json(b, err) != glz::error_code::none);
       }
    };
 
@@ -1183,7 +1182,7 @@ void read_tests() {
          std::string in = "    [ 3.25 , null , 3.125 ]   ";
          v3 v{};
 
-         expect(throws([&] { glz::read_json(v, in); }));
+         expect(glz::read_json(v, in) != glz::error_code::none);
       }
       
       // partial reading of fixed sized arrays
@@ -1215,7 +1214,7 @@ void read_tests() {
          R"(    { "v" :  [ 3.25 , null , 3.0625 ]   , "n" : null } )";
       oob oob{};
 
-      expect(throws([&] { glz::read_json(oob, in); }));
+      expect(glz::read_json(oob, in) != glz::error_code::none);
    };
 
    "Reversed object"_test = [] {
@@ -1321,7 +1320,7 @@ void read_tests() {
       std::string in = R"(    [1, 5, 232, 75, null, 54, 89] )";
       std::vector<int> v, vr{1, 5, 232, 75, 0, 54, 89};
       
-      expect(throws([&] { glz::read_json(v, in); }));
+      expect(glz::read_json(v, in) != glz::error_code::none);
    };
 
 //*  ISSUE UT cannot run this test
@@ -1347,7 +1346,7 @@ void read_tests() {
       std::string in = R"(   { "as" : 1, "so" : null, "make" : 3 } )";
       std::map<std::string, int> v, vr{{"as", 1}, {"so", 0}, {"make", 3}};
 
-      expect(throws([&] { glz::read_json(v, in); }));
+      expect(glz::read_json(v, in) != glz::error_code::none);
    };
 
    "Read boolean"_test = [] {
@@ -1369,7 +1368,7 @@ void read_tests() {
          std::string in = R"(null)";
          bool res{false};
          
-         expect(throws([&] {glz::read_json(res, in); }));
+         expect(glz::read_json(res, in) != glz::error_code::none);
       }
    };
 
@@ -1385,7 +1384,7 @@ void read_tests() {
          std::string in = R"(null)";
          int res{};
          
-         expect(throws([&] { glz::read_json(res, in); }));
+         expect(glz::read_json(res, in) != glz::error_code::none);
       }
    };
 
@@ -1448,17 +1447,17 @@ void read_tests() {
          std::string in = R"(null)";
          double res{};
          
-         expect(throws([&] {glz::read_json(res, in); }));
+         expect(glz::read_json(res, in) != glz::error_code::none);
       }
       {
          std::string res = R"(success)";
          double d;
-         expect(throws([&] {glz::read_json(d, res); }));
+         expect(glz::read_json(d, res) != glz::error_code::none);
       }
       {
          std::string res = R"(-success)";
          double d;
-         expect(throws([&] {glz::read_json(d, res); }));
+         expect(glz::read_json(d, res) != glz::error_code::none);
       }
       {
          std::string res = R"(1.a)";
@@ -1469,12 +1468,12 @@ void read_tests() {
       {
          std::string res = R"()";
          double d;
-         expect(throws([&] {glz::read_json(d, res); }));
+         expect(glz::read_json(d, res) != glz::error_code::none);
       }
       {
          std::string res = R"(-)";
          double d;
-         expect(throws([&] {glz::read_json(d, res); }));
+         expect(glz::read_json(d, res) != glz::error_code::none);
       }
       {
          std::string res = R"(1.)";
@@ -1506,7 +1505,7 @@ void read_tests() {
       std::string in_throw = R"("asljl{}121231212441[]123::,,;,;,,::,Q~123\a13dqwdwqwq")";
       res.clear();
 
-      expect(throws([&] { glz::read_json(res, in_throw); }));
+      expect(glz::read_json(res, in_throw) != glz::error_code::none);
    };
 
    "Nested array"_test = [] {
@@ -2688,7 +2687,7 @@ suite hide_tests = []
       
       hide_struct s{};
       
-      expect(throws([&]{ glz::read_json(s, b); }));
+      expect(glz::read_json(s, b) != glz::error_code::none);
    };
 };
 
