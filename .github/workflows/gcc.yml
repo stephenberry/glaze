@@ -39,6 +39,6 @@ jobs:
     - name: Test Install/find_package
       working-directory: build
       run: |
-        cmake --build . --target install
+        sudo cmake --build . --target install
         cmake -B ${{github.workspace}}/tests/find_package/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
-        sudo cmake --build ${{github.workspace}}/tests/find_package/build -j 2
+        cmake --build ${{github.workspace}}/tests/find_package/build -j 2
