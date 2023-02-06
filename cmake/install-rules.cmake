@@ -1,5 +1,5 @@
 if(PROJECT_IS_TOP_LEVEL)
-  set(CMAKE_INSTALL_INCLUDEDIR include/ CACHE PATH "")
+  set(CMAKE_INSTALL_INCLUDEDIR include/glaze CACHE PATH "")
 endif()
 
 # Project is configured with no languages, so tell GNUInstallDirs the lib dir
@@ -12,7 +12,7 @@ include(GNUInstallDirs)
 set(package glaze)
 
 install(
-    DIRECTORY include/
+    DIRECTORY include/glaze
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     COMPONENT glaze_Development
 )
