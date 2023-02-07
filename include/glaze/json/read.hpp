@@ -1187,7 +1187,11 @@ namespace glz
       
       std::string buffer;
       
-      file_to_buffer(buffer, ctx.current_file);
+      const auto ec = file_to_buffer(buffer, ctx.current_file);
+      
+      if (static_cast<bool>(ec)) {
+         return { ec };
+      }
       
       return read<Opts>(value, buffer, ctx);
    }

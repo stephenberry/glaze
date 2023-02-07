@@ -272,14 +272,18 @@ namespace glz
    }
    
    template <auto Opts = opts{.format = ndjson}, class T>
-   [[nodiscard]] inline auto read_file_ndjson(T& value, const sv file_name) {
+   [[nodiscard]] inline parse_error read_file_ndjson(T& value, const sv file_name) {
       
       context ctx{};
       ctx.current_file = file_name;
       
       std::string buffer;
       
-      file_to_buffer(buffer, ctx.current_file);
+      const auto ec = file_to_buffer(buffer, ctx.current_file);
+      
+      if (static_cast<bool>(ec)) {
+         return { ec };
+      }
       
       return read<Opts>(value, buffer, ctx);
    }

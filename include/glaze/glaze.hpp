@@ -49,7 +49,11 @@ namespace glz
       
       std::filesystem::path path{ file_name };
       
-      file_to_buffer(buffer, ctx.current_file);
+      const auto ec = file_to_buffer(buffer, ctx.current_file);
+      
+      if (static_cast<bool>(ec)) {
+         return { ec };
+      }
       
       if (path.has_extension()) {
          const auto extension = path.extension().string();
