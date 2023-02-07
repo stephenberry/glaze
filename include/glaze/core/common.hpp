@@ -275,13 +275,6 @@ namespace glz
 
       template <class T>
       concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
-
-      template <class T>
-      concept glaze_t = requires
-      {
-         meta<std::decay_t<T>>::value;
-      }
-      || local_meta_t<std::decay_t<T>>;
       
       template <class T>
       concept constructible = requires

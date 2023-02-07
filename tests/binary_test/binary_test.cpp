@@ -428,7 +428,7 @@ suite binary_helpers = [] {
       }));
       
       expect(nothrow([&] {
-         v = glz::read_binary<my_struct>(b);
+         v = *glz::read_binary<my_struct>(b);
       }));
    };
 };
@@ -490,7 +490,7 @@ suite no_cx_tag_test = [] {
       s.i = 0;
       s.d = 0.0;
       
-      glz::read<glz::opts{.format = glz::binary, .use_cx_tags = false}>(s, b);
+      expect(glz::read<glz::opts{.format = glz::binary, .use_cx_tags = false}>(s, b) == false);
       
       expect(s.i == 287);
       expect(s.d = 3.14);
@@ -504,7 +504,7 @@ void test_partial()
    some_struct s{};
    some_struct s2{};
    std::string buffer = R"({"i":2,"map":{"fish":5,"cake":2,"bear":3}})";
-   glz::read_json(s, buffer);
+   expect(glz::read_json(s, buffer) == false);
    
    std::vector<std::byte> out;
    static constexpr auto partial = glz::json_ptrs("/i",

@@ -142,6 +142,8 @@ struct glz::meta<Color>
    );
 };
 
+static_assert(glz::enum_name_v<Color::Red> == "Red");
+
 struct var1_t
 {
    double x{};
