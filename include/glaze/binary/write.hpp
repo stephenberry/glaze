@@ -125,7 +125,7 @@ namespace glz
       }
 
       template <uint64_t i, class... Args>
-      [[nodiscard]] auto dump_int(Args&&... args) noexcept
+      auto dump_int(Args&&... args) noexcept
       {
          if constexpr (i < 64) {
             static constexpr auto h = header8{ 0, static_cast<uint8_t>(i) };
@@ -188,10 +188,15 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         static auto op(auto&& value, is_context auto&&, Args&&... args) noexcept
+         static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump_int<Opts>(value.size(), std::forward<Args>(args)...);
-            dump(std::as_bytes(std::span{ value.data(), value.size() }), std::forward<Args>(args)...);
+            const auto b = dump_int<Opts>(value.size(), std::forward<Args>(args)...);
+            if (b) {
+               dump(std::as_bytes(std::span{ value.data(), value.size() }), std::forward<Args>(args)...);
+            }
+            else {
+               ctx.error = error_code::dump_int_error;
+            }
          }
       };
 

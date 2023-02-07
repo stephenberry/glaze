@@ -518,7 +518,9 @@ namespace glz
                         char8_t* to_next;
                         const auto result = f.out(mb, &codepoint, &codepoint + 1, from_next, buffer, buffer + 4, to_next);
                         if (result != std::codecvt_base::ok) {
-                           throw std::runtime_error("Could not convert unicode escape.");
+                           ctx.error = error_code::unicode_escape_conversion_failure;
+                           return;
+                           //throw std::runtime_error("Could not convert unicode escape.");
                         }
                         
                         const auto n = to_next - buffer;
@@ -535,7 +537,9 @@ namespace glz
                            auto* rbuf = reinterpret_cast<buffer_type*>(buffer);
                            const auto result = f.in(mb, rbuf, rbuf + n, from_next, &value, &value + 1, to_next);
                            if (result != std::codecvt_base::ok) {
-                              throw std::runtime_error("Could not convert unicode escape.");
+                              ctx.error = error_code::unicode_escape_conversion_failure;
+                              return;
+                              //throw std::runtime_error("Could not convert unicode escape.");
                            }
                         }
                      }
@@ -908,15 +912,17 @@ namespace glz
                   const auto current_file = ctx.current_file;
                   ctx.current_file = file_path.string();
                   
-                  glz::read<Opts>(value.value, buffer, ctx);
+                  std::ignore = glz::read<Opts>(value.value, buffer, ctx);
                   
                   ctx.current_file = current_file;
                }
                else {
-                  throw std::runtime_error("could not open file: " + path);
+                  ctx.error = error_code::file_open_failure;
+                  //throw std::runtime_error("could not open file: " + path);
                }
             } catch (const std::exception& e) {
-               throw std::runtime_error("include error for " + ctx.current_file + std::string(" | ") + e.what());
+               ctx.error = error_code::file_include_error;
+               //throw std::runtime_error("include error for " + ctx.current_file + std::string(" | ") + e.what());
             }
          }
       };

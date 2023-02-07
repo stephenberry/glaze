@@ -36,7 +36,11 @@ namespace glz
       u_requires_hex_digits,
       file_extension_not_supported,
       could_not_determine_extension,
-      seek_failure
+      seek_failure,
+      unicode_escape_conversion_failure,
+      file_open_failure,
+      file_include_error,
+      dump_int_error
    };
    
    struct parse_error final
