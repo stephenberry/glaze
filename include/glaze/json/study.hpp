@@ -21,7 +21,7 @@ namespace glz
       struct param
       {
          std::string ptr{};
-         std::string distribution{};
+         std::string distribution{}; // TODO: make an enum
          std::vector<raw_json> range{};
       };
 

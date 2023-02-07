@@ -340,14 +340,20 @@ namespace glz
    }
    
    template <class T>
-   inline void read_file_binary(T& value, const sv file_name) {
+   inline parse_error read_file_binary(T& value, const sv file_name) noexcept {
             
       context ctx{};
       ctx.current_file = file_name;
       
       std::string buffer;
-      file_to_buffer(buffer, ctx.current_file);
+      const auto file_error = file_to_buffer(buffer, ctx.current_file);
+      
+      if (static_cast<bool>(file_error)) {
+         return parse_error{ file_error };
+      }
       
       read<opts{.format = binary}>(value, buffer, ctx);
+      
+      return {};
    }
 }

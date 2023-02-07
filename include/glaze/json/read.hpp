@@ -898,32 +898,24 @@ namespace glz
             static thread_local std::string path{};
             read<json>::op<Opts>(path, ctx, it, end);
             
-            try {               
-               const auto file_path = relativize_if_not_absolute(std::filesystem::path(ctx.current_file).parent_path(), std::filesystem::path{ path });
-               
-               std::string buffer{};
-               std::ifstream file{ file_path };
-               if (file) {
-                  file.seekg(0, std::ios::end);
-                  buffer.resize(file.tellg());
-                  file.seekg(0);
-                  file.read(buffer.data(), buffer.size());
-                  
-                  const auto current_file = ctx.current_file;
-                  ctx.current_file = file_path.string();
-                  
-                  std::ignore = glz::read<Opts>(value.value, buffer, ctx);
-                  
-                  ctx.current_file = current_file;
-               }
-               else {
-                  ctx.error = error_code::file_open_failure;
-                  //throw std::runtime_error("could not open file: " + path);
-               }
-            } catch (const std::exception& e) {
-               ctx.error = error_code::file_include_error;
-               //throw std::runtime_error("include error for " + ctx.current_file + std::string(" | ") + e.what());
+            const auto file_path = relativize_if_not_absolute(std::filesystem::path(ctx.current_file).parent_path(), std::filesystem::path{ path });
+            
+            // TODO:
+            std::string buffer{};
+            std::string string_file_path = file_path.string();
+            const auto ec = file_to_buffer(buffer, string_file_path);
+            
+            if (static_cast<bool>(ec)) {
+               ctx.error = ec;
+               return;
             }
+            
+            const auto current_file = ctx.current_file;
+            ctx.current_file = file_path.string();
+            
+            std::ignore = glz::read<Opts>(value.value, buffer, ctx);
+            
+            ctx.current_file = current_file;
          }
       };
       

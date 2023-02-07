@@ -12,15 +12,17 @@
 namespace glz
 {
    template <class T>
-   void file_to_buffer(T& buffer, const std::string_view file_name)
+   [[nodiscard]] error_code file_to_buffer(T& buffer, const std::string_view file_name) noexcept
    {
       std::ifstream file{ std::string(file_name) };
 
       if (!file) {
-         throw std::runtime_error("glaze::file_to_buffer: File with path (" +
+         /*throw std::runtime_error("glaze::file_to_buffer: File with path (" +
                                   std::string(file_name) +
                                   ") could not be loaded. Ensure that file "
-                                  "exists at the given path.");
+                                  "exists at the given path.");*/
+         
+         return error_code::file_open_failure;
       }
 
       file.seekg(0, std::ios::end);
@@ -29,10 +31,12 @@ namespace glz
 
       buffer.assign((std::istreambuf_iterator<char>(file)),
                     std::istreambuf_iterator<char>());
+      
+      return {};
    }
 
    template <class T>
-   std::string file_to_buffer(T&& file_name)
+   std::string file_to_buffer(T&& file_name) noexcept
    {
       std::string buffer{};
       file_to_buffer(buffer, std::forward<T>(file_name));
@@ -41,7 +45,7 @@ namespace glz
 
    inline std::filesystem::path relativize_if_not_absolute(
       const std::filesystem::path& working_directory,
-      const std::filesystem::path& filepath)
+      const std::filesystem::path& filepath) noexcept
    {
       if (filepath.is_absolute()) {
          return filepath;
