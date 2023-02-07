@@ -581,7 +581,9 @@ namespace glz
       
       using span_t = std::span<std::remove_reference_t<decltype(*it)>>;
       
-      if (static_cast<bool>(ctx.error)) { return expect<span_t>{ unexpected(ctx.error) }; }
+      auto start = it;
+      
+      if (static_cast<bool>(ctx.error)) { return expect<span_t>{ unexpected(parse_error{ ctx.error, 0 }) }; }
       
       if constexpr (N == 0) {
          return std::span{ it, end };
@@ -660,14 +662,14 @@ namespace glz
                      else {
                         skip_value(ctx, it, end);
                         if (*it != ',') {
-                           ret = unexpected(error_code::key_not_found);
+                           ret = unexpected(parse_error{ error_code::key_not_found, static_cast<size_t>(std::distance(start, it)) });
                            return;
                         }
                         ++it;
                      }
                   }
                   else {
-                     ret = unexpected(error_code::syntax_error);
+                     ret = unexpected(parse_error{ error_code::syntax_error, static_cast<size_t>(std::distance(start, it)) });
                      return;
                   }
                }

@@ -44,36 +44,41 @@ namespace glz
    
    // For reading json from a std::vector<char>, std::deque<char> and the like
    template <opts Opts>
-   [[nodiscard]] inline error_code read(auto& value, detail::contiguous auto&& buffer, is_context auto&& ctx) noexcept
+   [[nodiscard]] inline parse_error read(auto& value, detail::contiguous auto&& buffer, is_context auto&& ctx) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
       
       auto b = reinterpret_cast<const char*>(buffer.data());
       auto e = reinterpret_cast<const char*>(buffer.data()); // to be incrementd
       
+      auto start = b;
+      
       using Buffer = std::decay_t<decltype(buffer)>;
       if constexpr (is_specialization_v<Buffer, std::basic_string> || is_specialization_v<Buffer, std::basic_string_view> || span<Buffer> || Opts.format == binary) {
          e += buffer.size();
          
          if (b == e) {
-            return ctx.error = error_code::no_read_input;
+            ctx.error = error_code::no_read_input;
+            return { ctx.error, 0 };
          }
       }
       else {
          // if not a std::string or a std::string_view, check that the last character is a null character
          // this is not required for binary specification reading, because we require the data to be properly formatted
          if (buffer.empty()) {
-            return ctx.error = error_code::no_read_input;
+            ctx.error = error_code::no_read_input;
+            return { ctx.error, 0 };
          }
          e += buffer.size() - 1;
          if (*e != '\0') {
-            return ctx.error = error_code::data_must_be_null_terminated;
+            ctx.error = error_code::data_must_be_null_terminated;
+            return { ctx.error, 0 };
          }
       }
       
       detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
       
-      return ctx.error;
+      return { ctx.error, static_cast<size_t>(std::distance(start, b)) };
       
       /*if constexpr (Opts.format == binary) {
          // binary exceptions are not formatted
@@ -97,7 +102,7 @@ namespace glz
    }
    
    template <opts Opts>
-   [[nodiscard]] inline error_code read(auto& value, detail::contiguous auto&& buffer) noexcept
+   [[nodiscard]] inline parse_error read(auto& value, detail::contiguous auto&& buffer) noexcept
    {
       context ctx{};
       return read<Opts>(value, buffer, ctx);
@@ -108,17 +113,17 @@ namespace glz
    
    // for char array input
    template <opts Opts, class T, string_viewable Buffer>
-   [[nodiscard]] inline error_code read(T& value, Buffer&& buffer, auto&& ctx) noexcept
+   [[nodiscard]] inline parse_error read(T& value, Buffer&& buffer, auto&& ctx) noexcept
    {
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
       if (str.empty()) {
-         return error_code::no_read_input;
+         return { error_code::no_read_input, 0 };
       }
       return read<Opts>(value, str, ctx);
    }
    
    template <opts Opts, class T, string_viewable Buffer>
-   [[nodiscard]] inline error_code read(T& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline parse_error read(T& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return read<Opts>(value, std::forward<Buffer>(buffer), ctx);

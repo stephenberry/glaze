@@ -297,7 +297,7 @@ namespace glz::detail
    }
    
    // expects opening whitespace to be handled
-   inline expect<sv> parse_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   inline expected<sv, error_code> parse_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) { return unexpected(ctx.error); }
       

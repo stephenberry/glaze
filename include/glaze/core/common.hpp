@@ -30,7 +30,7 @@
 namespace glz
 {
    template <class T>
-   using expect = expected<T, error_code>;
+   using expect = expected<T, parse_error>;
    
    template <class T, class... U>
    concept is_any_of = (std::same_as<T, U> || ...);

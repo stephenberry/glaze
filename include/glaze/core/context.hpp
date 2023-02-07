@@ -35,7 +35,22 @@ namespace glz
       invalid_escape,
       u_requires_hex_digits,
       file_extension_not_supported,
-      could_not_determine_extension
+      could_not_determine_extension,
+      seek_failure
+   };
+   
+   struct parse_error final
+   {
+      error_code ec{};
+      size_t location{};
+      
+      operator bool() const {
+         return ec != error_code::none;
+      }
+      
+      bool operator==(const error_code e) const {
+         return ec == e;
+      }
    };
    
    // Runtime context for configuration

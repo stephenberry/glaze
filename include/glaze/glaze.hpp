@@ -40,7 +40,7 @@
 namespace glz
 {
    template <class T>
-   inline error_code read_file(T& value, const sv file_name) noexcept {
+   inline parse_error read_file(T& value, const sv file_name) noexcept {
       
       context ctx{};
       ctx.current_file = file_name;
@@ -61,12 +61,12 @@ namespace glz
             return read<opts{.format = binary}>(value, buffer, ctx);
          }
          else {
-            return error_code::file_extension_not_supported;
+            return { error_code::file_extension_not_supported };
             //throw std::runtime_error("Extension not supported for glz::read_file: " + extension);
          }
       }
       else {
-         return error_code::could_not_determine_extension;
+         return { error_code::could_not_determine_extension };
          //throw std::runtime_error("Could not determine extension for: " + std::string(file_name));
       }
    }

@@ -730,7 +730,7 @@ namespace glz
       // needed for classes that are resizable, but do not have an emplace_back
       // it is copied so that it does not actually progress the iterator
       // expects the opening brace ([) to have already been consumed
-      [[nodiscard]] inline expect<size_t> number_of_array_elements(is_context auto&& ctx, auto it, auto&& end) noexcept
+      [[nodiscard]] inline expected<size_t, error_code> number_of_array_elements(is_context auto&& ctx, auto it, auto&& end) noexcept
       {
          skip_ws(ctx, it, end);
          if (static_cast<bool>(ctx.error)) { return unexpected(ctx.error); }
@@ -1165,7 +1165,7 @@ namespace glz
    }  // namespace detail
    
    template <class T, class Buffer>
-   [[nodiscard]] inline auto read_json(T& value, Buffer&& buffer) noexcept {
+   [[nodiscard]] inline parse_error read_json(T& value, Buffer&& buffer) noexcept {
       context ctx{};
       return read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
    }
@@ -1175,14 +1175,14 @@ namespace glz
       T value{};
       context ctx{};
       const auto ec = read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
-      if (static_cast<bool>(ec)) {
+      if (ec) {
          return unexpected(ec);
       }
       return value;
    }
    
    template <auto Opts = opts{}, class T>
-   inline error_code read_file_json(T& value, const sv file_name) {
+   inline parse_error read_file_json(T& value, const sv file_name) {
       
       context ctx{};
       ctx.current_file = file_name;
