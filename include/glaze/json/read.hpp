@@ -1177,7 +1177,7 @@ namespace glz
    }
    
    template <class T, class Buffer>
-   [[nodiscard]] inline expect<T> read_json(Buffer&& buffer) noexcept {
+   [[nodiscard]] inline expected<T, parse_error> read_json(Buffer&& buffer) noexcept {
       T value{};
       context ctx{};
       const auto ec = read<opts{}>(value, std::forward<Buffer>(buffer), ctx);

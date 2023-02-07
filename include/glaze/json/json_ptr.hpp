@@ -583,7 +583,7 @@ namespace glz
       
       auto start = it;
       
-      if (static_cast<bool>(ctx.error)) { return expect<span_t>{ unexpected(parse_error{ ctx.error, 0 }) }; }
+      if (static_cast<bool>(ctx.error)) { return expected<span_t, parse_error>{ unexpected(parse_error{ ctx.error, 0 }) }; }
       
       if constexpr (N == 0) {
          return std::span{ it, end };
@@ -593,7 +593,7 @@ namespace glz
          
          skip_ws(ctx, it, end);
          
-         expect<span_t> ret;
+         expected<span_t, parse_error> ret;
          
          for_each<N>([&](auto I) {
             using index_t = decltype(I);
@@ -681,7 +681,7 @@ namespace glz
    }
    
    template <class T, string_literal Str, auto Opts = opts{}>
-   [[nodiscard]] inline expect<T> get_as_json(detail::contiguous auto&& buffer) {
+   [[nodiscard]] inline expected<T, parse_error> get_as_json(detail::contiguous auto&& buffer) {
       const auto str = glz::get_view_json<Str>(buffer);
       if (str) {
          return glz::read_json<T>(*str);
@@ -690,7 +690,7 @@ namespace glz
    }
    
    template <string_literal Str, auto Opts = opts{}>
-   [[nodiscard]] inline expect<sv> get_sv_json(detail::contiguous auto&& buffer) {
+   [[nodiscard]] inline expected<sv, parse_error> get_sv_json(detail::contiguous auto&& buffer) {
       const auto s = glz::get_view_json<Str>(buffer);
       if (s) {
          return sv{ reinterpret_cast<const char*>(s->data()), s->size() };

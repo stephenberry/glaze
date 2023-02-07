@@ -261,7 +261,7 @@ namespace glz
    }
    
    template <class T, class Buffer>
-   [[nodiscard]] inline expect<T> read_ndjson(Buffer&& buffer) {
+   [[nodiscard]] inline expected<T, parse_error> read_ndjson(Buffer&& buffer) {
       T value{};
       context ctx{};
       const auto ec = read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
