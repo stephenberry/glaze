@@ -85,7 +85,9 @@ namespace glz
             overwrite(state, design.overwrite);
 
             for (auto &param : design.params) {
-               auto& ps = param_sets.emplace_back(param_set_from_dist(param));
+               const auto pe = param_set_from_dist(param);
+               // TODO: handle potential errors
+               auto& ps = param_sets.emplace_back(*pe);
                const auto num_elements = ps.elements.size();
                if (num_elements != 0) { max_index *= num_elements; }
             }
@@ -131,7 +133,7 @@ namespace glz
             return generate(index++);
          }
 
-         param_set param_set_from_dist(const param &dist)
+         expected<param_set, parse_error> param_set_from_dist(const param &dist)
          {
             param_set param_set;
 
@@ -155,15 +157,22 @@ namespace glz
             }
 
             if (dist.distribution == "elements") {
+               parse_error pe{};
                std::visit(
                   [&](auto&& param_ptr) {
                      for (auto&& j : dist.range) {
                         auto elem = *param_ptr;
-                        read_json(elem, j.str);
+                        pe = read_json(elem, j.str);
+                        if (pe) {
+                           return;
+                        }
                         param_set.elements.emplace_back(elem);
                      }
                   },
                   param_set.param_ptr);
+               if (pe) {
+                  return unexpected(pe);
+               }
             }
             else if (dist.distribution == "linspace") {
                if (dist.range.size() != 3) {
@@ -176,9 +185,15 @@ namespace glz
                double step{};
                double stop{};
 
-               read_json(start, dist.range[0].str);
-               read_json(step, dist.range[1].str);
-               read_json(stop, dist.range[2].str);
+               if (auto ec = read_json(start, dist.range[0].str)) {
+                  return unexpected(ec);
+               }
+               if (auto ec = read_json(step, dist.range[1].str)) {
+                  return unexpected(ec);
+               }
+               if (auto ec = read_json(stop, dist.range[2].str)) {
+                  return unexpected(ec);
+               }
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -329,7 +344,7 @@ namespace glz
             reset();
          }
 
-         random_param param_from_dist(const param &dist)
+         expected<random_param, parse_error> param_from_dist(const param &dist)
          {
             random_param result{};
 
@@ -384,8 +399,12 @@ namespace glz
                double start{};
                double stop{};
 
-               read_json(start, dist.range[0].str);
-               read_json(stop, dist.range[2].str);
+               if (auto ec = read_json(start, dist.range[0].str)) {
+                  return unexpected(ec);
+               }
+               if (auto ec = read_json(stop, dist.range[2].str)) {
+                  return unexpected(ec);
+               }
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -406,8 +425,12 @@ namespace glz
                double start{};
                double stop{};
 
-               read_json(start, dist.range[0].str);
-               read_json(stop, dist.range[1].str);
+               if (auto ec = read_json(start, dist.range[0].str)) {
+                  return unexpected(ec);
+               }
+               if (auto ec = read_json(stop, dist.range[1].str)) {
+                  return unexpected(ec);
+               }
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -429,8 +452,12 @@ namespace glz
                double mean{};
                double std_dev{};
 
-               read_json(mean, dist.range[0].str);
-               read_json(std_dev, dist.range[1].str);
+               if (auto ec = read_json(mean, dist.range[0].str)) {
+                  return unexpected(ec);
+               }
+               if (auto ec = read_json(std_dev, dist.range[1].str)) {
+                  return unexpected(ec);
+               }
 
                result.gen =
                   [this, dist = std::normal_distribution<double>(
