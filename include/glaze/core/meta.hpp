@@ -58,6 +58,9 @@ namespace glz
    template <class T>
    concept named = requires {
       meta<T>::name;
+   }
+   || requires {
+      T::glaze::name;
    };
    
    template <class T, bool fail_on_unknown = false>

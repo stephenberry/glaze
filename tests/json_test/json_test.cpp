@@ -2078,7 +2078,8 @@ struct local_meta
    
    struct glaze
    {
-   using T = local_meta;
+      static constexpr std::string_view name = "local_meta";
+      using T = local_meta;
       static constexpr auto value = glz::object("x", &T::x, "A comment for x", //
                                                "y", &T::y, "A comment for y");
    };
@@ -2093,6 +2094,9 @@ suite local_meta_tests = [] {
       std::string out;
       local_meta m{};
       glz::write_json(m, out);
+      expect(out == R"({"x":0,"y":0})");
+      expect(glz::named<local_meta> == true);
+      expect(glz::name_v<local_meta> == "local_meta");
    };
 };
 
