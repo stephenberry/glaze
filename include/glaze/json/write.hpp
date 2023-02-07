@@ -286,9 +286,9 @@ namespace glz
                // be
                // escaped for their enum names
                // TODO: Could create a pre qouted map for better perf
-               dump<'"'>(std::forward<Args>(args)...);
-               dump(str, std::forward<Args>(args)...);
-               dump<'"'>(std::forward<Args>(args)...);
+               dump<'"'>(args...);
+               dump(str, args...);
+               dump<'"'>(args...);
             }
             else [[unlikely]] {
                // What do we want to happen if the value doesnt have a mapped

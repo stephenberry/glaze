@@ -702,6 +702,17 @@ namespace glz
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_enum_to_string_map_impl<T>(indices);
       }
+      
+      // TODO: This faster approach can be used if the enum has an integer type base and sequential numbering
+      template <class T>
+      constexpr auto make_enum_to_string_array()
+      {
+         std::array<sv, std::tuple_size_v<meta_t<T>>> arr;
+         for_each<std::tuple_size_v<meta_t<T>>>([&](auto I) {
+            arr[I] = enum_name_v<static_cast<T>(I)>;
+         });
+         return arr;
+      }
 
       template <class T, size_t... I>
       constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>)
