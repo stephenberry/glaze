@@ -266,28 +266,38 @@ namespace glz
    // Get a refrence to a value at the location of a json_ptr. Will throw if
    // value doesnt exist or is wrong type
    template <class V, class T>
-   V& get(T&& root_value, sv json_ptr)
+   expected<std::reference_wrapper<V>, parse_error> get(T&& root_value, sv json_ptr)
    {
       V* result{};
+      error_code ec{};
       detail::seek_impl(
          [&](auto&& val) {
-            if constexpr (!std::is_same_v<V, std::decay_t<decltype(val)>>)
-               throw std::runtime_error("Called get on \"" +
+            if constexpr (!std::is_same_v<V, std::decay_t<decltype(val)>>) {
+               ec = error_code::get_wrong_type;
+               /*throw std::runtime_error("Called get on \"" +
                                         std::string(json_ptr) +
-                                        "\" with wrong type");
-            else if constexpr (!std::is_lvalue_reference_v<decltype(val)>)
-               throw std::runtime_error(
+                                        "\" with wrong type");*/
+            }
+            else if constexpr (!std::is_lvalue_reference_v<decltype(val)>) {
+               ec = error_code::cannot_be_referenced;
+               /*throw std::runtime_error(
                   " Called get on '" + std::string(json_ptr) +
-                  "' that points to data that cannot be refrenced directly");
-            else
+                  "' that points to data that cannot be refrenced directly");*/
+            }
+            else {
                result = &val;
+            }
          },
          std::forward<T>(root_value), json_ptr);
       if (!result) {
-         throw std::runtime_error("Called get on \"" + std::string(json_ptr) +
-                                  "\" which doesn't exist");
+         return unexpected(parse_error{ error_code::get_nonexistent_json_ptr });
+         /*throw std::runtime_error("Called get on \"" + std::string(json_ptr) +
+                                  "\" which doesn't exist");*/
       }
-      return *result;
+      else if (static_cast<bool>(ec)) {
+         return unexpected(parse_error{ ec });
+      }
+      return std::ref(*result);
    }
 
    // Get a pointer to a value at the location of a json_ptr. Will return

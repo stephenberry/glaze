@@ -40,7 +40,10 @@ namespace glz
       unicode_escape_conversion_failure,
       file_open_failure,
       file_include_error,
-      dump_int_error
+      dump_int_error,
+      get_nonexistent_json_ptr,
+      get_wrong_type,
+      cannot_be_referenced
    };
    
    struct parse_error final

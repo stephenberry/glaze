@@ -870,9 +870,9 @@ void json_pointer() {
       expect(thing.thing_ptr == glz::get<sub_thing*>(thing, "/thing_ptr"));
 
       //Invalid lookup
-      expect(throws([&] { glz::get<char>(thing, "/thing_ptr/a"); }));
+      expect(glz::get<char>(thing, "/thing_ptr/a").has_value() == false);
       expect(nothrow([&] { glz::get_if<char>(thing, "/thing_ptr/a"); }));
-      expect(throws([&] { glz::get<double>(thing, "/thing_ptr/c"); }));
+      expect(glz::get<double>(thing, "/thing_ptr/c").has_value() == false);
       expect(nothrow([&] { glz::get_if<double>(thing, "/thing_ptr/c"); }));
    };
 
