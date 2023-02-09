@@ -63,6 +63,19 @@ namespace glz
       }
    };
    
+   struct write_error final
+   {
+      error_code ec{};
+      
+      operator bool() const {
+         return ec != error_code::none;
+      }
+      
+      bool operator==(const error_code e) const {
+         return ec == e;
+      }
+   };
+   
    // Runtime context for configuration
    // We do not template the context on iterators so that it can be easily shared across buffer implementations
    struct context final

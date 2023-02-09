@@ -2415,7 +2415,7 @@ void file_include_test_auto()
 {
    includer_struct obj{};
    
-   glz::write_file(obj, "./auto.json");
+   expect(glz::write_file(obj, "./auto.json") == false);
    
    obj.str = "";
    
