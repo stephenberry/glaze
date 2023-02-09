@@ -46,7 +46,7 @@ namespace glz
          virtual bool read(const uint32_t /*format*/, const sv /*path*/,
                            const sv /*data*/) noexcept = 0;
 
-         virtual bool write(const uint32_t /*format*/, const sv /*path*/, std::string& /*data*/) = 0;
+         virtual bool write(const uint32_t /*format*/, const sv /*path*/, std::string& /*data*/) noexcept = 0;
 
          [[nodiscard]] virtual const sv last_error() const noexcept {
             return error;
