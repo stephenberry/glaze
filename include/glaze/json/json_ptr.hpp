@@ -574,7 +574,7 @@ namespace glz
       
       auto start = it;
       
-      if (static_cast<bool>(ctx.error)) { return expected<span_t, parse_error>{ unexpected(parse_error{ ctx.error, 0 }) }; }
+      if (static_cast<bool>(ctx.error)) [[unlikely]] { return expected<span_t, parse_error>{ unexpected(parse_error{ ctx.error, 0 }) }; }
       
       if constexpr (N == 0) {
          return std::span{ it, end };

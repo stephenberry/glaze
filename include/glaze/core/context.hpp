@@ -50,7 +50,8 @@ namespace glz
       invalid_get,
       invalid_get_fn,
       invalid_call,
-      invalid_partial_key
+      invalid_partial_key,
+      name_mismatch
    };
    
    struct parse_error final

@@ -311,7 +311,7 @@ namespace glz
          template <auto Options, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
-            if (static_cast<bool>(ctx.error)) { return; }
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
             
             if constexpr (!Options.ws_handled) {
                skip_ws(ctx, it, end);
@@ -335,7 +335,7 @@ namespace glz
          template <auto Opts, class It, class End>
          static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
          {
-            if (static_cast<bool>(ctx.error)) { return; }
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
             
             if constexpr (!Opts.ws_handled) {
                skip_ws(ctx, it, end);
@@ -420,7 +420,7 @@ namespace glz
             auto start = it;
             while (it < end) {
                skip_till_escape_or_quote(ctx, it, end);
-               if (static_cast<bool>(ctx.error)) { return; }
+               if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
                
                if (*it == '"') {
                   value.append(start, static_cast<size_t>(it - start));
@@ -443,7 +443,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if (static_cast<bool>(ctx.error)) { return; }
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
             
             match<'"'>(ctx, it);
             if (*it == '\\') [[unlikely]] {
@@ -561,7 +561,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if (static_cast<bool>(ctx.error)) { return; }
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
             
             skip_ws(ctx, it, end);
             const auto key = parse_key(ctx, it, end);
@@ -732,7 +732,7 @@ namespace glz
       [[nodiscard]] inline expected<size_t, error_code> number_of_array_elements(is_context auto&& ctx, auto it, auto&& end) noexcept
       {
          skip_ws(ctx, it, end);
-         if (static_cast<bool>(ctx.error)) { return unexpected(ctx.error); }
+         if (static_cast<bool>(ctx.error)) [[unlikely]] { return unexpected(ctx.error); }
          
          if (*it == ']') [[unlikely]] {
             return 0;
@@ -977,7 +977,7 @@ namespace glz
          template <auto Options, class It>
          static void op(auto& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
-            if (static_cast<bool>(ctx.error)) { return; }
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
             
             if constexpr (!Options.opening_handled) {
                skip_ws(ctx, it, end);
@@ -1058,7 +1058,7 @@ namespace glz
                   skip_ws(ctx, it, end);
                   match<':'>(ctx, it);
                   
-                  if (static_cast<bool>(ctx.error)) { return; }
+                  if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
                   
                   static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
                   if constexpr (Opts.error_on_unknown_keys) {
@@ -1096,7 +1096,7 @@ namespace glz
                   skip_ws(ctx, it, end);
                   match<':'>(ctx, it);
                   
-                  if (static_cast<bool>(ctx.error)) { return; }
+                  if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
                   
                   if constexpr (std::is_same_v<typename T::key_type,
                                                std::string>) {
@@ -1111,7 +1111,7 @@ namespace glz
                skip_ws(ctx, it, end);
             }
             
-            if (static_cast<bool>(ctx.error)) { return; }
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
             ctx.error = error_code::expected_bracket;
          }
       };

@@ -12,7 +12,7 @@ namespace glz::detail
    template <char c>
    inline void match(is_context auto&& ctx, auto&& it) noexcept
    {
-      if (static_cast<bool>(ctx.error)) { return; }
+      if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
       
       if (*it != c) [[unlikely]] {
          ctx.error = error_code::syntax_error;
@@ -30,7 +30,7 @@ namespace glz::detail
    template <string_literal str>
    inline void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) { return; }
+      if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
       
       const auto n = static_cast<size_t>(std::distance(it, end));
       if ((n < str.size) || (std::memcmp(it, str.value, str.size) != 0)) [[unlikely]] {
@@ -42,7 +42,7 @@ namespace glz::detail
    
    inline void skip_comment(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) { return; }
+      if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
       
       ++it;
       if (it == end) [[unlikely]] {
@@ -71,7 +71,7 @@ namespace glz::detail
    
    inline void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) { return; }
+      if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
       
       while (true) {
          switch (*it)
@@ -113,7 +113,7 @@ namespace glz::detail
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
       
-      if (static_cast<bool>(ctx.error)) { return; }
+      if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
 
       auto has_zero = [](uint64_t chunk) { return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080); };
 
@@ -151,7 +151,7 @@ namespace glz::detail
    
    inline void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) { return; }
+      if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
       
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
@@ -258,12 +258,12 @@ namespace glz::detail
    // expects opening whitespace to be handled
    inline expected<sv, error_code> parse_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) { return unexpected(ctx.error); }
+      if (static_cast<bool>(ctx.error)) [[unlikely]] { return unexpected(ctx.error); }
       
       match<'"'>(ctx, it);
       auto start = it;
       skip_till_quote(ctx, it, end);
-      if (static_cast<bool>(ctx.error)) { return unexpected(ctx.error); }
+      if (static_cast<bool>(ctx.error)) [[unlikely]] { return unexpected(ctx.error); }
       return sv{ start, static_cast<size_t>(it++ - start) };
    }
    

@@ -30,7 +30,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            if (static_cast<bool>(ctx.error)) { return; }
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
             
             if (it == end) {
                if constexpr (resizeable<T>) {
@@ -98,7 +98,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            if (static_cast<bool>(ctx.error)) { return; }
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
             
             static constexpr auto N = []() constexpr
             {
