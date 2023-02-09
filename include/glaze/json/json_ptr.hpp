@@ -615,7 +615,8 @@ namespace glz
                         else {
                            skip_value(ctx, it, end);
                            if (*it != ',') {
-                              throw std::runtime_error("Key not found");
+                              ret = unexpected(parse_error{ error_code::key_not_found, static_cast<size_t>(std::distance(start, it)) });
+                              return;
                            }
                            ++it;
                         }
@@ -628,7 +629,8 @@ namespace glz
                      for_each<n>([&](auto I) {
                         skip_value(ctx, it, end);
                         if (*it != ',') {
-                           throw std::runtime_error("Array element not found");
+                           ret = unexpected(parse_error{ error_code::array_element_not_found, static_cast<size_t>(std::distance(start, it)) });
+                           return;
                         }
                         ++it;
                      });
