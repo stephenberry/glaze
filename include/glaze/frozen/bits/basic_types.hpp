@@ -152,15 +152,17 @@ namespace glz::frozen
      constexpr       reference operator[](std::size_t index) { return data_[index]; }
      constexpr const_reference operator[](std::size_t index) const { return data_[index]; }
 
-     constexpr       reference at(std::size_t index) {
+     constexpr       reference at(std::size_t index) noexcept {
         if (index > N) {
-           throw std::out_of_range("Index (" + std::to_string(index) + ") out of bound (" + std::to_string(N) + ')');
+           std::abort();
+           //throw std::out_of_range("Index (" + std::to_string(index) + ") out of bound (" + std::to_string(N) + ')');
         }
        return data_[index];
      }
-     constexpr const_reference at(std::size_t index) const {
+     constexpr const_reference at(std::size_t index) const noexcept {
         if (index > N) {
-           throw std::out_of_range("Index (" + std::to_string(index) + ") out of bound (" + std::to_string(N) + ')');
+           std::abort();
+           //throw std::out_of_range("Index (" + std::to_string(index) + ") out of bound (" + std::to_string(N) + ')');
         }
        return data_[index];
      }

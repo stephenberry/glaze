@@ -192,11 +192,14 @@ namespace glz
                                json_ptr);
    }
    
+   template <class R>
+   using call_result_t = std::conditional_t<std::is_reference_v<R> || std::is_pointer_v<R>, std::decay_t<R>*, R>;
+   
    // call a member function
    template <class R, class T, class... Args>
    decltype(auto) call(T&& root_value, sv json_ptr, Args&&... args)
    {
-      std::conditional_t<std::is_reference_v<R> || std::is_pointer_v<R>, std::decay_t<R>*, R> result;
+      call_result_t<R> result;
       
       const auto valid = detail::seek_impl(
          [&result, &root_value, ...args = std::forward<Args>(args)](auto&& val) {
