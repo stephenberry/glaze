@@ -6,6 +6,8 @@
 #include "glaze/api/std/string.hpp"
 #include "glaze/api/trait.hpp"
 #include "glaze/core/format.hpp"
+#include "glaze/core/context.hpp"
+#include "glaze/util/expected.hpp"
 
 #include <stdexcept>
 #include <memory>
@@ -15,8 +17,11 @@
 
 namespace glz
 {
-   inline namespace v0_0_2
+   inline namespace v0_0_3
    {
+      template <class R>
+      using func_return_t = std::conditional_t<std::is_lvalue_reference_v<R>, std::reference_wrapper<std::decay_t<R>>, R>;
+      
       struct api
       {
          api() noexcept = default;
@@ -27,17 +32,14 @@ namespace glz
          virtual ~api() noexcept {}
 
          template <class T>
-         [[nodiscard]] T& get(const sv path);
-
-         template <class T>
-         [[nodiscard]] T* get_if(const sv path) noexcept;
+         [[nodiscard]] T* get(const sv path) noexcept;
 
          // Get a std::function from a member function or std::function across the API
          template <class T>
-         [[nodiscard]] T get_fn(const sv path);
+         [[nodiscard]] expected<T, error_code> get_fn(const sv path) noexcept;
 
          template <class Ret, class... Args>
-         [[nodiscard]] Ret call(const sv path, Args&&... args);
+         expected<func_return_t<Ret>, error_code> call(const sv path, Args&&... args) noexcept;
          
          [[nodiscard]] virtual bool contains(const sv path) noexcept = 0;
 
@@ -65,27 +67,8 @@ namespace glz
          std::map<std::string, std::function<std::shared_ptr<api>()>,
                   std::less<>>;
 
-      /// access reference via JSON pointer path
       template <class T>
-      T& api::get(const sv path) {
-         static constexpr auto hash = glz::hash<T>();
-         auto* ptr = get(path, hash);
-         if (ptr) {
-            return *static_cast<T*>(ptr);
-         }
-         else {
-            error = "\n api: glaze::get<" + std::string(glz::name_v<T>) + ">(\"" + std::string(path) + "\") | " + error;
-   #ifdef __cpp_exceptions
-            throw std::runtime_error(error);
-   #else
-            static T x{};
-            return x;
-   #endif
-         }
-      }
-
-      template <class T>
-      T* api::get_if(const sv path) noexcept {
+      T* api::get(const sv path) noexcept {
          static constexpr auto hash = glz::hash<T>();
          auto* ptr = get(path, hash);
          if (ptr) {
@@ -95,7 +78,7 @@ namespace glz
       }
 
       template <class T>
-      T api::get_fn(const sv path) {
+      expected<T, error_code> api::get_fn(const sv path) noexcept {
          static constexpr auto hash = glz::hash<T>();
          auto d = get_fn(path, hash);
          if (d) {
@@ -103,18 +86,14 @@ namespace glz
             return copy;
          }
          else {
-            error = "\n api: glaze::get_fn<" + std::string(glz::name_v<T>) + ">(\"" + std::string(path) + "\") | " + error;
-   #ifdef __cpp_exceptions
-            throw std::runtime_error(error);
-   #else
-            static T x{};
-            return x;
-   #endif
+            /*error = "\n api: glaze::get_fn<" + std::string(glz::name_v<T>) + ">(\"" + std::string(path) + "\") | " + error;
+            throw std::runtime_error(error);*/
+            return unexpected(error_code::invalid_get_fn);
          }
       }
 
       template <class Ret, class... Args>
-      Ret api::call(const sv path, Args&&... args)
+      expected<func_return_t<Ret>, error_code> api::call(const sv path, Args&&... args) noexcept
       {
          using F = std::function<Ret(Args...)>;
          static constexpr auto hash = glz::hash<F>();
@@ -136,15 +115,6 @@ namespace glz
             if (success) {
                return static_cast<Ret>(ptr);
             }
-            else {
-               error = "\n api: glaze::call<" + std::string(glz::name_v<Ret>) + ">(\"" + std::string(path) + "\") | " + error;
-      #ifdef __cpp_exceptions
-               throw std::runtime_error(error);
-      #else
-               static T x{};
-               return x;
-      #endif
-            }
          }
          else if constexpr (std::is_void_v<Ret>) {
             void* ptr = nullptr;
@@ -153,32 +123,13 @@ namespace glz
             if (success) {
                return;
             }
-            else {
-               error = "\n api: glaze::call<" + std::string(glz::name_v<Ret>) + ">(\"" + std::string(path) + "\") | " +
-                       error;
-#ifdef __cpp_exceptions
-               throw std::runtime_error(error);
-#else
-               return;
-#endif
-            }
          }
          else if constexpr (std::is_lvalue_reference_v<Ret>) {
             void* ptr{};
             const auto success = caller(path, hash, ptr, arguments);
 
             if (success) {
-               return *static_cast<std::decay_t<Ret>*>(ptr);
-            }
-            else {
-               error = "\n api: glaze::call<" + std::string(glz::name_v<Ret>) + ">(\"" + std::string(path) + "\") | " +
-                       error;
-#ifdef __cpp_exceptions
-               throw std::runtime_error(error);
-#else
-               static T x{};
-               return x;
-#endif
+               return std::ref(*static_cast<std::decay_t<Ret>*>(ptr));
             }
          }
          else {
@@ -189,16 +140,9 @@ namespace glz
             if (success) {
                return value;
             }
-            else {
-               error = "\n api: glaze::call<" + std::string(glz::name_v<Ret>) + ">(\"" + std::string(path) + "\") | " + error;
-      #ifdef __cpp_exceptions
-               throw std::runtime_error(error);
-      #else
-               static T x{};
-               return x;
-      #endif
-            }
          }
+         
+         return unexpected(error_code::invalid_call);
       }
 
       using iface_fn = std::shared_ptr<glz::iface>(*)();

@@ -90,12 +90,12 @@ void tests()
    };
 
    "my_api type io"_test = [&] {
-      auto& x = io->get<int>("/x");
-      auto& y = io->get<double>("/y");
-      auto& z = io->get<std::vector<double>>("/z");
-      expect(x == 7);
-      expect(y == 5.5);
-      expect(z == std::vector<double>{1.0,2.0});
+      auto* x = io->get<int>("/x");
+      auto* y = io->get<double>("/y");
+      auto* z = io->get<std::vector<double>>("/z");
+      expect(*x == 7);
+      expect(*y == 5.5);
+      expect(*z == std::vector<double>{1.0,2.0});
    };
 
    "function type name"_test = [] {
@@ -107,8 +107,8 @@ void tests()
    "function type io"_test = [&] {
       int x = 7;
       double y = 5.5;
-      auto& f = io->get<std::function<double(const int&, const double&)>>("/f");
-      expect(f(x, y) == 38.5);
+      auto* f = io->get<std::function<double(const int&, const double&)>>("/f");
+      expect((*f)(x, y) == 38.5);
    };
 }
 

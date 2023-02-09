@@ -43,7 +43,10 @@ namespace glz
       dump_int_error,
       get_nonexistent_json_ptr,
       get_wrong_type,
-      cannot_be_referenced
+      cannot_be_referenced,
+      invalid_get,
+      invalid_get_fn,
+      invalid_call
    };
    
    struct parse_error final
