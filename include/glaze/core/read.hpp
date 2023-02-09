@@ -79,26 +79,6 @@ namespace glz
       detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
       
       return { ctx.error, static_cast<size_t>(std::distance(start, b)) };
-      
-      /*if constexpr (Opts.format == binary) {
-         // binary exceptions are not formatted
-         detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
-      }
-      else {
-         try {
-            detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
-         }
-         catch (const std::exception& e) {
-            
-            auto index = std::distance(reinterpret_cast<const char*>(buffer.data()), b);
-            auto info = detail::get_source_info(buffer, index);
-            std::string error = e.what();
-            if (info) {
-               error = detail::generate_error_string(error, *info);
-            }
-            throw std::runtime_error(error);
-         }
-      }*/
    }
    
    template <opts Opts>

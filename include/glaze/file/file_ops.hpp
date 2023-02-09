@@ -16,12 +16,7 @@ namespace glz
    {
       std::ifstream file{ std::string(file_name) };
 
-      if (!file) {
-         /*throw std::runtime_error("glaze::file_to_buffer: File with path (" +
-                                  std::string(file_name) +
-                                  ") could not be loaded. Ensure that file "
-                                  "exists at the given path.");*/
-         
+      if (!file) {         
          return error_code::file_open_failure;
       }
 
