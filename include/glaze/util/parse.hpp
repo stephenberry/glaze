@@ -9,19 +9,6 @@
 namespace glz::detail
 {
    // assumes null terminated
-   /*template <char c>
-   inline void match(auto&& it)
-   {
-      if (*it != c) [[unlikely]] {
-         static constexpr char b[] = {c, '\0'};
-         static constexpr auto error = concat_arrays("Expected:", b);
-         throw std::runtime_error(error.data());
-      }
-      else [[likely]] {
-         ++it;
-      }
-   }*/
-   
    template <char c>
    inline void match(is_context auto&& ctx, auto&& it) noexcept
    {
@@ -40,32 +27,6 @@ namespace glz::detail
          ++it;
       }
    }
-   
-   // assumes null terminated by default
-   /*template <char c, bool is_null_terminated = true>
-   inline void match(auto&& it, auto&& end)
-   {
-      if constexpr (is_null_terminated) {
-         if (*it != c) [[unlikely]] {
-            static constexpr char b[] = {c, '\0'};
-            static constexpr auto error = concat_arrays("Expected:", b);
-            throw std::runtime_error(error.data());
-         }
-         else [[likely]] {
-            ++it;
-         }
-      }
-      else {
-         if (it == end || *it != c) [[unlikely]] {
-            static constexpr char b[] = {c, '\0'};
-            static constexpr auto error = concat_arrays("Expected:", b);
-            throw std::runtime_error(error.data());
-         }
-         else [[likely]] {
-            ++it;
-         }
-      }
-   }*/
 
    template <string_literal str>
    inline void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept

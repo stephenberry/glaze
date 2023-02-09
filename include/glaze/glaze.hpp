@@ -66,12 +66,10 @@ namespace glz
          }
          else {
             return { error_code::file_extension_not_supported };
-            //throw std::runtime_error("Extension not supported for glz::read_file: " + extension);
          }
       }
       else {
          return { error_code::could_not_determine_extension };
-         //throw std::runtime_error("Could not determine extension for: " + std::string(file_name));
       }
    }
    
