@@ -30,6 +30,8 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
+            if (static_cast<bool>(ctx.error)) { return; }
+            
             if (it == end) {
                if constexpr (resizeable<T>) {
                   value.clear();
@@ -51,7 +53,8 @@ namespace glz
                      ++it;
                   }
                   else {
-                     throw std::runtime_error(R"(Expected '\n' after '\r')");
+                     ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
+                     return;
                   }
                }
                while (*it == '\n') {
@@ -83,7 +86,7 @@ namespace glz
                }
             }
             else {
-               throw std::runtime_error("Exceeded static array size.");
+               ctx.error = error_code::exceeded_static_array_size;
             }
          }
       };
@@ -95,6 +98,8 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
+            if (static_cast<bool>(ctx.error)) { return; }
+            
             static constexpr auto N = []() constexpr
             {
                if constexpr (glaze_array_t<T>) {
@@ -113,7 +118,8 @@ namespace glz
                      ++it;
                   }
                   else {
-                     throw std::runtime_error(R"(Expected '\n' after '\r')");
+                     ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
+                     return;
                   }
                }
                while (*it == '\n') {
