@@ -47,20 +47,31 @@ namespace glz
       bool read(const uint32_t format, const sv path,
                  const sv data) noexcept override
       {
+         parse_error pe{};
+         bool success;
+         
          if (format == json) {
-            return detail::seek_impl(
+            success = detail::seek_impl(
                [&](auto&& val) {
-                  glz::read<opts{}>(val, data);
+                  pe = glz::read<opts{}>(val, data);
                },
                user, path);
          }
          else {
-            return detail::seek_impl(
+            success = detail::seek_impl(
                [&](auto&& val) {
-                  glz::read<opts{.format = binary}>(val, data);
+                  pe = glz::read<opts{.format = binary}>(val, data);
                },
                user, path);
          }
+         
+         if (success) {
+            if (pe) {
+               return false;
+            }
+            return true;
+         }
+         return false;
       }
 
       bool write(const uint32_t format, const sv path,

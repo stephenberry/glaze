@@ -207,7 +207,10 @@ namespace glz
          static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if constexpr (!has_static_size<T>) {
-               dump_int<Opts>(value.size(), std::forward<Args>(args)...);
+               const auto b = dump_int<Opts>(value.size(), std::forward<Args>(args)...);
+               if (!b) {
+                  ctx.error = error_code::dump_int_error;
+               }
             }
             for (auto&& x : value) {
                write<binary>::op<Opts>(x, ctx, std::forward<Args>(args)...);
