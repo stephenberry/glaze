@@ -308,9 +308,9 @@ namespace glz
    
    // std::string file_name needed for std::ofstream
    template <class T>
-   inline void write_file_ndjson(T&& value, const std::string& file_name) {
+   inline write_error write_file_ndjson(T&& value, const std::string& file_name) {
       std::string buffer{};
       write<opts{.format = ndjson}>(std::forward<T>(value), buffer);
-      buffer_to_file(buffer, file_name);
+      return { buffer_to_file(buffer, file_name) };
    }
 }

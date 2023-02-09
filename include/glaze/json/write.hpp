@@ -748,19 +748,20 @@ namespace glz
       return buffer;
    }
 
-   void buffer_to_file(auto&& buffer, auto&& file_name) {
+   [[nodiscard]] inline error_code buffer_to_file(auto&& buffer, auto&& file_name) noexcept {
       auto file = std::ofstream(file_name, std::ios::out);
       if (!file) {
-         throw std::runtime_error("glz::buffer_to_file: Could not create file with path (" + file_name + ").");
+         return error_code::file_open_failure;
       }
       file.write(buffer.data(), buffer.size());
+      return {};
    }
    
    // std::string file_name needed for std::ofstream
    template <class T>
-   inline void write_file_json(T&& value, const std::string& file_name) {
+   [[nodiscard]] inline write_error write_file_json(T&& value, const std::string& file_name) noexcept {
       std::string buffer{};
       write<opts{}>(std::forward<T>(value), buffer);
-      buffer_to_file(buffer, file_name);
+      return { buffer_to_file(buffer, file_name) };
    }
 }

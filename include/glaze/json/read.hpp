@@ -299,7 +299,6 @@ namespace glz
                   :  {
                      ctx.error = error_code::expected_true_or_false;
                      return;
-                     //throw std::runtime_error("Expected true or false");
                   }
             }
          }
@@ -379,7 +378,8 @@ namespace glz
                   // TODO: this is slow
                   ++it;
                   if (std::distance(it, end) < 4) [[unlikely]] {
-                     throw std::runtime_error("\\u should be followed by 4 hex digits.");
+                     ctx.error = error_code::u_requires_hex_digits; // \\u should be followed by 4 hex digits.
+                     return;
                   }
                   uint32_t codepoint_integer;
                   std::stringstream ss;
@@ -402,7 +402,8 @@ namespace glz
                      std::memcpy(buffer, &codepoint, 4);
                   }
                   else if (result != std::codecvt_base::ok) {
-                     throw std::runtime_error("Could not convert unicode escape.");
+                     ctx.error = error_code::unicode_escape_conversion_failure;
+                     return;
                   }
                   value.append(reinterpret_cast<char*>(buffer), to_next - buffer);
                   std::advance(it, 4);
@@ -485,7 +486,6 @@ namespace glz
                      if (std::distance(it, end) < 4) [[unlikely]] {
                         ctx.error = error_code::u_requires_hex_digits;
                         return;
-                        //throw std::runtime_error("\\u should be followed by 4 hex digits.");
                      }
                      //double codepoint_double;
                      //auto [ptr, ec] = from_chars(it, it + 4, codepoint_double, std::chars_format::hex);
@@ -515,7 +515,6 @@ namespace glz
                         if (result != std::codecvt_base::ok) {
                            ctx.error = error_code::unicode_escape_conversion_failure;
                            return;
-                           //throw std::runtime_error("Could not convert unicode escape.");
                         }
                         
                         const auto n = to_next - buffer;
