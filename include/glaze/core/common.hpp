@@ -853,7 +853,8 @@ struct glz::meta<glz::error_code>
                                            "cannot_be_referenced", cannot_be_referenced, //
                                            "invalid_get", invalid_get, //
                                            "invalid_get_fn", invalid_get_fn, //
-                                           "invalid_call", invalid_call //
+                                           "invalid_call", invalid_call, //
+                                           "invalid_partial_key", invalid_partial_key //
    );
 };
 

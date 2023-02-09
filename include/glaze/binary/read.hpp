@@ -355,8 +355,6 @@ namespace glz
          return parse_error{ file_error };
       }
       
-      read<opts{.format = binary}>(value, buffer, ctx);
-      
-      return {};
+      return read<opts{.format = binary}>(value, buffer, ctx);
    }
 }

@@ -315,9 +315,11 @@ namespace glz
    }
 
    template <auto& Partial, opts Opts, class T, output_buffer Buffer>
-   inline auto write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
+   [[nodiscard]] inline write_error write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
    {
       static constexpr auto partial = Partial;  // MSVC 16.11 hack
+      
+      write_error we{};
 
       if constexpr (std::count(partial.begin(), partial.end(), "") > 0) {
          detail::write<binary>::op<Opts>(value, ctx, buffer);
@@ -370,19 +372,20 @@ namespace glz
                   write<sub_partial, Opts>(it->second, buffer, ctx);
                }
                else {
-                  throw std::runtime_error(
-                     "Invalid key for map when writing out partial message");
+                  we.ec = error_code::invalid_partial_key;
                }
             });
          }
       }
+      
+      return we;
    }
    
    template <auto& Partial, opts Opts, class T, output_buffer Buffer>
-   inline auto write(T&& value, Buffer& buffer) noexcept
+   [[nodiscard]] inline write_error write(T&& value, Buffer& buffer) noexcept
    {
       context ctx{};
-      write<Partial, Opts>(std::forward<T>(value), buffer, ctx);
+      return write<Partial, Opts>(std::forward<T>(value), buffer, ctx);
    }
 
    template <auto& Partial, class T, class Buffer>

@@ -86,8 +86,6 @@ namespace glz
             return copy;
          }
          else {
-            /*error = "\n api: glaze::get_fn<" + std::string(glz::name_v<T>) + ">(\"" + std::string(path) + "\") | " + error;
-            throw std::runtime_error(error);*/
             return unexpected(error_code::invalid_get_fn);
          }
       }
