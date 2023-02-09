@@ -193,29 +193,6 @@ namespace glz
    }
    
    // call a member function
-   /*template <string_literal json_ptr, class T, class... Args>
-   decltype(auto) call(T&& root_value, Args&&... args)
-   {
-      static constexpr auto frozen_map = detail::make_map<T, false>();
-      static constexpr sv key = chars<json_ptr>;
-      static constexpr auto member_it = frozen_map.find(key);
-      if constexpr (member_it != frozen_map.end()) {
-         static constexpr auto member_ptr = std::get<member_it->second.index()>(member_it->second);
-         static constexpr auto f = std::mem_fn(member_ptr);
-         using F = decltype(f);
-         if constexpr (std::is_invocable_v<F, T, Args...>) {
-            return f(root_value, std::forward<Args>(args)...);
-         }
-         else {
-            throw std::runtime_error("call: function not invocable");
-         }
-      }
-      else {
-         throw std::runtime_error("call: invalid json_ptr path");
-      }
-   }*/
-   
-   // call a member function
    template <class R, class T, class... Args>
    decltype(auto) call(T&& root_value, sv json_ptr, Args&&... args)
    {

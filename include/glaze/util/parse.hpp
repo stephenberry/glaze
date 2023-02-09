@@ -20,7 +20,6 @@ namespace glz::detail
          /*
           static constexpr char b[] = {c, '\0'};
           static constexpr auto error = concat_arrays("Expected:", b);
-          throw std::runtime_error(error.data());
           */
       }
       else [[likely]] {
@@ -37,7 +36,6 @@ namespace glz::detail
       if ((n < str.size) || (std::memcmp(it, str.value, str.size) != 0)) [[unlikely]] {
          ctx.error = error_code::syntax_error;
          //static constexpr auto error = join_v<chars<"Expected:">, chars<str>>;
-         //throw std::runtime_error(error.data());
       }
       it += str.size;
    }
