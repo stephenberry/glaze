@@ -1921,18 +1921,10 @@ suite error_outputs = [] {
    "invalid character"_test = [] {
       std::string s = R"({"Hello":"World"x, "color": "red"})";
       std::map<std::string, std::string> m;
-      expect(glz::read_json(m, s) != glz::error_code::none);
-      
-      /*try
-      {
-         std::string s = R"({"Hello":"World"x, "color": "red"})";
-         std::map<std::string, std::string> m;
-         expect(glz::read_json(m, s) != glz::error_code::none);
-      }
-      catch (const std::exception& e) {
-         expect(std::string(e.what()) ==
-                "1:17: Expected:,\n   {\"Hello\":\"World\"x, \"color\": \"red\"}\n                   ^\n");
-      }*/
+      auto pe = glz::read_json(m, s);
+      expect(pe != glz::error_code::none);
+      auto err = glz::format_error(pe, s);
+      expect(err == "1:17: syntax_error\n   {\"Hello\":\"World\"x, \"color\": \"red\"}\n                   ^\n") << err;
    };
 };
 

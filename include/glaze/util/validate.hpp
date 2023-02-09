@@ -51,9 +51,9 @@ namespace glz
          }
       }
 
-      inline std::string generate_error_string(const sv error,
+      inline std::string generate_error_string(const std::string_view error,
                                                const source_info& info,
-                                               const sv filename = "")
+                                               const std::string_view filename = "")
       {
          std::string s{};
          

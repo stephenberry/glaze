@@ -709,7 +709,7 @@ namespace glz
       {
          std::array<sv, std::tuple_size_v<meta_t<T>>> arr;
          for_each<std::tuple_size_v<meta_t<T>>>([&](auto I) {
-            arr[I] = enum_name_v<static_cast<T>(I)>;
+            arr[I] = enum_name_v<static_cast<T>(decltype(I)::value)>;
          });
          return arr;
       }
@@ -808,5 +808,64 @@ namespace glz
    {
       return glz::detail::Flags{
          group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(args...))>>::op(glz::tuplet::make_copy_tuple(args...))};
+   }
+}
+
+template <>
+struct glz::meta<glz::error_code>
+{
+   static constexpr sv name = "glz::error_code";
+   using enum glz::error_code;
+   static constexpr auto value = enumerate("none", none, //
+                                           "no_read_input", no_read_input, //
+                                           "data_must_be_null_terminated", data_must_be_null_terminated, //
+                                           "parse_number_failure", parse_number_failure, //
+                                           "expected_brace", expected_brace, //
+                                           "expected_bracket", expected_bracket, //
+                                           "expected_quote", expected_quote, //
+                                           "exceeded_static_array_size", exceeded_static_array_size, //
+                                           "unexpected_end", unexpected_end, //
+                                           "expected_end_comment", expected_end_comment, //
+                                           "syntax_error", syntax_error, //
+                                           "key_not_found", key_not_found, //
+                                           "unexpected_enum", unexpected_enum, //
+                                           "attempt_member_func_read", attempt_member_func_read, //
+                                           "attempt_read_hidden", attempt_read_hidden, //
+                                           "invalid_nullable_read", invalid_nullable_read, //
+                                           "invalid_variant_object", invalid_variant_object, //
+                                           "invalid_variant_array", invalid_variant_array, //
+                                           "invalid_variant_string", invalid_variant_string, //
+                                           "no_matching_variant_type", no_matching_variant_type, //
+                                           "expected_true_or_false", expected_true_or_false, //
+                                           "unknown_key", unknown_key, //
+                                           "invalid_flag_input", invalid_flag_input, //
+                                           "invalid_escape", invalid_escape, //
+                                           "u_requires_hex_digits", u_requires_hex_digits, //
+                                           "file_extension_not_supported", file_extension_not_supported, //
+                                           "could_not_determine_extension", could_not_determine_extension, //
+                                           "seek_failure", seek_failure, //
+                                           "unicode_escape_conversion_failure", unicode_escape_conversion_failure, //
+                                           "file_open_failure", file_open_failure, //
+                                           "file_include_error", file_include_error, //
+                                           "dump_int_error", dump_int_error, //
+                                           "get_nonexistent_json_ptr", get_nonexistent_json_ptr, //
+                                           "get_wrong_type", get_wrong_type, //
+                                           "cannot_be_referenced", cannot_be_referenced, //
+                                           "invalid_get", invalid_get, //
+                                           "invalid_get_fn", invalid_get_fn, //
+                                           "invalid_call", invalid_call //
+   );
+};
+
+namespace glz
+{
+   [[nodiscard]] inline std::string format_error(const parse_error& pe, auto& buffer) {
+      static constexpr auto arr = detail::make_enum_to_string_array<error_code>();
+      
+      const auto info = detail::get_source_info(buffer, pe.location);
+      if (info) {
+         return detail::generate_error_string(arr[static_cast<uint32_t>(pe.ec)], *info);
+      }
+      return "";
    }
 }

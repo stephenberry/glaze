@@ -151,7 +151,6 @@ namespace glz
                      using object_types = typename variant_types<T>::object_types;
                      if constexpr (std::tuple_size_v<object_types> < 1) {
                         ctx.error = error_code::invalid_variant_object;
-                        //throw std::runtime_error("Encounted object in variant with no object type");
                      }
                      else {
                         ++it;
@@ -164,7 +163,6 @@ namespace glz
                      using array_types = typename variant_types<T>::array_types;
                      if constexpr (std::tuple_size_v<array_types> < 1) {
                         ctx.error = error_code::invalid_variant_array;
-                        //throw std::runtime_error("Encountered array in variant with no array type");
                      }
                      else {
                         using V = std::tuple_element_t<0, array_types>;
@@ -176,7 +174,6 @@ namespace glz
                      using string_types = typename variant_types<T>::string_types;
                      if constexpr (std::tuple_size_v<string_types> < 1) {
                         ctx.error = error_code::invalid_variant_string;
-                        //throw std::runtime_error("Encountered string in variant with no string type");
                      }
                      else {
                         using V = std::tuple_element_t<0, string_types>;
@@ -190,7 +187,6 @@ namespace glz
                      using bool_types = typename variant_types<T>::bool_types;
                      if constexpr (std::tuple_size_v<bool_types> < 1) {
                         ctx.error = error_code::no_matching_variant_type;
-                        //throw std::runtime_error("No matching type in variant");
                      }
                      else {
                         using V = std::tuple_element_t<0, bool_types>;
@@ -207,7 +203,6 @@ namespace glz
                      using number_types = typename variant_types<T>::number_types;
                      if constexpr (std::tuple_size_v<number_types> < 1) {
                         ctx.error = error_code::no_matching_variant_type;
-                        //throw std::runtime_error("No matching type in variant");
                      }
                      else {
                         using V = std::tuple_element_t<0, number_types>;

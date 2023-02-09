@@ -3,7 +3,10 @@
 
 #pragma once
 
+#include <iterator>
 #include <string_view>
+
+#include "glaze/util/validate.hpp"
 
 namespace glz
 {
