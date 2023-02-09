@@ -296,10 +296,11 @@ namespace glz
    // Get a value at the location of a json_ptr. Will throw if
    // value doesnt exist or is not asignable or is a narrowing conversion.
    template <class V, class T>
-   V get_value(T&& root_value, sv json_ptr)
+   expected<V, error_code> get_value(T&& root_value, sv json_ptr) noexcept
    {
       V result{};
       bool found{};
+      error_code ec{};
       detail::seek_impl(
          [&](auto&& val) {
             if constexpr (std::is_assignable_v<V, decltype(val)> &&
@@ -308,15 +309,17 @@ namespace glz
                result = val;
             }
             else {
-               throw std::runtime_error("Called get_value on \"" +
-                                        std::string(json_ptr) +
-                                        "\" with wrong type");
+               ec = error_code::get_wrong_type;
             }
          },
          std::forward<T>(root_value), json_ptr);
-      if (!found)
-         throw std::runtime_error("Called get_value on \"" + std::string(json_ptr) +
-                                  "\" which doesnt exist");
+      if (!found) {
+         return unexpected(error_code::get_nonexistent_json_ptr);
+      }
+      else if (static_cast<bool>(ec)) {
+         return unexpected(ec);
+      }
+      
       return result;
    }
 
