@@ -238,9 +238,9 @@ namespace glz::detail
       return false;
    }
 
-   inline constexpr bool is_digit(char c) { return c <= '9' && c >= '0'; }
+   inline constexpr bool is_digit(char c) noexcept { return c <= '9' && c >= '0'; }
 
-   inline constexpr size_t stoui(std::string_view s, size_t value = 0)
+   inline constexpr std::optional<size_t> stoui(std::string_view s, size_t value = 0) noexcept
    {
       if (s.empty()) {
          return value;
@@ -251,7 +251,7 @@ namespace glz::detail
       }
 
       else {
-         throw std::runtime_error("not a digit");
+         return {}; // not a digit
       }
    }
    

@@ -526,16 +526,17 @@ namespace glz
          else if constexpr (glz::detail::glaze_array_t<V>) {
             constexpr auto member_array =
                glz::detail::make_array<std::decay_t<V>>();
-            constexpr auto index = glz::detail::stoui(key_str); //TODO: Will not build if not int
-            if constexpr (index >= 0 && index < member_array.size()) {
-               constexpr auto member = member_array[index];
-               constexpr auto member_ptr = std::get<member.index()>(member);
-               using sub_t = decltype(glz::detail::get_member(std::declval<V>(), member_ptr));
-               return valid<sub_t, rem_ptr, Expected_t>();
+            constexpr auto optional_index = glz::detail::stoui(key_str); // TODO: Will not build if not int
+            if constexpr (optional_index) {
+               constexpr auto index = *optional_index;
+               if constexpr (index >= 0 && index < member_array.size()) {
+                  constexpr auto member = member_array[index];
+                  constexpr auto member_ptr = std::get<member.index()>(member);
+                  using sub_t = decltype(glz::detail::get_member(std::declval<V>(), member_ptr));
+                  return valid<sub_t, rem_ptr, Expected_t>();
+               }
             }
-            else {
-               return false;
-            }
+            return false;
          }
          else if constexpr (glz::detail::array_t<V>) {
             glz::detail::stoui(key_str);
