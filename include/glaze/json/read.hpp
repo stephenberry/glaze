@@ -388,7 +388,8 @@ namespace glz
                   
                   //auto [ptr, ec] = std::from_chars(it, it + 4, codepoint_double, std::chars_format::hex);
                   //if (ec != std::errc() || ptr - it != 4) {
-                  //   throw std::runtime_error("Invalid hex value for unicode escape.");
+                  //   ctx.error = error_code::u_requires_hex_digits;
+                  //   return;
                   //}
                   
                   char32_t codepoint = codepoint_integer;
@@ -490,7 +491,8 @@ namespace glz
                      //double codepoint_double;
                      //auto [ptr, ec] = from_chars(it, it + 4, codepoint_double, std::chars_format::hex);
                      //if (ec != std::errc() || ptr - it != 4) {
-                     //   throw std::runtime_error("Invalid hex value for unicode escape.");
+                     //   ctx.error = error_code::u_requires_hex_digits;
+                     //   return;
                      //}
                      //char32_t codepoint = static_cast<uint32_t>(codepoint_double);
                      
@@ -533,7 +535,6 @@ namespace glz
                            if (result != std::codecvt_base::ok) {
                               ctx.error = error_code::unicode_escape_conversion_failure;
                               return;
-                              //throw std::runtime_error("Could not convert unicode escape.");
                            }
                         }
                      }
@@ -870,7 +871,6 @@ namespace glz
                else {
                   ctx.error = error_code::invalid_flag_input;
                   return;
-                  //throw std::runtime_error("Invalid flag input: " + s);
                }
                
                skip_ws(ctx, it, end);
@@ -1145,9 +1145,7 @@ namespace glz
                   }
                   else {
                      ctx.error = error_code::invalid_nullable_read;
-                     /*throw std::runtime_error(
-                        "Cannot read into unset nullable that is not "
-                        "std::optional, std::unique_ptr, or std::shared_ptr");*/
+                     // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or std::shared_ptr
                   }
                }
                read<json>::op<Opts>(*value, ctx, it, end);

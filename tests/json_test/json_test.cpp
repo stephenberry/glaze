@@ -2855,7 +2855,6 @@ suite any_tests = []
       *static_cast<double*>(data) = 6.6;
       
       expect(glz::any_cast<double>(a) == 6.6);
-      expect(throws([&]{ glz::any_cast<int>(a); }));
    };
 };
 

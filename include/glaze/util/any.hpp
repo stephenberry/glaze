@@ -181,7 +181,7 @@ namespace glz
      if (auto *value = any_cast<V>(&a)) {
        return static_cast<T>(*value);
      } else {
-       throw bad_any_cast();
+        std::abort();
      }
    }
 
@@ -192,7 +192,7 @@ namespace glz
      if (auto *value = any_cast<V>(&a)) {
        return static_cast<T>(*value);
      } else {
-       throw bad_any_cast();
+        std::abort();
      }
    }
 
@@ -203,7 +203,7 @@ namespace glz
      if (auto *value = any_cast<V>(&a)) {
        return static_cast<T>(std::move(*value));
      } else {
-       throw bad_any_cast();
+        std::abort();
      }
    }
 

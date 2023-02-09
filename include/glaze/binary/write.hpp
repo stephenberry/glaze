@@ -395,7 +395,7 @@ namespace glz
    
    // std::string file_name needed for std::ofstream
    template <class T>
-   inline void write_file_binary(T&& value, const std::string& file_name) {
+   [[nodiscard]] inline write_error write_file_binary(T&& value, const std::string& file_name) noexcept {
       
       std::string buffer{};
       
@@ -407,7 +407,9 @@ namespace glz
          file << buffer;
       }
       else {
-         throw std::runtime_error("could not write file: " + file_name);
+         return { error_code::file_open_failure };
       }
+      
+      return {};
    }
 }

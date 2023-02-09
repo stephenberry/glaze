@@ -155,14 +155,12 @@ namespace glz::frozen
      constexpr       reference at(std::size_t index) noexcept {
         if (index > N) {
            std::abort();
-           //throw std::out_of_range("Index (" + std::to_string(index) + ") out of bound (" + std::to_string(N) + ')');
         }
        return data_[index];
      }
      constexpr const_reference at(std::size_t index) const noexcept {
         if (index > N) {
            std::abort();
-           //throw std::out_of_range("Index (" + std::to_string(index) + ") out of bound (" + std::to_string(N) + ')');
         }
        return data_[index];
      }
