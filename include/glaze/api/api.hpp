@@ -121,7 +121,7 @@ namespace glz
             const auto success = caller(path, hash, ptr, arguments);
 
             if (success) {
-               return;
+               return expected<void, error_code>{};
             }
          }
          else if constexpr (std::is_lvalue_reference_v<Ret>) {
