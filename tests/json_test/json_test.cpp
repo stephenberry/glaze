@@ -2293,6 +2293,17 @@ suite generic_json_tests = [] {
       expect(json[1].get<std::string>() == "Hello World");
       expect(json[2]["pi"].get<double>() == 3.14);
    };
+
+   "generic_json_const"_test = [] {
+      auto foo = [](const glz::json_t& json) { return json["s"].get<std::string>(); };
+      glz::json_t json = {{"s", "hello world"}};
+      expect(foo(json) == "hello world");
+   };
+
+   "generic_json_int"_test = [] {
+      glz::json_t json = {{"i", 1}};
+      expect(json["i"].get<double>() == 1);
+   };
 };
 
 struct holder0_t {
