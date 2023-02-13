@@ -2304,6 +2304,24 @@ suite generic_json_tests = [] {
       glz::json_t json = {{"i", 1}};
       expect(json["i"].get<double>() == 1);
    };
+
+   "generic_json_as"_test = [] {
+      glz::json_t json = {
+         {"pi", 3.141},
+         {"happy", true},
+         {"name", "Niels"},
+         {"nothing", nullptr},
+         {"answer", {{"everything", 42.0}}},
+         {"list", {1.0, 0.0, 2.0}},
+         {"object", {
+            {"currency", "USD"},
+            {"value", 42.99}
+         }}
+      };
+      expect(json["list"][2].as<int>() == 2);
+      expect(json["pi"].as<double>() == 3.141);
+      expect(json["name"].as<std::string_view>() == "Niels");
+   };
 };
 
 struct holder0_t {

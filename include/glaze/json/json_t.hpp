@@ -121,5 +121,28 @@ namespace glz
       {
          data = array_t(arr);
       }
+
+      template <class T>
+      T as() const
+      {
+         // Prefer get becuase it returs a refrence
+         return get<T>();
+      }
+
+      template <class T>
+      requires std::convertible_to<double, T> T as()
+      const
+      {
+         // Can be used for int and the like
+         return static_cast<T>(get<double>());
+      }
+
+      template <class T>
+      requires std::convertible_to<std::string, T> T as()
+      const
+      {
+         // Can be used for string_view and the like
+         return get<std::string>();
+      }
    };
 }
