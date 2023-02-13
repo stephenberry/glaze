@@ -105,12 +105,12 @@ namespace glz
       requires std::convertible_to<T, val_t> && (!std::same_as<json_t, std::decay_t<T>>)
       json_t(T&& val)
       {
-         data = val;
+         data = std::forward<T>(val);
       }
 
       template <class T>
-      requires std::convertible_to<T, double> &&(!std::convertible_to<T, val_t>) json_t(T&& val) {
-         data = static_cast<double>(val);
+      requires std::convertible_to<T, double> && (!std::same_as<json_t, std::decay_t<T>>) &&(!std::convertible_to<T, val_t>) json_t(T&& val) {
+         data = static_cast<double>(std::forward<T>(val));
       }
 
       json_t(std::initializer_list<std::pair<const std::string, json_t>>&& obj) { data = object_t(obj); }
