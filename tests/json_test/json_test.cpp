@@ -2327,13 +2327,13 @@ suite generic_json_tests = [] {
       static const glz::json_t messageSchema = {
          {"type","struct"},
          {"fields", {
-            {"field","branch"}, {"type","string"},
+            {{"field", "branch"}, {"type", "string"}},
             }
          }
       };
       std::string buffer{};
       glz::write_json(messageSchema, buffer);
-      expect(buffer ==R"({"fields":{"field":"branch","type":"string"},"type":"struct"})") << buffer;
+      expect(buffer ==R"({"fields":[{"field":"branch","type":"string"}],"type":"struct"})") << buffer;
    };
 };
 
