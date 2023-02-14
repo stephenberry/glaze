@@ -105,15 +105,27 @@ namespace glz
       requires std::convertible_to<T, val_t> && (!std::same_as<json_t, std::decay_t<T>>)
       json_t(T&& val)
       {
-         data = std::forward<T>(val);
+         data = val;
       }
 
       template <class T>
       requires std::convertible_to<T, double> && (!std::same_as<json_t, std::decay_t<T>>) &&(!std::convertible_to<T, val_t>) json_t(T&& val) {
-         data = static_cast<double>(std::forward<T>(val));
+         data = static_cast<double>(val);
       }
 
-      json_t(std::initializer_list<std::pair<const std::string, json_t>>&& obj) { data = object_t(obj); }
+      json_t(std::initializer_list<std::pair<const char *, json_t>>&& obj)
+      {
+         // TODO try to see if there is a beter way to do this initialization withought copying the json_t
+         // std::string in std::initializer_list<std::pair<const std::string, json_t>> would match with {"literal", "other_literal"}
+         // So we cant use std::string or std::string view.
+         // Luckily const char * will not match with {"literal", "other_literal"} but then we have to copy the data from the initializer list
+         // data = object_t(obj); // This is what we would use if std::initializer_list<std::pair<const std::string, json_t>> worked
+         data = object_t{};
+         auto& data_obj = std::get<object_t>(data);
+         for (auto&& pair : obj) {
+            data_obj.emplace(pair.first, pair.second);
+         }
+      }
 
       // Prevent conflict with object initializer list
       template <bool deprioritize = true>

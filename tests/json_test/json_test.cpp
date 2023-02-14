@@ -2322,6 +2322,19 @@ suite generic_json_tests = [] {
       expect(json["pi"].as<double>() == 3.141);
       expect(json["name"].as<std::string_view>() == "Niels");
    };
+
+   "generic_json_nested_initialization"_test = [] {
+      static const glz::json_t messageSchema = {
+         {"type","struct"},
+         {"fields", {
+            {{"field", "branch"}, {"type", "string"}},
+            }
+         }
+      };
+      std::string buffer{};
+      glz::write_json(messageSchema, buffer);
+      expect(buffer ==R"({"fields":[{"field":"branch","type":"string"}],"type":"struct"})") << buffer;
+   };
 };
 
 struct holder0_t {
