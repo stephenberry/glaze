@@ -52,7 +52,10 @@ namespace glz
       invalid_call,
       invalid_partial_key,
       name_mismatch,
-      array_element_not_found
+      array_element_not_found,
+      elements_not_convertible_to_design,
+      unknown_distribution,
+      invalid_distribution_elements
    };
    
    struct parse_error final

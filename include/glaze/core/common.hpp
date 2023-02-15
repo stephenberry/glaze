@@ -856,7 +856,10 @@ struct glz::meta<glz::error_code>
                                            "invalid_call", invalid_call, //
                                            "invalid_partial_key", invalid_partial_key, //
                                            "name_mismatch", name_mismatch, //
-                                           "array_element_not_found", array_element_not_found //
+                                           "array_element_not_found", array_element_not_found, //
+                                           "elements_not_convertible_to_design", elements_not_convertible_to_design, //
+                                           "unknown_distribution", unknown_distribution, //
+                                           "invalid_distribution_elements", invalid_distribution_elements //
    );
 };
 

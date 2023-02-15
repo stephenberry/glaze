@@ -1956,7 +1956,7 @@ void study_tests()
       std::mutex mtx{};
       glz::study::run_study(generator, [&](const auto& point, [[maybe_unused]] const auto job_num){
          std::unique_lock lock{mtx};
-         results.emplace_back(point.x);
+         results.emplace_back(point.value().x);
       });
       
       std::sort(results.begin(), results.end());
@@ -1975,7 +1975,7 @@ void study_tests()
       
       std::vector<std::string> results;
       for (size_t i = 0; i < g.size(); ++i) {
-         const auto point = g.generate(i);
+         const auto point = g.generate(i).value();
          results.emplace_back(std::to_string(point.x) + "|" + std::to_string(point.y));
       }
       
@@ -1985,7 +1985,7 @@ void study_tests()
       std::mutex mtx{};
       glz::study::run_study(g, [&](const auto& point, [[maybe_unused]] const auto job_num){
          std::unique_lock lock{mtx};
-         results2.emplace_back(std::to_string(point.x) + "|" + std::to_string(point.y));
+         results2.emplace_back(std::to_string(point.value().x) + "|" + std::to_string(point.value().y));
       });
       
       std::sort(results2.begin(), results2.end());
