@@ -38,6 +38,14 @@
 #include <utility>
 #include <variant>
 
+#ifndef GLZ_THROW_OR_ABORT
+   #if __cpp_exceptions
+         #define GLZ_THROW_OR_ABORT(EXC) (throw (EXC))
+   #else
+         #define GLZ_THROW_OR_ABORT(EXC) (std::abort())
+   #endif
+#endif
+
 namespace glz {
 
 template <class E>
@@ -192,6 +200,7 @@ constexpr void reinit_expected(T& newval, U& oldval, Args&&... args) {
   } else {
     U tmp(std::move(oldval));
     std::destroy_at(std::addressof(oldval));
+#if __cpp_exceptions
     try {
       std::construct_at(std::addressof(newval), std::forward<Args>(args)...);
     } catch (...) {
@@ -199,6 +208,9 @@ constexpr void reinit_expected(T& newval, U& oldval, Args&&... args) {
       throw;
     }
   }
+#else
+   std::abort();
+#endif
 }
 
 }  // namespace detail
@@ -522,6 +534,7 @@ class expected {
         } else {
           T tmp(std::move(this->val));
           std::destroy_at(std::addressof(this->val));
+#if __cpp_exceptions
           try {
             std::construct_at(std::addressof(this->unex), std::move(rhs.unex));
             std::destroy_at(std::addressof(rhs.unex));
@@ -530,6 +543,9 @@ class expected {
             std::construct_at(std::addressof(this->val), std::move(tmp));
             throw;
           }
+#else
+           std::abort();
+#endif
         }
         has_val = false;
         rhs.has_val = true;
@@ -576,28 +592,28 @@ class expected {
     if (has_value()) {
       return this->val;
     }
-    throw bad_expected_access(error());
+     GLZ_THROW_OR_ABORT(bad_expected_access(error()));
   }
 
   constexpr auto value() & -> T& {
     if (has_value()) {
       return this->val;
     }
-    throw bad_expected_access(error());
+     GLZ_THROW_OR_ABORT(bad_expected_access(error()));
   }
 
   constexpr auto value() const&& -> T const&& {
     if (has_value()) {
       return std::move(this->val);
     }
-    throw bad_expected_access(std::move(error()));
+     GLZ_THROW_OR_ABORT(bad_expected_access(std::move(error())));
   }
 
   constexpr auto value() && -> T&& {
     if (has_value()) {
       return std::move(this->val);
     }
-    throw bad_expected_access(std::move(error()));
+     GLZ_THROW_OR_ABORT(bad_expected_access(std::move(error())));
   }
 
   // precondition: has_value() = false
@@ -1155,13 +1171,13 @@ class expected<void, E> {
 
   constexpr void value() const& {
     if (!has_value()) {
-      throw bad_expected_access(error());
+       GLZ_THROW_OR_ABORT(bad_expected_access(error()));
     }
   }
 
   constexpr void value() && {
     if (!has_value()) {
-      throw bad_expected_access(std::move(error()));
+       GLZ_THROW_OR_ABORT(bad_expected_access(std::move(error())));
     }
   }
 

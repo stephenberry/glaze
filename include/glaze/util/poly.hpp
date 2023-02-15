@@ -50,16 +50,16 @@ namespace glz
          
          for_each<N>([&](auto I) {
             // TODO: move "m" and "frozen_map" out of for_each when MSVC 2019 is fixed or deprecated
-            static constexpr auto m = meta_v<Spec>;
+            static constexpr auto spec = meta_v<Spec>;
             static constexpr auto frozen_map = detail::make_map<std::remove_pointer_t<T>, false>();
             
-            static constexpr sv key = tuplet::get<0>(tuplet::get<I>(m));
+            static constexpr sv key = tuplet::get<0>(tuplet::get<I>(spec));
             static constexpr auto member_it = frozen_map.find(key);
             if constexpr (member_it != frozen_map.end()) {
                static constexpr auto index = cmap.table_lookup(key);
                static constexpr auto member_ptr = std::get<member_it->second.index()>(member_it->second);
                
-               using SpecElement = std::decay_t<decltype(tuplet::get<1>(tuplet::get<I>(m)))>;
+               using SpecElement = std::decay_t<decltype(tuplet::get<1>(tuplet::get<I>(spec)))>;
                
                using X = std::decay_t<decltype(member_ptr)>;
                if constexpr (std::is_member_object_pointer_v<X>) {
@@ -88,8 +88,7 @@ namespace glz
                }
             }
             else {
-               throw std::runtime_error("spec key does not match meta");
-               //static_assert(false_v<T>, "spec key does not match meta");
+               static_assert(false_v<decltype(member_it)>, "spec key does not match meta");
             }
          });
       }

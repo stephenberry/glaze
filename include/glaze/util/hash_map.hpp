@@ -162,7 +162,9 @@ namespace glz
       constexpr auto make_naive_map(std::initializer_list<std::pair<sv, T>> pairs)
       {
          static_assert(N <= 20);
-         assert(pairs.size() == N);
+         if (pairs.size() != N) {
+            std::atexit([]{ void("pairs.size() != N"); });
+         }
          naive_map<T, N, HashType, allow_hash_check> ht{};
          constexpr size_t m = naive_bucket_size<N>();
 
@@ -175,7 +177,7 @@ namespace glz
          }
          ht.seed = naive_perfect_hash<N, HashType>(keys);
          if (ht.seed == std::numeric_limits<HashType>::max()) {
-            throw std::runtime_error("Unable to find perfect hash.");
+            std::atexit([]{ void("Unable to find perfect hash"); });
          }
 
          for (size_t i = 0; i < N; ++i) {
