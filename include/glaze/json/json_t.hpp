@@ -10,13 +10,16 @@
 #include <stdexcept>
 #include <concepts>
 
+#include "glaze/util/hash_map.hpp"
+
+
 namespace glz
 {
    // Generic json type.
    struct json_t
    {
       using array_t = std::vector<json_t>;
-      using object_t = std::map<std::string, json_t, std::less<>>;
+      using object_t = std::unordered_map<std::string, json_t, transparent_string_hash, std::equal_to<>>;
       using null_t = double*;
       using val_t = std::variant<null_t, double, std::string, bool, array_t, object_t>;
       val_t data{};
@@ -102,18 +105,13 @@ namespace glz
       json_t() = default;
 
       template <class T>
-      requires std::convertible_to<T, val_t> && (!std::same_as<json_t, std::decay_t<T>>)
-      json_t(T&& val)
-      {
-         data = val;
-      }
+      requires std::convertible_to<T, val_t> && (!std::same_as<json_t, std::decay_t<T>>)constexpr json_t(T&& val) : data(val) {}
 
       template <class T>
-      requires std::convertible_to<T, double> && (!std::same_as<json_t, std::decay_t<T>>) &&(!std::convertible_to<T, val_t>) json_t(T&& val) {
-         data = static_cast<double>(val);
-      }
+      requires std::convertible_to<T, double> && (!std::same_as<json_t, std::decay_t<T>>) &&(!std::convertible_to<T, val_t>)
+      json_t(T&& val) : data(static_cast<double>(val)) {}
 
-      json_t(std::initializer_list<std::pair<const char *, json_t>>&& obj)
+      json_t(std::initializer_list<std::pair<const char*, json_t>>&& obj)
       {
          // TODO try to see if there is a beter way to do this initialization withought copying the json_t
          // std::string in std::initializer_list<std::pair<const std::string, json_t>> would match with {"literal", "other_literal"}
@@ -129,9 +127,8 @@ namespace glz
 
       // Prevent conflict with object initializer list
       template <bool deprioritize = true>
-      json_t(std::initializer_list<json_t>&& arr)
+      json_t(std::initializer_list<json_t>&& arr) : data(array_t(arr))
       {
-         data = array_t(arr);
       }
 
       template <class T>
@@ -142,7 +139,8 @@ namespace glz
       }
 
       template <class T>
-      requires std::convertible_to<double, T> T as()
+      requires std::convertible_to<double, T>
+      T as()
       const
       {
          // Can be used for int and the like
@@ -150,7 +148,8 @@ namespace glz
       }
 
       template <class T>
-      requires std::convertible_to<std::string, T> T as()
+      requires std::convertible_to<std::string, T>
+      T as()
       const
       {
          // Can be used for string_view and the like
@@ -158,3 +157,11 @@ namespace glz
       }
    };
 }
+
+template <>
+struct glz::meta<glz::json_t>
+{
+   static constexpr std::string_view name = "glz::json_t";
+   using T = glz::json_t;
+   static constexpr auto value = &T::data;
+};

@@ -1,3 +1,8 @@
+// Glaze Library
+// For the license information refer to glaze.hpp
+
+#pragma once
+
 #include <array>
 #include <cassert>
 #include <limits>
@@ -9,6 +14,15 @@
 
 namespace glz
 {
+   // Used for heterogeneous unordered_map lookups
+   struct transparent_string_hash
+   {
+      using is_transparent = void;
+      [[nodiscard]] size_t operator()(const char* txt) const { return std::hash<std::string_view>{}(txt); }
+      [[nodiscard]] size_t operator()(std::string_view txt) const { return std::hash<std::string_view>{}(txt); }
+      [[nodiscard]] size_t operator()(const std::string& txt) const { return std::hash<std::string>{}(txt); }
+   };
+
    namespace detail
    {
       // https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function

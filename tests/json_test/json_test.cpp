@@ -967,6 +967,9 @@ void bench()
       std::string buffer;
       glz::write_json(thing, buffer);
 
+      glz::json_t json{};
+      glz::read_json(json, buffer);
+
       auto tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
          buffer.clear();
@@ -984,6 +987,18 @@ void bench()
 
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
+         buffer.clear();
+         glz::write_json(json, buffer);
+      }
+      tend = std::chrono::high_resolution_clock::now();
+      duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
+      mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
+      std::cout << "write_json_t size: " << buffer.size() << " bytes\n";
+      std::cout << "write_json_t: " << duration << " s, " << mbytes_per_sec << " MB/s"
+                << "\n";
+
+      tstart = std::chrono::high_resolution_clock::now();
+      for (size_t i{}; i < repeat; ++i) {
          glz::read_json(thing, buffer);
       }
       tend = std::chrono::high_resolution_clock::now();
@@ -993,6 +1008,27 @@ void bench()
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "read_json: " << duration << " s, " << mbytes_per_sec
                      << " MB/s" << "\n";
+
+      tstart = std::chrono::high_resolution_clock::now();
+      for (size_t i{}; i < repeat; ++i) {
+         glz::read_json(json, buffer);
+      }
+      tend = std::chrono::high_resolution_clock::now();
+      duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
+      mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
+      std::cout << "read_json_t: " << duration << " s, " << mbytes_per_sec << " MB/s"
+                << "\n";
+
+      glz::skip skip_json{};
+      tstart = std::chrono::high_resolution_clock::now();
+      for (size_t i{}; i < repeat; ++i) {
+         glz::read_json(skip_json, buffer);
+      }
+      tend = std::chrono::high_resolution_clock::now();
+      duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
+      mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
+      std::cout << "read_skip: " << duration << " s, " << mbytes_per_sec << " MB/s"
+                << "\n";
 
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
@@ -2267,7 +2303,7 @@ suite variant_tests = [] {
 };
 
 suite generic_json_tests = [] {
-   "generic_json_write"_test = [] {
+   "generic_json_roundtrip"_test = [] {
       glz::json_t json = {
          {"pi", 3.141},
          {"happy", true},
@@ -2282,7 +2318,19 @@ suite generic_json_tests = [] {
       };
       std::string buffer{};
       glz::write_json(json, buffer);
-      expect(buffer == R"({"answer":{"everything":42},"happy":true,"list":[1,0,2],"name":"Niels","object":{"currency":"USD","value":42.99},"pi":3.141})") << buffer;
+
+      glz::json_t json2{};
+      glz::read_json(json2, buffer);
+      expect(json2["pi"].get<double>() == 3.141);
+      expect(json2["happy"].get<bool>() == true);
+      expect(json2["name"].get<std::string>() == "Niels");
+      expect(json2["nothing"].get<glz::json_t::null_t>() == nullptr);
+      expect(json2["answer"]["everything"].get<double>() == 42.0);
+      expect(json2["list"][0].get<double>() == 1.0);
+      expect(json2["list"][1].get<double>() == 0.0);
+      expect(json2["list"][2].get<double>() == 2.0);
+      expect(json2["object"]["currency"].get<std::string>() == "USD");
+      expect(json2["object"]["value"].get<double>() == 42.99);
    };
 
    "generic_json_read"_test = [] {
@@ -2333,7 +2381,12 @@ suite generic_json_tests = [] {
       };
       std::string buffer{};
       glz::write_json(messageSchema, buffer);
-      expect(buffer ==R"({"fields":[{"field":"branch","type":"string"}],"type":"struct"})") << buffer;
+
+      glz::json_t json2{};
+      glz::read_json(json2, buffer);
+      expect(json2["type"].get<std::string>() == "struct");
+      expect(json2["fields"][0]["field"].get<std::string>() == "branch");
+      expect(json2["fields"][0]["type"].get<std::string>() == "string");
    };
 };
 

@@ -38,7 +38,7 @@ namespace glz
       {
          template <auto Opts, is_context Ctx, class It0, class It1>
          static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) {
-            using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
+            using V = std::decay_t<decltype(get_member(std::declval<T>(), meta_wrapper_v<T>))>;
             from_json<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
@@ -195,9 +195,17 @@ namespace glz
                      }
                      break;
                   }
-                  //TODO handle nullable
-                  //case 'n':
-                  //   break;
+                  case 'n':
+                     using nullable_types = typename variant_types<T>::nullable_types;
+                     if constexpr (std::tuple_size_v<nullable_types> < 1) {
+                        throw std::runtime_error("No matching type in variant");
+                     }
+                     else {
+                        using V = std::tuple_element_t<0, nullable_types>;
+                        if (!std::holds_alternative<V>(value)) value = V{};
+                        match<"null">(it, end);
+                     }
+                     break;
                   default: {
                      // Not bool, string, object, or array so must be number or null
                      using number_types = typename variant_types<T>::number_types;
@@ -1091,8 +1099,6 @@ namespace glz
                      value = std::make_unique<typename T::element_type>();
                   else if constexpr (is_specialization_v<T, std::shared_ptr>)
                      value = std::make_shared<typename T::element_type>();
-                  else if constexpr (std::same_as<T, json_t>)
-                     value = {};
                   else if constexpr (constructible<T>) {
                      value = meta_construct_v<T>();
                   }
