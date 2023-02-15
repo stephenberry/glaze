@@ -969,6 +969,7 @@ void bench()
 
       glz::json_t json{};
       glz::read_json(json, buffer);
+      std::string buffer_json_t{};  // Prevent reordering of type key
 
       auto tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
@@ -987,13 +988,13 @@ void bench()
 
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
-         buffer.clear();
-         glz::write_json(json, buffer);
+         buffer_json_t.clear();
+         glz::write_json(json, buffer_json_t);
       }
       tend = std::chrono::high_resolution_clock::now();
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
-      mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
-      std::cout << "write_json_t size: " << buffer.size() << " bytes\n";
+      mbytes_per_sec = repeat * buffer_json_t.size() / (duration * 1048576);
+      std::cout << "write_json_t size: " << buffer_json_t.size() << " bytes\n";
       std::cout << "write_json_t: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
 
@@ -1011,11 +1012,11 @@ void bench()
 
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
-         glz::read_json(json, buffer);
+         glz::read_json(json, buffer_json_t);
       }
       tend = std::chrono::high_resolution_clock::now();
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
-      mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
+      mbytes_per_sec = repeat * buffer_json_t.size() / (duration * 1048576);
       std::cout << "read_json_t: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
 

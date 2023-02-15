@@ -203,7 +203,8 @@ namespace glz
                      else {
                         using V = std::tuple_element_t<0, nullable_types>;
                         if (!std::holds_alternative<V>(value)) value = V{};
-                        match<"null">(it, end);
+                        ++it;
+                        match<"ull">(it, end);
                      }
                      break;
                   default: {
