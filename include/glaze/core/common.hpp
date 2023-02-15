@@ -28,7 +28,7 @@
 #include "glaze/util/expected.hpp"
 
 namespace glz
-{   
+{
    template <class T, class... U>
    concept is_any_of = (std::same_as<T, U> || ...);
    

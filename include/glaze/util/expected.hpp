@@ -47,6 +47,12 @@
 #endif
 
 namespace glz {
+   inline void glaze_error(const char* msg) noexcept(__cpp_exceptions == 0) {
+      GLZ_THROW_OR_ABORT(std::runtime_error(msg));
+   }
+}
+
+namespace glz {
 
 template <class E>
 class unexpected {
