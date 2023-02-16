@@ -9,6 +9,8 @@
 >- `std::string format_error(const parse_error& pe, auto& buffer)` produces a more human readable error, which also points out where the error occurred within the buffer
 >- See [std::expected](https://en.cppreference.com/w/cpp/utility/expected) for more details on how expected works
 
+___
+
 One of the fastest JSON libraries in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
 
 ## Highlights
@@ -22,6 +24,8 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - Nearly zero intermediate allocations
 - Direct memory access through JSON pointer syntax
 - Tagged binary spec through the same API for maximum performance
+- No exceptions (compiles with `-fno-exceptions`)
+- No runtime type information necessary (compiles with `-fno-rtti`)
 - Much more!
 
 ## Performance
