@@ -2386,7 +2386,7 @@ void file_include_test()
 {
    includer_struct obj{};
    
-   glz::write_file_json(obj, "../alabastar.json");
+   expect(glz::write_file_json(obj, "../alabastar.json") == glz::error_code::none);
    
    obj.str = "";
    
@@ -2455,7 +2455,7 @@ void nested_file_include_test()
       
       obj.b.i = 13;
       
-      glz::write_file_json(obj.b, "./b/b.json");
+      expect(glz::write_file_json(obj.b, "./b/b.json") == glz::error_code::none);
    }
    
    obj.b.i = 0;
@@ -2507,7 +2507,7 @@ suite recorder_test = [] {
       
       expect(glz::read_json(rec, s) == glz::error_code::none);
       
-      glz::write_file_json(rec, "recorder_out.json");
+      expect(glz::write_file_json(rec, "recorder_out.json") == glz::error_code::none);
    };
 };
 
