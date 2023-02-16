@@ -813,10 +813,7 @@ struct api {
   /*default constructors hidden for brevity*/
   
   template <class T>
-    [[nodiscard]] T& get(const sv path);
-
-  template <class T>
-    [[nodiscard]] T* get_if(const sv path) noexcept;
+    [[nodiscard]] T* get(const sv path) noexcept;
 
   // Get a std::function from a member function across the API
   template <class T>
