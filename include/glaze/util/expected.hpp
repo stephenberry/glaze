@@ -529,6 +529,7 @@ class expected {
         if constexpr (std::is_nothrow_move_constructible_v<E>) {
           E tmp(std::move(rhs.unex));
           std::destroy_at(std::addressof(rhs.unex));
+#if __cpp_exceptions
           try {
             std::construct_at(std::addressof(rhs.val), std::move(this->val));
             std::destroy_at(std::addressof(this->val));
@@ -537,6 +538,9 @@ class expected {
             std::construct_at(std::addressof(rhs.unex), std::move(tmp));
             throw;
           }
+#else
+           std::abort();
+#endif
         } else {
           T tmp(std::move(this->val));
           std::destroy_at(std::addressof(this->val));

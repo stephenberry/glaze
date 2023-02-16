@@ -195,21 +195,26 @@ namespace glz
    template <class R>
    using call_result_t = std::conditional_t<std::is_reference_v<R> || std::is_pointer_v<R>, std::decay_t<R>*, R>;
    
+   template <class R>
+   using call_return_t = std::conditional_t<std::is_reference_v<R>, expected<std::reference_wrapper<std::decay_t<R>>, error_code>, expected<R, error_code>>;
+   
    // call a member function
    template <class R, class T, class... Args>
-   decltype(auto) call(T&& root_value, sv json_ptr, Args&&... args)
+   call_return_t<R> call(T&& root_value, sv json_ptr, Args&&... args) noexcept
    {
       call_result_t<R> result;
       
+      error_code ec{};
+      
       const auto valid = detail::seek_impl(
-         [&result, &root_value, ...args = std::forward<Args>(args)](auto&& val) {
+         [&ec, &result, &root_value, ...args = std::forward<Args>(args)](auto&& val) {
             using V = std::decay_t<decltype(val)>;
             if constexpr (std::is_member_function_pointer_v<V>) {
                auto f = std::mem_fn(val);
                using F = decltype(f);
                if constexpr (std::is_invocable_v<F, T, Args...>) {
                   if constexpr (!std::is_assignable_v<R, std::invoke_result_t<F, T, Args...>>) {
-                     throw std::runtime_error("call: type not assignable");
+                     ec = error_code::invalid_call; // type not assignable
                   }
                   else {
                      if constexpr (std::is_reference_v<R>) {
@@ -221,18 +226,21 @@ namespace glz
                   }
                }
                else {
-                  throw std::runtime_error("call: not invocable with given inputs");
+                  ec = error_code::invalid_call; // not invocable with given inputs
                }
             }
             else {
-               throw std::runtime_error("call: seek did not find a function");
+               ec = error_code::invalid_call; // seek did not find a function
             }
          },
          std::forward<T>(root_value), json_ptr);
       
       if (!valid) {
-         throw std::runtime_error("call: \"" + std::string(json_ptr) +
-                                  "\" doesn't exist");
+         return unexpected(error_code::get_nonexistent_json_ptr);
+      }
+      
+      if (static_cast<bool>(ec)) {
+         return unexpected(ec);
       }
       
       if constexpr (std::is_reference_v<R>) {

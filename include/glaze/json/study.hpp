@@ -374,9 +374,7 @@ namespace glz
 
             if (dist.distribution == "elements") {
                if (dist.range.size() == 0) {
-                  throw std::runtime_error(
-                     "glaze::study::random_doe::param_from_dist: Elements "
-                     "distribution's cannot be empty!");
+                  return unexpected(parse_error{ error_code::invalid_distribution_elements });
                }
                std::vector<basic> elements{};
                std::visit(

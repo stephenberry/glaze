@@ -2710,8 +2710,8 @@ suite member_function_tests = []
       mem_f_struct s{};
       
       using T = mem_f_struct;
-      auto& i = glz::call<int&>(s, "/access");
-      ++i;
+      auto i = glz::call<int&>(s, "/access");
+      ++i.value();
       
       expect(s.i == 1);
    };
