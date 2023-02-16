@@ -215,10 +215,10 @@ constexpr void reinit_expected(T& newval, U& oldval, Args&&... args) {
       std::construct_at(std::addressof(oldval), std::move(tmp));
       throw;
     }
-  }
 #else
    std::abort();
 #endif
+  }
 }
 
 }  // namespace detail

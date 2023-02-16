@@ -871,9 +871,9 @@ void json_pointer() {
 
       //Invalid lookup
       expect(glz::get<char>(thing, "/thing_ptr/a").has_value() == false);
-      expect(nothrow([&] { glz::get_if<char>(thing, "/thing_ptr/a"); }));
+      expect(glz::get_if<char>(thing, "/thing_ptr/a") == nullptr);
       expect(glz::get<double>(thing, "/thing_ptr/c").has_value() == false);
-      expect(nothrow([&] { glz::get_if<double>(thing, "/thing_ptr/c"); }));
+      expect(glz::get_if<double>(thing, "/thing_ptr/c") == nullptr);
    };
 
    "set"_test = [] {
@@ -2097,9 +2097,7 @@ suite raw_json_tests = [] {
       std::string s;
       glz::write_json(v, s);
       expect(s == R"([0,1,2])");
-      expect(nothrow([&] {
-         expect(glz::read_json(v, s) == glz::error_code::none);
-      }));
+      expect(glz::read_json(v, s) == glz::error_code::none);
    };
 };
 
@@ -2111,9 +2109,7 @@ suite json_helpers = [] {
       
       glz::error_code ec;
       
-      expect(nothrow([&] {
-         v = glz::read_json<my_struct>(json).value();
-      }));
+      v = glz::read_json<my_struct>(json).value();
    };
 };
 
