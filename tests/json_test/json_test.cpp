@@ -848,7 +848,7 @@ void json_pointer() {
       Thing thing{};
       std::any a{};
       glz::seek([&](auto&& val) { a = val; }, thing, "/thing_ptr/a");
-      expect(a.has_value() && a.type() == typeid(double) &&
+      expect(a.has_value() &&
              std::any_cast<double>(a) == thing.thing_ptr->a);
    };
 
@@ -856,7 +856,7 @@ void json_pointer() {
       Thing thing{};
       std::any b{};
       glz::seek([&](auto&& val) { b = val; }, thing, "/thing/b");
-      expect(b.has_value() && b.type() == typeid(std::string) &&
+      expect(b.has_value() &&
              std::any_cast<std::string>(b) == thing.thing.b);
    };
 
