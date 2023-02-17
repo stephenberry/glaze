@@ -328,47 +328,49 @@ namespace glz::detail
          return;
       }
 
-      if constexpr (Opts.force_conformance) {
-         it += *it == '-';
-         const auto sig_start_it = it;
-         auto frac_start_it = end;
-         if (*it == '0') {
-            ++it;
-            if (*it != '.') {
-               return;
-            }
-            ++it;
-            goto frac_start;
-         }
-         it = std::find_if_not(it, end, is_digit);
-         if (it == sig_start_it) {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-         if ((*it | ('E' ^ 'e')) == 'e') {
-            ++it;
-            goto exp_start;
-         }
-         if (*it != '.') return;
-         ++it;
-      frac_start:
-         frac_start_it = it;
-         it = std::find_if_not(it, end, is_digit);
-         if (it == frac_start_it) {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-         if ((*it | ('E' ^ 'e')) != 'e') return;
-         ++it;
-      exp_start:
-         it += *it == '+' || *it == '-';
-         const auto exp_start_it = it;
-         it = std::find_if_not(it, end, is_digit);
-         if (it == exp_start_it) {
-            ctx.error = error_code::syntax_error;
-            return;
-         }
-      }
+       if constexpr (Opts.force_conformance) {
+           [&](){
+               it += *it == '-';
+               const auto sig_start_it = it;
+               auto frac_start_it = end;
+               if (*it == '0') {
+                   ++it;
+                   if (*it != '.') {
+                       return;
+                   }
+                   ++it;
+                   goto frac_start;
+               }
+               it = std::find_if_not(it, end, is_digit);
+               if (it == sig_start_it) {
+                   ctx.error = error_code::syntax_error;
+                   return;
+               }
+               if ((*it | ('E' ^ 'e')) == 'e') {
+                   ++it;
+                   goto exp_start;
+               }
+               if (*it != '.') return;
+               ++it;
+           frac_start:
+               frac_start_it = it;
+               it = std::find_if_not(it, end, is_digit);
+               if (it == frac_start_it) {
+                   ctx.error = error_code::syntax_error;
+                   return;
+               }
+               if ((*it | ('E' ^ 'e')) != 'e') return;
+               ++it;
+           exp_start:
+               it += *it == '+' || *it == '-';
+               const auto exp_start_it = it;
+               it = std::find_if_not(it, end, is_digit);
+               if (it == exp_start_it) {
+                   ctx.error = error_code::syntax_error;
+                   return;
+               }
+           }();
+       }
       else {
          it = std::find_if_not(it + 1, end, is_numeric<char>);
       }
