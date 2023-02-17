@@ -321,17 +321,7 @@ namespace glz::detail
       }
    }
 
-   template <opts Opts>
-   inline void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
-   {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
-         return;
-      }
-
-      if constexpr (!Opts.force_conformance) {
-         it = std::find_if_not(it + 1, end, is_numeric<char>);
-      }
-      else {
+    inline void skip_number_with_validation(is_context auto&& ctx, auto&& it, auto&& end) noexcept {
         it += *it == '-';
         const auto sig_start_it = it;
         auto frac_start_it = end;
@@ -371,6 +361,20 @@ namespace glz::detail
             ctx.error = error_code::syntax_error;
             return;
         }
+    }
+
+   template <opts Opts>
+   inline void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+         return;
+      }
+
+      if constexpr (!Opts.force_conformance) {
+         it = std::find_if_not(it + 1, end, is_numeric<char>);
+      }
+      else {
+          skip_number_with_validation(ctx, it, end);
       }
    }
 
