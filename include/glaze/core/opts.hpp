@@ -21,6 +21,7 @@ namespace glz
       bool shrink_to_fit = false; // shrinks dynamic containers to new size to save memory
       bool write_type_info = true; // Write type info for meta objects in variants
       bool use_cx_tags = true; // whether binary output should write compile time known tags
+      bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
 
       // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled

@@ -396,7 +396,7 @@ namespace glz::detail
       }
    };
 
-   template <class T>
+   template <class T, bool force_conformance = false>
    inline bool parse_number(T &val, auto*& cur) noexcept
    {
 
@@ -418,23 +418,39 @@ namespace glz::detail
       /* begin with non-zero digit */
       sig = (uint64_t)(*cur - '0');
       if (sig > 9) {
-         if (*cur == 'n' && *++cur == 'a' && *++cur == 'n') {
-            val = sign ? -std::numeric_limits<T>::quiet_NaN() : std::numeric_limits<T>::quiet_NaN();
-            return true;
+         if constexpr (std::integral<T>) {
+            return false;
+         }
+         else if (*cur == 'n') {
+            ++cur;
+            if (*cur == 'u' && *++cur == 'l' && *++cur == 'l') {
+               val = sign ? -std::numeric_limits<T>::quiet_NaN() : std::numeric_limits<T>::quiet_NaN();
+               return true;
+            }
+            else if (*cur == 'a' && *++cur == 'n') {
+               val = sign ? -std::numeric_limits<T>::quiet_NaN() : std::numeric_limits<T>::quiet_NaN();
+               return true;
+            }
          }
          else {
             return false;
          }
       }
-      static constexpr auto zero = (uint8_t)'0';
+      constexpr auto zero = (uint8_t)'0';
 #define expr_intg(i)                              \
    if ((num_tmp = cur[i] - zero) <= 9) [[likely]] \
       sig = num_tmp + sig * 10;                   \
    else {                                         \
+      if constexpr (force_conformance && i > 1) { \
+         if (*cur == zero) return false;          \
+      }                                           \
       goto digi_sepr_##i;                         \
    }
       repeat_in_1_18(expr_intg);
 #undef expr_intg
+      if constexpr (force_conformance) {
+         if (*cur == zero) return false;
+      }
       cur += 19; /* skip continuous 19 digits */
       if (!digi_is_digit_or_fp(*cur)) {
          val = sign ? -T(sig) : T(sig);
@@ -533,6 +549,9 @@ digi_intg_more :
    digi_frac_end:
       sig_end = cur;
       exp_sig = -(int32_t)((cur - dot_pos) - 1);
+      if constexpr (force_conformance) {
+         if (exp_sig == 0) return false;
+      }
       if ((e_bit | *cur) != 'e') [[likely]] {
          if ((exp_sig < F64_MIN_DEC_EXP - 19)) [[unlikely]] {
             val = (sign ? -T(0) : T(0));
@@ -549,7 +568,12 @@ digi_intg_more :
       exp_sign = (*++cur == '-');
       cur += (*cur == '+' || *cur == '-');
       if (uint8_t(*cur - zero) > 9) [[unlikely]] {
-         goto digi_finish;
+         if constexpr (force_conformance) {
+            return false;
+         }
+         else {
+            goto digi_finish;
+         } 
       }
       while (*cur == '0') cur++;
       /* read exponent literal */

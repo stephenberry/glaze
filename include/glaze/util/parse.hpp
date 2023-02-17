@@ -68,7 +68,8 @@ namespace glz::detail
          ctx.error = error_code::expected_end_comment;
       }
    }
-   
+
+   template <opts Opts>
    inline void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
@@ -83,8 +84,13 @@ namespace glz::detail
                ++it;
                break;
             case '/': {
-               skip_comment(ctx, it, end);
-               break;
+               if constexpr (Opts.force_conformance) {
+                  ctx.error = error_code::syntax_error;
+               }
+               else {
+                  skip_comment(ctx, it, end);
+                  break;
+               }
             }
             default:
                return;
@@ -183,17 +189,77 @@ namespace glz::detail
       ctx.error = error_code::expected_quote;
    }
 
-   inline void skip_string(auto&& it, auto&& end) noexcept
+   template <opts Opts>
+   inline void skip_string(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
+      if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
+
       ++it;
-      while (it < end) {
-         if (*it == '"') {
-            ++it;
-            break;
+
+      if constexpr (Opts.force_conformance) {
+         while (true) {
+            switch (*it) {
+            case '"':
+               ++it;
+               return;
+            case '\b':
+            case '\f':
+            case '\n':
+            case '\r':
+            case '\t': {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            case '\\': {
+               ++it;
+               switch (*it) {
+                  case '"':
+                  case '\\':
+                  case '/':
+                  case 'b':
+                  case 'f':
+                  case 'n':
+                  case 'r':
+                  case 't': {
+                     ++it;
+                     continue;
+                  }
+                  case 'u': {
+                     ++it;
+                     if ((end - it) < 4) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     else if (std::all_of(it, it + 4, ::isxdigit)) [[likely]] {
+                        it += 4;
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     continue;
+                  }
+                  [[unlikely]] default: {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }   
+               }
+            }
+            [[likely]] default :
+               ++it;
+            }
          }
-         else if (*it == '\\' && ++it == end) [[unlikely]]
-            break;
-         ++it;
+      }
+      else {
+         while (it < end) {
+            if (*it == '"') {
+               ++it;
+               break;
+            }
+            else if (*it == '\\' && ++it == end) [[unlikely]]
+               break;
+            ++it;
+         }
       }
    }
 
@@ -209,7 +275,7 @@ namespace glz::detail
             skip_comment(ctx, it, end);
             break;
          case '"':
-            skip_string(it, end);
+            skip_string<opts{}>(ctx, it, end);
             break;
          case open:
             ++open_count;
@@ -254,6 +320,62 @@ namespace glz::detail
          return {}; // not a digit
       }
    }
+
+   template <opts Opts>
+   inline void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+         return;
+      }
+
+      if constexpr (Opts.force_conformance) {
+         it += *it == '-';
+         const auto sig_start_it = it;
+         auto frac_start_it = end;
+         if (*it == '0') {
+            ++it;
+            if (*it != '.') {
+               return;
+            }
+            ++it;
+            goto frac_start;
+         }
+         it = std::find_if_not(it, end, is_digit);
+         if (it == sig_start_it) {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         if ((*it | ('E' ^ 'e')) == 'e') {
+            ++it;
+            goto exp_start;
+         }
+         if (*it != '.') return;
+         ++it;
+      frac_start:
+         frac_start_it = it;
+         it = std::find_if_not(it, end, is_digit);
+         if (it == frac_start_it) {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         if ((*it | ('E' ^ 'e')) != 'e') return;
+         ++it;
+      exp_start:
+         it += *it == '+' || *it == '-';
+         const auto exp_start_it = it;
+         it = std::find_if_not(it, end, is_digit);
+         if (it == exp_start_it) {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+      }
+      else {
+         it = std::find_if_not(it + 1, end, is_numeric<char>);
+      }
+   }
+
+   template <opts Opts>
+   inline void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
    
    // expects opening whitespace to be handled
    inline expected<sv, error_code> parse_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -266,12 +388,76 @@ namespace glz::detail
       if (static_cast<bool>(ctx.error)) [[unlikely]] { return unexpected(ctx.error); }
       return sv{ start, static_cast<size_t>(it++ - start) };
    }
-   
+
+   template <opts Opts>
+   inline void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+         return;
+      }
+
+      if constexpr (!Opts.force_conformance) {
+         skip_until_closed<'{', '}'>(ctx, it, end);
+      }
+      else {
+         ++it;
+         skip_ws<Opts>(ctx, it, end);
+         if (*it == '}') {
+            ++it;
+            return;
+         }
+         while (true) {
+            if (*it != '"') {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            skip_string<Opts>(ctx, it, end);
+            skip_ws<Opts>(ctx, it, end);
+            match<':'>(ctx, it);
+            skip_ws<Opts>(ctx, it, end);
+            skip_value<Opts>(ctx, it, end);
+            skip_ws<Opts>(ctx, it, end);
+            if (*it != ',') break;
+            skip_ws<Opts>(ctx, ++it, end);
+         }
+         match<'}'>(ctx, it);
+      }
+   }
+
+   template <opts Opts>
+   inline void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+         return;
+      }
+
+      if constexpr (!Opts.force_conformance) {
+         skip_until_closed<'[', ']'>(ctx, it, end);
+      }
+      else {
+         ++it;
+         skip_ws<Opts>(ctx, it, end);
+         if (*it == ']') {
+            ++it;
+            return;
+         }
+         while (true) {
+            skip_value<Opts>(ctx, it, end);
+            skip_ws<Opts>(ctx, it, end);
+            if (*it != ',') break;
+            skip_ws<Opts>(ctx, ++it, end);
+         }
+         match<']'>(ctx, it);
+      }
+   }
+
+   template <opts Opts>
    inline void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      skip_ws(ctx, it, end);
-      while (true) {
-         switch (*it) {
+      if constexpr (!Opts.force_conformance) {
+         skip_ws<Opts>(ctx, it, end);
+         while (true) {
+            switch (*it) {
             case '{':
                skip_until_closed<'{', '}'>(ctx, it, end);
                break;
@@ -279,7 +465,7 @@ namespace glz::detail
                skip_until_closed<'[', ']'>(ctx, it, end);
                break;
             case '"':
-               skip_string(it, end);
+               skip_string<Opts>(ctx, it, end);
                break;
             case '/':
                skip_comment(ctx, it, end);
@@ -294,17 +480,51 @@ namespace glz::detail
                ++it;
                continue;
             }
+            }
+
+            break;
          }
-         
-         break;
+      }
+      else {
+          skip_ws<Opts>(ctx, it, end);
+          switch (*it) {
+            case '{':
+               skip_object<Opts>(ctx, it, end);
+               break;
+            case '[':
+               skip_array<Opts>(ctx, it, end);
+               break;
+            case '"':
+               skip_string<Opts>(ctx, it, end);
+               break;
+            case 'n':
+               ++it;
+               match<"ull">(ctx, it, end);
+               break;
+            case 'f':
+               ++it;
+               match<"alse">(ctx, it, end);
+               break;
+            case 't':
+               ++it;
+               match<"rue">(ctx, it, end);
+               break;
+            case '\0':
+               ctx.error = error_code::unexpected_end;
+               break;
+            default: {
+               skip_number<Opts>(ctx, it, end);
+            }
+         }
       }
    }
    
    // expects opening whitespace to be handled
+   template <opts Opts>
    inline auto parse_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       auto start = it;
-      skip_value(ctx, it, end);
+      skip_value<Opts>(ctx, it, end);
       return std::span{ start, static_cast<size_t>(std::distance(start, it)) };
    }
 }

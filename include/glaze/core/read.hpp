@@ -6,6 +6,7 @@
 #include "glaze/core/common.hpp"
 #include "glaze/util/validate.hpp"
 #include "glaze/api/std/span.hpp"
+#include "glaze/util/parse.hpp"
 
 #include <span>
 
@@ -77,6 +78,15 @@ namespace glz
       }
       
       detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
+
+      if constexpr (Opts.force_conformance) {
+         if (b != e) {
+            detail::skip_ws<Opts>(ctx, b, e);
+            if (b != e) {
+               ctx.error = error_code::syntax_error;
+            }
+         }
+      }
       
       return { ctx.error, static_cast<size_t>(std::distance(start, b)) };
    }

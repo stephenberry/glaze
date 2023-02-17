@@ -118,11 +118,11 @@ namespace glz
             if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
             
             if constexpr (!Options.opening_handled) {
-               skip_ws(ctx, it, end);
+               skip_ws<Options>(ctx, it, end);
                match<'{'>(ctx, it);
             }
             
-            skip_ws(ctx, it, end);
+            skip_ws<Options>(ctx, it, end);
             
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
             
@@ -134,7 +134,7 @@ namespace glz
                }
                
                // find the string, escape characters are not supported for recorders
-               skip_ws(ctx, it, end);
+               skip_ws<Opts>(ctx, it, end);
                const auto name = parse_key(ctx, it, end);
                
                auto& [str, v] = value.data[i];
@@ -143,22 +143,22 @@ namespace glz
                   return;
                }
                
-               skip_ws(ctx, it, end);
+               skip_ws<Opts>(ctx, it, end);
                match<':'>(ctx, it);
-               skip_ws(ctx, it, end);
+               skip_ws<Opts>(ctx, it, end);
                
                std::visit([&](auto&& deq) {
                   read<json>::op<Opts>(deq, ctx, it, end);
                }, v.first);
                
                if (i < n - 1) {
-                  skip_ws(ctx, it, end);
+                  skip_ws<Opts>(ctx, it, end);
                   match<','>(ctx, it);
-                  skip_ws(ctx, it, end);
+                  skip_ws<Opts>(ctx, it, end);
                }
             }
             
-            skip_ws(ctx, it, end);
+            skip_ws<Opts>(ctx, it, end);
             match<'}'>(ctx, it);
          }
       };
