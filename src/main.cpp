@@ -7,7 +7,7 @@
 
 struct obj_t {
     double x{};
-   float y{};
+    float y{};
 };
 
 template <>
@@ -20,6 +20,7 @@ struct glz::meta<obj_t>
 int main() {
     std::string buffer{};
     obj_t obj{};
-   glz::write_json(obj, buffer);
+    glz::write_json(obj, buffer);
     glz::read_json(obj, buffer);
-    return 0; }
+    return 0;
+}

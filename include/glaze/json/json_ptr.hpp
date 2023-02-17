@@ -199,7 +199,7 @@ namespace glz
    template <class R, class T, class... Args>
    decltype(auto) call(T&& root_value, sv json_ptr, Args&&... args)
    {
-      call_result_t<R> result;
+      call_result_t<R> result{};
       
       const auto valid = detail::seek_impl(
          [&result, &root_value, ...args = std::forward<Args>(args)](auto&& val) {
@@ -577,7 +577,7 @@ namespace glz
       else {
          using namespace glz::detail;
          
-         skip_ws(ctx, it, end);
+         skip_ws<Opts>(ctx, it, end);
          
          expected<span_t, parse_error> ret;
          
@@ -634,21 +634,21 @@ namespace glz
                match<'{'>(ctx, it);
                
                while (true) {
-                  skip_ws(ctx, it, end);
+                  skip_ws<Opts>(ctx, it, end);
                   const auto k = parse_key(ctx, it, end);
                   if (k) {
                      if (cx_string_cmp<key>(*k)) {
-                        skip_ws(ctx, it, end);
+                        skip_ws<Opts>(ctx, it, end);
                         match<':'>(ctx, it);
-                        skip_ws(ctx, it, end);
+                        skip_ws<Opts>(ctx, it, end);
                         
                         if constexpr (I == (N - 1)) {
-                           ret = parse_value(ctx, it, end);
+                           ret = parse_value<Opts>(ctx, it, end);
                         }
                         return;
                      }
                      else {
-                        skip_value(ctx, it, end);
+                        skip_value<Opts>(ctx, it, end);
                         if (*it != ',') {
                            ret = unexpected(parse_error{ error_code::key_not_found, static_cast<size_t>(std::distance(start, it)) });
                            return;

@@ -399,7 +399,7 @@ namespace glz
             if constexpr (same_size) {
                constexpr auto n = s0.size();
                if (key.size() != n) {
-                  items.end();
+                  return items.end();
                }
             }
             
