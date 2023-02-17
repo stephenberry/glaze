@@ -600,20 +600,20 @@ namespace glz
                   case '{': {
                      ++it;
                      while (true) {
-                        skip_ws(ctx, it, end);
+                        skip_ws<Opts>(ctx, it, end);
                         const auto k = parse_key(ctx, it, end);
                         if (cx_string_cmp<key>(k)) {
-                           skip_ws(ctx, it, end);
+                           skip_ws<Opts>(ctx, it, end);
                            match<':'>(ctx, it);
-                           skip_ws(ctx, it, end);
+                           skip_ws<Opts>(ctx, it, end);
                            
                            if constexpr (I == (N - 1)) {
-                              ret = parse_value(ctx, it, end);
+                              ret = parse_value<Opts>(ctx, it, end);
                            }
                            return;
                         }
                         else {
-                           skip_value(ctx, it, end);
+                           skip_value<Opts>(ctx, it, end);
                            if (*it != ',') {
                               ret = unexpected(parse_error{ error_code::key_not_found, static_cast<size_t>(std::distance(start, it)) });
                               return;
@@ -627,14 +627,14 @@ namespace glz
                      // Could optimize by counting commas
                      static constexpr auto n = stoui(key);
                      for_each<n>([&](auto I) {
-                        skip_value(ctx, it, end);
+                        skip_value<Opts>(ctx, it, end);
                         if (*it != ',') {
                            ret = unexpected(parse_error{ error_code::array_element_not_found, static_cast<size_t>(std::distance(start, it)) });
                            return;
                         }
                         ++it;
                      });
-                     ret = parse_value(ctx, it, end);
+                     ret = parse_value<Opts>(ctx, it, end);
                   }
                }
             }
