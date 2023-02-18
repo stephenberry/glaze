@@ -51,7 +51,7 @@ namespace glz::detail
          // maximum length for a double should be 24 chars, we use 64 to be sufficient
          if constexpr (detail::resizeable<B>) {
             if (ix + 64 > b.size()) [[unlikely]] {
-               b.resize(std::max(b.size() * 2, ix + 64));
+               b.resize((std::max)(b.size() * 2, ix + 64));
             }
          }
          

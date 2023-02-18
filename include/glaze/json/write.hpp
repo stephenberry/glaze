@@ -182,7 +182,7 @@ namespace glz
                // we use 4 * n to handle potential escape characters and quoted bounds (excessive safety)
                if constexpr (detail::resizeable<B>) {
                   if ((ix + 4 * n) >= b.size()) [[unlikely]] {
-                     b.resize(std::max(b.size() * 2, ix + 4 * n));
+                     b.resize((std::max)(b.size() * 2, ix + 4 * n));
                   }
                }
                

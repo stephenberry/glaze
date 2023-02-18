@@ -478,7 +478,7 @@ namespace glz::detail
 #undef expr_stop
          /* read more digits in integral part */
 digi_intg_more :
-      static constexpr uint64_t U64_MAX = std::numeric_limits<uint64_t>::max();  // todo
+      static constexpr uint64_t U64_MAX = (std::numeric_limits<uint64_t>::max)();  // todo
       if ((num_tmp = *cur - zero) < 10) {
          if (!digi_is_digit_or_fp(cur[1])) {
             /* this number is an integer consisting of 20 digits */
