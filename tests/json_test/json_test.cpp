@@ -1179,13 +1179,6 @@ void read_tests() {
    };
 
    "Read partial array type"_test = [] {
-      {
-         std::string in = "    [ 3.25 , null , 3.125 ]   ";
-         v3 v{};
-
-         expect(throws([&] { glz::read_json(v, in); }));
-      }
-      
       // partial reading of fixed sized arrays
       {
          std::string in = "    [ 3.25 , 3.125 ]   ";
@@ -1443,12 +1436,6 @@ void read_tests() {
          double res{};
          glz::read_json(res, in);
          expect(res == 11.0e5);
-      }
-      {
-         std::string in = R"(null)";
-         double res{};
-         
-         expect(throws([&] {glz::read_json(res, in); }));
       }
       {
          std::string res = R"(success)";
@@ -2136,16 +2123,42 @@ suite allocated_write = [] {
 };
 
 suite nan_tests = [] {
-   "nan_tests"_test = [] {
+   "nan_write_tests"_test = [] {
       double d = NAN;
       std::string s{};
       glz::write_json(d, s);
-      // TODO: this output is -nan for MSVC and nan for clang
-      expect(s == "nan" || s == "-nan");
-      
+      expect(s == "null");
+
       d = 0.0;
       glz::read_json(d, s);
       expect(std::isnan(d));
+
+
+   };
+   "nan_read_tests"_test = [] {
+      double d = 0.0;
+      std::string s = "null";
+      glz::read_json(d, s);
+      expect(std::isnan(d));
+
+      d = 0.0;
+      s = "NaN";
+      glz::read_json(d, s);
+      expect(std::isnan(d));
+
+      d = 0.0;
+      s = "nan";
+      glz::read_json(d, s);
+      expect(std::isnan(d));
+
+      std::array<double, 5> d_array{};
+      s = "[null, nan, NaN, -nan, 3.14]";
+      glz::read_json(d_array, s);
+      expect(std::isnan(d_array[0]));
+      expect(std::isnan(d_array[1]));
+      expect(std::isnan(d_array[2]));
+      expect(std::isnan(d_array[3]));
+      expect(d_array[4] == 3.14);
    };
 };
 

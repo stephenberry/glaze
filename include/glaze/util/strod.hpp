@@ -418,7 +418,16 @@ namespace glz::detail
       /* begin with non-zero digit */
       sig = (uint64_t)(*cur - '0');
       if (sig > 9) {
-         if (*cur == 'n' && *++cur == 'a' && *++cur == 'n') {
+         if constexpr (std::integral<T>) {
+            return false;
+         }
+         else if (*cur == 'n'  &&cur[1] == 'u' &&cur[2] == 'l' &&cur[3] == 'l') {
+            cur += 4;
+            val = std::numeric_limits<T>::quiet_NaN();
+            return true;
+         }
+         else if ((*cur | e_bit) == 'n' && (cur[1] | e_bit) == 'a' && (cur[2] | e_bit) == 'n') {
+            cur += 3;
             val = sign ? -std::numeric_limits<T>::quiet_NaN() : std::numeric_limits<T>::quiet_NaN();
             return true;
          }
