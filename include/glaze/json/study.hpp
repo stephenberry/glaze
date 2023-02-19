@@ -99,7 +99,7 @@ namespace glz
          {
             size_t deconst_index = i;
             for (auto &param_set : param_sets) {
-               const auto this_size = std::max(param_set.elements.size(), size_t{1});
+               const auto this_size = (std::max)(param_set.elements.size(), size_t{1});
                const auto this_index = deconst_index % this_size;
                deconst_index /= this_size;
                std::visit(
