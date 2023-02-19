@@ -996,21 +996,16 @@ namespace glz
       uint64_t sig_raw = raw & sig_mask;
       int32_t exp_raw = raw << 1 >> (sizeof(raw_t) * 8 - exponent_bits);
 
+      if (exp_raw == (uint32_t(1) << exponent_bits) - 1) [[unlikely]] {
+         // NaN or Infinity
+         std::memcpy(buffer, "null", 4);
+         return buffer + 4;
+      }
       if (sign) {
          *buffer = '-';
          ++buffer;
       }
-      if (exp_raw == (uint32_t(1) << exponent_bits) - 1) [[unlikely]] {
-         if (sig_raw == 0) {
-            std::memcpy(buffer, "Infinity", 8);
-            return buffer + 8;
-         }
-         else {
-            std::memcpy(buffer, "nan", 3);
-            return buffer + 3;
-         }
-      }
-      else if ((raw << 1) != 0) [[likely]] {
+      if ((raw << 1) != 0) [[likely]] {
          uint64_t sig_bin;
          int32_t exp_bin;
          if (exp_raw == 0) [[unlikely]] {
