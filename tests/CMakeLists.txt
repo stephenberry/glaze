@@ -11,9 +11,11 @@ FetchContent_Declare(
 )
 
 message(STATUS "Fetching dependencies...")
-
+set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL TRUE)
+set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(ut)
-
+set(CMAKE_SKIP_INSTALL_RULES OFF CACHE BOOL "" FORCE)
+set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL FALSE)
 message(STATUS "...finished fetching dependencies.")
 
 include(../cmake/code-coverage.cmake)

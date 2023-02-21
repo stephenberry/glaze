@@ -1178,13 +1178,6 @@ void read_tests() {
    };
 
    "Read partial array type"_test = [] {
-      {
-         std::string in = "    [ 3.25 , null , 3.125 ]   ";
-         v3 v{};
-
-         expect(glz::read_json(v, in) != glz::error_code::none);
-      }
-      
       // partial reading of fixed sized arrays
       {
          std::string in = "    [ 3.25 , 3.125 ]   ";
@@ -2067,7 +2060,8 @@ struct local_meta
    
    struct glaze
    {
-   using T = local_meta;
+      static constexpr std::string_view name = "local_meta";
+      using T = local_meta;
       static constexpr auto value = glz::object("x", &T::x, "A comment for x", //
                                                "y", &T::y, "A comment for y");
    };
@@ -2082,6 +2076,9 @@ suite local_meta_tests = [] {
       std::string out;
       local_meta m{};
       glz::write_json(m, out);
+      expect(out == R"({"x":0,"y":0})");
+      expect(glz::named<local_meta> == true);
+      expect(glz::name_v<local_meta> == "local_meta");
    };
 };
 
@@ -2119,15 +2116,41 @@ suite allocated_write = [] {
 };
 
 suite nan_tests = [] {
-   "nan_tests"_test = [] {
+   "nan_write_tests"_test = [] {
       double d = NAN;
       std::string s{};
       glz::write_json(d, s);
       expect(s == "null");
-      
+
       d = 0.0;
       expect(glz::read_json(d, s) == glz::error_code::none);
       expect(std::isnan(d));
+   };
+
+   "nan_read_tests"_test = [] {
+      double d = 0.0;
+      std::string s = "null";
+      expect(glz::read_json(d, s) == glz::error_code::none);
+      expect(std::isnan(d));
+
+      d = 0.0;
+      s = "NaN";
+      expect(glz::read_json(d, s) == glz::error_code::none);
+      expect(std::isnan(d));
+
+      d = 0.0;
+      s = "nan";
+      expect(glz::read_json(d, s) == glz::error_code::none);
+      expect(std::isnan(d));
+
+      std::array<double, 5> d_array{};
+      s = "[null, nan, NaN, -nan, 3.14]";
+      expect(glz::read_json(d_array, s) == glz::error_code::none);
+      expect(std::isnan(d_array[0]));
+      expect(std::isnan(d_array[1]));
+      expect(std::isnan(d_array[2]));
+      expect(std::isnan(d_array[3]));
+      expect(d_array[4] == 3.14);
    };
 };
 
@@ -2274,6 +2297,48 @@ suite generic_json_tests = [] {
       expect(json[0].get<double>() == 5.0);
       expect(json[1].get<std::string>() == "Hello World");
       expect(json[2]["pi"].get<double>() == 3.14);
+   };
+
+   "generic_json_const"_test = [] {
+      auto foo = [](const glz::json_t& json) { return json["s"].get<std::string>(); };
+      glz::json_t json = {{"s", "hello world"}};
+      expect(foo(json) == "hello world");
+   };
+
+   "generic_json_int"_test = [] {
+      glz::json_t json = {{"i", 1}};
+      expect(json["i"].get<double>() == 1);
+   };
+
+   "generic_json_as"_test = [] {
+      glz::json_t json = {
+         {"pi", 3.141},
+         {"happy", true},
+         {"name", "Niels"},
+         {"nothing", nullptr},
+         {"answer", {{"everything", 42.0}}},
+         {"list", {1.0, 0.0, 2.0}},
+         {"object", {
+            {"currency", "USD"},
+            {"value", 42.99}
+         }}
+      };
+      expect(json["list"][2].as<int>() == 2);
+      expect(json["pi"].as<double>() == 3.141);
+      expect(json["name"].as<std::string_view>() == "Niels");
+   };
+
+   "generic_json_nested_initialization"_test = [] {
+      static const glz::json_t messageSchema = {
+         {"type","struct"},
+         {"fields", {
+            {{"field", "branch"}, {"type", "string"}},
+            }
+         }
+      };
+      std::string buffer{};
+      glz::write_json(messageSchema, buffer);
+      expect(buffer ==R"({"fields":[{"field":"branch","type":"string"}],"type":"struct"})") << buffer;
    };
 };
 

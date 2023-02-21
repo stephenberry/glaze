@@ -972,7 +972,7 @@ namespace glz
       
       struct key_stats_t
       {
-         uint32_t min_length = std::numeric_limits<uint32_t>::max();
+         uint32_t min_length = (std::numeric_limits<uint32_t>::max)();
          uint32_t max_length{};
          uint32_t length_range{};
       };

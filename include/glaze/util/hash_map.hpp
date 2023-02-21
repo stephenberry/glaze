@@ -105,7 +105,7 @@ namespace glz
             if (index == N) return seed;
          }
 
-         return std::numeric_limits<HashType>::max();
+         return (std::numeric_limits<HashType>::max)();
       }
 
       inline bool sv_neq(const sv s0, const sv s1) noexcept { return s0 != s1; }
@@ -223,7 +223,7 @@ namespace glz
          
          std::sort(hashes.begin(), hashes.end());
          
-         uint8_t min_diff = std::numeric_limits<uint8_t>::max();
+         uint8_t min_diff = (std::numeric_limits<uint8_t>::max)();
          for (size_t i = 0; i < N - 1; ++i) {
             if ((hashes[i + 1] - hashes[i]) < min_diff) {
                min_diff = hashes[i + 1] - hashes[i];

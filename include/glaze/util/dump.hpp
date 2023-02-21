@@ -91,7 +91,7 @@ namespace glz::detail
       static constexpr auto n = s.size();
       
       if (ix + n > b.size()) [[unlikely]] {
-         b.resize(std::max(b.size() * 2, ix + n));
+         b.resize((std::max)(b.size() * 2, ix + n));
       }
       
       std::memcpy(b.data() + ix, s.data(), n);
@@ -111,7 +111,7 @@ namespace glz::detail
    inline void dumpn(size_t n, vector_like auto& b, auto&& ix) noexcept
    {
       if (ix + n > b.size()) [[unlikely]] {
-         b.resize(std::max(b.size() * 2, ix + n));
+         b.resize((std::max)(b.size() * 2, ix + n));
       }
 
       std::fill_n(b.data() + ix, n, c);
@@ -124,7 +124,7 @@ namespace glz::detail
       static constexpr auto n = s.size();
       
       if (ix + n > b.size()) [[unlikely]] {
-         b.resize(std::max(b.size() * 2, ix + n));
+         b.resize((std::max)(b.size() * 2, ix + n));
       }
       
       std::memcpy(b.data() + ix, s.data(), n);
@@ -143,7 +143,7 @@ namespace glz::detail
    inline void dump(const sv str, vector_like auto& b, auto&& ix) noexcept {
       const auto n = str.size();
       if (ix + n > b.size()) [[unlikely]] {
-         b.resize(std::max(b.size() * 2, ix + n));
+         b.resize((std::max)(b.size() * 2, ix + n));
       }
       
       std::memcpy(b.data() + ix, str.data(), n);
@@ -250,7 +250,7 @@ namespace glz::detail
    {
       const auto n = bytes.size();
       if (ix + n > b.size()) [[unlikely]] {
-         b.resize(std::max(b.size() * 2, ix + n));
+         b.resize((std::max)(b.size() * 2, ix + n));
       }
       
       std::memcpy(b.data() + ix, bytes.data(), n);
@@ -261,7 +261,7 @@ namespace glz::detail
    inline void dump(const std::array<uint8_t, N>& bytes, B&& b, auto&& ix) noexcept
    {
       if (ix + N > b.size()) [[unlikely]] {
-         b.resize(std::max(b.size() * 2, ix + N));
+         b.resize((std::max)(b.size() * 2, ix + N));
       }
       
       std::memcpy(b.data() + ix, bytes.data(), N);

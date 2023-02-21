@@ -421,16 +421,15 @@ namespace glz::detail
          if constexpr (std::integral<T>) {
             return false;
          }
-         else if (*cur == 'n') {
-            ++cur;
-            if (*cur == 'u' && *++cur == 'l' && *++cur == 'l') {
-               val = sign ? -std::numeric_limits<T>::quiet_NaN() : std::numeric_limits<T>::quiet_NaN();
-               return true;
-            }
-            else if (*cur == 'a' && *++cur == 'n') {
-               val = sign ? -std::numeric_limits<T>::quiet_NaN() : std::numeric_limits<T>::quiet_NaN();
-               return true;
-            }
+         else if (*cur == 'n'  &&cur[1] == 'u' &&cur[2] == 'l' &&cur[3] == 'l') {
+            cur += 4;
+            val = std::numeric_limits<T>::quiet_NaN();
+            return true;
+         }
+         else if ((*cur | e_bit) == 'n' && (cur[1] | e_bit) == 'a' && (cur[2] | e_bit) == 'n') {
+            cur += 3;
+            val = sign ? -std::numeric_limits<T>::quiet_NaN() : std::numeric_limits<T>::quiet_NaN();
+            return true;
          }
          else {
             return false;
@@ -494,7 +493,7 @@ namespace glz::detail
 #undef expr_stop
          /* read more digits in integral part */
 digi_intg_more :
-      static constexpr uint64_t U64_MAX = std::numeric_limits<uint64_t>::max();  // todo
+      static constexpr uint64_t U64_MAX = (std::numeric_limits<uint64_t>::max)();  // todo
       if ((num_tmp = *cur - zero) < 10) {
          if (!digi_is_digit_or_fp(cur[1])) {
             /* this number is an integer consisting of 20 digits */
