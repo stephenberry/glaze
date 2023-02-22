@@ -37,7 +37,7 @@ namespace glz
       {
          template <auto Opts, is_context Ctx, class B, class IX>
          static void op(auto&& value, Ctx&& ctx, B&& b, IX&& ix) {
-            using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
+            using V = std::decay_t<decltype(get_member(std::declval<T>(), meta_wrapper_v<T>))>;
             to_json<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };

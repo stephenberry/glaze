@@ -2218,7 +2218,7 @@ suite tagged_variant_tests = [] {
       //Automatic tagged discriminator ids
       tagged_variant2 var2 = put_action{{{"x", 100}, {"y", 200}}};
       glz::write_json(var2, s);
-      expect(s == R"({"type":"put_action","data":{"x":100,"y":200}})") << s;
+      expect(s == R"({"type":"put_action","data":{"x":100,"y":200}})");
    };
    
    "tagged_variant_read_tests"_test = [] {
@@ -2331,7 +2331,7 @@ suite generic_json_tests = [] {
       };
       std::string buffer{};
       glz::write_json(json, buffer);
-      expect(buffer == R"({"answer":{"everything":42},"happy":true,"list":[1,0,2],"name":"Niels","object":{"currency":"USD","value":42.99},"pi":3.141})") << buffer;
+      expect(buffer == R"({"answer":{"everything":42},"happy":true,"list":[1,0,2],"name":"Niels","nothing":null,"object":{"currency":"USD","value":42.99},"pi":3.141})") << buffer;
    };
 
    "generic_json_read"_test = [] {
