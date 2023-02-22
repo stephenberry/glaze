@@ -39,6 +39,16 @@ namespace glz
       {
          return get_void(user, path);
       }
+      
+      bool set_ptr(const sv path, std::pair<void*, sv> input) noexcept override
+      {
+         auto p = get_void(user, path);
+         if (p.second == input.second) {
+            p.first = input.first;
+            return true;
+         }
+         return false;
+      }
 
       [[nodiscard]] bool contains(const sv path) noexcept override {
         return detail::seek_impl([&](auto&& val) {}, user, path);

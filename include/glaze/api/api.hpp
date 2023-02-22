@@ -54,6 +54,8 @@ namespace glz
 
          /// unchecked `void*` access for low level programming (prefer templated get)
          [[nodiscard]] virtual std::pair<void*, sv> get(const sv path) noexcept = 0;
+         
+         [[nodiscard]] virtual bool set_ptr(const sv path, std::pair<void*, sv>) noexcept = 0;
       protected:
 
          virtual bool caller(const sv path, const sv type_hash, void*& ret, std::span<void*> args) noexcept = 0;
