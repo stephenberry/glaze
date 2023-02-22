@@ -43,7 +43,7 @@ namespace glz
       bool set_ptr(const sv path, std::pair<void*, sv> input) noexcept override
       {
          auto p = get_void(user, path);
-         if (p.second == input.second) {
+         if (p.second == input.second && input.first) {
             p.first = input.first;
             return true;
          }
