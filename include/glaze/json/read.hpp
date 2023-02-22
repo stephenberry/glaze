@@ -93,34 +93,27 @@ namespace glz
             match<R"("std::monostate")">(args...);
          };
       };
-      
-      template <is_variant T>
-      constexpr auto variant_type_names() {
-         constexpr auto N = std::variant_size_v<T>;
-         std::array<sv, N> ret{};
-         
-         for_each<N>([&](auto I) {
-            ret[I] = glz::name_v<std::decay_t<std::variant_alternative_t<I, T>>>;
-         });
-         
-         return ret;
-      }
 
       template <is_variant T>
       constexpr auto variant_is_auto_deducible()
       {
          //Contains at most one each of the basic json types bool, numeric, string, object, array
-         int bools{}, numbers{}, strings{}, objects{}, arrays{};
+         //If all objects are meta objects then we can attemt to deduce them as well either through a type tag or unique combinations of keys
+         int bools{}, numbers{}, strings{}, objects{}, meta_objects{}, arrays{};
          constexpr auto N = std::variant_size_v<T>;
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
             if constexpr (bool_t<V>) ++bools;
-            if constexpr (num_t<V>) ++numbers;
-            if constexpr (str_t<V> || glaze_enum_t<V>) ++strings;
-            if constexpr (map_t<V> || glaze_object_t<V>) ++objects;
-            if constexpr (array_t<V> || glaze_array_t<V>)++ arrays;
+            else if constexpr (num_t<V>) ++numbers;
+            else if constexpr (str_t<V> || glaze_enum_t<V>) ++strings;
+            else if constexpr (map_t<V>) ++objects;
+            else if constexpr (map_t<V>) {
+               ++objects;
+               ++meta_objects;
+            }
+            else if constexpr (array_t<V> || glaze_array_t<V>) ++arrays;
          });
-         return bools < 2 && numbers < 2 && strings < 2 && objects < 2 && arrays < 2;
+         return bools < 2 && numbers < 2 && strings < 2 && (objects < 2 || meta_objects == objects) && arrays < 2;
       }
 
       template <typename>
@@ -137,10 +130,23 @@ namespace glz
          using array_types = decltype(std::tuple_cat(std::conditional_t<array_t<Ts> || glaze_array_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
          using nullable_types = decltype(std::tuple_cat(std::conditional_t<nullable_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
       };
+
+      template <is_variant T>
+      constexpr auto runtime_variant_map() {
+         constexpr auto N = std::variant_size_v<T>;
+         std::array<T, N> ret{};
+         
+         for_each<N>([&](auto I) {
+            ret[I] = std::variant_alternative_t<I, T>{};
+         });
+         
+         return ret;
+      }
       
       template <is_variant T>
       struct from_json<T>
       {
+         // Note that items in the variant are required to be default constructible for us to switch types
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
@@ -148,15 +154,96 @@ namespace glz
                skip_ws(it, end);
                switch (*it) {
                   case '{':
+                     ++it;
                      using object_types = typename variant_types<T>::object_types;
                      if constexpr (std::tuple_size_v<object_types> < 1) {
                         throw std::runtime_error("Encounted object in variant with no object type");
                      }
-                     else {
-                        ++it;
+                     else if constexpr (std::tuple_size_v<object_types> == 1) {
                         using V = std::tuple_element_t<0, object_types>;
                         if (!std::holds_alternative<V>(value)) value = V{};
                         read<json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     }
+                     else {
+                        auto possible_types = bit_array<std::variant_size_v<T>>{}.flip();
+                        static constexpr auto deduction_map = glz::detail::make_variant_deduction_map<T>();
+                        static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
+                        skip_ws(it, end);
+                        auto start = it;
+                        while (*it != '}') {
+                           if (it != start) {
+                              match<','>(it);
+                           }
+                           std::string_view key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
+                           auto deduction_it = deduction_map.find(key);
+                           if (deduction_it != deduction_map.end()) [[likely]] {
+                              possible_types &= deduction_it->second;
+                           }
+                           else [[unlikely]] {
+                              if constexpr (!tag_v<T>.empty()) {
+                                 if (key == tag_v<T>) {
+                                    skip_ws(it, end);
+                                    match<':'>(it);
+
+                                    static thread_local std::string type{};
+                                    read<json>::op<Opts>(type, ctx, it, end);
+                                    skip_ws(it, end);
+                                    match<','>(it);
+
+                                    static constexpr auto id_map = make_variant_id_map<T>();
+                                    auto id_it = id_map.find(std::string_view{type});
+                                    if (id_it != id_map.end()) [[likely]] {
+                                       it = start;
+                                       const auto type_index = id_it->second;
+                                       if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                                       std::visit(
+                                          [&](auto&& v) {
+                                             using V = std::decay_t<decltype(v)>;
+                                             if constexpr (glaze_object_t<V>) {
+                                                from_json<V>::op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
+                                             }
+                                          },
+                                          value);
+                                       return;
+                                    }
+                                    else {
+                                       throw std::runtime_error("Invalid id for variant");
+                                    }
+                                 }
+                                 else if constexpr (Opts.error_on_unknown_keys) {
+                                    throw std::runtime_error("Key does not exist in any objects in variant");
+                                 }
+                              }
+                              else if constexpr (Opts.error_on_unknown_keys) {
+                                 throw std::runtime_error("Key does not exist in any objects in variant");
+                              }
+                           }
+
+                           auto matching_types = possible_types.popcount();
+                           if (matching_types == 0) {
+                              throw std::runtime_error("Invalid key combination for variant");
+                           }
+                           else if (matching_types == 1) {
+                              it = start;
+                              const auto type_index = possible_types.countr_zero();
+                              if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                              std::visit(
+                                 [&](auto&& v) {
+                                    using V = std::decay_t<decltype(v)>;
+                                    if constexpr (glaze_object_t<V>) {
+                                       from_json<V>::op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
+                                    }
+                                 },
+                                 value);
+                              return;
+                           }
+                           skip_ws(it, end);
+                           match<':'>(it);
+                           skip_ws(it, end);
+                           skip_value(it, end);
+                           skip_ws(it, end);
+                        }
+                        throw std::runtime_error("Multiple types match within variant");
                      }
                      break;
                   case '[':
@@ -213,61 +300,12 @@ namespace glz
                }
             }
             else {
-               const auto is_glaze_object = std::visit(
-                  [](auto&& v) {
+               std::visit(
+                  [&](auto&& v) {
                      using V = std::decay_t<decltype(v)>;
-                     if constexpr (glaze_object_t<V>) {
-                        return true;
-                     }
-                     else {
-                        return false;
-                     }
+                     read<json>::op<Opts>(v, ctx, it, end);
                   },
                   value);
-
-               if (is_glaze_object) {
-                  skip_ws(it, end);
-                  match<'{'>(it);
-                  skip_ws(it, end);
-
-                  match<R"("type")">(it, end);
-                  skip_ws(it, end);
-                  match<':'>(it);
-
-                  using V = std::decay_t<decltype(value)>;
-
-                  static constexpr auto names = variant_type_names<V>();
-                  static constexpr auto N = names.size();
-
-                  // TODO: Change from linear search to map?
-                  static thread_local std::string type{};
-                  read<json>::op<Opts>(type, ctx, it, end);
-                  skip_ws(it, end);
-                  match<','>(it);
-
-                  for_each<N>([&](auto I) {
-                     constexpr auto N = [] {
-                        return names[decltype(I)::value].size();
-                     }();  // MSVC internal compiler error workaround
-                     if (string_cmp_n<N>(type, names[I])) {
-                        using V = std::variant_alternative_t<I, T>;
-                        if (!std::holds_alternative<V>(value)) {
-                           // default construct the value if not matching
-                           value = V{};
-                        }
-                        read<json>::op<opening_handled<Opts>()>(std::get<I>(value), ctx, it, end);
-                        return;
-                     }
-                  });
-               }
-               else {
-                  std::visit(
-                     [&](auto&& v) {
-                        using V = std::decay_t<decltype(v)>;
-                        read<json>::op<Opts>(v, ctx, it, end);
-                     },
-                     value);
-               }
             }
          }
       };
@@ -882,7 +920,7 @@ namespace glz
          }
       };
       
-      template <class T>
+      template <glaze_object_t T>
       inline constexpr bool keys_may_contain_escape()
       {
          auto is_unicode = [](const auto c) {
@@ -905,6 +943,23 @@ namespace glz
          
          return may_escape;
       }
+
+      template <is_variant T>
+      inline constexpr bool keys_may_contain_escape()
+      {
+         bool may_escape = false;
+         constexpr auto N = std::variant_size_v<T>;
+         for_each<N>([&](auto I) {
+            using V = std::decay_t<std::variant_alternative_t<I, T>>;
+            if constexpr (glaze_object_t<V>) {
+               if constexpr (keys_may_contain_escape<V>()) {
+                  may_escape = true;
+                  return;
+               }
+            }
+         });
+         return may_escape;
+      }
       
       struct key_stats_t
       {
@@ -914,10 +969,15 @@ namespace glz
       };
       
       // only use this if the keys cannot contain escape characters
-      template <class T>
+      template <glaze_object_t T, string_literal tag = "">
       inline constexpr auto key_stats()
       {
          key_stats_t stats{};
+         if constexpr (!tag.sv().empty()) {
+            constexpr auto tag_size = tag.sv().size();
+            stats.max_length = tag_size;
+            stats.min_length = tag_size;
+         }
          
          constexpr auto N = std::tuple_size_v<meta_t<T>>;
          for_each<N>([&](auto I) {
@@ -937,13 +997,104 @@ namespace glz
          
          return stats;
       }
+
+      template <is_variant T, string_literal tag = "">
+      inline constexpr auto key_stats()
+      {
+         key_stats_t stats{};
+         if constexpr (!tag.sv().empty()) {
+            constexpr auto tag_size = tag.sv().size();
+            stats.max_length = tag_size;
+            stats.min_length = tag_size;
+         }
+
+         constexpr auto N = std::variant_size_v<T>;
+         for_each<N>([&](auto I) {
+            using V = std::decay_t<std::variant_alternative_t<I, T>>;
+            if constexpr (glaze_object_t<V>) {
+               constexpr auto substats = key_stats<V>();
+               if (substats.min_length < stats.min_length) {
+                  stats.min_length = substats.min_length;
+               }
+               if (substats.max_length > stats.max_length) {
+                  stats.max_length = substats.max_length;
+               }
+            }
+         });
+
+         stats.length_range = stats.max_length - stats.min_length;
+
+         return stats;
+      }
+
+      // Key parsing for meta objects or variants of meta objects.
+      // TODO We could expand this to compiletime known strings in general like enums
+      template <class T, auto Opts, string_literal tag = "">
+      std::string_view parse_object_key(is_context auto&& ctx, auto&& it, auto&& end)
+      {
+         std:: string_view key;
+         // skip white space and escape characters and find the string
+         skip_ws(it, end);
+         match<'"'>(it);
+         auto start = it;
+
+         if constexpr (keys_may_contain_escape<T>()) {
+            skip_till_escape_or_quote(it, end);
+            if (*it == '\\') [[unlikely]] {
+               // we dont' optimize this currently because it would increase binary size significantly with the
+               // complexity of generating escaped compile time versions of keys
+               it = start;
+               static thread_local std::string static_key{};
+               read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
+               key = static_key;
+            }
+            else [[likely]] {
+               key = sv{start, static_cast<size_t>(it - start)};
+               ++it;
+            }
+         }
+         else {
+            static constexpr auto stats = key_stats<T, tag>();
+            if constexpr (stats.length_range < 8 && Opts.error_on_unknown_keys) {
+               if ((it + stats.max_length) < end) [[likely]] {
+                  if constexpr (stats.length_range == 0) {
+                     key = sv{start, stats.max_length};
+                     it += stats.max_length;
+                     match<'"'>(it);
+                  }
+                  else {
+                     it += stats.min_length;
+                     for (uint32_t i = 0; i < stats.length_range; ++it) {
+                        if (*it == '"') {
+                           break;
+                        }
+                     }
+                     key = sv{start, static_cast<size_t>(it - start)};
+                     match<'"'>(it);
+                  }
+               }
+               else [[unlikely]] {
+                  skip_till_quote(it, end);
+                  key = sv{start, static_cast<size_t>(it - start)};
+                  ++it;
+               }
+            }
+            else {
+               skip_till_quote(it, end);
+               key = sv{start, static_cast<size_t>(it - start)};
+               ++it;
+            }
+         }
+
+         return key;
+      }
       
       template <class T>
       requires map_t<T> || glaze_object_t<T>
       struct from_json<T>
       {
-         template <auto Options, class It>
-         static void op(auto& value, is_context auto&& ctx, It&& it, auto&& end)
+         template <auto Options, string_literal tag = "">
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             if constexpr (!Options.opening_handled) {
                skip_ws(it, end);
@@ -967,82 +1118,25 @@ namespace glz
                }
                
                if constexpr (glaze_object_t<T>) {
-                  std::string_view key;
-                  // skip white space and escape characters and find the string
-                  skip_ws(it, end);
-                  match<'"'>(it);
-                  auto start = it;
-                  
-                  if constexpr (keys_may_contain_escape<T>()) {
-                     skip_till_escape_or_quote(it, end);
-                     if (*it == '\\') [[unlikely]] {
-                        // we dont' optimize this currently because it would increase binary size significantly with the complexity of generating escaped compile time versions of keys
-                        it = start;
-                        static thread_local std::string static_key{};
-                        read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
-                        key = static_key;
-                     }
-                     else [[likely]] {
-                        key = sv{ start, static_cast<size_t>(it - start) };
-                        ++it;
-                     }
-                  }
-                  else {
-                     static constexpr auto stats = key_stats<T>();
-                     if constexpr (stats.length_range < 8 && Opts.error_on_unknown_keys) {
-                        if ((it + stats.max_length) < end) [[likely]] {
-                           
-                           if constexpr (stats.length_range == 0) {
-                              key = sv{ start, stats.max_length };
-                              it += stats.max_length;
-                              match<'"'>(it);
-                           }
-                           else {
-                              it += stats.min_length;
-                              for (uint32_t i = 0; i < stats.length_range; ++it) {
-                                 if (*it == '"') {
-                                    break;
-                                 }
-                              }
-                              key = sv{ start, static_cast<size_t>(it - start) };
-                              match<'"'>(it);
-                           }
-                        }
-                        else [[unlikely]] {
-                           skip_till_quote(it, end);
-                           key = sv{ start, static_cast<size_t>(it - start) };
-                           ++it;
-                        }
-                     }
-                     else {
-                        skip_till_quote(it, end);
-                        key = sv{ start, static_cast<size_t>(it - start) };
-                        ++it;
-                     }
-                  }
+                  std::string_view key = parse_object_key<T, Opts, tag>(ctx, it, end);
                   
                   skip_ws(it, end);
                   match<':'>(it);
                   
                   static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
-                  if constexpr (Opts.error_on_unknown_keys) {
+                  const auto& member_it = frozen_map.find(key);
+                  if (member_it != frozen_map.end()) [[likely]] {
                      std::visit(
                         [&](auto&& member_ptr) {
                            read<json>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
-                        }, frozen_map.at(key));
+                        },
+                        member_it->second);
                   }
-                  else {
-                     const auto& member_it = frozen_map.find(key);
-                     if (member_it != frozen_map.end()) [[likely]] {
-                        std::visit(
-                           [&](auto&& member_ptr) {
-                              read<json>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
-                           },
-                           member_it->second);
+                  else [[unlikely]] {
+                     if constexpr (Opts.error_on_unknown_keys) {
+                        if (key != tag.sv()) throw std::runtime_error("Unkown key");
                      }
-                     else [[unlikely]] {
-                        skip_value(it, end);
-                     }
+                     skip_value(it, end);
                   }
                }
                else {

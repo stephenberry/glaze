@@ -16,10 +16,13 @@
 #endif
 
 #ifdef GLAZE_API_ON_WINDOWS
-#ifndef NOMINMAX
+#ifdef NOMINMAX
+#include <windows.h>
+#else
 #define NOMINMAX
+#include <windows.h>
+#undef NOMINMAX
 #endif
-#include <Windows.h>
 #define SHARED_LIBRARY_EXTENSION ".dll"
 #define SHARED_LIBRARY_PREFIX ""
 #elif __APPLE__

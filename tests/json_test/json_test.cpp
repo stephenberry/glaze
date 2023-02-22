@@ -674,17 +674,17 @@ void user_types() {
       Thing obj{};
       std::string buffer{};
       glz::write_json(obj, buffer);
-      expect(buffer == R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","v":{"type":"var1_t","x":0},"color":"Green","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})") << buffer;
+      expect(buffer == R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","v":{"x":0},"color":"Green","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})") << buffer;
 
       buffer.clear();
       glz::write<glz::opts{.skip_null_members=false}>(obj, buffer);
-      expect(buffer == R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","v":{"type":"var1_t","x":0},"color":"Green","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})") << buffer;
+      expect(buffer == R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2,"b":false,"c":"W","v":{"x":0},"color":"Green","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14,"b":"stuff"},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14,"b":"stuff"}})") << buffer;
 
       expect(nothrow([&] { glz::read_json(obj, buffer); }));
 
       buffer.clear();
       glz::write_jsonc(obj, buffer);
-      expect(buffer == R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2/*double is the best type*/,"b":false,"c":"W","v":{"type":"var1_t","x":0},"color":"Green","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/}})") << buffer;
+      expect(buffer == R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2/*double is the best type*/,"b":false,"c":"W","v":{"x":0},"color":"Green","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/}})") << buffer;
       expect(nothrow([&] { glz::read_json(obj, buffer); }));
    };
 
@@ -742,7 +742,6 @@ void user_types() {
    "b": false,
    "c": "W",
    "v": {
-      "type": "var1_t",
       "x": 0
    },
    "color": "Green",
@@ -2162,37 +2161,74 @@ suite nan_tests = [] {
    };
 };
 
-struct variant_custom
+
+struct put_action
 {
-   std::variant<var1_t, var2_t> v{};
+   std::map<std::string, int> data{};
 };
 
 template <>
-struct glz::meta<variant_custom>
+struct glz::meta<put_action>
 {
-   static constexpr std::string_view name = "variant_custom";
-   using T = variant_custom;
-   static constexpr auto value = object("v", &T::v);
+   using T = put_action;
+   static constexpr std::string_view name = "put_action";
+   static constexpr auto value = object("data", &T::data);
 };
 
-suite custom_variant_tests = [] {
-   "custom_variant_write_tests"_test = [] {
-      variant_custom obj{};
-      obj.v = var1_t{ 5.5 };
-      
+struct delete_action
+{
+   std::string data{};
+};
+
+template <>
+struct glz::meta<delete_action>
+{
+   using T = delete_action;
+   static constexpr std::string_view name = "delete_action";
+   static constexpr auto value = object("data", &T::data);
+};
+
+using tagged_variant = std::variant<put_action, delete_action>;
+
+template <>
+struct glz::meta<tagged_variant>
+{
+   static constexpr std::string_view tag = "action";
+   static constexpr auto ids = std::array{"PUT", "DELETE"}; //Defaults to glz::name_v of the type
+};
+
+// Test automatic ids
+using tagged_variant2 = std::variant<put_action, delete_action, std::monostate>;
+template <>
+struct glz::meta<tagged_variant2>
+{
+   static constexpr std::string_view tag = "type";
+   // ids defaults to glz::name_v of the type
+};
+
+suite tagged_variant_tests = [] {
+   "tagged_variant_write_tests"_test = [] {
+      // custom tagged discriminator ids
+      tagged_variant var = delete_action{{"the_internet"}};
       std::string s{};
-      
-      glz::write_json(obj, s);
-      
-      expect(s == R"({"v":{"type":"var1_t","x":5.5}})");
+      glz::write_json(var, s);
+      expect(s == R"({"action":"DELETE","data":"the_internet"})");
+      s.clear();
+
+      //Automatic tagged discriminator ids
+      tagged_variant2 var2 = put_action{{{"x", 100}, {"y", 200}}};
+      glz::write_json(var2, s);
+      expect(s == R"({"type":"put_action","data":{"x":100,"y":200}})") << s;
    };
    
-   "custom_variant_read_tests"_test = [] {
-      variant_custom obj{};
-      
-      glz::read_json(obj, R"({"v": { "type": "var1_t", "x": 5.5 }})");
-      
-      expect(std::get<var1_t>(obj.v).x == 5.5);
+   "tagged_variant_read_tests"_test = [] {
+      tagged_variant var{};
+      glz::read_json(var, R"({"action":"DELETE","data":"the_internet"})");
+      expect(std::get<delete_action>(var).data == "the_internet");
+
+      tagged_variant2 var2{};
+      glz::read_json(var2, R"({"type":"put_action","data":{"x":100,"y":200}})");
+      expect(std::get<put_action>(var2).data["y"] == 200);
    };
 };
 
@@ -3529,6 +3565,62 @@ suite get_sv = []
          expect(bomb.data.x == 10);
          expect(bomb.data.y == 200);
       }
+   };
+};
+
+struct yz_t
+{
+   int y{};
+   int z{};
+};
+
+template <>
+struct glz::meta<yz_t>
+{
+   using T = yz_t;
+   static constexpr auto value = object("y", &T::y, "z", &T::z);
+};
+
+struct xz_t
+{
+   int x{};
+   int z{};
+};
+
+template <>
+struct glz::meta<xz_t>
+{
+   using T = xz_t;
+   static constexpr auto value = object("x", &T::x, "z", &T::z);
+};
+
+suite metaobject_variant_auto_deduction = [] {
+   "metaobject_variant_auto_deduction"_test = [] {
+      std::variant<xy_t, yz_t, xz_t> var{};
+
+      constexpr auto dm = glz::detail::make_variant_deduction_map<std::variant<xy_t, yz_t, xz_t>>();
+
+      auto x = dm.at("x");
+      auto y = dm.at("y");
+      auto z = dm.at("z");
+
+      std::string b = R"({"y":1,"z":2})";
+      glz::read_json(var, b);
+      expect(std::holds_alternative<yz_t>(var));
+      expect(std::get<yz_t>(var).y == 1);
+      expect(std::get<yz_t>(var).z == 2);
+
+      b = R"({"x":5,"y":7})";
+      glz::read_json(var, b);
+      expect(std::holds_alternative<xy_t>(var));
+      expect(std::get<xy_t>(var).x == 5);
+      expect(std::get<xy_t>(var).y == 7);
+
+      b = R"({"z":3,"x":4})";
+      glz::read_json(var, b);
+      expect(std::holds_alternative<xz_t>(var));
+      expect(std::get<xz_t>(var).z == 3);
+      expect(std::get<xz_t>(var).x == 4);
    };
 };
 
