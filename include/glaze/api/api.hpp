@@ -53,7 +53,7 @@ namespace glz
          }
 
          /// unchecked `void*` access for low level programming (prefer templated get)
-         [[nodiscard]] virtual void* get(const sv path, const sv type_hash) noexcept = 0;
+         [[nodiscard]] virtual std::pair<void*, sv> get(const sv path) noexcept = 0;
       protected:
 
          virtual bool caller(const sv path, const sv type_hash, void*& ret, std::span<void*> args) noexcept = 0;
@@ -70,9 +70,9 @@ namespace glz
       template <class T>
       T* api::get(const sv path) noexcept {
          static constexpr auto hash = glz::hash<T>();
-         auto* ptr = get(path, hash);
-         if (ptr) {
-            return static_cast<T*>(ptr);
+         auto p = get(path);
+         if (p.first && p.second == hash) {
+            return static_cast<T*>(p.first);
          }
          return nullptr;
       }
