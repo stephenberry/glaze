@@ -192,28 +192,29 @@ namespace glz
          }
       };
 
-      template <class... Ts>
-      struct to_json_schema<std::variant<Ts...>>
+      template <is_variant T>
+      struct to_json_schema<T>
       {
          template <auto Opts>
          static void op(auto& s, auto& defs) noexcept
          {
-            using tuple_t = glz::tuplet::tuple<Ts...>;
-            static constexpr auto N = std::tuple_size_v<tuple_t>;
+            static constexpr auto N = std::variant_size_v<T>;
             s.type = {"number", "string", "boolean", "object", "array", "null"};
             s.oneOf = std::vector<schema>(N);
             for_each<N>([&](auto I) {
-               using V = std::decay_t<std::tuple_element_t<I, tuple_t>>;
+               using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I.value];
                //TODO use ref to avoid duplication in schema
                to_json_schema<V>::template op<Opts>(schema_val, defs);
                if constexpr (glaze_object_t<V>) {
-                  //TODO validate type name
                   auto& def = defs[name_v<std::string>];
                   if (!def.type) {
                      to_json_schema<std::string>::template op<Opts>(def, defs);
                   }
-                  (*schema_val.properties)["type"] = schema_ref{join_v<chars<"#/$defs/">, name_v<std::string>>};
+                  if constexpr (!tag_v<T>.empty()) {
+                     (*schema_val.properties)[tag_v<T>] = schema_ref{join_v<chars<"#/$defs/">, name_v<std::string>>};
+                     //TODO use enum or oneOf to get the ids_v to validate type name
+                  } 
                }
             });
          }

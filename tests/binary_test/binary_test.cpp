@@ -45,6 +45,7 @@ struct sub_thing
 template <>
 struct glz::meta<sub_thing>
 {
+   static constexpr std::string_view name = "sub_thing";
    static constexpr auto value = object(
       "a", &sub_thing::a, "Test comment 1",                         //
       "b", [](auto&& v) -> auto& { return v.b; }, "Test comment 2"  //
@@ -67,6 +68,7 @@ template <>
 struct glz::meta<sub_thing2>
 {
    using T = sub_thing2;
+   static constexpr std::string_view name = "sub_thing2";
    static constexpr auto value = object("a", &T::a, "Test comment 1",  //
                                         "b", &T::b, "Test comment 2",  //
                                         "c", &T::c,                    //
@@ -84,15 +86,13 @@ struct V3
    double y{2.7};
    double z{6.5};
 
-   bool operator==(const V3& rhs) const
-   {
-      return (x == rhs.x) && (y == rhs.y) && (z == rhs.z);
-   }
+   bool operator==(const V3& rhs) const { return (x == rhs.x) && (y == rhs.y) && (z == rhs.z); }
 };
 
 template <>
 struct glz::meta<V3>
 {
+   static constexpr std::string_view name = "V3";
    static constexpr auto value = array(&V3::x, &V3::y, &V3::z);
 };
 
@@ -109,6 +109,32 @@ struct glz::meta<Color>
    );
 };
 
+struct var1_t
+{
+   double x{};
+};
+
+template <>
+struct glz::meta<var1_t>
+{
+   using T = var1_t;
+   static constexpr std::string_view name = "var1_t";
+   static constexpr auto value = object("x", &T::x);
+};
+
+struct var2_t
+{
+   double y{};
+};
+
+template <>
+struct glz::meta<var2_t>
+{
+   using T = var2_t;
+   static constexpr std::string_view name = "var2_t";
+   static constexpr auto value = object("y", &T::y);
+};
+
 struct Thing
 {
    sub_thing thing{};
@@ -121,6 +147,7 @@ struct Thing
    double d{2};
    bool b{};
    char c{'W'};
+   std::variant<var1_t, var2_t> v{};
    Color color{Color::Green};
    std::vector<bool> vb = {true, false, false, true, true, true, true};
    std::shared_ptr<sub_thing> sptr = std::make_shared<sub_thing>();
@@ -137,6 +164,7 @@ template <>
 struct glz::meta<Thing>
 {
    using T = Thing;
+   static constexpr std::string_view name = "Thing";
    static constexpr auto value = object(
       "thing", &T::thing,                                    //
       "thing2array", &T::thing2array,                        //
@@ -148,6 +176,7 @@ struct glz::meta<Thing>
       "d", &T::d, "double is the best type",                 //
       "b", &T::b,                                            //
       "c", &T::c,                                            //
+      "v", &T::v,                                            //
       "color", &T::color,                                    //
       "vb", &T::vb,                                          //
       "sptr", &T::sptr,                                      //
@@ -336,6 +365,7 @@ void write_tests()
       obj.d = 0.9;
       obj.b = true;
       obj.c = 'L';
+      obj.v = std::variant_alternative_t<1, decltype(obj.v)>{};
       obj.color = Color::Blue;
       obj.vb = {false, true, true, false, false, true, true};
       obj.sptr = nullptr;
@@ -360,6 +390,7 @@ void write_tests()
       expect(obj2.d == 0.9);
       expect(obj2.b == true);
       expect(obj2.c == 'L');
+      expect(obj2.v.index() == 1);
       expect(obj2.color == Color::Blue);
       expect(obj2.vb == decltype(obj2.vb){false, true, true, false, false, true, true});
       expect(obj2.sptr == nullptr);

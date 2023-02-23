@@ -11,6 +11,7 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/util/error.hpp"
 #include "glaze/util/murmur.hpp"
+#include "glaze/util/variant.hpp"
 
 #include <utility>
 
@@ -173,6 +174,26 @@ namespace glz
             }
          }
       }
+
+      template <is_variant T>
+      struct to_binary<T> final
+      {
+         template <auto Opts, class... Args>
+         static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            std::visit(
+               [&](auto&& v) {
+                  using V = std::decay_t<decltype(v)>;
+                  static constexpr auto index = []() {
+                     T var = V{};
+                     return var.index();
+                  }();
+                  dump_int<index>(args...);
+                  write<binary>::op<Opts>(v, ctx, std::forward<Args>(args)...);
+               },
+               value);
+         }
+      };
 
       template <class T>
       requires num_t<T> || char_t<T> || glaze_enum_t<T>

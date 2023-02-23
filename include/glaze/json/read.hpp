@@ -130,18 +130,6 @@ namespace glz
          using array_types = decltype(std::tuple_cat(std::conditional_t<array_t<Ts> || glaze_array_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
          using nullable_types = decltype(std::tuple_cat(std::conditional_t<nullable_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
       };
-
-      template <is_variant T>
-      constexpr auto runtime_variant_map() {
-         constexpr auto N = std::variant_size_v<T>;
-         std::array<T, N> ret{};
-         
-         for_each<N>([&](auto I) {
-            ret[I] = std::variant_alternative_t<I, T>{};
-         });
-         
-         return ret;
-      }
       
       template <is_variant T>
       struct from_json<T>

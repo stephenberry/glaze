@@ -11,18 +11,18 @@ namespace glz
 {
    template <class T>
    concept is_variant = is_specialization_v<T, std::variant>;
-   
-   template <class ...T>
-   size_t variant_container_size(const std::variant<T...>& v)
+
+   namespace detail
    {
-       return std::visit([](auto&& x) -> size_t {
-          using Container = std::decay_t<decltype(x)>;
-          if constexpr (std::same_as<Container, std::monostate>) {
-             throw std::runtime_error("container_size: container is monostate");
-          }
-          else {
-             return x.size();
-          }
-       }, v);
+      template <is_variant T>
+      constexpr auto runtime_variant_map()
+      {
+         constexpr auto N = std::variant_size_v<T>;
+         std::array<T, N> ret{};
+
+         for_each<N>([&](auto I) { ret[I] = std::variant_alternative_t<I, T>{}; });
+
+         return ret;
+      }
    }
 }
