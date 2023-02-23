@@ -459,7 +459,7 @@ suite binary_helpers = [] {
       }));
       
       expect(nothrow([&] {
-         v = glz::read_binary<my_struct>(b);
+         v = *glz::read_binary<my_struct>(b);
       }));
    };
 };
@@ -521,7 +521,7 @@ suite no_cx_tag_test = [] {
       s.i = 0;
       s.d = 0.0;
       
-      glz::read<glz::opts{.format = glz::binary, .use_cx_tags = false}>(s, b);
+      expect(glz::read<glz::opts{.format = glz::binary, .use_cx_tags = false}>(s, b) == false);
       
       expect(s.i == 287);
       expect(s.d = 3.14);
@@ -535,50 +535,45 @@ void test_partial()
    some_struct s{};
    some_struct s2{};
    std::string buffer = R"({"i":2,"map":{"fish":5,"cake":2,"bear":3}})";
-   try {
-      glz::read_json(s, buffer);
-      
-      std::vector<std::byte> out;
-      static constexpr auto partial = glz::json_ptrs("/i",
-                                                       "/d",
-                                                       "/hello",
-                                                       "/sub/x",
-                                                       "/sub/y",
-                                                       "/map/fish",
-                                                       "/map/bear");
-      
-      static constexpr auto sorted = glz::sort_json_ptrs(partial);
+   expect(glz::read_json(s, buffer) == false);
+   
+   std::vector<std::byte> out;
+   static constexpr auto partial = glz::json_ptrs("/i",
+                                                    "/d",
+                                                    "/hello",
+                                                    "/sub/x",
+                                                    "/sub/y",
+                                                    "/map/fish",
+                                                    "/map/bear");
+   
+   static constexpr auto sorted = glz::sort_json_ptrs(partial);
 
-      static constexpr auto groups = glz::group_json_ptrs<sorted>();
-      
-      static constexpr auto N = std::tuple_size_v<decltype(groups)>;
-      glz::for_each<N>([&](auto I){
-         const auto group = glz::tuplet::get<I>(groups);
-         std::cout << std::get<0>(group) << ": ";
-         for (auto& rest : std::get<1>(group)) {
-            std::cout << rest << ", ";
-         }
-         std::cout << '\n';
-      });
-      
-      glz::write_binary<partial>(s, out);
-      
-      s2.i = 5;
-      s2.hello = "text";
-      s2.d = 5.5;
-      s2.sub.x = 0.0;
-      s2.sub.y = 20;
-      glz::read_binary(s2, out);
-      
-      expect(s2.i == 2);
-      expect(s2.d == 3.14);
-      expect(s2.hello == "Hello World");
-      expect(s2.sub.x == 400.0);
-      expect(s2.sub.y == 200.0);
-   }
-   catch (const std::exception& e) {
-      std::cout << e.what() << '\n';
-   }
+   static constexpr auto groups = glz::group_json_ptrs<sorted>();
+   
+   static constexpr auto N = std::tuple_size_v<decltype(groups)>;
+   glz::for_each<N>([&](auto I){
+      const auto group = glz::tuplet::get<I>(groups);
+      std::cout << std::get<0>(group) << ": ";
+      for (auto& rest : std::get<1>(group)) {
+         std::cout << rest << ", ";
+      }
+      std::cout << '\n';
+   });
+   
+   glz::write_binary<partial>(s, out);
+   
+   s2.i = 5;
+   s2.hello = "text";
+   s2.d = 5.5;
+   s2.sub.x = 0.0;
+   s2.sub.y = 20;
+   glz::read_binary(s2, out);
+   
+   expect(s2.i == 2);
+   expect(s2.d == 3.14);
+   expect(s2.hello == "Hello World");
+   expect(s2.sub.x == 400.0);
+   expect(s2.sub.y == 200.0);
 }
 
 struct includer_struct

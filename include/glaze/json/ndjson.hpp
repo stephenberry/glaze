@@ -30,6 +30,8 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
+            
             if (it == end) {
                if constexpr (resizeable<T>) {
                   value.clear();
@@ -51,7 +53,8 @@ namespace glz
                      ++it;
                   }
                   else {
-                     throw std::runtime_error(R"(Expected '\n' after '\r')");
+                     ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
+                     return;
                   }
                }
                while (*it == '\n') {
@@ -83,7 +86,7 @@ namespace glz
                }
             }
             else {
-               throw std::runtime_error("Exceeded static array size.");
+               ctx.error = error_code::exceeded_static_array_size;
             }
          }
       };
@@ -95,6 +98,8 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
+            
             static constexpr auto N = []() constexpr
             {
                if constexpr (glaze_array_t<T>) {
@@ -113,7 +118,8 @@ namespace glz
                      ++it;
                   }
                   else {
-                     throw std::runtime_error(R"(Expected '\n' after '\r')");
+                     ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
+                     return;
                   }
                }
                while (*it == '\n') {
@@ -255,39 +261,46 @@ namespace glz
    }  // namespace detail
    
    template <class T, class Buffer>
-   inline void read_ndjson(T& value, Buffer&& buffer) {
+   [[nodiscard]] inline auto read_ndjson(T& value, Buffer&& buffer) {
       context ctx{};
-      read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
+      return read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
    }
    
    template <class T, class Buffer>
-   inline auto read_ndjson(Buffer&& buffer) {
+   [[nodiscard]] inline expected<T, parse_error> read_ndjson(Buffer&& buffer) {
       T value{};
       context ctx{};
-      read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
-      return value;
+      const auto ec = read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
+      if (ec == error_code::none) {
+         return value;
+      }
+      return unexpected(ec);
    }
    
    template <auto Opts = opts{.format = ndjson}, class T>
-   inline void read_file_ndjson(T& value, const sv file_name) {
+   [[nodiscard]] inline parse_error read_file_ndjson(T& value, const sv file_name) {
       
       context ctx{};
       ctx.current_file = file_name;
       
       std::string buffer;
       
-      file_to_buffer(buffer, ctx.current_file);
+      const auto ec = file_to_buffer(buffer, ctx.current_file);
       
-      read<Opts>(value, buffer, ctx);
+      if (static_cast<bool>(ec)) {
+         return { ec };
+      }
+      
+      return read<Opts>(value, buffer, ctx);
    }
    
    template <class T, class Buffer>
-   inline auto write_ndjson(T&& value, Buffer&& buffer) {
+   [[nodiscard]] inline auto write_ndjson(T&& value, Buffer&& buffer) {
       return write<opts{.format = ndjson}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
    
    template <class T>
-   inline auto write_ndjson(T&& value) {
+   [[nodiscard]] inline auto write_ndjson(T&& value) {
       std::string buffer{};
       write<opts{.format = ndjson}>(std::forward<T>(value), buffer);
       return buffer;
@@ -295,9 +308,9 @@ namespace glz
    
    // std::string file_name needed for std::ofstream
    template <class T>
-   inline void write_file_ndjson(T&& value, const std::string& file_name) {
+   inline write_error write_file_ndjson(T&& value, const std::string& file_name) {
       std::string buffer{};
       write<opts{.format = ndjson}>(std::forward<T>(value), buffer);
-      buffer_to_file(buffer, file_name);
+      return { buffer_to_file(buffer, file_name) };
    }
 }

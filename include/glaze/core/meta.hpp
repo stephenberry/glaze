@@ -10,7 +10,7 @@
 #include "glaze/util/for_each.hpp"
 
 namespace glz
-{   
+{
    template <class T>
    struct meta
    {};
@@ -40,8 +40,15 @@ namespace glz
       {
          meta<T>::value;
       };
+      
+      template <class T>
+      concept glaze_t = requires
+      {
+         meta<std::decay_t<T>>::value;
+      }
+      || local_meta_t<std::decay_t<T>>;
    }
-
+   
    struct empty
    {
       static constexpr glz::tuplet::tuple<> value{};
@@ -162,6 +169,20 @@ namespace glz
          std::array<std::string_view, N> ids{};
          for_each<N>([&](auto I) { ids[I] = glz::name_v<std::decay_t<std::variant_alternative_t<I, T>>>; });
          return ids;
+      }
+   }();
+   
+   template <auto Enum> requires (std::is_enum_v<decltype(Enum)>)
+   inline constexpr std::string_view enum_name_v = []() -> std::string_view {
+      
+      using T = std::decay_t<decltype(Enum)>;
+      
+      if constexpr (detail::glaze_t<T>) {
+         using U = std::underlying_type_t<T>;
+         return glz::tuplet::get<0>(glz::tuplet::get<static_cast<U>(Enum)>(meta_v<T>));
+      }
+      else {
+         return "glz::unknown";
       }
    }();
    

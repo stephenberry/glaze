@@ -1,4 +1,16 @@
 # Glaze
+># IMPORTANT VERSION 1.0 RELEASE NOTES
+>
+>Previous versions of Glaze used exceptions, and for some minor features runtime type information (RTTI). This new version of glaze does not use exceptions or RTTI.
+>
+>- Glaze now builds with `-fno-exceptions` and `-fno-rtti`
+>- Functions that could error typically return an `expected<T, error_code>` or `expected<T, parse_error>` or `expected<T, write_error>`
+>- Note that when expecting a reference, `std::reference_wrapper` is used in the `expected`
+>- `std::string format_error(const parse_error& pe, auto& buffer)` produces a more human readable error, which also points out where the error occurred within the buffer
+>- See [std::expected](https://en.cppreference.com/w/cpp/utility/expected) for more details on how expected works
+
+___
+
 One of the fastest JSON libraries in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
 
 ## Highlights
@@ -12,6 +24,8 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - Nearly zero intermediate allocations
 - Direct memory access through JSON pointer syntax
 - Tagged binary spec through the same API for maximum performance
+- No exceptions (compiles with `-fno-exceptions`)
+- No runtime type information necessary (compiles with `-fno-rtti`)
 - Much more!
 
 ## Performance
@@ -118,7 +132,10 @@ glz::write_json(s, buffer);
 ```c++
 std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
 auto s = glz::read_json<my_struct>(buffer);
-// s is a my_struct populated from JSON
+if (s) // check for error
+{
+  s.value(); // s.value() is a my_struct populated from JSON
+}
 ```
 
 or
@@ -126,18 +143,21 @@ or
 ```c++
 std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
 my_struct s{};
-glz::read_json(s, buffer);
+auto ec = glz::read_json(s, buffer);
+if (ec) {
+  // handle error
+}
 // populates s from JSON
 ```
 
 ### Read/Write From File
 
 ```c++
-glz::read_file(obj, "./obj.json"); // reads as JSON from the extension
-glz::read_file_json(obj, "./obj.txt"); // reads some text file as JSON
+auto ec = glz::read_file(obj, "./obj.json"); // reads as JSON from the extension
+auto ec = glz::read_file_json(obj, "./obj.txt"); // reads some text file as JSON
 
-glz::write_file(obj, "./obj.json"); // writes file based on extension
-glz::write_file_json(obj, "./obj.txt"); // explicit JSON write
+auto ec = glz::write_file(obj, "./obj.json"); // writes file based on extension
+auto ec = glz::write_file_json(obj, "./obj.txt"); // explicit JSON write
 ```
 
 ## How To Use Glaze
@@ -236,8 +256,8 @@ Glaze supports JSON pointer syntax access in a C++ context. This is extremely he
 
 ```c++
 my_struct s{};
-auto& d = glz::get<double>(s, "/d");
-// d is a reference to d in the structure s
+auto d = glz::get<double>(s, "/d");
+// d.value() is a std::reference_wrapper to d in the structure s
 ```
 
 ```c++
@@ -513,11 +533,18 @@ Only `"x"` and `"z"` are written out, because they are true. Reading in the buff
 
 ## Error Handling
 
-Glaze is safe to use with untrusted messages. Exceptions are thrown on errors, which can be caught and handled however you want.
+Glaze is safe to use with untrusted messages. Errors are returned as error codes, typically within a `glz::expected`, which behaves just like a `std::expected`.
 
-Glaze also tries to be helpful and give useful information about where the error is exactly.
+To generate more helpful error messages, call `format_error`:
 
-For example, this test case:
+```c++
+auto pe = glz::read_json(obj, buffer);
+if (pe) {
+  std::string descriptive_error = glz::format_error(pe, s);
+}
+```
+
+This test case:
 
 ```json
 {"Hello":"World"x, "color": "red"}
@@ -790,10 +817,7 @@ struct api {
   /*default constructors hidden for brevity*/
   
   template <class T>
-    [[nodiscard]] T& get(const sv path);
-
-  template <class T>
-    [[nodiscard]] T* get_if(const sv path) noexcept;
+    [[nodiscard]] T* get(const sv path) noexcept;
 
   // Get a std::function from a member function across the API
   template <class T>

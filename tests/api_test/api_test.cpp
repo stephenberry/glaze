@@ -106,7 +106,7 @@ void tests()
    
    "calling functions"_test = [&] {
       auto func = io->get_fn<std::function<int()>>("/func");
-      expect(func() == 5);
+      expect(func.value()() == 5);
       expect(5 == io->call<int>("/func"));
 
       //auto func_ref = io->get_fn<std::function<const int&()>>("/func_ref");
@@ -114,26 +114,26 @@ void tests()
       expect(5 == io->call<const int&>("/func_ref"));
 
       auto sum = io->get_fn<std::function<double(double, double)>>("/sum");
-      expect(sum(7, 2) == 9);
+      expect(sum.value()(7, 2) == 9);
       expect(9 == io->call<double>("/sum", 7.0, 2.0));
 
       auto sum_lref = io->get_fn<std::function<double(const double&, const double&)>>("/sum_lref");
-      expect(sum_lref(7, 2) == 9);
+      expect(sum_lref.value()(7, 2) == 9);
       expect(9 == io->call<double>("/sum_lref", 7.0, 2.0));
 
       auto sum_rref = io->get_fn<std::function<double(double&&, double&&)>>("/sum_rref");
-      expect(sum_rref(7, 2) == 9);
+      expect(sum_rref.value()(7, 2) == 9);
       expect(9 == io->call<double>("/sum_rref", 7.0, 2.0));
 
       auto inc = io->get_fn<std::function<void(int&)>>("/inc");
       int i = 0;
-      inc(i);
+      inc.value()(i);
       expect(i == 1);
       io->call<void>("/inc", i);
       expect(i == 2);
       
       auto f = io->get_fn<std::function<double(const int&, const double&)>>("/f");
-      expect(f(7, 2) == 14);
+      expect(f.value()(7, 2) == 14);
    };
    
    "bool type name"_test = [] {
@@ -212,19 +212,19 @@ void tests()
    };
 
    "my_api type io"_test = [&] {
-      auto& x = io->get<int>("/x");
-      auto& y = io->get<double>("/y");
-      auto& z = io->get<std::vector<double>>("/z");
-      expect(x == 7);
-      expect(y == 5.5);
-      expect(z == std::vector<double>{1.0,2.0});
+      auto* x = io->get<int>("/x");
+      auto* y = io->get<double>("/y");
+      auto* z = io->get<std::vector<double>>("/z");
+      expect(*x == 7);
+      expect(*y == 5.5);
+      expect(*z == std::vector<double>{1.0,2.0});
    };
 
    "my_api type ptr unwrap io"_test = [&] {
-      auto& x = io->get<int>("/x_ptr");
-      auto& y = io->get<double>("/uptr");
-      expect(x == 7);
-      expect(y == 5.5);
+      auto* x = io->get<int>("/x_ptr");
+      auto* y = io->get<double>("/uptr");
+      expect(*x == 7);
+      expect(*y == 5.5);
    };
 
    "function type name"_test = [] {
@@ -236,17 +236,17 @@ void tests()
    "function type io"_test = [&] {
       int x = 7;
       double y = 5.5;
-      auto& f = io->get<std::function<double(const int&, const double&)>>("/f");
-      expect(f(x, y) == 38.5);
+      auto* f = io->get<std::function<double(const int&, const double&)>>("/f");
+      expect((*f)(x, y) == 38.5);
    };
 
    "my_api binary io"_test = [&] {
-      io->get<int>("/x") = 1;
-      io2->get<int>("/x") = 5;
+      *io->get<int>("/x") = 1;
+      *io2->get<int>("/x") = 5;
       std::string buffer{};
       io2->write(glz::binary, "", buffer);
       io->read(glz::binary, "", buffer);
-      expect(io->get<int>("/x") == 5);
+      expect(*io->get<int>("/x") == 5);
    };
 }
 

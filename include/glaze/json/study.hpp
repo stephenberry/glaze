@@ -10,6 +10,7 @@
 #include "glaze/thread/threadpool.hpp"
 #include "glaze/util/windows_nominmax.hpp"
 #include "glaze/util/type_traits.hpp"
+#include "glaze/util/expected.hpp"
 
 #include <random>
 #include <numeric>
@@ -21,7 +22,7 @@ namespace glz
       struct param
       {
          std::string ptr{};
-         std::string distribution{};
+         std::string distribution{}; // TODO: make an enum
          std::vector<raw_json> range{};
       };
 
@@ -85,7 +86,9 @@ namespace glz
             overwrite(state, design.overwrite);
 
             for (auto &param : design.params) {
-               auto& ps = param_sets.emplace_back(param_set_from_dist(param));
+               const auto pe = param_set_from_dist(param);
+               // TODO: handle potential errors
+               auto& ps = param_sets.emplace_back(*pe);
                const auto num_elements = ps.elements.size();
                if (num_elements != 0) { max_index *= num_elements; }
             }
@@ -95,14 +98,14 @@ namespace glz
 
          std::size_t size() const { return max_index; }
          
-         const State& generate(const size_t i)
+         [[nodiscard]] expected<State, error_code> generate(const size_t i) noexcept
          {
             size_t deconst_index = i;
             for (auto &param_set : param_sets) {
                const auto this_size = (std::max)(param_set.elements.size(), size_t{1});
                const auto this_index = deconst_index % this_size;
                deconst_index /= this_size;
-               std::visit(
+               const auto ec = std::visit(
                   [&](auto&& param_ptr) {
                      using V =
                         std::remove_pointer_t<std::decay_t<decltype(param_ptr)>>;
@@ -113,45 +116,53 @@ namespace glz
                            *param_ptr = static_cast<V>(std::get<double>(element));
                         }
                         else {
-                           throw std::runtime_error("full_factorial::generate: elements type not convertible to design type");
+                           return error_code::elements_not_convertible_to_design;
                         }
                      }
                      else {
                         *param_ptr = std::get<V>(param_set.elements[this_index]);
                      }
+                     
+                     return error_code::none;
                   },
                   param_set.param_ptr);
+               
+               if (static_cast<bool>(ec)) {
+                  return unexpected(ec);
+               }
             }
 
             return state;
          }
 
-         const State& generate()
+         [[nodiscard]] expected<State, error_code> generate()
          {
             return generate(index++);
          }
 
-         param_set param_set_from_dist(const param &dist)
+         expected<param_set, parse_error> param_set_from_dist(const param &dist)
          {
             param_set param_set;
-
-            bool found{};
-            detail::seek_impl(
+            
+            parse_error pe{};
+            bool found = detail::seek_impl(
                [&](auto &&val) {
                   if constexpr (std::is_assignable_v<
                                    basic, std::decay_t<decltype(val)>>) {
-                     found = true;
                      param_set.param_ptr = &val;
                   }
                   else {
-                     throw std::runtime_error(
-                        "Study params only support basic types like double, "
-                        "int, bool, or std::string");
+                     pe.ec = error_code::no_matching_variant_type; // Study params only support basic types like double, int, bool, or std::string
                   }
                },
                state, dist.ptr);
             if (!found) {
-               throw std::runtime_error("Param '" + dist.ptr + "' doesn't exist");
+               pe.ec = error_code::get_nonexistent_json_ptr;
+               return unexpected(pe);
+            }
+            
+            if (pe) {
+               return unexpected(pe);
             }
 
             if (dist.distribution == "elements") {
@@ -159,26 +170,36 @@ namespace glz
                   [&](auto&& param_ptr) {
                      for (auto&& j : dist.range) {
                         auto elem = *param_ptr;
-                        read_json(elem, j.str);
+                        pe = read_json(elem, j.str);
+                        if (pe) {
+                           return;
+                        }
                         param_set.elements.emplace_back(elem);
                      }
                   },
                   param_set.param_ptr);
+               if (pe) {
+                  return unexpected(pe);
+               }
             }
             else if (dist.distribution == "linspace") {
                if (dist.range.size() != 3) {
-                  throw std::runtime_error(
-                     "glaze::study::full_factorial::param_set_from_dist: Linspace "
-                     "distribution's range must have 3 elements!");
+                  return unexpected(parse_error{ error_code::invalid_distribution_elements }); // distribution's range must have 3 elements
                }
 
                double start{};
                double step{};
                double stop{};
 
-               read_json(start, dist.range[0].str);
-               read_json(step, dist.range[1].str);
-               read_json(stop, dist.range[2].str);
+               if (auto ec = read_json(start, dist.range[0].str)) {
+                  return unexpected(ec);
+               }
+               if (auto ec = read_json(step, dist.range[1].str)) {
+                  return unexpected(ec);
+               }
+               if (auto ec = read_json(stop, dist.range[2].str)) {
+                  return unexpected(ec);
+               }
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -189,10 +210,7 @@ namespace glz
                }
             }
             else {
-               throw std::runtime_error(
-                  "glaze::study::full_factorial::param_set_from_dist: Unknown "
-                  "distribution for non random study '"
-                  + dist.distribution + "'!");
+               return unexpected(parse_error{ error_code::unknown_distribution });
             }
 
             return param_set;
@@ -329,32 +347,34 @@ namespace glz
             reset();
          }
 
-         random_param param_from_dist(const param &dist)
+         expected<random_param, parse_error> param_from_dist(const param &dist)
          {
             random_param result{};
-
-            bool found{};
-            detail::seek_impl(
+            
+            parse_error pe{};
+            bool found = detail::seek_impl(
                [&](auto&& val) {
                   if constexpr (std::is_assignable_v<
                                    basic, std::decay_t<decltype(val)>>) {
-                     found = true;
                      result.param_ptr = &val;
                   }
                   else {
-                     throw std::runtime_error("Study params only support basic types like double, int, bool, or std::string");
+                     pe.ec = error_code::no_matching_variant_type; // Study params only support basic types like double, int, bool, or std::string
                   }
                },
                state, dist.ptr);
             if (!found) {
-               throw std::runtime_error("Param '" + dist.ptr + "' doesnt exist");
+               pe.ec = error_code::get_nonexistent_json_ptr;
+               return unexpected(pe);
+            }
+            
+            if (pe) {
+               return unexpected(pe);
             }
 
             if (dist.distribution == "elements") {
                if (dist.range.size() == 0) {
-                  throw std::runtime_error(
-                     "glaze::study::random_doe::param_from_dist: Elements "
-                     "distribution's cannot be empty!");
+                  return unexpected(parse_error{ error_code::invalid_distribution_elements });
                }
                std::vector<basic> elements{};
                std::visit(
@@ -376,16 +396,18 @@ namespace glz
             }
             else if (dist.distribution == "linspace") {
                if (dist.range.size() != 3) {
-                  throw std::runtime_error(
-                     "glaze::study::random_doe::param_from_dist: Linspace "
-                     "distribution's range does not have 3 elements!");
+                  return unexpected(parse_error{ error_code::invalid_distribution_elements }); // distribution's range must have 3 elements
                }
 
                double start{};
                double stop{};
 
-               read_json(start, dist.range[0].str);
-               read_json(stop, dist.range[2].str);
+               if (auto ec = read_json(start, dist.range[0].str)) {
+                  return unexpected(ec);
+               }
+               if (auto ec = read_json(stop, dist.range[2].str)) {
+                  return unexpected(ec);
+               }
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -398,16 +420,18 @@ namespace glz
             }
             else if (dist.distribution == "uniform") {
                if (dist.range.size() != 2) {
-                  throw std::runtime_error(
-                     "glaze::study::random_doe::param_from_dist: Uniform "
-                     "distribution's range must have 2 elements!");
+                  return unexpected(parse_error{ error_code::invalid_distribution_elements }); // distribution's range must have 3 elements
                }
 
                double start{};
                double stop{};
 
-               read_json(start, dist.range[0].str);
-               read_json(stop, dist.range[1].str);
+               if (auto ec = read_json(start, dist.range[0].str)) {
+                  return unexpected(ec);
+               }
+               if (auto ec = read_json(stop, dist.range[1].str)) {
+                  return unexpected(ec);
+               }
 
                if (start > stop) {
                   std::swap(start, stop);
@@ -421,16 +445,18 @@ namespace glz
             }
             else if (dist.distribution == "normal") {
                if (dist.range.size() != 2) {
-                  throw std::runtime_error(
-                     "glaze::study::random_doe::param_from_dist: Normal "
-                     "distribution's range must have 2 elements!");
+                  return unexpected(parse_error{ error_code::invalid_distribution_elements }); // distribution's range must have 3 elements
                }
 
                double mean{};
                double std_dev{};
 
-               read_json(mean, dist.range[0].str);
-               read_json(std_dev, dist.range[1].str);
+               if (auto ec = read_json(mean, dist.range[0].str)) {
+                  return unexpected(ec);
+               }
+               if (auto ec = read_json(std_dev, dist.range[1].str)) {
+                  return unexpected(ec);
+               }
 
                result.gen =
                   [this, dist = std::normal_distribution<double>(
@@ -439,9 +465,7 @@ namespace glz
                };
             }
             else {
-               throw std::runtime_error(
-                  "glaze::study::random_doe::param_from_dist: Unknown "
-                  "distribution");
+               return unexpected(parse_error{ error_code::unknown_distribution });
             }
          }
       };

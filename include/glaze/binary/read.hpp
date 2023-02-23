@@ -338,28 +338,35 @@ namespace glz
    }
    
    template <class T, class Buffer>
-   inline void read_binary(T&& value, Buffer&& buffer) noexcept
+   inline parse_error read_binary(T&& value, Buffer&& buffer) noexcept
    {
-      read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
+      return read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
    }
    
    template <class T, class Buffer>
-   inline auto read_binary(Buffer&& buffer) noexcept
+   inline expected<T, parse_error> read_binary(Buffer&& buffer) noexcept
    {
       T value{};
-      read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
+      const auto pe = read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
+      if (pe) {
+         return unexpected(pe);
+      }
       return value;
    }
    
    template <class T>
-   inline void read_file_binary(T& value, const sv file_name) {
+   inline parse_error read_file_binary(T& value, const sv file_name) noexcept {
             
       context ctx{};
       ctx.current_file = file_name;
       
       std::string buffer;
-      file_to_buffer(buffer, ctx.current_file);
+      const auto file_error = file_to_buffer(buffer, ctx.current_file);
       
-      read<opts{.format = binary}>(value, buffer, ctx);
+      if (static_cast<bool>(file_error)) {
+         return parse_error{ file_error };
+      }
+      
+      return read<opts{.format = binary}>(value, buffer, ctx);
    }
 }

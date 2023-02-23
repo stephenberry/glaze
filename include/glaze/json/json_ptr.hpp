@@ -192,44 +192,29 @@ namespace glz
                                json_ptr);
    }
    
-   // call a member function
-   /*template <string_literal json_ptr, class T, class... Args>
-   decltype(auto) call(T&& root_value, Args&&... args)
-   {
-      static constexpr auto frozen_map = detail::make_map<T, false>();
-      static constexpr sv key = chars<json_ptr>;
-      static constexpr auto member_it = frozen_map.find(key);
-      if constexpr (member_it != frozen_map.end()) {
-         static constexpr auto member_ptr = std::get<member_it->second.index()>(member_it->second);
-         static constexpr auto f = std::mem_fn(member_ptr);
-         using F = decltype(f);
-         if constexpr (std::is_invocable_v<F, T, Args...>) {
-            return f(root_value, std::forward<Args>(args)...);
-         }
-         else {
-            throw std::runtime_error("call: function not invocable");
-         }
-      }
-      else {
-         throw std::runtime_error("call: invalid json_ptr path");
-      }
-   }*/
+   template <class R>
+   using call_result_t = std::conditional_t<std::is_reference_v<R> || std::is_pointer_v<R>, std::decay_t<R>*, R>;
+   
+   template <class R>
+   using call_return_t = std::conditional_t<std::is_reference_v<R>, expected<std::reference_wrapper<std::decay_t<R>>, error_code>, expected<R, error_code>>;
    
    // call a member function
    template <class R, class T, class... Args>
-   decltype(auto) call(T&& root_value, sv json_ptr, Args&&... args)
+   call_return_t<R> call(T&& root_value, sv json_ptr, Args&&... args) noexcept
    {
-      std::conditional_t<std::is_reference_v<R> || std::is_pointer_v<R>, std::decay_t<R>*, R> result;
+      call_result_t<R> result{};
+      
+      error_code ec{};
       
       const auto valid = detail::seek_impl(
-         [&result, &root_value, ...args = std::forward<Args>(args)](auto&& val) {
+         [&ec, &result, &root_value, ...args = std::forward<Args>(args)](auto&& val) {
             using V = std::decay_t<decltype(val)>;
             if constexpr (std::is_member_function_pointer_v<V>) {
                auto f = std::mem_fn(val);
                using F = decltype(f);
                if constexpr (std::is_invocable_v<F, T, Args...>) {
                   if constexpr (!std::is_assignable_v<R, std::invoke_result_t<F, T, Args...>>) {
-                     throw std::runtime_error("call: type not assignable");
+                     ec = error_code::invalid_call; // type not assignable
                   }
                   else {
                      if constexpr (std::is_reference_v<R>) {
@@ -241,18 +226,21 @@ namespace glz
                   }
                }
                else {
-                  throw std::runtime_error("call: not invocable with given inputs");
+                  ec = error_code::invalid_call; // not invocable with given inputs
                }
             }
             else {
-               throw std::runtime_error("call: seek did not find a function");
+               ec = error_code::invalid_call; // seek did not find a function
             }
          },
          std::forward<T>(root_value), json_ptr);
       
       if (!valid) {
-         throw std::runtime_error("call: \"" + std::string(json_ptr) +
-                                  "\" doesn't exist");
+         return unexpected(error_code::get_nonexistent_json_ptr);
+      }
+      
+      if (static_cast<bool>(ec)) {
+         return unexpected(ec);
       }
       
       if constexpr (std::is_reference_v<R>) {
@@ -263,31 +251,33 @@ namespace glz
       }
    }
 
-   // Get a refrence to a value at the location of a json_ptr. Will throw if
+   // Get a refrence to a value at the location of a json_ptr. Will error if
    // value doesnt exist or is wrong type
    template <class V, class T>
-   V& get(T&& root_value, sv json_ptr)
+   expected<std::reference_wrapper<V>, parse_error> get(T&& root_value, sv json_ptr)
    {
       V* result{};
+      error_code ec{};
       detail::seek_impl(
          [&](auto&& val) {
-            if constexpr (!std::is_same_v<V, std::decay_t<decltype(val)>>)
-               throw std::runtime_error("Called get on \"" +
-                                        std::string(json_ptr) +
-                                        "\" with wrong type");
-            else if constexpr (!std::is_lvalue_reference_v<decltype(val)>)
-               throw std::runtime_error(
-                  " Called get on '" + std::string(json_ptr) +
-                  "' that points to data that cannot be refrenced directly");
-            else
+            if constexpr (!std::is_same_v<V, std::decay_t<decltype(val)>>) {
+               ec = error_code::get_wrong_type;
+            }
+            else if constexpr (!std::is_lvalue_reference_v<decltype(val)>) {
+               ec = error_code::cannot_be_referenced;
+            }
+            else {
                result = &val;
+            }
          },
          std::forward<T>(root_value), json_ptr);
       if (!result) {
-         throw std::runtime_error("Called get on \"" + std::string(json_ptr) +
-                                  "\" which doesn't exist");
+         return unexpected(parse_error{ error_code::get_nonexistent_json_ptr });
       }
-      return *result;
+      else if (static_cast<bool>(ec)) {
+         return unexpected(parse_error{ ec });
+      }
+      return std::ref(*result);
    }
 
    // Get a pointer to a value at the location of a json_ptr. Will return
@@ -306,13 +296,14 @@ namespace glz
       return result;
    }
 
-   // Get a value at the location of a json_ptr. Will throw if
+   // Get a value at the location of a json_ptr. Will error if
    // value doesnt exist or is not asignable or is a narrowing conversion.
    template <class V, class T>
-   V get_value(T&& root_value, sv json_ptr)
+   expected<V, error_code> get_value(T&& root_value, sv json_ptr) noexcept
    {
       V result{};
       bool found{};
+      error_code ec{};
       detail::seek_impl(
          [&](auto&& val) {
             if constexpr (std::is_assignable_v<V, decltype(val)> &&
@@ -321,15 +312,17 @@ namespace glz
                result = val;
             }
             else {
-               throw std::runtime_error("Called get_value on \"" +
-                                        std::string(json_ptr) +
-                                        "\" with wrong type");
+               ec = error_code::get_wrong_type;
             }
          },
          std::forward<T>(root_value), json_ptr);
-      if (!found)
-         throw std::runtime_error("Called get_value on \"" + std::string(json_ptr) +
-                                  "\" which doesnt exist");
+      if (!found) {
+         return unexpected(error_code::get_nonexistent_json_ptr);
+      }
+      else if (static_cast<bool>(ec)) {
+         return unexpected(ec);
+      }
+      
       return result;
    }
 
@@ -536,16 +529,17 @@ namespace glz
          else if constexpr (glz::detail::glaze_array_t<V>) {
             constexpr auto member_array =
                glz::detail::make_array<std::decay_t<V>>();
-            constexpr auto index = glz::detail::stoui(key_str); //TODO: Will not build if not int
-            if constexpr (index >= 0 && index < member_array.size()) {
-               constexpr auto member = member_array[index];
-               constexpr auto member_ptr = std::get<member.index()>(member);
-               using sub_t = decltype(glz::detail::get_member(std::declval<V>(), member_ptr));
-               return valid<sub_t, rem_ptr, Expected_t>();
+            constexpr auto optional_index = glz::detail::stoui(key_str); // TODO: Will not build if not int
+            if constexpr (optional_index) {
+               constexpr auto index = *optional_index;
+               if constexpr (index >= 0 && index < member_array.size()) {
+                  constexpr auto member = member_array[index];
+                  constexpr auto member_ptr = std::get<member.index()>(member);
+                  using sub_t = decltype(glz::detail::get_member(std::declval<V>(), member_ptr));
+                  return valid<sub_t, rem_ptr, Expected_t>();
+               }
             }
-            else {
-               return false;
-            }
+            return false;
          }
          else if constexpr (glz::detail::array_t<V>) {
             glz::detail::stoui(key_str);
@@ -561,21 +555,29 @@ namespace glz
       }
    }
    
-   inline constexpr bool maybe_numeric_key(const sv key)
+   [[nodiscard]] inline constexpr bool maybe_numeric_key(const sv key)
    {
       return key.find_first_not_of("0123456789") == std::string_view::npos;
    }
    
    template <string_literal Str, auto Opts = opts{}>
-   inline auto get_view_json(detail::contiguous auto&& buffer) {
+   [[nodiscard]] inline auto get_view_json(detail::contiguous auto&& buffer) {
       static constexpr auto s = chars<Str>;
       
       static constexpr auto tokens = split_json_ptr<s>();
       static constexpr auto N = tokens.size();
       
-      auto p = read_iterators<Opts>(buffer);
+      context ctx{};
+      auto p = read_iterators<Opts>(ctx, buffer);
+      
       auto& it = p.first;
       auto& end = p.second;
+      
+      using span_t = std::span<std::remove_reference_t<decltype(*it)>>;
+      
+      auto start = it;
+      
+      if (static_cast<bool>(ctx.error)) [[unlikely]] { return expected<span_t, parse_error>{ unexpected(parse_error{ ctx.error, 0 }) }; }
       
       if constexpr (N == 0) {
          return std::span{ it, end };
@@ -583,9 +585,9 @@ namespace glz
       else {
          using namespace glz::detail;
          
-         skip_ws(it, end);
+         skip_ws<Opts>(ctx, it, end);
          
-         std::span<std::remove_reference_t<decltype(*it)>> ret;
+         expected<span_t, parse_error> ret;
          
          for_each<N>([&](auto I) {
             using index_t = decltype(I);
@@ -598,22 +600,23 @@ namespace glz
                   case '{': {
                      ++it;
                      while (true) {
-                        skip_ws(it, end);
-                        const auto k = parse_key(it, end);
+                        skip_ws<Opts>(ctx, it, end);
+                        const auto k = parse_key(ctx, it, end);
                         if (cx_string_cmp<key>(k)) {
-                           skip_ws(it, end);
-                           match<':'>(it);
-                           skip_ws(it, end);
+                           skip_ws<Opts>(ctx, it, end);
+                           match<':'>(ctx, it);
+                           skip_ws<Opts>(ctx, it, end);
                            
                            if constexpr (I == (N - 1)) {
-                              ret = parse_value(it, end);
+                              ret = parse_value<Opts>(ctx, it, end);
                            }
                            return;
                         }
                         else {
-                           skip_value(it, end);
+                           skip_value<Opts>(ctx, it, end);
                            if (*it != ',') {
-                              throw std::runtime_error("Key not found");
+                              ret = unexpected(parse_error{ error_code::key_not_found, static_cast<size_t>(std::distance(start, it)) });
+                              return;
                            }
                            ++it;
                         }
@@ -624,38 +627,46 @@ namespace glz
                      // Could optimize by counting commas
                      static constexpr auto n = stoui(key);
                      for_each<n>([&](auto I) {
-                        skip_value(it, end);
+                        skip_value<Opts>(ctx, it, end);
                         if (*it != ',') {
-                           throw std::runtime_error("Array element not found");
+                           ret = unexpected(parse_error{ error_code::array_element_not_found, static_cast<size_t>(std::distance(start, it)) });
+                           return;
                         }
                         ++it;
                      });
-                     ret = parse_value(it, end);
+                     ret = parse_value<Opts>(ctx, it, end);
                   }
                }
             }
             else {
-               match<'{'>(it);
+               match<'{'>(ctx, it);
                
                while (true) {
-                  skip_ws(it, end);
-                  const auto k = parse_key(it, end);
-                  if (cx_string_cmp<key>(k)) {
-                     skip_ws(it, end);
-                     match<':'>(it);
-                     skip_ws(it, end);
-                     
-                     if constexpr (I == (N - 1)) {
-                        ret = parse_value(it, end);
+                  skip_ws<Opts>(ctx, it, end);
+                  const auto k = parse_key(ctx, it, end);
+                  if (k) {
+                     if (cx_string_cmp<key>(*k)) {
+                        skip_ws<Opts>(ctx, it, end);
+                        match<':'>(ctx, it);
+                        skip_ws<Opts>(ctx, it, end);
+                        
+                        if constexpr (I == (N - 1)) {
+                           ret = parse_value<Opts>(ctx, it, end);
+                        }
+                        return;
                      }
-                     return;
+                     else {
+                        skip_value<Opts>(ctx, it, end);
+                        if (*it != ',') {
+                           ret = unexpected(parse_error{ error_code::key_not_found, static_cast<size_t>(std::distance(start, it)) });
+                           return;
+                        }
+                        ++it;
+                     }
                   }
                   else {
-                     skip_value(it, end);
-                     if (*it != ',') {
-                        throw std::runtime_error("Key not found");
-                     }
-                     ++it;
+                     ret = unexpected(parse_error{ error_code::syntax_error, static_cast<size_t>(std::distance(start, it)) });
+                     return;
                   }
                }
             }
@@ -666,14 +677,20 @@ namespace glz
    }
    
    template <class T, string_literal Str, auto Opts = opts{}>
-   inline auto get_as_json(detail::contiguous auto&& buffer) {
+   [[nodiscard]] inline expected<T, parse_error> get_as_json(detail::contiguous auto&& buffer) {
       const auto str = glz::get_view_json<Str>(buffer);
-      return glz::read_json<T>(str);
+      if (str) {
+         return glz::read_json<T>(*str);
+      }
+      return unexpected(str.error());
    }
    
    template <string_literal Str, auto Opts = opts{}>
-   inline sv get_sv_json(detail::contiguous auto&& buffer) {
+   [[nodiscard]] inline expected<sv, parse_error> get_sv_json(detail::contiguous auto&& buffer) {
       const auto s = glz::get_view_json<Str>(buffer);
-      return { reinterpret_cast<const char*>(s.data()), s.size() };
+      if (s) {
+         return sv{ reinterpret_cast<const char*>(s->data()), s->size() };
+      }
+      return unexpected(s.error());
    }
 }

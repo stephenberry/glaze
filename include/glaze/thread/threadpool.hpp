@@ -74,6 +74,7 @@ namespace glz
          auto promise = std::make_shared<std::promise<result_type>>();
 
          queue.emplace(last_index++, [=, f = std::forward<F>(func)](const size_t thread_number) {
+#if __cpp_exceptions
             try {
                if constexpr (std::is_void<result_type>::value) {
                   f();
@@ -85,6 +86,14 @@ namespace glz
             catch (...) {
                promise->set_exception(std::current_exception());
             }
+#else
+            if constexpr (std::is_void<result_type>::value) {
+               f();
+            }
+            else {
+               promise->set_value(f());
+            }
+#endif
          });
 
          work_cv.notify_one();
@@ -103,6 +112,7 @@ namespace glz
          auto promise = std::make_shared<std::promise<result_type>>();
 
          queue.emplace(last_index++, [=, f = std::forward<F>(func)](const size_t thread_number) {
+#if __cpp_exceptions
             try {
                if constexpr (std::is_void<result_type>::value) {
                   f(thread_number);
@@ -114,6 +124,14 @@ namespace glz
             catch (...) {
                promise->set_exception(std::current_exception());
             }
+#else
+            if constexpr (std::is_void<result_type>::value) {
+               f(thread_number);
+            }
+            else {
+               promise->set_value(f(thread_number));
+            }
+#endif
          });
 
          work_cv.notify_one();
