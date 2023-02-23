@@ -7,6 +7,7 @@
 #include "glaze/tuplet/tuple.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
+#include "glaze/util/for_each.hpp"
 
 namespace glz
 {   
