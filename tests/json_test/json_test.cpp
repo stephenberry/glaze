@@ -3598,12 +3598,6 @@ suite metaobject_variant_auto_deduction = [] {
    "metaobject_variant_auto_deduction"_test = [] {
       std::variant<xy_t, yz_t, xz_t> var{};
 
-      constexpr auto dm = glz::detail::make_variant_deduction_map<std::variant<xy_t, yz_t, xz_t>>();
-
-      auto x = dm.at("x");
-      auto y = dm.at("y");
-      auto z = dm.at("z");
-
       std::string b = R"({"y":1,"z":2})";
       glz::read_json(var, b);
       expect(std::holds_alternative<yz_t>(var));

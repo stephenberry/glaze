@@ -42,7 +42,7 @@ namespace glz::detail {
             const auto chunk = pos / n_chunk_bits;
             const auto offset = pos % n_chunk_bits;
             const auto maskbit = Chunk_t{1} << offset;
-            return reference(&data[chunk], maskbit);
+            return reference{&data[chunk], maskbit};
         }
 
         constexpr bool operator[](size_t pos) const

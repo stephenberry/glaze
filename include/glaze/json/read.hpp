@@ -93,218 +93,6 @@ namespace glz
             match<R"("std::monostate")">(args...);
          };
       };
-
-      template <is_variant T>
-      constexpr auto variant_is_auto_deducible()
-      {
-         //Contains at most one each of the basic json types bool, numeric, string, object, array
-         //If all objects are meta objects then we can attemt to deduce them as well either through a type tag or unique combinations of keys
-         int bools{}, numbers{}, strings{}, objects{}, meta_objects{}, arrays{};
-         constexpr auto N = std::variant_size_v<T>;
-         for_each<N>([&](auto I) {
-            using V = std::decay_t<std::variant_alternative_t<I, T>>;
-            if constexpr (bool_t<V>) ++bools;
-            else if constexpr (num_t<V>) ++numbers;
-            else if constexpr (str_t<V> || glaze_enum_t<V>) ++strings;
-            else if constexpr (map_t<V>) ++objects;
-            else if constexpr (map_t<V>) {
-               ++objects;
-               ++meta_objects;
-            }
-            else if constexpr (array_t<V> || glaze_array_t<V>) ++arrays;
-         });
-         return bools < 2 && numbers < 2 && strings < 2 && (objects < 2 || meta_objects == objects) && arrays < 2;
-      }
-
-      template <typename>
-      struct variant_types;
-
-      template <typename... Ts>
-      struct variant_types<std::variant<Ts...>>
-      {
-         //TODO this way of filtering types is compile time intensive.
-         using bool_types = decltype(std::tuple_cat(std::conditional_t<bool_t<Ts>,std::tuple<Ts>,std::tuple<>>{}...));
-         using number_types = decltype(std::tuple_cat(std::conditional_t<num_t<Ts>,std::tuple<Ts>,std::tuple<>>{}...));
-         using string_types = decltype(std::tuple_cat(std::conditional_t<str_t<Ts> || glaze_enum_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
-         using object_types = decltype(std::tuple_cat(std::conditional_t<map_t<Ts> || glaze_object_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
-         using array_types = decltype(std::tuple_cat(std::conditional_t<array_t<Ts> || glaze_array_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
-         using nullable_types = decltype(std::tuple_cat(std::conditional_t<nullable_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
-      };
-      
-      template <is_variant T>
-      struct from_json<T>
-      {
-         // Note that items in the variant are required to be default constructible for us to switch types
-         template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
-         {
-            if constexpr (variant_is_auto_deducible<T>()) {
-               skip_ws(it, end);
-               switch (*it) {
-                  case '{':
-                     ++it;
-                     using object_types = typename variant_types<T>::object_types;
-                     if constexpr (std::tuple_size_v<object_types> < 1) {
-                        throw std::runtime_error("Encounted object in variant with no object type");
-                     }
-                     else if constexpr (std::tuple_size_v<object_types> == 1) {
-                        using V = std::tuple_element_t<0, object_types>;
-                        if (!std::holds_alternative<V>(value)) value = V{};
-                        read<json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
-                     }
-                     else {
-                        auto possible_types = bit_array<std::variant_size_v<T>>{}.flip();
-                        static constexpr auto deduction_map = glz::detail::make_variant_deduction_map<T>();
-                        static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
-                        skip_ws(it, end);
-                        auto start = it;
-                        while (*it != '}') {
-                           if (it != start) {
-                              match<','>(it);
-                           }
-                           std::string_view key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
-                           auto deduction_it = deduction_map.find(key);
-                           if (deduction_it != deduction_map.end()) [[likely]] {
-                              possible_types &= deduction_it->second;
-                           }
-                           else [[unlikely]] {
-                              if constexpr (!tag_v<T>.empty()) {
-                                 if (key == tag_v<T>) {
-                                    skip_ws(it, end);
-                                    match<':'>(it);
-
-                                    static thread_local std::string type{};
-                                    read<json>::op<Opts>(type, ctx, it, end);
-                                    skip_ws(it, end);
-                                    match<','>(it);
-
-                                    static constexpr auto id_map = make_variant_id_map<T>();
-                                    auto id_it = id_map.find(std::string_view{type});
-                                    if (id_it != id_map.end()) [[likely]] {
-                                       it = start;
-                                       const auto type_index = id_it->second;
-                                       if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
-                                       std::visit(
-                                          [&](auto&& v) {
-                                             using V = std::decay_t<decltype(v)>;
-                                             if constexpr (glaze_object_t<V>) {
-                                                from_json<V>::op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
-                                             }
-                                          },
-                                          value);
-                                       return;
-                                    }
-                                    else {
-                                       throw std::runtime_error("Invalid id for variant");
-                                    }
-                                 }
-                                 else if constexpr (Opts.error_on_unknown_keys) {
-                                    throw std::runtime_error("Key does not exist in any objects in variant");
-                                 }
-                              }
-                              else if constexpr (Opts.error_on_unknown_keys) {
-                                 throw std::runtime_error("Key does not exist in any objects in variant");
-                              }
-                           }
-
-                           auto matching_types = possible_types.popcount();
-                           if (matching_types == 0) {
-                              throw std::runtime_error("Invalid key combination for variant");
-                           }
-                           else if (matching_types == 1) {
-                              it = start;
-                              const auto type_index = possible_types.countr_zero();
-                              if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
-                              std::visit(
-                                 [&](auto&& v) {
-                                    using V = std::decay_t<decltype(v)>;
-                                    if constexpr (glaze_object_t<V>) {
-                                       from_json<V>::op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
-                                    }
-                                 },
-                                 value);
-                              return;
-                           }
-                           skip_ws(it, end);
-                           match<':'>(it);
-                           skip_ws(it, end);
-                           skip_value(it, end);
-                           skip_ws(it, end);
-                        }
-                        throw std::runtime_error("Multiple types match within variant");
-                     }
-                     break;
-                  case '[':
-                     using array_types = typename variant_types<T>::array_types;
-                     if constexpr (std::tuple_size_v<array_types> < 1) {
-                        throw std::runtime_error("Encountered array in variant with no array type");
-                     }
-                     else {
-                        using V = std::tuple_element_t<0, array_types>;
-                        if (!std::holds_alternative<V>(value)) value = V{};
-                        read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
-                     }
-                     break;
-                  case '"': {
-                     using string_types = typename variant_types<T>::string_types;
-                     if constexpr (std::tuple_size_v<string_types> < 1) {
-                        throw std::runtime_error("Encountered string in variant with no string type");
-                     }
-                     else {
-                        using V = std::tuple_element_t<0, string_types>;
-                        if (!std::holds_alternative<V>(value)) value = V{};
-                        read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
-                     }
-                     break;
-                  }
-                  case 't':
-                  case 'f': {
-                     using bool_types = typename variant_types<T>::bool_types;
-                     if constexpr (std::tuple_size_v<bool_types> < 1) {
-                        throw std::runtime_error("No matching type in variant");
-                     }
-                     else {
-                        using V = std::tuple_element_t<0, bool_types>;
-                        if (!std::holds_alternative<V>(value)) value = V{};
-                        read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
-                     }
-                     break;
-                  }
-                  case 'n':
-                     using nullable_types = typename variant_types<T>::nullable_types;
-                     if constexpr (std::tuple_size_v<nullable_types> < 1) {
-                        throw std::runtime_error("No matching type in variant");
-                     }
-                     else {
-                        using V = std::tuple_element_t<0, nullable_types>;
-                        if (!std::holds_alternative<V>(value)) value = V{};
-                        match<"null">(it, end);
-                     }
-                     break;
-                  default: {
-                     // Not bool, string, object, or array so must be number or null
-                     using number_types = typename variant_types<T>::number_types;
-                     if constexpr (std::tuple_size_v<number_types> < 1) {
-                        throw std::runtime_error("No matching type in variant");
-                     }
-                     else {
-                        using V = std::tuple_element_t<0, number_types>;
-                        if (!std::holds_alternative<V>(value)) value = V{};
-                        read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
-                     }
-                  }
-               }
-            }
-            else {
-               std::visit(
-                  [&](auto&& v) {
-                     using V = std::decay_t<decltype(v)>;
-                     read<json>::op<Opts>(v, ctx, it, end);
-                  },
-                  value);
-            }
-         }
-      };
       
       template <bool_t T>
       struct from_json<T>
@@ -1157,7 +945,219 @@ namespace glz
             throw std::runtime_error("Expected }");
          }
       };
-      
+
+       template <is_variant T>
+       constexpr auto variant_is_auto_deducible()
+       {
+          //Contains at most one each of the basic json types bool, numeric, string, object, array
+          //If all objects are meta objects then we can attemt to deduce them as well either through a type tag or unique combinations of keys
+          int bools{}, numbers{}, strings{}, objects{}, meta_objects{}, arrays{};
+          constexpr auto N = std::variant_size_v<T>;
+          for_each<N>([&](auto I) {
+             using V = std::decay_t<std::variant_alternative_t<I, T>>;
+             if constexpr (bool_t<V>) ++bools;
+             else if constexpr (num_t<V>) ++numbers;
+             else if constexpr (str_t<V> || glaze_enum_t<V>) ++strings;
+             else if constexpr (map_t<V>) ++objects;
+             else if constexpr (map_t<V>) {
+                ++objects;
+                ++meta_objects;
+             }
+             else if constexpr (array_t<V> || glaze_array_t<V>) ++arrays;
+          });
+          return bools < 2 && numbers < 2 && strings < 2 && (objects < 2 || meta_objects == objects) && arrays < 2;
+       }
+
+       template <typename>
+       struct variant_types;
+
+       template <typename... Ts>
+       struct variant_types<std::variant<Ts...>>
+       {
+          //TODO this way of filtering types is compile time intensive.
+          using bool_types = decltype(std::tuple_cat(std::conditional_t<bool_t<Ts>,std::tuple<Ts>,std::tuple<>>{}...));
+          using number_types = decltype(std::tuple_cat(std::conditional_t<num_t<Ts>,std::tuple<Ts>,std::tuple<>>{}...));
+          using string_types = decltype(std::tuple_cat(std::conditional_t<str_t<Ts> || glaze_enum_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+          using object_types = decltype(std::tuple_cat(std::conditional_t<map_t<Ts> || glaze_object_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+          using array_types = decltype(std::tuple_cat(std::conditional_t<array_t<Ts> || glaze_array_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+          using nullable_types = decltype(std::tuple_cat(std::conditional_t<nullable_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+       };
+       
+       template <is_variant T>
+       struct from_json<T>
+       {
+          // Note that items in the variant are required to be default constructible for us to switch types
+          template <auto Opts>
+          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+          {
+             if constexpr (variant_is_auto_deducible<T>()) {
+                skip_ws(it, end);
+                switch (*it) {
+                   case '{':
+                      ++it;
+                      using object_types = typename variant_types<T>::object_types;
+                      if constexpr (std::tuple_size_v<object_types> < 1) {
+                         throw std::runtime_error("Encounted object in variant with no object type");
+                      }
+                      else if constexpr (std::tuple_size_v<object_types> == 1) {
+                         using V = std::tuple_element_t<0, object_types>;
+                         if (!std::holds_alternative<V>(value)) value = V{};
+                         read<json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                      }
+                      else {
+                         auto possible_types = bit_array<std::variant_size_v<T>>{}.flip();
+                         static constexpr auto deduction_map = glz::detail::make_variant_deduction_map<T>();
+                         static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
+                         skip_ws(it, end);
+                         auto start = it;
+                         while (*it != '}') {
+                            if (it != start) {
+                               match<','>(it);
+                            }
+                            std::string_view key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
+                            auto deduction_it = deduction_map.find(key);
+                            if (deduction_it != deduction_map.end()) [[likely]] {
+                               possible_types &= deduction_it->second;
+                            }
+                            else [[unlikely]] {
+                               if constexpr (!tag_v<T>.empty()) {
+                                  if (key == tag_v<T>) {
+                                     skip_ws(it, end);
+                                     match<':'>(it);
+
+                                     static thread_local std::string type{};
+                                     read<json>::op<Opts>(type, ctx, it, end);
+                                     skip_ws(it, end);
+                                     match<','>(it);
+
+                                     static constexpr auto id_map = make_variant_id_map<T>();
+                                     auto id_it = id_map.find(std::string_view{type});
+                                     if (id_it != id_map.end()) [[likely]] {
+                                        it = start;
+                                        const auto type_index = id_it->second;
+                                        if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                                        std::visit(
+                                           [&](auto&& v) {
+                                              using V = std::decay_t<decltype(v)>;
+                                              if constexpr (glaze_object_t<V>) {
+                                                  from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
+                                              }
+                                           },
+                                           value);
+                                        return;
+                                     }
+                                     else {
+                                        throw std::runtime_error("Invalid id for variant");
+                                     }
+                                  }
+                                  else if constexpr (Opts.error_on_unknown_keys) {
+                                     throw std::runtime_error("Key does not exist in any objects in variant");
+                                  }
+                               }
+                               else if constexpr (Opts.error_on_unknown_keys) {
+                                  throw std::runtime_error("Key does not exist in any objects in variant");
+                               }
+                            }
+
+                            auto matching_types = possible_types.popcount();
+                            if (matching_types == 0) {
+                               throw std::runtime_error("Invalid key combination for variant");
+                            }
+                            else if (matching_types == 1) {
+                               it = start;
+                               const auto type_index = possible_types.countr_zero();
+                               if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                               std::visit(
+                                  [&](auto&& v) {
+                                     using V = std::decay_t<decltype(v)>;
+                                     if constexpr (glaze_object_t<V>) {
+                                        from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
+                                     }
+                                  },
+                                  value);
+                               return;
+                            }
+                            skip_ws(it, end);
+                            match<':'>(it);
+                            skip_ws(it, end);
+                            skip_value(it, end);
+                            skip_ws(it, end);
+                         }
+                         throw std::runtime_error("Multiple types match within variant");
+                      }
+                      break;
+                   case '[':
+                      using array_types = typename variant_types<T>::array_types;
+                      if constexpr (std::tuple_size_v<array_types> < 1) {
+                         throw std::runtime_error("Encountered array in variant with no array type");
+                      }
+                      else {
+                         using V = std::tuple_element_t<0, array_types>;
+                         if (!std::holds_alternative<V>(value)) value = V{};
+                         read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                      }
+                      break;
+                   case '"': {
+                      using string_types = typename variant_types<T>::string_types;
+                      if constexpr (std::tuple_size_v<string_types> < 1) {
+                         throw std::runtime_error("Encountered string in variant with no string type");
+                      }
+                      else {
+                         using V = std::tuple_element_t<0, string_types>;
+                         if (!std::holds_alternative<V>(value)) value = V{};
+                         read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                      }
+                      break;
+                   }
+                   case 't':
+                   case 'f': {
+                      using bool_types = typename variant_types<T>::bool_types;
+                      if constexpr (std::tuple_size_v<bool_types> < 1) {
+                         throw std::runtime_error("No matching type in variant");
+                      }
+                      else {
+                         using V = std::tuple_element_t<0, bool_types>;
+                         if (!std::holds_alternative<V>(value)) value = V{};
+                         read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                      }
+                      break;
+                   }
+                   case 'n':
+                      using nullable_types = typename variant_types<T>::nullable_types;
+                      if constexpr (std::tuple_size_v<nullable_types> < 1) {
+                         throw std::runtime_error("No matching type in variant");
+                      }
+                      else {
+                         using V = std::tuple_element_t<0, nullable_types>;
+                         if (!std::holds_alternative<V>(value)) value = V{};
+                         match<"null">(it, end);
+                      }
+                      break;
+                   default: {
+                      // Not bool, string, object, or array so must be number or null
+                      using number_types = typename variant_types<T>::number_types;
+                      if constexpr (std::tuple_size_v<number_types> < 1) {
+                         throw std::runtime_error("No matching type in variant");
+                      }
+                      else {
+                         using V = std::tuple_element_t<0, number_types>;
+                         if (!std::holds_alternative<V>(value)) value = V{};
+                         read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                      }
+                   }
+                }
+             }
+             else {
+                std::visit(
+                   [&](auto&& v) {
+                      using V = std::decay_t<decltype(v)>;
+                      read<json>::op<Opts>(v, ctx, it, end);
+                   },
+                   value);
+             }
+          }
+       };
+
       template <nullable_t T>
       struct from_json<T>
       {

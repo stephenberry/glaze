@@ -6,6 +6,7 @@
 #include <variant>
 
 #include "glaze/util/type_traits.hpp"
+#include "glaze/util/for_each.hpp"
 
 namespace glz
 {
@@ -19,9 +20,7 @@ namespace glz
       {
          constexpr auto N = std::variant_size_v<T>;
          std::array<T, N> ret{};
-
          for_each<N>([&](auto I) { ret[I] = std::variant_alternative_t<I, T>{}; });
-
          return ret;
       }
    }
