@@ -394,7 +394,7 @@ namespace glz
             if constexpr (same_size) {
                constexpr auto n = s0.size();
                if (key.size() != n) {
-                  throw std::runtime_error("Invalid key");
+                  return items.end();
                }
             }
             

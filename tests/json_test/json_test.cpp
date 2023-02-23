@@ -3532,6 +3532,30 @@ suite get_sv = []
    };
 };
 
+struct StructE
+{
+   std::string e;
+   GLZ_LOCAL_META(StructE, e);
+};
+
+struct Sample
+{
+   int a;
+   StructE d;
+   GLZ_LOCAL_META(Sample, a, d);
+};
+
+
+suite invalid_keys = [] {
+   "invalid_keys"_test = [] {
+      std::string test = {"{\"a\":1,\"bbbbbb\":\"0\",\"c\":\"Hello World\",\"d\":{\"e\":\"123\"} }"};
+      auto s = Sample{};
+
+      expect(throws([&] { glz::read<glz::opts{.error_on_unknown_keys = true}>(s, test); }));
+      expect(nothrow([&] { glz::read<glz::opts{.error_on_unknown_keys = false}>(s, test); }));
+   };
+};
+
 int main()
 {
    using namespace boost::ut;
