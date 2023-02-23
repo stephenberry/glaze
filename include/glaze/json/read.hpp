@@ -247,31 +247,35 @@ namespace glz
                   skip_till_escape_or_quote(ctx, it, end);
                   if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
                
-               if (*it == '"') {
-                  value.append(start, static_cast<size_t>(it - start));
-                  ++it;
-                  return;
+                  if (*it == '"') {
+                     value.append(start, static_cast<size_t>(it - start));
+                     ++it;
+                     return;
+                  }
+                  else {
+                     value.append(start, static_cast<size_t>(it - start));
+                     ++it;
+                     handle_escaped();
+                     start = it;
+                  }
                }
-               else {
-                  value.append(start, static_cast<size_t>(it - start));
-                  ++it;
-                  handle_escaped();
-                  start = it;
-               }
-            }
                else {
                   switch (*it) {
                      case '"': {
                         value.append(start, static_cast<size_t>(it - start));
                         ++it;
                         return;
-         }
+                     }
                      case '\b':
                      case '\f':
                      case '\n':
                      case '\r':
                      case '\t': {
                         ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     case '\0': {
+                        ctx.error = error_code::unexpected_end;
                         return;
                      }
                      case '\\': {
@@ -887,7 +891,10 @@ namespace glz
          auto start = it;
 
          if constexpr (keys_may_contain_escape<T>()) {
-                     skip_till_escape_or_quote(ctx, it, end);
+            skip_till_escape_or_quote(ctx, it, end);
+            if (static_cast<bool>(ctx.error)) [[unlikely]] {
+               return {};
+            }
             if (*it == '\\') [[unlikely]] {
                // we dont' optimize this currently because it would increase binary size significantly with the
                // complexity of generating escaped compile time versions of keys
@@ -922,13 +929,19 @@ namespace glz
                   }
                }
                else [[unlikely]] {
-                           skip_till_quote(ctx, it, end);
+                  skip_till_quote(ctx, it, end);
+                  if (static_cast<bool>(ctx.error)) [[unlikely]] {
+                     return {};
+                  }
                   key = sv{start, static_cast<size_t>(it - start)};
                   ++it;
                }
             }
             else {
-                        skip_till_quote(ctx, it, end);
+               skip_till_quote(ctx, it, end);
+               if (static_cast<bool>(ctx.error)) [[unlikely]] {
+                  return {};
+               }
                key = sv{start, static_cast<size_t>(it - start)};
                ++it;
             }
@@ -1072,6 +1085,9 @@ namespace glz
              if constexpr (variant_is_auto_deducible<T>()) {
                 skip_ws<Opts>(ctx, it, end);
                 switch (*it) {
+                   case '\0':
+                      ctx.error = error_code::unexpected_end;
+                      return;
                    case '{':
                       ++it;
                       using object_types = typename variant_types<T>::object_types;
@@ -1277,7 +1293,7 @@ namespace glz
                   else {
                      ctx.error = error_code::invalid_nullable_read;
                      // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or std::shared_ptr
-               }
+                  }
                }
                read<json>::op<Opts>(*value, ctx, it, end);
             }

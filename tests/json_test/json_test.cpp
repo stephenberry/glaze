@@ -945,7 +945,10 @@ void early_end()
          buffer_data.pop_back();
          buffer = buffer_data;
          // This is mainly to check if all our end checks are in place. In debug mode it should check if we try to read past the end and abort.
-         expect(glz::read_json(obj, buffer) != glz::error_code::none);
+         auto err = glz::read_json(obj, buffer);
+         expect(err != glz::error_code::none);
+         expect(err.location <= buffer.size());
+
       }
    };
 }

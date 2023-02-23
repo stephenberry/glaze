@@ -35,7 +35,7 @@ namespace glz::detail
       const auto n = static_cast<size_t>(std::distance(it, end));
       if ((n < str.size) || (std::memcmp(it, str.value, str.size) != 0)) [[unlikely]] {
          ctx.error = error_code::syntax_error;
-         //static constexpr auto error = join_v<chars<"Expected:">, chars<str>>;
+         return;
       }
       it += str.size;
    }
@@ -266,11 +266,16 @@ namespace glz::detail
    template <char open, char close>
    inline void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
+      if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
+
       ++it;
       size_t open_count = 1;
       size_t close_count = 0;
       while (it < end && open_count > close_count) {
          switch (*it) {
+         case '\0':
+            ctx.error = error_code::unexpected_end;
+            return;
          case '/':
             skip_comment(ctx, it, end);
             break;
