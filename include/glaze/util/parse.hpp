@@ -271,7 +271,7 @@ namespace glz::detail
       ++it;
       size_t open_count = 1;
       size_t close_count = 0;
-      while (it < end && open_count > close_count) {
+      while (true) {
          switch (*it) {
          case '\0':
             ctx.error = error_code::unexpected_end;
@@ -289,6 +289,9 @@ namespace glz::detail
          case close:
             ++close_count;
             ++it;
+            if (close_count >= open_count) {
+               return;
+            }
             break;
          default:
             ++it;
