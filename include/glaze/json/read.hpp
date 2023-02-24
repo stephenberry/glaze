@@ -21,6 +21,13 @@ namespace glz
 {
    namespace detail
    {
+      // Unless we can mutate the input buffer we need somewhere to store escaped strings for key lookup and such
+      // Could put this in the context but tls overhead isnt that bad. Will need to figure out when heap allocations are not allowed or restricted
+      inline std::string& string_buffer() {
+         static thread_local std::string buffer(128, ' ');
+         return buffer;
+      }
+
       template <class T = void>
       struct from_json {};
       
@@ -117,10 +124,10 @@ namespace glz
                   value = false;
                   break;
                }
-                  [[unlikely]] default
-                  :  {
-                     ctx.error = error_code::expected_true_or_false;
-                     return;
+               [[unlikely]] default
+               :  {
+                  ctx.error = error_code::expected_true_or_false;
+                  return;
             }
          }
          }
@@ -714,7 +721,7 @@ namespace glz
             
             match<'['>(ctx, it);
             
-            static thread_local std::string s{};
+            std::string& s = string_buffer();
             
             static constexpr auto map = make_map<T>();
             
@@ -748,13 +755,12 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            static thread_local std::string path{};
+            std::string& path = string_buffer();
             read<json>::op<Opts>(path, ctx, it, end);
             
-               const auto file_path = relativize_if_not_absolute(std::filesystem::path(ctx.current_file).parent_path(), std::filesystem::path{ path });
+            const auto file_path = relativize_if_not_absolute(std::filesystem::path(ctx.current_file).parent_path(), std::filesystem::path{ path });
                
-            // TODO:
-               std::string buffer{};
+            std::string& buffer = string_buffer();
             std::string string_file_path = file_path.string();
             const auto ec = file_to_buffer(buffer, string_file_path);
                   
@@ -763,13 +769,13 @@ namespace glz
                return;
             }
             
-                  const auto current_file = ctx.current_file;
-                  ctx.current_file = file_path.string();
+            const auto current_file = ctx.current_file;
+            ctx.current_file = file_path.string();
                   
             std::ignore = glz::read<Opts>(value.value, buffer, ctx);
                   
-                  ctx.current_file = current_file;
-               }
+            ctx.current_file = current_file;
+         }
       };
       
       template <glaze_object_t T>
@@ -899,7 +905,7 @@ namespace glz
                // we dont' optimize this currently because it would increase binary size significantly with the
                // complexity of generating escaped compile time versions of keys
                it = start;
-               static thread_local std::string static_key{};
+               std::string& static_key = string_buffer();
                read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
                key = static_key;
             }
@@ -1011,7 +1017,7 @@ namespace glz
                   }
                }
                else {
-                  static thread_local std::string key{};
+                  std::string& key = string_buffer();
                   read<json>::op<Opts>(key, ctx, it, end);
                   
                   skip_ws<Opts>(ctx, it, end);
@@ -1121,7 +1127,7 @@ namespace glz
                                      skip_ws<Opts>(ctx, it, end);
                                      match<':'>(ctx, it);
 
-                                     static thread_local std::string type{};
+                                     std::string& type = string_buffer();
                                      read<json>::op<Opts>(type, ctx, it, end);
                                      skip_ws<Opts>(ctx, it, end);
                                      match<','>(ctx, it);
