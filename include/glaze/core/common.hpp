@@ -26,6 +26,8 @@
 #include "glaze/util/hash_map.hpp"
 #include "glaze/util/murmur.hpp"
 #include "glaze/util/expected.hpp"
+#include "glaze/util/for_each.hpp"
+#include "glaze/util/bit_array.hpp"
 
 namespace glz
 {
@@ -730,6 +732,78 @@ namespace glz
          constexpr auto indices =
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_string_to_enum_map_impl<T>(indices);
+      }
+
+      template <class T>
+      constexpr auto get_combined_keys_from_variant()
+      {
+         constexpr auto N = std::variant_size_v<T>;
+         constexpr size_t max_keys = []() {
+            size_t res{};
+            for_each<N>([&](auto I) {
+               using V = std::decay_t<std::variant_alternative_t<I, T>>;
+               res += std::tuple_size_v<meta_t<V>>;
+            });
+            return res;
+         }();
+
+         std::array<std::string_view, max_keys> data{};
+         size_t index = 0;
+         for_each<N>([&](auto I) {
+            using V = std::decay_t<std::variant_alternative_t<I, T>>;
+            for_each<std::tuple_size_v<meta_t<V>>>([&](auto J) {
+               data[index++] = glz::tuplet::get<0>(glz::tuplet::get<J>(meta_v<V>));
+            });
+         });
+
+         std::sort(data.data(), data.data() + max_keys);
+         const auto end = std::unique(data.data(), data.data() + max_keys);
+         const auto size = std::distance(data.data(), end);
+
+         return std::pair{data, size};
+      }
+
+      template <class T, size_t... I>
+      constexpr auto make_variant_deduction_base_map(std::index_sequence<I...>, auto &&keys)
+      {
+         using V = bit_array<std::variant_size_v<T>>;
+         return frozen::make_unordered_map<frozen::string, V, sizeof...(I)>(
+            {std::make_pair<frozen::string, V>(frozen::string(std::get<I>(keys)), V{})...}
+         );
+      }
+
+      template <class T>
+      constexpr auto make_variant_deduction_map()
+      {
+         constexpr auto key_size_pair = get_combined_keys_from_variant<T>();
+
+         auto deduction_map = make_variant_deduction_base_map<T>(std::make_index_sequence<key_size_pair.second>{}, key_size_pair.first);
+
+         constexpr auto N = std::variant_size_v<T>;
+         for_each<N>([&](auto I) {
+            using V = std::decay_t<std::variant_alternative_t<I, T>>;
+            for_each<std::tuple_size_v<meta_t<V>>>([&](auto J) {
+               deduction_map.find(glz::tuplet::get<0>(glz::tuplet::get<J>(meta_v<V>)))->second[I] = true;
+            });
+         });
+
+         return deduction_map;
+      }
+
+      template <is_variant T, size_t... I>
+      constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
+      {
+         return frozen::make_unordered_map<frozen::string, size_t, std::variant_size_v<T>>(
+            {std::make_pair<frozen::string, size_t>(frozen::string(variant_ids[I]), I)...}
+         );
+      }
+
+      template <is_variant T>
+      constexpr auto make_variant_id_map()
+      {
+         constexpr auto indices = std::make_index_sequence<std::variant_size_v<T>>{};
+
+         return make_variant_id_map_impl<T>(indices, ids_v<T>);
       }
       
       inline decltype(auto) get_member(auto&& value, auto& member_ptr)

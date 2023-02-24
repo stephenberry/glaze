@@ -158,3 +158,11 @@ namespace glz
       }
    };
 }
+
+template <>
+struct glz::meta<glz::json_t>
+{
+   static constexpr std::string_view name = "glz::json_t";
+   using T = glz::json_t;
+   static constexpr auto value = &T::data;
+};

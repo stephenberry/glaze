@@ -143,6 +143,18 @@ namespace glz
                return 0;
          }
       }
+
+      template <is_variant T>
+      struct from_binary<T>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            const auto type_index = int_from_header(it, end);
+            if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+            std::visit([&](auto&& v) { read<binary>::op<Opts>(v, ctx, it, end); }, value);
+         }
+      };
       
       template <str_t T>
       struct from_binary<T> final

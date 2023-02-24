@@ -6,6 +6,8 @@
 #include <array>
 #include "glaze/tuplet/tuple.hpp"
 #include "glaze/util/type_traits.hpp"
+#include "glaze/util/variant.hpp"
+#include "glaze/util/for_each.hpp"
 
 namespace glz
 {
@@ -120,6 +122,53 @@ namespace glz
       }
       else {
          return "glz::unknown";
+      }
+   }();
+
+   template <class T>
+   concept tagged = requires
+   {
+      meta<T>::tag;
+   }
+   || requires { T::glaze::tag; };
+
+   template <class T>
+   concept ided = requires
+   {
+      meta<T>::ids;
+   }
+   || requires { T::glaze::ids; };
+
+   template <class T>
+   inline constexpr std::string_view tag_v = [] {
+      if constexpr (tagged<T>) {
+         if constexpr (detail::local_meta_t<T>) {
+            return T::glaze::tag;
+         }
+         else {
+            return meta<T>::tag;
+         }
+      }
+      else {
+         return "";
+      }
+   }();
+
+   template <is_variant T>
+   inline constexpr auto ids_v = [] {
+      if constexpr (ided<T>) {
+         if constexpr (detail::local_meta_t<T>) {
+            return T::glaze::ids;
+         }
+         else {
+            return meta<T>::ids;
+         }
+      }
+      else {
+         constexpr auto N = std::variant_size_v<T>;
+         std::array<std::string_view, N> ids{};
+         for_each<N>([&](auto I) { ids[I] = glz::name_v<std::decay_t<std::variant_alternative_t<I, T>>>; });
+         return ids;
       }
    }();
    
