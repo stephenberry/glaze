@@ -14,8 +14,19 @@
 #include "glaze/core/context.hpp"
 #include "glaze/util/string_literal.hpp"
 
-// TODO: Fix this
-#ifndef WIN32
+#ifdef __clang__
+   #ifndef GLZ_USE_ALWAYS_INLINE
+      #define GLZ_USE_ALWAYS_INLINE
+   #endif
+#endif
+
+#ifdef __GNUC__
+   #ifndef GLZ_USE_ALWAYS_INLINE
+      #define GLZ_USE_ALWAYS_INLINE
+   #endif
+#endif
+
+#ifdef GLZ_USE_ALWAYS_INLINE
 #ifdef NDEBUG
    #ifndef GLZ_ALWAYS_INLINE
       #define GLZ_ALWAYS_INLINE inline __attribute__((always_inline))
