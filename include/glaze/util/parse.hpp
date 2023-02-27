@@ -22,9 +22,7 @@ namespace glz::detail
    // assumes null terminated
    template <char c>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it) noexcept
-   {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
-      
+   {      
       if (*it != c) [[unlikely]] {
          ctx.error = error_code::syntax_error;
       }
@@ -36,8 +34,6 @@ namespace glz::detail
    template <string_literal str>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
-      
       const auto n = static_cast<size_t>(std::distance(it, end));
       if ((n < str.size) || (std::memcmp(it, str.value, str.size) != 0)) [[unlikely]] {
          ctx.error = error_code::syntax_error;
