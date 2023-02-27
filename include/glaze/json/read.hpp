@@ -905,8 +905,7 @@ namespace glz
                it = start;
                std::string& static_key = string_buffer();
                read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
-               const sv key = static_key;
-               return key;
+               return static_key;
             }
             else [[likely]] {
                const sv key{start, static_cast<size_t>(it - start)};
@@ -923,7 +922,7 @@ namespace glz
                   if constexpr (stats.length_range == 0) {
                      const sv key{start, stats.max_length};
                      it += stats.max_length;
-                              match<'"'>(ctx, it);
+                     match<'"'>(ctx, it);
                      return key;
                   }
                   else {
