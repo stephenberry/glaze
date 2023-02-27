@@ -53,6 +53,10 @@
       #define GLZ_ALWAYS_INLINE_CLANG inline
    #endif
 #endif
+#else
+   #ifndef GLZ_ALWAYS_INLINE_CLANG
+      #define GLZ_ALWAYS_INLINE_CLANG inline
+   #endif
 #endif
 
 namespace glz::detail
