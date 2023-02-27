@@ -728,7 +728,7 @@ namespace glz
                
                auto itr = map.find(s);
                if (itr != map.end()) {
-                  std::visit([&](auto&& x) {
+                  glz::visit([&](auto&& x) {
                      get_member(value, x) = true;
                   }, itr->second);
                }
@@ -988,7 +988,7 @@ namespace glz
                   static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
                   const auto& member_it = frozen_map.find(key);
                   if (member_it != frozen_map.end()) [[likely]] {
-                     std::visit(
+                     glz::visit(
                         [&](auto&& member_ptr) {
                            read<json>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
                         },
@@ -1130,7 +1130,7 @@ namespace glz
                                         it = start;
                                         const auto type_index = id_it->second;
                                         if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
-                                        std::visit(
+                                        glz::visit(
                                            [&](auto&& v) {
                                               using V = std::decay_t<decltype(v)>;
                                               if constexpr (glaze_object_t<V>) {
@@ -1165,7 +1165,7 @@ namespace glz
                                it = start;
                                const auto type_index = possible_types.countr_zero();
                                if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
-                               std::visit(
+                               glz::visit(
                                   [&](auto&& v) {
                                      using V = std::decay_t<decltype(v)>;
                                      if constexpr (glaze_object_t<V>) {
@@ -1252,7 +1252,7 @@ namespace glz
                 }
              }
              else {
-                std::visit(
+                glz::visit(
                    [&](auto&& v) {
                       using V = std::decay_t<decltype(v)>;
                       read<json>::op<Opts>(v, ctx, it, end);
