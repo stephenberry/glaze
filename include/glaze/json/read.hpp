@@ -421,9 +421,7 @@ namespace glz
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
-         {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
-            
+         {            
             skip_ws<Opts>(ctx, it, end);
             const auto key = parse_key(ctx, it, end);
             
@@ -890,13 +888,13 @@ namespace glz
       template <class T, auto Opts, string_literal tag = "">
       GLZ_ALWAYS_INLINE std::string_view parse_object_key(is_context auto&& ctx, auto&& it, auto&& end)
       {
-         std:: string_view key;
          // skip white space and escape characters and find the string
-                  skip_ws<Opts>(ctx, it, end);
-                  match<'"'>(ctx, it);
-         auto start = it;
+         skip_ws<Opts>(ctx, it, end);
+         match<'"'>(ctx, it);
 
          if constexpr (keys_may_contain_escape<T>()) {
+            auto start = it;
+            
             skip_till_escape_or_quote(ctx, it, end);
             if (static_cast<bool>(ctx.error)) [[unlikely]] {
                return {};
@@ -907,21 +905,26 @@ namespace glz
                it = start;
                std::string& static_key = string_buffer();
                read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
-               key = static_key;
+               const sv key = static_key;
+               return key;
             }
             else [[likely]] {
-               key = sv{start, static_cast<size_t>(it - start)};
+               const sv key{start, static_cast<size_t>(it - start)};
                ++it;
+               return key;
             }
          }
          else {
             static constexpr auto stats = key_stats<T, tag>();
             if constexpr (stats.length_range < 8 && Opts.error_on_unknown_keys) {
+               auto start = it;
+               
                if ((it + stats.max_length) < end) [[likely]] {
                   if constexpr (stats.length_range == 0) {
-                     key = sv{start, stats.max_length};
+                     const sv key{start, stats.max_length};
                      it += stats.max_length;
                               match<'"'>(ctx, it);
+                     return key;
                   }
                   else {
                      it += stats.min_length;
@@ -930,30 +933,19 @@ namespace glz
                            break;
                         }
                      }
-                     key = sv{start, static_cast<size_t>(it - start)};
-                              match<'"'>(ctx, it);
+                     const sv key{start, static_cast<size_t>(it - start)};
+                     match<'"'>(ctx, it);
+                     return key;
                   }
                }
                else [[unlikely]] {
-                  skip_till_quote(ctx, it, end);
-                  if (static_cast<bool>(ctx.error)) [[unlikely]] {
-                     return {};
-                  }
-                  key = sv{start, static_cast<size_t>(it - start)};
-                  ++it;
+                  return parse_unescaped_key(ctx, it, end);
                }
             }
             else {
-               skip_till_quote(ctx, it, end);
-               if (static_cast<bool>(ctx.error)) [[unlikely]] {
-                  return {};
-               }
-               key = sv{start, static_cast<size_t>(it - start)};
-               ++it;
+               return parse_unescaped_key(ctx, it, end);
             }
          }
-
-         return key;
       }
       
       template <class T>
@@ -985,7 +977,7 @@ namespace glz
                }
                
                if constexpr (glaze_object_t<T>) {
-                  std::string_view key = parse_object_key<T, Opts, tag>(ctx, it, end);
+                  const sv key = parse_object_key<T, Opts, tag>(ctx, it, end);
                   
                   skip_ws<Opts>(ctx, it, end);
                   match<':'>(ctx, it);
