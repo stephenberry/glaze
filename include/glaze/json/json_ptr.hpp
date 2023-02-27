@@ -542,8 +542,10 @@ namespace glz
             return false;
          }
          else if constexpr (glz::detail::array_t<V>) {
-            glz::detail::stoui(key_str);
-            return valid<typename V::value_type, rem_ptr, Expected_t>();
+            if (glz::detail::stoui(key_str)) {
+               return valid<typename V::value_type, rem_ptr, Expected_t>();
+            }
+            return false;
          }
          else if constexpr (glz::detail::nullable_t<V>) {
             using sub_t = decltype(*std::declval<V>());
