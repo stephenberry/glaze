@@ -29,7 +29,7 @@ int main()
  
    "read_json"_test = [] {
       Eigen::Matrix<double, 2 , 2> m{};
-      glz::read_json(m, "[2,1,7,4]");
+      expect(glz::read_json(m, "[2,1,7,4]") == glz::error_code::none);
       expect(m.rows() == 2);
       expect(m.cols() == 2);
       expect(m(0,1) == 7);
@@ -65,7 +65,7 @@ int main()
       std::string b;
       glz::write_json(m, b);
       Eigen::VectorXd e{};
-      glz::read_json(e, b);
+      expect(glz::read_json(e, b) == glz::error_code::none);
       const bool boolean = m == e;
       expect(boolean);
    };
