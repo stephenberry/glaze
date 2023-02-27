@@ -16,9 +16,15 @@
 
 // TODO: Fix this
 #ifndef WIN32
+#ifdef NDEBUG
    #ifndef GLZ_ALWAYS_INLINE
       #define GLZ_ALWAYS_INLINE inline __attribute__((always_inline))
    #endif
+#else
+   #ifndef GLZ_ALWAYS_INLINE
+      #define GLZ_ALWAYS_INLINE inline
+   #endif
+#endif
 #else
    #ifndef GLZ_ALWAYS_INLINE
       #define GLZ_ALWAYS_INLINE inline
