@@ -15,48 +15,30 @@
 #include "glaze/core/context.hpp"
 #include "glaze/util/string_literal.hpp"
 
-#ifdef __clang__
+#if defined(__clang__) || defined(__GNUC__)
    #ifndef GLZ_USE_ALWAYS_INLINE
       #define GLZ_USE_ALWAYS_INLINE
    #endif
 #endif
 
-#ifdef __GNUC__
-   #ifndef GLZ_USE_ALWAYS_INLINE
-      #define GLZ_USE_ALWAYS_INLINE
-   #endif
-#endif
-
-#ifdef GLZ_USE_ALWAYS_INLINE
-#ifdef NDEBUG
+#if defined(GLZ_USE_ALWAYS_INLINE) && defined(NDEBUG)
    #ifndef GLZ_ALWAYS_INLINE
       #define GLZ_ALWAYS_INLINE inline __attribute__((always_inline))
    #endif
-#else
-   #ifndef GLZ_ALWAYS_INLINE
-      #define GLZ_ALWAYS_INLINE inline
-   #endif
-#endif
-#else
-   #ifndef GLZ_ALWAYS_INLINE
-      #define GLZ_ALWAYS_INLINE inline
-   #endif
 #endif
 
-#ifdef __clang__
-#ifdef NDEBUG
+#ifndef GLZ_ALWAYS_INLINE
+   #define GLZ_ALWAYS_INLINE inline
+#endif
+
+#if defined(__clang__) && defined(NDEBUG)
    #ifndef GLZ_ALWAYS_INLINE_CLANG
       #define GLZ_ALWAYS_INLINE_CLANG inline __attribute__((always_inline))
    #endif
-#else
-   #ifndef GLZ_ALWAYS_INLINE_CLANG
-      #define GLZ_ALWAYS_INLINE_CLANG inline
-   #endif
 #endif
-#else
-   #ifndef GLZ_ALWAYS_INLINE_CLANG
-      #define GLZ_ALWAYS_INLINE_CLANG inline
-   #endif
+
+#ifndef GLZ_ALWAYS_INLINE_CLANG
+   #define GLZ_ALWAYS_INLINE_CLANG inline
 #endif
 
 namespace glz::detail
