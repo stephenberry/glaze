@@ -580,30 +580,37 @@ namespace glz::detail
       else {
           skip_ws<Opts>(ctx, it, end);
           switch (*it) {
-            case '{':
-               skip_object<Opts>(ctx, it, end);
-               break;
-            case '[':
-               skip_array<Opts>(ctx, it, end);
-               break;
-            case '"':
-               skip_string<Opts>(ctx, it, end);
-               break;
-            case 'n':
-               ++it;
-               match<"ull">(ctx, it, end);
-               break;
-            case 'f':
-               ++it;
-               match<"alse">(ctx, it, end);
-               break;
-            case 't':
-               ++it;
-               match<"rue">(ctx, it, end);
-               break;
-            case '\0':
-               ctx.error = error_code::unexpected_end;
-               break;
+             case '{': {
+                skip_object<Opts>(ctx, it, end);
+                break;
+             }
+             case '[': {
+                skip_array<Opts>(ctx, it, end);
+                break;
+             }
+             case '"': {
+                skip_string<Opts>(ctx, it, end);
+                break;
+             }
+             case 'n': {
+                ++it;
+                match<"ull">(ctx, it, end);
+                break;
+             }
+             case 'f': {
+                ++it;
+                match<"alse">(ctx, it, end);
+                break;
+             }
+             case 't': {
+                ++it;
+                match<"rue">(ctx, it, end);
+                break;
+             }
+             case '\0': {
+                ctx.error = error_code::unexpected_end;
+                break;
+             }
             default: {
                skip_number<Opts>(ctx, it, end);
             }
