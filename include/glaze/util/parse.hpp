@@ -6,11 +6,22 @@
 #include <bit>
 #include <iterator>
 
+// TODO: Fix this
+#ifndef WIN32
+   #ifndef GLZ_ALWAYS_INLINE
+      #define GLZ_ALWAYS_INLINE inline __attribute__((always_inline))
+   #endif
+#else
+   #ifndef GLZ_ALWAYS_INLINE
+      #define GLZ_ALWAYS_INLINE inline
+   #endif
+#endif
+
 namespace glz::detail
 {
    // assumes null terminated
    template <char c>
-   inline void match(is_context auto&& ctx, auto&& it) noexcept
+   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it) noexcept
    {
       if (*it != c) [[unlikely]] {
          ctx.error = error_code::syntax_error;
@@ -21,19 +32,18 @@ namespace glz::detail
    }
 
    template <string_literal str>
-   inline void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
-      
       const auto n = static_cast<size_t>(std::distance(it, end));
       if ((n < str.size) || (std::memcmp(it, str.value, str.size) != 0)) [[unlikely]] {
          ctx.error = error_code::syntax_error;
-         return;
       }
-      it += str.size;
+      else {
+         it += str.size;
+      }
    }
    
-   inline void skip_comment(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_comment(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
       
@@ -63,7 +73,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   inline void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
       
@@ -91,7 +101,7 @@ namespace glz::detail
       }
    }
    
-   inline void skip_ws_no_comments(auto&& it) noexcept
+   GLZ_ALWAYS_INLINE void skip_ws_no_comments(auto&& it) noexcept
    {
       while (true) {
          switch (*it)
@@ -108,7 +118,7 @@ namespace glz::detail
       }
    }
 
-   inline void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
       
@@ -148,7 +158,7 @@ namespace glz::detail
       ctx.error = error_code::expected_quote;
    }
    
-   inline void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
       
@@ -183,7 +193,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   inline void skip_string(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
 
@@ -257,7 +267,7 @@ namespace glz::detail
    }
 
    template <char open, char close>
-   inline void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
 
@@ -292,7 +302,7 @@ namespace glz::detail
       }
    }
    
-   inline constexpr bool is_numeric(const auto c) noexcept
+   GLZ_ALWAYS_INLINE constexpr bool is_numeric(const auto c) noexcept
    {
       switch (c) {
       case '0': case '1': case '2': case '3': //
@@ -305,9 +315,9 @@ namespace glz::detail
       return false;
    }
 
-   inline constexpr bool is_digit(char c) noexcept { return c <= '9' && c >= '0'; }
+   GLZ_ALWAYS_INLINE constexpr bool is_digit(char c) noexcept { return c <= '9' && c >= '0'; }
 
-   inline constexpr std::optional<size_t> stoui(std::string_view s, size_t value = 0) noexcept
+   GLZ_ALWAYS_INLINE constexpr std::optional<size_t> stoui(std::string_view s, size_t value = 0) noexcept
    {
       if (s.empty()) {
          return value;
@@ -322,7 +332,7 @@ namespace glz::detail
       }
    }
 
-    inline void skip_number_with_validation(is_context auto&& ctx, auto&& it, auto&& end) noexcept {
+   GLZ_ALWAYS_INLINE void skip_number_with_validation(is_context auto&& ctx, auto&& it, auto&& end) noexcept {
         it += *it == '-';
         const auto sig_start_it = it;
         auto frac_start_it = end;
@@ -365,7 +375,7 @@ namespace glz::detail
     }
 
    template <opts Opts>
-   inline void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] {
          return;
@@ -380,10 +390,10 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   inline void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
+   GLZ_ALWAYS_INLINE void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
    
    // expects opening whitespace to be handled
-   inline expected<sv, error_code> parse_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE expected<sv, error_code> parse_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] { return unexpected(ctx.error); }
       
@@ -395,7 +405,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   inline void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] {
          return;
@@ -430,7 +440,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   inline void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] {
          return;
@@ -457,7 +467,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   inline void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] {
          return;
@@ -530,7 +540,7 @@ namespace glz::detail
    
    // expects opening whitespace to be handled
    template <opts Opts>
-   inline auto parse_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE auto parse_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       auto start = it;
       skip_value<Opts>(ctx, it, end);
