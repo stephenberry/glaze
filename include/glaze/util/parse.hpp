@@ -5,6 +5,14 @@
 
 #include <bit>
 #include <iterator>
+#include <span>
+
+#include "glaze/api/name.hpp"
+#include "glaze/util/string_view.hpp"
+#include "glaze/core/opts.hpp"
+#include "glaze/util/expected.hpp"
+#include "glaze/core/context.hpp"
+#include "glaze/util/string_literal.hpp"
 
 // TODO: Fix this
 #ifndef WIN32

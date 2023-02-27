@@ -5,6 +5,7 @@
 
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/for_each.hpp"
+#include "glaze/util/parse.hpp"
 
 #include <variant>
 #include <stddef.h>
@@ -25,7 +26,7 @@ namespace glz
    namespace detail
    {
       template <is_variant T>
-      constexpr auto runtime_variant_map()
+      GLZ_ALWAYS_INLINE constexpr auto runtime_variant_map()
       {
          constexpr auto N = std::variant_size_v<T>;
          std::array<T, N> ret{};
@@ -36,14 +37,14 @@ namespace glz
 
    // Source: https://www.reddit.com/r/cpp/comments/kst2pu/comment/giilcxv/
    template <size_t I = 0>
-   inline decltype(auto) visit(auto&& f, auto&& v)
+   GLZ_ALWAYS_INLINE decltype(auto) visit(auto&& f, auto&& v)
    {
       constexpr auto vs = std::variant_size_v<std::remove_cvref_t<decltype(v)>>;
 
 #define _VISIT_CASE(N)                                                                       \
    case I + N: {                                                                             \
       if constexpr (I + N < vs) {                                                            \
-         return std::forward<decltype(f)>(f)(std::get<I + N>(std::forward<decltype(v)>(v))); \
+         return std::forward<decltype(f)>(f)(*std::get_if<std::variant_alternative_t<I + N, std::decay_t<decltype(v)>>>(&std::forward<decltype(v)>(v))); \
       }                                                                                      \
    }                                                                                         \
       /**/
