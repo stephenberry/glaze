@@ -23,7 +23,7 @@ namespace glz
    {
       // Unless we can mutate the input buffer we need somewhere to store escaped strings for key lookup and such
       // Could put this in the context but tls overhead isnt that bad. Will need to figure out when heap allocations are not allowed or restricted
-      inline std::string& string_buffer() {
+      GLZ_ALWAYS_INLINE std::string& string_buffer() noexcept {
          static thread_local std::string buffer(128, ' ');
          return buffer;
       }
@@ -469,7 +469,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         inline static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE_CLANG static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
@@ -509,7 +509,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         inline static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE_CLANG static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
@@ -633,7 +633,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         inline static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE_CLANG static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
@@ -663,7 +663,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         inline static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE_CLANG static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             static constexpr auto N = []() constexpr
             {
@@ -953,7 +953,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options, string_literal tag = "">
-         inline static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+         GLZ_ALWAYS_INLINE_CLANG static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             if constexpr (!Options.opening_handled) {
                skip_ws<Options>(ctx, it, end);
@@ -1078,7 +1078,7 @@ namespace glz
        {
           // Note that items in the variant are required to be default constructible for us to switch types
           template <auto Opts>
-          inline static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+          GLZ_ALWAYS_INLINE_CLANG static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
           {
              if constexpr (variant_is_auto_deducible<T>()) {
                 skip_ws<Opts>(ctx, it, end);
@@ -1266,7 +1266,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         inline static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE_CLANG static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             skip_ws<Opts>(ctx, it, end);
             

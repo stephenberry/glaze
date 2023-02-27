@@ -43,6 +43,18 @@
    #endif
 #endif
 
+#ifdef __clang__
+#ifdef NDEBUG
+   #ifndef GLZ_ALWAYS_INLINE_CLANG
+      #define GLZ_ALWAYS_INLINE_CLANG inline __attribute__((always_inline))
+   #endif
+#else
+   #ifndef GLZ_ALWAYS_INLINE_CLANG
+      #define GLZ_ALWAYS_INLINE_CLANG inline
+   #endif
+#endif
+#endif
+
 namespace glz::detail
 {
    // assumes null terminated
