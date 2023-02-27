@@ -12,15 +12,8 @@ namespace glz::detail
    template <char c>
    inline void match(is_context auto&& ctx, auto&& it) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
-      
       if (*it != c) [[unlikely]] {
          ctx.error = error_code::syntax_error;
-         
-         /*
-          static constexpr char b[] = {c, '\0'};
-          static constexpr auto error = concat_arrays("Expected:", b);
-          */
       }
       else [[likely]] {
          ++it;
