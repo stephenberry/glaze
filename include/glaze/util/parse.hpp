@@ -32,13 +32,13 @@
 #endif
 
 #if defined(__clang__) && defined(NDEBUG)
-   #ifndef GLZ_ALWAYS_INLINE_CLANG
-      #define GLZ_ALWAYS_INLINE_CLANG inline __attribute__((always_inline))
+   #ifndef GLZ_FLATTEN
+      #define GLZ_FLATTEN inline __attribute__((flatten))
    #endif
 #endif
 
-#ifndef GLZ_ALWAYS_INLINE_CLANG
-   #define GLZ_ALWAYS_INLINE_CLANG inline
+#ifndef GLZ_FLATTEN
+   #define GLZ_FLATTEN inline
 #endif
 
 namespace glz::detail

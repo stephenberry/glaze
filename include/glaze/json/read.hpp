@@ -469,7 +469,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         GLZ_ALWAYS_INLINE_CLANG static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
@@ -509,7 +509,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         GLZ_ALWAYS_INLINE_CLANG static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
@@ -633,7 +633,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         GLZ_ALWAYS_INLINE_CLANG static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
@@ -663,7 +663,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE_CLANG static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             static constexpr auto N = []() constexpr
             {
@@ -953,7 +953,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options, string_literal tag = "">
-         GLZ_ALWAYS_INLINE_CLANG static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+         GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             if constexpr (!Options.opening_handled) {
                skip_ws<Options>(ctx, it, end);
@@ -1078,7 +1078,7 @@ namespace glz
        {
           // Note that items in the variant are required to be default constructible for us to switch types
           template <auto Opts>
-          GLZ_ALWAYS_INLINE_CLANG static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
           {
              if constexpr (variant_is_auto_deducible<T>()) {
                 skip_ws<Opts>(ctx, it, end);
@@ -1266,7 +1266,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE_CLANG static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             skip_ws<Opts>(ctx, it, end);
             
