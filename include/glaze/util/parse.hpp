@@ -539,8 +539,9 @@ namespace glz::detail
       }
    }
 
+   // Can't use GLZ_ALWAYS_INLINE here because we have to allow infinite recursion
    template <opts Opts>
-   GLZ_ALWAYS_INLINE void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   inline void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] {
          return;
