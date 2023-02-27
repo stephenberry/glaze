@@ -253,8 +253,8 @@ namespace glz
             
             if constexpr (D.is_front_hash) {
                const auto k = static_cast<uint8_t>(key[0]) - D.front;
-               if (k > N_table) [[unlikely]] {
-                  return unexpected(error_code::unknown_key);
+               if (k >= N_table) [[unlikely]] {
+                  throw std::runtime_error("Invalid key");
                }
                const auto index = table[k];
                const auto& item = items[index];
@@ -265,8 +265,8 @@ namespace glz
             }
             else {
                const auto k = static_cast<uint8_t>(key.back()) - D.front;
-               if (k > N_table) [[unlikely]] {
-                  return unexpected(error_code::unknown_key);
+               if (k >= N_table) [[unlikely]] {
+                  throw std::runtime_error("Invalid key");
                }
                const auto index = table[k];
                const auto& item = items[index];
@@ -285,7 +285,7 @@ namespace glz
             
             if constexpr (D.is_front_hash) {
                const auto k = static_cast<uint8_t>(key[0]) - D.front;
-               if (k > N_table) [[unlikely]] {
+               if (k >= N_table) [[unlikely]] {
                   return items.end();
                }
                const auto index = table[k];
@@ -296,7 +296,7 @@ namespace glz
             }
             else {
                const auto k = static_cast<uint8_t>(key.back()) - D.front;
-               if (k > N_table) [[unlikely]] {
+               if (k >= N_table) [[unlikely]] {
                   return items.end();
                }
                const auto index = table[k];
