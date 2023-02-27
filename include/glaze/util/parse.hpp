@@ -477,8 +477,9 @@ namespace glz::detail
       return sv{ start, static_cast<size_t>(it++ - start) };
    }
 
+   // Can't use GLZ_ALWAYS_INLINE here because we have to allow infinite recursion
    template <opts Opts>
-   GLZ_ALWAYS_INLINE void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   inline void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] {
          return;
@@ -512,8 +513,9 @@ namespace glz::detail
       }
    }
 
+   // Can't use GLZ_ALWAYS_INLINE here because we have to allow infinite recursion
    template <opts Opts>
-   GLZ_ALWAYS_INLINE void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   inline void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] {
          return;
