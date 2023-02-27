@@ -930,12 +930,13 @@ namespace glz
                      it += stats.min_length;
                      for (uint32_t i = 0; i < stats.length_range; ++it) {
                         if (*it == '"') {
-                           break;
+                           const sv key{start, static_cast<size_t>(it - start)};
+                           ++it;
+                           return key;
                         }
                      }
-                     const sv key{start, static_cast<size_t>(it - start)};
-                     match<'"'>(ctx, it);
-                     return key;
+                     ctx.error = error_code::key_not_found;
+                     return {};
                   }
                }
                else [[unlikely]] {
