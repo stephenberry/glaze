@@ -73,7 +73,7 @@ namespace glz
          auto& object = std::get<object_t>(data);
          auto iter = object.find(key);
          if (iter == object.end()) {
-            throw std::runtime_error("Key not found.");
+            glaze_error("Key not found.");
          }
          return iter->second;
       }

@@ -48,6 +48,10 @@
    #endif
 #endif
 
+#if __cpp_exceptions
+#include <stdexcept>
+#endif
+
 namespace glz {
    inline void glaze_error(const char* msg) GLZ_NOEXCEPT {
       GLZ_THROW_OR_ABORT(std::runtime_error(msg));
