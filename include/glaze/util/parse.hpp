@@ -5,12 +5,26 @@
 
 #include <bit>
 #include <iterator>
+#include <span>
+
+#include "glaze/api/name.hpp"
+#include "glaze/util/string_view.hpp"
+#include "glaze/core/opts.hpp"
+#include "glaze/util/expected.hpp"
+#include "glaze/core/context.hpp"
+#include "glaze/util/string_literal.hpp"
 
 // TODO: Fix this
 #ifndef WIN32
+#ifdef NDEBUG
    #ifndef GLZ_ALWAYS_INLINE
       #define GLZ_ALWAYS_INLINE inline __attribute__((always_inline))
    #endif
+#else
+   #ifndef GLZ_ALWAYS_INLINE
+      #define GLZ_ALWAYS_INLINE inline
+   #endif
+#endif
 #else
    #ifndef GLZ_ALWAYS_INLINE
       #define GLZ_ALWAYS_INLINE inline
@@ -196,7 +210,9 @@ namespace glz::detail
    // very similar code to skip_till_quote, but it consumes the iterator and returns the key
    [[nodiscard]] GLZ_ALWAYS_INLINE const sv parse_unescaped_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
+      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+         return {};
+      }
       
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
