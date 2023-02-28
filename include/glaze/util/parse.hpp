@@ -31,7 +31,7 @@
    #define GLZ_ALWAYS_INLINE inline
 #endif
 
-#if defined(__clang__) && defined(NDEBUG)
+#if defined(GLZ_USE_ALWAYS_INLINE) && defined(NDEBUG)
    #ifndef GLZ_FLATTEN
       #define GLZ_FLATTEN inline __attribute__((flatten))
    #endif
