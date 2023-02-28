@@ -531,6 +531,9 @@ Only `"x"` and `"z"` are written out, because they are true. Reading in the buff
 
 > When writing binary, `flags` only uses one bit per boolean (byte aligned).
 
+## Variant handling and Type Deduction
+See [Variant-Handling](https://github.com/stephenberry/glaze/wiki/Variant-Handling) for details on std::variant support
+
 ## Error Handling
 
 Glaze is safe to use with untrusted messages. Errors are returned as error codes, typically within a `glz::expected`, which behaves just like a `std::expected`.
