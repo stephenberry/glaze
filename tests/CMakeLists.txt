@@ -29,7 +29,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(glz_test_common INTERFACE -fno-exceptions -fno-rtti -fsanitize=address)
     target_link_options(glz_test_common INTERFACE -fsanitize=address)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    target_compile_options(glz_test_common INTERFACE /GR- /fsanitize=address /bigobj)
+    target_compile_options(glz_test_common INTERFACE /GR- /bigobj) #/fsanitize=address
 endif()
 
 add_subdirectory(api_test)

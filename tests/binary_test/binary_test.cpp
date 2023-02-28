@@ -450,17 +450,18 @@ using namespace boost::ut;
 
 suite binary_helpers = [] {
    "binary_helpers"_test = [] {
-      my_struct v{};
+      my_struct v{22, 5.76, "ufo", {9, 5, 1}};
       
       std::string b;
       
-      expect(nothrow([&] {
-         b = glz::write_binary(v);
-      }));
+      b = glz::write_binary(v);
       
-      expect(nothrow([&] {
-         v = *glz::read_binary<my_struct>(b);
-      }));
+      auto v2 = *glz::read_binary<my_struct>(b);
+
+      expect(v2.i == 22);
+      expect(v2.d == 5.76);
+      expect(v2.hello == "ufo");
+      expect(v2.arr == std::array<uint64_t, 3>{9, 5, 1});
    };
 };
 
