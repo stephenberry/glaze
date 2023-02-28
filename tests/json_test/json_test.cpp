@@ -2546,7 +2546,8 @@ suite nested_file_include_test = [] {
    expect(obj.a.i == 13);
 };
 
-suite shrink_to_fit = [] {
+// Shrink to fit is nonbinding and cannot be properly tested 
+/*suite shrink_to_fit = [] {
    "shrink_to_fit"_test = [] {
       std::vector<int> v = { 1, 2, 3, 4, 5, 6 };
       std::string b = R"([1,2,3])";
@@ -2561,7 +2562,7 @@ suite shrink_to_fit = [] {
       expect(v.size() == 3);
       expect(v.capacity() == 3);
    };
-};
+};*/
 
 suite recorder_test = [] {
    "recorder_to_file"_test = [] {
