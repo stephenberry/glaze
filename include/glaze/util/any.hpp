@@ -157,12 +157,6 @@ namespace glz
          T value;
      };
    };
-   
-   class bad_any_cast : public std::bad_cast {
-     const char *what() const noexcept {
-       return "bad any cast";
-     }
-   };
 
    // C++20
    template <class T>

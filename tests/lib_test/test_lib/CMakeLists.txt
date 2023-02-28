@@ -5,9 +5,7 @@ add_library(${PROJECT_NAME} SHARED ${PROJECT_NAME}.cpp)
 set_target_properties(${PROJECT_NAME} PROPERTIES DEBUG_POSTFIX "_d")
 set_target_properties(${PROJECT_NAME} PROPERTIES RELWITHDEBINFO_POSTFIX "_rd")
 
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
-
-target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze)
+target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_common)
 
 set_target_properties(${PROJECT_NAME}
     PROPERTIES

@@ -21,6 +21,17 @@ message(STATUS "...finished fetching dependencies.")
 include(../cmake/code-coverage.cmake)
 add_code_coverage_all_targets()
 
+
+add_library(glz_test_common INTERFACE)
+target_compile_features(glz_test_common INTERFACE cxx_std_20)
+target_link_libraries(glz_test_common INTERFACE Boost::ut glaze::glaze)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(glz_test_common INTERFACE -fno-exceptions -fno-rtti -fsanitize=address)
+    target_link_options(glz_test_common INTERFACE -fsanitize=address)
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(glz_test_common INTERFACE /GR- /fsanitize=address /bigobj)
+endif()
+
 add_subdirectory(api_test)
 add_subdirectory(binary_test)
 add_subdirectory(eigen_test)
