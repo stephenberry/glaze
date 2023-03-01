@@ -561,7 +561,7 @@ This test case:
 Produces this error:
 
 ```
-1:17: Expected:,
+1:17: syntax_error
    {"Hello":"World"x, "color": "red"}
                    ^
 ```
