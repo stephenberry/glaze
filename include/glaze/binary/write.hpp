@@ -359,7 +359,7 @@ namespace glz
             glz::for_each<N>([&](auto I) {
                using index_t = decltype(I);
                using group_t = std::tuple_element_t<I, decltype(groups)>;
-               static constexpr auto group = [](index_t) constexpr -> group_t {
+               static constexpr auto group = []([[maybe_unused]] index_t Index) constexpr -> group_t {
                   return glz::tuplet::get<decltype(I)::value>(groups);
                }({}); // MSVC internal compiler error workaround
                

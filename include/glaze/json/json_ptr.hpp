@@ -593,7 +593,7 @@ namespace glz
          
          for_each<N>([&](auto I) {
             using index_t = decltype(I);
-            static constexpr auto key = [](index_t) constexpr -> sv {
+            static constexpr auto key = []([[maybe_unused]] index_t Index) constexpr -> sv {
                return std::get<decltype(I)::value>(tokens);
             }({}); // MSVC internal compiler error workaround
             if constexpr (maybe_numeric_key(key)) {
