@@ -37,13 +37,13 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.30**           | **927**      | **939**     |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1301**    |
-| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.69**           | **651**      | **1048**    |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.70**           | **396**      | **503**     |
-| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.16**           | **310**      | **648**     |
-| [**json_struct**](https://github.com/jorgen/json_struct)     | **4.23**           | **241**      | **331**     |
-| [**nlohmann**](https://github.com/nlohmann/json)             | **16.73**          | **89**       | **73**      |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.30**           | **907**      | **941**     |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1257**    |
+| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.73**           | **633**      | **1021**    |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.79**           | **382**      | **487**     |
+| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.21**           | **311**      | **630**     |
+| [**json_struct**](https://github.com/jorgen/json_struct)     | **4.29**           | **236**      | **329**     |
+| [**nlohmann**](https://github.com/nlohmann/json)             | **17.08**          | **89**       | **72**      |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
@@ -53,7 +53,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **2.44**           | **1338**     | **561**     |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **2.44**           | **1334**     | **564**     |
 | [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **114**     |
 
 ## Binary Performance
@@ -62,8 +62,8 @@ Tagged binary specification: [Crusher](https://github.com/stephenberry/crusher)
 
 | Metric                | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | --------------------- | ------------------ | ------------ | ----------- |
-| Raw performance       | **0.37**           | **2199**     | **1949**    |
-| Equivalent JSON data* | **0.37**           | **3261**     | **2891**    |
+| Raw performance       | **0.35**           | **2627**     | **1973**    |
+| Equivalent JSON data* | **0.35**           | **3896**     | **2926**    |
 
 JSON message size: 617 bytes
 
