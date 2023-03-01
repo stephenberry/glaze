@@ -399,9 +399,8 @@ namespace glz::detail
    template <class T, bool force_conformance = false>
    inline bool parse_number(T &val, auto*& cur) noexcept
    {
-
       const uint8_t *sig_cut = nullptr; /* significant part cutting position for long number */
-      const uint8_t *sig_end = nullptr;  /* significant part ending position */
+      [[maybe_unused]] const uint8_t *sig_end = nullptr;  /* significant part ending position */
       const uint8_t *dot_pos = nullptr;  /* decimal point position */
       uint32_t frac_zeros = 0;
       uint64_t sig = 0;    /* significant part of the number */
@@ -435,7 +434,7 @@ namespace glz::detail
             return false;
          }
       }
-      constexpr auto zero = (uint8_t)'0';
+      constexpr auto zero = static_cast<uint8_t>('0');
 #define expr_intg(i)                              \
    if ((num_tmp = cur[i] - zero) <= 9) [[likely]] \
       sig = num_tmp + sig * 10;                   \
@@ -467,7 +466,7 @@ namespace glz::detail
    dot_pos = cur + i;                                                  \
    if ((cur[i] == '.')) [[likely]] {                                   \
       if (sig == 0)                                                    \
-         while (cur[frac_zeros + i + 1] == (uint8_t)'0') ++frac_zeros; \
+         while (cur[frac_zeros + i + 1] == zero) ++frac_zeros; \
       goto digi_frac_##i;                                              \
    }                                                                   \
    cur += i;                                                           \
@@ -477,7 +476,7 @@ namespace glz::detail
 #undef expr_sepr
       /* read fraction part */
 #define expr_frac(i)                                                                                           \
-   digi_frac_##i : if (((num_tmp = (uint64_t)(cur[i + 1 + frac_zeros] - (uint8_t)'0')) <= 9)) [[likely]] sig = \
+   digi_frac_##i : if (((num_tmp = static_cast<uint64_t>(cur[i + 1 + frac_zeros] - zero)) <= 9)) [[likely]] sig = \
                       num_tmp + sig * 10;                                                                      \
    else { goto digi_stop_##i; }
          repeat_in_1_18(expr_frac)
@@ -742,7 +741,7 @@ digi_intg_more :
                                                         // ones after the rounding bit in the product
                      || (mantisa &
                          (round_mask << 1))  // Odd nums need to round up regardless of if the rest is nonzero or not
-                     || (std::countr_zero(sig_norm) + std::countr_zero(sig2_norm) <
+                     || (static_cast<size_t>(std::countr_zero(sig_norm) + std::countr_zero(sig2_norm)) <
                          128 - std::numeric_limits<T>::digits -
                             (2 - sig_product_starts_with_1))  // Check where the least significant one is
             ) {

@@ -152,7 +152,7 @@ namespace glz
        constexpr auto starts = shrink_index_array<filtered.second>(filtered.first);
        constexpr auto sizes = group_sizes(starts, N);
 
-       return glz::tuplet::tuple{ starts, sizes };
+      return glz::tuplet::make_tuple(starts, sizes);
    }
 
    template <class Tuple>

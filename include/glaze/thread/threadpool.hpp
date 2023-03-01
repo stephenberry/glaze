@@ -73,7 +73,7 @@ namespace glz
 
          auto promise = std::make_shared<std::promise<result_type>>();
 
-         queue.emplace(last_index++, [=, f = std::forward<F>(func)](const size_t thread_number) {
+         queue.emplace(last_index++, [=, f = std::forward<F>(func)](const size_t /*thread_number*/) {
 #if __cpp_exceptions
             try {
                if constexpr (std::is_void<result_type>::value) {

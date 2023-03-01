@@ -593,7 +593,7 @@ namespace glz
          
          for_each<N>([&](auto I) {
             using index_t = decltype(I);
-            static constexpr auto key = [](index_t Index) constexpr -> sv {
+            static constexpr auto key = [](index_t) constexpr -> sv {
                return std::get<decltype(I)::value>(tokens);
             }({}); // MSVC internal compiler error workaround
             if constexpr (maybe_numeric_key(key)) {
@@ -628,7 +628,7 @@ namespace glz
                      ++it;
                      // Could optimize by counting commas
                      static constexpr auto n = stoui(key);
-                     for_each<n>([&](auto I) {
+                     for_each<n>([&](auto) {
                         skip_value<Opts>(ctx, it, end);
                         if (*it != ',') {
                            ret = unexpected(parse_error{ error_code::array_element_not_found, static_cast<size_t>(std::distance(start, it)) });

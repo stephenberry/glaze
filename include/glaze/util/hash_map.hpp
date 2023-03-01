@@ -285,7 +285,7 @@ namespace glz
             
             if constexpr (D.is_front_hash) {
                const auto k = static_cast<uint8_t>(key[0]) - D.front;
-               if (k >= N_table) [[unlikely]] {
+               if (k >= static_cast<uint8_t>(N_table)) [[unlikely]] {
                   return items.end();
                }
                const auto index = table[k];
@@ -296,7 +296,7 @@ namespace glz
             }
             else {
                const auto k = static_cast<uint8_t>(key.back()) - D.front;
-               if (k >= N_table) [[unlikely]] {
+               if (k >= static_cast<uint8_t>(N_table)) [[unlikely]] {
                   return items.end();
                }
                const auto index = table[k];

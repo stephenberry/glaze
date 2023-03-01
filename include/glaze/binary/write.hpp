@@ -73,7 +73,7 @@ namespace glz
       struct to_binary<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&&, Args&&... args) noexcept {
+         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&&, Args&&...) noexcept {
          }
       };
       
@@ -81,7 +81,7 @@ namespace glz
       struct to_binary<includer<T>>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&&, Args&&... args) noexcept {
+         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&&, Args&&...) noexcept {
          }
       };
 
@@ -288,7 +288,6 @@ namespace glz
                   static constexpr uint32_t hash = murmur3_32(glz::tuplet::get<0>(item));
                   dump_type(hash, args...);
                }
-               using V = std::tuple_element_t<1, decltype(item)>;
                write<binary>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, args...);
             });
          }
@@ -360,7 +359,7 @@ namespace glz
             glz::for_each<N>([&](auto I) {
                using index_t = decltype(I);
                using group_t = std::tuple_element_t<I, decltype(groups)>;
-               static constexpr auto group = [](index_t Index) constexpr -> group_t {
+               static constexpr auto group = [](index_t) constexpr -> group_t {
                   return glz::tuplet::get<decltype(I)::value>(groups);
                }({}); // MSVC internal compiler error workaround
                

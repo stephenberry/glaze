@@ -1978,7 +1978,7 @@ suite thread_pool = [] {
       
       std::atomic<int> x = 0;
       
-      auto f = [&](auto thread_number) {
+      auto f = [&](auto /*thread_number*/) {
          ++x;
       };
       
@@ -2088,9 +2088,7 @@ suite json_helpers = [] {
       my_struct v{};
       auto json = glz::write_json(v);
       expect(json == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
-      
-      glz::error_code ec;
-      
+            
       v = glz::read_json<my_struct>(json).value();
    };
 };
@@ -2789,7 +2787,6 @@ suite member_function_tests = []
    {
       mem_f_struct s{};
       
-      using T = mem_f_struct;
       auto i = glz::call<int&>(s, "/access");
       ++i.value();
       
@@ -2834,7 +2831,7 @@ struct glz::meta<cat>
 };
 
 struct person {
-   void eat(const std::string& thing) {};
+   void eat(const std::string&) {};
 };
 
 template <> struct glz::meta<person> {
@@ -2873,7 +2870,7 @@ struct glz::meta<complex_function_call_t>
 
 struct string_t
 {
-   std::string string(const std::string_view s, const int y) {
+   std::string string(const std::string_view, const int) {
       return "";
    }
 };

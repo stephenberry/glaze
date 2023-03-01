@@ -41,7 +41,7 @@ namespace glz
       }
 
       [[nodiscard]] bool contains(const sv path) noexcept override {
-        return detail::seek_impl([&](auto&& val) {}, user, path);
+        return detail::seek_impl([&](auto&&) {}, user, path);
       }
 
       bool read(const uint32_t format, const sv path,
@@ -278,7 +278,7 @@ namespace glz
                      static constexpr auto h = glz::hash<V>();
                      if (h == type_hash) [[likely]] {
                         result =
-                           std::unique_ptr<void, void (*)(void*)>{&val, [](void* ptr) {}};
+                           std::unique_ptr<void, void (*)(void*)>{&val, [](void*) {}};
                      }
                      else [[unlikely]] {
                         error = "mismatching types";

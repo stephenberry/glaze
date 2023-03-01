@@ -54,7 +54,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&...) noexcept
          {
             ctx.error = error_code::attempt_member_func_read;
          }
@@ -64,7 +64,7 @@ namespace glz
       struct from_json<skip>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&... args) noexcept
          {
             skip_value<Opts>(ctx, args...);
          }
@@ -85,7 +85,7 @@ namespace glz
       struct from_json<hidden>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&...) noexcept
          {
             ctx.error = error_code::attempt_read_hidden;
          };
@@ -95,7 +95,7 @@ namespace glz
       struct from_json<std::monostate>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
          {
             match<R"("std::monostate")">(args...);
          };
@@ -1164,7 +1164,7 @@ namespace glz
                             else if (matching_types == 1) {
                                it = start;
                                const auto type_index = possible_types.countr_zero();
-                               if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                               if (value.index() != static_cast<size_t>(type_index)) value = runtime_variant_map<T>()[type_index];
                                glz::visit(
                                   [&](auto&& v) {
                                      using V = std::decay_t<decltype(v)>;
@@ -1254,7 +1254,6 @@ namespace glz
              else {
                 glz::visit(
                    [&](auto&& v) {
-                      using V = std::decay_t<decltype(v)>;
                       read<json>::op<Opts>(v, ctx, it, end);
                    },
                    value);

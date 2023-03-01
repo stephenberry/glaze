@@ -75,7 +75,7 @@ namespace glz
       struct to_json<hidden>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&&... args)
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args)
          {
             dump<'"'>(args...);
             dump("hidden type should not have been written", args...);
@@ -87,7 +87,7 @@ namespace glz
       struct to_json<skip>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&&... args)
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args)
          {
             dump<'"'>(args...);
             dump("skip type should not have been written", args...);
@@ -99,7 +99,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&&... args) {
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&...) {
          }
       };
       
@@ -144,7 +144,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class B>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
          {
             if constexpr (char_t<T>) {
                dump<'"'>(b, ix);
@@ -303,7 +303,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
             dump<'"'>(args...);
             dump(name_v<std::decay_t<decltype(value)>>, args...);
@@ -439,7 +439,7 @@ namespace glz
       struct to_json<std::monostate>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
          {
             dump<R"("std::monostate")">(args...);
          };
@@ -453,8 +453,7 @@ namespace glz
          {
             std::visit([&](auto&& val) {
                using V = std::decay_t<decltype(val)>;
-                  constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
-
+               
                if constexpr (Opts.write_type_info && !tag_v<T>.empty() && glaze_object_t<V>) {
                   // must first write out type
                   if constexpr (Opts.prettify) {
@@ -541,7 +540,7 @@ namespace glz
       struct to_json<includer<T>>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& /*ctx*/, Args&&... args) noexcept {
+         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& /*ctx*/, Args&&...) noexcept {
          }
       };      
 

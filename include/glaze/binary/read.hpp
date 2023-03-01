@@ -39,7 +39,7 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts, is_context Ctx, class It0, class It1>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) {
+         GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&&, It0&& it, It1&&) {
             static constexpr auto N = std::tuple_size_v<meta_t<T>>;
             
             static constexpr auto Length = byte_length<T>();
@@ -61,7 +61,7 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto&&) noexcept
          {
             using V = std::decay_t<T>;
             std::memcpy(&value, &(*it), sizeof(V));
@@ -73,7 +73,7 @@ namespace glz
       requires(std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>) struct from_binary<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& /* end */) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto&& /* end */) noexcept
          {
             value = static_cast<bool>(*it);
             ++it;
@@ -160,7 +160,7 @@ namespace glz
       struct from_binary<T> final
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto&& end) noexcept
          {
             const auto n = int_from_header(it, end);
             using V = typename std::decay_t<T>::value_type;
@@ -266,7 +266,7 @@ namespace glz
       struct from_binary<includer<T>>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept {
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&, auto&&) noexcept {
          }
       };
       
@@ -292,7 +292,6 @@ namespace glz
                   if (p != storage.end()) {
                      std::visit(
                                 [&](auto&& member_ptr) {
-                                   using V = std::decay_t<decltype(member_ptr)>;
                                    read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
                                 },
                         p->second);

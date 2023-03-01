@@ -53,7 +53,7 @@
 #endif
 
 namespace glz {
-   inline void glaze_error(const char* msg) GLZ_NOEXCEPT {
+   inline void glaze_error([[maybe_unused]] const char* msg) GLZ_NOEXCEPT {
       GLZ_THROW_OR_ABORT(std::runtime_error(msg));
    }
 }
