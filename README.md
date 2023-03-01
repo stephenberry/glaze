@@ -1,6 +1,8 @@
 # Glaze
 ># IMPORTANT VERSION 1.0 RELEASE NOTES
 >
+>**If you need to access the previous exception-based version, pull the `version0` branch**.
+>
 >Previous versions of Glaze used exceptions, and for some minor features runtime type information (RTTI). This new version of glaze does not use exceptions or RTTI.
 >
 >- Glaze now builds with `-fno-exceptions` and `-fno-rtti`
