@@ -27,7 +27,7 @@ namespace glz
       struct write<json>
       {
          template <auto Opts, class T, is_context Ctx, class B, class IX>
-         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+         GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
             to_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
@@ -36,8 +36,8 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, is_context Ctx, class B, class IX>
-         static void op(auto&& value, Ctx&& ctx, B&& b, IX&& ix) {
-            using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
+         GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, IX&& ix) {
+            using V = std::decay_t<decltype(get_member(std::declval<T>(), meta_wrapper_v<T>))>;
             to_json<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
@@ -46,7 +46,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) {
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) {
             static constexpr auto N = std::tuple_size_v<meta_t<T>>;
             
             dump<'['>(b, ix);
@@ -75,7 +75,7 @@ namespace glz
       struct to_json<hidden>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&&, auto&&... args)
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args)
          {
             dump<'"'>(args...);
             dump("hidden type should not have been written", args...);
@@ -87,7 +87,7 @@ namespace glz
       struct to_json<skip>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&&, auto&&... args)
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args)
          {
             dump<'"'>(args...);
             dump("skip type should not have been written", args...);
@@ -99,7 +99,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&&, auto&&... args) {
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&...) {
          }
       };
       
@@ -107,7 +107,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, Args&&... args)
+         GLZ_ALWAYS_INLINE static void op(auto&& value, Args&&... args)
          {
             using V = std::decay_t<decltype(value.get())>;
             to_json<V>::template op<Opts>(value.get(), std::forward<Args>(args)...);
@@ -118,7 +118,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(const bool value, is_context auto&&, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args) noexcept
          {
             if (value) {
                dump<"true">(std::forward<Args>(args)...);
@@ -133,7 +133,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class B>
-         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             write_chars::op<Opts>(value, ctx, b, ix);
          }
@@ -144,7 +144,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class B>
-         static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
          {
             if constexpr (char_t<T>) {
                dump<'"'>(b, ix);
@@ -273,7 +273,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using key_t = std::underlying_type_t<T>;
             static constexpr auto frozen_map =
@@ -286,9 +286,9 @@ namespace glz
                // be
                // escaped for their enum names
                // TODO: Could create a pre qouted map for better perf
-               dump<'"'>(std::forward<Args>(args)...);
-               dump(str, std::forward<Args>(args)...);
-               dump<'"'>(std::forward<Args>(args)...);
+               dump<'"'>(args...);
+               dump(str, args...);
+               dump<'"'>(args...);
             }
             else [[unlikely]] {
                // What do we want to happen if the value doesnt have a mapped
@@ -303,7 +303,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
             dump<'"'>(args...);
             dump(name_v<std::decay_t<decltype(value)>>, args...);
@@ -316,7 +316,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept {
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept {
             dump(value.str, b, ix);
          }
       };
@@ -325,7 +325,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<'['>(std::forward<Args>(args)...);
             if constexpr (Opts.prettify) {
@@ -369,7 +369,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<'{'>(std::forward<Args>(args)...);
             if constexpr (Opts.prettify) {
@@ -425,7 +425,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if (value)
                write<json>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
@@ -439,7 +439,7 @@ namespace glz
       struct to_json<std::monostate>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
          {
             dump<R"("std::monostate")">(args...);
          };
@@ -449,24 +449,30 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             std::visit([&](auto&& val) {
                using V = std::decay_t<decltype(val)>;
-               if constexpr (Opts.write_type_info && glaze_object_t<V>) {
+               
+               if constexpr (Opts.write_type_info && !tag_v<T>.empty() && glaze_object_t<V>) {
                   // must first write out type
                   if constexpr (Opts.prettify) {
                      dump<"{\n">(std::forward<Args>(args)...);
                      ctx.indentation_level += Opts.indentation_width;
                      dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
                      dump<R"("type": ")">(std::forward<Args>(args)...);
-                     dump(name_v<V>, std::forward<Args>(args)...);
+                     dump<'"'>(std::forward<Args>(args)...);
+                     dump(tag_v<T>, std::forward<Args>(args)...);
+                     dump<"\": \"">(std::forward<Args>(args)...);
+                     dump(ids_v<T>[value.index()], std::forward<Args>(args)...);
                      dump<"\",\n">(std::forward<Args>(args)...);
                      dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
                   }
                   else {
-                     dump<R"({"type":")">(std::forward<Args>(args)...);
-                     dump(name_v<V>, std::forward<Args>(args)...);
+                     dump<"{\"">(std::forward<Args>(args)...);
+                     dump(tag_v<T>, std::forward<Args>(args)...);
+                     dump<"\":\"">(std::forward<Args>(args)...);
+                     dump(ids_v<T>[value.index()], std::forward<Args>(args)...);
                      dump<R"(",)">(std::forward<Args>(args)...);
                   }
                   write<json>::op<opening_handled<Opts>()>(val, ctx, std::forward<Args>(args)...);
@@ -483,7 +489,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             static constexpr auto N = []() constexpr
             {
@@ -534,7 +540,7 @@ namespace glz
       struct to_json<includer<T>>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& /*value*/, is_context auto&& /*ctx*/, Args&&... args) noexcept {
+         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& /*ctx*/, Args&&...) noexcept {
          }
       };      
 
@@ -543,7 +549,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             static constexpr auto N = []() constexpr
             {
@@ -591,7 +597,7 @@ namespace glz
       };
 
       template <const std::string_view& S>
-      inline constexpr auto array_from_sv() noexcept
+      GLZ_ALWAYS_INLINE constexpr auto array_from_sv() noexcept
       {
          constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
          constexpr auto N = s.size();
@@ -600,7 +606,7 @@ namespace glz
          return arr;
       }
 
-      inline constexpr bool needs_escaping(const auto& S) noexcept
+      GLZ_ALWAYS_INLINE constexpr bool needs_escaping(const auto& S) noexcept
       {
          for (const auto& c : S) {
             if (c == '"') {
@@ -615,7 +621,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Options>
-         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             if constexpr (!Options.opening_handled) {
                dump<'{'>(b, ix);
@@ -725,42 +731,43 @@ namespace glz
    }  // namespace detail
    
    template <class T, class Buffer>
-   inline auto write_json(T&& value, Buffer&& buffer) {
+   GLZ_ALWAYS_INLINE auto write_json(T&& value, Buffer&& buffer) {
       return write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
    
    template <class T>
-   inline auto write_json(T&& value) {
+   GLZ_ALWAYS_INLINE auto write_json(T&& value) {
       std::string buffer{};
       write<opts{}>(std::forward<T>(value), buffer);
       return buffer;
    }
    
    template <class T, class Buffer>
-   inline void write_jsonc(T&& value, Buffer&& buffer) {
+   GLZ_ALWAYS_INLINE void write_jsonc(T&& value, Buffer&& buffer) {
       write<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
    
    template <class T>
-   inline auto write_jsonc(T&& value) {
+   GLZ_ALWAYS_INLINE auto write_jsonc(T&& value) {
       std::string buffer{};
       write<opts{.comments = true}>(std::forward<T>(value), buffer);
       return buffer;
    }
 
-   void buffer_to_file(auto&& buffer, auto&& file_name) {
+   [[nodiscard]] GLZ_ALWAYS_INLINE error_code buffer_to_file(auto&& buffer, auto&& file_name) noexcept {
       auto file = std::ofstream(file_name, std::ios::out);
       if (!file) {
-         throw std::runtime_error("glz::buffer_to_file: Could not create file with path (" + file_name + ").");
+         return error_code::file_open_failure;
       }
       file.write(buffer.data(), buffer.size());
+      return {};
    }
    
    // std::string file_name needed for std::ofstream
    template <class T>
-   inline void write_file_json(T&& value, const std::string& file_name) {
+   [[nodiscard]] GLZ_ALWAYS_INLINE write_error write_file_json(T&& value, const std::string& file_name) noexcept {
       std::string buffer{};
       write<opts{}>(std::forward<T>(value), buffer);
-      buffer_to_file(buffer, file_name);
+      return { buffer_to_file(buffer, file_name) };
    }
 }

@@ -73,7 +73,7 @@ namespace glz
          auto& object = std::get<object_t>(data);
          auto iter = object.find(key);
          if (iter == object.end()) {
-            throw std::runtime_error("Key not found.");
+            glaze_error("Key not found.");
          }
          return iter->second;
       }
@@ -158,3 +158,11 @@ namespace glz
       }
    };
 }
+
+template <>
+struct glz::meta<glz::json_t>
+{
+   static constexpr std::string_view name = "glz::json_t";
+   using T = glz::json_t;
+   static constexpr auto value = &T::data;
+};

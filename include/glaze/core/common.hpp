@@ -25,6 +25,9 @@
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/hash_map.hpp"
 #include "glaze/util/murmur.hpp"
+#include "glaze/util/expected.hpp"
+#include "glaze/util/for_each.hpp"
+#include "glaze/util/bit_array.hpp"
 
 namespace glz
 {
@@ -169,53 +172,6 @@ namespace glz
       {
          return concat(a1, a2, gen_seq<N1 - 1>{}, gen_seq<N2>{});
       }
-
-      template <size_t N>
-      struct string_literal
-      {
-         static constexpr size_t size = (N > 0) ? (N - 1) : 0;
-
-         constexpr string_literal() = default;
-
-         constexpr string_literal(const char (&str)[N])
-         {
-            std::copy_n(str, N, value);
-         }
-
-         char value[N];
-         constexpr const char *end() const noexcept { return value + size; }
-
-         constexpr const std::string_view sv() const noexcept
-         {
-            return {value, size};
-         }
-      };
-
-      template<size_t N>
-      constexpr auto string_literal_from_view(sv str)
-      {
-         string_literal<N + 1> sl{};
-         std::copy_n(str.data(), str.size(), sl.value);
-         *(sl.value + N) = '\0';
-         return sl;
-      }
-
-
-      template <size_t N>
-      constexpr size_t length(char const (&)[N]) noexcept
-      {
-         return N;
-      }
-
-      template <string_literal Str>
-      struct chars_impl
-      {
-         static constexpr std::string_view value{Str.value,
-                                                 length(Str.value) - 1};
-      };
-
-      template <string_literal Str>
-      inline constexpr std::string_view chars = chars_impl<Str>::value;
       
       template <uint32_t Format>
       struct read {};
@@ -274,13 +230,6 @@ namespace glz
 
       template <class T>
       concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
-
-      template <class T>
-      concept glaze_t = requires
-      {
-         meta<std::decay_t<T>>::value;
-      }
-      || local_meta_t<std::decay_t<T>>;
       
       template <class T>
       concept constructible = requires
@@ -708,6 +657,17 @@ namespace glz
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_enum_to_string_map_impl<T>(indices);
       }
+      
+      // TODO: This faster approach can be used if the enum has an integer type base and sequential numbering
+      template <class T>
+      constexpr auto make_enum_to_string_array()
+      {
+         std::array<sv, std::tuple_size_v<meta_t<T>>> arr;
+         for_each<std::tuple_size_v<meta_t<T>>>([&](auto I) {
+            arr[I] = enum_name_v<static_cast<T>(decltype(I)::value)>;
+         });
+         return arr;
+      }
 
       template <class T, size_t... I>
       constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>)
@@ -725,6 +685,78 @@ namespace glz
          constexpr auto indices =
             std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_string_to_enum_map_impl<T>(indices);
+      }
+
+      template <class T>
+      constexpr auto get_combined_keys_from_variant()
+      {
+         constexpr auto N = std::variant_size_v<T>;
+         constexpr size_t max_keys = []() {
+            size_t res{};
+            for_each<N>([&](auto I) {
+               using V = std::decay_t<std::variant_alternative_t<I, T>>;
+               res += std::tuple_size_v<meta_t<V>>;
+            });
+            return res;
+         }();
+
+         std::array<std::string_view, max_keys> data{};
+         size_t index = 0;
+         for_each<N>([&](auto I) {
+            using V = std::decay_t<std::variant_alternative_t<I, T>>;
+            for_each<std::tuple_size_v<meta_t<V>>>([&](auto J) {
+               data[index++] = glz::tuplet::get<0>(glz::tuplet::get<J>(meta_v<V>));
+            });
+         });
+
+         std::sort(data.data(), data.data() + max_keys);
+         const auto end = std::unique(data.data(), data.data() + max_keys);
+         const auto size = std::distance(data.data(), end);
+
+         return std::pair{data, size};
+      }
+
+      template <class T, size_t... I>
+      constexpr auto make_variant_deduction_base_map(std::index_sequence<I...>, auto &&keys)
+      {
+         using V = bit_array<std::variant_size_v<T>>;
+         return frozen::make_unordered_map<frozen::string, V, sizeof...(I)>(
+            {std::make_pair<frozen::string, V>(frozen::string(std::get<I>(keys)), V{})...}
+         );
+      }
+
+      template <class T>
+      constexpr auto make_variant_deduction_map()
+      {
+         constexpr auto key_size_pair = get_combined_keys_from_variant<T>();
+
+         auto deduction_map = make_variant_deduction_base_map<T>(std::make_index_sequence<key_size_pair.second>{}, key_size_pair.first);
+
+         constexpr auto N = std::variant_size_v<T>;
+         for_each<N>([&](auto I) {
+            using V = std::decay_t<std::variant_alternative_t<I, T>>;
+            for_each<std::tuple_size_v<meta_t<V>>>([&](auto J) {
+               deduction_map.find(glz::tuplet::get<0>(glz::tuplet::get<J>(meta_v<V>)))->second[I] = true;
+            });
+         });
+
+         return deduction_map;
+      }
+
+      template <is_variant T, size_t... I>
+      constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
+      {
+         return frozen::make_unordered_map<frozen::string, size_t, std::variant_size_v<T>>(
+            {std::make_pair<frozen::string, size_t>(frozen::string(variant_ids[I]), I)...}
+         );
+      }
+
+      template <is_variant T>
+      constexpr auto make_variant_id_map()
+      {
+         constexpr auto indices = std::make_index_sequence<std::variant_size_v<T>>{};
+
+         return make_variant_id_map_impl<T>(indices, ids_v<T>);
       }
       
       inline decltype(auto) get_member(auto&& value, auto& member_ptr)
@@ -803,5 +835,70 @@ namespace glz
    {
       return glz::detail::Flags{
          group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(args...))>>::op(glz::tuplet::make_copy_tuple(args...))};
+   }
+}
+
+template <>
+struct glz::meta<glz::error_code>
+{
+   static constexpr sv name = "glz::error_code";
+   using enum glz::error_code;
+   static constexpr auto value = enumerate("none", none, //
+                                           "no_read_input", no_read_input, //
+                                           "data_must_be_null_terminated", data_must_be_null_terminated, //
+                                           "parse_number_failure", parse_number_failure, //
+                                           "expected_brace", expected_brace, //
+                                           "expected_bracket", expected_bracket, //
+                                           "expected_quote", expected_quote, //
+                                           "exceeded_static_array_size", exceeded_static_array_size, //
+                                           "unexpected_end", unexpected_end, //
+                                           "expected_end_comment", expected_end_comment, //
+                                           "syntax_error", syntax_error, //
+                                           "key_not_found", key_not_found, //
+                                           "unexpected_enum", unexpected_enum, //
+                                           "attempt_member_func_read", attempt_member_func_read, //
+                                           "attempt_read_hidden", attempt_read_hidden, //
+                                           "invalid_nullable_read", invalid_nullable_read, //
+                                           "invalid_variant_object", invalid_variant_object, //
+                                           "invalid_variant_array", invalid_variant_array, //
+                                           "invalid_variant_string", invalid_variant_string, //
+                                           "no_matching_variant_type", no_matching_variant_type, //
+                                           "expected_true_or_false", expected_true_or_false, //
+                                           "unknown_key", unknown_key, //
+                                           "invalid_flag_input", invalid_flag_input, //
+                                           "invalid_escape", invalid_escape, //
+                                           "u_requires_hex_digits", u_requires_hex_digits, //
+                                           "file_extension_not_supported", file_extension_not_supported, //
+                                           "could_not_determine_extension", could_not_determine_extension, //
+                                           "seek_failure", seek_failure, //
+                                           "unicode_escape_conversion_failure", unicode_escape_conversion_failure, //
+                                           "file_open_failure", file_open_failure, //
+                                           "file_include_error", file_include_error, //
+                                           "dump_int_error", dump_int_error, //
+                                           "get_nonexistent_json_ptr", get_nonexistent_json_ptr, //
+                                           "get_wrong_type", get_wrong_type, //
+                                           "cannot_be_referenced", cannot_be_referenced, //
+                                           "invalid_get", invalid_get, //
+                                           "invalid_get_fn", invalid_get_fn, //
+                                           "invalid_call", invalid_call, //
+                                           "invalid_partial_key", invalid_partial_key, //
+                                           "name_mismatch", name_mismatch, //
+                                           "array_element_not_found", array_element_not_found, //
+                                           "elements_not_convertible_to_design", elements_not_convertible_to_design, //
+                                           "unknown_distribution", unknown_distribution, //
+                                           "invalid_distribution_elements", invalid_distribution_elements //
+   );
+};
+
+namespace glz
+{
+   [[nodiscard]] inline std::string format_error(const parse_error& pe, auto& buffer) {
+      static constexpr auto arr = detail::make_enum_to_string_array<error_code>();
+      
+      const auto info = detail::get_source_info(buffer, pe.location);
+      if (info) {
+         return detail::generate_error_string(arr[static_cast<uint32_t>(pe.ec)], *info);
+      }
+      return "";
    }
 }

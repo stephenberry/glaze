@@ -35,32 +35,43 @@ namespace glz
    {
       UserType user{};
       
-      void* get(const sv path, const sv type_hash) noexcept override
+      std::pair<void*, sv> get(const sv path) noexcept override
       {
-         return get_void(user, path, type_hash);
+         return get_void(user, path);
       }
 
       [[nodiscard]] bool contains(const sv path) noexcept override {
-        return detail::seek_impl([&](auto&& val) {}, user, path);
+        return detail::seek_impl([&](auto&&) {}, user, path);
       }
 
       bool read(const uint32_t format, const sv path,
                  const sv data) noexcept override
       {
+         parse_error pe{};
+         bool success;
+         
          if (format == json) {
-            return detail::seek_impl(
+            success = detail::seek_impl(
                [&](auto&& val) {
-                  glz::read<opts{}>(val, data);
+                  pe = glz::read<opts{}>(val, data);
                },
                user, path);
          }
          else {
-            return detail::seek_impl(
+            success = detail::seek_impl(
                [&](auto&& val) {
-                  glz::read<opts{.format = binary}>(val, data);
+                  pe = glz::read<opts{.format = binary}>(val, data);
                },
                user, path);
          }
+         
+         if (success) {
+            if (pe) {
+               return false;
+            }
+            return true;
+         }
+         return false;
       }
 
       bool write(const uint32_t format, const sv path,
@@ -193,11 +204,13 @@ namespace glz
       // Get a pointer to a value at the location of a json_ptr. Will return
       // nullptr if value doesnt exist or is wrong type
       template <class T>
-      void* get_void(T&& root_value, const sv json_ptr, const sv type_hash)
+      std::pair<void*, sv> get_void(T&& root_value, const sv json_ptr)
       {
          void* result{};
          
-         detail::seek_impl(
+         sv type_hash{};
+         
+         const auto success = detail::seek_impl(
             [&](auto&& val) {
                using V = std::decay_t<decltype(*unwrap(val))>;
                if constexpr (std::is_member_function_pointer_v<V>) {
@@ -205,22 +218,21 @@ namespace glz
                }
                else {
                   static constexpr auto h = glz::hash<V>();
-                  if (h == type_hash) [[likely]] {
-                     result = unwrap(val);
-                  }
-                  else [[unlikely]] {
-                     error = "mismatching types";
-                     error += ", expected: " + std::string(glz::name_v<V>);
-                  }
+                  type_hash = h;
+                  result = unwrap(val);
                }
             },
             std::forward<T>(root_value), json_ptr);
          
-         if (error.empty() && result == nullptr) {
+         if (!error.empty()) {
+            return { nullptr, "" };
+         }
+         else if (!success) {
             error = "invalid path";
+            return { nullptr, "" };
          }
          
-         return result;
+         return { result, type_hash };
       }
       
       template <class T>
@@ -266,7 +278,7 @@ namespace glz
                      static constexpr auto h = glz::hash<V>();
                      if (h == type_hash) [[likely]] {
                         result =
-                           std::unique_ptr<void, void (*)(void*)>{&val, [](void* ptr) {}};
+                           std::unique_ptr<void, void (*)(void*)>{&val, [](void*) {}};
                      }
                      else [[unlikely]] {
                         error = "mismatching types";

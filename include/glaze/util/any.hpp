@@ -8,7 +8,7 @@
 #include <concepts>
 #include <memory>
 #include <utility>
-#include <typeinfo>
+#include "glaze/api/trait.hpp"
 
 namespace glz
 {
@@ -111,10 +111,6 @@ namespace glz
      bool has_value() const noexcept {
        return static_cast<bool>(instance);
      }
-
-     const std::type_info &type() const noexcept {
-       return instance ? instance->type() : typeid(void);
-     }
       
       friend void swap(any& lhs, any& rhs) {
          lhs.swap(rhs);
@@ -130,9 +126,9 @@ namespace glz
       struct storage_base {
          virtual ~storage_base() = default;
          
-         virtual const std::type_info &type() const noexcept = 0;
          virtual std::unique_ptr<storage_base> clone() const = 0;
          virtual void* data() noexcept = 0;
+         std::string_view type_hash;
      };
       
       std::unique_ptr<storage_base> instance;
@@ -140,16 +136,14 @@ namespace glz
       template <class T>
       struct storage_impl final : storage_base
       {
-       template <class... Args>
-       storage_impl(Args&&... args) : value(std::forward<Args>(args)...) {}
-
-       const std::type_info& type() const noexcept override {
-         return typeid(T);
-       }
-
-       std::unique_ptr<storage_base> clone() const override {
-         return std::make_unique<storage_impl<T>>(value);
-       }
+         template <class... Args>
+         storage_impl(Args&&... args) : value(std::forward<Args>(args)...) {
+            type_hash = hash<T>();
+         }
+         
+         std::unique_ptr<storage_base> clone() const override {
+            return std::make_unique<storage_impl<T>>(value);
+         }
          
          void* data() noexcept override {
             if constexpr (std::is_pointer_v<T>) {
@@ -160,14 +154,8 @@ namespace glz
             }
          }
 
-       T value;
+         T value;
      };
-   };
-   
-   class bad_any_cast : public std::bad_cast {
-     const char *what() const noexcept {
-       return "bad any cast";
-     }
    };
 
    // C++20
@@ -181,7 +169,7 @@ namespace glz
      if (auto *value = any_cast<V>(&a)) {
        return static_cast<T>(*value);
      } else {
-       throw bad_any_cast();
+        std::abort();
      }
    }
 
@@ -192,7 +180,7 @@ namespace glz
      if (auto *value = any_cast<V>(&a)) {
        return static_cast<T>(*value);
      } else {
-       throw bad_any_cast();
+        std::abort();
      }
    }
 
@@ -203,16 +191,19 @@ namespace glz
      if (auto *value = any_cast<V>(&a)) {
        return static_cast<T>(std::move(*value));
      } else {
-       throw bad_any_cast();
+        std::abort();
      }
    }
 
    template <class T>
    const T* any_cast(const any* a) noexcept {
       if (!a) { return nullptr; }
-      auto* storage = dynamic_cast<any::storage_impl<T>*>(a->instance.get());
-      if (!storage) { return nullptr; }
-      return &storage->value;
+      static constexpr auto h = hash<T>();
+      
+      if (h == a->instance->type_hash) [[likely]] {
+         return &(reinterpret_cast<any::storage_impl<T>*>(a->instance.get())->value);
+      }
+      return nullptr;
    }
 
    template <class T>

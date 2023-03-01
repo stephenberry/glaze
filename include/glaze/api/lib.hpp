@@ -16,10 +16,13 @@
 #endif
 
 #ifdef GLAZE_API_ON_WINDOWS
-#ifndef NOMINMAX
+#ifdef NOMINMAX
+#include <windows.h>
+#else
 #define NOMINMAX
+#include <windows.h>
+#undef NOMINMAX
 #endif
-#include <Windows.h>
 #define SHARED_LIBRARY_EXTENSION ".dll"
 #define SHARED_LIBRARY_PREFIX ""
 #elif __APPLE__
@@ -96,7 +99,7 @@ namespace glz
       }
       
    private:
-      bool load_lib(const std::string& path) {
+      bool load_lib(const std::string& path) noexcept {
 #ifdef GLAZE_API_ON_WINDOWS
          lib_t loaded_lib = LoadLibrary(path.c_str());
 #else
@@ -115,9 +118,6 @@ namespace glz
                std::shared_ptr<glz::iface> shared_iface_ptr = (*ptr)()();
                api_map.merge(*shared_iface_ptr);
                return true;
-            }
-            else {
-               throw std::runtime_error("load_lib: glz_iface could not be loaded");
             }
          }
 

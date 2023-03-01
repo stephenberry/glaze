@@ -9,6 +9,7 @@
 #include "glaze/util/type_traits.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/util/for_each.hpp"
+#include "glaze/util/string_literal.hpp"
 
 namespace glz
 {
@@ -63,34 +64,4 @@ namespace glz
    concept has_glaze_name = requires {
        T::glaze_name;
    };*/
-   
-   template <size_t N>
-   struct string_literal {
-      consteval string_literal(const char (&str)[N]) {
-         std::copy_n(str, N, value);
-      }
-      
-      char value[N];
-   };
-   
-   template <size_t N>
-   constexpr size_t length(char const (&)[N]) {
-      return N;
-   }
-   
-   template <string_literal Str>
-   struct chars_impl {
-      static constexpr std::string_view value{ Str.value, length(Str.value) - 1 };
-   };
-   
-   template <string_literal Str>
-   inline constexpr std::string_view chars = chars_impl<Str>::value;
-   
-   template <const std::string_view& Str>
-   struct stringer_impl {
-      static constexpr std::string_view value = Str;
-   };
-   
-   template <const std::string_view& Str>
-   inline constexpr std::string_view stringer = stringer_impl<Str>::value;
 }

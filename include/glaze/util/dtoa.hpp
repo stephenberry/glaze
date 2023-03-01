@@ -978,7 +978,6 @@ namespace glz
    template <std::floating_point T>
    inline char *to_chars(char *buffer, T val) noexcept
    {
-      auto start = buffer;
       static_assert(std::numeric_limits<T>::is_iec559);
       static_assert(std::numeric_limits<T>::radix == 2);
       static_assert(std::is_same_v<float, T> || std::is_same_v<double, T>);

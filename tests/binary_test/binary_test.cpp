@@ -45,6 +45,7 @@ struct sub_thing
 template <>
 struct glz::meta<sub_thing>
 {
+   static constexpr std::string_view name = "sub_thing";
    static constexpr auto value = object(
       "a", &sub_thing::a, "Test comment 1",                         //
       "b", [](auto&& v) -> auto& { return v.b; }, "Test comment 2"  //
@@ -67,6 +68,7 @@ template <>
 struct glz::meta<sub_thing2>
 {
    using T = sub_thing2;
+   static constexpr std::string_view name = "sub_thing2";
    static constexpr auto value = object("a", &T::a, "Test comment 1",  //
                                         "b", &T::b, "Test comment 2",  //
                                         "c", &T::c,                    //
@@ -84,15 +86,13 @@ struct V3
    double y{2.7};
    double z{6.5};
 
-   bool operator==(const V3& rhs) const
-   {
-      return (x == rhs.x) && (y == rhs.y) && (z == rhs.z);
-   }
+   bool operator==(const V3& rhs) const { return (x == rhs.x) && (y == rhs.y) && (z == rhs.z); }
 };
 
 template <>
 struct glz::meta<V3>
 {
+   static constexpr std::string_view name = "V3";
    static constexpr auto value = array(&V3::x, &V3::y, &V3::z);
 };
 
@@ -109,6 +109,32 @@ struct glz::meta<Color>
    );
 };
 
+struct var1_t
+{
+   double x{};
+};
+
+template <>
+struct glz::meta<var1_t>
+{
+   using T = var1_t;
+   static constexpr std::string_view name = "var1_t";
+   static constexpr auto value = object("x", &T::x);
+};
+
+struct var2_t
+{
+   double y{};
+};
+
+template <>
+struct glz::meta<var2_t>
+{
+   using T = var2_t;
+   static constexpr std::string_view name = "var2_t";
+   static constexpr auto value = object("y", &T::y);
+};
+
 struct Thing
 {
    sub_thing thing{};
@@ -121,6 +147,7 @@ struct Thing
    double d{2};
    bool b{};
    char c{'W'};
+   std::variant<var1_t, var2_t> v{};
    Color color{Color::Green};
    std::vector<bool> vb = {true, false, false, true, true, true, true};
    std::shared_ptr<sub_thing> sptr = std::make_shared<sub_thing>();
@@ -137,6 +164,7 @@ template <>
 struct glz::meta<Thing>
 {
    using T = Thing;
+   static constexpr std::string_view name = "Thing";
    static constexpr auto value = object(
       "thing", &T::thing,                                    //
       "thing2array", &T::thing2array,                        //
@@ -148,6 +176,7 @@ struct glz::meta<Thing>
       "d", &T::d, "double is the best type",                 //
       "b", &T::b,                                            //
       "c", &T::c,                                            //
+      "v", &T::v,                                            //
       "color", &T::color,                                    //
       "vb", &T::vb,                                          //
       "sptr", &T::sptr,                                      //
@@ -336,6 +365,7 @@ void write_tests()
       obj.d = 0.9;
       obj.b = true;
       obj.c = 'L';
+      obj.v = std::variant_alternative_t<1, decltype(obj.v)>{};
       obj.color = Color::Blue;
       obj.vb = {false, true, true, false, false, true, true};
       obj.sptr = nullptr;
@@ -360,6 +390,7 @@ void write_tests()
       expect(obj2.d == 0.9);
       expect(obj2.b == true);
       expect(obj2.c == 'L');
+      expect(obj2.v.index() == 1);
       expect(obj2.color == Color::Blue);
       expect(obj2.vb == decltype(obj2.vb){false, true, true, false, false, true, true});
       expect(obj2.sptr == nullptr);
@@ -419,17 +450,18 @@ using namespace boost::ut;
 
 suite binary_helpers = [] {
    "binary_helpers"_test = [] {
-      my_struct v{};
+      my_struct v{22, 5.76, "ufo", {9, 5, 1}};
       
       std::string b;
       
-      expect(nothrow([&] {
-         b = glz::write_binary(v);
-      }));
+      b = glz::write_binary(v);
       
-      expect(nothrow([&] {
-         v = glz::read_binary<my_struct>(b);
-      }));
+      auto v2 = *glz::read_binary<my_struct>(b);
+
+      expect(v2.i == 22);
+      expect(v2.d == 5.76);
+      expect(v2.hello == "ufo");
+      expect(v2.arr == std::array<uint64_t, 3>{9, 5, 1});
    };
 };
 
@@ -490,7 +522,7 @@ suite no_cx_tag_test = [] {
       s.i = 0;
       s.d = 0.0;
       
-      glz::read<glz::opts{.format = glz::binary, .use_cx_tags = false}>(s, b);
+      expect(glz::read<glz::opts{.format = glz::binary, .use_cx_tags = false}>(s, b) == false);
       
       expect(s.i == 287);
       expect(s.d = 3.14);
@@ -504,50 +536,45 @@ void test_partial()
    some_struct s{};
    some_struct s2{};
    std::string buffer = R"({"i":2,"map":{"fish":5,"cake":2,"bear":3}})";
-   try {
-      glz::read_json(s, buffer);
-      
-      std::vector<std::byte> out;
-      static constexpr auto partial = glz::json_ptrs("/i",
-                                                       "/d",
-                                                       "/hello",
-                                                       "/sub/x",
-                                                       "/sub/y",
-                                                       "/map/fish",
-                                                       "/map/bear");
-      
-      static constexpr auto sorted = glz::sort_json_ptrs(partial);
+   expect(glz::read_json(s, buffer) == false);
+   
+   std::vector<std::byte> out;
+   static constexpr auto partial = glz::json_ptrs("/i",
+                                                    "/d",
+                                                    "/hello",
+                                                    "/sub/x",
+                                                    "/sub/y",
+                                                    "/map/fish",
+                                                    "/map/bear");
+   
+   static constexpr auto sorted = glz::sort_json_ptrs(partial);
 
-      static constexpr auto groups = glz::group_json_ptrs<sorted>();
-      
-      static constexpr auto N = std::tuple_size_v<decltype(groups)>;
-      glz::for_each<N>([&](auto I){
-         const auto group = glz::tuplet::get<I>(groups);
-         std::cout << std::get<0>(group) << ": ";
-         for (auto& rest : std::get<1>(group)) {
-            std::cout << rest << ", ";
-         }
-         std::cout << '\n';
-      });
-      
-      glz::write_binary<partial>(s, out);
-      
-      s2.i = 5;
-      s2.hello = "text";
-      s2.d = 5.5;
-      s2.sub.x = 0.0;
-      s2.sub.y = 20;
-      glz::read_binary(s2, out);
-      
-      expect(s2.i == 2);
-      expect(s2.d == 3.14);
-      expect(s2.hello == "Hello World");
-      expect(s2.sub.x == 400.0);
-      expect(s2.sub.y == 200.0);
-   }
-   catch (const std::exception& e) {
-      std::cout << e.what() << '\n';
-   }
+   static constexpr auto groups = glz::group_json_ptrs<sorted>();
+   
+   static constexpr auto N = std::tuple_size_v<decltype(groups)>;
+   glz::for_each<N>([&](auto I){
+      const auto group = glz::tuplet::get<I>(groups);
+      std::cout << std::get<0>(group) << ": ";
+      for (auto& rest : std::get<1>(group)) {
+         std::cout << rest << ", ";
+      }
+      std::cout << '\n';
+   });
+   
+   glz::write_binary<partial>(s, out);
+   
+   s2.i = 5;
+   s2.hello = "text";
+   s2.d = 5.5;
+   s2.sub.x = 0.0;
+   s2.sub.y = 20;
+   glz::read_binary(s2, out);
+   
+   expect(s2.i == 2);
+   expect(s2.d == 3.14);
+   expect(s2.hello == "Hello World");
+   expect(s2.sub.x == 400.0);
+   expect(s2.sub.y == 200.0);
 }
 
 struct includer_struct

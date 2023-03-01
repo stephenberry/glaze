@@ -6,9 +6,11 @@
 #include <array>
 #include "glaze/tuplet/tuple.hpp"
 #include "glaze/util/type_traits.hpp"
+#include "glaze/util/variant.hpp"
+#include "glaze/util/for_each.hpp"
 
 namespace glz
-{   
+{
    template <class T>
    struct meta
    {};
@@ -38,8 +40,15 @@ namespace glz
       {
          meta<T>::value;
       };
+      
+      template <class T>
+      concept glaze_t = requires
+      {
+         meta<std::decay_t<T>>::value;
+      }
+      || local_meta_t<std::decay_t<T>>;
    }
-
+   
    struct empty
    {
       static constexpr glz::tuplet::tuple<> value{};
@@ -110,6 +119,67 @@ namespace glz
       }
       else if constexpr (fail_on_unknown) {
          static_assert(false_v<T>, "name_v used on unnamed type");
+      }
+      else {
+         return "glz::unknown";
+      }
+   }();
+
+   template <class T>
+   concept tagged = requires
+   {
+      meta<T>::tag;
+   }
+   || requires { T::glaze::tag; };
+
+   template <class T>
+   concept ided = requires
+   {
+      meta<T>::ids;
+   }
+   || requires { T::glaze::ids; };
+
+   template <class T>
+   inline constexpr std::string_view tag_v = [] {
+      if constexpr (tagged<T>) {
+         if constexpr (detail::local_meta_t<T>) {
+            return T::glaze::tag;
+         }
+         else {
+            return meta<T>::tag;
+         }
+      }
+      else {
+         return "";
+      }
+   }();
+
+   template <is_variant T>
+   inline constexpr auto ids_v = [] {
+      if constexpr (ided<T>) {
+         if constexpr (detail::local_meta_t<T>) {
+            return T::glaze::ids;
+         }
+         else {
+            return meta<T>::ids;
+         }
+      }
+      else {
+         constexpr auto N = std::variant_size_v<T>;
+         std::array<std::string_view, N> ids{};
+         for_each<N>([&](auto I) { ids[I] = glz::name_v<std::decay_t<std::variant_alternative_t<I, T>>>; });
+         return ids;
+      }
+   }();
+   
+   template <auto Enum> requires (std::is_enum_v<decltype(Enum)>)
+   inline constexpr std::string_view enum_name_v = []() -> std::string_view {
+      
+      using T = std::decay_t<decltype(Enum)>;
+      
+      if constexpr (detail::glaze_t<T>) {
+         using U = std::underlying_type_t<T>;
+         return glz::tuplet::get<0>(glz::tuplet::get<static_cast<U>(Enum)>(meta_v<T>));
       }
       else {
          return "glz::unknown";

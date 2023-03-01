@@ -30,6 +30,7 @@
 #include "glaze/frozen/bits/pmh.hpp"
 #include "glaze/frozen/random.hpp"
 
+#include <optional>
 #include <tuple>
 #include <functional>
 
@@ -196,12 +197,12 @@ namespace glz::frozen
 
    private:
      template <class This, class KeyType, class Hasher, class Equal>
-     static inline constexpr auto& at_impl(This&& self, KeyType const &key, Hasher const &hash, Equal const &equal) {
+     static inline constexpr std::optional<std::reference_wrapper<Value>> at_impl(This&& self, KeyType const &key, Hasher const &hash, Equal const &equal) {
        auto& kv = self.lookup(key, hash);
        if (equal(kv.first, key))
          return kv.second;
        else {
-          throw std::out_of_range("unknown key");
+          return {};
        }
      }
       

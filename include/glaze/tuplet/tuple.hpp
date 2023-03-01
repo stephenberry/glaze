@@ -178,8 +178,8 @@ namespace glz {
       template <class T, class... Outer, class... Inner>
       constexpr auto cat_impl(T tup, type_list<Outer...>, type_list<Inner...>)
       -> tuple<type_t<Inner>...> {
-         return {static_cast<type_t<Outer>&&>(tup.identity_t<Outer>::value)
-            .identity_t<Inner>::value...};
+         return {{{static_cast<type_t<Outer>&&>(tup.identity_t<Outer>::value)
+            .identity_t<Inner>::value}...}};
       }
    } // namespace tuplet::detail
    
@@ -560,7 +560,7 @@ namespace glz {
             constexpr auto outer = detail::get_outer_bases(outer_bases {});
             constexpr auto inner = detail::get_inner_bases(outer_bases {});
             return detail::cat_impl(
-                                    big_tuple {static_cast<T&&>(ts)...},
+                                    big_tuple {{{std::forward<T>(ts)}...}},
                                     outer,
                                     inner);
          }
@@ -568,13 +568,13 @@ namespace glz {
 
       template <typename... Ts>
       constexpr auto make_tuple(Ts&&... args) {
-         return tuple<unwrap_ref_decay_t<Ts>...> {static_cast<Ts&&>(args)...};
+         return tuple<unwrap_ref_decay_t<Ts>...> {{{std::forward<Ts>(args)}...}};
       }
       
       // TODO: This version is needed for older versions of gcc, fixed in 12.2
       template <class... Ts>
       constexpr auto make_copy_tuple(Ts... args) {
-          return tuple<Ts...>{args...};
+         return tuple<Ts...>{{{args}...}};
       }
       
       template <typename... T>

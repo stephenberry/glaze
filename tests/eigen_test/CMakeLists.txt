@@ -2,8 +2,6 @@ project(eigen_test)
 
 add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
-
 find_package (Eigen3 3.4 QUIET)
 if(NOT Eigen3_FOUND)
   FetchContent_Declare(
@@ -21,7 +19,7 @@ if(NOT Eigen3_FOUND)
   endif()
 endif()
 
-target_link_libraries(${PROJECT_NAME} PRIVATE Boost::ut glaze::glaze Eigen3::Eigen)
+target_link_libraries(${PROJECT_NAME} PRIVATE glz_test_common Eigen3::Eigen)
 
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 

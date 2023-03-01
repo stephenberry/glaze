@@ -6,6 +6,7 @@
 
 #include "glaze/frozen/random.hpp"
 #include "glaze/util/string_cmp.hpp"
+#include "glaze/util/expected.hpp"
 
 namespace glz
 {
@@ -122,23 +123,25 @@ namespace glz
          constexpr decltype(auto) begin() const { return items.begin(); }
          constexpr decltype(auto) end() const { return items.end(); }
 
-         constexpr decltype(auto) at(auto &&key) const
+         constexpr expected<std::reference_wrapper<Value>, error_code> at(auto &&key) const noexcept
          {
             const auto hash = xsm1<HashType>{}(key, seed);
             const auto index = table[hash % m]; // modulus should be fast because m is known compile time
             const auto& item = items[index];
             if constexpr (allow_hash_check) {
-               if (hashes[index] != hash) [[unlikely]]
-                  throw std::runtime_error("Invalid key");
+               if (hashes[index] != hash) [[unlikely]] {
+                  return unexpected(error_code::unknown_key);
+               }
             }
             else {
-               if (!string_cmp(item.first, key)) [[unlikely]]
-                  throw std::runtime_error("Invalid key");
+               if (!string_cmp(item.first, key)) [[unlikely]] {
+                  return unexpected(error_code::unknown_key);
+               }
             }
             return item.second;
          }
 
-         constexpr decltype(auto) find(auto&& key) const
+         constexpr decltype(auto) find(auto&& key) const noexcept
          {
             const auto hash = xsm1<HashType>{}(key, seed);
             const auto index = table[hash % m];
@@ -159,7 +162,9 @@ namespace glz
       constexpr auto make_naive_map(std::initializer_list<std::pair<sv, T>> pairs)
       {
          static_assert(N <= 20);
-         assert(pairs.size() == N);
+         if (pairs.size() != N) {
+            glaze_error("pairs.size() != N");
+         }
          naive_map<T, N, HashType, allow_hash_check> ht{};
          constexpr size_t m = naive_bucket_size<N>();
 
@@ -171,8 +176,8 @@ namespace glz
             ++i;
          }
          ht.seed = naive_perfect_hash<N, HashType>(keys);
-         if (ht.seed == (std::numeric_limits<HashType>::max)()) {
-            throw std::runtime_error("Unable to find perfect hash.");
+         if (ht.seed == std::numeric_limits<HashType>::max()) {
+            glaze_error("Unable to find perfect hash");
          }
 
          for (size_t i = 0; i < N; ++i) {
@@ -240,37 +245,39 @@ namespace glz
          constexpr decltype(auto) begin() const { return items.begin(); }
          constexpr decltype(auto) end() const { return items.end(); }
          
-         constexpr decltype(auto) at(auto&& key) const
+         constexpr expected<std::reference_wrapper<T>, error_code> at(auto&& key) const noexcept
          {
             if (key.size() == 0) [[unlikely]] {
-               throw std::runtime_error("Invalid key");
+               return unexpected(error_code::unknown_key);
             }
             
             if constexpr (D.is_front_hash) {
                const auto k = static_cast<uint8_t>(key[0]) - D.front;
                if (k >= N_table) [[unlikely]] {
-                  throw std::runtime_error("Invalid key");
+                  glaze_error("Invalid key");
                }
                const auto index = table[k];
                const auto& item = items[index];
-               if (!string_cmp(item.first, key)) [[unlikely]]
-                  throw std::runtime_error("Invalid key");
+               if (!string_cmp(item.first, key)) [[unlikely]] {
+                  return unexpected(error_code::unknown_key);
+               }
                return item.second;
             }
             else {
                const auto k = static_cast<uint8_t>(key.back()) - D.front;
                if (k >= N_table) [[unlikely]] {
-                  throw std::runtime_error("Invalid key");
+                  glaze_error("Invalid key");
                }
                const auto index = table[k];
                const auto& item = items[index];
-               if (!string_cmp(item.first, key)) [[unlikely]]
-                  throw std::runtime_error("Invalid key");
+               if (!string_cmp(item.first, key)) [[unlikely]] {
+                  return unexpected(error_code::unknown_key);
+               }
                return item.second;
             }
          }
          
-         constexpr decltype(auto) find(auto&& key) const
+         constexpr decltype(auto) find(auto&& key) const noexcept
          {
             if (key.size() == 0) [[unlikely]] {
                return items.end();
@@ -278,7 +285,7 @@ namespace glz
             
             if constexpr (D.is_front_hash) {
                const auto k = static_cast<uint8_t>(key[0]) - D.front;
-               if (k >= N_table) [[unlikely]] {
+               if (k >= static_cast<uint8_t>(N_table)) [[unlikely]] {
                   return items.end();
                }
                const auto index = table[k];
@@ -289,7 +296,7 @@ namespace glz
             }
             else {
                const auto k = static_cast<uint8_t>(key.back()) - D.front;
-               if (k >= N_table) [[unlikely]] {
+               if (k >= static_cast<uint8_t>(N_table)) [[unlikely]] {
                   return items.end();
                }
                const auto index = table[k];
@@ -334,17 +341,17 @@ namespace glz
          constexpr decltype(auto) begin() const { return items.begin(); }
          constexpr decltype(auto) end() const { return items.end(); }
          
-         constexpr decltype(auto) at(auto&& key) const
+         constexpr expected<std::reference_wrapper<T>, error_code> at(auto&& key) const noexcept
          {
             if (cx_string_cmp<s>(key)) [[likely]] {
                return items[0].second;
             }
             else [[unlikely]] {
-               throw std::runtime_error("Invalid key");
+               return unexpected(error_code::unknown_key);
             }
          }
          
-         constexpr decltype(auto) find(auto&& key) const
+         constexpr decltype(auto) find(auto&& key) const noexcept
          {
             if (cx_string_cmp<s>(key)) [[likely]] {
                return items.begin();
@@ -369,12 +376,12 @@ namespace glz
          constexpr decltype(auto) begin() const { return items.begin(); }
          constexpr decltype(auto) end() const { return items.end(); }
          
-         constexpr decltype(auto) at(auto&& key) const
+         constexpr expected<std::reference_wrapper<T>, error_code> at(auto&& key) const noexcept
          {
             if constexpr (same_size) {
                constexpr auto n = s0.size();
                if (key.size() != n) {
-                  throw std::runtime_error("Invalid key");
+                  return unexpected(error_code::unknown_key);
                }
             }
             
@@ -385,11 +392,11 @@ namespace glz
                return items[1].second;
             }
             else [[unlikely]] {
-               throw std::runtime_error("Invalid key");
+               return unexpected(error_code::unknown_key);
             }
          }
          
-         constexpr decltype(auto) find(auto&& key) const
+         constexpr decltype(auto) find(auto&& key) const noexcept
          {
             if constexpr (same_size) {
                constexpr auto n = s0.size();
