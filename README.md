@@ -608,6 +608,7 @@ struct opts {
    bool shrink_to_fit = false; // shrinks dynamic containers to new size to save memory
    bool write_type_info = true; // Write type info for meta objects in variants
    bool use_cx_tags = true; // whether binary output should write compile time known tags
+   bool force_conformance = false; // Do not allow invalid json normally accepted when reading such as comments.
 };
 ```
 
