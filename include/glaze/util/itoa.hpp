@@ -33,6 +33,7 @@
  */
 
 #include <cstdint>
+#include <concepts>
 
 namespace glz
 {
@@ -81,7 +82,7 @@ namespace glz
        
        if (val < 100) { /* 1-2 digits: aa */
            lz = val < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[val * 2 + lz]);
+           ((pair *)buf)[0] = *(const pair *)&(char_table[val * 2 + lz]);
            buf -= lz;
            return buf + 2;
            
@@ -89,9 +90,9 @@ namespace glz
            aa = (val * 5243) >> 19; /* (val / 100) */
            bb = val - aa * 100; /* (val % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           ((pair *)buf)[0] = *(const pair *)&(char_table[aa * 2 + lz]);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
+           ((pair *)buf)[1] = ((const pair *)char_table)[bb];
            return buf + 4;
            
        } else if (val < 1000000) { /* 5-6 digits: aabbcc */
@@ -100,10 +101,10 @@ namespace glz
            bb = (bbcc * 5243) >> 19; /* (bbcc / 100) */
            cc = bbcc - bb * 100; /* (bbcc % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           ((pair *)buf)[0] = *(const pair *)&(char_table[aa * 2 + lz]);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
-           ((pair *)buf)[2] = ((pair *)char_table)[cc];
+           ((pair *)buf)[1] = ((const pair *)char_table)[bb];
+           ((pair *)buf)[2] = ((const pair *)char_table)[cc];
            return buf + 6;
            
        } else if (val < 100000000) { /* 7~8 digits: aabbccdd */
@@ -115,11 +116,11 @@ namespace glz
            bb = aabb - aa * 100; /* (aabb % 100) */
            dd = ccdd - cc * 100; /* (ccdd % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           ((pair *)buf)[0] = *(const pair *)&(char_table[aa * 2 + lz]);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
-           ((pair *)buf)[2] = ((pair *)char_table)[cc];
-           ((pair *)buf)[3] = ((pair *)char_table)[dd];
+           ((pair *)buf)[1] = ((const pair *)char_table)[bb];
+           ((pair *)buf)[2] = ((const pair *)char_table)[cc];
+           ((pair *)buf)[3] = ((const pair *)char_table)[dd];
            return buf + 8;
            
        } else { /* 9~10 digits: aabbccddee */
@@ -134,12 +135,12 @@ namespace glz
            cc = bbcc - bb * 100; /* (bbcc % 100) */
            ee = ddee - dd * 100; /* (ddee % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           ((pair *)buf)[0] = *(const pair *)&(char_table[aa * 2 + lz]);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
-           ((pair *)buf)[2] = ((pair *)char_table)[cc];
-           ((pair *)buf)[3] = ((pair *)char_table)[dd];
-           ((pair *)buf)[4] = ((pair *)char_table)[ee];
+           ((pair *)buf)[1] = ((const pair *)char_table)[bb];
+           ((pair *)buf)[2] = ((const pair *)char_table)[cc];
+           ((pair *)buf)[3] = ((const pair *)char_table)[dd];
+           ((pair *)buf)[4] = ((const pair *)char_table)[ee];
            return buf + 10;
        }
    }
@@ -162,10 +163,10 @@ namespace glz
        cc = (ccdd * 5243) >> 19; /* (ccdd / 100) */
        bb = aabb - aa * 100; /* (aabb % 100) */
        dd = ccdd - cc * 100; /* (ccdd % 100) */
-       ((pair *)buf)[0] = ((pair *)char_table)[aa];
-       ((pair *)buf)[1] = ((pair *)char_table)[bb];
-       ((pair *)buf)[2] = ((pair *)char_table)[cc];
-       ((pair *)buf)[3] = ((pair *)char_table)[dd];
+       ((pair *)buf)[0] = ((const pair *)char_table)[aa];
+       ((pair *)buf)[1] = ((const pair *)char_table)[bb];
+       ((pair *)buf)[2] = ((const pair *)char_table)[cc];
+       ((pair *)buf)[3] = ((const pair *)char_table)[dd];
        return buf + 8;
    }
    
@@ -174,8 +175,8 @@ namespace glz
        uint32_t aa, bb;
        aa = (val * 5243) >> 19; /* (val / 100) */
        bb = val - aa * 100; /* (val % 100) */
-       ((pair *)buf)[0] = ((pair *)char_table)[aa];
-       ((pair *)buf)[1] = ((pair *)char_table)[bb];
+       ((pair *)buf)[0] = ((const pair *)char_table)[aa];
+       ((pair *)buf)[1] = ((const pair *)char_table)[bb];
        return buf + 4;
    }
    
@@ -184,7 +185,7 @@ namespace glz
        
        if (val < 100) { /* 1-2 digits: aa */
            lz = val < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[val * 2 + lz]);
+           ((pair *)buf)[0] = *(const pair *)&(char_table[val * 2 + lz]);
            buf -= lz;
            return buf + 2;
            
@@ -192,9 +193,9 @@ namespace glz
            aa = (val * 5243) >> 19; /* (val / 100) */
            bb = val - aa * 100; /* (val % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           ((pair *)buf)[0] = *(const pair *)&(char_table[aa * 2 + lz]);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
+           ((pair *)buf)[1] = ((const pair *)char_table)[bb];
            return buf + 4;
            
        } else if (val < 1000000) { /* 5-6 digits: aabbcc */
@@ -203,10 +204,10 @@ namespace glz
            bb = (bbcc * 5243) >> 19; /* (bbcc / 100) */
            cc = bbcc - bb * 100; /* (bbcc % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           ((pair *)buf)[0] = *(const pair *)&(char_table[aa * 2 + lz]);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
-           ((pair *)buf)[2] = ((pair *)char_table)[cc];
+           ((pair *)buf)[1] = ((const pair *)char_table)[bb];
+           ((pair *)buf)[2] = ((const pair *)char_table)[cc];
            return buf + 6;
            
        } else { /* 7-8 digits: aabbccdd */
@@ -218,11 +219,11 @@ namespace glz
            bb = aabb - aa * 100; /* (aabb % 100) */
            dd = ccdd - cc * 100; /* (ccdd % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           ((pair *)buf)[0] = *(const pair *)&(char_table[aa * 2 + lz]);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
-           ((pair *)buf)[2] = ((pair *)char_table)[cc];
-           ((pair *)buf)[3] = ((pair *)char_table)[dd];
+           ((pair *)buf)[1] = ((const pair *)char_table)[bb];
+           ((pair *)buf)[2] = ((const pair *)char_table)[cc];
+           ((pair *)buf)[3] = ((const pair *)char_table)[dd];
            return buf + 8;
        }
    }
@@ -236,10 +237,10 @@ namespace glz
            bb = (bbcc * 5243) >> 19; /* (bbcc / 100) */
            cc = bbcc - bb * 100; /* (bbcc % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           ((pair *)buf)[0] = *(const pair *)&(char_table[aa * 2 + lz]);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
-           ((pair *)buf)[2] = ((pair *)char_table)[cc];
+           ((pair *)buf)[1] = ((const pair *)char_table)[bb];
+           ((pair *)buf)[2] = ((const pair *)char_table)[cc];
            return buf + 6;
            
        } else { /* 7-8 digits: aabbccdd */
@@ -251,11 +252,11 @@ namespace glz
            bb = aabb - aa * 100; /* (aabb % 100) */
            dd = ccdd - cc * 100; /* (ccdd % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           ((pair *)buf)[0] = *(const pair *)&(char_table[aa * 2 + lz]);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
-           ((pair *)buf)[2] = ((pair *)char_table)[cc];
-           ((pair *)buf)[3] = ((pair *)char_table)[dd];
+           ((pair *)buf)[1] = ((const pair *)char_table)[bb];
+           ((pair *)buf)[2] = ((const pair *)char_table)[cc];
+           ((pair *)buf)[3] = ((const pair *)char_table)[dd];
            return buf + 8;
        }
    }

@@ -171,7 +171,7 @@ namespace glz
                   dump<"\\t">(b, ix);
                   break;
                default:
-                  dump(value, b, ix);
+                  dump(value, b, ix); // TODO: This warning is an error We need to be able to dump wider char types
                }
                dump<'"'>(b, ix);
             }
