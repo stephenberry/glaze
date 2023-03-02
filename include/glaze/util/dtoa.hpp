@@ -20,12 +20,16 @@ namespace glz
    #pragma intrinsic(__umulh)
    #endif
 
+
    /** Multiplies two 64-bit unsigned integers (a * b),
        returns the 128-bit result as 'hi' and 'lo'. */
    inline void u128_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo)
    {
    #ifdef __SIZEOF_INT128__
+   #pragma GCC diagnostic push
+   #pragma GCC diagnostic ignored "-Wpedantic"
       unsigned __int128 m = static_cast<unsigned __int128>(a) * b;
+   #pragma GCC diagnostic pop
       *hi = uint64_t(m >> 64);
       *lo = uint64_t(m);
    #elif defined(_M_X64)
@@ -52,7 +56,10 @@ namespace glz
    inline void u128_mul_add(uint64_t a, uint64_t b, uint64_t c, uint64_t *hi, uint64_t *lo)
    {
    #ifdef __SIZEOF_INT128__
+   #pragma GCC diagnostic push
+   #pragma GCC diagnostic ignored "-Wpedantic"
       unsigned __int128 m = static_cast<unsigned __int128>(a) * b + c;
+   #pragma GCC diagnostic pop
       *hi = uint64_t(m >> 64);
       *lo = uint64_t(m);
    #else
@@ -906,10 +913,8 @@ namespace glz
       buf[0] = uint8_t(a + '0');
       buf += a > 0;
       lz = bb < 10 && a == 0;
-      //((uint16_t *)buf)[0] = *(const uint16_t *)(char_table + (bb * 2 + lz));
       std::memcpy(buf, char_table + (bb * 2 + lz), 2);
       buf -= lz;
-      //((uint16_t *)buf)[1] = ((const uint16_t *)char_table)[cc];
       std::memcpy(buf + 2, char_table + 2*cc, 2);
 
       if (ffgghhii) {
@@ -1087,7 +1092,7 @@ namespace glz
                uint32_t hi = (uint32_t(exp_dec) * 656) >> 16; /* exp / 100 */
                uint32_t lo = uint32_t(exp_dec) - hi * 100;    /* exp % 100 */
                buffer[0] = uint8_t(hi) + '0';
-               *(uint16_t *)&buffer[1] = *(const uint16_t *)(char_table + (lo * 2));
+               std::memcpy(&buffer[1], char_table + (lo * 2), 2);
                return buffer + 3;
             }
          }

@@ -78,7 +78,7 @@ namespace glz
          {
             using V = std::decay_t<decltype(value.get())>;
             from_json<V>::template op<Opts>(value.get(), std::forward<Args>(args)...);
-         };
+         }
       };
       
       template <>
@@ -88,7 +88,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&...) noexcept
          {
             ctx.error = error_code::attempt_read_hidden;
-         };
+         }
       };
       
       template <>
@@ -98,7 +98,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
          {
             match<R"("std::monostate")">(args...);
-         };
+         }
       };
       
       template <bool_t T>

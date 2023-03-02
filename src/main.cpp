@@ -21,6 +21,6 @@ int main() {
     std::string buffer{};
     obj_t obj{};
     glz::write_json(obj, buffer);
-    glz::read_json(obj, buffer);
+    std::ignore = glz::read_json(obj, buffer);
     return 0;
 }

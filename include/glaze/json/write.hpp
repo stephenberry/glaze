@@ -80,7 +80,7 @@ namespace glz
             dump<'"'>(args...);
             dump("hidden type should not have been written", args...);
             dump<'"'>(args...);
-         };
+         }
       };
       
       template <>
@@ -92,7 +92,7 @@ namespace glz
             dump<'"'>(args...);
             dump("skip type should not have been written", args...);
             dump<'"'>(args...);
-         };
+         }
       };
       
       template <is_member_function_pointer T>
@@ -111,7 +111,7 @@ namespace glz
          {
             using V = std::decay_t<decltype(value.get())>;
             to_json<V>::template op<Opts>(value.get(), std::forward<Args>(args)...);
-         };
+         }
       };
       
       template <boolean_like T>
@@ -442,7 +442,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
          {
             dump<R"("std::monostate")">(args...);
-         };
+         }
       };
 
       template <is_variant T>

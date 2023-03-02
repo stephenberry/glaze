@@ -340,7 +340,10 @@ namespace glz
                              std::decay_t<decltype(value)>,
                              std::decay_t<decltype(val)>>) {
                result = true;
+               #pragma GCC diagnostic push
+               #pragma GCC diagnostic ignored "-Waddress"
                val = value;
+               #pragma GCC diagnostic pop
             }
          },
          std::forward<T>(root_value), json_ptr);

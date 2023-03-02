@@ -111,7 +111,7 @@ namespace glz
 #ifdef GLAZE_API_ON_WINDOWS
             auto* ptr = (create)GetProcAddress(loaded_lib, "glz_iface");
 #else
-            auto* ptr = (create)dlsym(dlopen(path.c_str(), RTLD_NOW), "glz_iface");
+            auto* ptr = reinterpret_cast<create>(dlsym(dlopen(path.c_str(), RTLD_NOW), "glz_iface"));
 #endif
 
             if (ptr) {

@@ -51,7 +51,10 @@ namespace glz::detail
 #ifdef __SIZEOF_INT128__
    inline uint64_t mulhi64(uint64_t a, uint64_t b)
    {
+   #pragma GCC diagnostic push
+   #pragma GCC diagnostic ignored "-Wpedantic"
       unsigned __int128 prod = a * static_cast<unsigned __int128>(b);
+   #pragma GCC diagnostic pop
       return prod >> 64;
    }
 #elif defined(_M_X64) || defined(_M_ARM64)
