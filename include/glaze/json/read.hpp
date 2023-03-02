@@ -888,6 +888,10 @@ namespace glz
       template <class T, auto Opts, string_literal tag = "">
       GLZ_ALWAYS_INLINE std::string_view parse_object_key(is_context auto&& ctx, auto&& it, auto&& end)
       {
+         if (static_cast<bool>(ctx.error)) [[unlikely]] {
+            return {};
+         }
+
          // skip white space and escape characters and find the string
          skip_ws<Opts>(ctx, it, end);
          match<'"'>(ctx, it);
@@ -927,7 +931,7 @@ namespace glz
                   }
                   else {
                      it += stats.min_length;
-                     for (uint32_t i = 0; i < stats.length_range; ++it) {
+                     for (uint32_t i = 0; i <= stats.length_range; ++it, ++i) {
                         if (*it == '"') {
                            const sv key{start, static_cast<size_t>(it - start)};
                            ++it;

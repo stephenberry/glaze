@@ -3914,6 +3914,36 @@ suite metaobject_variant_auto_deduction = [] {
    };
 };
 
+
+struct my_struct2
+{
+   std::string string1;
+   std::string string2;
+   struct glaze
+   {
+      using T = my_struct2;
+      static constexpr auto value = glz::object("jsonrpc", &T::string1, "method", &T::string2);
+   };
+};
+
+suite invalid_array_as_object = [] {
+   "invalid_array_as_object"_test = [] {
+      {
+         std::string raw_json = R"([1])";
+         my_struct2 request_object;
+         expect(glz::read_json<my_struct2>(request_object, raw_json) != glz::error_code::none);
+      }
+      {
+         const std::string raw_json = R"(
+          [1]
+        )";
+         my_struct2 request_object;
+         expect(glz::read_json<my_struct2>(request_object, raw_json) != glz::error_code::none);
+      }
+   };
+};
+
+
 int main()
 {
    //Suites are set to run on exit
