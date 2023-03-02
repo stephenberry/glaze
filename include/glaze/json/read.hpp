@@ -1149,7 +1149,7 @@ namespace glz
                                         return;
                                      }
                                      else {
-                                        ctx.error = error_code::no_matching_variant_type;
+                                        ctx.error = ctx.error = error_code::no_matching_variant_type;
                                         return;
                                      }
                                   }
@@ -1166,7 +1166,7 @@ namespace glz
 
                             auto matching_types = possible_types.popcount();
                             if (matching_types == 0) {
-                               ctx.error = error_code::no_matching_variant_type;
+                               ctx.error = ctx.error = error_code::no_matching_variant_type;
                                return;
                             }
                             else if (matching_types == 1) {
@@ -1189,14 +1189,14 @@ namespace glz
                             skip_value<Opts>(ctx, it, end);
                             skip_ws<Opts>(ctx, it, end);
                          }
-                         ctx.error = error_code::no_matching_variant_type;
+                         ctx.error = ctx.error = error_code::no_matching_variant_type;
                          return;
                       }
                       break;
                    case '[':
                       using array_types = typename variant_types<T>::array_types;
                       if constexpr (std::tuple_size_v<array_types> < 1) {
-                         ctx.error = error_code::no_matching_variant_type;
+                         ctx.error = ctx.error = error_code::no_matching_variant_type;
                          return;
                       }
                       else {
@@ -1208,7 +1208,7 @@ namespace glz
                    case '"': {
                       using string_types = typename variant_types<T>::string_types;
                       if constexpr (std::tuple_size_v<string_types> < 1) {
-                         ctx.error = error_code::no_matching_variant_type;
+                         ctx.error = ctx.error = error_code::no_matching_variant_type;
                          return;
                       }
                       else {
@@ -1222,7 +1222,7 @@ namespace glz
                    case 'f': {
                       using bool_types = typename variant_types<T>::bool_types;
                       if constexpr (std::tuple_size_v<bool_types> < 1) {
-                         ctx.error = error_code::no_matching_variant_type;
+                         ctx.error = ctx.error = error_code::no_matching_variant_type;
                          return;
                       }
                       else {
@@ -1235,7 +1235,7 @@ namespace glz
                    case 'n':
                       using nullable_types = typename variant_types<T>::nullable_types;
                       if constexpr (std::tuple_size_v<nullable_types> < 1) {
-                         ctx.error = error_code::no_matching_variant_type;
+                         ctx.error = ctx.error = error_code::no_matching_variant_type;
                          return;
                       }
                       else {
@@ -1248,7 +1248,7 @@ namespace glz
                       // Not bool, string, object, or array so must be number or null
                       using number_types = typename variant_types<T>::number_types;
                       if constexpr (std::tuple_size_v<number_types> < 1) {
-                         ctx.error = error_code::no_matching_variant_type;
+                         ctx.error = ctx.error = error_code::no_matching_variant_type;
                          return;
                       }
                       else {

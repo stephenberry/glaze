@@ -210,7 +210,7 @@ pmh_tables<M, Hash> constexpr make_pmh_tables(const carray<Item, N> &
       cvector<std::size_t, decltype(step_one)::bucket_max> bucket_slots;
 
       while (bucket_slots.size() < bsize) {
-        auto slot = hash(key(items[bucket[bucket_slots.size()]]), d.value()) % M;
+        auto slot = hash(key(items[bucket[bucket_slots.size()]]), static_cast<size_t>(d.value())) % M;
 
         if (H[slot] != UNUSED || !all_different_from(bucket_slots, slot)) {
           bucket_slots.clear();

@@ -25,9 +25,9 @@ namespace glz
    inline void u128_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo)
    {
    #ifdef __SIZEOF_INT128__
-      unsigned __int128 m = static_cast<unsigned __int128>(a) * b;
-      *hi = uint64_t(m >> 64);
-      *lo = uint64_t(m);
+      unsigned __int128 m = (unsigned __int128)a * b;
+      *hi = (uint64_t)(m >> 64);
+      *lo = (uint64_t)(m);
    #elif defined(_M_X64)
       *lo = _umul128(a, b, hi);
    #elif defined(_M_ARM64)
@@ -52,9 +52,9 @@ namespace glz
    inline void u128_mul_add(uint64_t a, uint64_t b, uint64_t c, uint64_t *hi, uint64_t *lo)
    {
    #ifdef __SIZEOF_INT128__
-      unsigned __int128 m = static_cast<unsigned __int128>(a) * b + c;
-      *hi = uint64_t(m >> 64);
-      *lo = uint64_t(m);
+      unsigned __int128 m = (unsigned __int128)a * b + c;
+      *hi = (uint64_t)(m >> 64);
+      *lo = (uint64_t)(m);
    #else
       uint64_t h, l, t;
       u128_mul(a, b, &h, &l);
@@ -837,7 +837,7 @@ namespace glz
       /*                        : floor(log10(pow(2, exp_bin) * 3.0 / 4.0))     */
       /*   = lower_bound_closer ? floor(exp_bin * log10(2))                     */
       /*                        : floor(exp_bin * log10(2) + log10(3.0 / 4.0))  */
-      k = (exp_bin * 315653 - (lower_bound_closer ? 131237 : 0)) >> 20;
+      k = (int32_t)(exp_bin * 315653 - (lower_bound_closer ? 131237 : 0)) >> 20;
 
       /* k: [-324, 292]                                                         */
       /* h = exp_bin + floor(log2(pow(10, e)))                                  */
@@ -893,17 +893,17 @@ namespace glz
       bool lz;          /* leading zero */
       uint32_t tz1, tz2, tz; /* trailing zero */
 
-      uint32_t abbccddee = uint32_t(sig / 100000000);
-      uint32_t ffgghhii = uint32_t(sig - uint64_t(abbccddee) * 100000000);
+      uint32_t abbccddee = (uint32_t)(sig / 100000000);
+      uint32_t ffgghhii = (uint32_t)(sig - (uint64_t)abbccddee * 100000000);
       uint32_t abbcc = abbccddee / 10000;                /* (abbccddee / 10000) */
       uint32_t ddee = abbccddee - abbcc * 10000;         /* (abbccddee % 10000) */
-      uint32_t abb = uint32_t((uint64_t(abbcc) * 167773) >> 24); /* (abbcc / 100) */
+      uint32_t abb = (uint32_t)(((uint64_t)abbcc * 167773) >> 24); /* (abbcc / 100) */
       uint32_t a = (abb * 41) >> 12;                     /* (abb / 100) */
       uint32_t bb = abb - a * 100;                       /* (abb % 100) */
       uint32_t cc = abbcc - abb * 100;                   /* (abbcc % 100) */
 
       /* write abbcc */
-      buf[0] = uint8_t(a + '0');
+      buf[0] = (uint8_t)(a + '0');
       buf += a > 0;
       lz = bb < 10 && a == 0;
       //((uint16_t *)buf)[0] = *(const uint16_t *)(char_table + (bb * 2 + lz));
@@ -915,7 +915,7 @@ namespace glz
       if (ffgghhii) {
          uint32_t dd = (ddee * 5243) >> 19;                        /* (ddee / 100) */
          uint32_t ee = ddee - dd * 100;                            /* (ddee % 100) */
-         uint32_t ffgg = uint32_t((uint64_t(ffgghhii) * 109951163) >> 40); /* (val / 10000) */
+         uint32_t ffgg = (uint32_t)(((uint64_t)ffgghhii * 109951163) >> 40); /* (val / 10000) */
          uint32_t hhii = ffgghhii - ffgg * 10000;                  /* (val % 10000) */
          uint32_t ff = (ffgg * 5243) >> 19;                        /* (aabb / 100) */
          uint32_t gg = ffgg - ff * 100;                            /* (aabb % 100) */
@@ -1013,9 +1013,9 @@ namespace glz
             exp_bin = 1 - (std::numeric_limits<T>::max_exponent - 1) - (std::numeric_limits<T>::digits - 1);
          }
          else {
-            sig_bin = sig_raw | uint64_t(1ull << (std::numeric_limits<T>::digits - 1));
+            sig_bin = sig_raw | ((uint64_t)1 << (std::numeric_limits<T>::digits - 1));
             exp_bin =
-               int32_t(exp_raw) - (std::numeric_limits<T>::max_exponent - 1) - (std::numeric_limits<T>::digits - 1);
+               (int32_t)exp_raw - (std::numeric_limits<T>::max_exponent - 1) - (std::numeric_limits<T>::digits - 1);
          }
 
          //if constexpr (std::same_as<T, float>) {
@@ -1034,8 +1034,8 @@ namespace glz
          }
 
          int32_t sig_len = 17;
-         sig_len -= (sig_dec < 100000000ull * 100000000ull);
-         sig_len -= (sig_dec < 100000000ull * 10000000ull);
+         sig_len -= (sig_dec < (uint64_t)100000000 * 100000000);
+         sig_len -= (sig_dec < (uint64_t)100000000 * 10000000);
 
          /* the decimal point position relative to the first digit */
          int32_t dot_pos = sig_len + exp_dec;

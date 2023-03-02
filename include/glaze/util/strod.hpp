@@ -51,7 +51,7 @@ namespace glz::detail
 #ifdef __SIZEOF_INT128__
    inline uint64_t mulhi64(uint64_t a, uint64_t b)
    {
-      unsigned __int128 prod = a * static_cast<unsigned __int128>(b);
+      unsigned __int128 prod = a * (unsigned __int128)b;
       return prod >> 64;
    }
 #elif defined(_M_X64) || defined(_M_ARM64)
@@ -253,11 +253,11 @@ namespace glz::detail
    /** Match a character with specified type. */
    inline bool digi_is_type(uint8_t d, digi_type type) noexcept { return (digi_table[d] & type) != 0; }
    /** Match a floating point indicator: '.', 'e', 'E'. */
-   inline bool digi_is_fp(uint8_t d) noexcept { return digi_is_type(d, digi_type(DIGI_TYPE_DOT | DIGI_TYPE_EXP)); }
+   inline bool digi_is_fp(uint8_t d) noexcept { return digi_is_type(d, (digi_type)(DIGI_TYPE_DOT | DIGI_TYPE_EXP)); }
    /** Match a digit or floating point indicator: [0-9], '.', 'e', 'E'. */
    inline bool digi_is_digit_or_fp(uint8_t d) noexcept
    {
-      return digi_is_type(d, digi_type(DIGI_TYPE_ZERO | DIGI_TYPE_NONZERO | DIGI_TYPE_DOT | DIGI_TYPE_EXP));
+      return digi_is_type(d, (digi_type)(DIGI_TYPE_ZERO | DIGI_TYPE_NONZERO | DIGI_TYPE_DOT | DIGI_TYPE_EXP));
    }
 /* Macros used for loop unrolling and other purpose. */
 #define repeat2(x) \
@@ -317,8 +317,8 @@ namespace glz::detail
 
       bigint_t(uint64_t num)
       {
-         uint32_t lower_word = uint32_t(num);
-         uint32_t upper_word = uint32_t(num >> 32);
+         uint32_t lower_word = (uint32_t)num;
+         uint32_t upper_word = (uint32_t)(num >> 32);
          if (upper_word > 0) {
             data = {lower_word, upper_word};
          }
@@ -331,9 +331,9 @@ namespace glz::detail
       {
          uint32_t carry = 0;
          for (std::size_t i = 0; i < data.size(); i++) {
-            uint64_t res = uint64_t(data[i]) * uint64_t(num) + uint64_t(carry);
-            uint32_t lower_word = uint32_t(res);
-            uint32_t upper_word = uint32_t(res >> 32);
+            uint64_t res = (uint64_t)data[i] * (uint64_t)num + (uint64_t)carry;
+            uint32_t lower_word = (uint32_t)res;
+            uint32_t upper_word = (uint32_t)(res >> 32);
             data[i] = lower_word;
             carry = upper_word;
          }
@@ -423,7 +423,7 @@ namespace glz::detail
          }
       };
       /* begin with non-zero digit */
-      sig = uint64_t(*cur - '0');
+      sig = (uint64_t)(*cur - '0');
       if (sig > 9) {
          if constexpr (std::integral<T>) {
             return false;
@@ -560,7 +560,7 @@ digi_intg_more :
       /* fraction part end */
    digi_frac_end:
       sig_end = cur;
-      exp_sig = -int32_t((cur - dot_pos) - 1);
+      exp_sig = -(int32_t)((cur - dot_pos) - 1);
       if constexpr (force_conformance) {
          if (exp_sig == 0) return false;
       }
@@ -593,7 +593,7 @@ digi_intg_more :
       uint8_t c;
       while (uint8_t(c = *cur - zero) < 10) {
          ++cur;
-         exp_lit = c + uint32_t(exp_lit) * 10;
+         exp_lit = c + (uint32_t)exp_lit * 10;
       }
       // large exponent case
       if ((cur - tmp >= 6)) [[unlikely]] {
