@@ -12,7 +12,7 @@ include(GNUInstallDirs)
 set(package glaze)
 
 install(
-    DIRECTORY include/glaze/
+    DIRECTORY include/
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     COMPONENT glaze_Development
 )
