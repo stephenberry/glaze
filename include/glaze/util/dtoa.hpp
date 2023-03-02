@@ -1084,13 +1084,12 @@ namespace glz
                return buffer + 2 - lz;
             }
             else {
-               uint32_t hi = ((uint32_t)exp_dec * 656) >> 16; /* exp / 100 */
-               uint32_t lo = (uint32_t)exp_dec - hi * 100;    /* exp % 100 */
-               buffer[0] = hi + '0';
+               uint32_t hi = (uint32_t(exp_dec) * 656) >> 16; /* exp / 100 */
+               uint32_t lo = uint32_t(exp_dec) - hi * 100;    /* exp % 100 */
+               buffer[0] = uint8_t(hi) + '0';
                *(uint16_t *)&buffer[1] = *(const uint16_t *)(char_table + (lo * 2));
                return buffer + 3;
             }
-            return buffer;
          }
 
       }

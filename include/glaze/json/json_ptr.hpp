@@ -538,8 +538,13 @@ namespace glz
                   using sub_t = decltype(glz::detail::get_member(std::declval<V>(), member_ptr));
                   return valid<sub_t, rem_ptr, Expected_t>();
                }
+               else {
+                  return false;
+               }
             }
-            return false;
+            else {
+               return false;
+            }
          }
          else if constexpr (glz::detail::array_t<V>) {
             if (glz::detail::stoui(key_str)) {

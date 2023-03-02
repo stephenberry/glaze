@@ -414,6 +414,14 @@ namespace glz::detail
       bool sign;
       sign = (*hdr == '-');
       cur += sign;
+      auto apply_sign = [sign](auto&& val) -> T {
+         if constexpr (std::is_unsigned_v<T>) {
+            return static_cast<T>(val);
+         }
+         else {
+            return sign ? -static_cast<T>(val) : static_cast<T>(val);
+         }
+      };
       /* begin with non-zero digit */
       sig = (uint64_t)(*cur - '0');
       if (sig > 9) {
@@ -451,7 +459,10 @@ namespace glz::detail
       }
       cur += 19; /* skip continuous 19 digits */
       if (!digi_is_digit_or_fp(*cur)) {
-         val = sign ? -T(sig) : T(sig);
+         val = static_cast<T>(sig);
+         if constexpr (!std::is_unsigned_v<T>) {
+            val *= sign ? -1 : 1;
+         }
          return true;
       }
       goto digi_intg_more; /* read more digits in integral part */
@@ -460,7 +471,7 @@ namespace glz::detail
    digi_sepr_##i : if ((!digi_is_fp(cur[i]))) [[likely]]               \
    {                                                                   \
       cur += i;                                                        \
-      val = sign ? -T(sig) : T(sig);                                   \
+      val = apply_sign(sig);       \
       return true;                                                     \
    }                                                                   \
    dot_pos = cur + i;                                                  \
@@ -499,7 +510,10 @@ digi_intg_more :
             if ((sig < (U64_MAX / 10)) || (sig == (U64_MAX / 10) && num_tmp <= (U64_MAX % 10))) {
                sig = num_tmp + sig * 10;
                cur++;
-               val = sign ? -T(sig) : T(sig);
+               val = static_cast<T>(sig);
+               if constexpr (!std::is_unsigned_v<T>) {
+                  val *= sign ? -1 : 1;
+               }
                return true;
             }
          }
@@ -552,7 +566,7 @@ digi_intg_more :
       }
       if ((e_bit | *cur) != 'e') [[likely]] {
          if ((exp_sig < F64_MIN_DEC_EXP - 19)) [[unlikely]] {
-            val = (sign ? -T(0) : T(0));
+            val = apply_sign(0);
             return true;
          }
          exp = exp_sig;
@@ -584,11 +598,12 @@ digi_intg_more :
       // large exponent case
       if ((cur - tmp >= 6)) [[unlikely]] {
          if (sig == 0 || exp_sign) {
-            val = (sign ? -0 : 0);
+            val = apply_sign(0);
+            val = static_cast<T>(sig);
             return true;
          }
          else {
-            val = sign ? -std::numeric_limits<T>::infinity() : std::numeric_limits<T>::infinity();
+            val = apply_sign(std::numeric_limits<T>::infinity());
             return true;
          }
       }
@@ -597,26 +612,26 @@ digi_intg_more :
    digi_exp_finish:
       if constexpr (std::integral<T>) {
          if (sig == 0) {
-            val = (sign ? -0 : 0);
+            val = ((sign && !std::is_unsigned_v<T>) ? -0 : 0);
             return true;
          }
          if (exp_sig < -20) {
-            val = (sign ? -0 : 0);
+            val = apply_sign(0);
             return true;
          }
          else if (exp_sig > 20) {
-            val = sign ? -std::numeric_limits<T>::infinity() : std::numeric_limits<T>::infinity();
+            val = apply_sign(std::numeric_limits<T>::infinity());
             return true;
          }
          exp = exp_sig;
       }
       else {
          if (sig == 0) {
-            val = (sign ? -0 : 0);
+            val = (sign ? -T{0} : T{0});
             return true;
          }
          if ((exp_sig < F64_MIN_DEC_EXP - 19)) [[unlikely]] {
-            val = sign ? -0 : 0;
+            val = (sign ? -T{0} : T{0});
             return true;
          }
          else if ((exp_sig > F64_MAX_DEC_EXP)) [[unlikely]] {
@@ -634,10 +649,10 @@ digi_intg_more :
             val *= sign ? -1 : 1;
          }
          if (exp >= 0) {
-            val *= powers_of_ten_int[exp];
+            val *= T(powers_of_ten_int[exp]);
          }
          else {
-            val /= powers_of_ten_int[-exp];
+            val /= T(powers_of_ten_int[-exp]);
          }
          return true;
       }
@@ -660,15 +675,15 @@ digi_intg_more :
          }
          else {
             if (sig < (uint64_t(1) << 24) && std::abs(exp) <= 8) {
-               val = sig;
+               val = static_cast<T>(sig);
                if constexpr (!std::is_unsigned_v<T>) {
                   val *= sign ? -1 : 1;
                }
                if (exp >= 0) {
-                  val *= powers_of_ten_float[exp];
+                  val *= static_cast<T>(powers_of_ten_float[exp]);
                }
                else {
-                  val /= powers_of_ten_float[-exp];
+                  val /= static_cast<T>(powers_of_ten_float[-exp]);
                }
                return true;
             }
@@ -751,7 +766,7 @@ digi_intg_more :
 
          auto num = raw_t(sign) << (sizeof(raw_t) * 8 - 1) | raw_t(mantisa >> mantisa_shift) |
                     (raw_t(exp2 + std::numeric_limits<T>::max_exponent - 1) << (std::numeric_limits<T>::digits - 1));
-         num += round;
+         num += raw_t(round);
          std::memcpy(&val, &num, sizeof(T));
          return true;
       }

@@ -99,11 +99,10 @@ namespace glz
          static constexpr auto N = sizeof...(Args);
          std::array<void*, N> arguments;
 
-         //auto tuple = std::make_tuple(std::forward<Args>(args)...);
-         auto tuple = std::forward_as_tuple(std::forward<Args>(args)...);
+         auto tuple_args = std::forward_as_tuple(std::forward<Args>(args)...);
 
          for_each<N>([&](auto I) {
-            std::get<I>(arguments) = &std::get<I>(tuple);
+            std::get<I>(arguments) = &std::get<I>(tuple_args);
          });
 
          if constexpr (std::is_pointer_v<Ret>) {
