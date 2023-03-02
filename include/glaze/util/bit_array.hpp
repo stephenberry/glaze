@@ -89,7 +89,7 @@ namespace glz::detail {
             }
             else {
                 int res{};
-                for (int i = static_cast<int>(data.size()) - 1; i > -1; --i) {
+                for (size_t i = data.size() - 1; i >= 0; --i) {
                     const auto trailing_zeros = std::countr_zero(data[i]);
                     res += trailing_zeros;
                     if (trailing_zeros < n_chunk_bits) {
