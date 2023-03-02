@@ -100,6 +100,7 @@ namespace glz
                state = COMMENT;
             }
             break;
+         case NORMAL:
          default:
             break;
          }
