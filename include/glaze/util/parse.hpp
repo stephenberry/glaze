@@ -141,6 +141,21 @@ namespace glz::detail
          }
       }
    }
+   
+   GLZ_ALWAYS_INLINE auto has_zero(const uint64_t chunk) noexcept
+   {
+      return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080);
+   };
+   
+   GLZ_ALWAYS_INLINE auto has_quote(const uint64_t chunk) noexcept
+   {
+      return has_zero(chunk ^ 0b0010001000100010001000100010001000100010001000100010001000100010);
+   };
+   
+   GLZ_ALWAYS_INLINE auto has_escape(const uint64_t chunk) noexcept
+   {
+      return has_zero(chunk ^ 0b0101110001011100010111000101110001011100010111000101110001011100);
+   };
 
    GLZ_ALWAYS_INLINE void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -148,21 +163,11 @@ namespace glz::detail
       
       if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
 
-      auto has_zero = [](uint64_t chunk) { return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080); };
-
-      auto has_qoute = [&](uint64_t chunk) {
-         return has_zero(chunk ^ 0b0010001000100010001000100010001000100010001000100010001000100010);
-      };
-
-      auto has_escape = [&](uint64_t chunk) {
-         return has_zero(chunk ^ 0b0101110001011100010111000101110001011100010111000101110001011100);
-      };
-
       const auto end_m7 = end - 7;
       for (; it < end_m7; it += 8) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
-         uint64_t test_chars = has_qoute(chunk) | has_escape(chunk);
+         uint64_t test_chars = has_quote(chunk) | has_escape(chunk);
          if (test_chars != 0) {
                it += (std::countr_zero(test_chars) >> 3);
             return;
@@ -188,17 +193,11 @@ namespace glz::detail
       
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
-      auto has_zero = [](uint64_t chunk) { return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080); };
-
-      auto has_qoute = [&](uint64_t chunk) {
-         return has_zero(chunk ^ 0b0010001000100010001000100010001000100010001000100010001000100010);
-      };
-
       const auto end_m7 = end - 7;
       for (; it < end_m7; it += 8) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
-         uint64_t char_test = has_qoute(chunk);
+         uint64_t char_test = has_quote(chunk);
          if (char_test != 0) {
             it += (std::countr_zero(char_test) >> 3);
             return;
@@ -225,12 +224,6 @@ namespace glz::detail
       }
       
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-
-      auto has_zero = [](uint64_t chunk) { return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080); };
-
-      auto has_qoute = [&](uint64_t chunk) {
-         return has_zero(chunk ^ 0b0010001000100010001000100010001000100010001000100010001000100010);
-      };
       
       auto start = it;
 
@@ -238,7 +231,7 @@ namespace glz::detail
       for (; it < end_m7; it += 8) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
-         uint64_t test_chars = has_qoute(chunk);
+         uint64_t test_chars = has_quote(chunk);
          if (test_chars != 0) {
             it += (std::countr_zero(test_chars) >> 3);
             
@@ -268,12 +261,6 @@ namespace glz::detail
    [[nodiscard]] GLZ_ALWAYS_INLINE const sv parse_key_cx(is_context auto&& ctx, auto&& it) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-
-      auto has_zero = [](uint64_t chunk) { return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080); };
-
-      auto has_qoute = [&](uint64_t chunk) {
-         return has_zero(chunk ^ 0b0010001000100010001000100010001000100010001000100010001000100010);
-      };
       
       auto start = it;
       it += MinLength;
@@ -282,7 +269,7 @@ namespace glz::detail
       if constexpr (LengthRange == 7) {
          uint64_t chunk; // no need to default initialize
          std::memcpy(&chunk, it, LengthRange + 1);
-         const uint64_t test = has_qoute(chunk);
+         const uint64_t test = has_quote(chunk);
          if (test != 0) {
             it += (std::countr_zero(test) >> 3);
             
@@ -294,7 +281,7 @@ namespace glz::detail
       else {
          uint64_t chunk{};
          std::memcpy(&chunk, it, LengthRange + 1);
-         const uint64_t test = has_qoute(chunk);
+         const uint64_t test = has_quote(chunk);
          if (test != 0) {
             it += (std::countr_zero(test) >> 3);
             
