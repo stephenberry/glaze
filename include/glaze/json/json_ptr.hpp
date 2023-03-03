@@ -340,7 +340,14 @@ namespace glz
                              std::decay_t<decltype(value)>,
                              std::decay_t<decltype(val)>>) {
                result = true;
+               #if defined(__GNUC__) || defined(__GNUG__)
+               #pragma GCC diagnostic push
+               #pragma GCC diagnostic ignored "-Waddress"
+               #endif
                val = value;
+               #if defined(__GNUC__) || defined(__GNUG__)
+               #pragma GCC diagnostic pop
+               #endif
             }
          },
          std::forward<T>(root_value), json_ptr);
@@ -538,8 +545,13 @@ namespace glz
                   using sub_t = decltype(glz::detail::get_member(std::declval<V>(), member_ptr));
                   return valid<sub_t, rem_ptr, Expected_t>();
                }
+               else {
+                  return false;
+               }
             }
-            return false;
+            else {
+               return false;
+            }
          }
          else if constexpr (glz::detail::array_t<V>) {
             if (glz::detail::stoui(key_str)) {

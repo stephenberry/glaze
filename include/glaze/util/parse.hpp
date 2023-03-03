@@ -162,9 +162,9 @@ namespace glz::detail
       for (; it < end_m7; it += 8) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
-         uint64_t test = has_qoute(chunk) | has_escape(chunk);
-         if (test != 0) {
-            it += (std::countr_zero(test) >> 3);
+         uint64_t test_chars = has_qoute(chunk) | has_escape(chunk);
+         if (test_chars != 0) {
+               it += (std::countr_zero(test_chars) >> 3);
             return;
          }
       }
@@ -198,9 +198,9 @@ namespace glz::detail
       for (; it < end_m7; it += 8) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
-         uint64_t test = has_qoute(chunk);
-         if (test != 0) {
-            it += (std::countr_zero(test) >> 3);
+         uint64_t char_test = has_qoute(chunk);
+         if (char_test != 0) {
+            it += (std::countr_zero(char_test) >> 3);
             return;
          }
       }
@@ -238,9 +238,9 @@ namespace glz::detail
       for (; it < end_m7; it += 8) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
-         uint64_t test = has_qoute(chunk);
-         if (test != 0) {
-            it += (std::countr_zero(test) >> 3);
+         uint64_t test_chars = has_qoute(chunk);
+         if (test_chars != 0) {
+            it += (std::countr_zero(test_chars) >> 3);
             
             sv ret{ start, static_cast<size_t>(it - start) };
             ++it;

@@ -6,7 +6,7 @@ set(BOOST_UT_DISABLE_MODULE ON CACHE INTERNAL "")
 FetchContent_Declare(
   ut
   GIT_REPOSITORY https://github.com/boost-ext/ut.git
-  GIT_TAG 265199e173b16a75670fae62fc2446b9dffad39e
+  GIT_TAG c0319c73e954dcd35159e8005dbbd76b33d9eed7
   FIND_PACKAGE_ARGS
 )
 
@@ -21,18 +21,19 @@ message(STATUS "...finished fetching dependencies.")
 include(../cmake/code-coverage.cmake)
 add_code_coverage_all_targets()
 
-
 add_library(glz_test_common INTERFACE)
 target_compile_features(glz_test_common INTERFACE cxx_std_20)
 target_link_libraries(glz_test_common INTERFACE Boost::ut glaze::glaze)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(glz_test_common INTERFACE -fno-exceptions -fno-rtti)
+    target_compile_options(glz_test_common INTERFACE -Wall -Wextra -pedantic $<$<CONFIG:Debug>:-Werror>)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
       target_compile_options(glz_test_common INTERFACE -fsanitize=address)
       target_link_options(glz_test_common INTERFACE -fsanitize=address)
     endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_common INTERFACE /GR- /bigobj) #/fsanitize=address
+    target_compile_options(glz_test_common INTERFACE /W4)
 endif()
 
 add_subdirectory(api_test)

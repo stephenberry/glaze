@@ -80,7 +80,7 @@ namespace glz
             dump<'"'>(args...);
             dump("hidden type should not have been written", args...);
             dump<'"'>(args...);
-         };
+         }
       };
       
       template <>
@@ -92,7 +92,7 @@ namespace glz
             dump<'"'>(args...);
             dump("skip type should not have been written", args...);
             dump<'"'>(args...);
-         };
+         }
       };
       
       template <is_member_function_pointer T>
@@ -111,7 +111,7 @@ namespace glz
          {
             using V = std::decay_t<decltype(value.get())>;
             to_json<V>::template op<Opts>(value.get(), std::forward<Args>(args)...);
-         };
+         }
       };
       
       template <boolean_like T>
@@ -171,7 +171,7 @@ namespace glz
                   dump<"\\t">(b, ix);
                   break;
                default:
-                  dump(value, b, ix);
+                  dump(value, b, ix); // TODO: This warning is an error We need to be able to dump wider char types
                }
                dump<'"'>(b, ix);
             }
@@ -442,7 +442,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
          {
             dump<R"("std::monostate")">(args...);
-         };
+         }
       };
 
       template <is_variant T>
@@ -658,65 +658,65 @@ namespace glz
                // skip file_include
                if constexpr (std::is_same_v<val_t, includer<std::decay_t<V>>>) {
                   return;
-               }
-               
-               if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+               } 
+               else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
                   return;
                }
-
-               if (first) {
-                  first = false;
-               }
                else {
-                  // Null members may be skipped so we cant just write it out for all but the last member unless
-                  // trailing commas are allowed
-                  dump<','>(b, ix);
-                  if constexpr (Opts.prettify) {
-                     dump<'\n'>(b, ix);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                  if (first) {
+                     first = false;
                   }
-               }
-
-               using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
-               
-               if constexpr (str_t<Key> || char_t<Key>) {
-                  static constexpr sv key = glz::tuplet::get<0>(item);
-                  if constexpr (needs_escaping(key)) {
-                     write<json>::op<Opts>(key, ctx, b, ix);
-                     dump<':'>(b, ix);
+                  else {
+                     // Null members may be skipped so we cant just write it out for all but the last member unless
+                     // trailing commas are allowed
+                     dump<','>(b, ix);
                      if constexpr (Opts.prettify) {
-                        dump<' '>(b, ix);
+                        dump<'\n'>(b, ix);
+                        dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                     }
+                  }
+
+                  using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
+
+                  if constexpr (str_t<Key> || char_t<Key>) {
+                     static constexpr sv key = glz::tuplet::get<0>(item);
+                     if constexpr (needs_escaping(key)) {
+                        write<json>::op<Opts>(key, ctx, b, ix);
+                        dump<':'>(b, ix);
+                        if constexpr (Opts.prettify) {
+                           dump<' '>(b, ix);
+                        }
+                     }
+                     else {
+                        if constexpr (Opts.prettify) {
+                           static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\": ">>;
+                           dump<quoted>(b, ix);
+                        }
+                        else {
+                           static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\":">>;
+                           dump<quoted>(b, ix);
+                        }
                      }
                   }
                   else {
-                     if constexpr (Opts.prettify) {
-                        static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\": ">>;
-                        dump<quoted>(b, ix);
-                     }
-                     else {
-                        static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\":">>;
-                        dump<quoted>(b, ix);
-                     }
+                     static constexpr auto quoted =
+                        concat_arrays(concat_arrays("\"", glz::tuplet::get<0>(item)), "\":", Opts.prettify ? " " : "");
+                     write<json>::op<Opts>(quoted, ctx, b, ix);
                   }
-               }
-               else {
-                  static constexpr auto quoted =
-                     concat_arrays(concat_arrays("\"", glz::tuplet::get<0>(item)), "\":", Opts.prettify ? " " : "");
-                  write<json>::op<Opts>(quoted, ctx, b, ix);
-               }
-               
-               write<json>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, b, ix);
-               
-               static constexpr auto S = std::tuple_size_v<decltype(item)>;
-               if constexpr (Opts.comments && S > 2) {
-                  static constexpr sv comment = glz::tuplet::get<2>(item);
-                  if constexpr (comment.size() > 0) {
-                     if constexpr (Opts.prettify) {
-                        dump<' '>(b, ix);
+
+                  write<json>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, b, ix);
+
+                  static constexpr auto S = std::tuple_size_v<decltype(item)>;
+                  if constexpr (Opts.comments && S > 2) {
+                     static constexpr sv comment = glz::tuplet::get<2>(item);
+                     if constexpr (comment.size() > 0) {
+                        if constexpr (Opts.prettify) {
+                           dump<' '>(b, ix);
+                        }
+                        dump<"/*">(b, ix);
+                        dump(comment, b, ix);
+                        dump<"*/">(b, ix);
                      }
-                     dump<"/*">(b, ix);
-                     dump(comment, b, ix);
-                     dump<"*/">(b, ix);
                   }
                }
             });

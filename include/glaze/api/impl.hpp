@@ -109,7 +109,7 @@ namespace glz
       }
       
       template <class Arg_tuple, class F, class Parent, size_t... Is>
-      decltype(auto) call_args(F&& f, Parent&& parent, std::span<void*> args, std::index_sequence<Is...>)
+      decltype(auto) call_args(F&& f, Parent&& parent, [[maybe_unused]] std::span<void*> args, std::index_sequence<Is...>)
       {
          return f(parent, to_ref<std::tuple_element_t<Is, Arg_tuple>>(args[Is])...);
       }

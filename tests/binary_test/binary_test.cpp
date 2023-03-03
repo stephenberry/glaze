@@ -595,12 +595,12 @@ void file_include_test()
 {
    includer_struct obj{};
    
-   glz::write_file_binary(obj, "../alabastar.crush");
+   expect(glz::write_file_binary(obj, "../alabastar.crush") == glz::error_code::none);
    
    obj.str = "";
    obj.i = 0;
    
-   glz::read_file_binary(obj, "../alabastar.crush");
+   expect(glz::read_file_binary(obj, "../alabastar.crush") == glz::error_code::none);
    
    expect(obj.str == "Hello") << obj.str;
    expect(obj.i == 55) << obj.i;
@@ -667,57 +667,54 @@ void container_types()
       expect(lis == lis2);
    };
    "map string keys roundtrip"_test = [] {
-      std::map<std::string, int> map;
+      std::map<std::string, int> map1;
       std::string str{"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"};
       std::mt19937 g{};
       for (auto i = 0; i < 20; ++i) {
          std::shuffle(str.begin(), str.end(), g);
-         map[str] = rand();
+         map1[str] = rand();
       }
       std::string buffer{};
       std::map<std::string, int> map2{};
-      glz::write_binary(map, buffer);
+      glz::write_binary(map1, buffer);
       glz::read_binary(map2, buffer);
-      // expect(map == map2);
-      for (auto& it : map) {
+      for (auto& it : map1) {
          expect(map2[it.first] == it.second);
       }
    };
    "map int keys roundtrip"_test = [] {
-      std::map<int, int> map;
+      std::map<int, int> map1;
       for (auto i = 0; i < 20; ++i) {
-         map[rand()] = rand();
+         map1[rand()] = rand();
       }
       std::string buffer{};
       std::map<int, int> map2{};
-      glz::write_binary(map, buffer);
+      glz::write_binary(map1, buffer);
       glz::read_binary(map2, buffer);
-      // expect(map == map2);
-      for (auto& it : map) {
+      for (auto& it : map1) {
          expect(map2[it.first] == it.second);
       }
    };
    "unordered_map int keys roundtrip"_test = [] {
-      std::unordered_map<int, int> map;
+      std::unordered_map<int, int> map1;
       for (auto i = 0; i < 20; ++i) {
-         map[rand()] = rand();
+         map1[rand()] = rand();
       }
       std::string buffer{};
       std::unordered_map<int, int> map2{};
-      glz::write_binary(map, buffer);
+      glz::write_binary(map1, buffer);
       glz::read_binary(map2, buffer);
-      // expect(map == map2);
-      for (auto& it : map) {
+      for (auto& it : map1) {
          expect(map2[it.first] == it.second);
       }
    };
    "tuple roundtrip"_test = [] {
-      auto tuple = std::make_tuple(3, 2.7, std::string("curry"));
-      decltype(tuple) tuple2{};
+      auto tuple1 = std::make_tuple(3, 2.7, std::string("curry"));
+      decltype(tuple1) tuple2{};
       std::string buffer{};
-      glz::write_binary(tuple, buffer);
+      glz::write_binary(tuple1, buffer);
       glz::read_binary(tuple2, buffer);
-      expect(tuple == tuple2);
+      expect(tuple1 == tuple2);
    };
    "pair roundtrip"_test = [] {
       auto pair = std::make_pair(std::string("water"), 5.2);
