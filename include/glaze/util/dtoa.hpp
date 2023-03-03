@@ -26,10 +26,14 @@ namespace glz
    inline void u128_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo)
    {
    #ifdef __SIZEOF_INT128__
+   #if defined(__GNUC__) || defined(__GNUG__)
    #pragma GCC diagnostic push
    #pragma GCC diagnostic ignored "-Wpedantic"
+   #endif
       unsigned __int128 m = static_cast<unsigned __int128>(a) * b;
+   #if defined(__GNUC__) || defined(__GNUG__)
    #pragma GCC diagnostic pop
+   #endif
       *hi = uint64_t(m >> 64);
       *lo = uint64_t(m);
    #elif defined(_M_X64)
@@ -56,10 +60,14 @@ namespace glz
    inline void u128_mul_add(uint64_t a, uint64_t b, uint64_t c, uint64_t *hi, uint64_t *lo)
    {
    #ifdef __SIZEOF_INT128__
+   #if defined(__GNUC__) || defined(__GNUG__)
    #pragma GCC diagnostic push
    #pragma GCC diagnostic ignored "-Wpedantic"
+   #endif
       unsigned __int128 m = static_cast<unsigned __int128>(a) * b + c;
+   #if defined(__GNUC__) || defined(__GNUG__)
    #pragma GCC diagnostic pop
+   #endif
       *hi = uint64_t(m >> 64);
       *lo = uint64_t(m);
    #else

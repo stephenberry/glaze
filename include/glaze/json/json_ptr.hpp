@@ -340,10 +340,14 @@ namespace glz
                              std::decay_t<decltype(value)>,
                              std::decay_t<decltype(val)>>) {
                result = true;
+               #if defined(__GNUC__) || defined(__GNUG__)
                #pragma GCC diagnostic push
                #pragma GCC diagnostic ignored "-Waddress"
+               #endif
                val = value;
+               #if defined(__GNUC__) || defined(__GNUG__)
                #pragma GCC diagnostic pop
+               #endif
             }
          },
          std::forward<T>(root_value), json_ptr);
