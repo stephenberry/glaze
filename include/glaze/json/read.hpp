@@ -777,7 +777,7 @@ namespace glz
       };
       
       template <glaze_object_t T>
-      GLZ_ALWAYS_INLINE constexpr bool keys_may_contain_escape()
+      GLZ_ALWAYS_INLINE constexpr bool keys_may_contain_escape() noexcept
       {
          auto is_unicode = [](const auto c) {
             return (static_cast<uint8_t>(c) >> 7) > 0;
@@ -801,7 +801,7 @@ namespace glz
       }
 
       template <is_variant T>
-      GLZ_ALWAYS_INLINE constexpr bool keys_may_contain_escape()
+      GLZ_ALWAYS_INLINE constexpr bool keys_may_contain_escape() noexcept
       {
          bool may_escape = false;
          constexpr auto N = std::variant_size_v<T>;
@@ -826,7 +826,7 @@ namespace glz
       
       // only use this if the keys cannot contain escape characters
       template <glaze_object_t T, string_literal tag = "">
-      GLZ_ALWAYS_INLINE constexpr auto key_stats()
+      GLZ_ALWAYS_INLINE constexpr auto key_stats() noexcept
       {
          key_stats_t stats{};
          if constexpr (!tag.sv().empty()) {
@@ -855,7 +855,7 @@ namespace glz
       }
 
       template <is_variant T, string_literal tag = "">
-      GLZ_ALWAYS_INLINE constexpr auto key_stats()
+      GLZ_ALWAYS_INLINE constexpr auto key_stats() noexcept
       {
          key_stats_t stats{};
          if constexpr (!tag.sv().empty()) {
@@ -886,7 +886,7 @@ namespace glz
       // Key parsing for meta objects or variants of meta objects.
       // TODO We could expand this to compiletime known strings in general like enums
       template <class T, auto Opts, string_literal tag = "">
-      GLZ_ALWAYS_INLINE std::string_view parse_object_key(is_context auto&& ctx, auto&& it, auto&& end)
+      GLZ_ALWAYS_INLINE std::string_view parse_object_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
       {
          if (static_cast<bool>(ctx.error)) [[unlikely]] {
             return {};
@@ -959,7 +959,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options, string_literal tag = "">
-         GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
+         GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Options.opening_handled) {
                skip_ws<Options>(ctx, it, end);
@@ -1043,7 +1043,7 @@ namespace glz
       };
 
        template <is_variant T>
-       GLZ_ALWAYS_INLINE constexpr auto variant_is_auto_deducible()
+       GLZ_ALWAYS_INLINE constexpr auto variant_is_auto_deducible() noexcept
        {
           //Contains at most one each of the basic json types bool, numeric, string, object, array
           //If all objects are meta objects then we can attemt to deduce them as well either through a type tag or unique combinations of keys
@@ -1084,7 +1084,7 @@ namespace glz
        {
           // Note that items in the variant are required to be default constructible for us to switch types
           template <auto Opts>
-          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
           {
              if constexpr (variant_is_auto_deducible<T>()) {
                 skip_ws<Opts>(ctx, it, end);
