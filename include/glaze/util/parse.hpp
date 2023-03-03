@@ -593,7 +593,9 @@ namespace glz::detail
       }
 
       if constexpr (!Opts.force_conformance) {
-         skip_ws<Opts>(ctx, it, end);
+         if constexpr (!Opts.ws_handled) {
+            skip_ws<Opts>(ctx, it, end);
+         }
          while (true) {
             switch (*it) {
             case '{':
@@ -624,7 +626,9 @@ namespace glz::detail
          }
       }
       else {
-          skip_ws<Opts>(ctx, it, end);
+         if constexpr (!Opts.ws_handled) {
+            skip_ws<Opts>(ctx, it, end);
+         }
           switch (*it) {
              case '{': {
                 skip_object<Opts>(ctx, it, end);
