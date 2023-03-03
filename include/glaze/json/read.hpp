@@ -907,7 +907,9 @@ namespace glz
          }
 
          // skip white space and escape characters and find the string
-         skip_ws<Opts>(ctx, it, end);
+         if constexpr (!Opts.ws_handled) {
+            skip_ws<Opts>(ctx, it, end);
+         }
          match<'"'>(ctx, it);
 
          if constexpr (keys_may_contain_escape<T>()) {
@@ -1000,7 +1002,7 @@ namespace glz
                }
                
                if constexpr (glaze_object_t<T>) {
-                  const sv key = parse_object_key<T, Opts, tag>(ctx, it, end);
+                  const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
                   
                   skip_ws<Opts>(ctx, it, end);
                   match<':'>(ctx, it);
