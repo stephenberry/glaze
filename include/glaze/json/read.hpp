@@ -79,7 +79,7 @@ namespace glz
          {
             using V = std::decay_t<decltype(value.get())>;
             from_json<V>::template op<Opts>(value.get(), std::forward<Args>(args)...);
-         };
+         }
       };
       
       template <>
@@ -89,7 +89,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&...) noexcept
          {
             ctx.error = error_code::attempt_read_hidden;
-         };
+         }
       };
       
       template <>
@@ -100,7 +100,7 @@ namespace glz
          {
             skip_ws(args...);
             match<R"("std::monostate")">(args...);
-         };
+         }
       };
       
       template <bool_t T>
@@ -365,13 +365,12 @@ namespace glz
                         value = codepoint;
                      }
                      else {
-                        char32_t codepoint = codepoint_integer;
                         char8_t buffer[4];
                         auto& f = std::use_facet<std::codecvt<char32_t, char8_t, mbstate_t>>(std::locale());
                         std::mbstate_t mb{};
                         const char32_t* from_next;
                         char8_t* to_next;
-                        const auto result = f.out(mb, &codepoint, &codepoint + 1, from_next, buffer, buffer + 4, to_next);
+                        auto result = f.out(mb, &codepoint, &codepoint + 1, from_next, buffer, buffer + 4, to_next);
                         if (result != std::codecvt_base::ok) {
                            ctx.error = error_code::unicode_escape_conversion_failure;
                            return;
@@ -384,12 +383,12 @@ namespace glz
                         }
                         else {
                            using buffer_type = std::conditional_t<std::is_same_v<T, wchar_t>, char, char8_t>;
-                           auto& f = std::use_facet<std::codecvt<T, buffer_type, mbstate_t>>(std::locale());
-                           std::mbstate_t mb{};
-                           const buffer_type* from_next;
-                           T* to_next;
+                           auto& facet = std::use_facet<std::codecvt<T, buffer_type, mbstate_t>>(std::locale());
+                           const buffer_type* from_next_final;
+                           T* to_next_final;
                            auto* rbuf = reinterpret_cast<buffer_type*>(buffer);
-                           const auto result = f.in(mb, rbuf, rbuf + n, from_next, &value, &value + 1, to_next);
+                           result =
+                              facet.in(mb, rbuf, rbuf + n, from_next_final, &value, &value + 1, to_next_final);
                            if (result != std::codecvt_base::ok) {
                               ctx.error = error_code::unicode_escape_conversion_failure;
                               return;
@@ -703,13 +702,13 @@ namespace glz
             
             std::string& s = string_buffer();
             
-            static constexpr auto map = make_map<T>();
+            static constexpr auto flag_map = make_map<T>();
             
             while (true) {
                read<json>::op<Opts>(s, ctx, it, end);
                
-               auto itr = map.find(s);
-               if (itr != map.end()) {
+               auto itr = flag_map.find(s);
+               if (itr != flag_map.end()) {
                   std::visit([&](auto&& x) {
                      get_member(value, x) = true;
                   }, itr->second);
@@ -963,6 +962,7 @@ namespace glz
                   first = false;
                else [[likely]] {
                   match<','>(ctx, it);
+                  skip_ws<Opts>(ctx, it, end);
                }
                
                if constexpr (glaze_object_t<T>) {
@@ -992,8 +992,13 @@ namespace glz
                            ctx.error = error_code::unknown_key;
                            return;
                         }
+                        else {
+                           skip_value<Opts>(ctx, it, end);
+                        }
                      }
-                     skip_value<Opts>(ctx, it, end);
+                     else {
+                        skip_value<Opts>(ctx, it, end);
+                     }
                   }
                }
                else {
@@ -1106,13 +1111,13 @@ namespace glz
                                      skip_ws<Opts>(ctx, it, end);
                                      match<':'>(ctx, it);
 
-                                     std::string& type = string_buffer();
-                                     read<json>::op<Opts>(type, ctx, it, end);
+                                     std::string& type_id = string_buffer();
+                                     read<json>::op<Opts>(type_id, ctx, it, end);
                                      skip_ws<Opts>(ctx, it, end);
                                      match<','>(ctx, it);
 
                                      static constexpr auto id_map = make_variant_id_map<T>();
-                                     auto id_it = id_map.find(std::string_view{type});
+                                     auto id_it = id_map.find(std::string_view{type_id});
                                      if (id_it != id_map.end()) [[likely]] {
                                         it = start;
                                         const auto type_index = id_it->second;
@@ -1128,7 +1133,7 @@ namespace glz
                                         return;
                                      }
                                      else {
-                                        ctx.error = ctx.error = error_code::no_matching_variant_type;
+                                        ctx.error = error_code::no_matching_variant_type;
                                         return;
                                      }
                                   }
@@ -1145,7 +1150,7 @@ namespace glz
 
                             auto matching_types = possible_types.popcount();
                             if (matching_types == 0) {
-                               ctx.error = ctx.error = error_code::no_matching_variant_type;
+                               ctx.error = error_code::no_matching_variant_type;
                                return;
                             }
                             else if (matching_types == 1) {
@@ -1168,14 +1173,14 @@ namespace glz
                             skip_value<Opts>(ctx, it, end);
                             skip_ws<Opts>(ctx, it, end);
                          }
-                         ctx.error = ctx.error = error_code::no_matching_variant_type;
+                         ctx.error = error_code::no_matching_variant_type;
                          return;
                       }
                       break;
                    case '[':
                       using array_types = typename variant_types<T>::array_types;
                       if constexpr (std::tuple_size_v<array_types> < 1) {
-                         ctx.error = ctx.error = error_code::no_matching_variant_type;
+                         ctx.error = error_code::no_matching_variant_type;
                          return;
                       }
                       else {
@@ -1187,7 +1192,7 @@ namespace glz
                    case '"': {
                       using string_types = typename variant_types<T>::string_types;
                       if constexpr (std::tuple_size_v<string_types> < 1) {
-                         ctx.error = ctx.error = error_code::no_matching_variant_type;
+                         ctx.error = error_code::no_matching_variant_type;
                          return;
                       }
                       else {
@@ -1201,7 +1206,7 @@ namespace glz
                    case 'f': {
                       using bool_types = typename variant_types<T>::bool_types;
                       if constexpr (std::tuple_size_v<bool_types> < 1) {
-                         ctx.error = ctx.error = error_code::no_matching_variant_type;
+                         ctx.error = error_code::no_matching_variant_type;
                          return;
                       }
                       else {
@@ -1214,7 +1219,7 @@ namespace glz
                    case 'n':
                       using nullable_types = typename variant_types<T>::nullable_types;
                       if constexpr (std::tuple_size_v<nullable_types> < 1) {
-                         ctx.error = ctx.error = error_code::no_matching_variant_type;
+                         ctx.error = error_code::no_matching_variant_type;
                          return;
                       }
                       else {
@@ -1227,7 +1232,7 @@ namespace glz
                       // Not bool, string, object, or array so must be number or null
                       using number_types = typename variant_types<T>::number_types;
                       if constexpr (std::tuple_size_v<number_types> < 1) {
-                         ctx.error = ctx.error = error_code::no_matching_variant_type;
+                         ctx.error = error_code::no_matching_variant_type;
                          return;
                       }
                       else {

@@ -180,7 +180,7 @@ namespace glz
             glaze_error("Unable to find perfect hash");
          }
 
-         for (size_t i = 0; i < N; ++i) {
+         for (i = 0; i < N; ++i) {
             const auto hash = xsm1<HashType>{}(keys[i], ht.seed);
             if constexpr (allow_hash_check) {
                ht.hashes[i] = hash;
@@ -204,7 +204,7 @@ namespace glz
       template <size_t N, bool IsFrontHash = true>
       inline constexpr single_char_hash_desc single_char_hash(const std::array<std::string_view, N>& v) noexcept
       {
-         if (N > 255) {
+         if constexpr (N > 255) {
             return {};
          }
          

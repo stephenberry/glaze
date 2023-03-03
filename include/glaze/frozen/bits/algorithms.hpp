@@ -55,10 +55,10 @@ namespace glz::frozen
       }
 
       constexpr std::size_t bit_weight(std::size_t n) {
-        return (n <= 8*sizeof(unsigned int))
-          + (n <= 8*sizeof(unsigned long))
-          + (n <= 8*sizeof(unsigned long long))
-          + (n <= 128);
+        return (n <= 8ull*sizeof(unsigned int))
+          + (n <= 8ull*sizeof(unsigned long))
+          + (n <= 8ull*sizeof(unsigned long long))
+          + (n <= 128ull);
       }
 
       unsigned int select_uint_least(std::integral_constant<std::size_t, 4>);

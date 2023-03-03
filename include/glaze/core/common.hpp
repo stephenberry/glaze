@@ -518,8 +518,7 @@ namespace glz
          auto naive_or_normal_hash = [&]
          {
             // these variables needed for MSVC
-            constexpr bool n_20 = n <= 20;
-            if constexpr (n_20) {
+            if constexpr (n <= 20) {
                return glz::detail::make_naive_map<value_t, n, uint32_t, allow_hash_check>(
                   {std::make_pair<sv, value_t>(
                      sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),

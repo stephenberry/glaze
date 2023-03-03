@@ -33,6 +33,7 @@
  */
 
 #include <cstdint>
+#include <concepts>
 
 namespace glz
 {
@@ -81,7 +82,7 @@ namespace glz
        
        if (val < 100) { /* 1-2 digits: aa */
            lz = val < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[val * 2 + lz]);
+           std::memcpy(&buf[0], &char_table[val * 2 + lz], 2);
            buf -= lz;
            return buf + 2;
            
@@ -89,44 +90,45 @@ namespace glz
            aa = (val * 5243) >> 19; /* (val / 100) */
            bb = val - aa * 100; /* (val % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           std::memcpy(&buf[0], &char_table[aa * 2 + lz], 2);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
+           std::memcpy(&buf[2], &char_table[2 * bb], 2);
+
            return buf + 4;
            
        } else if (val < 1000000) { /* 5-6 digits: aabbcc */
-           aa = (uint32_t)(((uint64_t)val * 429497) >> 32); /* (val / 10000) */
+           aa = uint32_t((uint64_t(val) * 429497) >> 32); /* (val / 10000) */
            bbcc = val - aa * 10000; /* (val % 10000) */
            bb = (bbcc * 5243) >> 19; /* (bbcc / 100) */
            cc = bbcc - bb * 100; /* (bbcc % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           std::memcpy(buf, char_table + aa * 2 + lz, 2);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
-           ((pair *)buf)[2] = ((pair *)char_table)[cc];
+           std::memcpy(buf + 2, char_table + bb * 2, 2);
+           std::memcpy(buf + 4, char_table + cc * 2, 2);
            return buf + 6;
            
        } else if (val < 100000000) { /* 7~8 digits: aabbccdd */
            /* (val / 10000) */
-           aabb = (uint32_t)(((uint64_t)val * 109951163) >> 40);
+           aabb = uint32_t((uint64_t(val) * 109951163) >> 40);
            ccdd = val - aabb * 10000; /* (val % 10000) */
            aa = (aabb * 5243) >> 19; /* (aabb / 100) */
            cc = (ccdd * 5243) >> 19; /* (ccdd / 100) */
            bb = aabb - aa * 100; /* (aabb % 100) */
            dd = ccdd - cc * 100; /* (ccdd % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           std::memcpy(buf, char_table + aa * 2 + lz, 2);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
-           ((pair *)buf)[2] = ((pair *)char_table)[cc];
-           ((pair *)buf)[3] = ((pair *)char_table)[dd];
+           std::memcpy(buf + 2, char_table + bb * 2, 2);
+           std::memcpy(buf + 4, char_table + cc * 2, 2);
+           std::memcpy(buf + 6, char_table + dd * 2, 2);
            return buf + 8;
            
        } else { /* 9~10 digits: aabbccddee */
            /* (val / 10000) */
-           aabbcc = (uint32_t)(((uint64_t)val * 3518437209ul) >> 45);
+           aabbcc = uint32_t((uint64_t(val) * 3518437209ul) >> 45);
            /* (aabbcc / 10000) */
-           aa = (uint32_t)(((uint64_t)aabbcc * 429497) >> 32);
+           aa = uint32_t((uint64_t(aabbcc) * 429497) >> 32);
            ddee = val - aabbcc * 10000; /* (val % 10000) */
            bbcc = aabbcc - aa * 10000; /* (aabbcc % 10000) */
            bb = (bbcc * 5243) >> 19; /* (bbcc / 100) */
@@ -134,12 +136,12 @@ namespace glz
            cc = bbcc - bb * 100; /* (bbcc % 100) */
            ee = ddee - dd * 100; /* (ddee % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           std::memcpy(buf, char_table + aa * 2 + lz, 2);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
-           ((pair *)buf)[2] = ((pair *)char_table)[cc];
-           ((pair *)buf)[3] = ((pair *)char_table)[dd];
-           ((pair *)buf)[4] = ((pair *)char_table)[ee];
+           std::memcpy(buf + 2, char_table + bb * 2, 2);
+           std::memcpy(buf + 4, char_table + cc * 2, 2);
+           std::memcpy(buf + 6, char_table + dd * 2, 2);
+           std::memcpy(buf + 8, char_table + ee * 2, 2);
            return buf + 10;
        }
    }
@@ -147,25 +149,25 @@ namespace glz
    template <class T>
    requires std::same_as<T, int32_t>
    inline auto* to_chars(auto *buf, T val) noexcept {
-      uint32_t neg = (uint32_t)-val;
+      uint32_t neg = uint32_t(-val);
       std::size_t sign = val < 0;
       *buf = '-';
-      return to_chars(buf + sign, sign ? (uint32_t)neg : (uint32_t)val);
+      return to_chars(buf + sign, sign ? uint32_t(neg): uint32_t(val));
    }
    
    inline auto* to_chars_u64_len_8(auto *buf, uint32_t val) noexcept {
        /* 8 digits: aabbccdd */
        uint32_t aa, bb, cc, dd, aabb, ccdd;
-       aabb = (uint32_t)(((uint64_t)val * 109951163) >> 40); /* (val / 10000) */
+       aabb = uint32_t((uint64_t(val) * 109951163) >> 40); /* (val / 10000) */
        ccdd = val - aabb * 10000; /* (val % 10000) */
        aa = (aabb * 5243) >> 19; /* (aabb / 100) */
        cc = (ccdd * 5243) >> 19; /* (ccdd / 100) */
        bb = aabb - aa * 100; /* (aabb % 100) */
        dd = ccdd - cc * 100; /* (ccdd % 100) */
-       ((pair *)buf)[0] = ((pair *)char_table)[aa];
-       ((pair *)buf)[1] = ((pair *)char_table)[bb];
-       ((pair *)buf)[2] = ((pair *)char_table)[cc];
-       ((pair *)buf)[3] = ((pair *)char_table)[dd];
+       std::memcpy(buf, char_table + aa * 2, 2);
+       std::memcpy(buf + 2, char_table + bb * 2, 2);
+       std::memcpy(buf + 4, char_table + cc * 2, 2);
+       std::memcpy(buf + 6, char_table + dd * 2, 2);
        return buf + 8;
    }
    
@@ -174,8 +176,8 @@ namespace glz
        uint32_t aa, bb;
        aa = (val * 5243) >> 19; /* (val / 100) */
        bb = val - aa * 100; /* (val % 100) */
-       ((pair *)buf)[0] = ((pair *)char_table)[aa];
-       ((pair *)buf)[1] = ((pair *)char_table)[bb];
+       std::memcpy(buf, char_table + aa * 2, 2);
+       std::memcpy(buf + 2, char_table + bb * 2, 2);
        return buf + 4;
    }
    
@@ -184,7 +186,7 @@ namespace glz
        
        if (val < 100) { /* 1-2 digits: aa */
            lz = val < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[val * 2 + lz]);
+           std::memcpy(buf, char_table + val * 2 + lz, 2);
            buf -= lz;
            return buf + 2;
            
@@ -192,37 +194,37 @@ namespace glz
            aa = (val * 5243) >> 19; /* (val / 100) */
            bb = val - aa * 100; /* (val % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           std::memcpy(buf, char_table + aa * 2 + lz, 2);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
+            std::memcpy(buf + 2, char_table + bb * 2, 2);
            return buf + 4;
            
        } else if (val < 1000000) { /* 5-6 digits: aabbcc */
-           aa = (uint32_t)(((uint64_t)val * 429497) >> 32); /* (val / 10000) */
+           aa = uint32_t((uint64_t(val) * 429497) >> 32); /* (val / 10000) */
            bbcc = val - aa * 10000; /* (val % 10000) */
            bb = (bbcc * 5243) >> 19; /* (bbcc / 100) */
            cc = bbcc - bb * 100; /* (bbcc % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           std::memcpy(buf, char_table + aa * 2 + lz, 2);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
-           ((pair *)buf)[2] = ((pair *)char_table)[cc];
+           std::memcpy(buf + 2, char_table + bb * 2, 2);
+           std::memcpy(buf + 4, char_table + cc * 2, 2);
            return buf + 6;
            
        } else { /* 7-8 digits: aabbccdd */
            /* (val / 10000) */
-           aabb = (uint32_t)(((uint64_t)val * 109951163) >> 40);
+           aabb = uint32_t((uint64_t(val) * 109951163) >> 40);
            ccdd = val - aabb * 10000; /* (val % 10000) */
            aa = (aabb * 5243) >> 19; /* (aabb / 100) */
            cc = (ccdd * 5243) >> 19; /* (ccdd / 100) */
            bb = aabb - aa * 100; /* (aabb % 100) */
            dd = ccdd - cc * 100; /* (ccdd % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           std::memcpy(buf, char_table + aa * 2 + lz, 2);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
-           ((pair *)buf)[2] = ((pair *)char_table)[cc];
-           ((pair *)buf)[3] = ((pair *)char_table)[dd];
+           std::memcpy(buf + 2, char_table + bb * 2, 2);
+           std::memcpy(buf + 4, char_table + cc * 2, 2);
+           std::memcpy(buf + 6, char_table + dd * 2, 2);
            return buf + 8;
        }
    }
@@ -231,31 +233,31 @@ namespace glz
        uint32_t aa, bb, cc, dd, aabb, bbcc, ccdd, lz;
        
        if (val < 1000000) { /* 5-6 digits: aabbcc */
-           aa = (uint32_t)(((uint64_t)val * 429497) >> 32); /* (val / 10000) */
+           aa = uint32_t((uint64_t(val) * 429497) >> 32); /* (val / 10000) */
            bbcc = val - aa * 10000; /* (val % 10000) */
            bb = (bbcc * 5243) >> 19; /* (bbcc / 100) */
            cc = bbcc - bb * 100; /* (bbcc % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           std::memcpy(buf, char_table + aa * 2 + lz, 2);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
-           ((pair *)buf)[2] = ((pair *)char_table)[cc];
+           std::memcpy(buf + 2, char_table + bb * 2, 2);
+           std::memcpy(buf + 4, char_table + cc * 2, 2);
            return buf + 6;
            
        } else { /* 7-8 digits: aabbccdd */
            /* (val / 10000) */
-           aabb = (uint32_t)(((uint64_t)val * 109951163) >> 40);
+           aabb = uint32_t((uint64_t(val) * 109951163) >> 40);
            ccdd = val - aabb * 10000; /* (val % 10000) */
            aa = (aabb * 5243) >> 19; /* (aabb / 100) */
            cc = (ccdd * 5243) >> 19; /* (ccdd / 100) */
            bb = aabb - aa * 100; /* (aabb % 100) */
            dd = ccdd - cc * 100; /* (ccdd % 100) */
            lz = aa < 10;
-           ((pair *)buf)[0] = *(pair *)&(char_table[aa * 2 + lz]);
+           std::memcpy(buf, char_table + aa * 2 + lz, 2);
            buf -= lz;
-           ((pair *)buf)[1] = ((pair *)char_table)[bb];
-           ((pair *)buf)[2] = ((pair *)char_table)[cc];
-           ((pair *)buf)[3] = ((pair *)char_table)[dd];
+           std::memcpy(buf + 2, char_table + bb * 2, 2);
+           std::memcpy(buf + 4, char_table + cc * 2, 2);
+           std::memcpy(buf + 6, char_table + dd * 2, 2);
            return buf + 8;
        }
    }
@@ -267,22 +269,22 @@ namespace glz
        uint32_t mid, low;
        
        if (val < 100000000) { /* 1-8 digits */
-           buf = to_chars_u64_len_1_8(buf, (uint32_t)val);
+           buf = to_chars_u64_len_1_8(buf, uint32_t(val));
            return buf;
            
-       } else if (val < (uint64_t)100000000 * 100000000) { /* 9-16 digits */
+       } else if (val < 100000000ull * 100000000ull) { /* 9-16 digits */
            hgh = val / 100000000;
-           low = (uint32_t)(val - hgh * 100000000); /* (val % 100000000) */
-           buf = to_chars_u64_len_1_8(buf, (uint32_t)hgh);
+           low = uint32_t(val - hgh * 100000000); /* (val % 100000000) */
+           buf = to_chars_u64_len_1_8(buf, uint32_t(hgh));
            buf = to_chars_u64_len_8(buf, low);
            return buf;
            
        } else { /* 17-20 digits */
            tmp = val / 100000000;
-           low = (uint32_t)(val - tmp * 100000000); /* (val % 100000000) */
-           hgh = (uint32_t)(tmp / 10000);
-           mid = (uint32_t)(tmp - hgh * 10000); /* (tmp % 10000) */
-           buf = to_chars_u64_len_5_8(buf, (uint32_t)hgh);
+           low = uint32_t(val - tmp * 100000000); /* (val % 100000000) */
+           hgh = uint32_t(tmp / 10000);
+           mid = uint32_t(tmp - hgh * 10000); /* (tmp % 10000) */
+           buf = to_chars_u64_len_5_8(buf, uint32_t(hgh));
            buf = to_chars_u64_len_4(buf, mid);
            buf = to_chars_u64_len_8(buf, low);
            return buf;
@@ -292,9 +294,9 @@ namespace glz
    template <class T>
    requires std::same_as<T, int64_t>
    inline auto* to_chars(auto *buf, T val) noexcept {
-       uint64_t neg = (uint64_t)-val;
+       uint64_t neg = uint64_t(-val);
        std::size_t sign = val < 0;
        *buf = '-';
-       return to_chars(buf + sign, sign ? (uint64_t)neg : (uint64_t)val);
+       return to_chars(buf + sign, sign ? uint64_t(neg) : uint64_t(val));
    }
 }

@@ -65,7 +65,7 @@ namespace glz
      }
 
      any& operator=(any&& rhs) noexcept {
-       any(std::move(rhs)).swap(*this);
+       std::move(rhs).swap(*this);
        return *this;
      }
 

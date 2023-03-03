@@ -245,7 +245,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump_int<Opts>(value.size(), std::forward<Args>(args)...);
+            std::ignore = dump_int<Opts>(value.size(), std::forward<Args>(args)...);
             for (auto&& [k, v] : value) {
                write<binary>::op<Opts>(k, ctx, std::forward<Args>(args)...);
                write<binary>::op<Opts>(v, ctx, std::forward<Args>(args)...);
@@ -374,7 +374,7 @@ namespace glz
                
                static constexpr uint32_t hash = murmur3_32(key);
                detail::dump_type(hash, buffer);
-               write<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), buffer, ctx);
+               std::ignore = write<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), buffer, ctx);
             });
          }
          else if constexpr (detail::map_t<std::decay_t<T>>) {
@@ -389,7 +389,7 @@ namespace glz
                detail::write<binary>::op<Opts>(key, ctx, buffer);
                auto it = value.find(key);
                if (it != value.end()) {
-                  write<sub_partial, Opts>(it->second, buffer, ctx);
+                  std::ignore = write<sub_partial, Opts>(it->second, buffer, ctx);
                }
                else {
                   we.ec = error_code::invalid_partial_key;

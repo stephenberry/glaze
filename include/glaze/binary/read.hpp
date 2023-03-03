@@ -229,7 +229,7 @@ namespace glz
                   read<binary>::op<Opts>(value[key], ctx, it, end);
                }
             }
-         };
+         }
       };
 
       template <nullable_t T>
