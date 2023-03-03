@@ -954,6 +954,17 @@ suite early_end = [] {
    };
 };
 
+suite prettified_custom_object = [] {
+   using namespace boost::ut;
+
+   "prettified_custom_object"_test = [] {
+      Thing obj{};
+      std::string buffer = glz::write_json(obj);
+      buffer = glz::prettify(buffer);
+      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+   };
+};
+
 suite bench = [] {
    using namespace boost::ut;
    "bench"_test = [] {
