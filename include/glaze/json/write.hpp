@@ -637,7 +637,7 @@ namespace glz
             
             bool first = true;
             for_each<N>([&](auto I) {
-               static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+               static constexpr auto Opts = opening_handled_off<Options>();
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                using mptr_t = std::tuple_element_t<1, decltype(item)>;
                using val_t = member_t<V, mptr_t>;
