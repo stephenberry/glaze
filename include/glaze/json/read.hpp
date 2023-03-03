@@ -920,16 +920,15 @@ namespace glz
          else {
             static constexpr auto stats = key_stats<T, tag>();
             if constexpr (stats.length_range < 8 && Opts.error_on_unknown_keys) {
-               auto start = it;
-               
                if ((it + stats.max_length) < end) [[likely]] {
                   if constexpr (stats.length_range == 0) {
-                     const sv key{start, stats.max_length};
+                     const sv key{it, stats.max_length};
                      it += stats.max_length;
                      match<'"'>(ctx, it);
                      return key;
                   }
-                  else {
+                  else if constexpr (stats.length_range < 4) {
+                     auto start = it;
                      it += stats.min_length;
                      for (uint32_t i = 0; i <= stats.length_range; ++it, ++i) {
                         if (*it == '"') {
@@ -940,6 +939,9 @@ namespace glz
                      }
                      ctx.error = error_code::key_not_found;
                      return {};
+                  }
+                  else {
+                     return parse_key_cx<stats.min_length, stats.length_range>(ctx, it);
                   }
                }
                else [[unlikely]] {
