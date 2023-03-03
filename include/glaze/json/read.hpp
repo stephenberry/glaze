@@ -470,7 +470,6 @@ namespace glz
             skip_ws<Opts>(ctx, it, end);
             match<'['>(ctx, it);
             skip_ws<Opts>(ctx, it, end);
-            if (static_cast<bool>(ctx.error)) [[unlikely]] { return unexpected(ctx.error); }
             
             value.clear();
             
@@ -507,7 +506,7 @@ namespace glz
             skip_ws<Opts>(ctx, it, end);
             match<'['>(ctx, it);
             skip_ws<Opts>(ctx, it, end);
-            if (static_cast<bool>(ctx.error)) [[unlikely]] { return unexpected(ctx.error); }
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
             
             if (*it == ']') [[unlikely]] {
                ++it;
