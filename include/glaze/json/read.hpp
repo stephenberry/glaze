@@ -681,7 +681,7 @@ namespace glz
                   read<json>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx, it, end);
                }
                else {
-                  read<json>::op<ws_handled<Opts>()>(glz::tuplet::get<I>(value), ctx, it, end);
+                  read<json>::op<Opts>(glz::tuplet::get<I>(value), ctx, it, end);
                }
                skip_ws<Opts>(ctx, it, end);
             });
