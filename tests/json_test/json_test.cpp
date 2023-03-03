@@ -2448,6 +2448,36 @@ suite macro_tests = [] {
    };
 };
 
+struct file_struct
+{
+   std::string name;
+   std::string label;
+
+   struct glaze
+   {
+      using T = file_struct;
+      static constexpr auto value = glz::object("name", &T::name, "label", &T::label);
+   };
+};
+
+suite read_file_test = [] {
+   std::string filename = "../file.json";
+   {
+      std::ofstream out(filename);
+      expect(bool(out));
+      if (out) {
+         out << R"({
+  "name": "my",
+  "label": "label"
+})";
+      }
+   }
+
+   file_struct s;
+   expect(glz::read_file(s, filename) == glz::error_code::none);
+};
+
+
 struct includer_struct
 {
    std::string str = "Hello";

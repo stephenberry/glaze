@@ -977,6 +977,7 @@ namespace glz
                   first = false;
                else [[likely]] {
                   match<','>(ctx, it);
+                  skip_ws<Opts>(ctx, it, end);
                }
                
                if constexpr (glaze_object_t<T>) {
