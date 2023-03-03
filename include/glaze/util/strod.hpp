@@ -417,7 +417,7 @@ namespace glz::detail
       bool sign;
       sign = (*hdr == '-');
       cur += sign;
-      auto apply_sign = [sign](auto&& val) -> T {
+      auto apply_sign = [&](auto&& val) -> T {
          if constexpr (std::is_unsigned_v<T>) {
             return static_cast<T>(val);
          }
