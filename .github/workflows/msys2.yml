@@ -32,7 +32,7 @@ jobs:
         install: mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja mingw-w64-x86_64-gcc
 
     - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+      run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} ..
 
     - name: Build
       run: cmake --build build --config ${{env.BUILD_TYPE}} -j 2
