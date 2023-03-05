@@ -15,6 +15,10 @@
 #include <type_traits>
 #include <vector>
 
+#if defined(_M_X64) || defined(_M_ARM64)
+#include <intrin.h>
+#endif
+
 namespace glz::detail
 {
    // Based on yyjson: https://github.com/ibireme/yyjson/blob/master/src/yyjson.c with some changes to rounding and
@@ -60,7 +64,6 @@ namespace glz::detail
       return prod >> 64;
    }
 #elif defined(_M_X64) || defined(_M_ARM64)
-#include <intrin.h>
 #define mulhi64 __umulh
 #else
    uint64_t mulhi64(uint64_t a, uint64_t b)
@@ -590,7 +593,7 @@ digi_intg_more :
          }
          else {
             goto digi_finish;
-         } 
+         }
       }
       while (*cur == '0') cur++;
       /* read exponent literal */

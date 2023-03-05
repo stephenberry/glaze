@@ -25,7 +25,7 @@ namespace glz
 
       void n_threads(const size_t n)
       {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
          // NOT REQUIRED IN WINDOWS 11
          // TODO smarter distrubution of threads among groups.
          auto num_groups = GetActiveProcessorGroupCount();
@@ -52,7 +52,7 @@ namespace glz
 
       size_t concurrency() const
       {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
          auto num_groups = GetActiveProcessorGroupCount();
          unsigned int sum = 0;
          for (WORD i = 0; i < num_groups; ++i) {
@@ -100,7 +100,7 @@ namespace glz
 
          return promise->get_future();
       }
-      
+
       template <class F>
       requires std::is_invocable_v<std::decay_t<F>, size_t>
       std::future<std::invoke_result_t<std::decay_t<F>, size_t>> emplace_back(F&& func)
@@ -194,7 +194,7 @@ namespace glz
             lock.unlock();
 
             work->second(thread_number);
-            
+
             lock.lock();
             queue.erase(work);
 

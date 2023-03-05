@@ -83,7 +83,7 @@ namespace glz
       lib_loader(lib_loader&&) = delete;
       lib_loader& operator=(const lib_loader&) = delete;
       lib_loader& operator=(lib_loader&&) = delete;
-      
+
       lib_loader(const std::string_view directory) { load(directory); }
 
       ~lib_loader()
@@ -97,7 +97,7 @@ namespace glz
 #endif
          }
       }
-      
+
    private:
       bool load_lib(const std::string& path) noexcept {
 #ifdef GLAZE_API_ON_WINDOWS
@@ -109,11 +109,17 @@ namespace glz
             loaded_libs.emplace_back(loaded_lib);
 
 #ifdef GLAZE_API_ON_WINDOWS
-            auto* ptr = (create)GetProcAddress(loaded_lib, "glz_iface");
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-function-type"
+            auto* ptr = reinterpret_cast<create>(GetProcAddress(loaded_lib, "glz_iface"));
+#pragma GCC diagnostic pop
+#else
+            auto* ptr = reinterpret_cast<create>(GetProcAddress(loaded_lib, "glz_iface"));
+#endif
 #else
             auto* ptr = reinterpret_cast<create>(dlsym(dlopen(path.c_str(), RTLD_NOW), "glz_iface"));
 #endif
-
             if (ptr) {
                std::shared_ptr<glz::iface> shared_iface_ptr = (*ptr)()();
                api_map.merge(*shared_iface_ptr);
@@ -123,7 +129,7 @@ namespace glz
 
          return false;
       }
-      
+
       bool load_lib_by_name(const std::string& path)
       {
 #ifdef NDEBUG
