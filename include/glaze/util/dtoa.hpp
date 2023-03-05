@@ -7,19 +7,13 @@
 
 #include "glaze/util/itoa.hpp"
 
+#if defined(_M_X64) || defined(_M_ARM64)
+#include <intrin.h>
+#endif
+
 namespace glz
 {
    //Source: https://github.com/ibireme/yyjson/blob/master/src/yyjson.c
-
-   #if defined(_M_X64)
-   #include <intrin.h>
-   #pragma intrinsic(_umul128)
-   #pragma intrinsic(__umulh)
-   #elif defined(_M_ARM64)
-   #include <intrin.h>
-   #pragma intrinsic(__umulh)
-   #endif
-
 
    /** Multiplies two 64-bit unsigned integers (a * b),
        returns the 128-bit result as 'hi' and 'lo'. */

@@ -1,0 +1,42 @@
+name: msys2-mingw
+
+on:
+  push:
+    branches:
+    - main
+    - feature/*
+    paths-ignore:
+    - '**.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+    - '**.md'
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Debug
+  CMAKE_GENERATOR: Ninja
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+    - uses: actions/checkout@v3
+    - uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        msystem: MINGW64
+        install: mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja mingw-w64-x86_64-gcc
+
+    - name: Configure CMake
+      run: mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} ..
+
+    - name: Build
+      run: cmake --build build --config ${{env.BUILD_TYPE}} -j 2
+
+    - name: Test
+      working-directory: build
+      run: ctest -C ${{env.BUILD_TYPE}} -j 2 --output-on-failure
