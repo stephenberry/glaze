@@ -7,7 +7,9 @@
 #include <ranges>
 #include <charconv>
 #include <sstream>
-#include <cuchar>
+#include <locale>
+#include <cwchar>
+#include <climits>
 
 #include "glaze/core/read.hpp"
 #include "glaze/core/format.hpp"
@@ -177,7 +179,7 @@ namespace glz
       template <class T, class Val, class It, class End>
       GLZ_ALWAYS_INLINE void read_escaped_unicode(Val& value, is_context auto&& ctx, It&& it, End&& end) {
          // TODO: this is slow but who is escaping unicode nowadays
-         // codecvt is problematic on mingw hence the use of the c character conversion functions
+         // codecvt is problematic on mingw hence mixing with the c character conversion functions
          if (std::distance(it, end) < 4 || !std::all_of(it, it + 4, ::isxdigit)) [[unlikely]] {
             ctx.error = error_code::u_requires_hex_digits;
             return;
@@ -192,30 +194,7 @@ namespace glz
          }
          else {
             char32_t codepoint = hex4_to_char32(it);
-
-            char buffer[MB_LEN_MAX + 1];
-            std::mbstate_t state{};
-            auto n = std::c32rtomb(buffer, codepoint, &state);
-            if(n == std::numeric_limits<std::size_t>::max()) [[unlikely]] {
-               ctx.error = error_code::unicode_escape_conversion_failure;
-               return;
-            } else {
-               buffer[n] = 0;
-            }
-            if constexpr (std::is_same_v<T, char> || std::is_same_v<T, char8_t>) {
-               if constexpr (char_t<Val>) {
-                  if(n != 1) [[unlikely]] {
-                     ctx.error = error_code::unicode_escape_conversion_failure;
-                     return;
-                  }
-                  value = buffer[0];
-               }
-               else {
-                  value.append(buffer, n);
-               }
-               // Probably should be using mbrtoc8 for char8_t but encoding is likely utf8 anyways
-            }
-            else if constexpr (std::is_same_v<T, char16_t>) {
+            if constexpr (std::is_same_v<T, char16_t>) {
                if (codepoint < 0x10000)
                {
                   if constexpr (char_t<Val>)
@@ -241,24 +220,49 @@ namespace glz
                   }
                }
             }
-            else if constexpr (std::is_same_v<T, wchar_t>) {
-               wchar_t bufferw[MB_LEN_MAX];
-               std::mbstate_t statew{};
-               const char *buffer_ptr = &buffer[0];
-               n = std::mbsrtowcs(bufferw, &buffer_ptr, MB_LEN_MAX, &statew);
-               if(n == std::numeric_limits<std::size_t>::max()) [[unlikely]] {
+            else {
+               char8_t buffer[4];
+               auto& facet = std::use_facet<std::codecvt<char32_t, char8_t, mbstate_t>>(std::locale());
+               std::mbstate_t mbstate{};
+               const char32_t* from_next;
+               char8_t* to_next;
+               const auto result = facet.out(mbstate, &codepoint, &codepoint + 1, from_next, buffer, buffer + 4, to_next);
+               if (result != std::codecvt_base::ok) {
                   ctx.error = error_code::unicode_escape_conversion_failure;
                   return;
                }
-               if constexpr (char_t<Val>) {
-                  if(n != 1) [[unlikely]] {
+
+               if constexpr (std::is_same_v<T, char> || std::is_same_v<T, char8_t>) {
+                  if constexpr (char_t<Val>) {
+                     if((to_next - buffer) != 1) [[unlikely]] {
+                        ctx.error = error_code::unicode_escape_conversion_failure;
+                        return;
+                     }
+                     value = static_cast<T>(buffer[0]);
+                  }
+                  else {
+                     value.append(reinterpret_cast<T*>(buffer), to_next - buffer);
+                  }
+               }
+               else if constexpr (std::is_same_v<T, wchar_t>) {
+                  wchar_t bufferw[MB_LEN_MAX];
+                  std::mbstate_t statew{};
+                  auto buffer_ptr = reinterpret_cast<const char *>(buffer);
+                  auto n = std::mbsrtowcs(bufferw, &buffer_ptr, MB_LEN_MAX, &statew);
+                  if(n == std::numeric_limits<std::size_t>::max()) [[unlikely]] {
                      ctx.error = error_code::unicode_escape_conversion_failure;
                      return;
                   }
-                  value = bufferw[0];
-               }
-               else {
-                  value.append(bufferw, n);
+                  if constexpr (char_t<Val>) {
+                     if(n != 1) [[unlikely]] {
+                        ctx.error = error_code::unicode_escape_conversion_failure;
+                        return;
+                     }
+                     value = bufferw[0];
+                  }
+                  else {
+                     value.append(bufferw, n);
+                  }
                }
             }
          }
