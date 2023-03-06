@@ -145,7 +145,7 @@ namespace glz
       {
          return concat_impl<S1, make_is<size(S1)>, S2,
                             make_is<size(S2)>>::value;
-      };
+      }
 
       template <size_t... Is>
       struct seq
@@ -356,7 +356,7 @@ namespace glz
          else {
             return std::decay_t<T>{}.size();
          }
-      };
+      }
    
       template <class T>
       concept is_reference_wrapper = is_specialization_v<T, std::reference_wrapper>;

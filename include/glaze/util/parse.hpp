@@ -145,17 +145,17 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE auto has_zero(const uint64_t chunk) noexcept
    {
       return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080);
-   };
+   }
    
    GLZ_ALWAYS_INLINE auto has_quote(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ 0b0010001000100010001000100010001000100010001000100010001000100010);
-   };
+   }
    
    GLZ_ALWAYS_INLINE auto has_escape(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ 0b0101110001011100010111000101110001011100010111000101110001011100);
-   };
+   }
 
    GLZ_ALWAYS_INLINE void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -275,9 +275,9 @@ namespace glz::detail
       if constexpr (LengthRange == 7) {
          uint64_t chunk; // no need to default initialize
          std::memcpy(&chunk, it, LengthRange + 1);
-         const uint64_t test = has_quote(chunk);
-         if (test != 0) {
-            it += (std::countr_zero(test) >> 3);
+         const uint64_t test_chunk = has_quote(chunk);
+         if (test_chunk != 0) {
+               it += (std::countr_zero(test_chunk) >> 3);
             
             sv ret{ start, static_cast<size_t>(it - start) };
             ++it;
@@ -287,9 +287,9 @@ namespace glz::detail
       else {
          uint64_t chunk{};
          std::memcpy(&chunk, it, LengthRange + 1);
-         const uint64_t test = has_quote(chunk);
-         if (test != 0) {
-            it += (std::countr_zero(test) >> 3);
+         const uint64_t test_chunk = has_quote(chunk);
+         if (test_chunk != 0) {
+            it += (std::countr_zero(test_chunk) >> 3);
             
             sv ret{ start, static_cast<size_t>(it - start) };
             ++it;

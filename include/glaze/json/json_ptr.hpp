@@ -453,7 +453,7 @@ namespace glz
    inline constexpr auto make_arrays(std::index_sequence<Is...>)
    {
       return glz::tuplet::make_tuple(std::pair{ sv{}, std::array<sv, Arr[Is]>{} }...);
-   };
+   }
 
    template <size_t N, auto& Arr>
    inline constexpr auto sub_group(const auto start)

@@ -135,10 +135,9 @@ template <>
 struct glz::meta<Color>
 {
    static constexpr std::string_view name = "Color";
-   using enum Color;
-   static constexpr auto value = enumerate("Red", Red,      //
-                                           "Green", Green,  //
-                                           "Blue", Blue     //
+   static constexpr auto value = enumerate("Red", Color::Red,      //
+                                           "Green", Color::Green,  //
+                                           "Blue", Color::Blue       //
    );
 };
 

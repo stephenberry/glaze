@@ -857,7 +857,8 @@ namespace glz
          constexpr auto N = std::variant_size_v<T>;
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
-            if constexpr (glaze_object_t<V>) {
+            constexpr bool is_object = glaze_object_t<V>;
+            if constexpr (is_object) {
                if constexpr (keys_may_contain_escape<V>()) {
                   may_escape = true;
                   return;
@@ -917,7 +918,8 @@ namespace glz
          constexpr auto N = std::variant_size_v<T>;
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
-            if constexpr (glaze_object_t<V>) {
+            constexpr bool is_object = glaze_object_t<V>;
+            if constexpr (is_object) {
                constexpr auto substats = key_stats<V>();
                if (substats.min_length < stats.min_length) {
                   stats.min_length = substats.min_length;
@@ -1113,15 +1115,16 @@ namespace glz
           constexpr auto N = std::variant_size_v<T>;
           for_each<N>([&](auto I) {
              using V = std::decay_t<std::variant_alternative_t<I, T>>;
-             if constexpr (bool_t<V>) ++bools;
-             else if constexpr (num_t<V>) ++numbers;
-             else if constexpr (str_t<V> || glaze_enum_t<V>) ++strings;
-             else if constexpr (map_t<V>) ++objects;
-             else if constexpr (map_t<V>) {
-                ++objects;
-                ++meta_objects;
-             }
-             else if constexpr (array_t<V> || glaze_array_t<V>) ++arrays;
+             //ICE workaround
+             bools += bool_t<V>;
+             numbers += num_t<V>;
+             strings += str_t<V>;
+             strings += glaze_enum_t<V>;
+             objects += map_t<V>;
+             objects += glaze_object_t<V>;
+             meta_objects += glaze_object_t<V>;
+             arrays += glaze_array_t<V>;
+             arrays += array_t<V>;
           });
           return bools < 2 && numbers < 2 && strings < 2 && (objects < 2 || meta_objects == objects) && arrays < 2;
        }
@@ -1201,7 +1204,8 @@ namespace glz
                                         std::visit(
                                            [&](auto&& v) {
                                               using V = std::decay_t<decltype(v)>;
-                                              if constexpr (glaze_object_t<V>) {
+                                              constexpr bool is_object = glaze_object_t<V>;
+                                              if constexpr (is_object) {
                                                   from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                                               }
                                            },
@@ -1236,7 +1240,8 @@ namespace glz
                                std::visit(
                                   [&](auto&& v) {
                                      using V = std::decay_t<decltype(v)>;
-                                     if constexpr (glaze_object_t<V>) {
+                                     constexpr bool is_object = glaze_object_t<V>;
+                                     if constexpr (is_object) {
                                         from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                                      }
                                   },
