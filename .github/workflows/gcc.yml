@@ -25,7 +25,7 @@ jobs:
         std: [20, 23]
         exclude:
           - gcc: 10
-          - std: 23
+            std: 23
 
     env:
       CC: gcc-${{matrix.gcc}}
