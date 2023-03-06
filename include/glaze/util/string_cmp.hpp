@@ -108,7 +108,7 @@ namespace glz
    constexpr bool string_cmp(auto &&s0, auto &&s1) noexcept
    {
       if (std::is_constant_evaluated()) {
-         return sv{s0} == sv{s1};
+         return sv{s0.data(), s0.size()} == sv{s0.data(), s0.size()};
       }
       else {
          const auto n = s0.size();
