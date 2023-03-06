@@ -13,9 +13,6 @@ on:
     - '**.md'
   workflow_dispatch:
 
-env:
-  
-
 jobs:
   build:
     runs-on: ubuntu-22.04
