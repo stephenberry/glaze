@@ -74,33 +74,32 @@ namespace glz
 
       inline void prettify_other_states(const char c, general_state& state) noexcept
       {
-         using enum general_state;
          switch (state) {
-         case ESCAPED:
-            state = NORMAL;
+         case general_state::ESCAPED:
+            state = general_state::NORMAL;
             break;
-         case STRING:
+         case general_state::STRING:
             if (c == '"') {
-               state = NORMAL;
+               state = general_state::NORMAL;
             }
             break;
-         case BEFORE_ASTERISK:
-            state = COMMENT;
+         case general_state::BEFORE_ASTERISK:
+            state = general_state::COMMENT;
             break;
-         case COMMENT:
+         case general_state::COMMENT:
             if (c == '*') {
-               state = BEFORE_FSLASH;
+               state = general_state::BEFORE_FSLASH;
             }
             break;
-         case BEFORE_FSLASH:
+         case general_state::BEFORE_FSLASH:
             if (c == '/') {
-               state = NORMAL;
+               state = general_state::NORMAL;
             }
             else {
-               state = COMMENT;
+               state = general_state::COMMENT;
             }
             break;
-         case NORMAL:
+         case general_state::NORMAL:
          default:
             break;
          }
@@ -123,7 +122,7 @@ namespace glz
             out += tabs ? "\t" : " ";
          }
       };
-      
+
       using namespace detail;
       general_state state{general_state::NORMAL};
 
@@ -138,7 +137,7 @@ namespace glz
          }
       }
    }
-   
+
    /// <summary>
    /// allocating version of prettify
    /// </summary>
