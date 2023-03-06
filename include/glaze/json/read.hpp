@@ -1123,7 +1123,6 @@ namespace glz
              objects += map_t<V>;
              objects += glaze_object_t<V>;
              meta_objects += glaze_object_t<V>;
-             meta_objects += glaze_object_t<V>;
              arrays += glaze_array_t<V>;
              arrays += array_t<V>;
           });
