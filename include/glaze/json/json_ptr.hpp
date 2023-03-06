@@ -511,7 +511,8 @@ namespace glz
          constexpr auto rem_ptr =
             glz::string_literal_from_view<tokens.second.size()>(tokens.second);
          if constexpr (glz::detail::glaze_object_t<V>) {
-            using G = member_getter<V, glz::string_literal_from_view<key_str.size()>(key_str)>;
+            constexpr auto string_literal_key = glz::string_literal_from_view<key_str.size()>(key_str);
+            using G = member_getter<V, string_literal_key>;
             if constexpr (G::member_it != G::frozen_map.end()) {
                constexpr auto& element = G::member_it->second;
                constexpr auto I = element.index();
