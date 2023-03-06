@@ -14,21 +14,31 @@ on:
   workflow_dispatch:
 
 env:
-  BUILD_TYPE: Debug
+  
 
 jobs:
   build:
     runs-on: ubuntu-22.04
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        gcc: [10, 11, 12]
+        build_type: [Debug, Release]
+        std: [20, 23]
+      exclude:
+        - gcc: 10
+        - std: 23
 
     env:
-      CC: gcc-11
-      CXX: g++-11
+      CC: gcc-${{matrix.gcc}}
+      CXX: g++-${{matrix.gcc}}
 
     steps:
     - uses: actions/checkout@v3
 
     - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
 
     - name: Build
       run: cmake --build build -j 2
