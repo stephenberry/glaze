@@ -26,9 +26,9 @@ jobs:
         gcc: [10, 11, 12]
         build_type: [Debug, Release]
         std: [20, 23]
-      exclude:
-        - gcc: 10
-        - std: 23
+        exclude:
+          - gcc: 10
+          - std: 23
 
     env:
       CC: gcc-${{matrix.gcc}}
@@ -51,5 +51,5 @@ jobs:
       working-directory: build
       run: |
         sudo cmake --build . --target install
-        cmake -S ${{github.workspace}}/tests/find_package -B ${{github.workspace}}/tests/find_package/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+        cmake -S ${{github.workspace}}/tests/find_package -B ${{github.workspace}}/tests/find_package/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
         cmake --build ${{github.workspace}}/tests/find_package/build -j 2
