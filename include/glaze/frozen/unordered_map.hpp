@@ -121,29 +121,6 @@ namespace glz::frozen
      }
 
      template <class KeyType, class Hasher, class Equal>
-     constexpr Value const &at(KeyType const &key, Hasher const &hash, Equal const &equal) const {
-       return at_impl(*this, key, hash, equal);
-     }
-     template <class KeyType, class Hasher, class Equal>
-     constexpr Value &at(KeyType const &key, Hasher const &hash, Equal const &equal) {
-       return at_impl(*this, key, hash, equal);
-     }
-     template <class KeyType>
-     constexpr Value const &at(KeyType const &key) const {
-       return at(key, hash_function(), key_eq());
-     }
-     template <class KeyType>
-     constexpr Value &at(KeyType const &key) {
-       return at(key, hash_function(), key_eq());
-     }
-      
-      // does not check key equality
-      template <class KeyType>
-      constexpr Value &unsafe_at(KeyType const &key) {
-        return unsafe_at_impl(*this, key, hash_function());
-      }
-
-     template <class KeyType, class Hasher, class Equal>
      constexpr const_iterator find(KeyType const &key, Hasher const &hash, Equal const &equal) const {
        return find_impl(*this, key, hash, equal);
      }
@@ -196,20 +173,6 @@ namespace glz::frozen
       }
 
    private:
-     template <class This, class KeyType, class Hasher, class Equal>
-     static inline constexpr std::optional<std::reference_wrapper<Value>> at_impl(This&& self, KeyType const &key, Hasher const &hash, Equal const &equal) {
-       auto& kv = self.lookup(key, hash);
-       if (equal(kv.first, key))
-         return kv.second;
-       else {
-          return {};
-       }
-     }
-      
-      template <class This, class KeyType, class Hasher>
-      static inline constexpr auto& unsafe_at_impl(This&& self, KeyType const &key, Hasher const &hash) {
-        return self.lookup(key, hash).second;
-      }
 
      template <class This, class KeyType, class Hasher, class Equal>
      static inline constexpr auto find_impl(This&& self, KeyType const &key, Hasher const &hash, Equal const &equal) {

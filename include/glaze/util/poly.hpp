@@ -104,7 +104,7 @@ namespace glz
          
          if constexpr (member_it != cmap.end()) {
             static constexpr auto index = cmap.table_lookup(key);
-            using X = std::decay_t<decltype(std::get<member_it->second.index()>(cmap.at(key)))>;
+            using X = std::decay_t<decltype(std::get<member_it->second.index()>(cmap.find(key)->second))>;
             auto* v = reinterpret_cast<X>(map[index].fptr);
             using V = std::decay_t<decltype(v)>;
             if constexpr (std::is_invocable_v<V, void*, Args...>) {
@@ -126,7 +126,7 @@ namespace glz
          
          if constexpr (member_it != cmap.end()) {
             static constexpr auto index = cmap.table_lookup(key);
-            using X = decltype(std::get<member_it->second.index()>(cmap.at(key)));
+            using X = decltype(std::get<member_it->second.index()>(cmap.find(key)->second));
             auto* v = reinterpret_cast<X>(map[index].ptr);
             return *v;
          }
