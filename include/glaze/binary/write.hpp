@@ -321,6 +321,11 @@ namespace glz
       write<opts{.format = binary}>(std::forward<T>(value), buffer);
       return buffer;
    }
+   
+   template <class Map, class Key>
+   concept findable = requires(Map& map, const Key& key) {
+      map.find(key);
+   };
 
    template <auto& Partial, opts Opts, class T, output_buffer Buffer>
    [[nodiscard]] GLZ_ALWAYS_INLINE write_error write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
@@ -372,15 +377,27 @@ namespace glz
                }();  // MSVC internal compiler error workaround
                static constexpr auto key_value = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
-               static thread_local auto key =
-                  typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
-               detail::write<binary>::op<Opts>(key, ctx, buffer);
-               auto it = value.find(key);
-               if (it != value.end()) {
-                  std::ignore = write<sub_partial, Opts>(it->second, buffer, ctx);
+               if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
+                  detail::write<binary>::op<Opts>(key_value, ctx, buffer);
+                  auto it = value.find(key_value);
+                  if (it != value.end()) {
+                     std::ignore = write<sub_partial, Opts>(it->second, buffer, ctx);
+                  }
+                  else {
+                     we.ec = error_code::invalid_partial_key;
+                  }
                }
                else {
-                  we.ec = error_code::invalid_partial_key;
+                  static thread_local auto key =
+                     typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
+                  detail::write<binary>::op<Opts>(key, ctx, buffer);
+                  auto it = value.find(key);
+                  if (it != value.end()) {
+                     std::ignore = write<sub_partial, Opts>(it->second, buffer, ctx);
+                  }
+                  else {
+                     we.ec = error_code::invalid_partial_key;
+                  }
                }
             });
          }
