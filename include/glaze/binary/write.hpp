@@ -26,16 +26,16 @@ namespace glz
       struct write<binary>
       {
          template <auto Opts, class T, is_context Ctx, class B>
-         GLZ_ALWAYS_INLINE static auto op(T&& value, Ctx&& ctx, B&& b)
+         GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b) noexcept
          {
-            return to_binary<std::decay_t<T>>::template op<Opts>(
+            to_binary<std::decay_t<T>>::template op<Opts>(
                std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b));
          }
 
          template <auto Opts, class T, is_context Ctx, class B, class IX>
-         GLZ_ALWAYS_INLINE static auto op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+         GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
-            return to_binary<std::decay_t<T>>::template op<Opts>(
+            to_binary<std::decay_t<T>>::template op<Opts>(
                std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
@@ -44,7 +44,7 @@ namespace glz
       struct to_binary<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, Args&&... args) {
+         GLZ_ALWAYS_INLINE static void op(auto&& value, Args&&... args) noexcept {
             using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
             to_binary<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Args>(args)...);
          }
@@ -89,13 +89,13 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static auto op(const bool value, is_context auto&&, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args) noexcept
          {
             if (value) {
-               return dump<static_cast<std::byte>(1)>(std::forward<Args>(args)...);
+               dump<static_cast<std::byte>(1)>(std::forward<Args>(args)...);
             }
             else {
-               return dump<static_cast<std::byte>(0)>(std::forward<Args>(args)...);
+               dump<static_cast<std::byte>(0)>(std::forward<Args>(args)...);
             }
          }
       };
@@ -104,8 +104,8 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static auto op(auto&& /*value*/, is_context auto&&, Args&&...) noexcept
-         { return error{}; }
+         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&&, Args&&...) noexcept
+         {}
       };
 
       template <class T>
@@ -113,20 +113,20 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             write<binary>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
          }
       };
 
       template <class... Args>
-      GLZ_ALWAYS_INLINE auto dump_type(auto&& value, Args&&... args) noexcept
+      GLZ_ALWAYS_INLINE void dump_type(auto&& value, Args&&... args) noexcept
       {
-         return dump(std::as_bytes(std::span{ &value, 1 }), std::forward<Args>(args)...);
+         dump(std::as_bytes(std::span{ &value, 1 }), std::forward<Args>(args)...);
       }
 
       template <uint64_t i, class... Args>
-      GLZ_ALWAYS_INLINE auto dump_int(Args&&... args) noexcept
+      GLZ_ALWAYS_INLINE void dump_int(Args&&... args) noexcept
       {
          if constexpr (i < 64) {
             static constexpr auto h = header8{ 0, static_cast<uint8_t>(i) };
@@ -151,26 +151,22 @@ namespace glz
       }
 
       template <auto Opts, class... Args>
-      [[nodiscard]] GLZ_ALWAYS_INLINE bool dump_int(size_t i, Args&&... args) noexcept
+      GLZ_ALWAYS_INLINE void dump_int(size_t i, Args&&... args) noexcept
       {
          if (i < 64) {
             dump_type(header8{ 0, static_cast<uint8_t>(i) }, std::forward<Args>(args)...);
-            return true;
          }
          else if (i < 16384) {
             dump_type(header16{ 1, static_cast<uint16_t>(i) }, std::forward<Args>(args)...);
-            return true;
          }
          else if (i < 1073741824) {
             dump_type(header32{ 2, static_cast<uint32_t>(i) }, std::forward<Args>(args)...);
-            return true;
          }
          else if (i < 4611686018427387904) {
             dump_type(header64{ 3, i }, std::forward<Args>(args)...);
-            return true;
          }
          else {
-            return false;
+            std::abort(); // this should never happen because we should never allocate containers of this size
          }
       }
 
@@ -178,7 +174,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             std::visit(
                [&](auto&& v) {
@@ -199,9 +195,9 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&&, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
-            return dump_type(value, std::forward<Args>(args)...);
+            dump_type(value, std::forward<Args>(args)...);
          }
       };
 
@@ -209,15 +205,10 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
-            const auto b = dump_int<Opts>(value.size(), std::forward<Args>(args)...);
-            if (b) {
-               dump(std::as_bytes(std::span{ value.data(), value.size() }), std::forward<Args>(args)...);
-            }
-            else {
-               ctx.error = error_code::dump_int_error;
-            }
+            dump_int<Opts>(value.size(), std::forward<Args>(args)...);
+            dump(std::as_bytes(std::span{ value.data(), value.size() }), std::forward<Args>(args)...);
          }
       };
 
@@ -225,13 +216,10 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if constexpr (!has_static_size<T>) {
-               const auto b = dump_int<Opts>(value.size(), std::forward<Args>(args)...);
-               if (!b) {
-                  ctx.error = error_code::dump_int_error;
-               }
+               dump_int<Opts>(value.size(), std::forward<Args>(args)...);
             }
             for (auto&& x : value) {
                write<binary>::op<Opts>(x, ctx, std::forward<Args>(args)...);
@@ -245,7 +233,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            std::ignore = dump_int<Opts>(value.size(), std::forward<Args>(args)...);
+            dump_int<Opts>(value.size(), std::forward<Args>(args)...);
             for (auto&& [k, v] : value) {
                write<binary>::op<Opts>(k, ctx, std::forward<Args>(args)...);
                write<binary>::op<Opts>(v, ctx, std::forward<Args>(args)...);
@@ -257,7 +245,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if (value) {
                dump<static_cast<std::byte>(1)>(std::forward<Args>(args)...);
@@ -274,7 +262,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
@@ -298,7 +286,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
@@ -312,7 +300,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<V>>([&](auto I) {
@@ -323,8 +311,8 @@ namespace glz
    }
 
    template <class T, class Buffer>
-   GLZ_ALWAYS_INLINE auto write_binary(T&& value, Buffer&& buffer) {
-      return write<opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+   GLZ_ALWAYS_INLINE void write_binary(T&& value, Buffer&& buffer) {
+      write<opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
@@ -333,6 +321,11 @@ namespace glz
       write<opts{.format = binary}>(std::forward<T>(value), buffer);
       return buffer;
    }
+   
+   template <class Map, class Key>
+   concept findable = requires(Map& map, const Key& key) {
+      map.find(key);
+   };
 
    template <auto& Partial, opts Opts, class T, output_buffer Buffer>
    [[nodiscard]] GLZ_ALWAYS_INLINE write_error write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
@@ -379,20 +372,35 @@ namespace glz
          }
          else if constexpr (detail::map_t<std::decay_t<T>>) {
             glz::for_each<N>([&](auto I) {
-               static constexpr auto group = []() {
+               using index_t = decltype(I);
+               using group_t = std::tuple_element_t<I, decltype(groups)>;
+               static constexpr auto group = []([[maybe_unused]] index_t Index) constexpr -> group_t {
                   return glz::tuplet::get<decltype(I)::value>(groups);
-               }();  // MSVC internal compiler error workaround
+               }({}); // MSVC internal compiler error workaround
+               
                static constexpr auto key_value = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
-               static thread_local auto key =
-                  typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
-               detail::write<binary>::op<Opts>(key, ctx, buffer);
-               auto it = value.find(key);
-               if (it != value.end()) {
-                  std::ignore = write<sub_partial, Opts>(it->second, buffer, ctx);
+               if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
+                  detail::write<binary>::op<Opts>(key_value, ctx, buffer);
+                  auto it = value.find(key_value);
+                  if (it != value.end()) {
+                     std::ignore = write<sub_partial, Opts>(it->second, buffer, ctx);
+                  }
+                  else {
+                     we.ec = error_code::invalid_partial_key;
+                  }
                }
                else {
-                  we.ec = error_code::invalid_partial_key;
+                  static thread_local auto key =
+                     typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
+                  detail::write<binary>::op<Opts>(key, ctx, buffer);
+                  auto it = value.find(key);
+                  if (it != value.end()) {
+                     std::ignore = write<sub_partial, Opts>(it->second, buffer, ctx);
+                  }
+                  else {
+                     we.ec = error_code::invalid_partial_key;
+                  }
                }
             });
          }
