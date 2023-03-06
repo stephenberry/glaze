@@ -34,7 +34,7 @@ namespace glz
       opts ret = Opts;
       ret.opening_handled = true;
       return ret;
-   };
+   }
    
    template <opts Opts>
    constexpr auto opening_handled_off()
@@ -42,7 +42,7 @@ namespace glz
       opts ret = Opts;
       ret.opening_handled = false;
       return ret;
-   };
+   }
    
    template <opts Opts>
    constexpr auto ws_handled()
@@ -50,7 +50,7 @@ namespace glz
       opts ret = Opts;
       ret.ws_handled = true;
       return ret;
-   };
+   }
    
    template <opts Opts>
    constexpr auto ws_handled_off()
@@ -58,5 +58,5 @@ namespace glz
       opts ret = Opts;
       ret.ws_handled = false;
       return ret;
-   };
+   }
 }
