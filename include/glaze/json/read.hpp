@@ -513,6 +513,8 @@ namespace glz
          template <auto Options>
          GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
+            
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
             }
@@ -553,6 +555,8 @@ namespace glz
          template <auto Options>
          GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
+            
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
             }
@@ -677,6 +681,8 @@ namespace glz
          template <auto Options>
          GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
+            
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
             }
@@ -707,6 +713,8 @@ namespace glz
          template <auto Opts>
          GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
+            
             static constexpr auto N = []() constexpr
             {
                if constexpr (glaze_array_t<T>) {
@@ -1005,6 +1013,8 @@ namespace glz
          template <auto Options, string_literal tag = "">
          GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
+            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
+            
             if constexpr (!Options.opening_handled) {
                if constexpr (!Options.ws_handled) {
                   skip_ws<Options>(ctx, it, end);
