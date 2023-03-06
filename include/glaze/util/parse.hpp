@@ -192,8 +192,14 @@ namespace glz::detail
       if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
       
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
+      
+      auto* pc = std::memchr(it, '"', std::distance(it, end));
+      if (pc) [[likely]] {
+         it = reinterpret_cast<std::decay_t<decltype(it)>>(pc);
+         return;
+      }
 
-      const auto end_m7 = end - 7;
+      /*const auto end_m7 = end - 7;
       for (; it < end_m7; it += 8) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
@@ -212,7 +218,7 @@ namespace glz::detail
             }
          }
          ++it;
-      }
+      }*/
       ctx.error = error_code::expected_quote;
    }
    
