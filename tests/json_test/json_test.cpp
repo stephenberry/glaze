@@ -3985,6 +3985,81 @@ suite invalid_array_as_object = [] {
 };
 
 
+struct OKX_OrderBook_Data
+{
+   std::string alias;
+   std::string baseCcy;
+   std::string category;
+   std::string ctMult;
+   std::string ctType;
+   std::string ctVal;
+   std::string ctValCcy;
+   std::string expTime;
+   std::string instFamily;
+   std::string instId;
+   std::string instType;
+   std::string lever;
+   std::string listTime;
+   std::string lotSz;
+   std::string maxIcebergSz;
+   std::string maxLmtSz;
+   std::string maxMktSz;
+   std::string maxStopSz;
+   std::string maxTriggerSz;
+   std::string maxTwapSz;
+   std::string minSz;
+
+   std::string optType;
+   std::string quoteCcy;
+   std::string settleCcy;
+   std::string state;
+   std::string stk;
+   std::string tickSz;
+   std::string uly;
+
+   GLZ_LOCAL_META(OKX_OrderBook_Data, alias, baseCcy, category, ctMult, ctType, ctVal, ctValCcy, expTime, instFamily, instId, instType, lever, listTime, lotSz, maxIcebergSz, maxLmtSz, maxMktSz,
+                       maxStopSz, maxTriggerSz, maxTwapSz, minSz, optType, quoteCcy, settleCcy, state, stk, tickSz,
+                       uly);
+};
+
+struct OKX_OrderBook
+{
+   std::string code;
+   std::vector<OKX_OrderBook_Data> data;
+   std::string msg;
+};
+
+template <>
+struct glz::meta<OKX_OrderBook>
+{
+   using T = OKX_OrderBook;
+   static constexpr auto value = object("code", &T::code, "data", &T::data, "msg", &T::msg);
+};
+
+suite long_object = [] {
+
+   "long_object"_test = [] {
+      std::string_view order_book_str = R"(
+    {"code":"0","data":[{"alias":"","baseCcy":"BTC","category":"1","ctMult":"","ctType":"","ctVal":"",
+    "ctValCcy":"","expTime":"","instFamily":"","instId":"BTC-USDT",
+    "instType":"SPOT","lever":"10","listTime":"1548133413000","lotSz":"0.00000001","maxIcebergSz":"9999999999",
+    "maxLmtSz":"9999999999","maxMktSz":"1000000","maxStopSz":"1000000","maxTriggerSz":"9999999999","maxTwapSz":"9999999999",
+    "minSz":"0.00001","optType":"","quoteCcy":"USDT","settleCcy":"","state":"live","stk":"","tickSz":"0.1","uly":""}],
+    "msg":""}
+)";
+
+      OKX_OrderBook order_book{};
+      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false}>(order_book, order_book_str);
+      expect(ec == glz::error_code::none);
+      
+
+      std::string buffer{};
+      glz::write_json(order_book, buffer);
+      expect(order_book.data[0].instType == "SPOT");
+   };
+};
+
+
 int main()
 {
    // Explicitly run registered test suites and report errors
