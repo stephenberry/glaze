@@ -105,7 +105,7 @@ namespace glz
       if constexpr (N > 2)
          static_assert(sv_convertible<std::tuple_element_t<2, M>>,
                        "third element should be a string comment");
-   };
+   }
 
    template <size_t n_groups>
    constexpr auto group_sizes(const std::array<size_t, n_groups>& indices, size_t n_total)
