@@ -35,7 +35,7 @@ namespace glz
    {
       UserType user{};
       
-      std::pair<void*, sv> get(const sv path) noexcept override
+      std::pair<void*, glz::hash_t> get(const sv path) noexcept override
       {
          return get_void(user, path);
       }
@@ -93,7 +93,7 @@ namespace glz
          }
       }
       
-      std::unique_ptr<void, void(*)(void*)> get_fn(const sv path, const sv type_hash) noexcept override
+      std::unique_ptr<void, void (*)(void*)> get_fn(const sv path, const glz::hash_t type_hash) noexcept override
       {
          return get_void_fn(user, path, type_hash);
       }
@@ -114,7 +114,7 @@ namespace glz
          return f(parent, to_ref<std::tuple_element_t<Is, Arg_tuple>>(args[Is])...);
       }
       
-      bool caller(const sv path, const sv type_hash, void*& ret, std::span<void*> args) noexcept override
+      bool caller(const sv path, const glz::hash_t type_hash, void*& ret, std::span<void*> args) noexcept override
       {
          auto p = parent_last_json_ptrs(path);
          const auto parent_ptr = p.first;
@@ -204,11 +204,11 @@ namespace glz
       // Get a pointer to a value at the location of a json_ptr. Will return
       // nullptr if value doesnt exist or is wrong type
       template <class T>
-      std::pair<void*, sv> get_void(T&& root_value, const sv json_ptr)
+      std::pair<void*, hash_t> get_void(T&& root_value, const sv json_ptr)
       {
          void* result{};
          
-         sv type_hash{};
+         glz::hash_t type_hash{};
          
          const auto success = detail::seek_impl(
             [&](auto&& val) {
@@ -225,18 +225,18 @@ namespace glz
             std::forward<T>(root_value), json_ptr);
          
          if (!error.empty()) {
-            return { nullptr, "" };
+            return {nullptr, {}};
          }
          else if (!success) {
             error = "invalid path";
-            return { nullptr, "" };
+            return {nullptr, {}};
          }
          
          return { result, type_hash };
       }
       
       template <class T>
-      auto get_void_fn(T&& root_value, const sv json_ptr, const sv type_hash)
+      auto get_void_fn(T&& root_value, const sv json_ptr, const glz::hash_t type_hash)
       {
          std::unique_ptr<void, void(*)(void*)> result{ nullptr, nullptr };
          

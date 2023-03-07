@@ -121,9 +121,27 @@ namespace glz
       
       static constexpr sv hash = hash128_v<to_hash>;
    };
-   
+
+   namespace detail
+   {
+      template <std::unsigned_integral T, size_t N>
+      constexpr std::array<T, N> uint_array_from_sv(sv str)
+      {
+         std::array<T, N> res{};
+         constexpr auto bytes = sizeof(T);
+         for (size_t i = 0; i < N; ++i) {
+            for (size_t j = 0; j < bytes; ++j) {
+               res[i] |= T(str[i * bytes + j]) << (8 * j);
+            }
+         }
+         return res;
+      }
+   }
+
+   using hash_t = std::array<uint64_t, 2>;
    template <class T>
-   consteval auto hash() {
-      return trait<T>::hash;
+   consteval hash_t hash()
+   {
+      return detail::uint_array_from_sv<uint64_t, 2>(trait<T>::hash);
    }
 }

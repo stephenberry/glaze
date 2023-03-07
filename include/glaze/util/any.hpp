@@ -128,7 +128,7 @@ namespace glz
          
          virtual std::unique_ptr<storage_base> clone() const = 0;
          virtual void* data() noexcept = 0;
-         std::string_view type_hash;
+         glz::hash_t type_hash;
      };
       
       std::unique_ptr<storage_base> instance;
