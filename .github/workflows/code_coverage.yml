@@ -1,12 +1,6 @@
 name: code_coverage
 
 on:
-  push:
-    branches:
-    - main
-    - feature/*
-    paths-ignore:
-    - '**.md'
   workflow_dispatch:
 
 env:
