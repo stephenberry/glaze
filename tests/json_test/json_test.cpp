@@ -1908,6 +1908,18 @@ suite write_tests = [] {
    };
 };
 
+struct error_comma_obj {
+    struct error_comma_data {
+       std::string instId;
+	   GLZ_LOCAL_META(error_comma_data, instId);
+    };
+
+    std::string code;
+    std::string msg;
+    std::vector<error_comma_data> data;
+    GLZ_LOCAL_META(error_comma_obj, data, code, msg);
+};
+
 suite error_outputs = [] {
    "invalid character"_test = [] {
          std::string s = R"({"Hello":"World"x, "color": "red"})";
@@ -1916,6 +1928,24 @@ suite error_outputs = [] {
       expect(pe != glz::error_code::none);
       auto err = glz::format_error(pe, s);
       expect(err == "1:17: syntax_error\n   {\"Hello\":\"World\"x, \"color\": \"red\"}\n                   ^\n") << err;
+   };
+
+   "extra comma"_test = [] {
+      std::string s = R"({
+      "code": "0",
+      "msg": "",
+      "data": [ {
+          "instId": "USDT"
+        },
+        {
+          "instId": "BTC"
+        },
+     ]
+  })";
+      auto ex = glz::read_json<error_comma_obj>(s);
+      expect(!ex.has_value());
+      auto err = glz::format_error(ex.error(), s);
+      expect(err == "10:7: syntax_error\n        ]\n  }\n         ^\n") << err;
    };
 };
 
