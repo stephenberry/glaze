@@ -45,7 +45,7 @@ namespace glz::detail
 {
    // assumes null terminated
    template <char c>
-   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it) noexcept
+   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
    {
       if (*it != c) [[unlikely]] {
          ctx.error = error_code::syntax_error;
@@ -506,7 +506,7 @@ namespace glz::detail
    {
       if (static_cast<bool>(ctx.error)) [[unlikely]] { return unexpected(ctx.error); }
       
-      match<'"'>(ctx, it);
+      match<'"'>(ctx, it, end);
       auto start = it;
       skip_till_quote(ctx, it, end);
       if (static_cast<bool>(ctx.error)) [[unlikely]] { return unexpected(ctx.error); }
@@ -538,14 +538,14 @@ namespace glz::detail
             }
             skip_string<Opts>(ctx, it, end);
             skip_ws<Opts>(ctx, it, end);
-            match<':'>(ctx, it);
+            match<':'>(ctx, it, end);
             skip_ws<Opts>(ctx, it, end);
             skip_value<Opts>(ctx, it, end);
             skip_ws<Opts>(ctx, it, end);
             if (*it != ',') break;
             skip_ws<Opts>(ctx, ++it, end);
          }
-         match<'}'>(ctx, it);
+         match<'}'>(ctx, it, end);
       }
    }
 
@@ -573,7 +573,7 @@ namespace glz::detail
             if (*it != ',') break;
             skip_ws<Opts>(ctx, ++it, end);
          }
-         match<']'>(ctx, it);
+         match<']'>(ctx, it, end);
       }
    }
 

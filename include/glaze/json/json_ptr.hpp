@@ -619,7 +619,7 @@ namespace glz
                         const auto k = parse_key(ctx, it, end);
                         if (cx_string_cmp<key>(k)) {
                            skip_ws<Opts>(ctx, it, end);
-                           match<':'>(ctx, it);
+                           match<':'>(ctx, it, end);
                            skip_ws<Opts>(ctx, it, end);
                            
                            if constexpr (I == (N - 1)) {
@@ -654,7 +654,7 @@ namespace glz
                }
             }
             else {
-               match<'{'>(ctx, it);
+               match<'{'>(ctx, it, end);
                
                while (true) {
                   skip_ws<Opts>(ctx, it, end);
@@ -662,7 +662,7 @@ namespace glz
                   if (k) {
                      if (cx_string_cmp<key>(*k)) {
                         skip_ws<Opts>(ctx, it, end);
-                        match<':'>(ctx, it);
+                        match<':'>(ctx, it, end);
                         skip_ws<Opts>(ctx, it, end);
                         
                         if constexpr (I == (N - 1)) {

@@ -33,34 +33,40 @@ namespace glz
 {
    template <class T, class... U>
    concept is_any_of = (std::same_as<T, U> || ...);
+
+   struct hidden{};
    
    // hide class is a wrapper to denote that the exposed variable should be excluded or hidden for serialization output
    template <class T>
    struct hide final
    {
       T value;
+
+      constexpr decltype(auto) operator()(auto &&) const { return hidden{}; }
    };
    
    template <class T>
    hide(T) -> hide<T>;
    
-   struct hidden {};
-   
    struct skip{}; // to skip a keyed value in input
-   
-   // Register this with an object to allow file including (direct writes) to the meta object
-   struct file_include {};
-   
+
    template <class T>
    struct includer
    {
-      T& value;
+      T &value;
    };
 
    template <class T>
    struct meta<includer<T>>
    {
       static constexpr std::string_view name = detail::join_v<chars<"includer<">, name_v<T>, chars<">">>;
+   };
+   
+   // Register this with an object to allow file including (direct writes) to the meta object
+   struct file_include {
+      constexpr decltype(auto) operator()(auto&& value) const {
+         return includer<std::decay_t<decltype(value)>>{value};
+      }
    };
    
    template <class T>
@@ -761,25 +767,30 @@ namespace glz
       inline decltype(auto) get_member(auto&& value, auto& member_ptr)
       {
          using V = std::decay_t<decltype(member_ptr)>;
-         if constexpr (std::is_same_v<V, file_include>) {
-            return includer<std::decay_t<decltype(value)>>{ value };
-         }
-         else if constexpr (std::is_member_object_pointer_v<V>) {
+         if constexpr (std::is_member_object_pointer_v<V>) {
             return value.*member_ptr;
          }
          else if constexpr (std::is_member_function_pointer_v<V>) {
             return member_ptr;
          }
-         else if constexpr (is_specialization_v<V, hide>) {
-            return hidden{};
+         else if constexpr (std::invocable<decltype(member_ptr), decltype(value)>) {
+            return std::invoke(member_ptr, value);
          }
-         else if constexpr (std::same_as<V, skip>) {
+         else
+         {
             return member_ptr;
          }
-         else {
-            return member_ptr(value);
-         }
       }
+
+      //// member_ptr and lambda wrapper helper
+      //template <template <class> class Wrapper, class Wrapped>
+      //struct wrap
+      //{
+      //   Wrapped wrapped;
+      //   constexpr decltype(auto) operator()(auto &&value) const { return Wrapper{get_member(value, wrapped)}; }
+
+      //   constexpr decltype(auto) unwrap(auto &&value) const { return get_member(value, wrapped); }
+      //};
       
       template <class T, class mptr_t>
       using member_t = decltype(get_member(std::declval<T>(), std::declval<std::decay_t<mptr_t>&>()));

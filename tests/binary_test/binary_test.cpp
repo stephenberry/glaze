@@ -745,7 +745,7 @@ struct lambda_value_t
 template <>
 struct glz::meta<lambda_value_t>
 {
-   static constexpr auto value = [](auto& self) -> auto& { return self.x; };
+   static constexpr auto value = [](auto&& self) -> auto& { return self.x; };
 };
 
 suite value_test = []
