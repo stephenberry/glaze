@@ -2228,6 +2228,19 @@ struct glz::meta<tagged_variant2>
    // ids defaults to glz::name_v of the type
 };
 
+// Test array based variant (experimental, not meant for external usage since api might change)
+using num_variant = std::variant<double, int32_t, uint64_t, int8_t, float>;
+struct holds_some_num
+{
+   num_variant num{};
+};
+template <>
+struct glz::meta<holds_some_num>
+{
+   using T = holds_some_num;
+   static constexpr auto value = object("num", glz::detail::array_variant{&T::num});
+};
+
 suite tagged_variant_tests = [] {
    "tagged_variant_write_tests"_test = [] {
       // custom tagged discriminator ids
@@ -2251,6 +2264,33 @@ suite tagged_variant_tests = [] {
       tagged_variant2 var2{};
       expect(glz::read_json(var2, R"({"type":"put_action","data":{"x":100,"y":200}})") == glz::error_code::none);
       expect(std::get<put_action>(var2).data["y"] == 200);
+   };
+
+   "array_variant_tests"_test = [] {
+      // Test array based variant (experimental, not meant for external usage since api might change)
+
+      holds_some_num obj{};
+      auto ec = glz::read_json(obj, R"({"num":["float", 3.14]})");
+      std::string b = R"({"num":["float", 3.14]})";
+      expect(ec == glz::error_code::none) << glz::format_error(ec, b);
+      expect(std::get<float>(obj.num) == 3.14f);
+      expect(glz::read_json(obj, R"({"num":["uint64_t", 5]})") == glz::error_code::none);
+      expect(std::get<uint64_t>(obj.num) == 5);
+      expect(glz::read_json(obj, R"({"num":["int8_t", -3]})") == glz::error_code::none);
+      expect(std::get<int8_t>(obj.num) == -3);
+      expect(glz::read_json(obj, R"({"num":["int32_t", -2]})") == glz::error_code::none);
+      expect(std::get<int32_t>(obj.num) == -2);
+
+      obj.num = 5.0;
+      std::string s{};
+      glz::write_json(obj, s);
+      expect(s == R"({"num":["double",5]})");
+      obj.num = uint64_t{3};
+      glz::write_json(obj, s);
+      expect(s == R"({"num":["uint64_t",3]})");
+      obj.num = int8_t{-5};
+      glz::write_json(obj, s);
+      expect(s == R"({"num":["int8_t",-5]})");
    };
 };
 

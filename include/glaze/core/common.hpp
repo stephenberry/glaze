@@ -782,15 +782,18 @@ namespace glz
          }
       }
 
-      //// member_ptr and lambda wrapper helper
-      //template <template <class> class Wrapper, class Wrapped>
-      //struct wrap
-      //{
-      //   Wrapped wrapped;
-      //   constexpr decltype(auto) operator()(auto &&value) const { return Wrapper{get_member(value, wrapped)}; }
+      // member_ptr and lambda wrapper helper
+      template <template <class> class Wrapper, class Wrapped>
+      struct wrap
+      {
+         Wrapped wrapped;
+         constexpr decltype(auto) operator()(auto &&value) const
+         {
+            return Wrapper<std::decay_t<decltype(get_member(value, wrapped))>>{get_member(value, wrapped)};
+         }
 
-      //   constexpr decltype(auto) unwrap(auto &&value) const { return get_member(value, wrapped); }
-      //};
+         constexpr decltype(auto) unwrap(auto &&value) const { return get_member(value, wrapped); }
+      };
       
       template <class T, class mptr_t>
       using member_t = decltype(get_member(std::declval<T>(), std::declval<std::decay_t<mptr_t>&>()));
@@ -818,6 +821,20 @@ namespace glz
 
       template <class T>
       using member_tuple_t = typename members_from_meta<T>::type;
+
+      // Output variants in the following format  ["variant_type", variant_json_data] with glz::detail:array_variant(&T::var);
+      template <is_variant T>
+      struct array_var_wrapper
+      {
+         T &value;
+      };
+      // TODO: Could do this if the compiler supports alias template deduction
+      // template <class T>
+      // using array_var = wrap<array_var_wrapper, T>;
+      template <class T>
+      struct array_variant : wrap<array_var_wrapper, T> {};
+      template <class T>
+      array_variant(T) -> array_variant<T>;  // Only needed on older compilers until we move to template alias deduction
    }  // namespace detail
 
    constexpr auto array(auto&&... args)

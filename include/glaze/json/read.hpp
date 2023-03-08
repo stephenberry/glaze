@@ -1148,12 +1148,15 @@ namespace glz
        struct from_json<T>
        {
           // Note that items in the variant are required to be default constructible for us to switch types
-          template <auto Opts>
+          template <auto Options>
           GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
           {
              if constexpr (variant_is_auto_deducible<T>()) {
-                skip_ws<Opts>(ctx, it, end);
-                switch (*it) {
+               if constexpr (!Options.ws_handled) {
+                  skip_ws<Options>(ctx, it, end);
+               }
+               static constexpr auto Opts = ws_handled_off<Options>();
+               switch (*it) {
                    case '\0':
                       ctx.error = error_code::unexpected_end;
                       return;
@@ -1327,10 +1330,52 @@ namespace glz
              else {
                 std::visit(
                    [&](auto&& v) {
-                      read<json>::op<Opts>(v, ctx, it, end);
+                      read<json>::op<Options>(v, ctx, it, end);
                    },
                    value);
              }
+          }
+       };
+
+       template <class T>
+       struct from_json<array_var_wrapper<T>>
+       {
+          template <auto Options>
+          GLZ_FLATTEN static void op(auto &&wrapper, is_context auto &&ctx, auto &&it, auto &&end)
+          {
+             auto& value = wrapper.value;
+
+             if constexpr (!Options.ws_handled) {
+                skip_ws<Options>(ctx, it, end);
+             }
+             static constexpr auto Opts = ws_handled_off<Options>();
+
+             match<'['>(ctx, it, end);
+             skip_ws<Opts>(ctx, it, end);
+
+             //TODO Use key parsing for compiletime known keys
+             match<'"'>(ctx, it, end);
+             auto start = it;
+             skip_till_quote(ctx, it, end);
+             sv type_id = {start, static_cast<size_t>(it - start)};
+             match<'"'>(ctx, it, end);
+
+             static constexpr auto id_map = make_variant_id_map<T>();
+             auto id_it = id_map.find(type_id);
+             if (id_it != id_map.end()) [[likely]] {
+                skip_ws<Opts>(ctx, it, end);
+                match<','>(ctx, it, end);
+                const auto type_index = id_it->second;
+                if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                std::visit([&](auto&& v) { read<json>::op<Opts>(v, ctx, it, end); }, value);
+             }
+             else {
+                ctx.error = error_code::no_matching_variant_type;
+                return;
+             }
+
+             skip_ws<Opts>(ctx, it, end);
+             match<']'>(ctx, it, end);
           }
        };
 
