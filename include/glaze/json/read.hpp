@@ -283,7 +283,7 @@ namespace glz
                   skip_ws<Opts>(ctx, it, end);
                }
 
-               match<'"'>(ctx, it);
+               match<'"'>(ctx, it, end);
             }
 
             // overwrite portion
@@ -395,7 +395,7 @@ namespace glz
                   skip_ws<Opts>(ctx, it, end);
                }
 
-               match<'"'>(ctx, it);
+               match<'"'>(ctx, it, end);
             }
 
             if (*it == '\\') [[unlikely]] {
@@ -449,7 +449,7 @@ namespace glz
                }
                value = *it++;
             }
-            match<'"'>(ctx, it);
+            match<'"'>(ctx, it, end);
          }
       };
 
@@ -487,9 +487,9 @@ namespace glz
             if constexpr (!Opts.ws_handled) {
                skip_ws<Opts>(ctx, it, end);
             }
-            match<'"'>(ctx, it);
+            match<'"'>(ctx, it, end);
             skip_till_quote(ctx, it, end);
-            match<'"'>(ctx, it);
+            match<'"'>(ctx, it, end);
          }
       };
 
@@ -520,7 +520,7 @@ namespace glz
             }
             static constexpr auto Opts = ws_handled_off<Options>();
 
-            match<'['>(ctx, it);
+            match<'['>(ctx, it, end);
             skip_ws<Opts>(ctx, it, end);
 
             value.clear();
@@ -542,7 +542,7 @@ namespace glz
                   ++it;
                   return;
                }
-               match<','>(ctx, it);
+               match<','>(ctx, it, end);
             }
          }
       };
@@ -562,7 +562,7 @@ namespace glz
             }
             static constexpr auto Opts = ws_handled_off<Options>();
 
-            match<'['>(ctx, it);
+            match<'['>(ctx, it, end);
             skip_ws<Opts>(ctx, it, end);
 
             if (*it == ']') [[unlikely]] {
@@ -688,7 +688,7 @@ namespace glz
             }
             static constexpr auto Opts = ws_handled_off<Options>();
 
-            match<'['>(ctx, it);
+            match<'['>(ctx, it, end);
             const auto n = number_of_array_elements<Opts>(ctx, it, end);
             if (n) {
                value.resize(*n);
@@ -697,11 +697,11 @@ namespace glz
                read<json>::op<Opts>(x, ctx, it, end);
                   skip_ws<Opts>(ctx, it, end);
                   if (i < *n - 1) {
-                     match<','>(ctx, it);
+                     match<','>(ctx, it, end);
                }
                ++i;
             }
-               match<']'>(ctx, it);
+            match<']'>(ctx, it, end);
          }
          }
       };
@@ -730,7 +730,7 @@ namespace glz
                skip_ws<Opts>(ctx, it, end);
             }
 
-            match<'['>(ctx, it);
+            match<'['>(ctx, it, end);
             skip_ws<Opts>(ctx, it, end);
 
             for_each<N>([&](auto I) {
@@ -738,7 +738,7 @@ namespace glz
                   return;
                }
                if constexpr (I != 0) {
-                  match<','>(ctx, it);
+                  match<','>(ctx, it, end);
                   skip_ws<Opts>(ctx, it, end);
                }
                if constexpr (is_std_tuple<T>) {
@@ -753,7 +753,7 @@ namespace glz
                skip_ws<Opts>(ctx, it, end);
             });
 
-            match<']'>(ctx, it);
+            match<']'>(ctx, it, end);
          }
       };
 
@@ -767,7 +767,7 @@ namespace glz
                skip_ws<Opts>(ctx, it, end);
             }
 
-            match<'['>(ctx, it);
+            match<'['>(ctx, it, end);
 
             std::string& s = string_buffer();
 
@@ -792,7 +792,7 @@ namespace glz
                   ++it;
                   return;
                }
-               match<','>(ctx, it);
+               match<','>(ctx, it, end);
             }
          }
       };
@@ -948,7 +948,7 @@ namespace glz
          if constexpr (!Opts.ws_handled) {
             skip_ws<Opts>(ctx, it, end);
          }
-         match<'"'>(ctx, it);
+         match<'"'>(ctx, it, end);
 
          if constexpr (keys_may_contain_escape<T>()) {
             auto start = it;
@@ -978,7 +978,7 @@ namespace glz
                   if constexpr (stats.length_range == 0) {
                      const sv key{it, stats.max_length};
                      it += stats.max_length;
-                     match<'"'>(ctx, it);
+                     match<'"'>(ctx, it, end);
                      return key;
                   }
                   else if constexpr (stats.length_range < 4) {
@@ -1021,7 +1021,7 @@ namespace glz
                if constexpr (!Options.ws_handled) {
                   skip_ws<Options>(ctx, it, end);
                }
-               match<'{'>(ctx, it);
+               match<'{'>(ctx, it, end);
             }
 
             skip_ws<Options>(ctx, it, end);
@@ -1037,7 +1037,7 @@ namespace glz
                else if (first) [[unlikely]]
                   first = false;
                else [[likely]] {
-                  match<','>(ctx, it);
+                  match<','>(ctx, it, end);
                   skip_ws<Opts>(ctx, it, end);
                }
 
@@ -1045,7 +1045,7 @@ namespace glz
                   const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
 
                   skip_ws<Opts>(ctx, it, end);
-                  match<':'>(ctx, it);
+                  match<':'>(ctx, it, end);
                   skip_ws<Opts>(ctx, it, end);
 
                   if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
@@ -1083,7 +1083,7 @@ namespace glz
                   read<json>::op<Opts>(key, ctx, it, end);
 
                   skip_ws<Opts>(ctx, it, end);
-                  match<':'>(ctx, it);
+                  match<':'>(ctx, it, end);
                   skip_ws<Opts>(ctx, it, end);
 
                   if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
@@ -1177,7 +1177,7 @@ namespace glz
                          auto start = it;
                          while (*it != '}') {
                             if (it != start) {
-                               match<','>(ctx, it);
+                               match<','>(ctx, it, end);
                             }
                             std::string_view key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
                             auto deduction_it = deduction_map.find(key);
@@ -1188,12 +1188,12 @@ namespace glz
                                if constexpr (!tag_v<T>.empty()) {
                                   if (key == tag_v<T>) {
                                      skip_ws<Opts>(ctx, it, end);
-                                     match<':'>(ctx, it);
+                                     match<':'>(ctx, it, end);
 
                                      std::string& type_id = string_buffer();
                                      read<json>::op<Opts>(type_id, ctx, it, end);
                                      skip_ws<Opts>(ctx, it, end);
-                                     match<','>(ctx, it);
+                                     match<','>(ctx, it, end);
 
                                      static constexpr auto id_map = make_variant_id_map<T>();
                                      auto id_it = id_map.find(std::string_view{type_id});
@@ -1249,7 +1249,7 @@ namespace glz
                                return;
                             }
                             skip_ws<Opts>(ctx, it, end);
-                            match<':'>(ctx, it);
+                            match<':'>(ctx, it, end);
                             skip_ws<Opts>(ctx, it, end);
                             skip_value<Opts>(ctx, it, end);
                             skip_ws<Opts>(ctx, it, end);

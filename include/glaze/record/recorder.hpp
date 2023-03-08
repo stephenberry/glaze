@@ -119,7 +119,7 @@ namespace glz
             
             if constexpr (!Options.opening_handled) {
                skip_ws<Options>(ctx, it, end);
-               match<'{'>(ctx, it);
+               match<'{'>(ctx, it, end);
             }
             
             skip_ws<Options>(ctx, it, end);
@@ -144,7 +144,7 @@ namespace glz
                }
                
                skip_ws<Opts>(ctx, it, end);
-               match<':'>(ctx, it);
+               match<':'>(ctx, it, end);
                skip_ws<Opts>(ctx, it, end);
                
                std::visit([&](auto&& deq) {
@@ -153,13 +153,13 @@ namespace glz
                
                if (i < n - 1) {
                   skip_ws<Opts>(ctx, it, end);
-                  match<','>(ctx, it);
+                  match<','>(ctx, it, end);
                   skip_ws<Opts>(ctx, it, end);
                }
             }
             
             skip_ws<Opts>(ctx, it, end);
-            match<'}'>(ctx, it);
+            match<'}'>(ctx, it, end);
          }
       };
    }
