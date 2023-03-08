@@ -4126,7 +4126,7 @@ namespace glz::detail
 template<auto MemPtr>
 constexpr decltype(auto) qouted()
 {
-   return [](auto&& val) { return qouted_t<std::decay_t<decltype(val.*MemPtr)>>(val.*MemPtr); };
+   return [](auto&& val) { return qouted_t{val.*MemPtr}; };
 }
 
 struct A
