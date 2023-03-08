@@ -485,6 +485,36 @@ namespace glz
       };
 
       template <class T>
+      struct to_json<array_var_wrapper<T>>
+      {
+         template <auto Opts, class... Args>
+         GLZ_ALWAYS_INLINE static void op(auto&& wrapper, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            auto& value = wrapper.value;
+            dump<'['>(args...);
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level += Opts.indentation_width;
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            }
+            dump<'"'>(args...);
+            dump(ids_v<T>[value.index()], args...);
+            dump<"\",">(args...);
+            if constexpr (Opts.prettify) {
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            }
+            std::visit([&](auto&& v) { write<json>::op<Opts>(v, ctx, args...); }, value);
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level -= Opts.indentation_width;
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            }
+            dump<']'>(args...);
+         }
+      };
+
+      template <class T>
       requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
       struct to_json<T>
       {
