@@ -83,10 +83,7 @@ namespace glz
          if (!holds<object_t>()) return false;
          auto& object = std::get<object_t>(data);
          auto iter = object.find(key);
-         if (iter == object.end()) {
-            return false;
-         }
-         return true;
+         return iter != object.end();
       }
 
       operator bool() const { return !std::holds_alternative<null_t>(data); }
