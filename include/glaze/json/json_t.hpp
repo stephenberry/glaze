@@ -84,9 +84,9 @@ namespace glz
          auto& object = std::get<object_t>(data);
          auto iter = object.find(key);
          if (iter == object.end()) {
-            return true;
+            return false;
          }
-         return false;
+         return true;
       }
 
       operator bool() const { return !std::holds_alternative<null_t>(data); }
