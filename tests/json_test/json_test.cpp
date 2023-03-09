@@ -2446,6 +2446,12 @@ suite generic_json_tests = [] {
       glz::write_json(messageSchema, buffer);
       expect(buffer ==R"({"fields":[{"field":"branch","type":"string"}],"type":"struct"})") << buffer;
    };
+   
+   "json_t_contains"_test = [] {
+      auto json = glz::read_json<glz::json_t>(R"({"foo":"bar"})");
+      expect(!json->contains("id"));
+      expect(json->contains("foo"));
+   };
 };
 
 struct holder0_t {
