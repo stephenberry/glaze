@@ -1019,6 +1019,105 @@ for (auto i = 0; i < 1000; ++i) {
 See the `ext` directory for extensions.
 
 - [Eigen](https://gitlab.com/libeigen/eigen). Supports reading and writing from Eigen Vector types.
+- [jsonrpc](https://www.jsonrpc.org/specification). Glaze wrapper supporting jsonrpc 2.0 specification.
+
+## jsonrpc 2.0
+
+Compile time specification of jsonrpc methods making it unnecessary to convert json to its according params/result/error type.
+
+### Example
+```C++
+struct method_foo_params
+{
+   int foo_a{};
+   std::string foo_b{};
+};
+template <>
+struct glz::meta<method_foo_params>
+{
+   static constexpr auto value{glz::object("foo_a", &method_foo_params::foo_a, "foo_b", &method_foo_params::foo_b)};
+};
+struct method_foo_result
+{
+   bool foo_c{};
+   std::string foo_d{};
+   bool operator==(method_foo_result const& rhs) const noexcept { return foo_c == rhs.foo_c && foo_d == rhs.foo_d; }
+};
+template <>
+struct glz::meta<method_foo_result>
+{
+   static constexpr auto value{glz::object("foo_c", &method_foo_result::foo_c, "foo_d", &method_foo_result::foo_d)};
+};
+
+struct method_bar_params
+{
+   int bar_a{};
+   std::string bar_b{};
+};
+template <>
+struct glz::meta<method_bar_params>
+{
+   static constexpr auto value{glz::object("bar_a", &method_bar_params::bar_a, "bar_b", &method_bar_params::bar_b)};
+};
+struct method_bar_result
+{
+   bool bar_c{};
+   std::string bar_d{};
+   bool operator==(method_bar_result const& rhs) const noexcept { return bar_c == rhs.bar_c && bar_d == rhs.bar_d; }
+};
+template <>
+struct glz::meta<method_bar_result>
+{
+   static constexpr auto value{glz::object("bar_c", &method_bar_result::bar_c, "bar_d", &method_bar_result::bar_d)};
+};
+
+namespace rpc = glz::rpc;
+
+auto main(int, char**) -> int {
+    rpc::server<rpc::server_method_t<"foo", method_foo_params, method_foo_result>,
+                rpc::server_method_t<"bar", method_bar_params, method_bar_result>>
+       server;
+    rpc::client<rpc::client_method_t<"foo", method_foo_params, method_foo_result>,
+                rpc::client_method_t<"bar", method_bar_params, method_bar_result>>
+       client;
+   
+    server.on<"foo">([](method_foo_params const& params) -> glz::expected<method_foo_result, rpc::error> {
+        // access to member variables for the request `foo`
+        // params.foo_a 
+        // params.foo_b
+        return method_foo_result{.foo_c = true, .foo_d = "new world"};
+        // Or return an error:
+        // return glz::unexpected(rpc::error(rpc::error_e::server_error_lower, "my error"));
+    });
+    client.on<"foo">([](glz::expected<method_foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
+        // Access to value and/or id
+    });
+    
+    server.on<"bar">([](method_bar_params const& params) -> glz::expected<method_bar_result, rpc::error> {
+        return method_bar_result{.bar_c = true, .bar_d = "new world"};
+    });
+    
+    client.on<"bar">([](glz::expected<method_bar_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
+        // Access to value and/or id
+    });
+    
+    auto request_str{client.request<"foo">("42", method_foo_params{.foo_a = 1337, .foo_b = "hello world"})};
+    // request_str: R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})"
+    // send request_str over your communication protocol to the server
+    
+    // Call the server callback for method `foo`
+    // Returns each response json string since the request_str can withold batch of requests.
+    // If the request is a notification (no `id` in request) a response will not be generated.
+    // For convenience, if it is an error response the error struct is included. 
+    std::vector<std::pair<std::string, rpc::error>> response_vec = server.call(request_str);
+   
+    assert(response_vec.at(0).first ==
+         R"({"jsonrpc":"2.0","result":{"foo_c":true,"foo_d":"new world"},"id":"42"})");
+   
+    // Call the client callback for method `foo` with the provided results
+    client.call(response_vec.at(0).first);
+}
+```
 
 # License
 

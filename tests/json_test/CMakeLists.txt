@@ -11,3 +11,12 @@ endif ()
 add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME})
 
 target_code_coverage(${PROJECT_NAME} AUTO ALL)
+
+# jsonrpc
+add_executable(jsonrpc_test jsonrpc_test.cpp)
+
+target_link_libraries(jsonrpc_test PRIVATE glz_test_common)
+
+add_test(NAME jsonrpc_test COMMAND jsonrpc_test)
+
+target_code_coverage(jsonrpc_test AUTO ALL)
