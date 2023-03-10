@@ -1,9 +1,8 @@
+#include <algorithm>
+#include <deque>
 #include <glaze/glaze.hpp>
 #include <glaze/tuplet/tuple.hpp>
 #include <glaze/util/expected.hpp>
-
-#include <algorithm>
-#include <deque>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -91,23 +90,15 @@ namespace glz::rpc
       template <typename char_type, unsigned N>
       basic_fixed_string(char_type const (&str)[N]) -> basic_fixed_string<char_type, N - 1>;
 
-      template <typename char_type, std::size_t N, std::size_t M>
-      consteval auto concat_fixed_string(basic_fixed_string<char_type, N> l,
-                                         basic_fixed_string<char_type, M> r) noexcept
+      struct only_id
       {
-         basic_fixed_string<char_type, N + M> result;
-         auto it{std::copy(l.begin(), l.end(), result.begin())};
-         it = std::copy(r.begin(), r.end(), it);
-         *it = {};
-         return result;
-      }
-
-      template <typename char_type, std::size_t N, std::size_t M, typename... U>
-      consteval auto concat_fixed_string(basic_fixed_string<char_type, N> l, basic_fixed_string<char_type, M> r,
-                                         U... u) noexcept
-      {
-         return concat_fixed_string(l, concat_fixed_string(r, u...));
-      }
+         jsonrpc_id_type id{};
+         struct glaze
+         {
+            using T = only_id;
+            static constexpr auto value{glz::object("id", &T::id)};
+         };
+      };
    }
 
    class error
@@ -348,73 +339,6 @@ namespace glz::rpc
             return {{glz::write_json(response_parse_error), response_parse_error.error.value()}};
          }
 
-         // Extract each request, if request does not include and ID a std::nullopt will be returned
-         auto const per_request{
-            [this](std::string_view json_request) -> std::optional<std::pair<std::string, rpc::error>> {
-               expected<generic_request_t, glz::parse_error> request{glz::read_json<generic_request_t>(json_request)};
-
-               if (!request.has_value()) {
-                  // Failed, but let's try to extract the `id`
-                  expected<json_t, glz::parse_error> exp_json_parsed{glz::read_json<json_t>(json_request)};
-                  if (exp_json_parsed.has_value()) {
-                     auto const& json_parsed{exp_json_parsed.value()};
-                     if (json_parsed.contains("id")) {
-                        generic_response_t response_w_id{json_parsed["id"].as<jsonrpc_id_type>(),
-                                                         rpc::error::invalid(request.error(), json_request)};
-                        return std::make_pair(glz::write_json(response_w_id), response_w_id.error.value());
-                     }
-                  }
-                  generic_response_t response_no_id{rpc::error::invalid(request.error(), json_request)};
-                  return std::make_pair(glz::write_json(response_no_id), response_no_id.error.value());
-               }
-
-               auto& req{request.value()};
-               if (req.version != rpc::supported_version) {
-                  if (std::holds_alternative<glz::json_t::null_t>(req.id)) {
-                     return std::nullopt;
-                  }
-                  generic_response_t response_inv_version{std::move(req.id), rpc::error::version(req.version)};
-                  return std::make_pair(glz::write_json(response_inv_version), response_inv_version.error.value());
-               }
-
-               std::optional<std::pair<std::string, rpc::error>> return_v{};
-               bool method_found = methods.any([&json_request, &req, &return_v](auto&& method) -> bool {
-                  using meth_t = std::remove_reference_t<decltype(method)>;
-                  if (req.method == meth_t::name_v) {
-                     expected<typename meth_t::request_t, glz::parse_error> const& params_request{
-                        glz::read_json<typename meth_t::request_t>(json_request)};
-                     if (params_request.has_value()) {
-                        expected<typename meth_t::result_t, rpc::error> result{std::invoke(
-                           method.callback, params_request->params)};  // todo what if method.callback is null
-                        if (result.has_value()) {
-                           typename meth_t::response_t response_w_result{std::move(req.id), std::move(result.value())};
-                           return_v = std::make_pair(glz::write_json(response_w_result), rpc::error{});
-                        }
-                        else {
-                           typename meth_t::response_t response_w_err{std::move(req.id), std::move(result.error())};
-                           return_v = std::make_pair(glz::write_json(response_w_err), result.error());
-                        }
-                     }
-                     else {
-                        typename meth_t::response_t response_w_parse_err{
-                           std::move(req.id), rpc::error::invalid(params_request.error(), json_request)};
-                        return_v =
-                           std::make_pair(glz::write_json(response_w_parse_err), response_w_parse_err.error.value());
-                     }
-                     if (std::holds_alternative<glz::json_t::null_t>(req.id)) {
-                        return_v = std::nullopt;
-                     }
-                     return true;
-                  }
-                  return false;
-               });
-               if (!method_found) {
-                  generic_response_t response_inv_method{std::move(req.id), rpc::error::method(req.method)};
-                  return std::make_pair(glz::write_json(response_inv_method), response_inv_method.error.value());
-               }
-               return return_v;
-            }};
-
          auto batch_requests{glz::read_json<std::vector<glz::json_t>>(json_request)};
          if (batch_requests.has_value()) {
             if (batch_requests->empty()) {
@@ -440,6 +364,72 @@ namespace glz::rpc
          }
          return {};
       }
+
+     private:
+      auto per_request(std::string_view json_request) -> std::optional<std::pair<std::string, rpc::error>>
+      {
+         expected<generic_request_t, glz::parse_error> request{glz::read_json<generic_request_t>(json_request)};
+
+         if (!request.has_value()) {
+            // Failed, but let's try to extract the `id`
+            detail::only_id id{};
+            glz::context ctx{};
+            auto parse_error{glz::read<glz::opts{
+               .error_on_unknown_keys = false,
+            }>(id, json_request, ctx)};
+
+            if (parse_error) {
+               generic_response_t response_no_id{rpc::error::invalid(request.error(), json_request)};
+               return std::make_pair(glz::write_json(response_no_id), response_no_id.error.value());
+            }
+
+            generic_response_t response_w_id{std::move(id.id), rpc::error::invalid(request.error(), json_request)};
+            return std::make_pair(glz::write_json(response_w_id), response_w_id.error.value());
+         }
+
+         auto& req{request.value()};
+         if (req.version != rpc::supported_version) {
+            generic_response_t response_inv_version{std::move(req.id), rpc::error::version(req.version)};
+            return std::make_pair(glz::write_json(response_inv_version), response_inv_version.error.value());
+         }
+
+         std::optional<std::pair<std::string, rpc::error>> return_v{};
+         bool method_found = methods.any([&json_request, &req, &return_v](auto&& method) -> bool {
+            using meth_t = std::remove_reference_t<decltype(method)>;
+            if (req.method != meth_t::name_v) {
+               return false;
+            }
+            auto const& params_request{glz::read_json<typename meth_t::request_t>(json_request)};
+            if (params_request.has_value()) {
+               expected<typename meth_t::result_t, rpc::error> result{
+                  std::invoke(method.callback, params_request->params)};
+               if (result.has_value()) {
+                  typename meth_t::response_t response_w_result{std::move(req.id), std::move(result.value())};
+                  return_v = std::make_pair(glz::write_json(response_w_result), rpc::error{});
+                  if (std::holds_alternative<glz::json_t::null_t>(req.id)) {
+                     return_v = std::nullopt;
+                  }
+               }
+               else {
+                  typename meth_t::response_t response_w_err{std::move(req.id), std::move(result.error())};
+                  return_v = std::make_pair(glz::write_json(response_w_err), result.error());
+               }
+            }
+            else {
+               // TODO: Finish thought, glaze does not error on missing field:
+               // https://github.com/stephenberry/glaze/issues/207
+               typename meth_t::response_t response_w_parse_err{
+                  std::move(req.id), rpc::error::invalid(params_request.error(), json_request)};
+               return_v = std::make_pair(glz::write_json(response_w_parse_err), response_w_parse_err.error.value());
+            }
+            return true;
+         });
+         if (!method_found) {
+            generic_response_t response_inv_method{std::move(req.id), rpc::error::method(req.method)};
+            return std::make_pair(glz::write_json(response_inv_method), response_inv_method.error.value());
+         }
+         return return_v;
+      };
    };
 
    template <concepts::client_method_type... method_type>
