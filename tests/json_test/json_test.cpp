@@ -1824,7 +1824,7 @@ suite write_tests = [] {
    };
 
    //* TODO: Gives 23 errors. Errors come from an MSVC include file "utility": it claims that the base class is
-   //undifined.
+   // undefined.
    "Write object"_test = [] {
       Named n{"Hello, world!", {{{21, 15, 13}, 0}, {0}}};
 
