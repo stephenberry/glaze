@@ -11,41 +11,45 @@ namespace glz
    namespace detail
    {
       template <class T = void>
-      struct from_ndjson {};
-      
+      struct from_ndjson
+      {};
+
       template <>
       struct read<ndjson>
       {
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
-            from_ndjson<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+         static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
+         {
+            from_ndjson<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                            std::forward<It0>(it), std::forward<It1>(end));
          }
       };
-      
-      template <class T> requires array_t<T> &&
-      (emplace_backable<T> ||
-       !resizeable<T>)
+
+      template <class T>
+         requires array_t<T> && (emplace_backable<T> || !resizeable<T>)
       struct from_ndjson<T>
       {
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
-            
+            if (static_cast<bool>(ctx.error)) [[unlikely]] {
+               return;
+            }
+
             if (it == end) {
                if constexpr (resizeable<T>) {
                   value.clear();
-                  
+
                   if constexpr (Opts.shrink_to_fit) {
                      value.shrink_to_fit();
                   }
                }
             }
-                        
+
             const auto n = value.size();
-            
+
             auto value_it = value.begin();
-            
+
             auto read_new_lines = [&] {
                while (*it == '\r') {
                   ++it;
@@ -53,7 +57,7 @@ namespace glz
                      ++it;
                   }
                   else {
-                     ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
+                     ctx.error = error_code::syntax_error;  // Expected '\n' after '\r'
                      return;
                   }
                }
@@ -61,27 +65,27 @@ namespace glz
                   ++it;
                }
             };
-            
+
             for (size_t i = 0; i < n; ++i) {
                read<json>::op<Opts>(*value_it++, ctx, it, end);
                if (it == end) {
                   value.resize(i + 1);
-                  
+
                   if constexpr (Opts.shrink_to_fit) {
                      value.shrink_to_fit();
                   }
-                  
+
                   return;
                }
-               
+
                read_new_lines();
             }
-            
+
             // growing
             if constexpr (emplace_backable<T>) {
                while (it < end) {
                   read<json>::op<Opts>(value.emplace_back(), ctx, it, end);
-                  
+
                   read_new_lines();
                }
             }
@@ -92,25 +96,25 @@ namespace glz
       };
 
       template <class T>
-      requires glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>
+         requires glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>
       struct from_ndjson<T>
       {
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
-            
-            static constexpr auto N = []() constexpr
-            {
+            if (static_cast<bool>(ctx.error)) [[unlikely]] {
+               return;
+            }
+
+            static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<T>) {
                   return std::tuple_size_v<meta_t<T>>;
                }
                else {
                   return std::tuple_size_v<T>;
                }
-            }
-            ();
-            
+            }();
+
             auto read_new_lines = [&] {
                while (*it == '\r') {
                   ++it;
@@ -118,7 +122,7 @@ namespace glz
                      ++it;
                   }
                   else {
-                     ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
+                     ctx.error = error_code::syntax_error;  // Expected '\n' after '\r'
                      return;
                   }
                }
@@ -126,7 +130,7 @@ namespace glz
                   ++it;
                }
             };
-            
+
             for_each<N>([&](auto I) {
                if (it == end) {
                   return;
@@ -146,19 +150,22 @@ namespace glz
             });
          }
       };
-      
+
       template <class T = void>
-      struct to_ndjson {};
-      
+      struct to_ndjson
+      {};
+
       template <>
       struct write<ndjson>
       {
          template <auto Opts, class T, is_context Ctx, class B, class IX>
-         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-            to_ndjson<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+         {
+            to_ndjson<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                          std::forward<B>(b), std::forward<IX>(ix));
          }
       };
-      
+
       template <array_t T>
       struct to_ndjson<T>
       {
@@ -173,7 +180,7 @@ namespace glz
                   return value.empty();
                }
             }();
-            
+
             if (!is_empty) {
                auto it = value.begin();
                write<json>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
@@ -188,27 +195,26 @@ namespace glz
       };
 
       template <class T>
-      requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
+         requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
       struct to_ndjson<T>
       {
          template <auto Opts, class... Args>
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            static constexpr auto N = []() constexpr
-            {
+            static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<std::decay_t<T>>) {
                   return std::tuple_size_v<meta_t<std::decay_t<T>>>;
                }
                else {
                   return std::tuple_size_v<std::decay_t<T>>;
                }
-            }
-            ();
-            
+            }();
+
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx,
+                                        std::forward<Args>(args)...);
                }
                else {
                   write<json>::op<Opts>(glz::tuplet::get<I>(value), ctx, std::forward<Args>(args)...);
@@ -224,23 +230,21 @@ namespace glz
       };
 
       template <class T>
-      requires is_std_tuple<std::decay_t<T>>
+         requires is_std_tuple<std::decay_t<T>>
       struct to_ndjson<T>
       {
          template <auto Opts, class... Args>
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            static constexpr auto N = []() constexpr
-            {
+            static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<std::decay_t<T>>) {
                   return std::tuple_size_v<meta_t<std::decay_t<T>>>;
                }
                else {
                   return std::tuple_size_v<std::decay_t<T>>;
                }
-            }
-            ();
-            
+            }();
+
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
@@ -259,15 +263,17 @@ namespace glz
          }
       };
    }  // namespace detail
-   
+
    template <class T, class Buffer>
-   [[nodiscard]] inline auto read_ndjson(T& value, Buffer&& buffer) {
+   [[nodiscard]] inline auto read_ndjson(T& value, Buffer&& buffer)
+   {
       context ctx{};
       return read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
    }
-   
+
    template <class T, class Buffer>
-   [[nodiscard]] inline expected<T, parse_error> read_ndjson(Buffer&& buffer) {
+   [[nodiscard]] inline expected<T, parse_error> read_ndjson(Buffer&& buffer)
+   {
       T value{};
       context ctx{};
       const auto ec = read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
@@ -276,41 +282,44 @@ namespace glz
       }
       return unexpected(ec);
    }
-   
+
    template <auto Opts = opts{.format = ndjson}, class T>
-   [[nodiscard]] inline parse_error read_file_ndjson(T& value, const sv file_name) {
-      
+   [[nodiscard]] inline parse_error read_file_ndjson(T& value, const sv file_name)
+   {
       context ctx{};
       ctx.current_file = file_name;
-      
+
       std::string buffer;
-      
+
       const auto ec = file_to_buffer(buffer, ctx.current_file);
-      
+
       if (static_cast<bool>(ec)) {
-         return { ec };
+         return {ec};
       }
-      
+
       return read<Opts>(value, buffer, ctx);
    }
-   
+
    template <class T, class Buffer>
-   [[nodiscard]] inline auto write_ndjson(T&& value, Buffer&& buffer) {
+   [[nodiscard]] inline auto write_ndjson(T&& value, Buffer&& buffer)
+   {
       return write<opts{.format = ndjson}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
-   
+
    template <class T>
-   [[nodiscard]] inline auto write_ndjson(T&& value) {
+   [[nodiscard]] inline auto write_ndjson(T&& value)
+   {
       std::string buffer{};
       write<opts{.format = ndjson}>(std::forward<T>(value), buffer);
       return buffer;
    }
-   
+
    // std::string file_name needed for std::ofstream
    template <class T>
-   inline write_error write_file_ndjson(T&& value, const std::string& file_name) {
+   inline write_error write_file_ndjson(T&& value, const std::string& file_name)
+   {
       std::string buffer{};
       write<opts{.format = ndjson}>(std::forward<T>(value), buffer);
-      return { buffer_to_file(buffer, file_name) };
+      return {buffer_to_file(buffer, file_name)};
    }
 }

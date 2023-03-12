@@ -11,17 +11,14 @@ namespace glz
 {
    namespace detail
    {
-      template <class Tuple, size_t...I>
+      template <class Tuple, size_t... I>
       constexpr std::string_view tuple_name_impl(std::index_sequence<I...>)
       {
-            return join_v<
-               chars<"std::tuple<">,
-               std::conditional_t<
-                  I != std::tuple_size_v<Tuple> - 1,
-                  join<name_v<std::tuple_element_t<I, Tuple>>, chars<",">>,
-                  join<name_v<std::tuple_element_t<I, Tuple>>>
-               >::value...,
-               chars<">">>;
+         return join_v<chars<"std::tuple<">,
+                       std::conditional_t<I != std::tuple_size_v<Tuple> - 1,
+                                          join<name_v<std::tuple_element_t<I, Tuple>>, chars<",">>,
+                                          join<name_v<std::tuple_element_t<I, Tuple>>>>::value...,
+                       chars<">">>;
       }
    }
 
@@ -31,7 +28,7 @@ namespace glz
    template <tuple T>
    struct meta<T>
    {
-      static constexpr std::string_view name = detail::tuple_name_impl<T>(
-         std::make_index_sequence<std::tuple_size_v<T>>());
+      static constexpr std::string_view name =
+         detail::tuple_name_impl<T>(std::make_index_sequence<std::tuple_size_v<T>>());
    };
 }

@@ -3,9 +3,9 @@
 
 #pragma once
 
+#include <filesystem>
 #include <fstream>
 #include <string>
-#include <filesystem>
 
 #include "glaze/core/context.hpp"
 
@@ -14,9 +14,9 @@ namespace glz
    template <class T>
    [[nodiscard]] error_code file_to_buffer(T& buffer, const std::string_view file_name) noexcept
    {
-      std::ifstream file{ std::string(file_name) };
+      std::ifstream file{std::string(file_name)};
 
-      if (!file) {         
+      if (!file) {
          return error_code::file_open_failure;
       }
 
@@ -24,9 +24,8 @@ namespace glz
       buffer.reserve(file.tellg());
       file.seekg(0, std::ios::beg);
 
-      buffer.assign((std::istreambuf_iterator<char>(file)),
-                    std::istreambuf_iterator<char>());
-      
+      buffer.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+
       return {};
    }
 
@@ -38,9 +37,8 @@ namespace glz
       return buffer;
    }
 
-   inline std::filesystem::path relativize_if_not_absolute(
-      const std::filesystem::path& working_directory,
-      const std::filesystem::path& filepath) noexcept
+   inline std::filesystem::path relativize_if_not_absolute(const std::filesystem::path& working_directory,
+                                                           const std::filesystem::path& filepath) noexcept
    {
       if (filepath.is_absolute()) {
          return filepath;

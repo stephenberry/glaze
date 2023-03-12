@@ -1,25 +1,23 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include "glaze/api/lib.hpp"
+
 #include <iostream>
 #include <tuple>
 
 #include "boost/ut.hpp"
-#include "interface.hpp"
 #include "glaze/api/api.hpp"
-#include "glaze/api/lib.hpp"
+#include "interface.hpp"
 
-glz::iface_fn glz_iface() noexcept
-{
-   return glz::make_iface<>();
-}
+glz::iface_fn glz_iface() noexcept { return glz::make_iface<>(); }
 
 void tests()
 {
    using namespace boost::ut;
    glz::lib_loader lib(TEST_LIB_INTERFACE_LOCATION);
    auto io = lib["my_api"]();
-   
+
    "bool type name"_test = [] {
       {
          std::string_view b = glz::name_v<bool>;
@@ -45,8 +43,7 @@ void tests()
 
    "vector type name"_test = [] {
       {
-         std::string_view v =
-            glz::name_v<std::vector<std::vector<int>*>>;
+         std::string_view v = glz::name_v<std::vector<std::vector<int>*>>;
          expect(v == "std::vector<std::vector<int32_t>*>");
       }
       {
@@ -57,13 +54,11 @@ void tests()
 
    "unordered type name"_test = [] {
       {
-         std::string_view u =
-            glz::name_v<std::unordered_set<std::vector<std::string>>>;
+         std::string_view u = glz::name_v<std::unordered_set<std::vector<std::string>>>;
          expect(u == "std::unordered_set<std::vector<std::string>>");
       }
       {
-         std::string_view u =
-            glz::name_v<std::unordered_map<uint64_t, std::string_view>>;
+         std::string_view u = glz::name_v<std::unordered_map<uint64_t, std::string_view>>;
          expect(u == "std::unordered_map<uint64_t,std::string_view>");
       }
    };
@@ -95,12 +90,11 @@ void tests()
       auto* z = io->get<std::vector<double>>("/z");
       expect(*x == 7);
       expect(*y == 5.5);
-      expect(*z == std::vector<double>{1.0,2.0});
+      expect(*z == std::vector<double>{1.0, 2.0});
    };
 
    "function type name"_test = [] {
-      std::string_view f =
-         glz::name_v<std::function<double(const int&, const double&)>>;
+      std::string_view f = glz::name_v<std::function<double(const int&, const double&)>>;
       expect(f == "std::function<double(const int32_t&,const double&)>");
    };
 
@@ -115,6 +109,6 @@ void tests()
 int main()
 {
    tests();
-   
+
    return 0;
 }

@@ -1,9 +1,9 @@
 #pragma once
 
-#include <cstdint>
-#include <cstring>
 #include <array>
 #include <concepts>
+#include <cstdint>
+#include <cstring>
 
 #include "glaze/util/itoa.hpp"
 
@@ -13,29 +13,29 @@
 
 namespace glz
 {
-   //Source: https://github.com/ibireme/yyjson/blob/master/src/yyjson.c
+   // Source: https://github.com/ibireme/yyjson/blob/master/src/yyjson.c
 
    /** Multiplies two 64-bit unsigned integers (a * b),
        returns the 128-bit result as 'hi' and 'lo'. */
    inline void u128_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo)
    {
-   #ifdef __SIZEOF_INT128__
-   #if defined(__GNUC__) || defined(__GNUG__)
-   #pragma GCC diagnostic push
-   #pragma GCC diagnostic ignored "-Wpedantic"
-   #endif
+#ifdef __SIZEOF_INT128__
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
       unsigned __int128 m = static_cast<unsigned __int128>(a) * b;
-   #if defined(__GNUC__) || defined(__GNUG__)
-   #pragma GCC diagnostic pop
-   #endif
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
       *hi = uint64_t(m >> 64);
       *lo = uint64_t(m);
-   #elif defined(_M_X64)
+#elif defined(_M_X64)
       *lo = _umul128(a, b, hi);
-   #elif defined(_M_ARM64)
+#elif defined(_M_ARM64)
       *hi = __umulh(a, b);
       *lo = a * b;
-   #else
+#else
       uint32_t a0 = (uint32_t)(a), a1 = (uint32_t)(a >> 32);
       uint32_t b0 = (uint32_t)(b), b1 = (uint32_t)(b >> 32);
       uint64_t p00 = (uint64_t)a0 * b0, p01 = (uint64_t)a0 * b1;
@@ -46,32 +46,32 @@ namespace glz
       uint32_t m10 = (uint32_t)(m1), m11 = (uint32_t)(m1 >> 32);
       *hi = p11 + m01 + m11;
       *lo = ((uint64_t)m10 << 32) | (uint32_t)p00;
-   #endif
+#endif
    }
 
    /** Multiplies two 64-bit unsigned integers and add a value (a * b + c),
        returns the 128-bit result as 'hi' and 'lo'. */
    inline void u128_mul_add(uint64_t a, uint64_t b, uint64_t c, uint64_t *hi, uint64_t *lo)
    {
-   #ifdef __SIZEOF_INT128__
-   #if defined(__GNUC__) || defined(__GNUG__)
-   #pragma GCC diagnostic push
-   #pragma GCC diagnostic ignored "-Wpedantic"
-   #endif
+#ifdef __SIZEOF_INT128__
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
       unsigned __int128 m = static_cast<unsigned __int128>(a) * b + c;
-   #if defined(__GNUC__) || defined(__GNUG__)
-   #pragma GCC diagnostic pop
-   #endif
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic pop
+#endif
       *hi = uint64_t(m >> 64);
       *lo = uint64_t(m);
-   #else
+#else
       uint64_t h, l, t;
       u128_mul(a, b, &h, &l);
       t = l + c;
       h += ((t < l) | (t < c));
       *hi = h;
       *lo = t;
-   #endif
+#endif
    }
 
    /** Multiplies 128-bit integer and returns highest 64-bit rounded value. */
@@ -99,7 +99,7 @@ namespace glz
    /** Maximum exact decimal exponent in pow10_sig_table */
    inline constexpr auto POW10_SIG_TABLE_128_MAX_EXACT_EXP = 55;
 
-   //TODO: Remove duplicate table
+   // TODO: Remove duplicate table
    inline constexpr std::array<uint64_t, 1336> pow10_sig_table_128 = {
       0xBF29DCABA82FDEAE, 0x7432EE873880FC33, /* ~= 10^-343 */
       0xEEF453D6923BD65A, 0x113FAA2906A13B3F, /* ~= 10^-342 */
@@ -785,26 +785,26 @@ namespace glz
       *lo = pow10_sig_table_128[idx * 2 + 1];
    }
 
-   inline constexpr std::array<uint64_t, 21> exp10_int{     1ull,
-                                                            10ull,
-                                                            100ull,
-                                                            1000ull,
-                                                            10000ull,
-                                                            100000ull,
-                                                            1000000ull,
-                                                            10000000ull,
-                                                            100000000ull,
-                                                            1000000000ull,
-                                                            10000000000ull,
-                                                            100000000000ull,
-                                                            1000000000000ull,
-                                                            10000000000000ull,
-                                                            100000000000000ull,
-                                                            1000000000000000ull,
-                                                            10000000000000000ull,
-                                                            100000000000000000ull,
-                                                            1000000000000000000ull,
-                                                            10000000000000000000ull};
+   inline constexpr std::array<uint64_t, 21> exp10_int{1ull,
+                                                       10ull,
+                                                       100ull,
+                                                       1000ull,
+                                                       10000ull,
+                                                       100000ull,
+                                                       1000000ull,
+                                                       10000000ull,
+                                                       100000000ull,
+                                                       1000000000ull,
+                                                       10000000000ull,
+                                                       100000000000ull,
+                                                       1000000000000ull,
+                                                       10000000000000ull,
+                                                       100000000000000ull,
+                                                       1000000000000000ull,
+                                                       10000000000000000ull,
+                                                       100000000000000000ull,
+                                                       1000000000000000000ull,
+                                                       10000000000000000000ull};
 
    /**
     Convert double number from binary to decimal.
@@ -828,7 +828,8 @@ namespace glz
     @param exp_dec The output value of exponent in decimal.
     @warning The input double number should not be 0, inf, nan.
     */
-   inline void f64_bin_to_dec(uint64_t sig_raw, int32_t exp_raw, uint64_t sig_bin, int32_t exp_bin, uint64_t *sig_dec, int32_t *exp_dec)
+   inline void f64_bin_to_dec(uint64_t sig_raw, int32_t exp_raw, uint64_t sig_bin, int32_t exp_bin, uint64_t *sig_dec,
+                              int32_t *exp_dec)
    {
       bool is_even, lower_bound_closer, u_inside, w_inside, round_up;
       uint64_t s, sp, cb, cbl, cbr, vb, vbl, vbr, pow10hi, pow10lo, upper, lower, mid;
@@ -899,17 +900,17 @@ namespace glz
     */
    inline char *write_u64_len_15_to_17_trim(char *buf, uint64_t sig)
    {
-      bool lz;          /* leading zero */
+      bool lz;               /* leading zero */
       uint32_t tz1, tz2, tz; /* trailing zero */
 
       uint32_t abbccddee = uint32_t(sig / 100000000);
       uint32_t ffgghhii = uint32_t(sig - uint64_t(abbccddee) * 100000000);
-      uint32_t abbcc = abbccddee / 10000;                /* (abbccddee / 10000) */
-      uint32_t ddee = abbccddee - abbcc * 10000;         /* (abbccddee % 10000) */
+      uint32_t abbcc = abbccddee / 10000;                        /* (abbccddee / 10000) */
+      uint32_t ddee = abbccddee - abbcc * 10000;                 /* (abbccddee % 10000) */
       uint32_t abb = uint32_t((uint64_t(abbcc) * 167773) >> 24); /* (abbcc / 100) */
-      uint32_t a = (abb * 41) >> 12;                     /* (abb / 100) */
-      uint32_t bb = abb - a * 100;                       /* (abb % 100) */
-      uint32_t cc = abbcc - abb * 100;                   /* (abbcc % 100) */
+      uint32_t a = (abb * 41) >> 12;                             /* (abb / 100) */
+      uint32_t bb = abb - a * 100;                               /* (abb % 100) */
+      uint32_t cc = abbcc - abb * 100;                           /* (abbcc % 100) */
 
       /* write abbcc */
       buf[0] = uint8_t(a + '0');
@@ -917,30 +918,30 @@ namespace glz
       lz = bb < 10 && a == 0;
       std::memcpy(buf, char_table + (bb * 2 + lz), 2);
       buf -= lz;
-      std::memcpy(buf + 2, char_table + 2*cc, 2);
+      std::memcpy(buf + 2, char_table + 2 * cc, 2);
 
       if (ffgghhii) {
-         uint32_t dd = (ddee * 5243) >> 19;                        /* (ddee / 100) */
-         uint32_t ee = ddee - dd * 100;                            /* (ddee % 100) */
+         uint32_t dd = (ddee * 5243) >> 19;                                /* (ddee / 100) */
+         uint32_t ee = ddee - dd * 100;                                    /* (ddee % 100) */
          uint32_t ffgg = uint32_t((uint64_t(ffgghhii) * 109951163) >> 40); /* (val / 10000) */
-         uint32_t hhii = ffgghhii - ffgg * 10000;                  /* (val % 10000) */
-         uint32_t ff = (ffgg * 5243) >> 19;                        /* (aabb / 100) */
-         uint32_t gg = ffgg - ff * 100;                            /* (aabb % 100) */
+         uint32_t hhii = ffgghhii - ffgg * 10000;                          /* (val % 10000) */
+         uint32_t ff = (ffgg * 5243) >> 19;                                /* (aabb / 100) */
+         uint32_t gg = ffgg - ff * 100;                                    /* (aabb % 100) */
          //((uint16_t *)buf)[2] = ((const uint16_t *)char_table)[dd];
-         std::memcpy(buf + 4, char_table + 2*dd, 2);
+         std::memcpy(buf + 4, char_table + 2 * dd, 2);
          //((uint16_t *)buf)[3] = ((const uint16_t *)char_table)[ee];
-         std::memcpy(buf + 6, char_table + 2*ee, 2);
+         std::memcpy(buf + 6, char_table + 2 * ee, 2);
          //((uint16_t *)buf)[4] = ((const uint16_t *)char_table)[ff];
-         std::memcpy(buf + 8, char_table + 2*ff, 2);
+         std::memcpy(buf + 8, char_table + 2 * ff, 2);
          //((uint16_t *)buf)[5] = ((const uint16_t *)char_table)[gg];
-         std::memcpy(buf + 10, char_table + 2*gg, 2);
+         std::memcpy(buf + 10, char_table + 2 * gg, 2);
          if (hhii) {
             uint32_t hh = (hhii * 5243) >> 19; /* (ccdd / 100) */
             uint32_t ii = hhii - hh * 100;     /* (ccdd % 100) */
             //((uint16_t *)buf)[6] = ((const uint16_t *)char_table)[hh];
-            std::memcpy(buf + 12, char_table + 2*hh, 2);
+            std::memcpy(buf + 12, char_table + 2 * hh, 2);
             //((uint16_t *)buf)[7] = ((const uint16_t *)char_table)[ii];
-            std::memcpy(buf + 14, char_table + 2*ii, 2);
+            std::memcpy(buf + 14, char_table + 2 * ii, 2);
             tz1 = dec_trailing_zero_table[hh];
             tz2 = dec_trailing_zero_table[ii];
             tz = ii ? tz2 : (tz1 + 2);
@@ -960,9 +961,9 @@ namespace glz
             uint32_t dd = (ddee * 5243) >> 19; /* (ddee / 100) */
             uint32_t ee = ddee - dd * 100;     /* (ddee % 100) */
             //((uint16_t *)buf)[2] = ((const uint16_t *)char_table)[dd];
-            std::memcpy(buf + 4, char_table + 2*dd, 2);
+            std::memcpy(buf + 4, char_table + 2 * dd, 2);
             //((uint16_t *)buf)[3] = ((const uint16_t *)char_table)[ee];
-            std::memcpy(buf + 6, char_table + 2*ee, 2);
+            std::memcpy(buf + 6, char_table + 2 * ee, 2);
             tz1 = dec_trailing_zero_table[dd];
             tz2 = dec_trailing_zero_table[ee];
             tz = ee ? tz2 : (tz1 + 2);
@@ -979,8 +980,7 @@ namespace glz
       }
    }
 
-    consteval uint32_t numbits(uint32_t x) { return x < 2 ? x : 1 + numbits(x >> 1); }
-
+   consteval uint32_t numbits(uint32_t x) { return x < 2 ? x : 1 + numbits(x >> 1); }
 
    template <std::floating_point T>
    inline char *to_chars(char *buffer, T val) noexcept
@@ -1025,11 +1025,11 @@ namespace glz
                int32_t(exp_raw) - (std::numeric_limits<T>::max_exponent - 1) - (std::numeric_limits<T>::digits - 1);
          }
 
-         //if constexpr (std::same_as<T, float>) {
-         //   constexpr auto shift = std::numeric_limits<double>::digits - std::numeric_limits<float>::digits;
-         //   sig_bin <<= shift;
-         //   exp_bin -= shift;
-         //}
+         // if constexpr (std::same_as<T, float>) {
+         //    constexpr auto shift = std::numeric_limits<double>::digits - std::numeric_limits<float>::digits;
+         //    sig_bin <<= shift;
+         //    exp_bin -= shift;
+         // }
 
          /* binary to decimal */
          uint64_t sig_dec;
@@ -1098,9 +1098,8 @@ namespace glz
                return buffer + 3;
             }
          }
-
       }
-       else [[unlikely]] {
+      else [[unlikely]] {
          *buffer = '0';
          return buffer + 1;
       }

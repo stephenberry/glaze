@@ -14,21 +14,15 @@ namespace glz
 
       constexpr string_literal() = default;
 
-      constexpr string_literal(const char (&str)[N])
-      {
-         std::copy_n(str, N, value);
-      }
+      constexpr string_literal(const char (&str)[N]) { std::copy_n(str, N, value); }
 
       char value[N];
-      constexpr const char *end() const noexcept { return value + size; }
+      constexpr const char* end() const noexcept { return value + size; }
 
-      constexpr const std::string_view sv() const noexcept
-      {
-         return {value, size};
-      }
+      constexpr const std::string_view sv() const noexcept { return {value, size}; }
    };
 
-   template<size_t N>
+   template <size_t N>
    constexpr auto string_literal_from_view(sv str)
    {
       string_literal<N + 1> sl{};
@@ -36,7 +30,6 @@ namespace glz
       *(sl.value + N) = '\0';
       return sl;
    }
-
 
    template <size_t N>
    constexpr size_t length(char const (&)[N]) noexcept
@@ -47,18 +40,18 @@ namespace glz
    template <string_literal Str>
    struct chars_impl
    {
-      static constexpr std::string_view value{Str.value,
-                                              length(Str.value) - 1};
+      static constexpr std::string_view value{Str.value, length(Str.value) - 1};
    };
 
    template <string_literal Str>
    inline constexpr std::string_view chars = chars_impl<Str>::value;
-   
+
    template <const std::string_view& Str>
-   struct stringer_impl {
+   struct stringer_impl
+   {
       static constexpr std::string_view value = Str;
    };
-   
+
    template <const std::string_view& Str>
    inline constexpr std::string_view stringer = stringer_impl<Str>::value;
 }

@@ -3,20 +3,18 @@
 
 #pragma once
 
-#include "glaze/util/string_view.hpp"
-#include "glaze/util/for_each.hpp"
-#include "glaze/tuplet/tuple.hpp"
-
 #include <tuple>
+
+#include "glaze/tuplet/tuple.hpp"
+#include "glaze/util/for_each.hpp"
+#include "glaze/util/string_view.hpp"
 
 namespace glz
 {
    template <class T>
    concept is_std_tuple = is_specialization_v<T, std::tuple> || is_specialization_v<T, std::pair>;
-   
-   inline constexpr auto size_impl(auto&& t) {
-       return std::tuple_size_v<std::decay_t<decltype(t)>>;
-   }
+
+   inline constexpr auto size_impl(auto&& t) { return std::tuple_size_v<std::decay_t<decltype(t)>>; }
 
    template <class T>
    inline constexpr size_t size_v = std::tuple_size_v<std::decay_t<T>>;
@@ -37,8 +35,7 @@ namespace glz
       static constexpr auto is = std::make_index_sequence<N / 2>{};
       return std::make_pair(detail::tuple_split_impl<0>(tuple, is), detail::tuple_split_impl<1>(tuple, is));
    }
-   
-   
+
    // group builder code
    template <size_t N>
    constexpr auto shrink_index_array(auto&& arr)
@@ -51,21 +48,20 @@ namespace glz
    }
 
    template <class Tuple>
-   constexpr auto filter() {
+   constexpr auto filter()
+   {
       constexpr auto n = std::tuple_size_v<Tuple>;
       std::array<size_t, n> indices{};
       size_t i = 0;
-      for_each<n>(
-         [&](auto I) {
-            using V = std::decay_t<std::tuple_element_t<I, Tuple>>;
-            if constexpr (!std::convertible_to<V, std::string_view>) {
-               indices[i++] = I - 1;
-            }
+      for_each<n>([&](auto I) {
+         using V = std::decay_t<std::tuple_element_t<I, Tuple>>;
+         if constexpr (!std::convertible_to<V, std::string_view>) {
+            indices[i++] = I - 1;
          }
-      );
+      });
       return std::make_pair(indices, i);
    }
-   
+
    namespace detail
    {
       template <class Func, class Tuple, std::size_t... Is>
@@ -74,28 +70,24 @@ namespace glz
          return tuplet::make_tuple(f(tuplet::get<Is>(tuple))...);
       }
    }
-   
+
    template <class Func, class Tuple>
    inline constexpr auto map_tuple(Func&& f, Tuple&& tuple)
    {
       constexpr auto N = std::tuple_size_v<std::decay_t<Tuple>>;
       return detail::map_tuple(f, tuple, std::make_index_sequence<N>{});
    }
-   
+
    template <class M>
    inline constexpr void check_member()
    {
       constexpr auto N = std::tuple_size_v<M>;
-      
-      static_assert(N == 0 || N > 1,
-                    "members need at least a name and a member pointer");
-      static_assert(N < 4,
-         "only member_ptr (or enum, or lambda), name, and comment are supported at the momment");
-      
-      
+
+      static_assert(N == 0 || N > 1, "members need at least a name and a member pointer");
+      static_assert(N < 4, "only member_ptr (or enum, or lambda), name, and comment are supported at the momment");
+
       if constexpr (N > 0)
-         static_assert(sv_convertible<std::tuple_element_t<0, M>>,
-                       "first element should be the name");
+         static_assert(sv_convertible<std::tuple_element_t<0, M>>, "first element should be the name");
       /*if constexpr (N > 1) {
        TODO: maybe someday add better error messaging that handles lambdas
          using E = std::tuple_element_t<1, M>;
@@ -103,20 +95,19 @@ namespace glz
                        "second element should be the member pointer");
       }*/
       if constexpr (N > 2)
-         static_assert(sv_convertible<std::tuple_element_t<2, M>>,
-                       "third element should be a string comment");
+         static_assert(sv_convertible<std::tuple_element_t<2, M>>, "third element should be a string comment");
    }
 
    template <size_t n_groups>
    constexpr auto group_sizes(const std::array<size_t, n_groups>& indices, size_t n_total)
    {
-       std::array<size_t, n_groups> diffs;
-       
-       for (size_t i = 0; i < n_groups - 1; ++i) {
-           diffs[i] = indices[i + 1] - indices[i];
-       }
-       diffs[n_groups - 1] = n_total - indices[n_groups - 1];
-       return diffs;
+      std::array<size_t, n_groups> diffs;
+
+      for (size_t i = 0; i < n_groups - 1; ++i) {
+         diffs[i] = indices[i + 1] - indices[i];
+      }
+      diffs[n_groups - 1] = n_total - indices[n_groups - 1];
+      return diffs;
    }
 
    template <size_t Start, class Tuple, size_t... Is>
@@ -132,7 +123,7 @@ namespace glz
          }
       };
       auto r = glz::tuplet::make_copy_tuple(get_elem(std::integral_constant<size_t, Is>{})...);
-      //check_member<decltype(r)>();
+      // check_member<decltype(r)>();
       return r;
    }
 
@@ -140,17 +131,17 @@ namespace glz
    constexpr auto make_groups_impl(Tuple&& t, std::index_sequence<GroupNumber...>)
    {
       return glz::tuplet::make_copy_tuple(make_group<get<GroupNumber>(GroupStartArr)>(
-                                                                             t, std::make_index_sequence<std::get<GroupNumber>(GroupSizeArr)>{})...);
+         t, std::make_index_sequence<std::get<GroupNumber>(GroupSizeArr)>{})...);
    }
 
    template <class Tuple>
    constexpr auto make_groups_helper()
    {
-       constexpr auto N = std::tuple_size_v<Tuple>;
+      constexpr auto N = std::tuple_size_v<Tuple>;
 
-       constexpr auto filtered = filter<Tuple>();
-       constexpr auto starts = shrink_index_array<filtered.second>(filtered.first);
-       constexpr auto sizes = group_sizes(starts, N);
+      constexpr auto filtered = filter<Tuple>();
+      constexpr auto starts = shrink_index_array<filtered.second>(filtered.first);
+      constexpr auto sizes = group_sizes(starts, N);
 
       return glz::tuplet::make_tuple(starts, sizes);
    }

@@ -2,8 +2,8 @@
 // For the license information refer to glaze.hpp
 #pragma once
 
-#include "glaze/json/write.hpp"
 #include "glaze/api/impl.hpp"
+#include "glaze/json/write.hpp"
 
 namespace glz
 {
@@ -31,8 +31,8 @@ namespace glz
          std::optional<std::string_view> _const{};
          std::optional<std::string_view> description{};
          std::optional<std::map<std::string_view, schema_ref, std::less<>>> properties{};  // glaze_object
-         std::optional<schema_ref> items{};                                        // array
-         std::optional<std::variant<bool, schema_ref>> additionalProperties{};               // map
+         std::optional<schema_ref> items{};                                                // array
+         std::optional<std::variant<bool, schema_ref>> additionalProperties{};             // map
          std::optional<std::map<std::string_view, schema, std::less<>>> defs{};
          std::optional<std::vector<std::string_view>> _enum{};  // enum
          std::optional<std::vector<schema>> oneOf{};
@@ -72,8 +72,8 @@ namespace glz
       };
 
       template <class T>
-      requires(std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> ||
-               std::same_as<T, std::vector<bool>::const_reference>)
+         requires(std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> ||
+                  std::same_as<T, std::vector<bool>::const_reference>)
       struct to_json_schema<T>
       {
          template <auto Opts>
@@ -99,7 +99,7 @@ namespace glz
       };
 
       template <class T>
-      requires str_t<T> || char_t<T>
+         requires str_t<T> || char_t<T>
       struct to_json_schema<T>
       {
          template <auto Opts>
@@ -120,11 +120,11 @@ namespace glz
             // TODO use oneOf instead of enum to handle doc comments
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
-            //s._enum = std::vector<std::string_view>(N);
-            //for_each<N>([&](auto I) {
-            //   static constexpr auto item = std::get<I>(meta_v<V>);
-            //   (*s._enum)[I.value] = std::get<0>(item);
-            //});
+            // s._enum = std::vector<std::string_view>(N);
+            // for_each<N>([&](auto I) {
+            //    static constexpr auto item = std::get<I>(meta_v<V>);
+            //    (*s._enum)[I.value] = std::get<0>(item);
+            // });
             s.oneOf = std::vector<schema>(N);
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
@@ -138,7 +138,7 @@ namespace glz
       };
 
       template <class T>
-      requires std::same_as<std::decay_t<T>, raw_json>
+         requires std::same_as<std::decay_t<T>, raw_json>
       struct to_json_schema<T>
       {
          template <auto Opts>
@@ -170,7 +170,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& s, auto& defs) noexcept
          {
-            using V = std::decay_t<std::tuple_element_t<1,range_value_t<std::decay_t<T>>>>;
+            using V = std::decay_t<std::tuple_element_t<1, range_value_t<std::decay_t<T>>>>;
             s.type = {"object"};
             auto& def = defs[name_v<V>];
             if (!def.type) {
@@ -204,7 +204,7 @@ namespace glz
             for_each<N>([&](auto I) {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I.value];
-               //TODO use ref to avoid duplication in schema
+               // TODO use ref to avoid duplication in schema
                to_json_schema<V>::template op<Opts>(schema_val, defs);
                constexpr bool glaze_object = glaze_object_t<V>;
                if constexpr (glaze_object) {
@@ -214,15 +214,15 @@ namespace glz
                   }
                   if constexpr (!tag_v<T>.empty()) {
                      (*schema_val.properties)[tag_v<T>] = schema_ref{join_v<chars<"#/$defs/">, name_v<std::string>>};
-                     //TODO use enum or oneOf to get the ids_v to validate type name
-                  } 
+                     // TODO use enum or oneOf to get the ids_v to validate type name
+                  }
                }
             });
          }
       };
 
       template <class T>
-      requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
+         requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
       struct to_json_schema<T>
       {
          template <auto Opts>
@@ -254,7 +254,7 @@ namespace glz
                   to_json_schema<val_t>::template op<Opts>(def, defs);
                }
                auto ref_val = schema_ref{join_v<chars<"#/$defs/">, name_v<val_t>>};
-               if constexpr (std::tuple_size_v<decltype(item)> > 2) {
+               if constexpr (std::tuple_size_v < decltype(item) >> 2) {
                   ref_val.description = glz::tuplet::get<2>(item);
                }
                (*s.properties)[glz::tuplet::get<0>(item)] = ref_val;

@@ -9,17 +9,10 @@ namespace glz
 {
    namespace detail
    {
-      enum class general_state : uint32_t {
-         NORMAL,
-         ESCAPED,
-         STRING,
-         BEFORE_ASTERISK,
-         COMMENT,
-         BEFORE_FSLASH
-      };
+      enum class general_state : uint32_t { NORMAL, ESCAPED, STRING, BEFORE_ASTERISK, COMMENT, BEFORE_FSLASH };
 
       inline void prettify_normal_state(const char c, auto& out, uint32_t& indent, auto nl,
-                                 general_state& state) noexcept
+                                        general_state& state) noexcept
       {
          switch (c) {
          case ',':
@@ -109,8 +102,7 @@ namespace glz
    /// <summary>
    /// pretty print a JSON string
    /// </summary>
-   inline void prettify(const auto& in, auto& out, const bool tabs = false,
-                 const uint32_t indent_size = 3) noexcept
+   inline void prettify(const auto& in, auto& out, const bool tabs = false, const uint32_t indent_size = 3) noexcept
    {
       out.reserve(in.size());
       uint32_t indent{};
@@ -141,8 +133,7 @@ namespace glz
    /// <summary>
    /// allocating version of prettify
    /// </summary>
-   inline std::string prettify(const auto& in, const bool tabs = false,
-                 const uint32_t indent_size = 3) noexcept
+   inline std::string prettify(const auto& in, const bool tabs = false, const uint32_t indent_size = 3) noexcept
    {
       std::string out{};
       prettify(in, out, tabs, indent_size);

@@ -3,12 +3,12 @@
 
 #pragma once
 
-#include "glaze/api/hash.hpp"
-#include "glaze/util/string_view.hpp"
-#include "glaze/core/meta.hpp"
-#include "glaze/core/common.hpp"
-
 #include <array>
+
+#include "glaze/api/hash.hpp"
+#include "glaze/core/common.hpp"
+#include "glaze/core/meta.hpp"
+#include "glaze/util/string_view.hpp"
 
 namespace glz
 {
@@ -17,41 +17,42 @@ namespace glz
    {
       using sv = std::string_view;
       static constexpr sv type_name_unhashed = name_v<T>;
-      static constexpr sv type_name_hash = hash128_v<type_name_unhashed>; // must hash for consistent length
-      
-      static constexpr sv type_size_hash = hash128_v<int_to_sv_v<size_t, sizeof(T)>>; // must hash for consistent length
-      
-      static constexpr sv major_version = hash128_i_v<version<T>[0]>; // must hash for consistent length
-      static constexpr sv minor_version = hash128_i_v<version<T>[1]>; // must hash for consistent length
-      static constexpr sv revision = hash128_i_v<version<T>[2]>; // must hash for consistent length
-      
+      static constexpr sv type_name_hash = hash128_v<type_name_unhashed>;  // must hash for consistent length
+
+      static constexpr sv type_size_hash =
+         hash128_v<int_to_sv_v<size_t, sizeof(T)>>;  // must hash for consistent length
+
+      static constexpr sv major_version = hash128_i_v<version<T>[0]>;  // must hash for consistent length
+      static constexpr sv minor_version = hash128_i_v<version<T>[1]>;  // must hash for consistent length
+      static constexpr sv revision = hash128_i_v<version<T>[2]>;       // must hash for consistent length
+
 #define std_trait(x) static constexpr sv x = to_sv<std::x##_v<T>>()
       std_trait(is_trivial);
       std_trait(is_standard_layout);
-      
+
       std_trait(is_default_constructible);
       std_trait(is_trivially_default_constructible);
       std_trait(is_nothrow_default_constructible);
-      
+
       std_trait(is_trivially_copyable);
-      
+
       std_trait(is_move_constructible);
       std_trait(is_trivially_move_constructible);
       std_trait(is_nothrow_move_constructible);
-      
+
       std_trait(is_destructible);
       std_trait(is_trivially_destructible);
       std_trait(is_nothrow_destructible);
-      
+
       std_trait(has_unique_object_representations);
-      
+
       std_trait(is_polymorphic);
       std_trait(has_virtual_destructor);
       std_trait(is_aggregate);
 #undef std_trait
-      
-      //static constexpr sv cplusplus = empty_if<std::is_standard_layout_v<T>>(to_sv<__cplusplus>());
-      
+
+      // static constexpr sv cplusplus = empty_if<std::is_standard_layout_v<T>>(to_sv<__cplusplus>());
+
 #ifdef __clang__
       static constexpr sv clang = "clang";
 #endif
@@ -61,64 +62,53 @@ namespace glz
 #ifdef _MSC_VER
       static constexpr sv msvc = "msvc";
 #endif
-      
-      static constexpr sv blank = ""; // to end possible macros
+
+      static constexpr sv blank = "";  // to end possible macros
 
       static constexpr sv members = glz::name_v<glz::detail::member_tuple_t<T>>;
-      
-      static constexpr sv to_hash = detail::join_v<
-      type_name_hash,
-      
-      type_size_hash,
-      
-      major_version,
-      minor_version,
-      revision,
-      
-      is_trivial,
-      is_standard_layout,
-      
-      is_default_constructible,
-      is_trivially_default_constructible,
-      is_nothrow_default_constructible,
-      
-      is_trivially_copyable,
-      
-      is_move_constructible,
-      is_trivially_move_constructible,
-      is_nothrow_move_constructible,
-      
-      is_destructible,
-      is_trivially_destructible,
-      is_nothrow_destructible,
-      
-      has_unique_object_representations,
-      
-      is_polymorphic,
-      has_virtual_destructor,
-      is_aggregate,
-      
+
+      static constexpr sv to_hash =
+         detail::join_v<type_name_hash,
+
+                        type_size_hash,
+
+                        major_version, minor_version, revision,
+
+                        is_trivial, is_standard_layout,
+
+                        is_default_constructible, is_trivially_default_constructible, is_nothrow_default_constructible,
+
+                        is_trivially_copyable,
+
+                        is_move_constructible, is_trivially_move_constructible, is_nothrow_move_constructible,
+
+                        is_destructible, is_trivially_destructible, is_nothrow_destructible,
+
+                        has_unique_object_representations,
+
+                        is_polymorphic, has_virtual_destructor, is_aggregate,
+
 #ifdef __clang__
-      clang,
+                        clang,
 #endif
 #ifdef __GNUC__
-      gnuc,
+                        gnuc,
 #endif
 #ifdef _MSC_VER
-      msvc,
+                        msvc,
 #endif
-      blank,
+                        blank,
 
-      members
-      >;
-      
-   private:
+                        members>;
+
+     private:
       static constexpr sv v = "v";
       static constexpr sv comma = ",";
-   public:
+
+     public:
       static constexpr sv version_sv = detail::join_v<v, major_version, comma, minor_version, comma, revision>;
       static constexpr version_t version = ::glz::version<T>;
-      
+
       static constexpr sv hash = hash128_v<to_hash>;
    };
 

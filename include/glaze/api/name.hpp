@@ -6,10 +6,10 @@
 #include <algorithm>
 #include <string_view>
 
-#include "glaze/util/type_traits.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/string_literal.hpp"
+#include "glaze/util/type_traits.hpp"
 
 namespace glz
 {
@@ -59,7 +59,7 @@ namespace glz
 #endif
       static constexpr auto join_v = join<Strs...>::value;
    }
-   
+
    /*template <class T>
    concept has_glaze_name = requires {
        T::glaze_name;
