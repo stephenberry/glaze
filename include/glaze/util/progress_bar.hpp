@@ -15,11 +15,11 @@ namespace glz
       size_t completed{};
       size_t total{};
       double time_taken{};
-      
+
       std::string string() const
       {
          std::string s{};
-         
+
          const size_t one = 1;
          const auto one_or_total = (std::max)(total, one);
          const auto one_or_completed = (std::min)(completed, one_or_total);
@@ -50,7 +50,7 @@ namespace glz
          s += " " + std::to_string(std::lround(percentage)) + "%";
          s += " | ETA: " + std::to_string(minutes) + "m " + std::to_string(seconds) + "s";
          s += " | " + std::to_string(one_or_completed) + "/" + std::to_string(one_or_total);
-         
+
          // TODO: use std::format when available
          /*fmt::format_to(std::back_inserter(s), FMT_COMPILE(" {}% | ETA: {}m {}s | {}/{}"), //
                         std::round(percentage), //
@@ -62,7 +62,7 @@ namespace glz
       }
    };
 
-   inline std::ostream& operator<<(std::ostream &o, const progress_bar& bar)
+   inline std::ostream& operator<<(std::ostream& o, const progress_bar& bar)
    {
       o << bar.string();
       return o;

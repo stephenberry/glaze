@@ -12,16 +12,14 @@ namespace glz
 {
    namespace detail
    {
-      template <class Variant, size_t...I>
+      template <class Variant, size_t... I>
       constexpr std::string_view variant_name_impl(std::index_sequence<I...>)
       {
-            return join_v<
-               chars<"std::variant<">,
-                  std::conditional_t<I != std::variant_size_v<Variant> - 1,
-                  join<name_v<std::variant_alternative_t<I, Variant>>, chars<",">>,
-                  join<name_v<std::variant_alternative_t<I, Variant>>>
-               >::value...,
-               chars<">">>;
+         return join_v<chars<"std::variant<">,
+                       std::conditional_t<I != std::variant_size_v<Variant> - 1,
+                                          join<name_v<std::variant_alternative_t<I, Variant>>, chars<",">>,
+                                          join<name_v<std::variant_alternative_t<I, Variant>>>>::value...,
+                       chars<">">>;
       }
    }
 

@@ -16,7 +16,6 @@ namespace glz
    struct meta<T>
    {
       using V = typename T::element_type;
-      static constexpr std::string_view name =
-         detail::join_v<chars<"std::unique_ptr<">, name_v<V>, chars<">">>;
+      static constexpr std::string_view name = detail::join_v<chars<"std::unique_ptr<">, name_v<V>, chars<">">>;
    };
 }

@@ -10,8 +10,7 @@
 
 namespace glz
 {
-   enum class error_code : uint32_t
-   {
+   enum class error_code : uint32_t {
       none,
       no_read_input,
       data_must_be_null_terminated,
@@ -57,34 +56,26 @@ namespace glz
       unknown_distribution,
       invalid_distribution_elements
    };
-   
+
    struct parse_error final
    {
       error_code ec{};
       size_t location{};
-      
-      operator bool() const {
-         return ec != error_code::none;
-      }
-      
-      bool operator==(const error_code e) const {
-         return ec == e;
-      }
+
+      operator bool() const { return ec != error_code::none; }
+
+      bool operator==(const error_code e) const { return ec == e; }
    };
-   
+
    struct write_error final
    {
       error_code ec{};
-      
-      operator bool() const {
-         return ec != error_code::none;
-      }
-      
-      bool operator==(const error_code e) const {
-         return ec == e;
-      }
+
+      operator bool() const { return ec != error_code::none; }
+
+      bool operator==(const error_code e) const { return ec == e; }
    };
-   
+
    // Runtime context for configuration
    // We do not template the context on iterators so that it can be easily shared across buffer implementations
    struct context final
@@ -94,7 +85,7 @@ namespace glz
       std::string current_file;  // top level file path
       error_code error{};
    };
-   
+
    template <class T>
    concept is_context = std::same_as<std::decay_t<T>, context>;
 }

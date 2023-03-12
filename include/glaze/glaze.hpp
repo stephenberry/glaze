@@ -33,31 +33,31 @@
 #pragma once
 
 #include "glaze/binary.hpp"
-#include "glaze/json.hpp"
 #include "glaze/file/file_ops.hpp"
+#include "glaze/json.hpp"
 #include "glaze/record/recorder.hpp"
 
 namespace glz
 {
    template <class T>
-   inline parse_error read_file(T& value, const sv file_name) noexcept {
-      
+   inline parse_error read_file(T& value, const sv file_name) noexcept
+   {
       context ctx{};
       ctx.current_file = file_name;
-      
+
       std::string buffer;
-      
-      std::filesystem::path path{ file_name };
-      
+
+      std::filesystem::path path{file_name};
+
       const auto ec = file_to_buffer(buffer, ctx.current_file);
-      
+
       if (static_cast<bool>(ec)) {
-         return { ec };
+         return {ec};
       }
-      
+
       if (path.has_extension()) {
          const auto extension = path.extension().string();
-         
+
          if (extension == ".json" || extension == ".jsonc") {
             return read<opts{}>(value, buffer, ctx);
          }
@@ -65,27 +65,27 @@ namespace glz
             return read<opts{.format = binary}>(value, buffer, ctx);
          }
          else {
-            return { error_code::file_extension_not_supported };
+            return {error_code::file_extension_not_supported};
          }
       }
       else {
-         return { error_code::could_not_determine_extension };
+         return {error_code::could_not_determine_extension};
       }
    }
-   
+
    template <class T>
-   [[nodiscard]] inline write_error write_file(T& value, const sv file_name) {
-      
+   [[nodiscard]] inline write_error write_file(T& value, const sv file_name)
+   {
       context ctx{};
       ctx.current_file = file_name;
-      
+
       std::string buffer;
-      
-      std::filesystem::path path{ file_name };
-      
+
+      std::filesystem::path path{file_name};
+
       if (path.has_extension()) {
          const auto extension = path.extension().string();
-         
+
          if (extension == ".json") {
             write<opts{}>(value, buffer, ctx);
          }
@@ -96,22 +96,22 @@ namespace glz
             write<opts{.format = binary}>(value, buffer, ctx);
          }
          else {
-            return { error_code::file_extension_not_supported };
+            return {error_code::file_extension_not_supported};
          }
       }
       else {
-         return { error_code::could_not_determine_extension };
+         return {error_code::could_not_determine_extension};
       }
-      
-      std::ofstream file(std::string{ file_name });
-      
+
+      std::ofstream file(std::string{file_name});
+
       if (file) {
          file << buffer;
       }
       else {
-         return { error_code::file_open_failure };
+         return {error_code::file_open_failure};
       }
-      
+
       return {};
    }
 }

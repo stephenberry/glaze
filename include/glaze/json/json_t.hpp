@@ -3,12 +3,13 @@
 
 #pragma once
 
+#include <stddef.h>
+
+#include <concepts>
+#include <map>
+#include <stdexcept>
 #include <variant>
 #include <vector>
-#include <map>
-#include <stddef.h>
-#include <stdexcept>
-#include <concepts>
 
 namespace glz
 {
@@ -99,24 +100,28 @@ namespace glz
       json_t() = default;
 
       template <class T>
-      requires std::convertible_to<T, val_t> && (!std::same_as<json_t, std::decay_t<T>>)
+         requires std::convertible_to<T, val_t> && (!std::same_as<json_t, std::decay_t<T>>)
       json_t(T&& val)
       {
          data = val;
       }
 
       template <class T>
-      requires std::convertible_to<T, double> && (!std::same_as<json_t, std::decay_t<T>>) &&(!std::convertible_to<T, val_t>) json_t(T&& val) {
+         requires std::convertible_to<T, double> && (!std::same_as<json_t, std::decay_t<T>>) &&
+                  (!std::convertible_to<T, val_t>)
+      json_t(T&& val)
+      {
          data = static_cast<double>(val);
       }
 
-      json_t(std::initializer_list<std::pair<const char *, json_t>>&& obj)
+      json_t(std::initializer_list<std::pair<const char*, json_t>>&& obj)
       {
          // TODO try to see if there is a beter way to do this initialization withought copying the json_t
-         // std::string in std::initializer_list<std::pair<const std::string, json_t>> would match with {"literal", "other_literal"}
-         // So we cant use std::string or std::string view.
-         // Luckily const char * will not match with {"literal", "other_literal"} but then we have to copy the data from the initializer list
-         // data = object_t(obj); // This is what we would use if std::initializer_list<std::pair<const std::string, json_t>> worked
+         // std::string in std::initializer_list<std::pair<const std::string, json_t>> would match with {"literal",
+         // "other_literal"} So we cant use std::string or std::string view. Luckily const char * will not match with
+         // {"literal", "other_literal"} but then we have to copy the data from the initializer list data =
+         // object_t(obj); // This is what we would use if std::initializer_list<std::pair<const std::string, json_t>>
+         // worked
          data = object_t{};
          auto& data_obj = std::get<object_t>(data);
          for (auto&& pair : obj) {
@@ -139,16 +144,16 @@ namespace glz
       }
 
       template <class T>
-      requires std::convertible_to<double, T> T as()
-      const
+         requires std::convertible_to<double, T>
+      T as() const
       {
          // Can be used for int and the like
          return static_cast<T>(get<double>());
       }
 
       template <class T>
-      requires std::convertible_to<std::string, T> T as()
-      const
+         requires std::convertible_to<std::string, T>
+      T as() const
       {
          // Can be used for string_view and the like
          return get<std::string>();

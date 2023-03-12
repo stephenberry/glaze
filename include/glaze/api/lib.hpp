@@ -3,11 +3,11 @@
 
 #pragma once
 
-#include "glaze/api/api.hpp"
-
-#include <string_view>
 #include <filesystem>
 #include <map>
+#include <string_view>
+
+#include "glaze/api/api.hpp"
 
 #if defined(_WIN32) || defined(__CYGWIN__)
 #ifndef GLAZE_API_ON_WINDOWS
@@ -45,12 +45,13 @@ namespace glz
 
    struct lib_loader final
    {
-      using create = glz::iface_fn(*)(void);
+      using create = glz::iface_fn (*)(void);
 
       iface api_map{};
       std::vector<lib_t> loaded_libs{};
 
-      void load(const sv path) {
+      void load(const sv path)
+      {
          const std::filesystem::path libpath(path);
          if (std::filesystem::is_directory(libpath)) {
             load_libs(path);
@@ -73,10 +74,7 @@ namespace glz
          }
       }
 
-      auto& operator[](const sv lib_name)
-      {
-         return api_map[std::string(lib_name)];
-      }
+      auto& operator[](const sv lib_name) { return api_map[std::string(lib_name)]; }
 
       lib_loader() = default;
       lib_loader(const lib_loader&) = delete;
@@ -89,7 +87,7 @@ namespace glz
       ~lib_loader()
       {
          api_map.clear();
-         for(const auto &lib: loaded_libs) {
+         for (const auto& lib : loaded_libs) {
 #ifdef GLAZE_API_ON_WINDOWS
             FreeLibrary(lib);
 #else
@@ -98,8 +96,9 @@ namespace glz
          }
       }
 
-   private:
-      bool load_lib(const std::string& path) noexcept {
+     private:
+      bool load_lib(const std::string& path) noexcept
+      {
 #ifdef GLAZE_API_ON_WINDOWS
          lib_t loaded_lib = LoadLibrary(path.c_str());
 #else

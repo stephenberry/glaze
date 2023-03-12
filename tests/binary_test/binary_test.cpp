@@ -4,16 +4,15 @@
 #ifndef BOOST_UT_DISABLE_MODULE
 #define BOOST_UT_DISABLE_MODULE
 #endif
-#include "boost/ut.hpp"
-
 #include <bit>
-#include <map>
+#include <chrono>
 #include <deque>
 #include <list>
-#include <chrono>
+#include <map>
 
-#include "glaze/binary/write.hpp"
+#include "boost/ut.hpp"
 #include "glaze/binary/read.hpp"
+#include "glaze/binary/write.hpp"
 
 using namespace glz;
 
@@ -102,9 +101,9 @@ template <>
 struct glz::meta<Color>
 {
    static constexpr std::string_view name = "Color";
-   static constexpr auto value = enumerate("Red", Color:: Red,  //
+   static constexpr auto value = enumerate("Red", Color::Red,      //
                                            "Green", Color::Green,  //
-                                           "Blue", Color::Blue       //
+                                           "Blue", Color::Blue     //
    );
 };
 
@@ -202,7 +201,7 @@ void write_tests()
          expect(start == f);
       }
    };
-   
+
    "bool"_test = [] {
       {
          bool b = true;
@@ -213,7 +212,7 @@ void write_tests()
          expect(b == b2);
       }
    };
-   
+
    "float"_test = [] {
       {
          float f = 1.5f;
@@ -224,7 +223,7 @@ void write_tests()
          expect(f == f2);
       }
    };
-   
+
    "string"_test = [] {
       {
          std::string s = "Hello World";
@@ -235,10 +234,10 @@ void write_tests()
          expect(s == s2);
       }
    };
-   
+
    "array"_test = [] {
       {
-         std::array<float, 3> arr = { 1.2f, 3434.343f, 0.f };
+         std::array<float, 3> arr = {1.2f, 3434.343f, 0.f};
          std::vector<std::byte> out;
          write_binary(arr, out);
          std::array<float, 3> arr2{};
@@ -246,10 +245,10 @@ void write_tests()
          expect(arr == arr2);
       }
    };
-   
+
    "vector"_test = [] {
       {
-         std::vector<float> v = { 1.2f, 3434.343f, 0.f };
+         std::vector<float> v = {1.2f, 3434.343f, 0.f};
          std::vector<std::byte> out;
          write_binary(v, out);
          std::vector<float> v2;
@@ -257,7 +256,7 @@ void write_tests()
          expect(v == v2);
       }
    };
-   
+
    "my_struct"_test = [] {
       my_struct s{};
       s.i = 5;
@@ -313,8 +312,7 @@ void write_tests()
    "map"_test = [] {
       std::vector<std::byte> out;
 
-      std::map<std::string, int> str_map{
-         {"a", 1}, {"b", 10}, {"c", 100}, {"d", 1000}};
+      std::map<std::string, int> str_map{{"a", 1}, {"b", 10}, {"c", 100}, {"d", 1000}};
 
       write_binary(str_map, out);
 
@@ -328,8 +326,7 @@ void write_tests()
 
       out.clear();
 
-      std::map<int, double> dbl_map{
-         {1, 5.55}, {3, 7.34}, {8, 44.332}, {0, 0.000}};
+      std::map<int, double> dbl_map{{1, 5.55}, {3, 7.34}, {8, 44.332}, {0, 0.000}};
       write_binary(dbl_map, out);
 
       std::map<int, double> dbl_read{};
@@ -349,7 +346,7 @@ void write_tests()
       glz::read_binary(color_read, buffer);
       expect(color == color_read);
    };
-   
+
    "complex user obect"_test = [] {
       std::vector<std::byte> buffer{};
 
@@ -358,7 +355,7 @@ void write_tests()
       obj.thing2array[0].a = 992;
       obj.vec3.x = 1.004;
       obj.list = {9, 3, 7, 4, 2};
-      obj.array = {"life", "of", "pi", "!"};      
+      obj.array = {"life", "of", "pi", "!"};
       obj.vector = {{7, 7, 7}, {3, 6, 7}};
       obj.i = 4;
       obj.d = 0.9;
@@ -372,7 +369,7 @@ void write_tests()
       obj.deque = {0.0, 2.2, 3.9};
       obj.map = {{"a", 7}, {"f", 3}, {"b", 4}};
       obj.mapi = {{5, 5.0}, {7, 7.1}, {2, 2.22222}};
-      
+
       glz::write_binary(obj, buffer);
 
       Thing obj2{};
@@ -413,7 +410,7 @@ void bench()
       Thing thing{};
 
       std::vector<std::byte> buffer;
-      //std::string buffer;
+      // std::string buffer;
 
       auto tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
@@ -421,13 +418,10 @@ void bench()
          glz::write_binary(thing, buffer);
       }
       auto tend = std::chrono::high_resolution_clock::now();
-      auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(
-                         tend - tstart)
-                         .count();
+      auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       auto mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "to_binary size: " << buffer.size() << " bytes\n";
-      std::cout << "to_binary: " << duration << " s, " << mbytes_per_sec
-                << " MB/s"
+      std::cout << "to_binary: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
 
       tstart = std::chrono::high_resolution_clock::now();
@@ -435,12 +429,9 @@ void bench()
          glz::read_binary(thing, buffer);
       }
       tend = std::chrono::high_resolution_clock::now();
-      duration = std::chrono::duration_cast<std::chrono::duration<double>>(
-                    tend - tstart)
-                    .count();
+      duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
-      std::cout << "from_binary: " << duration << " s, " << mbytes_per_sec
-                << " MB/s"
+      std::cout << "from_binary: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
    };
 }
@@ -450,11 +441,11 @@ using namespace boost::ut;
 suite binary_helpers = [] {
    "binary_helpers"_test = [] {
       my_struct v{22, 5.76, "ufo", {9, 5, 1}};
-      
+
       std::string b;
-      
+
       b = glz::write_binary(v);
-      
+
       auto v2 = *glz::read_binary<my_struct>(b);
 
       expect(v2.i == 22);
@@ -496,33 +487,31 @@ struct glz::meta<some_struct>
    using T = some_struct;
    static constexpr auto value = object(
       //"i", [](auto&& v) -> auto& { return v.i; },  //
-                                        "i", &T::i,
-                                        "d", &T::d,     //
-                                        "c", &T::c,
-                                               "hello", &T::hello,  //
-                                               "arr", &T::arr,      //
-                                               "sub", &T::sub,      //
-                                               "map", &T::map       //
+      "i", &T::i, "d", &T::d,          //
+      "c", &T::c, "hello", &T::hello,  //
+      "arr", &T::arr,                  //
+      "sub", &T::sub,                  //
+      "map", &T::map                   //
    );
 };
 
-#include "glaze/json/read.hpp"
-#include "glaze/json/json_ptr.hpp"
 #include "glaze/api/impl.hpp"
+#include "glaze/json/json_ptr.hpp"
+#include "glaze/json/read.hpp"
 
 suite no_cx_tag_test = [] {
    "no_cx_tags"_test = [] {
       some_struct s{};
-      
+
       std::string b{};
-      
+
       glz::write<glz::opts{.format = glz::binary, .use_cx_tags = false}>(s, b);
-      
+
       s.i = 0;
       s.d = 0.0;
-      
+
       expect(glz::read<glz::opts{.format = glz::binary, .use_cx_tags = false}>(s, b) == false);
-      
+
       expect(s.i == 287);
       expect(s.d = 3.14);
    };
@@ -530,28 +519,24 @@ suite no_cx_tag_test = [] {
 
 void test_partial()
 {
-   expect(glz::name_v<glz::detail::member_tuple_t<some_struct>> == R"(glz::tuplet::tuple<int32_t,double,Color,std::string,std::array<uint64_t,3>,sub,std::map<std::string,int32_t>>)");
-   
+   expect(
+      glz::name_v<glz::detail::member_tuple_t<some_struct>> ==
+      R"(glz::tuplet::tuple<int32_t,double,Color,std::string,std::array<uint64_t,3>,sub,std::map<std::string,int32_t>>)");
+
    some_struct s{};
    some_struct s2{};
    std::string buffer = R"({"i":2,"map":{"fish":5,"cake":2,"bear":3}})";
    expect(glz::read_json(s, buffer) == false);
-   
+
    std::vector<std::byte> out;
-   static constexpr auto partial = glz::json_ptrs("/i",
-                                                    "/d",
-                                                    "/hello",
-                                                    "/sub/x",
-                                                    "/sub/y",
-                                                    "/map/fish",
-                                                    "/map/bear");
-   
+   static constexpr auto partial = glz::json_ptrs("/i", "/d", "/hello", "/sub/x", "/sub/y", "/map/fish", "/map/bear");
+
    static constexpr auto sorted = glz::sort_json_ptrs(partial);
 
    static constexpr auto groups = glz::group_json_ptrs<sorted>();
-   
+
    static constexpr auto N = std::tuple_size_v<decltype(groups)>;
-   glz::for_each<N>([&](auto I){
+   glz::for_each<N>([&](auto I) {
       const auto group = glz::tuplet::get<I>(groups);
       std::cout << std::get<0>(group) << ": ";
       for (auto& rest : std::get<1>(group)) {
@@ -559,16 +544,16 @@ void test_partial()
       }
       std::cout << '\n';
    });
-   
+
    glz::write_binary<partial>(s, out);
-   
+
    s2.i = 5;
    s2.hello = "text";
    s2.d = 5.5;
    s2.sub.x = 0.0;
    s2.sub.y = 20;
    glz::read_binary(s2, out);
-   
+
    expect(s2.i == 2);
    expect(s2.d == 3.14);
    expect(s2.hello == "Hello World");
@@ -589,18 +574,17 @@ struct glz::meta<includer_struct>
    static constexpr auto value = object("#include", glz::file_include{}, "str", &T::str, "i", &T::i);
 };
 
-
 void file_include_test()
 {
    includer_struct obj{};
-   
+
    expect(glz::write_file_binary(obj, "../alabastar.crush") == glz::error_code::none);
-   
+
    obj.str = "";
    obj.i = 0;
-   
+
    expect(glz::read_file_binary(obj, "../alabastar.crush") == glz::error_code::none);
-   
+
    expect(obj.str == "Hello") << obj.str;
    expect(obj.i == 55) << obj.i;
 }
@@ -734,7 +718,7 @@ template <>
 struct glz::meta<value_t>
 {
    using T = value_t;
-   static constexpr auto value{ &T::x };
+   static constexpr auto value{&T::x};
 };
 
 struct lambda_value_t
@@ -748,99 +732,93 @@ struct glz::meta<lambda_value_t>
    static constexpr auto value = [](auto&& self) -> auto& { return self.x; };
 };
 
-suite value_test = []
-{
+suite value_test = [] {
    "value"_test = [] {
       std::string s{};
-      
+
       value_t v{};
       v.x = 5;
       glz::write_binary(v, s);
       v.x = 0;
-      
+
       glz::read_binary(v, s);
       expect(v.x == 5);
    };
-   
+
    "lambda value"_test = [] {
       std::string s{};
-      
+
       lambda_value_t v{};
       v.x = 5;
       glz::write_binary(v, s);
       v.x = 0;
-      
+
       glz::read_binary(v, s);
       expect(v.x == 5);
    };
 };
 
-struct TestMsg {
+struct TestMsg
+{
    uint64_t id{};
    std::string val{};
 };
 
 template <>
-struct glz::meta<TestMsg> {
-    static constexpr std::string_view name = "TestMsg";
-    using T = TestMsg;
-    static constexpr auto value = object(
-            "id", &T::id,
-            "val", &T::val
-    );
+struct glz::meta<TestMsg>
+{
+   static constexpr std::string_view name = "TestMsg";
+   using T = TestMsg;
+   static constexpr auto value = object("id", &T::id, "val", &T::val);
 };
 
-suite byte_buffer = []
-{
-   "uint8_t buffer"_test = []
-   {
+suite byte_buffer = [] {
+   "uint8_t buffer"_test = [] {
       TestMsg msg{};
       msg.id = 5;
       msg.val = "hello";
       std::vector<uint8_t> buffer{};
       glz::write_binary(msg, buffer);
-      
+
       buffer.emplace_back('\0');
-      
+
       msg.id = 0;
       msg.val = "";
-      
+
       glz::read_binary(msg, buffer);
       expect(msg.id == 5);
       expect(msg.val == "hello");
    };
-   
-   "std::byte buffer"_test = []
-   {
+
+   "std::byte buffer"_test = [] {
       TestMsg msg{};
       msg.id = 5;
       msg.val = "hello";
       std::vector<std::byte> buffer{};
       glz::write_binary(msg, buffer);
-      
+
       buffer.emplace_back(static_cast<std::byte>('\0'));
-      
+
       msg.id = 0;
       msg.val = "";
-      
+
       glz::read_binary(msg, buffer);
       expect(msg.id == 5);
       expect(msg.val == "hello");
    };
-   
-   "char8_t buffer"_test = []
-   {
+
+   "char8_t buffer"_test = [] {
       TestMsg msg{};
       msg.id = 5;
       msg.val = "hello";
       std::vector<char8_t> buffer{};
       glz::write_binary(msg, buffer);
-      
+
       buffer.emplace_back('\0');
-      
+
       msg.id = 0;
       msg.val = "";
-      
+
       glz::read_binary(msg, buffer);
       expect(msg.id == 5);
       expect(msg.val == "hello");
@@ -849,9 +827,9 @@ suite byte_buffer = []
 
 struct flags_t
 {
-   bool x{ true };
+   bool x{true};
    bool y{};
-   bool z{ true };
+   bool z{true};
 };
 
 template <>
@@ -861,20 +839,18 @@ struct glz::meta<flags_t>
    static constexpr auto value = flags("x", &T::x, "y", &T::y, "z", &T::z);
 };
 
-suite flag_test = []
-{
-   "flags"_test = []
-   {
+suite flag_test = [] {
+   "flags"_test = [] {
       flags_t s{};
-      
+
       std::string b{};
       glz::write_binary(s, b);
-      
+
       s.x = false;
       s.z = false;
-      
+
       glz::read_binary(s, b);
-      
+
       expect(s.x);
       expect(s.z);
    };

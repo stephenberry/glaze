@@ -55,12 +55,12 @@ namespace glz::detail
 #ifdef __SIZEOF_INT128__
    inline uint64_t mulhi64(uint64_t a, uint64_t b)
    {
-   #if defined(__GNUC__) || defined(__GNUG__)
-   #pragma GCC diagnostic push
-   #pragma GCC diagnostic ignored "-Wpedantic"
+#if defined(__GNUC__) || defined(__GNUG__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
       unsigned __int128 prod = a * static_cast<unsigned __int128>(b);
-   #pragma GCC diagnostic pop
-   #endif
+#pragma GCC diagnostic pop
+#endif
       return prod >> 64;
    }
 #elif defined(_M_X64) || defined(_M_ARM64)
@@ -227,10 +227,7 @@ namespace glz::detail
 
    inline uint64_t sig2_from_exp10(int32_t exp10) noexcept { return pow10_sig_table[exp10 - pow10_sig_table_min_exp]; }
 
-   inline int32_t exp2_from_exp10(int32_t exp10) noexcept
-   {
-      return (((exp10 * 217706 - 4128768) >> 16) + 126);
-   }
+   inline int32_t exp2_from_exp10(int32_t exp10) noexcept { return (((exp10 * 217706 - 4128768) >> 16) + 126); }
 
    /*==============================================================================
     * Digit Character Matcher
@@ -405,11 +402,11 @@ namespace glz::detail
    };
 
    template <class T, bool force_conformance = false>
-   inline bool parse_number(T &val, auto*& cur) noexcept
+   inline bool parse_number(T &val, auto *&cur) noexcept
    {
-      const uint8_t *sig_cut = nullptr; /* significant part cutting position for long number */
-      [[maybe_unused]] const uint8_t *sig_end = nullptr;  /* significant part ending position */
-      const uint8_t *dot_pos = nullptr;  /* decimal point position */
+      const uint8_t *sig_cut = nullptr;                  /* significant part cutting position for long number */
+      [[maybe_unused]] const uint8_t *sig_end = nullptr; /* significant part ending position */
+      const uint8_t *dot_pos = nullptr;                  /* decimal point position */
       uint32_t frac_zeros = 0;
       uint64_t sig = 0;    /* significant part of the number */
       int32_t exp = 0;     /* exponent part of the number */
@@ -417,12 +414,12 @@ namespace glz::detail
       int32_t exp_sig = 0; /* temporary exponent number from significant part */
       int32_t exp_lit = 0; /* temporary exponent number from exponent literal part */
       uint64_t num_tmp;    /* temporary number for reading */
-      const uint8_t *tmp;   /* temporary cursor for reading */
+      const uint8_t *tmp;  /* temporary cursor for reading */
       const uint8_t *hdr = cur;
       bool sign;
       sign = (*hdr == '-');
       cur += sign;
-      auto apply_sign = [&](auto&& val) -> T {
+      auto apply_sign = [&](auto &&val) -> T {
          if constexpr (std::is_unsigned_v<T>) {
             return static_cast<T>(val);
          }
@@ -436,7 +433,7 @@ namespace glz::detail
          if constexpr (std::integral<T>) {
             return false;
          }
-         else if (*cur == 'n'  &&cur[1] == 'u' &&cur[2] == 'l' &&cur[3] == 'l') {
+         else if (*cur == 'n' && cur[1] == 'u' && cur[2] == 'l' && cur[3] == 'l') {
             cur += 4;
             val = std::numeric_limits<T>::quiet_NaN();
             return true;
@@ -474,44 +471,46 @@ namespace glz::detail
          return true;
       }
       goto digi_intg_more; /* read more digits in integral part */
-      /* process first non-digit character */
-#define expr_sepr(i)                                                   \
-   digi_sepr_##i : if ((!digi_is_fp(cur[i]))) [[likely]]               \
-   {                                                                   \
-      cur += i;                                                        \
-      val = apply_sign(sig);       \
-      return true;                                                     \
-   }                                                                   \
-   dot_pos = cur + i;                                                  \
-   if ((cur[i] == '.')) [[likely]] {                                   \
-      if (sig == 0)                                                    \
+                           /* process first non-digit character */
+#define expr_sepr(i)                                           \
+   digi_sepr_##i : if ((!digi_is_fp(cur[i]))) [[likely]]       \
+   {                                                           \
+      cur += i;                                                \
+      val = apply_sign(sig);                                   \
+      return true;                                             \
+   }                                                           \
+   dot_pos = cur + i;                                          \
+   if ((cur[i] == '.')) [[likely]] {                           \
+      if (sig == 0)                                            \
          while (cur[frac_zeros + i + 1] == zero) ++frac_zeros; \
-      goto digi_frac_##i;                                              \
-   }                                                                   \
-   cur += i;                                                           \
-   sig_end = cur;                                                      \
+      goto digi_frac_##i;                                      \
+   }                                                           \
+   cur += i;                                                   \
+   sig_end = cur;                                              \
    goto digi_exp_more;
       repeat_in_1_18(expr_sepr)
 #undef expr_sepr
       /* read fraction part */
-#define expr_frac(i)                                                                                           \
+#define expr_frac(i)                                                                                              \
    digi_frac_##i : if (((num_tmp = static_cast<uint64_t>(cur[i + 1 + frac_zeros] - zero)) <= 9)) [[likely]] sig = \
-                      num_tmp + sig * 10;                                                                      \
-   else { goto digi_stop_##i; }
+                      num_tmp + sig * 10;                                                                         \
+   else                                                                                                           \
+   {                                                                                                              \
+      goto digi_stop_##i;                                                                                         \
+   }
          repeat_in_1_18(expr_frac)
 #undef expr_frac
-      cur += 20 + frac_zeros;                     /* skip 19 digits and 1 decimal point */
+            cur += 20 + frac_zeros;                     /* skip 19 digits and 1 decimal point */
       if (uint8_t(*cur - zero) > 9) goto digi_frac_end; /* fraction part end */
       goto digi_frac_more;                              /* read more digits in fraction part */
-      /* significant part end */
+                                                        /* significant part end */
 #define expr_stop(i)                          \
    digi_stop_##i : cur += i + 1 + frac_zeros; \
    goto digi_frac_end;
       repeat_in_1_18(expr_stop)
 #undef expr_stop
          /* read more digits in integral part */
-digi_intg_more :
-      static constexpr uint64_t U64_MAX = (std::numeric_limits<uint64_t>::max)();  // todo
+         digi_intg_more : static constexpr uint64_t U64_MAX = (std::numeric_limits<uint64_t>::max)();  // todo
       if ((num_tmp = *cur - zero) < 10) {
          if (!digi_is_digit_or_fp(cur[1])) {
             /* this number is an integer consisting of 20 digits */

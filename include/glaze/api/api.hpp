@@ -3,25 +3,26 @@
 
 #pragma once
 
-#include "glaze/api/std/string.hpp"
-#include "glaze/api/trait.hpp"
-#include "glaze/core/format.hpp"
-#include "glaze/core/context.hpp"
-#include "glaze/util/expected.hpp"
-
-#include <stdexcept>
-#include <memory>
 #include <functional>
 #include <map>
+#include <memory>
 #include <span>
+#include <stdexcept>
+
+#include "glaze/api/std/string.hpp"
+#include "glaze/api/trait.hpp"
+#include "glaze/core/context.hpp"
+#include "glaze/core/format.hpp"
+#include "glaze/util/expected.hpp"
 
 namespace glz
 {
    inline namespace v0_0_3
    {
       template <class R>
-      using func_return_t = std::conditional_t<std::is_lvalue_reference_v<R>, std::reference_wrapper<std::decay_t<R>>, R>;
-      
+      using func_return_t =
+         std::conditional_t<std::is_lvalue_reference_v<R>, std::reference_wrapper<std::decay_t<R>>, R>;
+
       struct api
       {
          api() noexcept = default;
@@ -40,35 +41,32 @@ namespace glz
 
          template <class Ret, class... Args>
          expected<func_return_t<Ret>, error_code> call(const sv path, Args&&... args) noexcept;
-         
+
          [[nodiscard]] virtual bool contains(const sv path) noexcept = 0;
 
-         virtual bool read(const uint32_t /*format*/, const sv /*path*/,
-                           const sv /*data*/) noexcept = 0;
+         virtual bool read(const uint32_t /*format*/, const sv /*path*/, const sv /*data*/) noexcept = 0;
 
          virtual bool write(const uint32_t /*format*/, const sv /*path*/, std::string& /*data*/) noexcept = 0;
 
-         [[nodiscard]] virtual const sv last_error() const noexcept {
-            return error;
-         }
+         [[nodiscard]] virtual const sv last_error() const noexcept { return error; }
 
          /// unchecked `void*` access for low level programming (prefer templated get)
          [[nodiscard]] virtual std::pair<void*, glz::hash_t> get(const sv path) noexcept = 0;
-      protected:
 
-         virtual bool caller(const sv path, const glz::hash_t type_hash, void*& ret, std::span<void*> args) noexcept = 0;
+        protected:
+         virtual bool caller(const sv path, const glz::hash_t type_hash, void*& ret,
+                             std::span<void*> args) noexcept = 0;
 
          virtual std::unique_ptr<void, void (*)(void*)> get_fn(const sv path, const glz::hash_t type_hash) noexcept = 0;
 
          std::string error{};
       };
 
-      using iface =
-         std::map<std::string, std::function<std::shared_ptr<api>()>,
-                  std::less<>>;
+      using iface = std::map<std::string, std::function<std::shared_ptr<api>()>, std::less<>>;
 
       template <class T>
-      T* api::get(const sv path) noexcept {
+      T* api::get(const sv path) noexcept
+      {
          static constexpr auto hash = glz::hash<T>();
          auto p = get(path);
          if (p.first && p.second == hash) {
@@ -78,7 +76,8 @@ namespace glz
       }
 
       template <class T>
-      expected<T, error_code> api::get_fn(const sv path) noexcept {
+      expected<T, error_code> api::get_fn(const sv path) noexcept
+      {
          static constexpr auto hash = glz::hash<T>();
          auto d = get_fn(path, hash);
          if (d) {
@@ -101,9 +100,7 @@ namespace glz
 
          auto tuple_args = std::forward_as_tuple(std::forward<Args>(args)...);
 
-         for_each<N>([&](auto I) {
-            std::get<I>(arguments) = &std::get<I>(tuple_args);
-         });
+         for_each<N>([&](auto I) { std::get<I>(arguments) = &std::get<I>(tuple_args); });
 
          if constexpr (std::is_pointer_v<Ret>) {
             void* ptr{};
@@ -138,11 +135,11 @@ namespace glz
                return value;
             }
          }
-         
+
          return unexpected(error_code::invalid_call);
       }
 
-      using iface_fn = std::shared_ptr<glz::iface>(*)();
+      using iface_fn = std::shared_ptr<glz::iface> (*)();
    }
 }
 

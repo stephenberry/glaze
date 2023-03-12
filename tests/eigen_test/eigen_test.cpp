@@ -1,20 +1,20 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include "glaze/ext/eigen.hpp"
+
+#include <Eigen/Core>
+#include <any>
 #include <chrono>
 #include <iostream>
+#include <iterator>
 #include <random>
-#include <any>
 
 #include "boost/ut.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
-#include "glaze/ext/eigen.hpp"
-
-#include <Eigen/Core>
-#include <iterator>
 
 int main()
 {
@@ -26,16 +26,16 @@ int main()
       glz::write_json(m, json);
       expect(json == "[5,1,1,7]");
    };
- 
+
    "read_json"_test = [] {
-      Eigen::Matrix<double, 2 , 2> m{};
+      Eigen::Matrix<double, 2, 2> m{};
       expect(glz::read_json(m, "[2,1,7,4]") == glz::error_code::none);
       expect(m.rows() == 2);
       expect(m.cols() == 2);
-      expect(m(0,1) == 7);
-      expect(m(1,1) == 4);
+      expect(m(0, 1) == 7);
+      expect(m(1, 1) == 4);
    };
-   
+
    "binary"_test = [] {
       Eigen::Matrix<double, 2, 2> m{};
       m << 1, 2, 3, 4;

@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include "glaze/util/itoa.hpp"
-#include "glaze/util/dtoa.hpp"
-#include "glaze/core/opts.hpp"
 #include "glaze/core/common.hpp"
+#include "glaze/core/opts.hpp"
+#include "glaze/util/dtoa.hpp"
+#include "glaze/util/itoa.hpp"
 
 namespace glz::detail
 {
@@ -36,7 +36,7 @@ namespace glz::detail
          }
       }
    }
-   
+
    struct write_chars
    {
       template <auto Opts, class B>
@@ -46,7 +46,7 @@ namespace glz::detail
             // more efficient strings in C++23:
           https://en.cppreference.com/w/cpp/string/basic_string/resize_and_overwrite
           }*/
-         
+
          // https://stackoverflow.com/questions/1701055/what-is-the-maximum-length-in-chars-needed-to-represent-any-double-value
          // maximum length for a double should be 24 chars, we use 64 to be sufficient
          if constexpr (detail::resizeable<B>) {
@@ -54,9 +54,9 @@ namespace glz::detail
                b.resize((std::max)(b.size() * 2, ix + 64));
             }
          }
-         
+
          using V = std::decay_t<decltype(value)>;
-         
+
          if constexpr (is_any_of<V, float, double, int32_t, uint32_t, int64_t, uint64_t>) {
             auto start = data_ptr(b) + ix;
             auto end = glz::to_chars(start, value);

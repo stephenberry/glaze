@@ -4,8 +4,8 @@
 #pragma once
 
 #include <algorithm>
-#include <string>
 #include <optional>
+#include <string>
 
 namespace glz
 {
@@ -18,13 +18,12 @@ namespace glz
          std::string context;
       };
 
-      inline std::optional<source_info> get_source_info(const auto& buffer,
-                                                        const std::size_t index)
+      inline std::optional<source_info> get_source_info(const auto& buffer, const std::size_t index)
       {
          if (index >= buffer.size()) {
             return std::nullopt;
          }
-         
+
          using V = std::decay_t<decltype(buffer[0])>;
          const std::size_t r_index = buffer.size() - index - 1;
          const auto start = std::begin(buffer) + index;
@@ -33,36 +32,29 @@ namespace glz
          const auto pnl = std::find(std::min(rstart + 1, std::rend(buffer)), std::rend(buffer), static_cast<V>('\n'));
          const auto dist = std::distance(rstart, pnl);
          const auto nnl = std::find(std::min(start + 1, std::end(buffer)), std::end(buffer), static_cast<V>('\n'));
-         
+
          if constexpr (std::same_as<V, std::byte>) {
             std::string context{
-               reinterpret_cast<const char*>(buffer.data()) +
-                  (pnl == std::rend(buffer) ? 0 : index - dist + 1),
+               reinterpret_cast<const char*>(buffer.data()) + (pnl == std::rend(buffer) ? 0 : index - dist + 1),
                reinterpret_cast<const char*>(&(*nnl))};
-            return source_info{static_cast<std::size_t>(count + 1),
-                              static_cast<std::size_t>(dist), context};
+            return source_info{static_cast<std::size_t>(count + 1), static_cast<std::size_t>(dist), context};
          }
          else {
-            std::string context{
-               std::begin(buffer) +
-                  (pnl == std::rend(buffer) ? 0 : index - dist + 1),
-               nnl};
-            return source_info{static_cast<std::size_t>(count + 1),
-                              static_cast<std::size_t>(dist), context};
+            std::string context{std::begin(buffer) + (pnl == std::rend(buffer) ? 0 : index - dist + 1), nnl};
+            return source_info{static_cast<std::size_t>(count + 1), static_cast<std::size_t>(dist), context};
          }
       }
 
-      inline std::string generate_error_string(const std::string_view error,
-                                               const source_info& info,
+      inline std::string generate_error_string(const std::string_view error, const source_info& info,
                                                const std::string_view filename = "")
       {
          std::string s{};
-         
+
          if (!filename.empty()) {
             s += filename;
             s += ":";
          }
-         
+
          s += std::to_string(info.line) + ":" + std::to_string(info.column) + ": ";
          s += error;
          s += "\n";
@@ -71,14 +63,14 @@ namespace glz
             s += " ";
          }
          s += "^\n";
-         
+
          // TODO: use std::format when available
          /*
          auto it = std::back_inserter(s);
          if (!filename.empty()) {
             fmt::format_to(it, FMT_COMPILE("{}:"), filename);
          }
-         
+
          fmt::format_to(it, FMT_COMPILE("{}:{}: {}\n"), info.line, info.column, error);
          fmt::format_to(it, FMT_COMPILE("   {}\n   "), info.context);
          fmt::format_to(it, FMT_COMPILE("{: <{}}^\n"), "", info.column - 1);*/

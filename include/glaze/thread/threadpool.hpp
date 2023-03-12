@@ -34,8 +34,7 @@ namespace glz
             auto thread = std::thread(&pool::worker, this, i);
             auto hndl = thread.native_handle();
             GROUP_AFFINITY affinity;
-            if (GetThreadGroupAffinity(hndl, &affinity) &&
-                affinity.Group != group) {
+            if (GetThreadGroupAffinity(hndl, &affinity) && affinity.Group != group) {
                affinity.Group = group;
                SetThreadGroupAffinity(hndl, &affinity, nullptr);
             }
@@ -102,7 +101,7 @@ namespace glz
       }
 
       template <class F>
-      requires std::is_invocable_v<std::decay_t<F>, size_t>
+         requires std::is_invocable_v<std::decay_t<F>, size_t>
       std::future<std::invoke_result_t<std::decay_t<F>, size_t>> emplace_back(F&& func)
       {
          using result_type = std::invoke_result_t<std::decay_t<F>, size_t>;
@@ -158,7 +157,7 @@ namespace glz
          work_cv.notify_all();
          lock.unlock();
 
-         for (auto &t : threads)
+         for (auto& t : threads)
             if (t.joinable()) t.join();
       }
 
@@ -178,9 +177,7 @@ namespace glz
          while (true) {
             // Wait for work
             std::unique_lock<std::mutex> lock(mtx);
-            work_cv.wait(lock, [this]() {
-               return closed || !(front_index == last_index);
-            });
+            work_cv.wait(lock, [this]() { return closed || !(front_index == last_index); });
             if (queue.empty()) {
                if (closed) {
                   return;
