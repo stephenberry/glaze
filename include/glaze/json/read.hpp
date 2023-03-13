@@ -395,10 +395,14 @@ namespace glz
       };
 
       template <str_view_t T>
-      struct from_json<T>{
+      struct from_json<T>
+      {
          template <auto Opts, class It, class End>
-         GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
+         GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
+         {
+            if (static_cast<bool>(ctx.error)) [[unlikely]] {
+               return;
+            }
 
             if constexpr (!Opts.opening_handled) {
                if constexpr (!Opts.ws_handled) {
@@ -435,7 +439,9 @@ namespace glz
             while (it < end) {
                if constexpr (!Opts.force_conformance) {
                   skip_till_escape_or_quote(ctx, it, end);
-                  if (static_cast<bool>(ctx.error)) [[unlikely]] { return; }
+                  if (static_cast<bool>(ctx.error)) [[unlikely]] {
+                     return;
+                  }
 
                   if (*it == '"') {
                      ++it;
@@ -476,7 +482,7 @@ namespace glz
                   }
                }
             }
-            return ;
+            return;
          }
       };
 

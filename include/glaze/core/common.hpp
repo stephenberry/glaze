@@ -247,7 +247,8 @@ namespace glz
 
       // this concept requires that T is string and copies the string in json
       template <class T>
-      concept string_t = str_t<T> && !std::same_as<std::decay_t<T>, std::string_view>;
+      concept string_t = str_t<T> && !
+      std::same_as<std::decay_t<T>, std::string_view>;
 
       // this concept requires that T is just a view
       template <class T>
