@@ -64,35 +64,6 @@ suite starter = [] {
    };
 };
 
-//struct my_strings
-//{
-//   std::string hello = "Hello";
-//   std::string_view world = "World";
-//};
-//
-//template <>
-//struct glz::meta<my_strings>
-//{
-//   static constexpr std::string_view name = "my_strings";
-//   using T = my_strings;
-//   static constexpr auto value = object("hello", &T::hello,  //
-//                                        "world", &T::world   //
-//   );
-//};
-//
-//suite strings = [] {
-//   "example"_test = [] {
-//      my_strings s{};
-//      std::string buffer{};
-//      glz::write_json(s, buffer);
-//      expect(buffer == R"({"hello":"Hello","world":"World"})");
-//      expect(glz::prettify(buffer) == R"({
-//   "hello": "Hello",
-//   "world": "World",
-//})");
-//   };
-//};
-
 struct sub_thing
 {
    double a{3.14};
