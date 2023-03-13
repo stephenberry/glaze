@@ -606,7 +606,7 @@ namespace glz
          {
             auto it_start = it;
             skip_value<Opts>(ctx, it, end);
-            value.str = {it_start, it};
+            value.str = {it_start, it_start - it};
          }
       };
 
