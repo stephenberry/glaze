@@ -246,6 +246,11 @@ namespace glz
       complex_t<T> && !std::same_as<std::nullptr_t, T> && std::convertible_to<std::decay_t<T>, std::string_view>;
 
       template <class T>
+      concept string_t = str_t<T> && !std::same_as<std::decay_t<T>, std::string_view>;
+      template <class T>
+      concept str_view_t = str_t<T> && std::same_as<std::decay_t<T>, std::string_view>;
+
+      template <class T>
       concept pair_t = requires(T pair) {
                           {
                              pair.first
