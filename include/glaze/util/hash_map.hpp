@@ -256,7 +256,7 @@ namespace glz
             }
 
             if constexpr (D.is_front_hash) {
-               const auto k = static_cast<uint8_t>(key[0]) - D.front;
+               const auto k = static_cast<uint8_t>(static_cast<uint8_t>(key.back()) - D.front);
                if (k >= N_table) [[unlikely]] {
                   glaze_error("Invalid key");
                }
@@ -268,7 +268,7 @@ namespace glz
                return item.second;
             }
             else {
-               const auto k = static_cast<uint8_t>(key.back()) - D.front;
+               const auto k = static_cast<uint8_t>(static_cast<uint8_t>(key.back()) - D.front);
                if (k >= N_table) [[unlikely]] {
                   glaze_error("Invalid key");
                }
@@ -288,7 +288,7 @@ namespace glz
             }
 
             if constexpr (D.is_front_hash) {
-               const auto k = static_cast<uint8_t>(key[0]) - D.front;
+               const auto k = static_cast<uint8_t>(static_cast<uint8_t>(key.back()) - D.front);
                if (k >= static_cast<uint8_t>(N_table)) [[unlikely]] {
                   return items.end();
                }
@@ -299,7 +299,7 @@ namespace glz
                return items.begin() + index;
             }
             else {
-               const auto k = static_cast<uint8_t>(key.back()) - D.front;
+               const auto k = static_cast<uint8_t>(static_cast<uint8_t>(key.back()) - D.front);
                if (k >= static_cast<uint8_t>(N_table)) [[unlikely]] {
                   return items.end();
                }
