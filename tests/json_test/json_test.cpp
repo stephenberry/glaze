@@ -2121,6 +2121,14 @@ suite raw_json_tests = [] {
       expect(s == R"([0,1,2])");
       expect(glz::read_json(v, s) == glz::error_code::none);
    };
+   "raw_json_view_read"_test = [] {
+      std::vector<glz::raw_json_view> v{};
+      std::string s = R"([0,1,2])";
+      expect(glz::read_json(v, s) == glz::error_code::none);
+      expect(v[0].str == "0");
+      expect(v[1].str == "1");
+      expect(v[2].str == "2");
+   };
 };
 
 suite json_helpers = [] {

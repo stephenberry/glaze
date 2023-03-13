@@ -138,8 +138,7 @@ namespace glz
       };
 
       template <class T>
-         requires std::same_as<std::decay_t<T>, raw_json>
-      struct to_json_schema<T>
+      struct to_json_schema<basic_raw_json<T>>
       {
          template <auto Opts>
          static void op(auto& s, auto&) noexcept

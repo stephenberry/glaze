@@ -186,25 +186,30 @@ namespace glz
       {};
    }  // namespace detail
 
-   struct raw_json
+   // Use std::stringview if you know the buffer is going to outlive this
+   template <class string_type = std::string>
+   struct basic_raw_json
    {
-      std::string str;
+      string_type str;
 
-      raw_json() = default;
+      basic_raw_json() = default;
 
       template <class T>
-         requires(!std::same_as<std::decay_t<T>, raw_json>)
-      raw_json(T &&s) : str(std::forward<T>(s))
+         requires(!std::same_as<std::decay_t<T>, basic_raw_json>)
+      basic_raw_json(T &&s) : str(std::forward<T>(s))
       {}
 
-      raw_json(const raw_json &) = default;
-      raw_json(raw_json &&) = default;
-      raw_json &operator=(const raw_json &) = default;
-      raw_json &operator=(raw_json &&) = default;
+      basic_raw_json(const basic_raw_json &) = default;
+      basic_raw_json(basic_raw_json &&) = default;
+      basic_raw_json &operator=(const basic_raw_json &) = default;
+      basic_raw_json &operator=(basic_raw_json &&) = default;
    };
 
-   template <>
-   struct meta<raw_json>
+   using raw_json = basic_raw_json<std::string>;
+   using raw_json_view = basic_raw_json<std::string_view>;
+
+   template <class T>
+   struct meta<basic_raw_json<T>>
    {
       static constexpr std::string_view name = "raw_json";
    };
