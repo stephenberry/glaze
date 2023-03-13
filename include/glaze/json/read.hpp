@@ -598,16 +598,15 @@ namespace glz
          }
       };
 
-      template <>
-      struct from_json<raw_json>
+      template <class T>
+      struct from_json<basic_raw_json<T>>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(raw_json& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             auto it_start = it;
             skip_value<Opts>(ctx, it, end);
-            value.str.clear();
-            value.str.insert(value.str.begin(), it_start, it);
+            value.str = {it_start, it};
          }
       };
 

@@ -112,8 +112,7 @@ namespace glz
       };
 
       template <class T>
-         requires std::same_as<std::decay_t<T>, raw_json>
-      struct to_binary<T> final
+      struct to_binary<basic_raw_json<T>> final
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
