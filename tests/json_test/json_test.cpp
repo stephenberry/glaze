@@ -420,6 +420,14 @@ suite basic_types = [] {
       expect(glz::read_json(val, "\"as\\\"df\\\\ghjkl\"") == glz::error_code::none);
       expect(val == "as\"df\\ghjkl");
    };
+
+   "string_view read"_test = [] {
+      std::string_view val{};
+      expect(glz::read_json(val, "\"fish\"") == glz::error_code::none);
+      expect(val == "fish");
+      expect(glz::read_json(val, "\"as\\\"df\\\\ghjkl\"") == glz::error_code::none);
+      expect(val == "as\\\"df\\\\ghjkl");
+   };
 };
 
 suite container_types = [] {
