@@ -307,9 +307,12 @@ namespace glz
                // What do we want to happen if the value doesnt have a mapped
                // string
                if constexpr (glaze_local_enum_t<T>) {
+                  using member_t = std::decay_t<member_t<T, decltype(&T::val)>>;
+                  using key_t = std::underlying_type_t<member_t>;
                   write<json>::op<Opts>(static_cast<key_t>(value.val), ctx, std::forward<Args>(args)...);
                }
                else {
+                  using key_t = std::underlying_type_t<T>;
                   write<json>::op<Opts>(static_cast<key_t>(value), ctx, std::forward<Args>(args)...);
                }
             }
