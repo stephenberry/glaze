@@ -558,7 +558,8 @@ namespace glz
          }
       };
 
-      template <glaze_enum_t T>
+      template <class T>
+         requires glaze_local_enum_t<T> || glaze_enum_t<T>
       struct from_json<T>
       {
          template <auto Opts>
@@ -574,7 +575,12 @@ namespace glz
                static constexpr auto frozen_map = detail::make_string_to_enum_map<T>();
                const auto& member_it = frozen_map.find(frozen::string(*key));
                if (member_it != frozen_map.end()) {
-                  value = member_it->second;
+                  if constexpr (glaze_local_enum_t<T>) {
+                     value.val = member_it->second;
+                  }
+                  else {
+                     value = member_it->second;
+                  }
                }
                else [[unlikely]] {
                   ctx.error = error_code::unexpected_enum;

@@ -314,6 +314,9 @@ namespace glz
       concept has_data = requires(T container) { container.data(); };
 
       template <class T>
+      concept has_val = requires(T t) { t.val; };
+
+      template <class T>
       concept contiguous = has_size<T> && has_data<T>;
 
       template <class T>
@@ -394,6 +397,9 @@ namespace glz
       concept glaze_enum_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Enum>;
 
       template <class T>
+      concept glaze_local_enum_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Enum> && has_val<T>;
+
+      template <class T>
       concept glaze_flags_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Flags>;
 
       template <class T>
@@ -410,6 +416,62 @@ namespace glz
 #endif
                                           };
 
+      inline decltype(auto) get_member(auto &&value, auto &member_ptr)
+      {
+         using V = std::decay_t<decltype(member_ptr)>;
+         if constexpr (std::is_member_object_pointer_v<V>) {
+            return value.*member_ptr;
+         }
+         else if constexpr (std::is_member_function_pointer_v<V>) {
+            return member_ptr;
+         }
+         else if constexpr (std::invocable<decltype(member_ptr), decltype(value)>) {
+            return std::invoke(member_ptr, value);
+         }
+         else {
+            return member_ptr;
+         }
+      }
+
+      // member_ptr and lambda wrapper helper
+      template <template <class> class Wrapper, class Wrapped>
+      struct wrap
+      {
+         Wrapped wrapped;
+         constexpr decltype(auto) operator()(auto &&value) const
+         {
+            return Wrapper<std::decay_t<decltype(get_member(value, wrapped))>>{get_member(value, wrapped)};
+         }
+
+         constexpr decltype(auto) unwrap(auto &&value) const { return get_member(value, wrapped); }
+      };
+
+      template <class T, class mptr_t>
+      using member_t = decltype(get_member(std::declval<T>(), std::declval<std::decay_t<mptr_t> &>()));
+
+      template <class T, class = std::make_index_sequence<std::tuple_size<meta_t<T>>::value>>
+      struct members_from_meta;
+
+      template <class T, size_t... I>
+      inline constexpr auto members_from_meta_impl()
+      {
+         if constexpr (glaze_object_t<std::decay_t<T>>) {
+            return glz::tuplet::tuple<
+               std::decay_t<member_t<T, std::tuple_element_t<1, std::tuple_element_t<I, meta_t<T>>>>>...>{};
+         }
+         else {
+            return glz::tuplet::tuple{};
+         }
+      }
+
+      template <class T, size_t... I>
+      struct members_from_meta<T, std::index_sequence<I...>>
+      {
+         using type = decltype(members_from_meta_impl<T, I...>());
+      };
+
+      template <class T>
+      using member_tuple_t = typename members_from_meta<T>::type;
       // from
       // https://stackoverflow.com/questions/55941964/how-to-filter-duplicate-types-from-tuple-c
       template <class T, class... Ts>
@@ -626,11 +688,21 @@ namespace glz
       template <class T, size_t... I>
       constexpr auto make_enum_to_string_map_impl(std::index_sequence<I...>)
       {
-         using key_t = std::underlying_type_t<T>;
-         return frozen::make_unordered_map<key_t, frozen::string, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<key_t, frozen::string>(
-               static_cast<key_t>(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))),
-               frozen::string(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))))...});
+         if constexpr (std::is_enum_v<T>) {
+            using key_t = std::underlying_type_t<T>;
+            return frozen::make_unordered_map<key_t, frozen::string, std::tuple_size_v<meta_t<T>>>(
+               {std::make_pair<key_t, frozen::string>(
+                  static_cast<key_t>(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))),
+                  frozen::string(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))))...});
+         }
+         else {
+            using U = std::decay_t<member_t<T, decltype(&T::val)>>;
+            using key_t = std::underlying_type_t<U>;
+            return frozen::make_unordered_map<key_t, frozen::string, std::tuple_size_v<meta_t<T>>>(
+               {std::make_pair<key_t, frozen::string>(
+                  static_cast<key_t>(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))),
+                  frozen::string(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))))...});
+         }
       }
 
       template <class T>
@@ -653,9 +725,18 @@ namespace glz
       template <class T, size_t... I>
       constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>)
       {
-         return frozen::make_unordered_map<frozen::string, T, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<frozen::string, T>(frozen::string(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                               T(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))))...});
+         if constexpr (std::is_enum_v<T>) {
+            return frozen::make_unordered_map<frozen::string, T, std::tuple_size_v<meta_t<T>>>(
+               {std::make_pair<frozen::string, T>(
+                  frozen::string(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                  static_cast<T>(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))))...});
+         }
+         else {
+            using U = std::decay_t<member_t<T, decltype(&T::val)>>;
+            return frozen::make_unordered_map<frozen::string, U, std::tuple_size_v<meta_t<T>>>(
+               {std::make_pair<frozen::string, U>(frozen::string(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                                  U(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))))...});
+         }
       }
 
       template <class T>
@@ -734,63 +815,6 @@ namespace glz
 
          return make_variant_id_map_impl<T>(indices, ids_v<T>);
       }
-
-      inline decltype(auto) get_member(auto &&value, auto &member_ptr)
-      {
-         using V = std::decay_t<decltype(member_ptr)>;
-         if constexpr (std::is_member_object_pointer_v<V>) {
-            return value.*member_ptr;
-         }
-         else if constexpr (std::is_member_function_pointer_v<V>) {
-            return member_ptr;
-         }
-         else if constexpr (std::invocable<decltype(member_ptr), decltype(value)>) {
-            return std::invoke(member_ptr, value);
-         }
-         else {
-            return member_ptr;
-         }
-      }
-
-      // member_ptr and lambda wrapper helper
-      template <template <class> class Wrapper, class Wrapped>
-      struct wrap
-      {
-         Wrapped wrapped;
-         constexpr decltype(auto) operator()(auto &&value) const
-         {
-            return Wrapper<std::decay_t<decltype(get_member(value, wrapped))>>{get_member(value, wrapped)};
-         }
-
-         constexpr decltype(auto) unwrap(auto &&value) const { return get_member(value, wrapped); }
-      };
-
-      template <class T, class mptr_t>
-      using member_t = decltype(get_member(std::declval<T>(), std::declval<std::decay_t<mptr_t> &>()));
-
-      template <class T, class = std::make_index_sequence<std::tuple_size<meta_t<T>>::value>>
-      struct members_from_meta;
-
-      template <class T, size_t... I>
-      inline constexpr auto members_from_meta_impl()
-      {
-         if constexpr (glaze_object_t<std::decay_t<T>>) {
-            return glz::tuplet::tuple<
-               std::decay_t<member_t<T, std::tuple_element_t<1, std::tuple_element_t<I, meta_t<T>>>>>...>{};
-         }
-         else {
-            return glz::tuplet::tuple{};
-         }
-      }
-
-      template <class T, size_t... I>
-      struct members_from_meta<T, std::index_sequence<I...>>
-      {
-         using type = decltype(members_from_meta_impl<T, I...>());
-      };
-
-      template <class T>
-      using member_tuple_t = typename members_from_meta<T>::type;
 
       // Output variants in the following format  ["variant_type", variant_json_data] with
       // glz::detail:array_variant(&T::var);

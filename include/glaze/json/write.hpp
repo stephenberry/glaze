@@ -274,15 +274,25 @@ namespace glz
          }
       };
 
-      template <glaze_enum_t T>
+      template <class T>
+         requires glaze_local_enum_t<T> || glaze_enum_t<T>
       struct to_json<T>
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            using key_t = std::underlying_type_t<T>;
             static constexpr auto frozen_map = detail::make_enum_to_string_map<T>();
-            const auto& member_it = frozen_map.find(static_cast<key_t>(value));
+            const auto& member_it = [&value] {
+               if constexpr (glaze_local_enum_t<T>) {
+                  using member_t = std::decay_t<member_t<T, decltype(&T::val)>>;
+                  using key_t = std::underlying_type_t<member_t>;
+                  return frozen_map.find(static_cast<key_t>(value.val));
+               }
+               else {
+                  using key_t = std::underlying_type_t<T>;
+                  return frozen_map.find(static_cast<key_t>(value));
+               }
+            }();
             if (member_it != frozen_map.end()) {
                const sv str = {member_it->second.data(), member_it->second.size()};
                // Note: Assumes people dont use strings with chars that need to
@@ -296,7 +306,13 @@ namespace glz
             else [[unlikely]] {
                // What do we want to happen if the value doesnt have a mapped
                // string
-               write<json>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
+               if constexpr (glaze_local_enum_t<T>) {
+                  write<json>::op<Opts>(static_cast<key_t>(value.val), ctx, std::forward<Args>(args)...);
+               }
+               else {
+                  write<json>::op<Opts>(static_cast<key_t>(value), ctx,
+                                        std::forward<Args>(args)...);
+               }
             }
          }
       };

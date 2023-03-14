@@ -619,6 +619,29 @@ suite nullable_types = [] {
    };
 };
 
+enum class Status { alive, dead };
+
+struct Status_
+{
+   Status val;
+   Status_(const Status& st) : val(st) {}
+   operator Status() const { return val; }
+   operator Status&() { return val; }
+   struct glaze
+   {
+      static constexpr auto value = glz::enumerate("alive", Status::alive, "dead", Status::dead);
+   };
+};
+
+struct Person
+{
+   Status_ status;
+   struct glaze
+   {
+      static constexpr auto value = glz::object("status", &Person::status);
+   };
+};
+
 suite enum_types = [] {
    using namespace boost::ut;
    "enum"_test = [] {
@@ -632,6 +655,16 @@ suite enum_types = [] {
       buffer.clear();
       glz::write_json(color, buffer);
       expect(buffer == "\"Green\"");
+   };
+   "enum_struct"_test = [] {
+      Person e{Status::alive};
+      std::string buffer3{};
+      glz::write_json(e, buffer3);
+      expect(buffer3 == R"({"status":"alive"})");
+
+      buffer3 = R"({"status":"dead"})";
+      expect(glz::read_json(e, buffer3) == glz::error_code::none);
+      expect(e.status == Status::dead);
    };
 };
 
@@ -4100,7 +4133,7 @@ namespace glz::detail
          dump<'"'>(args...);
       }
    };
-}
+}  // namespace glz::detail
 
 template <auto MemPtr>
 constexpr decltype(auto) qouted()
