@@ -35,17 +35,17 @@ ut::suite valid_vector_test_cases_server = [] {
 
    for (auto const& pair : valid_requests) {
       std::tie(raw_json, resulting_request) = pair;
-      std::string stripped{resulting_request};
-      stripped.erase(std::remove_if(stripped.begin(), stripped.end(), ::isspace), stripped.end());
+      auto stripped{std::make_shared<std::string>(resulting_request)};
+      stripped->erase(std::remove_if(stripped->begin(), stripped->end(), ::isspace), stripped->end());
 
-      ut::test("response:" + stripped) = [&server, &raw_json, &stripped]() {
+      ut::test("response:" + *stripped) = [&server, &raw_json, stripped]() {
          auto response_vec = server.call(raw_json);
-         if (stripped.empty()) {  // if no id is supplied expected response should be none
+         if (stripped->empty()) {  // if no id is supplied expected response should be none
             ut::expect(response_vec.empty());
             return;
          }
          ut::expect(response_vec.size() == 1);
-         ut::expect(response_vec.at(0).first == stripped);
+         ut::expect(response_vec.at(0).first == *stripped);
       };
    }
 };
@@ -319,10 +319,11 @@ ut::suite struct_test_cases = [] {
     {"jsonrpc": "2.0", "method": "invalid_method_name", "params": [42,23], "id": "2"},
     {"foo": "boo"},
     {"jsonrpc":"2.0","method":"bar","params":{"bar_a":1337,"bar_b":"hello world"}},
-    {"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"4222222"}
+    {"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"4222222"},
+    {"jsonrpc":"2.0","invalid_method_key":"foo","params":{},"id":"4222222"}
 ]
 )");
-      ut::expect(response_vec.size() == 5);
+      ut::expect(response_vec.size() == 6);
       ut::expect(response_vec.at(0).first == R"({"jsonrpc":"2.0","result":{"foo_c":false,"foo_d":""},"id":"42"})");
       ut::expect(response_vec.at(1).first ==
                  R"({"jsonrpc":"2.0","result":{"bar_c":false,"bar_d":""},"id":"bar-uuid"})");
@@ -331,8 +332,11 @@ ut::suite struct_test_cases = [] {
          R"({"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":"Method: \"invalid_method_name\" not found"},"id":"2"})");
       ut::expect(
          response_vec.at(3).first ==
-         R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:8: unknown_key\n   {\"foo\":\"boo\"}\n          ^\n"},"id":null})");
+         R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:9: unknown_key\n   {\"foo\": \"boo\"}\n           ^\n"},"id":null})");
       ut::expect(response_vec.at(4).first == R"({"jsonrpc":"2.0","result":{"foo_c":false,"foo_d":""},"id":"4222222"})");
+      ut::expect( // ID is still being parsed and responded
+         response_vec.at(5).first ==
+         R"({"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:21: syntax_error\n   {\"jsonrpc\":\"2.0\",\"invalid_method_key\":\"foo\",\"params\":{},\"id\":\"4222222\"}\n                       ^\n"},"id":"4222222"})");
    };
 
    "server weird id values"_test = [&server] {

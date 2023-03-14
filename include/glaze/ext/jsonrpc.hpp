@@ -1,3 +1,5 @@
+#pragma once
+
 #include <algorithm>
 #include <deque>
 #include <glaze/glaze.hpp>
@@ -89,16 +91,6 @@ namespace glz::rpc
 
       template <typename char_type, unsigned N>
       basic_fixed_string(char_type const (&str)[N]) -> basic_fixed_string<char_type, N - 1>;
-
-      struct only_id
-      {
-         jsonrpc_id_type id{};
-         struct glaze
-         {
-            using T = only_id;
-            static constexpr auto value{glz::object("id", &T::id)};
-         };
-      };
    }
 
    class error
@@ -208,7 +200,7 @@ namespace glz::rpc
             glz::object("jsonrpc", &T::version, "method", &T::method, "params", &T::params, "id", &T::id)};
       };
    };
-   using generic_request_t = request_t<glz::skip>;
+   using generic_request_t = request_t<glz::raw_json_view>;
 
    template <typename result_type>
    struct response_t
@@ -236,7 +228,7 @@ namespace glz::rpc
             glz::object("jsonrpc", &T::version, "result", &T::result, "error", &T::error, "id", &T::id)};
       };
    };
-   using generic_response_t = response_t<glz::skip>;
+   using generic_response_t = response_t<glz::raw_json_view>;
 
    template <detail::basic_fixed_string name, typename params_type, typename result_type>
    struct server_method_t
@@ -339,7 +331,7 @@ namespace glz::rpc
             return {{glz::write_json(response_parse_error), response_parse_error.error.value()}};
          }
 
-         auto batch_requests{glz::read_json<std::vector<glz::json_t>>(json_request)};
+         auto batch_requests{glz::read_json<std::vector<glz::raw_json_view>>(json_request)};
          if (batch_requests.has_value()) {
             if (batch_requests->empty()) {
                generic_response_t response_empty_vector{rpc::error(rpc::error_e::invalid_request)};
@@ -349,7 +341,7 @@ namespace glz::rpc
             std::vector<std::pair<std::string, rpc::error>> return_vec;
             return_vec.reserve(batch_requests->size());
             for (auto&& request : batch_requests.value()) {
-               auto response{per_request(glz::write_json(request))};
+               auto response{per_request(request.str)};
                if (response.has_value()) {
                   return_vec.emplace_back(std::move(response.value()));
                }
@@ -372,18 +364,14 @@ namespace glz::rpc
 
          if (!request.has_value()) {
             // Failed, but let's try to extract the `id`
-            detail::only_id id{};
-            glz::context ctx{};
-            auto parse_error{glz::read<glz::opts{
-               .error_on_unknown_keys = false,
-            }>(id, json_request, ctx)};
+            auto id{glz::get_as_json<jsonrpc_id_type, "/id">(json_request)};
 
-            if (parse_error) {
+            if (!id.has_value()) {
                generic_response_t response_no_id{rpc::error::invalid(request.error(), json_request)};
                return std::make_pair(glz::write_json(response_no_id), response_no_id.error.value());
             }
 
-            generic_response_t response_w_id{std::move(id.id), rpc::error::invalid(request.error(), json_request)};
+            generic_response_t response_w_id{std::move(id.value()), rpc::error::invalid(request.error(), json_request)};
             return std::make_pair(glz::write_json(response_w_id), response_w_id.error.value());
          }
 
