@@ -310,8 +310,7 @@ namespace glz
                   write<json>::op<Opts>(static_cast<key_t>(value.val), ctx, std::forward<Args>(args)...);
                }
                else {
-                  write<json>::op<Opts>(static_cast<key_t>(value), ctx,
-                                        std::forward<Args>(args)...);
+                  write<json>::op<Opts>(static_cast<key_t>(value), ctx, std::forward<Args>(args)...);
                }
             }
          }

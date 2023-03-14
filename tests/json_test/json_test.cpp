@@ -619,30 +619,31 @@ suite nullable_types = [] {
    };
 };
 
-namespace city {
-
-enum class Status { alive, dead };
-
-struct Status_
+namespace city
 {
-   Status val;
-   Status_(const Status& st) : val(st) {}
-   operator Status() const { return val; }
-   operator Status&() { return val; }
-   struct glaze
-   {
-      static constexpr auto value = glz::enumerate("alive", Status::alive, "dead", Status::dead);
-   };
-};
 
-struct Person
-{
-   Status_ status;
-   struct glaze
+   enum class Status { alive, dead };
+
+   struct Status_
    {
-      static constexpr auto value = glz::object("status", &Person::status);
+      Status val;
+      Status_(const Status& st) : val(st) {}
+      operator Status() const { return val; }
+      operator Status&() { return val; }
+      struct glaze
+      {
+         static constexpr auto value = glz::enumerate("alive", Status::alive, "dead", Status::dead);
+      };
    };
-};
+
+   struct Person
+   {
+      Status_ status;
+      struct glaze
+      {
+         static constexpr auto value = glz::object("status", &Person::status);
+      };
+   };
 }
 
 suite enum_types = [] {
