@@ -289,6 +289,10 @@ namespace glz::rpc
                                   std::function<void(glz::expected<typename method_t::result_t, rpc::error> const&,
                                                      jsonrpc_id_type const&)>>;
          };
+
+      template <typename call_return_t>
+      concept call_return_type =
+         requires { requires glz::is_any_of<call_return_t, std::string, std::vector<response_t<glz::raw_json>>>; };
    }
 
    namespace detail
@@ -312,6 +316,8 @@ namespace glz::rpc
    template <concepts::server_method_type... method_type>
    struct server
    {
+      using raw_response_t = response_t<glz::raw_json>;
+
       server() = default;
       glz::tuplet::tuple<method_type...> methods{};
 
@@ -321,67 +327,68 @@ namespace glz::rpc
          detail::set_callback<name>(methods, callback);
       }
 
-      // Return json stringified response_t meaning it can both be error and non-error
-      // If `id` is null in json_request a response will not be generated
-      std::vector<std::pair<std::string, rpc::error>> call(std::string_view json_request)
+      using raw_call_return_t = std::vector<raw_response_t>;
+      // Return json stringified std::vector<response_t> meaning it can both be error and non-error and batch request
+      // response. If `id` is null in json_request a response will not be generated
+      // If you would like to handle errors for each request:
+      // auto response_vector = server.call<decltype(server_instance)::raw_call_return_t>("...");
+      // std::string response = glz::write_json(response_vector);
+      template <concepts::call_return_type return_t = std::string>
+      return_t call(std::string_view json_request)
       {
+         constexpr auto return_helper{[]<typename input_type>(input_type&& response) -> auto {
+            if constexpr (std::same_as<return_t, std::string>) {
+               return glz::write_json(std::forward<input_type>(response));
+            }
+            else if constexpr (std::same_as<input_type, raw_response_t>) {
+               return std::vector<raw_response_t>{std::forward<input_type>(response)};
+            }
+            else {
+               return std::forward<input_type>(response);
+            }
+         }};
+
          if (auto parse_err{glz::validate_json(json_request)}) {
-            generic_response_t response_parse_error{
-               rpc::error(rpc::error_e::parse_error, format_error(parse_err, json_request))};
-            return {{glz::write_json(response_parse_error), response_parse_error.error.value()}};
+            return return_helper(raw_response_t{
+               rpc::error(rpc::error_e::parse_error, format_error(parse_err, json_request))});
          }
 
          auto batch_requests{glz::read_json<std::vector<glz::raw_json_view>>(json_request)};
-         if (batch_requests.has_value()) {
-            if (batch_requests->empty()) {
-               generic_response_t response_empty_vector{rpc::error(rpc::error_e::invalid_request)};
-               return {{glz::write_json(response_empty_vector), response_empty_vector.error.value()}};
-            }
-
-            std::vector<std::pair<std::string, rpc::error>> return_vec;
-            return_vec.reserve(batch_requests->size());
-            for (auto&& request : batch_requests.value()) {
-               auto response{per_request(request.str)};
-               if (response.has_value()) {
-                  return_vec.emplace_back(std::move(response.value()));
-               }
-            }
-            return return_vec;
+         if (batch_requests.has_value() && batch_requests.value().empty()) {
+            return return_helper(raw_response_t{rpc::error(rpc::error_e::invalid_request)});
          }
-         else {
-            auto response{per_request(json_request)};
-            if (response.has_value()) {
-               return {{std::move(response.value())}};
-            }
+         if (batch_requests.has_value()) {
+            return return_helper(batch_request(batch_requests.value()));
+         }
+
+         // At this point we are with a single request
+         auto response{per_request(json_request)};
+         if (response.has_value()) {
+            return return_helper(std::move(response.value()));
          }
          return {};
       }
 
      private:
-      auto per_request(std::string_view json_request) -> std::optional<std::pair<std::string, rpc::error>>
+      auto per_request(std::string_view json_request) -> std::optional<response_t<glz::raw_json>>
       {
          expected<generic_request_t, glz::parse_error> request{glz::read_json<generic_request_t>(json_request)};
 
          if (!request.has_value()) {
             // Failed, but let's try to extract the `id`
             auto id{glz::get_as_json<jsonrpc_id_type, "/id">(json_request)};
-
             if (!id.has_value()) {
-               generic_response_t response_no_id{rpc::error::invalid(request.error(), json_request)};
-               return std::make_pair(glz::write_json(response_no_id), response_no_id.error.value());
+               return raw_response_t{rpc::error::invalid(request.error(), json_request)};
             }
-
-            generic_response_t response_w_id{std::move(id.value()), rpc::error::invalid(request.error(), json_request)};
-            return std::make_pair(glz::write_json(response_w_id), response_w_id.error.value());
+            return raw_response_t{std::move(id.value()), rpc::error::invalid(request.error(), json_request)};
          }
 
          auto& req{request.value()};
          if (req.version != rpc::supported_version) {
-            generic_response_t response_inv_version{std::move(req.id), rpc::error::version(req.version)};
-            return std::make_pair(glz::write_json(response_inv_version), response_inv_version.error.value());
+            return raw_response_t{std::move(req.id), rpc::error::version(req.version)};
          }
 
-         std::optional<std::pair<std::string, rpc::error>> return_v{};
+         std::optional<response_t<glz::raw_json>> return_v{};
          bool method_found = methods.any([&json_request, &req, &return_v](auto&& method) -> bool {
             using meth_t = std::remove_reference_t<decltype(method)>;
             if (req.method != meth_t::name_v) {
@@ -392,32 +399,41 @@ namespace glz::rpc
                expected<typename meth_t::result_t, rpc::error> result{
                   std::invoke(method.callback, params_request->params)};
                if (result.has_value()) {
-                  typename meth_t::response_t response_w_result{std::move(req.id), std::move(result.value())};
-                  return_v = std::make_pair(glz::write_json(response_w_result), rpc::error{});
+                  return_v = raw_response_t{std::move(req.id), glz::write_json(result)};
                   if (std::holds_alternative<glz::json_t::null_t>(req.id)) {
+                     // rpc notification requires no response
                      return_v = std::nullopt;
                   }
                }
                else {
-                  typename meth_t::response_t response_w_err{std::move(req.id), std::move(result.error())};
-                  return_v = std::make_pair(glz::write_json(response_w_err), result.error());
+                  return_v = raw_response_t{std::move(req.id), std::move(result.error())};
                }
             }
             else {
                // TODO: Finish thought, glaze does not error on missing field:
                // https://github.com/stephenberry/glaze/issues/207
-               typename meth_t::response_t response_w_parse_err{
-                  std::move(req.id), rpc::error::invalid(params_request.error(), json_request)};
-               return_v = std::make_pair(glz::write_json(response_w_parse_err), response_w_parse_err.error.value());
+               return_v = raw_response_t{std::move(req.id), rpc::error::invalid(params_request.error(), json_request)};
             }
             return true;
          });
          if (!method_found) {
-            generic_response_t response_inv_method{std::move(req.id), rpc::error::method(req.method)};
-            return std::make_pair(glz::write_json(response_inv_method), response_inv_method.error.value());
+            return raw_response_t{std::move(req.id), rpc::error::method(req.method)};
          }
          return return_v;
       };
+
+      std::vector<raw_response_t> batch_request(std::vector<glz::raw_json_view> batch_requests)
+      {
+         std::vector<response_t<glz::raw_json>> return_vec;
+         return_vec.reserve(batch_requests.size());
+         for (auto&& request : batch_requests) {
+            auto response{per_request(request.str)};
+            if (response.has_value()) {
+               return_vec.emplace_back(std::move(response.value()));
+            }
+         }
+         return return_vec;
+      }
    };
 
    template <concepts::client_method_type... method_type>

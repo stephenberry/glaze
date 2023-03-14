@@ -1106,16 +1106,18 @@ auto main(int, char**) -> int {
     // send request_str over your communication protocol to the server
     
     // Call the server callback for method `foo`
-    // Returns each response json string since the request_str can withold batch of requests.
+    // Returns response json string since the request_str can withold batch of requests.
     // If the request is a notification (no `id` in request) a response will not be generated.
-    // For convenience, if it is an error response the error struct is included. 
-    std::vector<std::pair<std::string, rpc::error>> response_vec = server.call(request_str);
+    // For convenience, you can serialize the response yourself and get the responses as following:
+    // auto response_vector = server.call<decltype(server)::raw_call_return_t>("...");
+    // std::string response = glz::write_json(response_vector);
+    std::string response = server.call(request_str);
    
-    assert(response_vec.at(0).first ==
+    assert(response ==
          R"({"jsonrpc":"2.0","result":{"foo_c":true,"foo_d":"new world"},"id":"42"})");
    
     // Call the client callback for method `foo` with the provided results
-    client.call(response_vec.at(0).first);
+    client.call(response);
 }
 ```
 
