@@ -619,6 +619,8 @@ suite nullable_types = [] {
    };
 };
 
+namespace city {
+
 enum class Status { alive, dead };
 
 struct Status_
@@ -641,6 +643,7 @@ struct Person
       static constexpr auto value = glz::object("status", &Person::status);
    };
 };
+}
 
 suite enum_types = [] {
    using namespace boost::ut;
@@ -657,14 +660,14 @@ suite enum_types = [] {
       expect(buffer == "\"Green\"");
    };
    "enum_struct"_test = [] {
-      Person e{Status::alive};
+      city::Person e{city::Status::alive};
       std::string buffer3{};
       glz::write_json(e, buffer3);
       expect(buffer3 == R"({"status":"alive"})");
 
       buffer3 = R"({"status":"dead"})";
       expect(glz::read_json(e, buffer3) == glz::error_code::none);
-      expect(e.status == Status::dead);
+      expect(e.status == city::Status::dead);
    };
 };
 
