@@ -54,7 +54,8 @@ namespace glz
       array_element_not_found,
       elements_not_convertible_to_design,
       unknown_distribution,
-      invalid_distribution_elements
+      invalid_distribution_elements,
+      missing_key
    };
 
    struct parse_error final

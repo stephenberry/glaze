@@ -1139,10 +1139,19 @@ namespace glz
 
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
+            // Only used if error_on_missing_keys = true
+            [[maybe_unused]] bit_array<std::tuple_size_v<meta_t<T>>> fields{};
+
             bool first = true;
             while (true) {
                if (*it == '}') [[unlikely]] {
                   ++it;
+                  if constexpr (Opts.error_on_missing_keys) {
+                     constexpr auto req_fields = required_fields<T, Opts>();
+                     if ((req_fields & fields) != req_fields) {
+                        ctx.error = error_code::missing_key;
+                     }
+                  }
                   return;
                }
                else if (first) [[unlikely]]
@@ -1166,6 +1175,12 @@ namespace glz
                   static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
                   const auto& member_it = frozen_map.find(key);
                   if (member_it != frozen_map.end()) [[likely]] {
+                     if constexpr (Opts.error_on_missing_keys) {
+                        // TODO: Kludge/hack. Should work but could easily cuase memory issues with small changes.
+                        // At the very least if we are going to do this add a get_index method to the maps and call that
+                        auto index = member_it - frozen_map.begin();
+                        fields[index] = true;
+                     }
                      std::visit(
                         [&](auto&& member_ptr) {
                            read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
