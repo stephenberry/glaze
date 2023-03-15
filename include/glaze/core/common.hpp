@@ -807,7 +807,21 @@ namespace glz
       {};
       template <class T>
       array_variant(T) -> array_variant<T>;  // Only needed on older compilers until we move to template alias deduction
-   }                                         // namespace detail
+
+      template <class T, auto Opts>
+      constexpr auto required_fields()
+      {
+         constexpr auto n = std::tuple_size_v<meta_t<T>>;
+         bit_array<n> fields{};
+         if constexpr (Opts.error_on_missing_keys) {
+            for_each<n>([&](auto I) constexpr {
+               fields[I] = Opts.skip_null_members == false ||
+                           !nullable_t<std::decay_t<std::tuple_element_t<I, member_tuple_t<T>>>>;
+            });
+         }
+         return fields;
+      }
+   }  // namespace detail
 
    constexpr auto array(auto &&...args) { return detail::Array{glz::tuplet::make_copy_tuple(args...)}; }
 

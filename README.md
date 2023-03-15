@@ -609,6 +609,7 @@ struct opts {
    bool write_type_info = true; // Write type info for meta objects in variants
    bool use_cx_tags = true; // whether binary output should write compile time known tags
    bool force_conformance = false; // Do not allow invalid json normally accepted when reading such as comments.
+   bool error_on_missing_keys = false;  // Require all non nullable keys to be present in the object. Use skip_null_members = false to require nullable members
 };
 ```
 

@@ -11,11 +11,10 @@ namespace glz::detail
 {
    // Basicly std::bitset but exposes things normally not availible like the bitscan functions
    template <size_t N, std::unsigned_integral Chunk_t = uint64_t>
-      requires(N > 0)
    struct bit_array
    {
       static constexpr size_t n_chunk_bits = std::numeric_limits<Chunk_t>::digits;
-      static constexpr size_t n_chunks = (N - 1) / n_chunk_bits + 1;
+      static constexpr size_t n_chunks = (N == 0) ? 0 : (N - 1) / n_chunk_bits + 1;
 
       struct reference
       {
@@ -129,5 +128,13 @@ namespace glz::detail
          }
          return *this;
       }
+
+      constexpr bit_array operator&(const bit_array& rhs) const noexcept
+      {
+         auto ret = *this;
+         return ret &= rhs;
+      }
+
+      constexpr bool operator==(const bit_array& rhs) const noexcept { return data == rhs.data; }
    };
 }

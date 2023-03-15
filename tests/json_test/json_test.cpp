@@ -4133,6 +4133,96 @@ suite lamda_wrapper = [] {
    };
 };
 
+struct nullable_keys
+{
+   double req{};
+   std::optional<double> opt{};
+   double req2{};
+   std::optional<double> opt2{};
+};
+
+template <>
+struct glz::meta<nullable_keys>
+{
+   using T = nullable_keys;
+   static constexpr auto value = object("req", &T::req, "opt", &T::opt, "req2", &T::req2, "opt2", &T::opt2);
+};
+
+suite required_keys = [] {
+   "required_keys"_test = [] {
+      std::string buffer{};
+      my_struct obj{};
+
+      buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
+      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::none);
+      buffer = R"({"d":3.14,"arr":[1,2,3],"hello":"Hello World","i":287})";
+      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::none);
+      buffer = R"({"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
+      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) != glz::error_code::none);
+      buffer = R"({"i":287,"hello":"Hello World","arr":[1,2,3]})";
+      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) != glz::error_code::none);
+      buffer = R"({"i":287,"d":3.14,"arr":[1,2,3]})";
+      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) != glz::error_code::none);
+      buffer = R"({"i":287,"d":3.14,"hello":"Hello World"})";
+      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) != glz::error_code::none);
+   };
+
+   "required_keys_with_nullable"_test = [] {
+      std::string buffer{};
+      nullable_keys obj{};
+
+      buffer = R"({"req": 0, "opt": null, "req2": 0, "opt2": 0})";
+      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::none);
+      buffer = R"({"req": 0, "opt": null, "opt2": 0})";
+      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) != glz::error_code::none);
+      buffer = R"({"opt": null, "req2": 0, "opt2": 0})";
+      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) != glz::error_code::none);
+      buffer = R"({"req": 0, "req2": 0, "opt2": 0})";
+      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::none);
+      buffer = R"({"req": 0, "req2": 0})";
+      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::none);
+   };
+
+   "required_keys_long_object"_test = [] {
+      std::string_view order_book_str = R"(
+         {"code":"0","data":[{"alias":"","baseCcy":"BTC","category":"1","ctMult":"","ctType":"","ctVal":"",
+         "ctValCcy":"","expTime":"","instFamily":"","instId":"BTC-USDT",
+         "instType":"SPOT","lever":"10","listTime":"1548133413000","lotSz":"0.00000001","maxIcebergSz":"9999999999",
+         "maxLmtSz":"9999999999","maxMktSz":"1000000","maxStopSz":"1000000","maxTriggerSz":"9999999999","maxTwapSz":"9999999999",
+         "minSz":"0.00001","optType":"","quoteCcy":"USDT","settleCcy":"","state":"live","stk":"","tickSz":"0.1","uly":""}],
+         "msg":""}
+      )";
+
+      OKX_OrderBook order_book{};
+      auto ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(order_book,
+                                                                                                    order_book_str);
+      expect(ec == glz::error_code::none);
+
+      std::string_view order_book_str_missing = R"(
+         {"code":"0","data":[{"alias":"","baseCcy":"BTC","ctMult":"","ctType":"","ctVal":"",
+         "ctValCcy":"","expTime":"","instFamily":"","instId":"BTC-USDT",
+         "instType":"SPOT","lever":"10","listTime":"1548133413000","lotSz":"0.00000001","maxIcebergSz":"9999999999",
+         "maxLmtSz":"9999999999","maxMktSz":"1000000","maxStopSz":"1000000","maxTriggerSz":"9999999999","maxTwapSz":"9999999999",
+         "minSz":"0.00001","optType":"","quoteCcy":"USDT","settleCcy":"","state":"live","stk":"","tickSz":"0.1","uly":""}],
+         "msg":""}
+      )";
+      ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(order_book,
+                                                                                               order_book_str_missing);
+      expect(ec != glz::error_code::none);
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
