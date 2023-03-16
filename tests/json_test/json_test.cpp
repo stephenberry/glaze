@@ -4069,7 +4069,7 @@ suite long_object = [] {
 };
 
 template <class T>
-struct quoted
+struct quoted_t
 {
    T& val;
 };
@@ -4077,7 +4077,7 @@ struct quoted
 namespace glz::detail
 {
    template <class T>
-   struct from_json<quoted<T>>
+   struct from_json<quoted_t<T>>
    {
       template <auto Opts>
       static void op(auto&& value, auto&&... args)
@@ -4090,7 +4090,7 @@ namespace glz::detail
    };
 
    template <class T>
-   struct to_json<quoted<T>>
+   struct to_json<quoted_t<T>>
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -4105,7 +4105,7 @@ namespace glz::detail
 template <auto MemPtr>
 constexpr decltype(auto) qouted()
 {
-   return [](auto&& val) { return quoted<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+   return [](auto&& val) { return quoted_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
 }
 
 struct A
