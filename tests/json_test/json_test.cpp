@@ -4069,7 +4069,7 @@ suite long_object = [] {
 };
 
 template <class T>
-struct qouted_t
+struct quoted
 {
    T& val;
 };
@@ -4077,7 +4077,7 @@ struct qouted_t
 namespace glz::detail
 {
    template <class T>
-   struct from_json<qouted_t<T>>
+   struct from_json<quoted<T>>
    {
       template <auto Opts>
       static void op(auto&& value, auto&&... args)
@@ -4090,7 +4090,7 @@ namespace glz::detail
    };
 
    template <class T>
-   struct to_json<qouted_t<T>>
+   struct to_json<quoted<T>>
    {
       template <auto Opts>
       static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -4105,7 +4105,7 @@ namespace glz::detail
 template <auto MemPtr>
 constexpr decltype(auto) qouted()
 {
-   return [](auto&& val) { return qouted_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+   return [](auto&& val) { return quoted<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
 }
 
 struct A
@@ -4129,6 +4129,16 @@ suite lamda_wrapper = [] {
 
       buffer = R"({"x":"999.2"})";
       expect(glz::read_json(a, buffer) == glz::error_code::none);
+      expect(a.x == 999.2);
+   };
+   "lamda_wrapper_error_on_missing_keys"_test = [] {
+      A a{3.14};
+      std::string buffer{};
+      glz::write_json(a, buffer);
+      expect(buffer == R"({"x":"3.14"})");
+
+      buffer = R"({"x":"999.2"})";
+      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(a, buffer) == glz::error_code::none);
       expect(a.x == 999.2);
    };
 };

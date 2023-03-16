@@ -815,8 +815,9 @@ namespace glz
          bit_array<n> fields{};
          if constexpr (Opts.error_on_missing_keys) {
             for_each<n>([&](auto I) constexpr {
-               fields[I] = Opts.skip_null_members == false ||
-                           !nullable_t<std::decay_t<std::tuple_element_t<I, member_tuple_t<T>>>>;
+               fields[I] =
+                  !static_cast<bool>(Opts.skip_null_members) ||
+                  !nullable_t<std::decay_t<member_t<T, std::tuple_element_t<1, std::tuple_element_t<I, meta_t<T>>>>>>;
             });
          }
          return fields;
