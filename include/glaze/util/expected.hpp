@@ -923,11 +923,7 @@ namespace glz
       }
 
       template <class T2>
-         requires(!detail::is_expected<T2>) && requires(T const& x, T2 const& v) {
-                                                  {
-                                                     *x == v
-                                                     } -> std::convertible_to<bool>;
-                                               }
+         requires(!detail::is_expected<T2>) && requires(expected const& x, T2 const& v) { static_cast<bool>(*x == v); }
                                             friend constexpr auto operator==(expected const& x, T2 const& v) -> bool
       {
          return x.has_value() && static_cast<bool>(*x == v);
