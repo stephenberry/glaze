@@ -1,13 +1,13 @@
 #pragma once
 
 #include <algorithm>
-#include <deque>
 #include <glaze/glaze.hpp>
 #include <glaze/tuplet/tuple.hpp>
 #include <glaze/util/expected.hpp>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -62,6 +62,20 @@ namespace glz::rpc
 
    namespace detail
    {
+      std::string id_to_string(jsonrpc_id_type const& id)
+      {
+         if (std::holds_alternative<glz::json_t::null_t>(id)) {
+            return "null";
+         }
+         else if (auto* string_id{std::get_if<std::string>(&id)}) {
+            return *string_id;
+         }
+         else if (auto* int_id{std::get_if<std::int64_t>(&id)}) {
+            return std::to_string(*int_id);
+         }
+         return "unknown";
+      }
+
       template <typename CharType, unsigned N>
       struct [[nodiscard]] basic_fixed_string
       {
@@ -252,8 +266,8 @@ namespace glz::rpc
       using jsonrpc_id_t = jsonrpc_id_type;
       using request_t = rpc::request_t<params_t>;
       using response_t = rpc::response_t<result_t>;
-      std::function<void(glz::expected<result_t, rpc::error> const&, jsonrpc_id_type const&)> callback{
-         [](auto const&, auto const&) {}};
+      using callback_t = std::function<void(glz::expected<result_t, rpc::error> const&, jsonrpc_id_type const&)>;
+      std::unordered_map<jsonrpc_id_type, callback_t> pending_requests;
    };
    namespace concepts
    {
@@ -267,15 +281,15 @@ namespace glz::rpc
                                typename method_t::jsonrpc_id_t;
                                typename method_t::request_t;
                                typename method_t::response_t;
-                               {
-                                  meth.callback
-                               };
                             };
 
       template <typename method_t>
       concept server_method_type =
          requires(method_t meth) {
             requires method_type<method_t>;
+            {
+               meth.callback
+            };
             requires std::same_as<
                decltype(meth.callback),
                std::function<expected<typename method_t::result_t, rpc::error>(typename method_t::params_t const&)>>;
@@ -285,9 +299,14 @@ namespace glz::rpc
       concept client_method_type =
          requires(method_t meth) {
             requires method_type<method_t>;
-            requires std::same_as<decltype(meth.callback),
+            {
+               meth.pending_requests
+            };
+            requires std::same_as<
+               decltype(meth.pending_requests),
+               std::unordered_map<jsonrpc_id_type,
                                   std::function<void(glz::expected<typename method_t::result_t, rpc::error> const&,
-                                                     jsonrpc_id_type const&)>>;
+                                                     jsonrpc_id_type const&)>>>;
          };
 
       template <typename call_return_t>
@@ -310,6 +329,50 @@ namespace glz::rpc
             }
             return false;
          });
+      }
+
+      // Utility to get index of name_v inside method_t
+      template <typename T, T value, typename... Ts>
+      struct index_of_name;
+
+      template <typename T, T value, typename... Ts>
+      struct index_of_name<T, value, T, Ts...>
+      {
+         static constexpr std::size_t index = 0;
+      };
+
+      template <typename T, T value, typename U, typename... Ts>
+      struct index_of_name<T, value, U, Ts...>
+      {
+         static constexpr std::size_t index = (value == U::name_v) ? 0 : 1 + index_of_name<T, value, Ts...>::index;
+      };
+
+      template <typename T, T value>
+      struct index_of_name<T, value>
+      {
+         static constexpr std::size_t index = std::numeric_limits<size_t>::max();
+      };
+
+      template <typename map_t, detail::basic_fixed_string name, typename... method_type>
+      auto get_request_map(glz::tuplet::tuple<method_type...>& methods) -> map_t&
+      {
+         constexpr bool method_found = ((method_type::name_v == name) || ...);
+         static_assert(method_found, "Method not declared in client.");
+
+         map_t* return_ptr{nullptr};
+
+         methods.any([&return_ptr](auto&& method) -> bool {
+            using meth_t = std::remove_reference_t<decltype(method)>;
+            if constexpr (name == meth_t::name_v) {
+               return_ptr = &method.pending_requests;
+               return true;  // break methods loop
+            }
+            return false;
+         });
+
+         assert(return_ptr != nullptr);  // static_assert above should guarantee this
+
+         return *return_ptr;
       }
    }
 
@@ -336,209 +399,230 @@ namespace glz::rpc
       template <concepts::call_return_type return_t = std::string>
       return_t call(std::string_view json_request)
       {
-         constexpr auto return_helper{
-            []<typename input_type>(input_type &&
-                                    response) -> auto{if constexpr (std::same_as<return_t, std::string>){
-                                                 return glz::write_json(std::forward<input_type>(response));
-      }
-      else if constexpr (std::same_as<input_type, raw_response_t>)
-      {
-         return std::vector<raw_response_t>{std::forward<input_type>(response)};
-      }
-      else
-      {
-         return std::forward<input_type>(response);
-      }
-   }
-};
-
-if (auto parse_err{glz::validate_json(json_request)}) {
-   return return_helper(raw_response_t{rpc::error(rpc::error_e::parse_error, format_error(parse_err, json_request))});
-}
-
-auto batch_requests{glz::read_json<std::vector<glz::raw_json_view>>(json_request)};
-if (batch_requests.has_value() && batch_requests.value().empty()) {
-   return return_helper(raw_response_t{rpc::error(rpc::error_e::invalid_request)});
-}
-if (batch_requests.has_value()) {
-   return return_helper(batch_request(batch_requests.value()));
-}
-
-// At this point we are with a single request
-auto response{per_request(json_request)};
-if (response.has_value()) {
-   return return_helper(std::move(response.value()));
-}
-return {};
-}
-
-private:
-auto per_request(std::string_view json_request) -> std::optional<response_t<glz::raw_json>>
-{
-   expected<generic_request_t, glz::parse_error> request{glz::read_json<generic_request_t>(json_request)};
-
-   if (!request.has_value()) {
-      // Failed, but let's try to extract the `id`
-      auto id{glz::get_as_json<jsonrpc_id_type, "/id">(json_request)};
-      if (!id.has_value()) {
-         return raw_response_t{rpc::error::invalid(request.error(), json_request)};
-      }
-      return raw_response_t{std::move(id.value()), rpc::error::invalid(request.error(), json_request)};
-   }
-
-   auto& req{request.value()};
-   if (req.version != rpc::supported_version) {
-      return raw_response_t{std::move(req.id), rpc::error::version(req.version)};
-   }
-
-   std::optional<response_t<glz::raw_json>> return_v{};
-   bool method_found = methods.any([&json_request, &req, &return_v](auto&& method) -> bool {
-      using meth_t = std::remove_reference_t<decltype(method)>;
-      if (req.method != meth_t::name_v) {
-         return false;
-      }
-      auto const& params_request{glz::read_json<typename meth_t::request_t>(json_request)};
-      if (params_request.has_value()) {
-         expected<typename meth_t::result_t, rpc::error> result{std::invoke(method.callback, params_request->params)};
-         if (result.has_value()) {
-            return_v = raw_response_t{std::move(req.id), glz::write_json(result)};
-            if (std::holds_alternative<glz::json_t::null_t>(req.id)) {
-               // rpc notification requires no response
-               return_v = std::nullopt;
+         constexpr auto return_helper = []<typename input_type>(input_type && response) -> auto
+         {
+            if constexpr (std::same_as<return_t, std::string>) {
+               return glz::write_json(std::forward<input_type>(response));
             }
-         }
-         else {
-            return_v = raw_response_t{std::move(req.id), std::move(result.error())};
-         }
-      }
-      else {
-         // TODO: Finish thought, glaze does not error on missing field:
-         // https://github.com/stephenberry/glaze/issues/207
-         return_v = raw_response_t{std::move(req.id), rpc::error::invalid(params_request.error(), json_request)};
-      }
-      return true;
-   });
-   if (!method_found) {
-      return raw_response_t{std::move(req.id), rpc::error::method(req.method)};
-   }
-   return return_v;
-};
-
-std::vector<raw_response_t> batch_request(std::vector<glz::raw_json_view> batch_requests)
-{
-   std::vector<response_t<glz::raw_json>> return_vec;
-   return_vec.reserve(batch_requests.size());
-   for (auto&& request : batch_requests) {
-      auto response{per_request(request.str)};
-      if (response.has_value()) {
-         return_vec.emplace_back(std::move(response.value()));
-      }
-   }
-   return return_vec;
-}
-}
-;
-
-template <concepts::client_method_type... method_type>
-struct client
-{
-   // Create client with default queue size of 100
-   client() = default;
-   // Create client given the queue size to store request ids
-   explicit client(std::size_t max_queue_size) : queue_size(max_queue_size) {}
-   std::size_t const queue_size{100};
-   glz::tuplet::tuple<method_type...> methods{};
-   // <id, method_name>
-   std::deque<std::pair<jsonrpc_id_type, std::string>> id_ring_buffer{};
-
-   template <detail::basic_fixed_string name>
-   constexpr void on(auto const& callback)  // std::function<void(glz::expected<result_t, rpc::error> const&,
-                                            // jsonrpc_id_type const&)>
-   {
-      detail::set_callback<name>(methods, callback);
-   }
-
-   rpc::error call(std::string_view json_response)
-   {
-      expected<generic_response_t, glz::parse_error> response{glz::read_json<generic_response_t>(json_response)};
-
-      if (!response.has_value()) {
-         return rpc::error{rpc::error_e::parse_error, format_error(response.error(), json_response)};
-      }
-
-      auto& res{response.value()};
-
-      auto id_it{std::find_if(std::begin(id_ring_buffer), std::end(id_ring_buffer),
-                              [&res](auto&& pair) { return res.id == pair.first; })};
-
-      if (id_it == std::end(id_ring_buffer)) {
-         return rpc::error{rpc::error_e::internal, "ID not found in request buffer."};
-      }
-
-      jsonrpc_id_type id;
-      std::string method_name;
-      std::tie(id, method_name) = *id_it;
-
-      id_ring_buffer.erase(id_it);
-
-      rpc::error return_v;
-      bool method_found = methods.any([&json_response, &method_name, &return_v](auto&& method) -> bool {
-         using meth_t = std::remove_reference_t<decltype(method)>;
-         if (method_name == meth_t::name_v) {
-            expected<typename meth_t::response_t, glz::parse_error> response{
-               glz::read_json<typename meth_t::response_t>(json_response)};
-
-            if (!response.has_value()) {
-               return_v = rpc::error{rpc::error_e::parse_error, format_error(response.error(), json_response)};
+            else if constexpr (std::same_as<input_type, raw_response_t>) {
+               return std::vector<raw_response_t>{std::forward<input_type>(response)};
             }
             else {
-               auto& res_typed{response.value()};
-               if (res_typed.result.has_value()) {
-                  std::invoke(method.callback, res_typed.result.value(), res_typed.id);
-               }
-               else if (res_typed.error.has_value()) {
-                  std::invoke(method.callback, unexpected(res_typed.error.value()), res_typed.id);
+               return std::forward<input_type>(response);
+            }
+         };
+
+         if (auto parse_err{glz::validate_json(json_request)}) {
+            return return_helper(
+               raw_response_t{rpc::error(rpc::error_e::parse_error, format_error(parse_err, json_request))});
+         }
+
+         auto batch_requests{glz::read_json<std::vector<glz::raw_json_view>>(json_request)};
+         if (batch_requests.has_value() && batch_requests.value().empty()) {
+            return return_helper(raw_response_t{rpc::error(rpc::error_e::invalid_request)});
+         }
+         if (batch_requests.has_value()) {
+            return return_helper(batch_request(batch_requests.value()));
+         }
+
+         // At this point we are with a single request
+         auto response{per_request(json_request)};
+         if (response.has_value()) {
+            return return_helper(std::move(response.value()));
+         }
+         return {};
+      }
+
+     private:
+      auto per_request(std::string_view json_request) -> std::optional<response_t<glz::raw_json>>
+      {
+         expected<generic_request_t, glz::parse_error> request{glz::read_json<generic_request_t>(json_request)};
+
+         if (!request.has_value()) {
+            // Failed, but let's try to extract the `id`
+            auto id{glz::get_as_json<jsonrpc_id_type, "/id">(json_request)};
+            if (!id.has_value()) {
+               return raw_response_t{rpc::error::invalid(request.error(), json_request)};
+            }
+            return raw_response_t{std::move(id.value()), rpc::error::invalid(request.error(), json_request)};
+         }
+
+         auto& req{request.value()};
+         if (req.version != rpc::supported_version) {
+            return raw_response_t{std::move(req.id), rpc::error::version(req.version)};
+         }
+
+         std::optional<response_t<glz::raw_json>> return_v{};
+         bool method_found = methods.any([&json_request, &req, &return_v](auto&& method) -> bool {
+            using meth_t = std::remove_reference_t<decltype(method)>;
+            if (req.method != meth_t::name_v) {
+               return false;
+            }
+            auto const& params_request{glz::read_json<typename meth_t::request_t>(json_request)};
+            if (params_request.has_value()) {
+               expected<typename meth_t::result_t, rpc::error> result{
+                  std::invoke(method.callback, params_request->params)};
+               if (result.has_value()) {
+                  return_v = raw_response_t{std::move(req.id), glz::write_json(result)};
+                  if (std::holds_alternative<glz::json_t::null_t>(req.id)) {
+                     // rpc notification requires no response
+                     return_v = std::nullopt;
+                  }
                }
                else {
-                  return_v = rpc::error{rpc::error_e::parse_error, R"(Missing key "result" or "error" in response)"};
+                  return_v = raw_response_t{std::move(req.id), std::move(result.error())};
                }
             }
+            else {
+               // TODO: Finish thought, glaze does not error on missing field:
+               // https://github.com/stephenberry/glaze/issues/207
+               return_v = raw_response_t{std::move(req.id), rpc::error::invalid(params_request.error(), json_request)};
+            }
             return true;
+         });
+         if (!method_found) {
+            return raw_response_t{std::move(req.id), rpc::error::method(req.method)};
          }
-         return false;
-      });
+         return return_v;
+      };
 
-      if (!method_found) [[unlikely]] {
-         if (!return_v) {
-            return_v = rpc::error::method(method_name);
+      std::vector<raw_response_t> batch_request(std::vector<glz::raw_json_view> batch_requests)
+      {
+         std::vector<response_t<glz::raw_json>> return_vec;
+         return_vec.reserve(batch_requests.size());
+         for (auto&& request : batch_requests) {
+            auto response{per_request(request.str)};
+            if (response.has_value()) {
+               return_vec.emplace_back(std::move(response.value()));
+            }
          }
+         return return_vec;
       }
+   };
 
-      return return_v;
-   }
-
-   template <detail::basic_fixed_string method_name>
-   [[nodiscard]] auto request(jsonrpc_id_type&& id, auto&& params) -> std::string
+   template <concepts::client_method_type... method_type>
+   struct client
    {
-      constexpr bool method_found = ((method_type::name_v == method_name) || ...);
-      static_assert(method_found, "Method not declared in client.");
+      // Create client with default queue size of 100
+      client() = default;
+      // Create client given the queue size to store request ids
+      explicit client(std::size_t max_queue_size) : queue_size(max_queue_size) {}
+      std::size_t const queue_size{100};
+      glz::tuplet::tuple<method_type...> methods{};
 
-      using params_type = std::remove_cvref_t<decltype(params)>;
-      constexpr bool params_type_found = (std::is_same_v<typename method_type::params_t, params_type> || ...);
-      static_assert(params_type_found, "Input parameters do not match constructed client parameter types.");
+      rpc::error call(std::string_view json_response)
+      {
+         expected<generic_response_t, glz::parse_error> response{glz::read_json<generic_response_t>(json_response)};
 
-      constexpr bool method_params_match =
-         ((method_type::name_v == method_name && std::is_same_v<typename method_type::params_t, params_type>) || ...);
-      static_assert(method_params_match, "Method name and given params type do not match.");
+         if (!response.has_value()) {
+            return rpc::error{rpc::error_e::parse_error, format_error(response.error(), json_response)};
+         }
 
-      id_ring_buffer.emplace_front(id, method_name);
-      if (id_ring_buffer.size() > queue_size) {
-         id_ring_buffer.pop_back();
+         auto& res{response.value()};
+
+         rpc::error return_v;
+         bool id_found = methods.any([&json_response, &res, &return_v](auto&& method) -> bool {
+            using meth_t = std::remove_reference_t<decltype(method)>;
+
+            if (auto it{method.pending_requests.find(res.id)}; it != std::end(method.pending_requests)) {
+               auto [id, callback] = *it;
+
+               expected<typename meth_t::response_t, glz::parse_error> response{
+                  glz::read_json<typename meth_t::response_t>(json_response)};
+
+               if (!response.has_value()) {
+                  return_v = rpc::error{rpc::error_e::parse_error, format_error(response.error(), json_response)};
+               }
+               else {
+                  auto& res_typed{response.value()};
+                  if (res_typed.result.has_value()) {
+                     std::invoke(callback, res_typed.result.value(), res_typed.id);
+                  }
+                  else if (res_typed.error.has_value()) {
+                     std::invoke(callback, unexpected(res_typed.error.value()), res_typed.id);
+                  }
+                  else {
+                     return_v = rpc::error{rpc::error_e::parse_error, R"(Missing key "result" or "error" in response)"};
+                  }
+               }
+               method.pending_requests.erase(it);
+               return true;
+            }
+            return false;
+         });
+
+         if (!id_found) [[unlikely]] {
+            if (!return_v) {
+               return_v = rpc::error(rpc::error_e::internal, "id: " + detail::id_to_string(res.id) + " not found");
+            }
+         }
+
+         return return_v;
       }
 
-      rpc::request_t<params_type> req(std::forward<jsonrpc_id_type>(id), method_name.view(),
-                                      std::forward<params_type>(params));
-      return glz::write_json(std::move(req));
-   }
-};
+      // callback should be of type std::function<void(glz::expected<result_t, rpc::error> const&, jsonrpc_id_type
+      // const&)> where result_t is the result type declared for the given method name returns the request string and
+      // whether the callback was inserted into the queue if the callback was not inserted into the queue it can mean
+      // that the input was a notification or more serious, conflicting id, the provided id should be unique!
+      template <detail::basic_fixed_string method_name>
+      [[nodiscard]] auto request(jsonrpc_id_type&& id, auto&& params, auto&& callback) -> std::pair<std::string, bool>
+      {
+         constexpr bool method_found = ((method_type::name_v == method_name) || ...);
+         static_assert(method_found, "Method not declared in client.");
+
+         using params_type = std::remove_cvref_t<decltype(params)>;
+         constexpr bool params_type_found = (std::is_same_v<typename method_type::params_t, params_type> || ...);
+         static_assert(params_type_found, "Input parameters do not match constructed client parameter types.");
+
+         constexpr bool method_params_match =
+            ((method_type::name_v == method_name && std::is_same_v<typename method_type::params_t, params_type>) ||
+             ...);
+         static_assert(method_params_match, "Method name and given params type do not match.");
+
+         rpc::request_t<params_type> req(std::forward<jsonrpc_id_type>(id), method_name.view(),
+                                         std::forward<params_type>(params));
+
+         if (std::holds_alternative<glz::json_t::null_t>(id)) {
+            return {glz::write_json(std::move(req)), false};
+         }
+
+         // Some bookkeeping store the callback
+         bool inserted{false};
+         methods.any([&inserted, &req, cb = std::forward<decltype(callback)>(callback)](auto&& method) -> bool {
+            using meth_t = std::remove_reference_t<decltype(method)>;
+            if constexpr (method_name == meth_t::name_v) {
+               [[maybe_unused]] decltype(method.pending_requests.begin()) unused{};  // iterator_t
+               std::tie(unused, inserted) = method.pending_requests.emplace(std::make_pair(req.id, cb));
+               return true;  // break methods loop
+            }
+            return false;
+         });
+
+         return {glz::write_json(std::move(req)), inserted};
+      }
+
+      template <detail::basic_fixed_string method_name>
+      [[nodiscard]] auto notify(auto&& params) -> std::string
+      {
+         auto placebo{[](auto&, auto&) {}};
+         return request<method_name>(glz::json_t::null_t{}, params, std::move(placebo)).first;
+      }
+
+      template <detail::basic_fixed_string method_name>
+      [[nodiscard]] auto const& get_request_map() const
+      {
+         constexpr auto idx = detail::index_of_name<decltype(method_name), method_name, method_type...>::index;
+         using method_element = std::tuple_element_t<idx, std::tuple<method_type...>>;
+         using request_map_t = decltype(method_element().pending_requests);
+         return detail::get_request_map<request_map_t, method_name>(methods);
+      }
+      template <detail::basic_fixed_string method_name>
+      [[nodiscard]] auto& get_request_map()
+      {
+         constexpr auto idx = detail::index_of_name<decltype(method_name), method_name, method_type...>::index;
+         using method_element = std::tuple_element_t<idx, std::tuple<method_type...>>;
+         using request_map_t = decltype(method_element().pending_requests);
+         return detail::get_request_map<request_map_t, method_name>(methods);
+      }
+   };
 }  // namespace glz::rpc
