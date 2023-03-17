@@ -922,15 +922,11 @@ namespace glz
          return x.has_value() ? (*x == *y) : (x.error() == y.error());
       }
 
-      template <class T2>
-         requires(!detail::is_expected<T2>) && requires(T const& x, T2 const& v) {
-                                                  {
-                                                     x == v
-                                                     } -> std::convertible_to<bool>;
-                                               }
-                                            friend constexpr auto operator==(expected const& x, T2 const& v) -> bool
+      template <typename T2>
+         requires(!detail::is_expected<T2>)
+      friend constexpr bool operator==(const expected& x, const T2& v)
       {
-         return x.has_value() && static_cast<bool>(*x == v);
+         return x.has_value() && bool(*x == v);
       }
 
       template <class E2>
