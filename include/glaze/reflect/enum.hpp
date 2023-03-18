@@ -216,11 +216,14 @@ namespace glz::detail
    }
 }
 
-template <class E>
-requires std::is_enum_v<E>
-struct glz::meta<E>
+namespace glz
 {
-   static constexpr std::string_view name =
-      glz::detail::type_name<E>();  // Should be consistant across gcc/MSVC/clang unless enum is in a template
-   static constexpr auto value = glz::detail::Enum{glz::detail::auto_enum<E>()};
-};
+   template <class E>
+      requires std::is_enum_v<E>
+   struct meta<E>
+   {
+      static constexpr std::string_view name =
+         glz::detail::type_name<E>();  // Should be consistant across gcc/MSVC/clang unless enum is in a template
+      static constexpr auto value = glz::detail::Enum{glz::detail::auto_enum<E>()};
+   };
+}
