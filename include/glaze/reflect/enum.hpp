@@ -1,3 +1,4 @@
+#pragma once
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -213,12 +214,14 @@ namespace glz::detail
       constexpr auto vals = enum_array<T>();
       return auto_enum<T, vals>(std::make_index_sequence<vals.size()>{});
    }
+   template <class T>
+   concept is_enum = std::is_enum_v<T>;
 }
 
-template <class E>
-   requires std::is_enum_v<E>
+template <glz::detail::is_enum E>
 struct glz::meta<E>
 {
-   static constexpr sv name = glz::detail::type_name<E>; // Should be consistant across gcc/MSVC/clang unless enum is in a template
+   static constexpr sv name =
+      glz::detail::type_name<E>();  // Should be consistant across gcc/MSVC/clang unless enum is in a template
    static constexpr auto value = glz::detail::Enum{glz::detail::auto_enum<E>()};
 };

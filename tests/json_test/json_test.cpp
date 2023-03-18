@@ -4233,31 +4233,28 @@ suite required_keys = [] {
    };
 };
 
-namespace ns {
-enum class foo : int16_t {
-    red,
-    green,
-    yellow,
-    brown = yellow | green,
-    a,
-    b,
-    c,
-    p = 121,
-    elk_nine = 127,
-    l = 888,
-    l2 = -128
-};
+namespace ns
+{
+   enum class foo : int16_t {
+      red,
+      green,
+      yellow,
+      brown = yellow | green,
+      a,
+      b,
+      c,
+      p = 121,
+      elk_nine = 127,
+      l = 888,
+      l2 = -128
+   };
 
-enum biz  : uint8_t {
-    sheep_266,
-    frogs_7,
-};
+   enum biz : uint8_t {
+      sheep_266,
+      frogs_7,
+   };
 
-enum bar {
-    rock,
-    paper,
-    goldfish
-};
+   enum bar { rock, paper, goldfish };
 }  // namespace ns
 
 suite enum_reflect = [] {
@@ -4275,23 +4272,17 @@ suite enum_reflect = [] {
    };
 };
 
-enum class color_no_meta {
-    red,
-    green,
-    blue
-};
+enum class color_no_meta { red, green, blue };
 
 template <class T>
-struct some_template {
-    // How do we specialize this
-    enum class inner_enum_no_meta {
-        pi,
-        dog
-    };
-    // Hack to get clang to generate enum names for an enum in a template
-    // We have to refer to one of the enums by name somewhere before the relection stuff is called
-    // This is already done in the test but it's good measure to avoid confusion
-    static_assert(inner_enum_no_meta::pi == inner_enum_no_meta::pi);
+struct some_template
+{
+   // How do we specialize this
+   enum class inner_enum_no_meta { pi, dog };
+   // Hack to get clang to generate enum names for an enum in a template
+   // We have to refer to one of the enums by name somewhere before the relection stuff is called
+   // This is already done in the test but it's good measure to avoid confusion
+   static_assert(inner_enum_no_meta::pi == inner_enum_no_meta::pi);
 };
 
 suite enum_auto_meta = [] {
