@@ -4233,6 +4233,96 @@ suite required_keys = [] {
    };
 };
 
+namespace ns {
+enum class foo : int16_t {
+    red,
+    green,
+    yellow,
+    brown = yellow | green,
+    a,
+    b,
+    c,
+    p = 121,
+    elk_nine = 127,
+    l = 888,
+    l2 = -128
+};
+
+enum biz  : uint8_t {
+    sheep_266,
+    frogs_7,
+};
+
+enum bar {
+    rock,
+    paper,
+    goldfish
+};
+}  // namespace ns
+
+suite enum_reflect = [] {
+   "enum_reflect"_test = [] {
+      using namespace glz::detail;
+      expect(type_name<ns::foo>() == "ns::foo");
+      expect(type_name<ns::biz>() == "ns::biz");
+      expect(enum_name<ns::foo::brown>() == "brown");
+      expect(enum_name<ns::biz::sheep_266>() == "sheep_266");
+      expect(enum_array<ns::foo>().size() == 11);
+      expect(enum_array<ns::biz>().size() == 2);
+      expect(enum_array<ns::bar>().size() == 3);
+      expect(enum_array<ns::foo>()[9] == ns::foo::elk_nine);
+      expect(enum_name<enum_array<ns::foo>()[9]>() == "elk_nine");
+   };
+};
+
+enum class color_no_meta {
+    red,
+    green,
+    blue
+};
+
+template <class T>
+struct some_template {
+    // How do we specialize this
+    enum class inner_enum_no_meta {
+        pi,
+        dog
+    };
+    // Hack to get clang to generate enum names for an enum in a template
+    // We have to refer to one of the enums by name somewhere before the relection stuff is called
+    // This is already done in the test but it's good measure to avoid confusion
+    static_assert(inner_enum_no_meta::pi == inner_enum_no_meta::pi);
+};
+
+suite enum_auto_meta = [] {
+   "enum_auto_meta"_test = [] {
+      color_no_meta color = color_no_meta::red;
+      std::string buffer{};
+      glz::write_json(color, buffer);
+      expect(buffer == "\"red\"");
+
+      expect(glz::read_json(color, "\"green\"") == glz::error_code::none);
+      expect(color == color_no_meta::green);
+      buffer.clear();
+      glz::write_json(color, buffer);
+      expect(buffer == "\"green\"");
+   };
+
+   "enum_inside_template_auto_meta"_test = [] {
+      using pi_dog = typename some_template<int>::inner_enum_no_meta;
+      pi_dog e = pi_dog::dog;
+      std::string buffer{};
+      glz::write_json(e, buffer);
+      expect(buffer == "\"dog\"");
+
+      expect(glz::read_json(e, "\"pi\"") == glz::error_code::none);
+      expect(e == pi_dog::pi);
+      buffer.clear();
+      glz::write_json(e, buffer);
+      expect(buffer == "\"pi\"");
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors

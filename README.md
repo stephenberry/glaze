@@ -368,6 +368,9 @@ Lambda functions by default copy returns, therefore the `auto&` return type is t
 
 In JSON enums are used in their string form. In binary they are used in their integer form.
 
+For small enums using values in the range -1024 to 1024 no meta is required on the major compilers. There can be issues with enums inside templated classes/structs on clang but that can be avoided by using the enum inside a static assert `static_assert(Color::Red == Color::Red);`.
+
+Enum metas can be explicitly defined to reduce build times, add comments, support larger values, and to support non major compilers. 
 ```c++
 enum class Color { Red, Green, Blue };
 
