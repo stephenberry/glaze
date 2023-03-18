@@ -61,24 +61,31 @@ ut::suite vector_test_cases = [] {
    });
 
    ut::test("sum_result = 6") = [&server, &client] {
-      auto request_str{client.request<"summer">(1, std::vector{1, 2, 3})};
-      ut::expect(request_str == R"({"jsonrpc":"2.0","method":"summer","params":[1,2,3],"id":1})");
+      bool called{};
+      auto request_str{client.request<"summer">(
+         1, std::vector{1, 2, 3}, [&called](glz::expected<int, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
+            called = true;
+            ut::expect(value.has_value());
+            ut::expect(value.value() == 6);
+            ut::expect(std::holds_alternative<std::int64_t>(id));
+            ut::expect(std::get<std::int64_t>(id) == std::int64_t{1});
+         })};
+      ut::expect(request_str.first == R"({"jsonrpc":"2.0","method":"summer","params":[1,2,3],"id":1})");
+
+      [[maybe_unused]] auto& requests = client.get_request_map<"summer">();
+      ut::expect(requests.size() == 1);
+      ut::expect(requests.contains(1));  // the id is 1
 
       server.on<"summer">([](request_vec const& vec) -> glz::expected<int, rpc::error> {
          ut::expect(vec == std::vector{1, 2, 3});
          int sum{std::reduce(std::cbegin(vec), std::cend(vec))};
          return sum;
       });
-      std::string response = server.call(request_str);
+      std::string response = server.call(request_str.first);
       ut::expect(response == R"({"jsonrpc":"2.0","result":6,"id":1})");
 
-      client.on<"summer">([](glz::expected<int, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
-         ut::expect(value.has_value());
-         ut::expect(value.value() == 6);
-         ut::expect(std::holds_alternative<std::int64_t>(id));
-         ut::expect(std::get<std::int64_t>(id) == std::int64_t{1});
-      });
       client.call(response);
+      ut::expect(called);
    };
 };
 
@@ -135,8 +142,17 @@ ut::suite struct_test_cases = [] {
       client;
 
    ut::test("valid foo request") = [&server, &client] {
-      auto request_str{client.request<"foo">("42", method_foo_params{.foo_a = 1337, .foo_b = "hello world"})};
-      ut::expect(request_str ==
+      bool called{};
+      auto request_str{client.request<"foo">(
+         "42", method_foo_params{.foo_a = 1337, .foo_b = "hello world"},
+         [&called](glz::expected<method_foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
+            called = true;
+            ut::expect(value.has_value());
+            ut::expect(value.value() == method_foo_result{.foo_c = true, .foo_d = "new world"});
+            ut::expect(std::holds_alternative<std::string>(id));
+            ut::expect(std::get<std::string>(id) == std::string{"42"});
+         })};
+      ut::expect(request_str.first ==
                  R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})");
 
       server.on<"foo">([](method_foo_params const& params) -> glz::expected<method_foo_result, rpc::error> {
@@ -145,21 +161,27 @@ ut::suite struct_test_cases = [] {
          return method_foo_result{.foo_c = true, .foo_d = "new world"};
       });
 
-      std::string response = server.call(request_str);
+      std::string response = server.call(request_str.first);
       ut::expect(response == R"({"jsonrpc":"2.0","result":{"foo_c":true,"foo_d":"new world"},"id":"42"})");
 
-      client.on<"foo">([](glz::expected<method_foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
-         ut::expect(value.has_value());
-         ut::expect(value.value() == method_foo_result{.foo_c = true, .foo_d = "new world"});
-         ut::expect(std::holds_alternative<std::string>(id));
-         ut::expect(std::get<std::string>(id) == std::string{"42"});
-      });
       client.call(response);
+      ut::expect(called);
+
+      server.on<"foo">([](method_foo_params const&) -> glz::expected<method_foo_result, rpc::error> { return {}; });
    };
 
    ut::test("valid bar request") = [&server, &client] {
-      auto request_str{client.request<"bar">("bar-uuid", method_bar_params{.bar_a = 1337, .bar_b = "hello world"})};
-      ut::expect(request_str ==
+      bool called{};
+      auto request_str{client.request<"bar">(
+         "bar-uuid", method_bar_params{.bar_a = 1337, .bar_b = "hello world"},
+         [&called](glz::expected<method_bar_result, rpc::error> const& value, rpc::jsonrpc_id_type const& id) -> void {
+            called = true;
+            ut::expect(value.has_value());
+            ut::expect(value.value() == method_bar_result{.bar_c = true, .bar_d = "new world"});
+            ut::expect(std::holds_alternative<std::string>(id));
+            ut::expect(std::get<std::string>(id) == std::string{"bar-uuid"});
+         })};
+      ut::expect(request_str.first ==
                  R"({"jsonrpc":"2.0","method":"bar","params":{"bar_a":1337,"bar_b":"hello world"},"id":"bar-uuid"})");
 
       server.on<"bar">([](method_bar_params const& params) -> glz::expected<method_bar_result, rpc::error> {
@@ -168,26 +190,28 @@ ut::suite struct_test_cases = [] {
          return method_bar_result{.bar_c = true, .bar_d = "new world"};
       });
 
-      std::string response = server.call(request_str);
+      std::string response = server.call(request_str.first);
       ut::expect(response == R"({"jsonrpc":"2.0","result":{"bar_c":true,"bar_d":"new world"},"id":"bar-uuid"})");
 
-      client.on<"bar">(
-         [](glz::expected<method_bar_result, rpc::error> const& value, rpc::jsonrpc_id_type const& id) -> void {
-            ut::expect(value.has_value());
-            ut::expect(value.value() == method_bar_result{.bar_c = true, .bar_d = "new world"});
-            ut::expect(std::holds_alternative<std::string>(id));
-            ut::expect(std::get<std::string>(id) == std::string{"bar-uuid"});
-         });
       client.call(response);
+      ut::expect(called);
 
       server.on<"bar">([](method_bar_params const&) -> glz::expected<method_bar_result, rpc::error> { return {}; });
-      client.on<"bar">([](glz::expected<method_bar_result, rpc::error> const&, rpc::jsonrpc_id_type const&) -> void {});
    };
 
    ut::test("foo request error") = [&server, &client] {
-      auto request_str{client.request<"foo">("42", method_foo_params{.foo_a = 1337, .foo_b = "hello world"})};
+      bool called{};
+      auto request_str{client.request<"foo">(
+         "42", method_foo_params{.foo_a = 1337, .foo_b = "hello world"},
+         [&called](glz::expected<method_foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
+            called = true;
+            ut::expect(!value.has_value());
+            ut::expect(value.error() == rpc::error{rpc::error_e::server_error_lower, "my error"});
+            ut::expect(std::holds_alternative<std::string>(id));
+            ut::expect(std::get<std::string>(id) == std::string{"42"});
+         })};
 
-      ut::expect(request_str ==
+      ut::expect(request_str.first ==
                  R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})");
 
       server.on<"foo">([](method_foo_params const& params) -> glz::expected<method_foo_result, rpc::error> {
@@ -196,17 +220,14 @@ ut::suite struct_test_cases = [] {
          return glz::unexpected(rpc::error(rpc::error_e::server_error_lower, "my error"));
       });
 
-      std::string response = server.call(request_str);
+      std::string response = server.call(request_str.first);
       ut::expect(response ==
                  R"({"jsonrpc":"2.0","error":{"code":-32000,"message":"Server error","data":"my error"},"id":"42"})");
 
-      client.on<"foo">([](glz::expected<method_foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
-         ut::expect(!value.has_value());
-         ut::expect(value.error() == rpc::error{rpc::error_e::server_error_lower, "my error"});
-         ut::expect(std::holds_alternative<std::string>(id));
-         ut::expect(std::get<std::string>(id) == std::string{"42"});
-      });
       client.call(response);
+      ut::expect(called);
+
+      server.on<"foo">([](method_foo_params const&) -> glz::expected<method_foo_result, rpc::error> { return {}; });
    };
 
    ut::test("server invalid version error") = [&server] {
@@ -365,6 +386,66 @@ ut::suite struct_test_cases = [] {
          ut::expect(response.error.has_value());
          ut::expect(response.error->get_code().value() == glz::rpc::error_e::invalid_request);
       }
+   };
+   "client request map"_test = [&client] {
+      bool first_call{};
+      std::ignore =
+         client.request<"foo">("first_call", method_foo_params{}, [&first_call](auto, auto) { first_call = true; });
+      bool second_call{};
+      std::ignore =
+         client.request<"foo">("second_call", method_foo_params{}, [&second_call](auto, auto) { second_call = true; });
+      bool third_call{};
+      std::ignore =
+         client.request<"foo">("third_call", method_foo_params{}, [&third_call](auto, auto) { third_call = true; });
+      decltype(auto) map = client.get_request_map<"foo">();
+      map.at("first_call")({}, {});
+      ut::expect(first_call);
+      ut::expect(!second_call);
+      ut::expect(!third_call);
+      map.at("second_call")({}, {});
+      map.at("third_call")({}, {});
+      ut::expect(second_call);
+      ut::expect(third_call);
+      map.clear();
+   };
+   "client request timeout"_test = [&client] {
+      std::string id{"some id"};
+      std::ignore = client.request<"foo">(id, method_foo_params{}, [](auto, auto) {});
+
+      auto timeout = [&id, &client]() {
+         decltype(auto) map = client.get_request_map<"foo">();
+         ut::expect(map.contains(id));
+         map.erase(id);
+      };
+      timeout();
+   };
+   "client request id needs to be unique"_test = [&client] {
+      std::string id{"some id"};
+      bool first_called{};
+      auto [unused, inserted] =
+         client.request<"foo">(id, method_foo_params{}, [&first_called](auto, auto) { first_called = true; });
+      ut::expect(inserted);
+      auto [unused2, second_insert] = client.request<"foo">(id, method_foo_params{}, [](auto, auto) {});
+      ut::expect(!second_insert);
+
+      decltype(auto) map = client.get_request_map<"foo">();
+      map.at(id)({}, {});
+      ut::expect(first_called);
+
+      map.clear();
+   };
+   "client notification"_test = [&client] {
+      auto const notify_str{client.notify<"foo">(method_foo_params{})};
+      ut::expect(notify_str == R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":0,"foo_b":""},"id":null})");
+   };
+   "client call erases id from queue"_test = [&client, &server] {
+      std::uint8_t call_cnt{};
+      auto [request, inserted] =
+         client.request<"foo">("next gen id", method_foo_params{}, [&call_cnt](auto, auto) { call_cnt++; });
+      auto response = server.call(request);
+      client.call(response);
+      client.call(response);
+      ut::expect(call_cnt == 1);
    };
 
    // glaze currently does not support required members, so the user will get default constructed.
