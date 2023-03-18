@@ -4299,6 +4299,8 @@ suite enum_auto_meta = [] {
       expect(buffer == "\"green\"");
    };
 
+// This is does not work on older versions of gcc
+#if !defined(__GNUC__) || __GNUC__ > 10
    "enum_inside_template_auto_meta"_test = [] {
       using pi_dog = typename some_template<int>::inner_enum_no_meta;
       pi_dog e = pi_dog::dog;
@@ -4312,6 +4314,7 @@ suite enum_auto_meta = [] {
       glz::write_json(e, buffer);
       expect(buffer == "\"pi\"");
    };
+#endif
 };
 
 int main()
