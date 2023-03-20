@@ -525,7 +525,7 @@ See [Variant Handling](https://github.com/stephenberry/glaze/docs/variant-handli
 
 ## Generic JSON
 
-See [Generic JSON](../glaze/docs/generic-json.md) for `glz::json_t`.
+See [Generic JSON](./docs/generic-json.md) for `glz::json_t`.
 
 ```c++
 glz::json_t json{};
