@@ -14,7 +14,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - Tagged binary spec through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
 - No runtime type information necessary (compiles with `-fno-rtti`)
-- [JSON-RPC 2.0](#JSON-RPC 2.0) support
+- JSON-RPC 2.0 support
 - Much more!
 
 ## Performance
