@@ -1186,6 +1186,9 @@ namespace glz
                            read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
                         },
                         member_it->second);
+                     if (static_cast<bool>(ctx.error)) [[unlikely]] {
+                        return;
+                     }
                   }
                   else [[unlikely]] {
                      if constexpr (Opts.error_on_unknown_keys) {
@@ -1209,6 +1212,9 @@ namespace glz
                else {
                   std::string& key = string_buffer();
                   read<json>::op<Opts>(key, ctx, it, end);
+                  if (static_cast<bool>(ctx.error)) [[unlikely]] {
+                     return;
+                  }
 
                   skip_ws<Opts>(ctx, it, end);
                   match<':'>(ctx, it, end);

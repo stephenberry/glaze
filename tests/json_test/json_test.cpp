@@ -4192,10 +4192,10 @@ suite required_keys = [] {
       expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::none);
       buffer = R"({"req": 0, "opt": null, "opt2": 0})";
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) != glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::missing_key);
       buffer = R"({"opt": null, "req2": 0, "opt2": 0})";
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
-      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) != glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::missing_key);
       buffer = R"({"req": 0, "req2": 0, "opt2": 0})";
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
       expect(glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer) == glz::error_code::none);
@@ -4229,7 +4229,7 @@ suite required_keys = [] {
       )";
       ec = glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = true}>(order_book,
                                                                                                order_book_str_missing);
-      expect(ec != glz::error_code::none);
+      expect(ec == glz::error_code::missing_key);
    };
 };
 
