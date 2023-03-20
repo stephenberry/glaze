@@ -521,7 +521,7 @@ Only `"x"` and `"z"` are written out, because they are true. Reading in the buff
 > When writing binary, `flags` only uses one bit per boolean (byte aligned).
 
 ## Variant Handling and Type Deduction
-See [Variant Handling](https://github.com/stephenberry/glaze/docs/variant-handling.md) for details on `std::variant` support.
+See [Variant Handling](./docs/variant-handling.md) for details on `std::variant` support.
 
 ## Generic JSON
 
