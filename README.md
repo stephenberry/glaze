@@ -735,12 +735,13 @@ expect(json[2]["pi"].get<double>() == 3.14);
 
 # More Features
 
-- Tagged binary messaging for maximum performance
-- A data recorder (`recorder.hpp`)
-- A generic library API
-- A thread pool
-- Studies based on JSON structures
-- Eigen C++ matrix library support
+## [Shared Library API](./docs/glaze-interfaces.md)
+
+## [Thread Pool](./docs/thread-pool.md)
+
+## [Data Recorder](./docs/recorder.md)
+
+## [JSON-RPC 2.0](./docs/json-rpc.md)
 
 # Tagged Binary Messages (Crusher)
 
@@ -783,40 +784,6 @@ static constexpr auto partial = glz::json_ptrs("/i",
 std::vector<std::byte> out;
 glz::write_binary<partial>(s, out);
 ```
-
-# Data Recorder
-
-`record/recorder.hpp` provides an efficient recorder for mixed data types. The template argument takes all the supported types. The recorder stores the data as a variant of deques of those types. `std::deque` is used to avoid the cost of reallocating when a `std::vector` would grow, and typically a recorder is used in cases when the length is unknown.
-
-```c++
-glz::recorder<double, float> rec;
-
-double x = 0.0;
-float y = 0.f;
-
-rec["x"] = x;
-rec["y"] = y;
-
-for (int i = 0; i < 100; ++i) {
-   x += 1.5;
-   y += static_cast<float>(i);
-   rec.update(); // saves the current state of x and y
-}
-
-glz::write_file_json(rec, "recorder_out.json");
-```
-
-# Glaze Interfaces (Generic Library API)
-
-See [Glaze Interfaces](./docs/glaze-interfaces.md) for details on the shared library API.
-
-# Thread Pool
-
-See [Thread Pool](./docs/thread-pool.md).
-
-# Design of Experiments (Studies)
-
-[TODO: expand]
 
 # Extensions
 
