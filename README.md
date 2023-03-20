@@ -1,21 +1,4 @@
 # Glaze
-># IMPORTANT VERSION 1.0 RELEASE NOTES
->
->**If you need to access the previous exception-based version, pull the `version0` branch**.
->
->Previous versions of Glaze used exceptions, and for some minor features runtime type information (RTTI). This new version of glaze does not use exceptions or RTTI.
->
->- Glaze now builds with `-fno-exceptions` and `-fno-rtti`
->- Functions that could error typically return an `expected<T, error_code>` or `expected<T, parse_error>` or `expected<T, write_error>`
->- Note that when expecting a reference, `std::reference_wrapper` is used in the `expected`
->- `std::string format_error(const parse_error& pe, auto& buffer)` produces a more human readable error, which also points out where the error occurred within the buffer
->- See [std::expected](https://en.cppreference.com/w/cpp/utility/expected) for more details on how expected works
->
->Aditional notable breaking changes:
->- "type" field is no longer output or used by default for glaze objects in a std::variant since auto deduction for glaze objects in a variant has been heavily improved and tagged variants can be customized so it should no longer be necessary in most use cases. See [Variant Handling](https://github.com/stephenberry/glaze/wiki/Variant-Handling) for more details.
-
-___
-
 One of the fastest JSON libraries in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
 
 ## Highlights
