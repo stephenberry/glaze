@@ -735,13 +735,13 @@ expect(json[2]["pi"].get<double>() == 3.14);
 
 # More Features
 
-## [Shared Library API](./docs/glaze-interfaces.md)
+### [Shared Library API](./docs/glaze-interfaces.md)
 
-## [Thread Pool](./docs/thread-pool.md)
+### [Thread Pool](./docs/thread-pool.md)
 
-## [Data Recorder](./docs/recorder.md)
+### [Data Recorder](./docs/recorder.md)
 
-## [JSON-RPC 2.0](./docs/json-rpc.md)
+### [JSON-RPC 2.0](./docs/json-rpc.md)
 
 # Tagged Binary Messages (Crusher)
 
