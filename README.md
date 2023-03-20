@@ -14,6 +14,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - Tagged binary spec through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
 - No runtime type information necessary (compiles with `-fno-rtti`)
+- [JSON-RPC 2.0](#JSON-RPC 2.0) support
 - Much more!
 
 ## Performance
@@ -1005,9 +1006,9 @@ See the `ext` directory for extensions.
 - [Eigen](https://gitlab.com/libeigen/eigen). Supports reading and writing from Eigen Vector types.
 - [jsonrpc](https://www.jsonrpc.org/specification). Glaze wrapper supporting jsonrpc 2.0 specification.
 
-## jsonrpc 2.0
+## JSON-RPC 2.0
 
-Compile time specification of jsonrpc methods making it unnecessary to convert json to its according params/result/error type.
+Compile time specification of JSON-RPC methods making it unnecessary to convert JSON to its according params/result/error type.
 
 ### Example
 ```C++
