@@ -15,6 +15,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - No exceptions (compiles with `-fno-exceptions`)
 - No runtime type information necessary (compiles with `-fno-rtti`)
 - [JSON-RPC 2.0 support](./docs/json-rpc.md)
+- [JSON Schema generation](./docs/json-schema.md)
 - Much more!
 
 ## Performance
@@ -410,19 +411,6 @@ Simplified prettify definition below, which allows the use of tabs or changing t
 string prettify(auto& in, bool tabs = false, uint32_t indent_size = 3)
 ```
 
-## JSON Schema
-
-JSON Schema can automaticly be generated for serializable named types exposed via the meta system.
-```c++
-std::string schema = glz::write_json_schema<my_struct>();
-```
-
-This can be used for autocomplete, linting, and validation of user input/config files in editors like VS Code that support JSON Schema.
-
-![autocomplete example](https://user-images.githubusercontent.com/9817348/199346159-8b127c7b-a9ac-49fe-b86d-71350f0e1b10.png)
-
-![linting example](https://user-images.githubusercontent.com/9817348/199347118-ef7e9f74-ed20-4ff5-892a-f70ff1df23b5.png)
-
 
 ## Array Types
 
@@ -711,6 +699,8 @@ glz::read_ndjson(x, s);
 ### [Data Recorder](./docs/recorder.md)
 
 ### [JSON-RPC 2.0](./docs/json-rpc.md)
+
+### [JSON Schema](./docs/json-schema.md)
 
 # Extensions
 
