@@ -520,8 +520,19 @@ Only `"x"` and `"z"` are written out, because they are true. Reading in the buff
 
 > When writing binary, `flags` only uses one bit per boolean (byte aligned).
 
-## Variant handling and Type Deduction
-See [Variant-Handling](https://github.com/stephenberry/glaze/wiki/Variant-Handling) for details on std::variant support
+## Variant Handling and Type Deduction
+See [Variant Handling](https://github.com/stephenberry/glaze/docs/variant-handling.md) for details on `std::variant` support.
+
+## Generic JSON
+
+See [Generic JSON](https://github.com/stephenberry/glaze/docs/generic-json.md) for `glz::json_t`.
+
+```c++
+glz::json_t json{};
+std::string buffer = R"([5,"Hello World",{"pi":3.14}])";
+glz::read_json(json, buffer);
+assert(json[2]["pi"].get<double>() == 3.14);
+```
 
 ## Error Handling
 
