@@ -1,0 +1,115 @@
+## JSON-RPC 2.0
+
+Compile time specification of JSON-RPC methods making it unnecessary to convert JSON to its according params/result/error type.
+
+- [JSON-RPC 2.0 specification](https://www.jsonrpc.org/specification)
+
+### Example
+
+```C++
+struct method_foo_params
+{
+   int foo_a{};
+   std::string foo_b{};
+};
+template <>
+struct glz::meta<method_foo_params>
+{
+   static constexpr auto value{glz::object("foo_a", &method_foo_params::foo_a, "foo_b", &method_foo_params::foo_b)};
+};
+struct method_foo_result
+{
+   bool foo_c{};
+   std::string foo_d{};
+   bool operator==(method_foo_result const& rhs) const noexcept { return foo_c == rhs.foo_c && foo_d == rhs.foo_d; }
+};
+template <>
+struct glz::meta<method_foo_result>
+{
+   static constexpr auto value{glz::object("foo_c", &method_foo_result::foo_c, "foo_d", &method_foo_result::foo_d)};
+};
+
+struct method_bar_params
+{
+   int bar_a{};
+   std::string bar_b{};
+};
+template <>
+struct glz::meta<method_bar_params>
+{
+   static constexpr auto value{glz::object("bar_a", &method_bar_params::bar_a, "bar_b", &method_bar_params::bar_b)};
+};
+struct method_bar_result
+{
+   bool bar_c{};
+   std::string bar_d{};
+   bool operator==(method_bar_result const& rhs) const noexcept { return bar_c == rhs.bar_c && bar_d == rhs.bar_d; }
+};
+template <>
+struct glz::meta<method_bar_result>
+{
+   static constexpr auto value{glz::object("bar_c", &method_bar_result::bar_c, "bar_d", &method_bar_result::bar_d)};
+};
+
+namespace rpc = glz::rpc;
+
+auto main(int, char**) -> int {
+    rpc::server<rpc::server_method_t<"foo", method_foo_params, method_foo_result>,
+                rpc::server_method_t<"bar", method_bar_params, method_bar_result>>
+       server;
+    rpc::client<rpc::client_method_t<"foo", method_foo_params, method_foo_result>,
+                rpc::client_method_t<"bar", method_bar_params, method_bar_result>>
+       client;
+   
+    // One long living callback per method for the server
+    server.on<"foo">([](method_foo_params const& params) -> glz::expected<method_foo_result, rpc::error> {
+        // access to member variables for the request `foo`
+        // params.foo_a 
+        // params.foo_b
+        return method_foo_result{.foo_c = true, .foo_d = "new world"};
+        // Or return an error:
+        // return glz::unexpected(rpc::error(rpc::error_e::server_error_lower, "my error"));
+    });
+    server.on<"bar">([](method_bar_params const& params) -> glz::expected<method_bar_result, rpc::error> {
+        return method_bar_result{.bar_c = true, .bar_d = "new world"};
+    });
+    
+    std::string uuid{"42"};
+    // One callback per client request
+    auto [request_str, inserted] = client.request<"foo">(
+            uuid, 
+            method_foo_params{.foo_a = 1337, .foo_b = "hello world"}, 
+            [](glz::expected<method_foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
+        // Access to value and/or id
+    });
+    // request_str: R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})"
+    // send request_str over your communication protocol to the server
+    
+    // you can assign timeout for the request in your event loop
+    auto timeout = [uuid, &client]() {
+        decltype(auto) map = client.get_request_map<"foo">();
+        if (map.contains(id));
+            map.erase(id);
+    };
+    timeout();
+    
+    // Call the server callback for method `foo`
+    // Returns response json string since the request_str can withold batch of requests.
+    // If the request is a notification (no `id` in request) a response will not be generated.
+    // For convenience, you can serialize the response yourself and get the responses as following:
+    // auto response_vector = server.call<decltype(server)::raw_call_return_t>("...");
+    // std::string response = glz::write_json(response_vector);
+    std::string response = server.call(request_str);
+   
+    assert(response ==
+         R"({"jsonrpc":"2.0","result":{"foo_c":true,"foo_d":"new world"},"id":"42"})");
+   
+    // Call the client callback for method `foo` with the provided results
+    // This will automatically remove the previously assigned callback
+    client.call(response);
+    // This would return an internal error since the `id` is still not in the request map
+    auto err = client.call(response);
+}
+```
+
+> Thanks to **[jbbjarnason](https://github.com/jbbjarnason)**

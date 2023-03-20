@@ -1,6 +1,6 @@
 # Variant Handling
 
-Glaze has full support std::variants when writing and read support when either the type of the underlying json is deducible or the current type stored in the variant is the correct type. 
+Glaze has full support `std::variant` when writing, and read support when either the type of the underlying JSON is deducible or the current type stored in the variant is the correct type. 
 
 ## Basic Types
 
