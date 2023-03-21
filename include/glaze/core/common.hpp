@@ -898,7 +898,8 @@ struct glz::meta<glz::error_code>
                 "array_element_not_found", glz::error_code::array_element_not_found,                        //
                 "elements_not_convertible_to_design", glz::error_code::elements_not_convertible_to_design,  //
                 "unknown_distribution", glz::error_code::unknown_distribution,                              //
-                "invalid_distribution_elements", glz::error_code::invalid_distribution_elements             //
+                "invalid_distribution_elements", glz::error_code::invalid_distribution_elements,            //
+                "missing_key", glz::error_code::missing_key                                                 //
       );
 };
 
