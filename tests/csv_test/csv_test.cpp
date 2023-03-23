@@ -11,15 +11,10 @@ using namespace glz;
 
 struct my_struct
 {
-   std::vector<int> num1 = {};
-   std::deque<float> num2 = {};
-   std::vector<bool> maybe = {};
-   //std::vector<std::string> errors = {};
-
-
-   std::vector<std::array<int, 3>> v3s = {};
-
-   // enum support
+   std::vector<int> num1{};
+   std::deque<float> num2{};
+   std::vector<bool> maybe{};
+   std::vector<std::array<int, 3>> v3s{};
 };
 
 template <>
@@ -37,8 +32,8 @@ struct glz::meta<my_struct>
 
 void read_tests()
 {
-   //"basic read"_test = []
-   //{
+   "read column wise"_test = []
+   {
       std::string input_col =
 R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -46,6 +41,21 @@ R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 55,66,0,3,3,3
 77,88,0,4,4,4)";
 
+      my_struct obj{};
+
+      read_csv<false>(obj, input_col);
+      
+      expect(obj.num1[0] == 11);
+      expect(obj.num2[2] == 66);
+      expect(obj.maybe[3] == false);
+      expect(obj.v3s[0] == std::array{1,1,1});
+      expect(obj.v3s[1] == std::array{2,2,2});
+      
+      expect(!write_file_csv<false>(obj, "csv_test_colwise.csv"));
+   };
+   
+   "read row wise"_test = []
+   {
       std::string input_row =
 R"(num1,11,33,55,77
 num2,22,44,66,88
@@ -54,19 +64,16 @@ v3s[0],1,2,3,4
 v3s[1],1,2,3,4
 v3s[2],1,2,3,4)";
 
-
-      my_struct obj_row{};
-      my_struct obj_col{};
-
-      read_csv(obj_row, input_row);
-      read_csv<false>(obj_col, input_col);
-
-   //};
-
-      expect(!write_file_csv<false>(obj_col, "csv_test_colwise.csv"));
-      expect(!write_file_csv(obj_row, "csv_test_rowwise.csv"));
-
-      return;
+      my_struct obj{};
+      read_csv(obj, input_row);
+      
+      expect(obj.num1[0] == 11);
+      expect(obj.num2[2] == 66);
+      expect(obj.maybe[3] == false);
+      expect(obj.v3s[0][2] == 3);
+      
+      expect(!write_file_csv(obj, "csv_test_rowwise.csv"));
+   };
 }
 
 int main()

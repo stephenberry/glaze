@@ -4,13 +4,8 @@
 #pragma once
 
 #include "glaze/core/read.hpp"
-//#include "glaze/core/write.hpp"
 #include "glaze/core/format.hpp"
 #include "glaze/util/strod.hpp"
-//#include "glaze/core/opts.hpp"
-//#include "glaze/util/type_traits.hpp"
-//#include "glaze/util/parse.hpp"
-//#include "glaze/util/for_each.hpp"
 #include "glaze/file/file_ops.hpp"
 
 #include <charconv>
@@ -150,14 +145,9 @@ namespace glz
             }
          }
       };
-
-      inline void find_newline(auto&& it, auto&& end) noexcept
-      {
-         while (++it != end && *it != '\n')
-            ;
-      }
-
-      inline void goto_delim(auto&& it, auto&& end, char delim) noexcept
+      
+      template <char delim>
+      inline void goto_delim(auto&& it, auto&& end) noexcept
       {
          while (++it != end && *it != delim)
             ;
@@ -169,9 +159,6 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            std::string_view file = sv{it, size_t(std::distance(it, end))};
-            auto lines = Split(file, '\n');
-
             if constexpr (Opts.row_wise) {
                static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
 
@@ -186,50 +173,41 @@ namespace glz
                   }
 
                   auto start = it;
-                  goto_delim(it, end, ',');
-                  std::string_view key = sv{start, static_cast<size_t>(it - start)};
+                  goto_delim<','>(it, end);
+                  sv key{start, static_cast<size_t>(it - start)};
+                  
+                  const auto brace_pos = key.find('[');
+                  if (brace_pos != std::string_view::npos) {
+                     const auto close_brace = key.find(']');
+                     auto index = key.substr(brace_pos + 1, close_brace - (brace_pos + 1));
+                     key = key.substr(0, brace_pos);
+                     uint64_t i;
+                     const auto [ptr, ec] = std::from_chars(index.data(), index.data() + index.size(), i);
+                     if (ec != std::errc()) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     ctx.csv_index = uint32_t(i);
+                  }
 
                   while (*it != '\n' && it != end) {
                      ++it;
-
-                     auto brace_pos = key.find('[');
-                     if (brace_pos != std::string_view::npos) {
-                        auto key_name = key.substr(0, brace_pos);
-
-                        auto close_brace = key.find(']');
-                        auto index = key.substr(brace_pos + 1, close_brace - (brace_pos + 1));
-                        int i;
-                        auto [ptr, ec] = std::from_chars(index.data(), index.data() + index.size(), i);
-                        if (ec == std::errc()) {
-                           ctx.error = error_code::syntax_error;
-                           return;
-                        }
-                        ctx.csv_index = i;
-                        const auto& member_it = frozen_map.find(key_name);
-                        if (member_it != frozen_map.end()) [[likely]] {
-                           std::visit(
-                              [&](auto&& member_ptr) {
-                                 read<csv>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
-                              },
-                              member_it->second);
-                        }
-                     }
-                     else {
-                        const auto& member_it = frozen_map.find(key);
-                        if (member_it != frozen_map.end()) [[likely]] {
-                           std::visit(
-                              [&](auto&& member_ptr) {
-                                 read<csv>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
-                              },
-                              member_it->second);
-                        }
+                     
+                     const auto& member_it = frozen_map.find(key);
+                     if (member_it != frozen_map.end()) [[likely]] {
+                        std::visit(
+                           [&](auto&& member_ptr) {
+                              read<csv>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
+                           },
+                           member_it->second);
                      }
                   }
                }
             }
-            else {
+            else // column wise
+            {
                auto start = it;
-               goto_delim(it, end, '\n');
+               goto_delim<'\n'>(it, end);
                std::string_view key_line = sv{start, static_cast<size_t>(it - start)};
                //++it;  // pass by the new line
 
@@ -246,7 +224,7 @@ namespace glz
                         key = key.substr(0, brace_pos);
                         for (size_t j = i + 1; j < keys.size(); ++j) {
                            if (keys[j].find(key) != std::string_view::npos) {
-                              i++;
+                              ++i;
                            }
                         }
                      }
