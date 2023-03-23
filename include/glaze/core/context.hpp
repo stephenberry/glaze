@@ -85,6 +85,7 @@ namespace glz
       uint32_t indentation_level{};
       std::string current_file;  // top level file path
       error_code error{};
+      uint32_t csv_index{};
    };
 
    template <class T>
