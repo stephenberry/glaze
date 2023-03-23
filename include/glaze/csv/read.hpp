@@ -169,7 +169,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            std::string_view file = sv{it, end};
+            std::string_view file = sv{it, size_t(std::distance(it, end))};
             auto lines = Split(file, '\n');
 
             if constexpr (Opts.row_wise) {
@@ -266,9 +266,9 @@ namespace glz
    }
 
    template <bool RowWise = true, class T, class Buffer>
-   inline void read_csv(T&& value, Buffer&& buffer) noexcept
+   inline auto read_csv(T&& value, Buffer&& buffer) noexcept
    {
-      read<opts{.format = csv, .row_wise = RowWise}>(value, std::forward<Buffer>(buffer));
+      return read<opts{.format = csv, .row_wise = RowWise}>(value, std::forward<Buffer>(buffer));
    }
 
    template <bool RowWise = true, class T, class Buffer>

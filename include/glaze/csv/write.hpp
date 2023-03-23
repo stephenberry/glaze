@@ -73,27 +73,27 @@ namespace glz
          {
             if constexpr (resizeable<T>) {
                if constexpr (Opts.row_wise) {
-                  for (int i = 0; i < value.size(); i++) {
+                  const auto n = value.size();
+                  for (size_t i = 0; i < n; ++i) {
                      write<csv>::op<Opts>(value[i], ctx, b, ix);
 
-                     if(i != (value.size() - 1))
+                     if (i != (n - 1)) {
                         dump<','>(b, ix);
+                     }
                   }
                }
                else {
                   write<csv>::op<Opts>(value[ctx.csv_index], ctx, b, ix);
                }
-               
             }
             else {
-               if constexpr (Opts.row_wise) {
-
-               }
-               for (int i = 0; i < value.size(); i++) {
+               const auto n = value.size();
+               for (size_t i = 0; i < n; ++i) {
                   write<csv>::op<Opts>(value[i], ctx, b, ix);
 
-                  if (i != (value.size() - 1))
+                  if (i != (n - 1)) {
                      dump<','>(b, ix);
+                  }
                }
             }
          }
@@ -108,9 +108,8 @@ namespace glz
             dump(value, b, ix);
          }
       };
-
-
-      template <class T> requires glaze_object_t<T>
+      
+      template <glaze_object_t T>
       struct to_csv<T>
       {
          template <auto Opts, class B>
@@ -130,15 +129,15 @@ namespace glz
                   if constexpr (array_t<V_t>) {
 
                      auto member = get_member(value, glz::tuplet::get<1>(item));
-                     int count = member.size();
-                     int size = member[0].size();
-                     for (int i = 0; i < size; i++) {
+                     const auto count = member.size();
+                     const auto size = member[0].size();
+                     for (size_t i = 0; i < size; ++i) {
                         std::string idx_key(key);
                         idx_key += '[' + std::to_string(i) + ']';
                         write<csv>::op<Opts>(idx_key, ctx, b, ix);
                         dump<','>(b, ix);
 
-                        for (int j = 0; j < count; j++) {
+                        for (size_t j = 0; j < count; ++j) {
                            write<csv>::op<Opts>(member[j][i], ctx, b, ix);
                            if (j != count - 1) {
                               dump<','>(b, ix);
@@ -170,7 +169,7 @@ namespace glz
                   if (first) {
                      first = false;
                      if constexpr (array_t<item_type>) {
-                        row_count = get_member(value, glz::tuplet::get<1>(item)).size();
+                        row_count = int(get_member(value, glz::tuplet::get<1>(item)).size());
                      }
                   }
                   else {
@@ -178,15 +177,15 @@ namespace glz
 
                      if constexpr (array_t<item_type>) {
                         const auto size = get_member(value, glz::tuplet::get<1>(item)).size();
-                        row_count = (size < row_count) ? size : row_count;
+                        row_count = (int(size) < row_count) ? int(size) : row_count;
                      }
                   }
 
                   using V_t = typename item_type::value_type;
 
                   if constexpr (array_t<V_t> && !resizeable<V_t>) {
-                     int size = get_member(value, glz::tuplet::get<1>(item))[0].size();
-                     for (int i = 0; i < size; i++) {
+                     const auto size = get_member(value, glz::tuplet::get<1>(item))[0].size();
+                     for (size_t i = 0; i < size; ++i) {
                         std::string idx_key(key);
                         idx_key += '[' + std::to_string(i) + ']';
                         write<csv>::op<Opts>(idx_key, ctx, b, ix);
@@ -203,7 +202,7 @@ namespace glz
 
                dump <'\n'>(b, ix);
 
-               for (; ctx.csv_index < row_count; ctx.csv_index++) {
+               for (; int(ctx.csv_index) < row_count; ++ctx.csv_index) {
                   first = true;
 
                   for_each<N>([&](auto I) {
@@ -219,7 +218,7 @@ namespace glz
                      write<csv>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, b, ix);
                   });
 
-                  dump <'\n'>(b, ix);
+                  dump<'\n'>(b, ix);
                }
             }
          }

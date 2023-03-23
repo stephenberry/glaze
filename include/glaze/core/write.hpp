@@ -78,4 +78,14 @@ namespace glz
       context ctx{};
       write<Opts>(std::forward<T>(value), os, ctx);
    }
+   
+   [[nodiscard]] GLZ_ALWAYS_INLINE error_code buffer_to_file(auto&& buffer, auto&& file_name) noexcept
+   {
+      auto file = std::ofstream(file_name, std::ios::out);
+      if (!file) {
+         return error_code::file_open_failure;
+      }
+      file.write(buffer.data(), buffer.size());
+      return {};
+   }
 }

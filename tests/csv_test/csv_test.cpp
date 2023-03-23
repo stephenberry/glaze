@@ -63,9 +63,8 @@ v3s[2],1,2,3,4)";
 
    //};
 
-      write_file_csv<false>(obj_col, "csv_test_colwise.csv");
-      write_file_csv(obj_row, "csv_test_rowwise.csv");
-
+      expect(!write_file_csv<false>(obj_col, "csv_test_colwise.csv"));
+      expect(!write_file_csv(obj_row, "csv_test_rowwise.csv"));
 
       return;
 }
