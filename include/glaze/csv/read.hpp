@@ -10,31 +10,6 @@
 
 #include <charconv>
 
-// Taken from https://stackoverflow.com/questions/48012539/idiomatically-split-a-string-view
-inline std::vector<std::string_view> Split(const std::string_view str, const char delim = ',')
-{
-   std::vector<std::string_view> result;
-
-   int indexCommaToLeftOfColumn = 0;
-   int indexCommaToRightOfColumn = -1;
-
-   for (int i = 0; i < static_cast<int>(str.size()); i++) {
-      if (str[i] == delim) {
-         indexCommaToLeftOfColumn = indexCommaToRightOfColumn;
-         indexCommaToRightOfColumn = i;
-         int index = indexCommaToLeftOfColumn + 1;
-         int length = indexCommaToRightOfColumn - index;
-
-         std::string_view column(str.data() + index, length);
-         result.push_back(column);
-      }
-   }
-   const std::string_view finalColumn(str.data() + indexCommaToRightOfColumn + 1,
-                                      str.size() - indexCommaToRightOfColumn - 1);
-   result.push_back(finalColumn);
-   return result;
-}
-
 namespace glz
 {
    namespace detail
@@ -131,17 +106,14 @@ namespace glz
                   value[ctx.csv_index] = element;
                }
                else {
-                  size_t size = value.size();
+                  const auto size = value.size();
                   for (size_t i = 0; i < size; ++i) {
-                     typename T::value_type element;
-                     read<csv>::op<Opts>(element, ctx, it, end);
-                     value[i] = element;
+                     read<csv>::op<Opts>(value[i], ctx, it, end);
                      if (i != size - 1) {
-                        ++it;
+                        ++it; // skip comment
                      }
                   }
                }
-               
             }
          }
       };
@@ -181,13 +153,13 @@ namespace glz
                      const auto close_brace = key.find(']');
                      auto index = key.substr(brace_pos + 1, close_brace - (brace_pos + 1));
                      key = key.substr(0, brace_pos);
-                     uint64_t i;
+                     uint32_t i;
                      const auto [ptr, ec] = std::from_chars(index.data(), index.data() + index.size(), i);
                      if (ec != std::errc()) {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     ctx.csv_index = uint32_t(i);
+                     ctx.csv_index = i;
                   }
 
                   while (*it != '\n' && it != end) {
@@ -206,35 +178,64 @@ namespace glz
             }
             else // column wise
             {
+               std::vector<sv> keys;
+               
+               // array like keys are only read once, because they will handle multiple values at once
+               auto read_key = [&](auto&& start, auto&& it) {
+                  sv key{ start, size_t(it - start) };
+                  const auto brace_pos = key.find('[');
+                  if (brace_pos != std::string_view::npos) {
+                     key = key.substr(0, brace_pos);
+                  }
+                  if (keys.size() && (keys.back() != key)) {
+                     keys.emplace_back(key);
+                  }
+                  else if (keys.empty()) {
+                     keys.emplace_back(key);
+                  }
+               };
+               
                auto start = it;
-               goto_delim<'\n'>(it, end);
-               std::string_view key_line = sv{start, static_cast<size_t>(it - start)};
-               //++it;  // pass by the new line
-
-               auto keys = Split(key_line);
+               while (it != end) {
+                  if (*it == ',') {
+                     read_key(start, it);
+                     ++it;
+                     start = it;
+                  }
+                  else if (*it == '\n') {
+                     if (start == it) {
+                        // trailing comma or empty
+                     }
+                     else {
+                        read_key(start, it);
+                     }
+                     break;
+                  }
+                  else {
+                     ++it;
+                  }
+               }
+               
+               const auto n_keys = keys.size();
+               
+               static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
 
                while (it != end) {
-                  for (size_t i = 0; i < keys.size(); ++i) {
-                     ++it;
-
-                     auto key = keys[i];
-
-                     size_t brace_pos = key.find('[');
-                     if (brace_pos != std::string::npos) {
-                        key = key.substr(0, brace_pos);
-                        for (size_t j = i + 1; j < keys.size(); ++j) {
-                           if (keys[j].find(key) != std::string_view::npos) {
-                              ++i;
-                           }
-                        }
+                  ++it; // skip new line
+                  for (size_t i = 0; i < n_keys; ++i) {
+                     if (*it == ',') {
+                        ++it;
                      }
-
-                     static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
-                     const auto& member_it = frozen_map.find(key);
+                     const auto& member_it = frozen_map.find(keys[i]);
                      if (member_it != frozen_map.end()) [[likely]] {
                         std::visit(
-                           [&](auto&& member_ptr) { read<csv>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
-                           member_it->second);
+                           [&](auto&& member_ptr) {
+                              read<csv>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
+                           }, member_it->second);
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::unknown_key;
+                        return;
                      }
                   }
                }
