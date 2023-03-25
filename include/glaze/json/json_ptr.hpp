@@ -641,8 +641,13 @@ namespace glz
                while (true) {
                   skip_ws<Opts>(ctx, it, end);
                   const auto k = parse_key(ctx, it, end);
-                  if (k) {
-                     if (cx_string_cmp<key>(*k)) {
+                  if (bool(ctx.error)) [[unlikely]] {
+                     ret = unexpected(
+                        parse_error{error_code::syntax_error, static_cast<size_t>(std::distance(start, it))});
+                     return;
+                  }
+                  else {
+                     if (cx_string_cmp<key>(k)) {
                         skip_ws<Opts>(ctx, it, end);
                         match<':'>(ctx, it, end);
                         skip_ws<Opts>(ctx, it, end);
@@ -661,11 +666,6 @@ namespace glz
                         }
                         ++it;
                      }
-                  }
-                  else {
-                     ret = unexpected(
-                        parse_error{error_code::syntax_error, static_cast<size_t>(std::distance(start, it))});
-                     return;
                   }
                }
             }
