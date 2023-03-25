@@ -17,7 +17,7 @@ assert(json[2]["pi"].get<double>() == 3.14);
 glz::json_t json = {
    {"pi", 3.141},
    {"happy", true},
-   {"name", "Niels"},
+   {"name", "Stephen"},
    {"nothing", nullptr},
    {"answer", {{"everything", 42.0}}},
    {"list", {1.0, 0.0, 2.0}},
@@ -28,5 +28,5 @@ glz::json_t json = {
 };
 std::string buffer{};
 glz::write_json(json, buffer);
-expect(buffer == R"({"answer":{"everything":42},"happy":true,"list":[1,0,2],"name":"Niels","object":{"currency":"USD","value":42.99},"pi":3.141})");
+expect(buffer == R"({"answer":{"everything":42},"happy":true,"list":[1,0,2],"name":"Stephen","object":{"currency":"USD","value":42.99},"pi":3.141})");
 ```
