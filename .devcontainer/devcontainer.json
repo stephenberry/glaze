@@ -1,0 +1,46 @@
+{
+   "name": "Alpine++",
+   "build": {
+      "dockerfile": "Dockerfile"
+   },
+   "features": {
+      "ghcr.io/devcontainers/features/common-utils:2":{}
+  },
+   // Needed when using a ptrace-based debugger like C++, Go, and Rust
+   "capAdd": [
+      "SYS_PTRACE"
+   ],
+   "securityOpt": [
+      "seccomp=unconfined"
+   ],
+   // Configure tool-specific properties.
+   "customizations": {
+      // Configure properties specific to VS Code.
+      "vscode": {
+         // Set *default* container specific settings.json values on container create.
+         "settings": {
+            // Disable cpptool intellisense since we are using clangd
+            "C_Cpp.intelliSenseEngine": "disabled",
+            "C_Cpp.autocomplete": "disabled",
+            "C_Cpp.errorSquiggles": "disabled",
+            // Make sure we are writing a compile_commands.json to the root for tools to use
+            "cmake.exportCompileCommandsFile": true,
+            "cmake.copyCompileCommands": "${workspaceRoot}/compile_commands.json",
+            // cSpell Can clutter up the problems with false positives
+            "cSpell.diagnosticLevel": "Hint"
+         },
+         // Add the IDs of extensions you want installed when the container is created.
+         // Note that some extensions may not work in Alpine Linux. See https://aka.ms/vscode-remote/linux.
+         "extensions": [
+            "llvm-vs-code-extensions.vscode-clangd",
+            "ms-vscode.cpptools",
+            "ms-vscode.cmake-tools",
+            "twxs.cmake",
+            "cschlosser.doxdocgen",
+            "editorconfig.editorconfig",
+            "streetsidesoftware.code-spell-checker",
+            "GitHub.copilot"
+         ]
+      }
+   }
+}

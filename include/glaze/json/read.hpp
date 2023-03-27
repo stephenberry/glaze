@@ -19,6 +19,7 @@
 #include "glaze/util/parse.hpp"
 #include "glaze/util/strod.hpp"
 #include "glaze/util/type_traits.hpp"
+#include "glaze/util/variant.hpp"
 
 namespace glz
 {
@@ -109,6 +110,8 @@ namespace glz
          {
             if constexpr (!Opts.ws_handled) {
                skip_ws<Opts>(ctx, args...);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
             match<R"("std::monostate")">(args...);
          }
@@ -122,20 +125,22 @@ namespace glz
          {
             if constexpr (!Opts.ws_handled) {
                skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
 
             switch (*it) {
             case 't': {
                ++it;
-               match<"rue">(ctx, it, end);
                value = true;
-               break;
+               match<"rue">(ctx, it, end);
+               return;
             }
             case 'f': {
                ++it;
-               match<"alse">(ctx, it, end);
                value = false;
-               break;
+               match<"alse">(ctx, it, end);
+               return;
             }
                [[unlikely]] default:
                {
@@ -152,12 +157,10 @@ namespace glz
          template <auto Options, class It>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
-               return;
-            }
-
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
 
             // TODO: fix this
@@ -165,11 +168,11 @@ namespace glz
                                          const uint8_t*, uint8_t*>;
             auto cur = reinterpret_cast<X>(it);
             auto s = parse_number<std::decay_t<T>, Options.force_conformance>(value, cur);
+            it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
             if (!s) [[unlikely]] {
                ctx.error = error_code::parse_number_failure;
                return;
             }
-            it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
          }
       };
 
@@ -284,16 +287,16 @@ namespace glz
          template <auto Opts, class It, class End>
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
-               return;
-            }
-
             if constexpr (!Opts.opening_handled) {
                if constexpr (!Opts.ws_handled) {
                   skip_ws<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
 
                match<'"'>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
 
             // overwrite portion
@@ -329,7 +332,7 @@ namespace glz
                case 'u': {
                   ++it;
                   read_escaped_unicode<char>(value, ctx, it, end);
-                  break;
+                  return;
                }
                default: {
                   ctx.error = error_code::invalid_escape;
@@ -344,9 +347,8 @@ namespace glz
             while (it < end) {
                if constexpr (!Opts.force_conformance) {
                   skip_till_escape_or_quote(ctx, it, end);
-                  if (static_cast<bool>(ctx.error)) [[unlikely]] {
+                  if (bool(ctx.error)) [[unlikely]]
                      return;
-                  }
 
                   if (*it == '"') {
                      value.append(start, static_cast<size_t>(it - start));
@@ -357,6 +359,8 @@ namespace glz
                      value.append(start, static_cast<size_t>(it - start));
                      ++it;
                      handle_escaped();
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                      start = it;
                   }
                }
@@ -383,6 +387,8 @@ namespace glz
                      value.append(start, static_cast<size_t>(it - start));
                      ++it;
                      handle_escaped();
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                      start = it;
                      break;
                   }
@@ -400,16 +406,16 @@ namespace glz
          template <auto Opts, class It, class End>
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
-               return;
-            }
-
             if constexpr (!Opts.opening_handled) {
                if constexpr (!Opts.ws_handled) {
                   skip_ws<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
 
                match<'"'>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
 
             // overwrite portion
@@ -439,9 +445,8 @@ namespace glz
             while (it < end) {
                if constexpr (!Opts.force_conformance) {
                   skip_till_escape_or_quote(ctx, it, end);
-                  if (static_cast<bool>(ctx.error)) [[unlikely]] {
+                  if (bool(ctx.error)) [[unlikely]]
                      return;
-                  }
 
                   if (*it == '"') {
                      ++it;
@@ -451,6 +456,8 @@ namespace glz
                   else {
                      ++it;
                      handle_escaped();
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                   }
                }
                else {
@@ -474,6 +481,8 @@ namespace glz
                   case '\\': {
                      ++it;
                      handle_escaped();
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                      value = std::string_view{start, it - start - 1};
                      break;
                   }
@@ -492,16 +501,16 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
-               return;
-            }
-
             if constexpr (!Opts.opening_handled) {
                if constexpr (!Opts.ws_handled) {
                   skip_ws<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
 
                match<'"'>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
 
             if (*it == '\\') [[unlikely]] {
@@ -539,7 +548,7 @@ namespace glz
                case 'u': {
                   ++it;
                   read_escaped_unicode<T>(value, ctx, it, end);
-                  break;
+                  return;
                }
                default: {
                   ctx.error = error_code::invalid_escape;
@@ -566,19 +575,21 @@ namespace glz
          {
             if constexpr (!Opts.ws_handled) {
                skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
 
             const auto key = parse_key(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
-            if (key) {
-               static constexpr auto frozen_map = detail::make_string_to_enum_map<T>();
-               const auto& member_it = frozen_map.find(frozen::string(*key));
-               if (member_it != frozen_map.end()) {
-                  value = member_it->second;
-               }
-               else [[unlikely]] {
-                  ctx.error = error_code::unexpected_enum;
-               }
+            static constexpr auto frozen_map = detail::make_string_to_enum_map<T>();
+            const auto& member_it = frozen_map.find(frozen::string(key));
+            if (member_it != frozen_map.end()) {
+               value = member_it->second;
+            }
+            else [[unlikely]] {
+               ctx.error = error_code::unexpected_enum;
             }
          }
       };
@@ -591,10 +602,18 @@ namespace glz
          {
             if constexpr (!Opts.ws_handled) {
                skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
             match<'"'>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             skip_till_quote(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             match<'"'>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
          }
       };
 
@@ -606,6 +625,8 @@ namespace glz
          {
             auto it_start = it;
             skip_value<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             value.str = {it_start, static_cast<std::size_t>(it - it_start)};
          }
       };
@@ -618,17 +639,19 @@ namespace glz
          template <auto Options>
          GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
-               return;
-            }
-
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
             static constexpr auto Opts = ws_handled_off<Options>();
 
             match<'['>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             skip_ws<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             value.clear();
 
@@ -637,19 +660,27 @@ namespace glz
                if constexpr (sizeof(V) > 8) {
                   static thread_local V v;
                   read<json>::op<Opts>(v, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                   value.emplace(v);
                }
                else {
                   V v;
                   read<json>::op<Opts>(v, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                   value.emplace(std::move(v));
                }
                skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                if (*it == ']') {
                   ++it;
                   return;
                }
                match<','>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
          }
       };
@@ -661,17 +692,19 @@ namespace glz
          template <auto Options>
          GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
-               return;
-            }
-
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
             static constexpr auto Opts = ws_handled_off<Options>();
 
             match<'['>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             skip_ws<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             if (*it == ']') [[unlikely]] {
                ++it;
@@ -691,10 +724,16 @@ namespace glz
 
             for (size_t i = 0; i < n; ++i) {
                read<json>::op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                if (*it == ',') [[likely]] {
                   ++it;
                   skip_ws<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
                else if (*it == ']') {
                   ++it;
@@ -717,10 +756,16 @@ namespace glz
             if constexpr (emplace_backable<T>) {
                while (it < end) {
                   read<json>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                   skip_ws<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                   if (*it == ',') [[likely]] {
                      ++it;
                      skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                   }
                   else if (*it == ']') {
                      ++it;
@@ -743,14 +788,12 @@ namespace glz
       // it is copied so that it does not actually progress the iterator
       // expects the opening brace ([) to have already been consumed
       template <auto Opts>
-      [[nodiscard]] GLZ_ALWAYS_INLINE expected<size_t, error_code> number_of_array_elements(is_context auto&& ctx,
-                                                                                            auto it,
-                                                                                            auto&& end) noexcept
+      [[nodiscard]] GLZ_ALWAYS_INLINE size_t number_of_array_elements(is_context auto&& ctx, auto it,
+                                                                      auto&& end) noexcept
       {
          skip_ws<Opts>(ctx, it, end);
-         if (static_cast<bool>(ctx.error)) [[unlikely]] {
-            return unexpected(ctx.error);
-         }
+         if (bool(ctx.error)) [[unlikely]]
+            return {};
 
          if (*it == ']') [[unlikely]] {
             return 0;
@@ -765,23 +808,28 @@ namespace glz
             }
             case '/': {
                skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return {};
                break;
             }
             case '"': {
                skip_string<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return {};
                break;
             }
             case ']': {
                return count;
             }
             case '\0': {
-               return unexpected(error_code::unexpected_end);
+               ctx.error = error_code::unexpected_end;
+               return {};
             }
             default:
                ++it;
             }
          }
-         return unexpected(error_code::syntax_error);  // should never be reached
+         unreachable();
       }
 
       template <class T>
@@ -791,30 +839,30 @@ namespace glz
          template <auto Options>
          GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
-               return;
-            }
-
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
             static constexpr auto Opts = ws_handled_off<Options>();
 
             match<'['>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             const auto n = number_of_array_elements<Opts>(ctx, it, end);
-            if (n) {
-               value.resize(*n);
-               size_t i = 0;
-               for (auto& x : value) {
-                  read<json>::op<Opts>(x, ctx, it, end);
-                  skip_ws<Opts>(ctx, it, end);
-                  if (i < *n - 1) {
-                     match<','>(ctx, it, end);
-                  }
-                  ++i;
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            value.resize(n);
+            size_t i = 0;
+            for (auto& x : value) {
+               read<json>::op<Opts>(x, ctx, it, end);
+               skip_ws<Opts>(ctx, it, end);
+               if (i < n - 1) {
+                  match<','>(ctx, it, end);
                }
-               match<']'>(ctx, it, end);
+               ++i;
             }
+            match<']'>(ctx, it, end);
          }
       };
 
@@ -825,10 +873,6 @@ namespace glz
          template <auto Opts>
          GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
-               return;
-            }
-
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<T>) {
                   return std::tuple_size_v<meta_t<T>>;
@@ -840,10 +884,16 @@ namespace glz
 
             if constexpr (!Opts.ws_handled) {
                skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
 
             match<'['>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             skip_ws<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             for_each<N>([&](auto I) {
                if (*it == ']') {
@@ -851,18 +901,30 @@ namespace glz
                }
                if constexpr (I != 0) {
                   match<','>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                   skip_ws<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
                if constexpr (is_std_tuple<T>) {
                   read<json>::op<ws_handled<Opts>()>(std::get<I>(value), ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
                else if constexpr (glaze_array_t<T>) {
                   read<json>::op<ws_handled<Opts>()>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
                else {
                   read<json>::op<ws_handled<Opts>()>(glz::tuplet::get<I>(value), ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
                skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             });
 
             match<']'>(ctx, it, end);
@@ -877,9 +939,13 @@ namespace glz
          {
             if constexpr (!Opts.ws_handled) {
                skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
 
             match<'['>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             std::string& s = string_buffer();
 
@@ -887,6 +953,8 @@ namespace glz
 
             while (true) {
                read<json>::op<Opts>(s, ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
 
                auto itr = flag_map.find(s);
                if (itr != flag_map.end()) {
@@ -898,6 +966,8 @@ namespace glz
                }
 
                skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                if (*it == ']') {
                   ++it;
                   return;
@@ -915,6 +985,8 @@ namespace glz
          {
             std::string& path = string_buffer();
             read<json>::op<Opts>(path, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             const auto file_path = relativize_if_not_absolute(std::filesystem::path(ctx.current_file).parent_path(),
                                                               std::filesystem::path{path});
@@ -932,6 +1004,8 @@ namespace glz
             ctx.current_file = file_path.string();
 
             std::ignore = glz::read<Opts>(value.value, buffer, ctx);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             ctx.current_file = current_file;
          }
@@ -1049,23 +1123,22 @@ namespace glz
       template <class T, auto Opts, string_literal tag = "">
       GLZ_ALWAYS_INLINE std::string_view parse_object_key(is_context auto&& ctx, auto&& it, auto&& end)
       {
-         if (static_cast<bool>(ctx.error)) [[unlikely]] {
-            return {};
-         }
-
          // skip white space and escape characters and find the string
          if constexpr (!Opts.ws_handled) {
             skip_ws<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return {};
          }
          match<'"'>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return {};
 
          if constexpr (keys_may_contain_escape<T>()) {
             auto start = it;
 
             skip_till_escape_or_quote(ctx, it, end);
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
+            if (bool(ctx.error)) [[unlikely]]
                return {};
-            }
             if (*it == '\\') [[unlikely]] {
                // we dont' optimize this currently because it would increase binary size significantly with the
                // complexity of generating escaped compile time versions of keys
@@ -1124,18 +1197,20 @@ namespace glz
          template <auto Options, string_literal tag = "">
          GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
-               return;
-            }
-
             if constexpr (!Options.opening_handled) {
                if constexpr (!Options.ws_handled) {
                   skip_ws<Options>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
                match<'{'>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
 
             skip_ws<Options>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
@@ -1158,19 +1233,27 @@ namespace glz
                   first = false;
                else [[likely]] {
                   match<','>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                   skip_ws<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
 
                if constexpr (glaze_object_t<T>) {
                   const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
-
-                  skip_ws<Opts>(ctx, it, end);
-                  match<':'>(ctx, it, end);
-                  skip_ws<Opts>(ctx, it, end);
-
-                  if (static_cast<bool>(ctx.error)) [[unlikely]] {
+                  if (bool(ctx.error)) [[unlikely]]
                      return;
-                  }
+
+                  skip_ws<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  match<':'>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  skip_ws<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
 
                   static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
                   const auto& member_it = frozen_map.find(key);
@@ -1186,9 +1269,8 @@ namespace glz
                            read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
                         },
                         member_it->second);
-                     if (static_cast<bool>(ctx.error)) [[unlikely]] {
+                     if (bool(ctx.error)) [[unlikely]]
                         return;
-                     }
                   }
                   else [[unlikely]] {
                      if constexpr (Opts.error_on_unknown_keys) {
@@ -1202,44 +1284,53 @@ namespace glz
                         }
                         else {
                            skip_value<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
                         }
                      }
                      else {
                         skip_value<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
                      }
                   }
                }
                else {
                   std::string& key = string_buffer();
                   read<json>::op<Opts>(key, ctx, it, end);
-                  if (static_cast<bool>(ctx.error)) [[unlikely]] {
+                  if (bool(ctx.error)) [[unlikely]]
                      return;
-                  }
 
                   skip_ws<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                   match<':'>(ctx, it, end);
-                  skip_ws<Opts>(ctx, it, end);
-
-                  if (static_cast<bool>(ctx.error)) [[unlikely]] {
+                  if (bool(ctx.error)) [[unlikely]]
                      return;
-                  }
+                  skip_ws<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
 
                   if constexpr (std::is_same_v<typename T::key_type, std::string>) {
                      read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                   }
                   else {
                      static thread_local typename T::key_type key_value{};
                      read<json>::op<Opts>(key_value, ctx, key.data(), key.data() + key.size());
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                      read<json>::op<Opts>(value[key_value], ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                   }
                }
                skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
-
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
-               return;
-            }
-            ctx.error = error_code::expected_bracket;
+            unreachable();
          }
       };
 
@@ -1297,6 +1388,8 @@ namespace glz
             if constexpr (variant_is_auto_deducible<T>()) {
                if constexpr (!Options.ws_handled) {
                   skip_ws<Options>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
                static constexpr auto Opts = ws_handled_off<Options>();
                switch (*it) {
@@ -1314,18 +1407,25 @@ namespace glz
                      using V = std::tuple_element_t<0, object_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     return;
                   }
                   else {
                      auto possible_types = bit_array<std::variant_size_v<T>>{}.flip();
                      static constexpr auto deduction_map = glz::detail::make_variant_deduction_map<T>();
                      static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
                      skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                      auto start = it;
                      while (*it != '}') {
                         if (it != start) {
                            match<','>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
                         }
                         std::string_view key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
                         auto deduction_it = deduction_map.find(key);
                         if (deduction_it != deduction_map.end()) [[likely]] {
                            possible_types &= deduction_it->second;
@@ -1334,12 +1434,22 @@ namespace glz
                            if constexpr (!tag_v<T>.empty()) {
                               if (key == tag_v<T>) {
                                  skip_ws<Opts>(ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
                                  match<':'>(ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
 
                                  std::string& type_id = string_buffer();
                                  read<json>::op<Opts>(type_id, ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
                                  skip_ws<Opts>(ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
                                  match<','>(ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
 
                                  static constexpr auto id_map = make_variant_id_map<T>();
                                  auto id_it = id_map.find(std::string_view{type_id});
@@ -1397,10 +1507,20 @@ namespace glz
                            return;
                         }
                         skip_ws<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
                         match<':'>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
                         skip_ws<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
                         skip_value<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
                         skip_ws<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
                      }
                      ctx.error = error_code::no_matching_variant_type;
                      return;
@@ -1416,6 +1536,7 @@ namespace glz
                      using V = std::tuple_element_t<0, array_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     return;
                   }
                   break;
                case '"': {
@@ -1428,6 +1549,7 @@ namespace glz
                      using V = std::tuple_element_t<0, string_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     return;
                   }
                   break;
                }
@@ -1442,6 +1564,7 @@ namespace glz
                      using V = std::tuple_element_t<0, bool_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     return;
                   }
                   break;
                }
@@ -1455,6 +1578,7 @@ namespace glz
                      using V = std::tuple_element_t<0, nullable_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      match<"null">(ctx, it, end);
+                     return;
                   }
                   break;
                default: {
@@ -1468,6 +1592,7 @@ namespace glz
                      using V = std::tuple_element_t<0, number_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     return;
                   }
                }
                }
@@ -1488,27 +1613,45 @@ namespace glz
 
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
             static constexpr auto Opts = ws_handled_off<Options>();
 
             match<'['>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             skip_ws<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             // TODO Use key parsing for compiletime known keys
             match<'"'>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             auto start = it;
             skip_till_quote(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             sv type_id = {start, static_cast<size_t>(it - start)};
             match<'"'>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             static constexpr auto id_map = make_variant_id_map<T>();
             auto id_it = id_map.find(type_id);
             if (id_it != id_map.end()) [[likely]] {
                skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                match<','>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                const auto type_index = id_it->second;
                if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
                std::visit([&](auto&& v) { read<json>::op<Opts>(v, ctx, it, end); }, value);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
             else {
                ctx.error = error_code::no_matching_variant_type;
@@ -1516,6 +1659,8 @@ namespace glz
             }
 
             skip_ws<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             match<']'>(ctx, it, end);
          }
       };
@@ -1523,14 +1668,21 @@ namespace glz
       template <nullable_t T>
       struct from_json<T>
       {
-         template <auto Opts>
+         template <auto Options>
          GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            skip_ws<Opts>(ctx, it, end);
+            if constexpr (!Options.ws_handled) {
+               skip_ws<Options>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+            static constexpr auto Opts = ws_handled_off<Options>();
 
             if (*it == 'n') {
                ++it;
                match<"ull">(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                if constexpr (!std::is_pointer_v<T>) {
                   value.reset();
                }
@@ -1548,6 +1700,7 @@ namespace glz
                   }
                   else {
                      ctx.error = error_code::invalid_nullable_read;
+                     return;
                      // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or std::shared_ptr
                   }
                }

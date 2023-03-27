@@ -279,12 +279,12 @@ suite escaping_tests = [] {
       expect(c == '\t');
 
       in = R"("\u11FF")";
-      char32_t c32;
+      char32_t c32{};
       expect(glz::read_json(c32, in) == glz::error_code::none);
       expect(static_cast<uint32_t>(c32) == 0x11FF);
 
       in = R"("\u732B")";
-      char16_t c16;
+      char16_t c16{};
       expect(glz::read_json(c16, in) == glz::error_code::none);
       char16_t uc = u'\u732b';
       expect(c16 == uc);
@@ -1950,7 +1950,7 @@ suite error_outputs = [] {
       auto ex = glz::read_json<error_comma_obj>(s);
       expect(!ex.has_value());
       auto err = glz::format_error(ex.error(), s);
-      expect(err == "10:7: syntax_error\n        ]\n  }\n         ^\n") << err;
+      expect(err == "10:6: syntax_error\n        ]\n        ^\n") << err;
    };
 };
 

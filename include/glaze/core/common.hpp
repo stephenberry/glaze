@@ -308,6 +308,10 @@ namespace glz
       concept resizeable = requires(T container) { container.resize(0); };
 
       template <class T>
+      concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> && !
+      resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
+
+      template <class T>
       concept has_size = requires(T container) { container.size(); };
 
       template <class T>
@@ -898,7 +902,8 @@ struct glz::meta<glz::error_code>
                 "array_element_not_found", glz::error_code::array_element_not_found,                        //
                 "elements_not_convertible_to_design", glz::error_code::elements_not_convertible_to_design,  //
                 "unknown_distribution", glz::error_code::unknown_distribution,                              //
-                "invalid_distribution_elements", glz::error_code::invalid_distribution_elements             //
+                "invalid_distribution_elements", glz::error_code::invalid_distribution_elements,            //
+                "missing_key", glz::error_code::missing_key                                                 //
       );
 };
 
