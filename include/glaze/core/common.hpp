@@ -308,6 +308,10 @@ namespace glz
       concept resizeable = requires(T container) { container.resize(0); };
 
       template <class T>
+      concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> && !
+      resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
+
+      template <class T>
       concept has_size = requires(T container) { container.size(); };
 
       template <class T>
