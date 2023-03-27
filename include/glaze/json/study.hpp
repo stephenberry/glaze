@@ -288,7 +288,8 @@ namespace glz
                auto& params = params_per_state.front();
                params.resize(dim);
                for (std::size_t i = 0; i < dim; i++) {
-                  params[i] = param_from_dist(design.params[i]);
+                  //TODO: Fix this. It is unsafe to derefrence this but we cant return an error code.
+                  params[i] = *param_from_dist(design.params[i]);
                }
             }
 
