@@ -3421,7 +3421,7 @@ struct custom_unique
 
    custom_unique(std::unique_ptr<T>&& in) : x(std::move(in)) {}
 
-   operator bool() { return static_cast<bool>(x); }
+   operator bool() { return bool(x); }
 
    T& operator*() { return *x; }
 

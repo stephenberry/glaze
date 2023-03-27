@@ -32,7 +32,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
@@ -102,7 +102,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
@@ -293,7 +293,7 @@ namespace glz
 
       const auto ec = file_to_buffer(buffer, ctx.current_file);
 
-      if (static_cast<bool>(ec)) {
+      if (bool(ec)) {
          return {ec};
       }
 

@@ -230,7 +230,7 @@ namespace glz
          return unexpected(error_code::get_nonexistent_json_ptr);
       }
 
-      if (static_cast<bool>(ec)) {
+      if (bool(ec)) {
          return unexpected(ec);
       }
 
@@ -265,7 +265,7 @@ namespace glz
       if (!result) {
          return unexpected(parse_error{error_code::get_nonexistent_json_ptr});
       }
-      else if (static_cast<bool>(ec)) {
+      else if (bool(ec)) {
          return unexpected(parse_error{ec});
       }
       return std::ref(*result);
@@ -310,7 +310,7 @@ namespace glz
       if (!found) {
          return unexpected(error_code::get_nonexistent_json_ptr);
       }
-      else if (static_cast<bool>(ec)) {
+      else if (bool(ec)) {
          return unexpected(ec);
       }
 
@@ -571,7 +571,7 @@ namespace glz
 
       auto start = it;
 
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+      if (bool(ctx.error)) [[unlikely]] {
          return expected<span_t, parse_error>{unexpected(parse_error{ctx.error, 0})};
       }
 

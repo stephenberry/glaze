@@ -73,7 +73,7 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE void skip_comment(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+      if (bool(ctx.error)) [[unlikely]] {
          return;
       }
 
@@ -105,7 +105,7 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+      if (bool(ctx.error)) [[unlikely]] {
          return;
       }
 
@@ -168,7 +168,7 @@ namespace glz::detail
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+      if (bool(ctx.error)) [[unlikely]] {
          return;
       }
 
@@ -198,7 +198,7 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+      if (bool(ctx.error)) [[unlikely]] {
          return;
       }
 
@@ -236,7 +236,7 @@ namespace glz::detail
    // very similar code to skip_till_quote, but it consumes the iterator and returns the key
    [[nodiscard]] GLZ_ALWAYS_INLINE const sv parse_unescaped_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+      if (bool(ctx.error)) [[unlikely]] {
          return {};
       }
 
@@ -315,7 +315,7 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+      if (bool(ctx.error)) [[unlikely]] {
          return;
       }
 
@@ -391,7 +391,7 @@ namespace glz::detail
    template <char open, char close>
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+      if (bool(ctx.error)) [[unlikely]] {
          return;
       }
 
@@ -512,7 +512,7 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+      if (bool(ctx.error)) [[unlikely]] {
          return;
       }
 
@@ -548,7 +548,7 @@ namespace glz::detail
    template <opts Opts>
    inline void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+      if (bool(ctx.error)) [[unlikely]] {
          return;
       }
 
@@ -600,7 +600,7 @@ namespace glz::detail
    template <opts Opts>
    inline void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+      if (bool(ctx.error)) [[unlikely]] {
          return;
       }
 
@@ -636,7 +636,7 @@ namespace glz::detail
    template <opts Opts>
    inline void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
+      if (bool(ctx.error)) [[unlikely]] {
          return;
       }
 

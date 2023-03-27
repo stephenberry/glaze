@@ -48,7 +48,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&&) noexcept
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
@@ -71,7 +71,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&&) noexcept
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
@@ -331,7 +331,7 @@ namespace glz
       std::string buffer;
       const auto ec = file_to_buffer(buffer, ctx.current_file);
 
-      if (static_cast<bool>(ec)) {
+      if (bool(ec)) {
          return {ec};
       }
 

@@ -82,7 +82,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto&& /* end */) noexcept
          {
-            value = static_cast<bool>(*it);
+            value = bool(*it);
             ++it;
          }
       };
@@ -245,7 +245,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            const auto has_value = static_cast<bool>(*it);
+            const auto has_value = bool(*it);
             ++it;
 
             if (has_value) {
@@ -366,7 +366,7 @@ namespace glz
       std::string buffer;
       const auto file_error = file_to_buffer(buffer, ctx.current_file);
 
-      if (static_cast<bool>(file_error)) {
+      if (bool(file_error)) {
          return parse_error{file_error};
       }
 

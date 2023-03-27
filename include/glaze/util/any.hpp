@@ -113,7 +113,7 @@ namespace glz
 
       void swap(any& other) noexcept { std::swap(instance, other.instance); }
 
-      bool has_value() const noexcept { return static_cast<bool>(instance); }
+      bool has_value() const noexcept { return bool(instance); }
 
       friend void swap(any& lhs, any& rhs) { lhs.swap(rhs); }
 
