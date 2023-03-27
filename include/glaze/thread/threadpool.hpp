@@ -101,7 +101,7 @@ namespace glz
       }
 
       template <class F>
-         requires std::is_invocable_v<std::decay_t<F>, size_t>
+         requires std::invocable<std::decay_t<F>, size_t>
       std::future<std::invoke_result_t<std::decay_t<F>, size_t>> emplace_back(F&& func)
       {
          using result_type = std::invoke_result_t<std::decay_t<F>, size_t>;

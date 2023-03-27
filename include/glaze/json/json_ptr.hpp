@@ -203,7 +203,7 @@ namespace glz
             if constexpr (std::is_member_function_pointer_v<V>) {
                auto f = std::mem_fn(val);
                using F = decltype(f);
-               if constexpr (std::is_invocable_v<F, T, Args...>) {
+               if constexpr (std::invocable<F, T, Args...>) {
                   if constexpr (!std::is_assignable_v<R, std::invoke_result_t<F, T, Args...>>) {
                      ec = error_code::invalid_call;  // type not assignable
                   }
