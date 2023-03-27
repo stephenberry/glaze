@@ -60,6 +60,8 @@ namespace glz::detail
 #pragma GCC diagnostic ignored "-Wpedantic"
       unsigned __int128 prod = a * static_cast<unsigned __int128>(b);
 #pragma GCC diagnostic pop
+#else
+      unsigned __int128 prod = a * static_cast<unsigned __int128>(b);
 #endif
       return prod >> 64;
    }
@@ -378,7 +380,7 @@ namespace glz::detail
                data[idx + move] = num;
             }
             data[move] = data[0] << shft;
-            if (data.back() == 0) data.resize(data.size() - 1);
+            if (data.back() == 0) data.pop_back();
             while (move) data[--move] = 0;
          }
       }

@@ -23,7 +23,11 @@
 
 #if defined(GLZ_USE_ALWAYS_INLINE) && defined(NDEBUG)
 #ifndef GLZ_ALWAYS_INLINE
+#if defined(__clang__)
+#define GLZ_ALWAYS_INLINE inline __attribute__((always_inline)) __attribute__((flatten))
+#else
 #define GLZ_ALWAYS_INLINE inline __attribute__((always_inline))
+#endif
 #endif
 #endif
 
@@ -116,6 +120,7 @@ namespace glz::detail
          case '/': {
             if constexpr (Opts.force_conformance) {
                ctx.error = error_code::syntax_error;
+               return;
             }
             else {
                skip_comment(ctx, it, end);
@@ -303,7 +308,7 @@ namespace glz::detail
          }
       }
 
-      ctx.error = error_code::expected_quote;
+      ctx.error = error_code::unknown_key;
       return {};
    }
 
@@ -523,18 +528,19 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept;
 
    // expects opening whitespace to be handled
-   GLZ_ALWAYS_INLINE expected<sv, error_code> parse_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE sv parse_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
-         return unexpected(ctx.error);
-      }
+      // TODO this assumes no escapes.
+      if (bool(ctx.error)) [[unlikely]]
+         return {};
 
       match<'"'>(ctx, it, end);
+      if (bool(ctx.error)) [[unlikely]]
+         return {};
       auto start = it;
       skip_till_quote(ctx, it, end);
-      if (static_cast<bool>(ctx.error)) [[unlikely]] {
-         return unexpected(ctx.error);
-      }
+      if (bool(ctx.error)) [[unlikely]]
+         return {};
       return sv{start, static_cast<size_t>(it++ - start)};
    }
 
@@ -552,6 +558,8 @@ namespace glz::detail
       else {
          ++it;
          skip_ws<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
          if (*it == '}') {
             ++it;
             return;
@@ -562,13 +570,27 @@ namespace glz::detail
                return;
             }
             skip_string<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             skip_ws<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             match<':'>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             skip_ws<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             skip_value<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             skip_ws<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             if (*it != ',') break;
             skip_ws<Opts>(ctx, ++it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
          }
          match<'}'>(ctx, it, end);
       }
@@ -588,15 +610,23 @@ namespace glz::detail
       else {
          ++it;
          skip_ws<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
          if (*it == ']') {
             ++it;
             return;
          }
          while (true) {
             skip_value<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             skip_ws<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
             if (*it != ',') break;
             skip_ws<Opts>(ctx, ++it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
          }
          match<']'>(ctx, it, end);
       }
@@ -618,22 +648,31 @@ namespace glz::detail
             switch (*it) {
             case '{':
                skip_until_closed<'{', '}'>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                break;
             case '[':
                skip_until_closed<'[', ']'>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                break;
             case '"':
                skip_string<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                break;
             case '/':
                skip_comment(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                continue;
             case ',':
             case '}':
             case ']':
                break;
             case '\0':
-               break;
+               ctx.error = error_code::unexpected_end;
+               return;
             default: {
                ++it;
                continue;
