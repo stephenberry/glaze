@@ -113,7 +113,8 @@ y,1,2,3,4,5,6,7,8,9,10
       out.clear();
       write<opts{.format = csv, .row_wise = false}>(m, out);
       
-      std::cout << out << '\n';
+      //m.clear();
+      //read<opts{.format = csv}>(m, out);
    };
 }
 
