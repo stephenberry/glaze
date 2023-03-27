@@ -784,7 +784,7 @@ namespace glz
       *hi = pow10_sig_table_128[idx * 2];
       *lo = pow10_sig_table_128[idx * 2 + 1];
    }*/
-   
+
    inline void pow10_table_get_sig_128(int32_t exp10, uint64_t hilo[2]) noexcept
    {
       const int32_t idx = exp10 - (POW10_SIG_TABLE_128_MIN_EXP);
@@ -820,7 +820,7 @@ namespace glz
 
       const bool is_even = !(sig_bin & 1);
       const bool lower_bound_closer = (sig_raw == 0 && exp_raw > 1);
-      
+
       const uint64_t cb = 4 * sig_bin;
       const uint64_t cbl = cb - 2 + lower_bound_closer;
       const uint64_t cbr = cb + 2;
@@ -837,11 +837,11 @@ namespace glz
       /*   = exp_bin + floor(log2(10) * e)                                      */
       const int32_t exp10 = -k;
       const int32_t h = exp_bin + ((exp10 * 217707) >> 16) + 1;
-      
+
       uint64_t pow10hilo[2];
       pow10_table_get_sig_128(exp10, pow10hilo);
-      const uint64_t& pow10hi = pow10hilo[0];
-      uint64_t& pow10lo = pow10hilo[1];
+      const uint64_t &pow10hi = pow10hilo[0];
+      uint64_t &pow10lo = pow10hilo[1];
       pow10lo += (exp10 < POW10_SIG_TABLE_128_MIN_EXACT_EXP || exp10 > POW10_SIG_TABLE_128_MAX_EXACT_EXP);
       const uint64_t vbl = round_to_odd(pow10hi, pow10lo, cbl << h);
       const uint64_t vb = round_to_odd(pow10hi, pow10lo, cb << h);
@@ -849,7 +849,7 @@ namespace glz
 
       const uint64_t lower = vbl + !is_even;
       const uint64_t upper = vbr - !is_even;
-      
+
       bool u_inside, w_inside;
 
       const uint64_t s = vb / 4;
