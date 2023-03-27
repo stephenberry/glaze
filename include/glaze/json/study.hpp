@@ -127,7 +127,7 @@ namespace glz
                   },
                   param_set.param_ptr);
 
-               if (static_cast<bool>(ec)) {
+               if (bool(ec)) {
                   return unexpected(ec);
                }
             }

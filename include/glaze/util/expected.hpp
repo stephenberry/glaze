@@ -937,7 +937,7 @@ namespace glz
                   }
       friend constexpr auto operator==(expected const& x, unexpected<E2> const& e) -> bool
       {
-         return !x.has_value() && static_cast<bool>(x.error() == e.value());
+         return !x.has_value() && bool(x.error() == e.value());
       }
 
       // specialized algorithms
@@ -1440,7 +1440,7 @@ namespace glz
                                         -> bool
       {
          if (x.has_value() != y.has_value()) return false;
-         return x.has_value() or static_cast<bool>(x.error() == y.error());
+         return x.has_value() or bool(x.error() == y.error());
       }
 
       template <class E2>
@@ -1451,7 +1451,7 @@ namespace glz
                   }
       friend constexpr auto operator==(expected const& x, unexpected<E2> const& e) -> bool
       {
-         return !x.has_value() && static_cast<bool>(x.error() == e.value());
+         return !x.has_value() && bool(x.error() == e.value());
       }
 
       // specialized algorithms

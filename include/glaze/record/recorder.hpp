@@ -115,7 +115,7 @@ namespace glz
          template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if (static_cast<bool>(ctx.error)) [[unlikely]] {
+            if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 

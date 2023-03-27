@@ -52,7 +52,7 @@ namespace glz
 
       const auto ec = file_to_buffer(buffer, ctx.current_file);
 
-      if (static_cast<bool>(ec)) {
+      if (bool(ec)) {
          return {ec};
       }
 
