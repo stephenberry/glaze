@@ -3,20 +3,21 @@
 
 #pragma once
 
-#include "glaze/core/read.hpp"
+#include <charconv>
+
 #include "glaze/core/format.hpp"
-#include "glaze/util/strod.hpp"
+#include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/parse.hpp"
-
-#include <charconv>
+#include "glaze/util/strod.hpp"
 
 namespace glz
 {
    namespace detail
    {
       template <class T = void>
-      struct from_csv {};
+      struct from_csv
+      {};
 
       template <>
       struct read<csv>
@@ -24,7 +25,8 @@ namespace glz
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
          static void op(T&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
          {
-            from_csv<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+            from_csv<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                         std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
@@ -35,7 +37,8 @@ namespace glz
          static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
             using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
-            from_csv<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+            from_csv<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
+                                           std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
@@ -48,7 +51,7 @@ namespace glz
             if (static_cast<bool>(ctx.error)) [[unlikely]] {
                return;
             }
-            
+
             // TODO: fix this also, taken from json
             using X = std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
                                          const uint8_t*, uint8_t*>;
@@ -71,7 +74,7 @@ namespace glz
             if (static_cast<bool>(ctx.error)) [[unlikely]] {
                return;
             }
-            
+
             // TODO: fix this also, taken from json
             using X = std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
                                          const uint8_t*, uint8_t*>;
@@ -96,7 +99,7 @@ namespace glz
             read<csv>::op<Opts>(value.emplace_back(), ctx, it, end);
          }
       };
-      
+
       template <char delim>
       inline void goto_delim(auto&& it, auto&& end) noexcept
       {
@@ -111,17 +114,16 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
             static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
-            //static constexpr auto N = std::tuple_size_v<meta_t<T>>;
-            
+            // static constexpr auto N = std::tuple_size_v<meta_t<T>>;
+
             if constexpr (Opts.row_wise) {
-               
                while (it != end) {
                   auto start = it;
                   goto_delim<','>(it, end);
                   sv key{start, static_cast<size_t>(it - start)};
-                  
+
                   size_t csv_index;
-                  
+
                   const auto brace_pos = key.find('[');
                   if (brace_pos != sv::npos) {
                      const auto close_brace = key.find(']');
@@ -133,11 +135,11 @@ namespace glz
                         return;
                      }
                   }
-                  
+
                   match<','>(ctx, it, end);
-                  
+
                   const auto& member_it = frozen_map.find(key);
-                  
+
                   if (member_it != frozen_map.end()) [[likely]] {
                      std::visit(
                         [&](auto&& member_ptr) {
@@ -152,12 +154,12 @@ namespace glz
                                  else [[unlikely]] {
                                     read<csv>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
                                  }
-                                 
+
                                  if (*it == '\n') {
                                     ++it;
                                     break;
                                  }
-                                 
+
                                  if (*it == ',') {
                                     ++it;
                                  }
@@ -165,19 +167,19 @@ namespace glz
                                     ctx.error = error_code::syntax_error;
                                     return;
                                  }
-                                 
+
                                  ++col;
                               }
                            }
                            else {
                               while (it != end) {
                                  read<csv>::op<Opts>(member, ctx, it, end);
-                                 
+
                                  if (*it == '\n') {
                                     ++it;
                                     break;
                                  }
-                                 
+
                                  if (*it == ',') {
                                     ++it;
                                  }
@@ -196,15 +198,15 @@ namespace glz
                   }
                }
             }
-            else // column wise
+            else  // column wise
             {
                std::vector<std::pair<sv, size_t>> keys;
-               
+
                auto read_key = [&](auto&& start, auto&& it) {
-                  sv key{ start, size_t(it - start) };
-                  
+                  sv key{start, size_t(it - start)};
+
                   size_t csv_index{};
-                  
+
                   const auto brace_pos = key.find('[');
                   if (brace_pos != sv::npos) {
                      const auto close_brace = key.find(']');
@@ -216,10 +218,10 @@ namespace glz
                         return;
                      }
                   }
-                  
-                  keys.emplace_back(std::pair{ key, csv_index });
+
+                  keys.emplace_back(std::pair{key, csv_index});
                };
-               
+
                auto start = it;
                while (it != end) {
                   if (*it == ',') {
@@ -240,17 +242,17 @@ namespace glz
                      ++it;
                   }
                }
-               
+
                if (*it == '\n') {
-                  ++it; // skip new line
+                  ++it;  // skip new line
                }
                else {
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               
+
                const auto n_keys = keys.size();
-               
+
                size_t row = 0;
 
                while (it != end) {
@@ -273,20 +275,21 @@ namespace glz
                               else {
                                  read<csv>::op<Opts>(member, ctx, it, end);
                               }
-                           }, member_it->second);
+                           },
+                           member_it->second);
                      }
                      else [[unlikely]] {
                         ctx.error = error_code::unknown_key;
                         return;
                      }
-                     
+
                      if (*it == ',') {
                         ++it;
                      }
                   }
-                  
+
                   if (*it == '\n') {
-                     ++it; // skip new line
+                     ++it;  // skip new line
                      ++row;
                   }
                }
@@ -317,7 +320,7 @@ namespace glz
 
       std::string buffer;
       const auto ec = file_to_buffer(buffer, ctx.current_file);
-      
+
       if (static_cast<bool>(ec)) {
          return {ec};
       }

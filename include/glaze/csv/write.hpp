@@ -3,18 +3,19 @@
 
 #pragma once
 
+#include "glaze/core/opts.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/core/write_chars.hpp"
-#include "glaze/core/opts.hpp"
-#include "glaze/util/for_each.hpp"
 #include "glaze/util/dump.hpp"
+#include "glaze/util/for_each.hpp"
 
 namespace glz
 {
    namespace detail
    {
       template <class T = void>
-      struct to_csv {};
+      struct to_csv
+      {};
 
       template <>
       struct write<csv>
@@ -61,7 +62,6 @@ namespace glz
             else {
                dump<'0'>(b, ix);
             }
-
          }
       };
 
@@ -99,7 +99,8 @@ namespace glz
          }
       };
 
-      template <class T> requires str_t<T> || char_t<T>
+      template <class T>
+      requires str_t<T> || char_t<T>
       struct to_csv<T>
       {
          template <auto Opts, class B>
@@ -108,7 +109,7 @@ namespace glz
             dump(value, b, ix);
          }
       };
-      
+
       template <glaze_object_t T>
       struct to_csv<T>
       {
@@ -127,7 +128,6 @@ namespace glz
                   using V = typename item_type::value_type;
 
                   if constexpr (array_t<V>) {
-
                      auto&& member = get_member(value, glz::tuplet::get<1>(item));
                      const auto count = member.size();
                      const auto size = member[0].size();
@@ -165,7 +165,7 @@ namespace glz
                   static constexpr sv key = glz::tuplet::get<0>(item);
 
                   using X = std::decay_t<decltype(get_member(value, glz::tuplet::get<1>(item)))>;
-                  
+
                   if constexpr (fixed_array_value_t<X>) {
                      const auto size = get_member(value, glz::tuplet::get<1>(item))[0].size();
                      for (size_t i = 0; i < size; ++i) {
@@ -181,30 +181,30 @@ namespace glz
                   else {
                      write<csv>::op<Opts>(key, ctx, b, ix);
                   }
-                  
+
                   if (I != N - 1) {
                      dump<','>(b, ix);
                   }
                });
-               
+
                dump<'\n'>(b, ix);
-               
+
                size_t row = 0;
                bool end = false;
-               
+
                while (true) {
                   for_each<N>([&](auto I) {
                      static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
-                     
+
                      using X = std::decay_t<decltype(get_member(value, glz::tuplet::get<1>(item)))>;
-                     
+
                      if constexpr (fixed_array_value_t<X>) {
                         auto&& member = get_member(value, glz::tuplet::get<1>(item));
                         if (row >= member.size()) {
                            end = true;
                            return;
                         }
-                        
+
                         const auto n = member[0].size();
                         for (size_t i = 0; i < n; ++i) {
                            write<csv>::op<Opts>(member[row][i], ctx, b, ix);
@@ -219,34 +219,34 @@ namespace glz
                            end = true;
                            return;
                         }
-                        
+
                         write<csv>::op<Opts>(member[row], ctx, b, ix);
-                        
+
                         if (I != N - 1) {
                            dump<','>(b, ix);
                         }
                      }
                   });
-                  
+
                   if (end) {
                      break;
                   }
-                  
+
                   ++row;
-                  
+
                   dump<'\n'>(b, ix);
                }
             }
          }
       };
    }
-   
+
    template <class T, class Buffer>
    GLZ_ALWAYS_INLINE auto write_csv(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = csv}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
-   
+
    template <class T>
    GLZ_ALWAYS_INLINE auto write_csv(T&& value)
    {
