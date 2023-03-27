@@ -1,5 +1,5 @@
 {
-   "name": "Ubuntu++",
+   "name": "Alpine++",
    "build": {
       "dockerfile": "Dockerfile"
    },

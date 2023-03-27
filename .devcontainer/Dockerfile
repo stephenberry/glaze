@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM alpine:3.17
 
-RUN apt-get update \
-      && apt-get -y install --no-install-recommends g++-12 clang-tools clangd gdb cmake ninja-build git
+RUN apk update \
+     && apk add --no-cache g++ gdb clang clang-extra-tools cmake make git
