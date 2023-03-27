@@ -106,14 +106,14 @@ namespace glz
          while (++it != end && *it != delim)
             ;
       }
-      
+
       template <map_t T>
       struct from_csv<T>
       {
          /*template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            
+
          }*/
       };
 

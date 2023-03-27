@@ -100,7 +100,7 @@ namespace glz
       };
 
       template <class T>
-      requires str_t<T> || char_t<T>
+         requires str_t<T> || char_t<T>
       struct to_csv<T>
       {
          template <auto Opts, class B>
@@ -109,7 +109,7 @@ namespace glz
             dump(value, b, ix);
          }
       };
-      
+
       template <map_t T>
       struct to_csv<T>
       {
@@ -117,7 +117,7 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             if constexpr (Opts.row_wise) {
-               for (auto&[name, data] : value) {
+               for (auto& [name, data] : value) {
                   dump(name, b, ix);
                   dump<','>(b, ix);
                   const auto n = data.size();
@@ -134,39 +134,39 @@ namespace glz
                // dump titles
                const auto n = value.size();
                size_t i = 0;
-               for (auto&[name, data] : value) {
+               for (auto& [name, data] : value) {
                   dump(name, b, ix);
                   ++i;
                   if (i < n) {
                      dump<','>(b, ix);
                   }
                }
-               
+
                dump<'\n'>(b, ix);
-               
+
                size_t row = 0;
                bool end = false;
                while (true) {
                   i = 0;
-                  for (auto&[name, data] : value) {
+                  for (auto& [name, data] : value) {
                      if (row >= data.size()) {
                         end = true;
                         break;
                      }
-                     
+
                      write<csv>::op<Opts>(data[row], ctx, b, ix);
                      ++i;
                      if (i < n) {
                         dump<','>(b, ix);
                      }
                   }
-                  
+
                   if (end) {
                      break;
                   }
-                  
+
                   dump<'\n'>(b, ix);
-                  
+
                   ++row;
                }
             }
