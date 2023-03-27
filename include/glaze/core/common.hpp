@@ -70,11 +70,12 @@ namespace glz
    };
 
    template <class T>
-   concept range = requires(T &t) {
-                      typename T::value_type;
-                      requires !std::same_as<void, decltype(t.begin())>;
-                      requires !std::same_as<void, decltype(t.end())>;
-                   };
+   concept range = requires(T &t)
+   {
+      typename T::value_type;
+      requires !std::same_as<void, decltype(t.begin())>;
+      requires !std::same_as<void, decltype(t.end())>;
+   };
 
    // range like
    template <class T>
@@ -195,9 +196,7 @@ namespace glz
       basic_raw_json() = default;
 
       template <class T>
-         requires(!std::same_as<std::decay_t<T>, basic_raw_json>)
-      basic_raw_json(T &&s) : str(std::forward<T>(s))
-      {}
+      requires(!std::same_as<std::decay_t<T>, basic_raw_json>) basic_raw_json(T &&s) : str(std::forward<T>(s)) {}
 
       basic_raw_json(const basic_raw_json &) = default;
       basic_raw_json(basic_raw_json &&) = default;
@@ -226,129 +225,143 @@ namespace glz
    namespace detail
    {
       template <class T>
-      concept char_t = std::same_as<std::decay_t<T>, char> || std::same_as<std::decay_t<T>, char16_t> ||
-                       std::same_as<std::decay_t<T>, char32_t> || std::same_as<std::decay_t<T>, wchar_t>;
+      concept char_t = std::same_as < std::decay_t<T>,
+      char > || std::same_as<std::decay_t<T>, char16_t> || std::same_as<std::decay_t<T>, char32_t> ||
+         std::same_as<std::decay_t<T>, wchar_t>;
 
       template <class T>
-      concept bool_t =
-         std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>;
+      concept bool_t = std::same_as < std::decay_t<T>,
+      bool > || std::same_as<std::decay_t<T>, std::vector<bool>::reference>;
 
       template <class T>
-      concept int_t = std::integral<std::decay_t<T>> && !
-      char_t<std::decay_t<T>> && !bool_t<T>;
+      concept int_t = std::integral<std::decay_t<T>> && !char_t<std::decay_t<T>> && !bool_t<T>;
 
       template <class T>
       concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
 
       template <class T>
-      concept constructible = requires { meta<std::decay_t<T>>::construct; } || local_construct_t<std::decay_t<T>>;
+      concept constructible = requires
+      {
+         meta<std::decay_t<T>>::construct;
+      }
+      || local_construct_t<std::decay_t<T>>;
 
       template <class T>
       concept complex_t = glaze_t<std::decay_t<T>>;
 
       template <class T>
-      concept str_t = !
-      complex_t<T> && !std::same_as<std::nullptr_t, T> && std::convertible_to<std::decay_t<T>, std::string_view>;
+      concept str_t =
+         !complex_t<T> && !std::same_as<std::nullptr_t, T> && std::convertible_to<std::decay_t<T>, std::string_view>;
 
       // this concept requires that T is string and copies the string in json
       template <class T>
-      concept string_t = str_t<T> && !
-      std::same_as<std::decay_t<T>, std::string_view>;
+      concept string_t = str_t<T> && !std::same_as<std::decay_t<T>, std::string_view>;
 
       // this concept requires that T is just a view
       template <class T>
       concept str_view_t = str_t<T> && std::same_as<std::decay_t<T>, std::string_view>;
 
       template <class T>
-      concept pair_t = requires(T pair) {
-                          {
-                             pair.first
-                             } -> std::same_as<typename T::first_type &>;
-                          {
-                             pair.second
-                             } -> std::same_as<typename T::second_type &>;
-                       };
+      concept pair_t = requires(T pair)
+      {
+         {
+            pair.first
+            } -> std::same_as<typename T::first_type &>;
+         {
+            pair.second
+            } -> std::same_as<typename T::second_type &>;
+      };
 
       template <class T>
-      concept map_subscriptable = requires(T container) {
-                                     {
-                                        container[std::declval<typename T::key_type>()]
-                                        } -> std::same_as<typename T::mapped_type &>;
-                                  };
+      concept map_subscriptable = requires(T container)
+      {
+         {
+            container[std::declval<typename T::key_type>()]
+            } -> std::same_as<typename T::mapped_type &>;
+      };
 
       template <class T>
-      concept map_t = !
-      complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> && map_subscriptable<T>;
+      concept map_t = !complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> && map_subscriptable<T>;
 
       template <class T>
       concept array_t = (!complex_t<T> && !str_t<T> && !map_t<T> && range<T>);
 
       template <class T>
-      concept emplace_backable = requires(T container) {
-                                    {
-                                       container.emplace_back()
-                                       } -> std::same_as<typename T::reference>;
-                                 };
+      concept emplace_backable = requires(T container)
+      {
+         {
+            container.emplace_back()
+            } -> std::same_as<typename T::reference>;
+      };
 
       template <class T>
-      concept emplaceable = requires(T container) {
-                               {
-                                  container.emplace(std::declval<typename T::value_type>())
-                               };
-                            };
+      concept emplaceable = requires(T container)
+      {
+         {container.emplace(std::declval<typename T::value_type>())};
+      };
 
       template <class T>
-      concept push_backable = requires(T container) {
-                                 {
-                                    container.push_back(std::declval<typename T::value_type>())
-                                 };
-                              };
+      concept push_backable = requires(T container)
+      {
+         {container.push_back(std::declval<typename T::value_type>())};
+      };
 
       template <class T>
-      concept resizeable = requires(T container) { container.resize(0); };
-      
-      template <class T>
-      concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> && !resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
+      concept resizeable = requires(T container)
+      {
+         container.resize(0);
+      };
 
       template <class T>
-      concept has_size = requires(T container) { container.size(); };
+      concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> &&
+         !resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
 
       template <class T>
-      concept has_data = requires(T container) { container.data(); };
+      concept has_size = requires(T container)
+      {
+         container.size();
+      };
+
+      template <class T>
+      concept has_data = requires(T container)
+      {
+         container.data();
+      };
 
       template <class T>
       concept contiguous = has_size<T> && has_data<T>;
 
       template <class T>
-      concept accessible = requires(T container) {
-                              {
-                                 container[size_t{}]
-                                 } -> std::same_as<typename T::reference>;
-                           };
+      concept accessible = requires(T container)
+      {
+         {
+            container[size_t{}]
+            } -> std::same_as<typename T::reference>;
+      };
 
       template <class T>
       concept boolean_like = std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> ||
-                             std::same_as<T, std::vector<bool>::const_reference>;
+         std::same_as<T, std::vector<bool>::const_reference>;
 
       template <class T>
       concept vector_like = resizeable<T> && accessible<T> && has_data<T>;
 
       template <class T>
-      concept is_span = requires(T t) {
-                           T::extent;
-                           typename T::element_type;
-                        };
+      concept is_span = requires(T t)
+      {
+         T::extent;
+         typename T::element_type;
+      };
 
       template <class T>
       concept is_dynamic_span = T::extent == static_cast<size_t>(-1);
 
       template <class T>
-      concept has_static_size = (is_span<T> && !is_dynamic_span<T>) ||
-                                (requires(T container) {
-                                    {
-                                       std::bool_constant<(std::decay_t<T>{}.size(), true)>()
-                                       } -> std::same_as<std::true_type>;
-                                 } && std::decay_t<T>{}.size() > 0);
+      concept has_static_size = (is_span<T> && !is_dynamic_span<T>) || (requires(T container) {
+                                   {
+                                      std::bool_constant<(std::decay_t<T>{}.size(), true)>()
+                                      } -> std::same_as<std::true_type>;
+                                } && std::decay_t<T>{}.size() > 0);
 
       template <class T>
       constexpr size_t get_size() noexcept
@@ -365,27 +378,27 @@ namespace glz
       concept is_reference_wrapper = is_specialization_v<T, std::reference_wrapper>;
 
       template <class T>
-      concept tuple_t = requires(T t) {
-                           std::tuple_size<T>::value;
-                           glz::tuplet::get<0>(t);
-                        } && !
-      complex_t<T> && !range<T>;
+      concept tuple_t = requires(T t)
+      {
+         std::tuple_size<T>::value;
+         glz::tuplet::get<0>(t);
+      }
+      &&!complex_t<T> && !range<T>;
 
       template <class T>
-      concept nullable_t = !
-      complex_t<T> && !str_t<T> && requires(T t) {
-                                      bool(t);
-                                      {
-                                         *t
-                                      };
-                                   };
+      concept nullable_t = !complex_t<T> && !str_t<T> && requires(T t)
+      {
+         bool(t);
+         {*t};
+      };
 
       template <class T>
-      concept func_t = requires(T t) {
-                          typename T::result_type;
-                          std::function(t);
-                       } && !
-      glaze_t<T>;
+      concept func_t = requires(T t)
+      {
+         typename T::result_type;
+         std::function(t);
+      }
+      &&!glaze_t<T>;
 
       template <class T>
       concept glaze_array_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Array>;
@@ -404,14 +417,15 @@ namespace glz
          glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || glaze_flags_t<T>);
 
       template <class From, class To>
-      concept non_narrowing_convertable = requires(From from, To to) {
+      concept non_narrowing_convertable = requires(From from, To to)
+      {
 #if __GNUC__
-                                             // TODO: guard gcc against narrowing conversions when fixed
-                                             to = from;
+         // TODO: guard gcc against narrowing conversions when fixed
+         to = from;
 #else
-                                             To{from};
+         To{from};
 #endif
-                                          };
+      };
 
       // from
       // https://stackoverflow.com/questions/55941964/how-to-filter-duplicate-types-from-tuple-c
