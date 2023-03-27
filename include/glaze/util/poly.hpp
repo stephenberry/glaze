@@ -114,7 +114,7 @@ namespace glz
             using X = std::decay_t<decltype(std::get<member_it->second.index()>(cmap.find(key)->second))>;
             auto* v = reinterpret_cast<X>(map[index].fptr);
             using V = std::decay_t<decltype(v)>;
-            if constexpr (std::is_invocable_v<V, void*, Args...>) {
+            if constexpr (std::invocable<V, void*, Args...>) {
                return v(raw_ptr, std::forward<Args>(args)...);
             }
             else {
