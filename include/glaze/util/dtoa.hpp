@@ -17,7 +17,7 @@ namespace glz
 
    /** Multiplies two 64-bit unsigned integers (a * b),
        returns the 128-bit result as 'hi' and 'lo'. */
-   inline void u128_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo)
+   inline void u128_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo) noexcept
    {
 #ifdef __SIZEOF_INT128__
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -51,7 +51,7 @@ namespace glz
 
    /** Multiplies two 64-bit unsigned integers and add a value (a * b + c),
        returns the 128-bit result as 'hi' and 'lo'. */
-   inline void u128_mul_add(uint64_t a, uint64_t b, uint64_t c, uint64_t *hi, uint64_t *lo)
+   inline void u128_mul_add(uint64_t a, uint64_t b, uint64_t c, uint64_t *hi, uint64_t *lo) noexcept
    {
 #ifdef __SIZEOF_INT128__
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -75,7 +75,7 @@ namespace glz
    }
 
    /** Multiplies 128-bit integer and returns highest 64-bit rounded value. */
-   inline uint64_t round_to_odd(uint64_t hi, uint64_t lo, uint64_t cp)
+   inline uint64_t round_to_odd(uint64_t hi, uint64_t lo, uint64_t cp) noexcept
    {
       uint64_t x_hi, x_lo, y_hi, y_lo;
       u128_mul(cp, lo, &x_hi, &x_lo);
@@ -99,7 +99,7 @@ namespace glz
    /** Maximum exact decimal exponent in pow10_sig_table */
    inline constexpr auto POW10_SIG_TABLE_128_MAX_EXACT_EXP = 55;
 
-   // TODO: Remove duplicate table
+   // TODO: Remove duplicate table (see pow10_sig_table)
    inline constexpr std::array<uint64_t, 1336> pow10_sig_table_128 = {
       0xBF29DCABA82FDEAE, 0x7432EE873880FC33, /* ~= 10^-343 */
       0xEEF453D6923BD65A, 0x113FAA2906A13B3F, /* ~= 10^-342 */
@@ -778,33 +778,18 @@ namespace glz
     @param hi    The highest 64 bits of pow(10, e).
     @param lo    The lower 64 bits after `hi`.
     */
-   inline void pow10_table_get_sig_128(int32_t exp10, uint64_t *hi, uint64_t *lo)
+   /*inline void pow10_table_get_sig_128(int32_t exp10, uint64_t *hi, uint64_t *lo) noexcept
    {
-      int32_t idx = exp10 - (POW10_SIG_TABLE_128_MIN_EXP);
+      const int32_t idx = exp10 - (POW10_SIG_TABLE_128_MIN_EXP);
       *hi = pow10_sig_table_128[idx * 2];
       *lo = pow10_sig_table_128[idx * 2 + 1];
-   }
+   }*/
 
-   inline constexpr std::array<uint64_t, 21> exp10_int{1ull,
-                                                       10ull,
-                                                       100ull,
-                                                       1000ull,
-                                                       10000ull,
-                                                       100000ull,
-                                                       1000000ull,
-                                                       10000000ull,
-                                                       100000000ull,
-                                                       1000000000ull,
-                                                       10000000000ull,
-                                                       100000000000ull,
-                                                       1000000000000ull,
-                                                       10000000000000ull,
-                                                       100000000000000ull,
-                                                       1000000000000000ull,
-                                                       10000000000000000ull,
-                                                       100000000000000000ull,
-                                                       1000000000000000000ull,
-                                                       10000000000000000000ull};
+   inline void pow10_table_get_sig_128(int32_t exp10, uint64_t hilo[2]) noexcept
+   {
+      const int32_t idx = exp10 - (POW10_SIG_TABLE_128_MIN_EXP);
+      std::memcpy(hilo, pow10_sig_table_128.data() + idx * 2, 16);
+   }
 
    /**
     Convert double number from binary to decimal.
@@ -829,42 +814,45 @@ namespace glz
     @warning The input double number should not be 0, inf, nan.
     */
    inline void f64_bin_to_dec(uint64_t sig_raw, int32_t exp_raw, uint64_t sig_bin, int32_t exp_bin, uint64_t *sig_dec,
-                              int32_t *exp_dec)
+                              int32_t *exp_dec) noexcept
    {
-      bool is_even, lower_bound_closer, u_inside, w_inside, round_up;
-      uint64_t s, sp, cb, cbl, cbr, vb, vbl, vbr, pow10hi, pow10lo, upper, lower, mid;
-      int32_t k, h, exp10;
+      uint64_t sp, mid;
 
-      is_even = !(sig_bin & 1);
-      lower_bound_closer = (sig_raw == 0 && exp_raw > 1);
+      const bool is_even = !(sig_bin & 1);
+      const bool lower_bound_closer = (sig_raw == 0 && exp_raw > 1);
 
-      cbl = 4 * sig_bin - 2 + lower_bound_closer;
-      cb = 4 * sig_bin;
-      cbr = 4 * sig_bin + 2;
+      const uint64_t cb = 4 * sig_bin;
+      const uint64_t cbl = cb - 2 + lower_bound_closer;
+      const uint64_t cbr = cb + 2;
 
       /* exp_bin: [-1074, 971]                                                  */
       /* k = lower_bound_closer ? floor(log10(pow(2, exp_bin)))                 */
       /*                        : floor(log10(pow(2, exp_bin) * 3.0 / 4.0))     */
       /*   = lower_bound_closer ? floor(exp_bin * log10(2))                     */
       /*                        : floor(exp_bin * log10(2) + log10(3.0 / 4.0))  */
-      k = (exp_bin * 315653 - (lower_bound_closer ? 131237 : 0)) >> 20;
+      const int32_t k = (exp_bin * 315653 - (lower_bound_closer ? 131237 : 0)) >> 20;
 
       /* k: [-324, 292]                                                         */
       /* h = exp_bin + floor(log2(pow(10, e)))                                  */
       /*   = exp_bin + floor(log2(10) * e)                                      */
-      exp10 = -k;
-      h = exp_bin + ((exp10 * 217707) >> 16) + 1;
+      const int32_t exp10 = -k;
+      const int32_t h = exp_bin + ((exp10 * 217707) >> 16) + 1;
 
-      pow10_table_get_sig_128(exp10, &pow10hi, &pow10lo);
+      uint64_t pow10hilo[2];
+      pow10_table_get_sig_128(exp10, pow10hilo);
+      const uint64_t &pow10hi = pow10hilo[0];
+      uint64_t &pow10lo = pow10hilo[1];
       pow10lo += (exp10 < POW10_SIG_TABLE_128_MIN_EXACT_EXP || exp10 > POW10_SIG_TABLE_128_MAX_EXACT_EXP);
-      vbl = round_to_odd(pow10hi, pow10lo, cbl << h);
-      vb = round_to_odd(pow10hi, pow10lo, cb << h);
-      vbr = round_to_odd(pow10hi, pow10lo, cbr << h);
+      const uint64_t vbl = round_to_odd(pow10hi, pow10lo, cbl << h);
+      const uint64_t vb = round_to_odd(pow10hi, pow10lo, cb << h);
+      const uint64_t vbr = round_to_odd(pow10hi, pow10lo, cbr << h);
 
-      lower = vbl + !is_even;
-      upper = vbr - !is_even;
+      const uint64_t lower = vbl + !is_even;
+      const uint64_t upper = vbr - !is_even;
 
-      s = vb / 4;
+      bool u_inside, w_inside;
+
+      const uint64_t s = vb / 4;
       if (s >= 10) {
          sp = s / 10;
          u_inside = (lower <= 40 * sp);
@@ -880,7 +868,7 @@ namespace glz
       w_inside = (upper >= 4 * s + 4);
 
       mid = 4 * s + 2;
-      round_up = (vb > mid) || (vb == mid && (s & 1) != 0);
+      const bool round_up = (vb > mid) || (vb == mid && (s & 1) != 0);
 
       *sig_dec = s + ((u_inside != w_inside) ? w_inside : round_up);
       *exp_dec = k;
@@ -898,7 +886,7 @@ namespace glz
     These digits are named as "aabbccddeeffgghhii" here.
     For example, input 1234567890123000, output "1234567890123".
     */
-   inline char *write_u64_len_15_to_17_trim(char *buf, uint64_t sig)
+   inline char *write_u64_len_15_to_17_trim(char *buf, uint64_t sig) noexcept
    {
       bool lz;               /* leading zero */
       uint32_t tz1, tz2, tz; /* trailing zero */
@@ -980,7 +968,7 @@ namespace glz
       }
    }
 
-   consteval uint32_t numbits(uint32_t x) { return x < 2 ? x : 1 + numbits(x >> 1); }
+   consteval uint32_t numbits(uint32_t x) noexcept { return x < 2 ? x : 1 + numbits(x >> 1); }
 
    template <std::floating_point T>
    inline char *to_chars(char *buffer, T val) noexcept
@@ -1061,9 +1049,9 @@ namespace glz
             else {
                /* dot after first digit */
                /* such as 1.234, 1234.0, 123400000000000000000.0 */
-               memset(buffer, '0', 8);
-               memset(buffer + 8, '0', 8);
-               memset(buffer + 16, '0', 8);
+               std::memset(buffer, '0', 8);
+               std::memset(buffer + 8, '0', 8);
+               std::memset(buffer + 16, '0', 8);
                auto num_hdr = buffer + 1;
                auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
                for (int i = 0; i < dot_pos; i++) buffer[i] = buffer[i + 1];
@@ -1091,8 +1079,8 @@ namespace glz
                return buffer + 2 - lz;
             }
             else {
-               uint32_t hi = (uint32_t(exp_dec) * 656) >> 16; /* exp / 100 */
-               uint32_t lo = uint32_t(exp_dec) - hi * 100;    /* exp % 100 */
+               const uint32_t hi = (uint32_t(exp_dec) * 656) >> 16; /* exp / 100 */
+               const uint32_t lo = uint32_t(exp_dec) - hi * 100;    /* exp % 100 */
                buffer[0] = uint8_t(hi) + '0';
                std::memcpy(&buffer[1], char_table + (lo * 2), 2);
                return buffer + 3;
