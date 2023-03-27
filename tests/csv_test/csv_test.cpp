@@ -1,6 +1,9 @@
 #include <deque>
 
 #include "boost/ut.hpp"
+
+#include <map>
+
 #include "glaze/csv/read.hpp"
 #include "glaze/csv/write.hpp"
 
@@ -22,9 +25,10 @@ struct glz::meta<my_struct>
    static constexpr auto value = glz::object("num1", &T::num1, "num2", &T::num2, "maybe", &T::maybe, "v3s", &T::v3s);
 };
 
-void read_tests()
+void csv_tests()
 {
-   "read column wise"_test = [] {
+   "read/write column wise"_test = []
+   {
       std::string input_col =
          R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -57,8 +61,9 @@ void read_tests()
 
       expect(!write_file_csv<false>(obj, "csv_test_colwise.csv"));
    };
-
-   "read row wise"_test = [] {
+   
+   "read/write row wise"_test = []
+   {
       std::string input_row =
          R"(num1,11,33,55,77
 num2,22,44,66,88
@@ -88,6 +93,28 @@ v3s[2],1,2,3,4)");
 
       expect(!write_file_csv(obj, "csv_test_rowwise.csv"));
    };
+   
+   "std::map"_test = [] {
+      std::map<std::string, std::vector<uint64_t>> m;
+      auto& x = m["x"];
+      auto& y = m["y"];
+      
+      for (size_t i = 0; i < 10; ++i) {
+         x.emplace_back(i);
+         y.emplace_back(i + 1);
+      }
+      
+      std::string out{};
+      write<opts{.format = csv}>(m, out);
+      expect(out == R"(x,0,1,2,3,4,5,6,7,8,9
+y,1,2,3,4,5,6,7,8,9,10
+)");
+      
+      out.clear();
+      write<opts{.format = csv, .row_wise = false}>(m, out);
+      
+      std::cout << out << '\n';
+   };
 }
 
-int main() { read_tests(); }
+int main() { csv_tests(); }
