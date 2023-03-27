@@ -124,9 +124,9 @@ namespace glz
                   static constexpr sv key = glz::tuplet::get<0>(item);
 
                   using item_type = std::decay_t<decltype(get_member(value, glz::tuplet::get<1>(item)))>;
-                  using V_t = typename item_type::value_type;
+                  using V = typename item_type::value_type;
 
-                  if constexpr (array_t<V_t>) {
+                  if constexpr (array_t<V>) {
 
                      auto member = get_member(value, glz::tuplet::get<1>(item));
                      const auto count = member.size();
@@ -157,72 +157,100 @@ namespace glz
                });
             }
             else {
-               int row_count = -1;
-               bool first = true;
-
+               // write titles
                for_each<N>([&](auto I) {
                   static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                   static constexpr sv key = glz::tuplet::get<0>(item);
 
-                  using item_type = std::decay_t<decltype(get_member(value, glz::tuplet::get<1>(item)))>;
-
-                  if (first) {
-                     first = false;
-                     if constexpr (array_t<item_type>) {
-                        row_count = int(get_member(value, glz::tuplet::get<1>(item)).size());
-                     }
-                  }
-                  else {
-                     dump<','>(b, ix);
-
-                     if constexpr (array_t<item_type>) {
-                        const auto size = get_member(value, glz::tuplet::get<1>(item)).size();
-                        row_count = (int(size) < row_count) ? int(size) : row_count;
-                     }
-                  }
-
-                  using V_t = typename item_type::value_type;
-
-                  if constexpr (array_t<V_t> && !resizeable<V_t>) {
+                  using X = std::decay_t<decltype(get_member(value, glz::tuplet::get<1>(item)))>;
+                  
+                  if constexpr (fixed_array_value_t<X>) {
                      const auto size = get_member(value, glz::tuplet::get<1>(item))[0].size();
                      for (size_t i = 0; i < size; ++i) {
-                        std::string idx_key(key);
-                        idx_key += '[' + std::to_string(i) + ']';
-                        write<csv>::op<Opts>(idx_key, ctx, b, ix);
-                        if (i != size - 1)
+                        dump<key>(b, ix);
+                        dump<'['>(b, ix);
+                        write_chars::op<Opts>(i, ctx, b, ix);
+                        dump<']'>(b, ix);
+                        if (i != size - 1) {
                            dump<','>(b, ix);
+                        }
                      }
                   }
                   else {
                      write<csv>::op<Opts>(key, ctx, b, ix);
                   }
-
                   
+                  if (I != N - 1) {
+                     dump<','>(b, ix);
+                  }
                });
-
-               dump <'\n'>(b, ix);
-
-               for (; int(ctx.csv_index) < row_count; ++ctx.csv_index) {
-                  first = true;
-
+               
+               dump<'\n'>(b, ix);
+               
+               size_t row = 0;
+               bool end = false;
+               
+               while (true) {
                   for_each<N>([&](auto I) {
                      static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
-
-                     if (first) {
-                        first = false;
+                     
+                     using X = std::decay_t<decltype(get_member(value, glz::tuplet::get<1>(item)))>;
+                     
+                     if constexpr (fixed_array_value_t<X>) {
+                        auto&& member = get_member(value, glz::tuplet::get<1>(item));
+                        if (row >= member.size()) {
+                           end = true;
+                           return;
+                        }
+                        
+                        const auto n = member[0].size();
+                        for (size_t i = 0; i < n; ++i) {
+                           write<csv>::op<Opts>(member[row][i], ctx, b, ix);
+                           if (i != n - 1) {
+                              dump<','>(b, ix);
+                           }
+                        }
                      }
                      else {
-                        dump<','>(b, ix);
+                        auto&& member = get_member(value, glz::tuplet::get<1>(item));
+                        if (row >= member.size()) {
+                           end = true;
+                           return;
+                        }
+                        
+                        write<csv>::op<Opts>(member[row], ctx, b, ix);
+                        
+                        if (I != N - 1) {
+                           dump<','>(b, ix);
+                        }
                      }
-
-                     write<csv>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, b, ix);
                   });
-
+                  
+                  if (end) {
+                     break;
+                  }
+                  
+                  ++row;
+                  
                   dump<'\n'>(b, ix);
                }
             }
          }
       };
+   }
+   
+   template <class T, class Buffer>
+   GLZ_ALWAYS_INLINE auto write_csv(T&& value, Buffer&& buffer)
+   {
+      return write<opts{.format = csv}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+   }
+   
+   template <class T>
+   GLZ_ALWAYS_INLINE auto write_csv(T&& value)
+   {
+      std::string buffer{};
+      write<opts{.format = csv}>(std::forward<T>(value), buffer);
+      return buffer;
    }
 
    template <bool RowWise = true, class T>

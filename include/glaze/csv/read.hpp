@@ -7,6 +7,7 @@
 #include "glaze/core/format.hpp"
 #include "glaze/util/strod.hpp"
 #include "glaze/file/file_ops.hpp"
+#include "glaze/util/parse.hpp"
 
 #include <charconv>
 
@@ -92,28 +93,16 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
-            if constexpr (resizeable<T>)
-            {
-               typename T::value_type element;
-               read<csv>::op<Opts>(element, ctx, it, end);
-               value.emplace_back(element);
-            }
-            else
-            {
-               if constexpr (Opts.row_wise) {
-                  typename T::value_type element;
-                  read<csv>::op<Opts>(element, ctx, it, end);
-                  value[ctx.csv_index] = element;
+            if constexpr (Opts.row_wise) {
+               if constexpr (resizeable<T>) {
+                  
                }
                else {
-                  const auto size = value.size();
-                  for (size_t i = 0; i < size; ++i) {
-                     read<csv>::op<Opts>(value[i], ctx, it, end);
-                     if (i != size - 1) {
-                        ++it; // skip comment
-                     }
-                  }
+                  
                }
+            }
+            else {
+               read<csv>::op<Opts>(value.emplace_back(), ctx, it, end);
             }
          }
       };
@@ -131,68 +120,88 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
+            static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
+            //static constexpr auto N = std::tuple_size_v<meta_t<T>>;
+            
             if constexpr (Opts.row_wise) {
-               static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
-
-               bool first = true;
-
+               
                while (it != end) {
-                  if (first) {
-                     first = false;
-                  }
-                  else {
-                     ++it;
-                  }
-
                   auto start = it;
                   goto_delim<','>(it, end);
                   sv key{start, static_cast<size_t>(it - start)};
                   
+                  size_t csv_index;
+                  
                   const auto brace_pos = key.find('[');
-                  if (brace_pos != std::string_view::npos) {
+                  if (brace_pos != sv::npos) {
                      const auto close_brace = key.find(']');
-                     auto index = key.substr(brace_pos + 1, close_brace - (brace_pos + 1));
+                     const auto index = key.substr(brace_pos + 1, close_brace - (brace_pos + 1));
                      key = key.substr(0, brace_pos);
-                     uint32_t i;
-                     const auto [ptr, ec] = std::from_chars(index.data(), index.data() + index.size(), i);
+                     const auto [ptr, ec] = std::from_chars(index.data(), index.data() + index.size(), csv_index);
                      if (ec != std::errc()) {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     ctx.csv_index = i;
                   }
-
-                  while (*it != '\n' && it != end) {
-                     ++it;
-                     
-                     const auto& member_it = frozen_map.find(key);
-                     if (member_it != frozen_map.end()) [[likely]] {
+                  
+                  match<','>(ctx, it, end);
+                  
+                  const auto& member_it = frozen_map.find(key);
+                  
+                  if (member_it != frozen_map.end()) [[likely]] {
+                     while (it != end) {
+                        
                         std::visit(
                            [&](auto&& member_ptr) {
-                              read<csv>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
+                              auto&& member = get_member(value, member_ptr);
+                              using M = std::decay_t<decltype(member)>;
+                              if constexpr (fixed_array_value_t<M>) {
+                                 read<csv>::op<Opts>(member[csv_index], ctx, it, end);
+                              }
+                              else {
+                                 read<csv>::op<Opts>(member, ctx, it, end);
+                              }
                            },
                            member_it->second);
+                                                
+                        if (*it == '\n') [[likely]] {
+                           ++it;
+                           break;
+                        }
+                        else {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
                      }
+                  }
+                  else [[unlikely]] {
+                     ctx.error = error_code::unknown_key;
+                     return;
                   }
                }
             }
             else // column wise
             {
-               std::vector<sv> keys;
+               std::vector<std::pair<sv, size_t>> keys;
                
-               // array like keys are only read once, because they will handle multiple values at once
                auto read_key = [&](auto&& start, auto&& it) {
                   sv key{ start, size_t(it - start) };
+                  
+                  size_t csv_index{};
+                  
                   const auto brace_pos = key.find('[');
-                  if (brace_pos != std::string_view::npos) {
+                  if (brace_pos != sv::npos) {
+                     const auto close_brace = key.find(']');
+                     const auto index = key.substr(brace_pos + 1, close_brace - (brace_pos + 1));
                      key = key.substr(0, brace_pos);
+                     const auto [ptr, ec] = std::from_chars(index.data(), index.data() + index.size(), csv_index);
+                     if (ec != std::errc()) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
                   }
-                  if (keys.size() && (keys.back() != key)) {
-                     keys.emplace_back(key);
-                  }
-                  else if (keys.empty()) {
-                     keys.emplace_back(key);
-                  }
+                  
+                  keys.emplace_back(std::pair{ key, csv_index });
                };
                
                auto start = it;
@@ -216,27 +225,53 @@ namespace glz
                   }
                }
                
+               if (*it == '\n') {
+                  ++it; // skip new line
+               }
+               else {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               
                const auto n_keys = keys.size();
                
-               static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
+               size_t row = 0;
 
                while (it != end) {
-                  ++it; // skip new line
                   for (size_t i = 0; i < n_keys; ++i) {
-                     if (*it == ',') {
-                        ++it;
-                     }
-                     const auto& member_it = frozen_map.find(keys[i]);
+                     const auto& member_it = frozen_map.find(keys[i].first);
                      if (member_it != frozen_map.end()) [[likely]] {
                         std::visit(
                            [&](auto&& member_ptr) {
-                              read<csv>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
+                              auto&& member = get_member(value, member_ptr);
+                              using M = std::decay_t<decltype(member)>;
+                              if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
+                                 const auto index = keys[i].second;
+                                 if (row < member.size()) [[likely]] {
+                                    read<csv>::op<Opts>(member[row][index], ctx, it, end);
+                                 }
+                                 else [[unlikely]] {
+                                    read<csv>::op<Opts>(member.emplace_back()[index], ctx, it, end);
+                                 }
+                              }
+                              else {
+                                 read<csv>::op<Opts>(member, ctx, it, end);
+                              }
                            }, member_it->second);
                      }
                      else [[unlikely]] {
                         ctx.error = error_code::unknown_key;
                         return;
                      }
+                     
+                     if (*it == ',') {
+                        ++it;
+                     }
+                  }
+                  
+                  if (*it == '\n') {
+                     ++it; // skip new line
+                     ++row;
                   }
                }
             }
