@@ -5,9 +5,7 @@ set(BOOST_UT_DISABLE_MODULE ON CACHE INTERNAL "")
 
 FetchContent_Declare(
   ut
-  GIT_REPOSITORY https://github.com/boost-ext/ut.git
-  GIT_TAG 265199e173b16a75670fae62fc2446b9dffad39e
-  FIND_PACKAGE_ARGS
+  URL https://github.com/boost-ext/ut/archive/265199e173b16a75670fae62fc2446b9dffad39e.zip
 )
 
 message(STATUS "Fetching dependencies...")
