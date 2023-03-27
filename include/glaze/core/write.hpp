@@ -10,11 +10,10 @@
 namespace glz
 {
    template <class Buffer>
-   concept raw_buffer = std::same_as < std::decay_t<Buffer>,
-   char* > ;
+   concept raw_buffer = std::same_as<std::decay_t<Buffer>, char*>;
 
    template <class Buffer>
-   concept output_buffer = range<Buffer> &&(sizeof(range_value_t<Buffer>) == sizeof(char));
+   concept output_buffer = range<Buffer> && (sizeof(range_value_t<Buffer>) == sizeof(char));
 
    template <class T>
    inline auto data_ptr(T& buffer)
