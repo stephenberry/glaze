@@ -93,17 +93,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
-            if constexpr (Opts.row_wise) {
-               if constexpr (resizeable<T>) {
-                  
-               }
-               else {
-                  
-               }
-            }
-            else {
-               read<csv>::op<Opts>(value.emplace_back(), ctx, it, end);
-            }
+            read<csv>::op<Opts>(value.emplace_back(), ctx, it, end);
          }
       };
       
@@ -149,30 +139,56 @@ namespace glz
                   const auto& member_it = frozen_map.find(key);
                   
                   if (member_it != frozen_map.end()) [[likely]] {
-                     while (it != end) {
-                        
-                        std::visit(
-                           [&](auto&& member_ptr) {
-                              auto&& member = get_member(value, member_ptr);
-                              using M = std::decay_t<decltype(member)>;
-                              if constexpr (fixed_array_value_t<M>) {
-                                 read<csv>::op<Opts>(member[csv_index], ctx, it, end);
+                     std::visit(
+                        [&](auto&& member_ptr) {
+                           auto&& member = get_member(value, member_ptr);
+                           using M = std::decay_t<decltype(member)>;
+                           if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
+                              size_t col = 0;
+                              while (it != end) {
+                                 if (col < member.size()) [[likely]] {
+                                    read<csv>::op<Opts>(member[col][csv_index], ctx, it, end);
+                                 }
+                                 else [[unlikely]] {
+                                    read<csv>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
+                                 }
+                                 
+                                 if (*it == '\n') {
+                                    ++it;
+                                    break;
+                                 }
+                                 
+                                 if (*it == ',') {
+                                    ++it;
+                                 }
+                                 else {
+                                    ctx.error = error_code::syntax_error;
+                                    return;
+                                 }
+                                 
+                                 ++col;
                               }
-                              else {
+                           }
+                           else {
+                              while (it != end) {
                                  read<csv>::op<Opts>(member, ctx, it, end);
+                                 
+                                 if (*it == '\n') {
+                                    ++it;
+                                    break;
+                                 }
+                                 
+                                 if (*it == ',') {
+                                    ++it;
+                                 }
+                                 else {
+                                    ctx.error = error_code::syntax_error;
+                                    return;
+                                 }
                               }
-                           },
-                           member_it->second);
-                                                
-                        if (*it == '\n') [[likely]] {
-                           ++it;
-                           break;
-                        }
-                        else {
-                           ctx.error = error_code::syntax_error;
-                           return;
-                        }
-                     }
+                           }
+                        },
+                        member_it->second);
                   }
                   else [[unlikely]] {
                      ctx.error = error_code::unknown_key;

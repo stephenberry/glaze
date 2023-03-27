@@ -128,13 +128,14 @@ namespace glz
 
                   if constexpr (array_t<V>) {
 
-                     auto member = get_member(value, glz::tuplet::get<1>(item));
+                     auto&& member = get_member(value, glz::tuplet::get<1>(item));
                      const auto count = member.size();
                      const auto size = member[0].size();
                      for (size_t i = 0; i < size; ++i) {
-                        std::string idx_key(key);
-                        idx_key += '[' + std::to_string(i) + ']';
-                        write<csv>::op<Opts>(idx_key, ctx, b, ix);
+                        dump<key>(b, ix);
+                        dump<'['>(b, ix);
+                        write_chars::op<Opts>(i, ctx, b, ix);
+                        dump<']'>(b, ix);
                         dump<','>(b, ix);
 
                         for (size_t j = 0; j < count; ++j) {
@@ -144,12 +145,13 @@ namespace glz
                            }
                         }
 
-                        if (i != size - 1)
+                        if (i != size - 1) {
                            dump<'\n'>(b, ix);
+                        }
                      }
                   }
                   else {
-                     write<csv>::op<Opts>(key, ctx, b, ix);
+                     dump<key>(b, ix);
                      dump<','>(b, ix);
                      write<csv>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, b, ix);
                      dump<'\n'>(b, ix);

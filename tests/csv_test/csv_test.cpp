@@ -83,9 +83,20 @@ v3s[2],1,2,3,4)";
       expect(obj.num1[0] == 11);
       expect(obj.num2[2] == 66);
       expect(obj.maybe[3] == false);
-      expect(obj.v3s[0][2] == 3);
+      expect(obj.v3s[0][2] == 1);
       
-      //expect(!write_file_csv(obj, "csv_test_rowwise.csv"));
+      std::string out{};
+      
+      write<opts{.format = csv}>(obj, out);
+      expect(out ==
+             R"(num1,11,33,55,77
+num2,22,44,66,88
+maybe,1,1,0,0
+v3s[0],1,2,3,4
+v3s[1],1,2,3,4
+v3s[2],1,2,3,4)");
+      
+      expect(!write_file_csv(obj, "csv_test_rowwise.csv"));
    };
 }
 
