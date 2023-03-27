@@ -995,7 +995,7 @@ namespace glz
             std::string string_file_path = file_path.string();
             const auto ec = file_to_buffer(buffer, string_file_path);
 
-            if (static_cast<bool>(ec)) {
+            if (bool(ec)) {
                ctx.error = ec;
                return;
             }
@@ -1747,7 +1747,7 @@ namespace glz
 
       const auto ec = file_to_buffer(buffer, ctx.current_file);
 
-      if (static_cast<bool>(ec)) {
+      if (bool(ec)) {
          return {ec};
       }
 
