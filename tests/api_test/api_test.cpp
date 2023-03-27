@@ -36,19 +36,20 @@ template <>
 struct glz::meta<my_api>
 {
    using T = my_api;
-   static constexpr auto value = glz::object("x", &T::x,                                  //
-                                             "y", &T::y,                                  //
-                                             "z", &T::z,                                  //
-                                             "x_ptr", &T::x_ptr,                          //
-                                             "uptr", &T::uptr,                            //
-                                             "s", &T::s,                                  //
-                                             "f", &T::f,                                  //
-                                             "init", &T::init,                            //
-                                             "func", &T::func, "func_ref", &T::func_ref,  //
-                                             "inc", &T::inc,                              //
-                                             "sum", &T::sum,                              //
-                                             "sum_lref", &T::sum_lref,                    //
-                                             "sum_rref", &T::sum_rref                     //
+   static constexpr auto value = glz::object(
+      "x", &T::x,                                  //
+      "y", [](auto&& v) -> auto& { return v.y; },  //
+      "z", &T::z,                                  //
+      "x_ptr", &T::x_ptr,                          //
+      "uptr", &T::uptr,                            //
+      "s", &T::s,                                  //
+      "f", &T::f,                                  //
+      "init", &T::init,                            //
+      "func", &T::func, "func_ref", &T::func_ref,  //
+      "inc", &T::inc,                              //
+      "sum", &T::sum,                              //
+      "sum_lref", &T::sum_lref,                    //
+      "sum_rref", &T::sum_rref                     //
    );
 
    static constexpr std::string_view name = "my_api";
