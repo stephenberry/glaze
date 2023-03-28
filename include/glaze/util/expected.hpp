@@ -1,8 +1,3 @@
-// Glaze Library
-// For the license information refer to glaze.hpp
-
-// Modified from: https://github.com/RishabhRD
-
 /*
  * MIT License
  *
@@ -29,14 +24,7 @@
 
 #pragma once
 
-#include <concepts>
-#include <deque>
-#include <exception>
-#include <functional>
-#include <memory>
-#include <type_traits>
 #include <utility>
-#include <variant>
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -59,6 +47,29 @@ namespace glz
       GLZ_THROW_OR_ABORT(std::runtime_error(msg));
    }
 }
+
+#if __has_include(<expected>)
+#include <expected>
+#endif
+
+#ifdef __cpp_lib_expected
+namespace glz
+{
+   template <class expected_t, class unexpected_t>
+   using expected = std::expected<expected_t, unexpected_t>;
+
+   template <class unexpected_t>
+   using unexpected = std::unexpected<unexpected_t>;
+}
+#else
+
+#include <concepts>
+#include <deque>
+#include <exception>
+#include <functional>
+#include <memory>
+#include <type_traits>
+#include <variant>
 
 namespace glz
 {
@@ -186,7 +197,7 @@ namespace glz
       template <typename T, typename E, typename U, typename G, typename UF, typename GF>
       concept expected_constructible_from_other = std::constructible_from<T, UF> && std::constructible_from<E, GF> &&
                                                   (!std::constructible_from<T, expected<U, G>&>) &&
-                                                  (!std::constructible_from<T, expected<U, G>>) &&
+                                                  (!std::constructible_from<T, expected<U, G> >) &&
                                                   (!std::constructible_from<T, expected<U, G> const&>) &&
                                                   (!std::constructible_from<T, expected<U, G> const>) &&
                                                   (!std::convertible_to<expected<U, G>&, T>) &&
@@ -194,16 +205,16 @@ namespace glz
                                                   (!std::convertible_to<expected<U, G> const&, T>) &&
                                                   (!std::convertible_to<expected<U, G> const &&, T>) &&
                                                   (!std::constructible_from<unexpected<E>, expected<U, G>&>) &&
-                                                  (!std::constructible_from<unexpected<E>, expected<U, G>>) &&
+                                                  (!std::constructible_from<unexpected<E>, expected<U, G> >) &&
                                                   (!std::constructible_from<unexpected<E>, expected<U, G> const&>) &&
                                                   (!std::constructible_from<unexpected<E>, expected<U, G> const>);
 
       template <typename T>
-      concept is_unexpected = std::same_as<std::remove_cvref_t<T>, unexpected<typename T::value_type>>;
+      concept is_unexpected = std::same_as<std::remove_cvref_t<T>, unexpected<typename T::value_type> >;
 
       template <typename T>
       concept is_expected =
-         std::same_as<std::remove_cvref_t<T>, expected<typename T::value_type, typename T::error_type>>;
+         std::same_as<std::remove_cvref_t<T>, expected<typename T::value_type, typename T::error_type> >;
 
       // This function makes sure expected doesn't get into valueless_by_exception
       // state due to any exception while assignment
@@ -327,7 +338,7 @@ namespace glz
 
       template <class U = T>
          requires(!std::same_as<std::remove_cvref_t<U>, std::in_place_t>) &&
-                 (!std::same_as<expected<T, E>, std::remove_cvref_t<U>>) &&
+                 (!std::same_as<expected<T, E>, std::remove_cvref_t<U> >) &&
                  (!detail::is_unexpected<U>) && std::constructible_from<T, U>
       constexpr explicit(!std::convertible_to<U, T>) expected(U&& v)  // NOLINT
          : val(std::forward<U>(v))
@@ -440,9 +451,9 @@ namespace glz
       }
 
       template <class U = T>
-         constexpr auto operator=(U&& rhs) -> expected& requires(!std::same_as<expected, std::remove_cvref_t<U>>) &&
-         (!detail::is_unexpected<std::remove_cvref_t<U>>)&&std::constructible_from<T, U>&& std::is_assignable_v<T&,
-                                                                                                                U> &&
+         constexpr auto operator=(U&& rhs) -> expected& requires(!std::same_as<expected, std::remove_cvref_t<U> >) &&
+         (!detail::is_unexpected<std::remove_cvref_t<U> >)&&std::constructible_from<T, U>&& std::is_assignable_v<T&,
+                                                                                                                 U> &&
          (std::is_nothrow_constructible_v<T, U> || std::is_nothrow_move_constructible_v<T> ||
           std::is_nothrow_move_constructible_v<E>)
       {
@@ -663,7 +674,7 @@ namespace glz
          return has_value() ? std::move(**this) : static_cast<T>(std::forward<U>(v));
       }
 
-      template <class F, class V = T&, class U = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = T&, class U = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> &&
                   std::is_copy_constructible_v<E> && std::is_copy_constructible_v<T>
       constexpr auto and_then(F&& f) &
@@ -674,7 +685,7 @@ namespace glz
          return U(unexpect, error());
       }
 
-      template <class F, class V = T const&, class U = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = T const&, class U = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> &&
                   std::is_copy_constructible_v<E> && std::is_copy_constructible_v<T>
       constexpr auto and_then(F&& f) const&
@@ -685,7 +696,7 @@ namespace glz
          return U(unexpect, error());
       }
 
-      template <class F, class V = T&&, class U = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = T&&, class U = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> &&
                   std::is_move_constructible_v<E> && std::is_move_constructible_v<T>
       constexpr auto and_then(F&& f) &&
@@ -696,7 +707,7 @@ namespace glz
          return U(unexpect, std::move(error()));
       }
 
-      template <class F, class V = T const&&, class U = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = T const&&, class U = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> &&
                   std::is_move_constructible_v<E> && std::is_move_constructible_v<T>
       constexpr auto and_then(F&& f) const&&
@@ -707,7 +718,7 @@ namespace glz
          return U(unexpect, std::move(error()));
       }
 
-      template <class F, class V = E&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires detail::is_expected<G> && std::is_same_v<typename G::value_type, T> &&
                   std::is_copy_constructible_v<T> && std::is_copy_constructible_v<E>
       constexpr auto or_else(F&& f) &
@@ -718,7 +729,7 @@ namespace glz
          return std::invoke(std::forward<F>(f), error());
       }
 
-      template <class F, class V = E const&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E const&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires detail::is_expected<G> && std::is_same_v<typename G::value_type, T> &&
                   std::is_copy_constructible_v<T> && std::is_copy_constructible_v<E>
       constexpr auto or_else(F&& f) const&
@@ -729,7 +740,7 @@ namespace glz
          return std::invoke(std::forward<F>(f), error());
       }
 
-      template <class F, class V = E&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires detail::is_expected<G> && std::is_same_v<typename G::value_type, T> &&
                   std::is_move_constructible_v<T> && std::is_move_constructible_v<E>
       constexpr auto or_else(F&& f) &&
@@ -740,7 +751,7 @@ namespace glz
          return std::invoke(std::forward<F>(f), std::move(error()));
       }
 
-      template <class F, class V = E const&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E const&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires detail::is_expected<G> && std::is_same_v<typename G::value_type, T> &&
                   std::is_move_constructible_v<T> && std::is_move_constructible_v<E>
       constexpr auto or_else(F&& f) const&&
@@ -751,7 +762,7 @@ namespace glz
          return std::invoke(std::forward<F>(f), std::move(error()));
       }
 
-      template <class F, class V = E&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_void_v<G> && std::is_copy_constructible_v<T> && std::is_copy_constructible_v<E>
       constexpr auto or_else(F&& f) &
       {
@@ -762,7 +773,7 @@ namespace glz
          return expected(*this);
       }
 
-      template <class F, class V = E const&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E const&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_void_v<G> && std::is_copy_constructible_v<T> && std::is_copy_constructible_v<E>
       constexpr auto or_else(F&& f) const&
       {
@@ -773,7 +784,7 @@ namespace glz
          return expected(*this);
       }
 
-      template <class F, class V = E&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_void_v<G> && std::is_move_constructible_v<T> && std::is_move_constructible_v<E> &&
                   std::is_copy_constructible_v<E>
       constexpr auto or_else(F&& f) &&
@@ -786,7 +797,7 @@ namespace glz
          return expected(std::move(*this));
       }
 
-      template <class F, class V = E const&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E const&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_void_v<G> && std::is_move_constructible_v<T> && std::is_move_constructible_v<E> &&
                   std::is_copy_constructible_v<E>
       constexpr auto or_else(F&& f) const&&
@@ -799,7 +810,7 @@ namespace glz
          return expected(std::move(*this));
       }
 
-      template <class F, class V = T&, class U = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = T&, class U = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_copy_constructible_v<E> && std::is_copy_constructible_v<T>
       constexpr auto transform(F&& f) &
       {
@@ -815,7 +826,7 @@ namespace glz
          return expected<U, E>(unexpect, error());
       }
 
-      template <class F, class V = T const&, class U = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = T const&, class U = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_copy_constructible_v<E> && std::is_copy_constructible_v<T>
       constexpr auto transform(F&& f) const&
       {
@@ -831,7 +842,7 @@ namespace glz
          return expected<U, E>(unexpect, error());
       }
 
-      template <class F, class V = T&&, class U = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = T&&, class U = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_move_constructible_v<E> && std::is_move_constructible_v<T>
       constexpr auto transform(F&& f) &&
       {
@@ -847,7 +858,7 @@ namespace glz
          return expected<U, E>(unexpect, std::move(error()));
       }
 
-      template <class F, class V = T const&&, class U = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = T const&&, class U = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_move_constructible_v<E> && std::is_move_constructible_v<T>
       constexpr auto transform(F&& f) const&&
       {
@@ -863,7 +874,7 @@ namespace glz
          return expected<U, E>(unexpect, std::move(error()));
       }
 
-      template <class F, class V = E&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_copy_constructible_v<T> && std::is_copy_constructible_v<E>
       constexpr auto transform_error(F&& f) &
       {
@@ -873,7 +884,7 @@ namespace glz
          return expected<T, G>(unexpect, std::invoke(std::forward<F>(f), error()));
       }
 
-      template <class F, class V = E const&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E const&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_copy_constructible_v<T> && std::is_copy_constructible_v<E>
       constexpr auto transform_error(F&& f) const&
       {
@@ -883,7 +894,7 @@ namespace glz
          return expected<T, G>(unexpect, std::invoke(std::forward<F>(f), error()));
       }
 
-      template <class F, class V = E&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_move_constructible_v<T> && std::is_move_constructible_v<E>
       constexpr auto transform_error(F&& f) &&
       {
@@ -893,7 +904,7 @@ namespace glz
          return expected<T, G>(unexpect, std::invoke(std::forward<F>(f), std::move(error())));
       }
 
-      template <class F, class V = E const&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E const&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_move_constructible_v<T> && std::is_move_constructible_v<E>
       constexpr auto transform_error(F&& f) const&&
       {
@@ -996,7 +1007,7 @@ namespace glz
       template <class U, class G>
          requires std::is_void_v<U> && std::is_constructible_v<E, G const&> &&
                   (!std::is_constructible_v<unexpected<E>, expected<U, G>&>) &&
-                  (!std::is_constructible_v<unexpected<E>, expected<U, G>>) &&
+                  (!std::is_constructible_v<unexpected<E>, expected<U, G> >) &&
                   (!std::is_constructible_v<unexpected<E>, expected<U, G> const&>) &&
                   (!std::is_constructible_v<unexpected<E>, expected<U, G> const&>)
       constexpr explicit(!std::is_convertible_v<G const&, E>) expected(expected<U, G> const& rhs)  // NOLINT
@@ -1010,7 +1021,7 @@ namespace glz
       template <class U, class G>
          requires std::is_void_v<U> && std::is_constructible_v<E, G> &&
                   (!std::is_constructible_v<unexpected<E>, expected<U, G>&>) &&
-                  (!std::is_constructible_v<unexpected<E>, expected<U, G>>) &&
+                  (!std::is_constructible_v<unexpected<E>, expected<U, G> >) &&
                   (!std::is_constructible_v<unexpected<E>, expected<U, G> const&>) &&
                   (!std::is_constructible_v<unexpected<E>, expected<U, G> const&>)
       constexpr explicit(!std::is_convertible_v<G const&, E>) expected(expected<U, G>&& rhs)  // NOLINT
@@ -1195,7 +1206,7 @@ namespace glz
       constexpr auto error() && -> E&& { return std::move(this->unex); }
 
       // monadic
-      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F>>>
+      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F> > >
          requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> && std::is_copy_constructible_v<E>
       constexpr auto and_then(F&& f) &
       {
@@ -1205,7 +1216,7 @@ namespace glz
          return U(unexpect, error());
       }
 
-      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F>>>
+      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F> > >
          requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> && std::is_copy_constructible_v<E>
       constexpr auto and_then(F&& f) const&
       {
@@ -1215,7 +1226,7 @@ namespace glz
          return U(unexpect, error());
       }
 
-      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F>>>
+      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F> > >
          requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> && std::is_move_constructible_v<E>
       constexpr auto and_then(F&& f) &&
       {
@@ -1225,7 +1236,7 @@ namespace glz
          return U(unexpect, std::move(error()));
       }
 
-      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F>>>
+      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F> > >
          requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> && std::is_move_constructible_v<E>
       constexpr auto and_then(F&& f) const&&
       {
@@ -1235,7 +1246,7 @@ namespace glz
          return U(unexpect, std::move(error()));
       }
 
-      template <class F, class V = E&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires detail::is_expected<G> && std::is_same_v<typename G::value_type, void> &&
                   std::is_copy_constructible_v<E>
       constexpr auto or_else(F&& f) &
@@ -1246,7 +1257,7 @@ namespace glz
          return std::invoke(std::forward<F>(f), error());
       }
 
-      template <class F, class V = E const&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E const&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires detail::is_expected<G> && std::is_same_v<typename G::value_type, void> &&
                   std::is_copy_constructible_v<E>
       constexpr auto or_else(F&& f) const&
@@ -1257,7 +1268,7 @@ namespace glz
          return std::invoke(std::forward<F>(f), error());
       }
 
-      template <class F, class V = E&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires detail::is_expected<G> && std::is_same_v<typename G::value_type, void> &&
                   std::is_move_constructible_v<E>
       constexpr auto or_else(F&& f) &&
@@ -1268,7 +1279,7 @@ namespace glz
          return std::invoke(std::forward<F>(f), std::move(error()));
       }
 
-      template <class F, class V = E const&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E const&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires detail::is_expected<G> && std::is_same_v<typename G::value_type, void> &&
                   std::is_move_constructible_v<E>
       constexpr auto or_else(F&& f) const&&
@@ -1279,7 +1290,7 @@ namespace glz
          return std::invoke(std::forward<F>(f), std::move(error()));
       }
 
-      template <class F, class V = E&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_void_v<G> && std::is_copy_constructible_v<E>
       constexpr auto or_else(F&& f) &
       {
@@ -1290,7 +1301,7 @@ namespace glz
          return expected(*this);
       }
 
-      template <class F, class V = E const&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E const&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_void_v<G> && std::is_copy_constructible_v<E>
       constexpr auto or_else(F&& f) const&
       {
@@ -1301,7 +1312,7 @@ namespace glz
          return expected(*this);
       }
 
-      template <class F, class V = E&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_void_v<G> && std::is_move_constructible_v<E> && std::is_copy_constructible_v<E>
       constexpr auto or_else(F&& f) &&
       {
@@ -1313,7 +1324,7 @@ namespace glz
          return expected(std::move(*this));
       }
 
-      template <class F, class V = E const&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E const&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_void_v<G> && std::is_move_constructible_v<E> && std::is_copy_constructible_v<E>
       constexpr auto or_else(F&& f) const&&
       {
@@ -1325,7 +1336,7 @@ namespace glz
          return expected(std::move(*this));
       }
 
-      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F>>>
+      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F> > >
          requires std::is_copy_constructible_v<E>
       constexpr auto transform(F&& f) &
       {
@@ -1341,7 +1352,7 @@ namespace glz
          return expected<U, E>(unexpect, error());
       }
 
-      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F>>>
+      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F> > >
          requires std::is_copy_constructible_v<E>
       constexpr auto transform(F&& f) const&
       {
@@ -1357,7 +1368,7 @@ namespace glz
          return expected<U, E>(unexpect, error());
       }
 
-      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F>>>
+      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F> > >
          requires std::is_move_constructible_v<E>
       constexpr auto transform(F&& f) &&
       {
@@ -1373,7 +1384,7 @@ namespace glz
          return expected<U, E>(unexpect, std::move(error()));
       }
 
-      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F>>>
+      template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F> > >
          requires std::is_move_constructible_v<E>
       constexpr auto transform(F&& f) const&&
       {
@@ -1389,7 +1400,7 @@ namespace glz
          return expected<U, E>(unexpect, std::move(error()));
       }
 
-      template <class F, class V = E&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_copy_constructible_v<E>
       constexpr auto transform_error(F&& f) &
       {
@@ -1399,7 +1410,7 @@ namespace glz
          return expected<void, G>(unexpect, std::invoke(std::forward<F>(f), error()));
       }
 
-      template <class F, class V = E const&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E const&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_copy_constructible_v<E>
       constexpr auto transform_error(F&& f) const&
       {
@@ -1409,7 +1420,7 @@ namespace glz
          return expected<void, G>(unexpect, std::invoke(std::forward<F>(f), error()));
       }
 
-      template <class F, class V = E&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_move_constructible_v<E>
       constexpr auto transform_error(F&& f) &&
       {
@@ -1419,7 +1430,7 @@ namespace glz
          return expected<void, G>(unexpect, std::invoke(std::forward<F>(f), std::move(error())));
       }
 
-      template <class F, class V = E const&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V>>>
+      template <class F, class V = E const&&, class G = std::remove_cvref_t<std::invoke_result_t<F, V> > >
          requires std::is_move_constructible_v<E>
       constexpr auto transform_error(F&& f) const&&
       {
@@ -1465,3 +1476,5 @@ namespace glz
    };
 
 }
+
+#endif
