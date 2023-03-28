@@ -1,8 +1,3 @@
-// Glaze Library
-// For the license information refer to glaze.hpp
-
-// Modified from: https://github.com/RishabhRD
-
 /*
  * MIT License
  *
@@ -29,14 +24,7 @@
 
 #pragma once
 
-#include <concepts>
-#include <deque>
-#include <exception>
-#include <functional>
-#include <memory>
-#include <type_traits>
 #include <utility>
-#include <variant>
 
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
@@ -59,6 +47,29 @@ namespace glz
       GLZ_THROW_OR_ABORT(std::runtime_error(msg));
    }
 }
+
+#if __has_include(<expected>)
+#include <expected>
+#endif
+
+#ifdef __cpp_lib_expected
+namespace glz
+{
+   template <class expected_t, class unexpected_t>
+   using expected = std::expected<expected_t, unexpected_t>;
+
+   template <class unexpected_t>
+   using unexpected = std::unexpected<unexpected_t>;
+}
+#else
+
+#include <concepts>
+#include <deque>
+#include <exception>
+#include <functional>
+#include <memory>
+#include <type_traits>
+#include <variant>
 
 namespace glz
 {
@@ -1465,3 +1476,5 @@ namespace glz
    };
 
 }
+
+#endif
