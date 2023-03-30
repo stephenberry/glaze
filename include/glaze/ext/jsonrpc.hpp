@@ -273,38 +273,41 @@ namespace glz::rpc
    {
       template <typename method_t>
       concept method_type = requires(method_t meth) {
-         method_t::name_v;
-         {
-            std::same_as<decltype(method_t::name_v), std::string_view>
-         };
-         typename method_t::params_t;
-         typename method_t::jsonrpc_id_t;
-         typename method_t::request_t;
-         typename method_t::response_t;
-      };
+                               method_t::name_v;
+                               {
+                                  std::same_as<decltype(method_t::name_v), std::string_view>
+                               };
+                               typename method_t::params_t;
+                               typename method_t::jsonrpc_id_t;
+                               typename method_t::request_t;
+                               typename method_t::response_t;
+                            };
 
       template <typename method_t>
-      concept server_method_type = requires(method_t meth) {
-         requires method_type<method_t>;
-         {
-            meth.callback
+      concept server_method_type =
+         requires(method_t meth) {
+            requires method_type<method_t>;
+            {
+               meth.callback
+            };
+            requires std::same_as<
+               decltype(meth.callback),
+               std::function<expected<typename method_t::result_t, rpc::error>(typename method_t::params_t const&)>>;
          };
-         requires std::same_as<decltype(meth.callback), std::function<expected<typename method_t::result_t, rpc::error>(
-                                                           typename method_t::params_t const&)>>;
-      };
 
       template <typename method_t>
-      concept client_method_type = requires(method_t meth) {
-         requires method_type<method_t>;
-         {
-            meth.pending_requests
+      concept client_method_type =
+         requires(method_t meth) {
+            requires method_type<method_t>;
+            {
+               meth.pending_requests
+            };
+            requires std::same_as<
+               decltype(meth.pending_requests),
+               std::unordered_map<jsonrpc_id_type,
+                                  std::function<void(glz::expected<typename method_t::result_t, rpc::error> const&,
+                                                     jsonrpc_id_type const&)>>>;
          };
-         requires std::same_as<
-            decltype(meth.pending_requests),
-            std::unordered_map<jsonrpc_id_type,
-                               std::function<void(glz::expected<typename method_t::result_t, rpc::error> const&,
-                                                  jsonrpc_id_type const&)>>>;
-      };
 
       template <typename call_return_t>
       concept call_return_type =
@@ -396,7 +399,8 @@ namespace glz::rpc
       template <concepts::call_return_type return_t = std::string>
       return_t call(std::string_view json_request)
       {
-         constexpr auto return_helper = []<typename input_type>(input_type&& response) -> auto {
+         constexpr auto return_helper = []<typename input_type>(input_type && response) -> auto
+         {
             if constexpr (std::same_as<return_t, std::string>) {
                return glz::write_json(std::forward<input_type>(response));
             }
