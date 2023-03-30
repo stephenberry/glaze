@@ -18,7 +18,7 @@ namespace glz
          return res;
       }
       else {
-         uint64_t res;  // no need to default initialize, excess will be discarded
+         uint64_t res; // no need to default initialize, excess will be discarded
          std::memcpy(&res, bytes, n);
          return res;
       }
@@ -36,7 +36,7 @@ namespace glz
          return res;
       }
       else {
-         uint64_t res;  // no need to default initialize, excess will be discarded
+         uint64_t res; // no need to default initialize, excess will be discarded
          std::memcpy(&res, bytes, N);
          return res;
       }
@@ -149,7 +149,7 @@ namespace glz
    template <const sv& S, bool CheckSize = true>
    inline constexpr bool cx_string_cmp(const sv key) noexcept
    {
-      constexpr auto s = S;  // Needed for MSVC to avoid an internal compiler error
+      constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
       constexpr auto n = s.size();
       if (std::is_constant_evaluated()) {
          return key == s;

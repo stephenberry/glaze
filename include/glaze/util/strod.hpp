@@ -385,7 +385,7 @@ namespace glz::detail
          }
       }
 
-      auto operator<=>(const bigint_t &rhs) const
+      auto operator<=>(const bigint_t& rhs) const
       {
          if (data.size() < rhs.data.size()) return -1;
          if (data.size() > rhs.data.size()) return 1;
@@ -404,24 +404,24 @@ namespace glz::detail
    };
 
    template <class T, bool force_conformance = false>
-   inline bool parse_number(T &val, auto *&cur) noexcept
+   inline bool parse_number(T& val, auto*& cur) noexcept
    {
-      const uint8_t *sig_cut = nullptr;                  /* significant part cutting position for long number */
-      [[maybe_unused]] const uint8_t *sig_end = nullptr; /* significant part ending position */
-      const uint8_t *dot_pos = nullptr;                  /* decimal point position */
+      const uint8_t* sig_cut = nullptr; /* significant part cutting position for long number */
+      [[maybe_unused]] const uint8_t* sig_end = nullptr; /* significant part ending position */
+      const uint8_t* dot_pos = nullptr; /* decimal point position */
       uint32_t frac_zeros = 0;
-      uint64_t sig = 0;    /* significant part of the number */
-      int32_t exp = 0;     /* exponent part of the number */
-      bool exp_sign;       /* temporary exponent sign from literal part */
+      uint64_t sig = 0; /* significant part of the number */
+      int32_t exp = 0; /* exponent part of the number */
+      bool exp_sign; /* temporary exponent sign from literal part */
       int32_t exp_sig = 0; /* temporary exponent number from significant part */
       int32_t exp_lit = 0; /* temporary exponent number from exponent literal part */
-      uint64_t num_tmp;    /* temporary number for reading */
-      const uint8_t *tmp;  /* temporary cursor for reading */
-      const uint8_t *hdr = cur;
+      uint64_t num_tmp; /* temporary number for reading */
+      const uint8_t* tmp; /* temporary cursor for reading */
+      const uint8_t* hdr = cur;
       bool sign;
       sign = (*hdr == '-');
       cur += sign;
-      auto apply_sign = [&](auto &&val) -> T {
+      auto apply_sign = [&](auto&& val) -> T {
          if constexpr (std::is_unsigned_v<T>) {
             return static_cast<T>(val);
          }
@@ -473,7 +473,7 @@ namespace glz::detail
          return true;
       }
       goto digi_intg_more; /* read more digits in integral part */
-                           /* process first non-digit character */
+      /* process first non-digit character */
 #define expr_sepr(i)                                           \
    digi_sepr_##i : if ((!digi_is_fp(cur[i]))) [[likely]]       \
    {                                                           \
@@ -502,17 +502,17 @@ namespace glz::detail
    }
          repeat_in_1_18(expr_frac)
 #undef expr_frac
-            cur += 20 + frac_zeros;                     /* skip 19 digits and 1 decimal point */
+            cur += 20 + frac_zeros; /* skip 19 digits and 1 decimal point */
       if (uint8_t(*cur - zero) > 9) goto digi_frac_end; /* fraction part end */
-      goto digi_frac_more;                              /* read more digits in fraction part */
-                                                        /* significant part end */
+      goto digi_frac_more; /* read more digits in fraction part */
+      /* significant part end */
 #define expr_stop(i)                          \
    digi_stop_##i : cur += i + 1 + frac_zeros; \
    goto digi_frac_end;
       repeat_in_1_18(expr_stop)
 #undef expr_stop
          /* read more digits in integral part */
-         digi_intg_more : static constexpr uint64_t U64_MAX = (std::numeric_limits<uint64_t>::max)();  // todo
+         digi_intg_more : static constexpr uint64_t U64_MAX = (std::numeric_limits<uint64_t>::max)(); // todo
       if ((num_tmp = *cur - zero) < 10) {
          if (!digi_is_digit_or_fp(cur[1])) {
             /* this number is an integer consisting of 20 digits */
@@ -539,7 +539,7 @@ namespace glz::detail
       }
       /* read more digits in fraction part */
    digi_frac_more:
-      sig_cut = cur;        /* too large to fit in u64, excess digits need to be cut */
+      sig_cut = cur; /* too large to fit in u64, excess digits need to be cut */
       sig += (*cur >= '5'); /* round */
       while (uint8_t(*++cur - zero) < 10) {
       }
@@ -736,8 +736,8 @@ namespace glz::detail
                int32_t exp2_upper = exp2 - std::numeric_limits<T>::digits;
 
                bigint_t big_comp{sig_upper};
-               bigint_t big_full{sig};  // Not dealing will ulp from sig_cut since we only care about roundtriping
-                                        // machine doubles and only a human would use so many sigfigs
+               bigint_t big_full{sig}; // Not dealing will ulp from sig_cut since we only care about roundtriping
+                                       // machine doubles and only a human would use so many sigfigs
                if (exp >= 0) {
                   big_full.mul_pow10(exp);
                }
@@ -761,13 +761,13 @@ namespace glz::detail
                }
             }
             else if ((exp < pow10_sig_table_min_exact ||
-                      exp > pow10_sig_table_max_exact)  // If there are ones after 64 bits in sig2 then there will be
-                                                        // ones after the rounding bit in the product
+                      exp > pow10_sig_table_max_exact) // If there are ones after 64 bits in sig2 then there will be
+                                                       // ones after the rounding bit in the product
                      || (mantisa &
-                         (round_mask << 1))  // Odd nums need to round up regardless of if the rest is nonzero or not
+                         (round_mask << 1)) // Odd nums need to round up regardless of if the rest is nonzero or not
                      || (static_cast<size_t>(std::countr_zero(sig_norm) + std::countr_zero(sig2_norm)) <
                          128 - std::numeric_limits<T>::digits -
-                            (2 - sig_product_starts_with_1))  // Check where the least significant one is
+                            (2 - sig_product_starts_with_1)) // Check where the least significant one is
             ) {
                round = 1;
             }

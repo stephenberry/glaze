@@ -12,7 +12,7 @@ namespace glz
    {};
    namespace detail
    {
-      struct aggressive_unicorn_type;  // Do not unleash
+      struct aggressive_unicorn_type; // Do not unleash
    }
    template <>
    struct false_t<detail::aggressive_unicorn_type> : std::true_type

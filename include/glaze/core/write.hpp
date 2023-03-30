@@ -36,7 +36,7 @@ namespace glz
             buffer.resize(128);
          }
       }
-      size_t ix = 0;  // overwrite index
+      size_t ix = 0; // overwrite index
       detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
       if constexpr (detail::resizeable<Buffer>) {
          buffer.resize(ix);

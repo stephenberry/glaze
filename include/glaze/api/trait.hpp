@@ -17,14 +17,13 @@ namespace glz
    {
       using sv = std::string_view;
       static constexpr sv type_name_unhashed = name_v<T>;
-      static constexpr sv type_name_hash = hash128_v<type_name_unhashed>;  // must hash for consistent length
+      static constexpr sv type_name_hash = hash128_v<type_name_unhashed>; // must hash for consistent length
 
-      static constexpr sv type_size_hash =
-         hash128_v<int_to_sv_v<size_t, sizeof(T)>>;  // must hash for consistent length
+      static constexpr sv type_size_hash = hash128_v<int_to_sv_v<size_t, sizeof(T)>>; // must hash for consistent length
 
-      static constexpr sv major_version = hash128_i_v<version<T>[0]>;  // must hash for consistent length
-      static constexpr sv minor_version = hash128_i_v<version<T>[1]>;  // must hash for consistent length
-      static constexpr sv revision = hash128_i_v<version<T>[2]>;       // must hash for consistent length
+      static constexpr sv major_version = hash128_i_v<version<T>[0]>; // must hash for consistent length
+      static constexpr sv minor_version = hash128_i_v<version<T>[1]>; // must hash for consistent length
+      static constexpr sv revision = hash128_i_v<version<T>[2]>; // must hash for consistent length
 
 #define std_trait(x) static constexpr sv x = to_sv<std::x##_v<T>>()
       std_trait(is_trivial);
@@ -63,7 +62,7 @@ namespace glz
       static constexpr sv msvc = "msvc";
 #endif
 
-      static constexpr sv blank = "";  // to end possible macros
+      static constexpr sv blank = ""; // to end possible macros
 
       static constexpr sv members = glz::name_v<glz::detail::member_tuple_t<T>>;
 

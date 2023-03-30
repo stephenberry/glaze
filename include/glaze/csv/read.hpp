@@ -232,7 +232,7 @@ namespace glz
                   }
                }
             }
-            else  // column wise
+            else // column wise
             {
                const auto keys = read_column_wise_keys(ctx, it, end);
 
@@ -241,7 +241,7 @@ namespace glz
                }
 
                if (*it == '\n') {
-                  ++it;  // skip new line
+                  ++it; // skip new line
                }
                else {
                   ctx.error = error_code::syntax_error;
@@ -276,7 +276,7 @@ namespace glz
                   }
 
                   if (*it == '\n') {
-                     ++it;  // skip new line
+                     ++it; // skip new line
                      ++row;
                   }
                }
@@ -375,7 +375,7 @@ namespace glz
                   }
                }
             }
-            else  // column wise
+            else // column wise
             {
                const auto keys = read_column_wise_keys(ctx, it, end);
 
@@ -384,7 +384,7 @@ namespace glz
                }
 
                if (*it == '\n') {
-                  ++it;  // skip new line
+                  ++it; // skip new line
                }
                else {
                   ctx.error = error_code::syntax_error;
@@ -429,7 +429,7 @@ namespace glz
                   }
 
                   if (*it == '\n') {
-                     ++it;  // skip new line
+                     ++it; // skip new line
                      ++row;
                   }
                }

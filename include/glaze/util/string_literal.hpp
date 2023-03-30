@@ -32,7 +32,7 @@ namespace glz
    }
 
    template <size_t N>
-   constexpr size_t length(char const (&)[N]) noexcept
+   constexpr size_t length(const char (&)[N]) noexcept
    {
       return N;
    }

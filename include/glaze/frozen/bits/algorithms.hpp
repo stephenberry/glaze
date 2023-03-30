@@ -75,7 +75,7 @@ namespace glz::frozen
       using select_uint_least_t = decltype(select_uint_least(std::integral_constant<std::size_t, bit_weight(N)>()));
 
       template <typename Iter, typename Compare>
-      constexpr auto min_element(Iter begin, const Iter end, Compare const &compare)
+      constexpr auto min_element(Iter begin, const Iter end, const Compare& compare)
       {
          auto result = begin;
          while (begin != end) {
@@ -88,7 +88,7 @@ namespace glz::frozen
       }
 
       template <class T>
-      constexpr void cswap(T &a, T &b)
+      constexpr void cswap(T& a, T& b)
       {
          auto tmp = a;
          a = b;
@@ -96,27 +96,27 @@ namespace glz::frozen
       }
 
       template <class T, class U>
-      constexpr void cswap(std::pair<T, U> &a, std::pair<T, U> &b)
+      constexpr void cswap(std::pair<T, U>& a, std::pair<T, U>& b)
       {
          cswap(a.first, b.first);
          cswap(a.second, b.second);
       }
 
       template <class... Tys, std::size_t... Is>
-      constexpr void cswap(std::tuple<Tys...> &a, std::tuple<Tys...> &b, std::index_sequence<Is...>)
+      constexpr void cswap(std::tuple<Tys...>& a, std::tuple<Tys...>& b, std::index_sequence<Is...>)
       {
          using swallow = int[];
          (void)swallow{(cswap(std::get<Is>(a), std::get<Is>(b)), 0)...};
       }
 
       template <class... Tys>
-      constexpr void cswap(std::tuple<Tys...> &a, std::tuple<Tys...> &b)
+      constexpr void cswap(std::tuple<Tys...>& a, std::tuple<Tys...>& b)
       {
          cswap(a, b, std::make_index_sequence<sizeof...(Tys)>());
       }
 
       template <typename Iterator, class Compare>
-      constexpr Iterator partition(Iterator left, Iterator right, Compare const &compare)
+      constexpr Iterator partition(Iterator left, Iterator right, const Compare& compare)
       {
          auto pivot = left + (right - left) / 2;
          auto value = *pivot;
@@ -132,7 +132,7 @@ namespace glz::frozen
       }
 
       template <typename Iterator, class Compare>
-      constexpr void quicksort(Iterator left, Iterator right, Compare const &compare)
+      constexpr void quicksort(Iterator left, Iterator right, const Compare& compare)
       {
          while (0 < right - left) {
             auto new_pivot = bits::partition(left, right, compare);
@@ -142,7 +142,7 @@ namespace glz::frozen
       }
 
       template <typename T, std::size_t N, class Compare>
-      constexpr bits::carray<T, N> quicksort(bits::carray<T, N> const &array, Compare const &compare)
+      constexpr bits::carray<T, N> quicksort(const bits::carray<T, N>& array, const Compare& compare)
       {
          bits::carray<T, N> res = array;
          quicksort(res.begin(), res.end() - 1, compare);
@@ -152,9 +152,9 @@ namespace glz::frozen
       template <class T, class Compare>
       struct LowerBound
       {
-         T const &value_;
-         Compare const &compare_;
-         constexpr LowerBound(T const &value, Compare const &compare) : value_(value), compare_(compare) {}
+         const T& value_;
+         const Compare& compare_;
+         constexpr LowerBound(const T& value, const Compare& compare) : value_(value), compare_(compare) {}
 
          template <class ForwardIt>
          inline constexpr ForwardIt doit_fast(ForwardIt first, std::integral_constant<std::size_t, 0>)
@@ -204,7 +204,7 @@ namespace glz::frozen
       };
 
       template <std::size_t N, class ForwardIt, class T, class Compare>
-      constexpr ForwardIt lower_bound(ForwardIt first, const T &value, Compare const &compare)
+      constexpr ForwardIt lower_bound(ForwardIt first, const T& value, const Compare& compare)
       {
          return LowerBound<T, Compare>{value, compare}.doitfirst(
             first, std::integral_constant<std::size_t, N>{},
@@ -212,7 +212,7 @@ namespace glz::frozen
       }
 
       template <std::size_t N, class Compare, class ForwardIt, class T>
-      constexpr bool binary_search(ForwardIt first, const T &value, Compare const &compare)
+      constexpr bool binary_search(ForwardIt first, const T& value, const Compare& compare)
       {
          ForwardIt where = lower_bound<N>(first, value, compare);
          return (!(where == first + N) && !(compare(value, *where)));

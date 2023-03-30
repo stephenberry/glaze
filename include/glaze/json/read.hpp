@@ -342,7 +342,7 @@ namespace glz
             };
 
             // growth portion
-            value.clear();  // Single append on unescaped strings so overwrite opt isnt as important
+            value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
             auto start = it;
             while (it < end) {
                if constexpr (!Opts.force_conformance) {
@@ -1021,7 +1021,7 @@ namespace glz
          for_each<N>([&](auto I) {
             constexpr auto s = [] {
                return glz::tuplet::get<0>(glz::tuplet::get<decltype(I)::value>(meta_v<T>));
-            }();  // MSVC internal compiler error workaround
+            }(); // MSVC internal compiler error workaround
             for (auto& c : s) {
                if (c == '\\' || c == '"' || is_unicode(c)) {
                   may_escape = true;
@@ -1073,7 +1073,7 @@ namespace glz
          for_each<N>([&](auto I) {
             constexpr auto s = [] {
                return glz::tuplet::get<0>(glz::tuplet::get<decltype(I)::value>(meta_v<T>));
-            }();  // MSVC internal compiler error workaround
+            }(); // MSVC internal compiler error workaround
             const auto n = s.size();
             if (n < stats.min_length) {
                stats.min_length = n;
@@ -1708,7 +1708,7 @@ namespace glz
             }
          }
       };
-   }  // namespace detail
+   } // namespace detail
 
    template <class Buffer>
    [[nodiscard]] GLZ_ALWAYS_INLINE parse_error validate_json(Buffer&& buffer) noexcept

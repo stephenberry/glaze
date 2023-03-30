@@ -28,10 +28,10 @@ template <>
 struct glz::meta<my_struct>
 {
    using T = my_struct;
-   static constexpr auto value = object("i", &T::i,          //
-                                        "d", &T::d,          //
-                                        "hello", &T::hello,  //
-                                        "arr", &T::arr       //
+   static constexpr auto value = object("i", &T::i, //
+                                        "d", &T::d, //
+                                        "hello", &T::hello, //
+                                        "arr", &T::arr //
    );
 };
 
@@ -46,8 +46,8 @@ struct glz::meta<sub_thing>
 {
    static constexpr std::string_view name = "sub_thing";
    static constexpr auto value = object(
-      "a", &sub_thing::a, "Test comment 1",                         //
-      "b", [](auto&& v) -> auto& { return v.b; }, "Test comment 2"  //
+      "a", &sub_thing::a, "Test comment 1", //
+      "b", [](auto&& v) -> auto& { return v.b; }, "Test comment 2" //
    );
 };
 
@@ -68,14 +68,14 @@ struct glz::meta<sub_thing2>
 {
    using T = sub_thing2;
    static constexpr std::string_view name = "sub_thing2";
-   static constexpr auto value = object("a", &T::a, "Test comment 1",  //
-                                        "b", &T::b, "Test comment 2",  //
-                                        "c", &T::c,                    //
-                                        "d", &T::d,                    //
-                                        "e", &T::e,                    //
-                                        "f", &T::f,                    //
-                                        "g", &T::g,                    //
-                                        "h", &T::h                     //
+   static constexpr auto value = object("a", &T::a, "Test comment 1", //
+                                        "b", &T::b, "Test comment 2", //
+                                        "c", &T::c, //
+                                        "d", &T::d, //
+                                        "e", &T::e, //
+                                        "f", &T::f, //
+                                        "g", &T::g, //
+                                        "h", &T::h //
    );
 };
 
@@ -101,9 +101,9 @@ template <>
 struct glz::meta<Color>
 {
    static constexpr std::string_view name = "Color";
-   static constexpr auto value = enumerate("Red", Color::Red,      //
-                                           "Green", Color::Green,  //
-                                           "Blue", Color::Blue     //
+   static constexpr auto value = enumerate("Red", Color::Red, //
+                                           "Green", Color::Green, //
+                                           "Blue", Color::Blue //
    );
 };
 
@@ -164,25 +164,25 @@ struct glz::meta<Thing>
    using T = Thing;
    static constexpr std::string_view name = "Thing";
    static constexpr auto value = object(
-      "thing", &T::thing,                                    //
-      "thing2array", &T::thing2array,                        //
-      "vec3", &T::vec3,                                      //
-      "list", &T::list,                                      //
-      "deque", &T::deque,                                    //
-      "vector", [](auto&& v) -> auto& { return v.vector; },  //
-      "i", [](auto&& v) -> auto& { return v.i; },            //
-      "d", &T::d, "double is the best type",                 //
-      "b", &T::b,                                            //
-      "c", &T::c,                                            //
-      "v", &T::v,                                            //
-      "color", &T::color,                                    //
-      "vb", &T::vb,                                          //
-      "sptr", &T::sptr,                                      //
-      "optional", &T::optional,                              //
-      "array", &T::array,                                    //
-      "map", &T::map,                                        //
-      "mapi", &T::mapi,                                      //
-      "thing_ptr", &T::thing_ptr                             //
+      "thing", &T::thing, //
+      "thing2array", &T::thing2array, //
+      "vec3", &T::vec3, //
+      "list", &T::list, //
+      "deque", &T::deque, //
+      "vector", [](auto&& v) -> auto& { return v.vector; }, //
+      "i", [](auto&& v) -> auto& { return v.i; }, //
+      "d", &T::d, "double is the best type", //
+      "b", &T::b, //
+      "c", &T::c, //
+      "v", &T::v, //
+      "color", &T::color, //
+      "vb", &T::vb, //
+      "sptr", &T::sptr, //
+      "optional", &T::optional, //
+      "array", &T::array, //
+      "map", &T::map, //
+      "mapi", &T::mapi, //
+      "thing_ptr", &T::thing_ptr //
    );
 };
 
@@ -487,11 +487,11 @@ struct glz::meta<some_struct>
    using T = some_struct;
    static constexpr auto value = object(
       //"i", [](auto&& v) -> auto& { return v.i; },  //
-      "i", &T::i, "d", &T::d,          //
-      "c", &T::c, "hello", &T::hello,  //
-      "arr", &T::arr,                  //
-      "sub", &T::sub,                  //
-      "map", &T::map                   //
+      "i", &T::i, "d", &T::d, //
+      "c", &T::c, "hello", &T::hello, //
+      "arr", &T::arr, //
+      "sub", &T::sub, //
+      "map", &T::map //
    );
 };
 

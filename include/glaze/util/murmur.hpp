@@ -37,7 +37,7 @@ namespace glz
 
    inline constexpr uint32_t murmur3_32(auto&& value) noexcept
    {
-      uint32_t h = 31;  // We always use a seed of 31 for Crusher
+      uint32_t h = 31; // We always use a seed of 31 for Crusher
       uint32_t k;
       const auto n = value.size();
       auto* key = value.data();
@@ -63,7 +63,7 @@ namespace glz
       // we use. Swaps only apply when the memory is copied in a chunk.
       h ^= murmur_32_scramble(k);
       /* Finalize. */
-      h ^= static_cast<uint32_t>(n);  // static_cast needed for MSVC 2019
+      h ^= static_cast<uint32_t>(n); // static_cast needed for MSVC 2019
       h ^= h >> 16;
       h *= 0x85ebca6b;
       h ^= h >> 13;

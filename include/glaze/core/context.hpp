@@ -83,7 +83,7 @@ namespace glz
    {
       // INTERNAL USE
       uint32_t indentation_level{};
-      std::string current_file;  // top level file path
+      std::string current_file; // top level file path
       error_code error{};
    };
 

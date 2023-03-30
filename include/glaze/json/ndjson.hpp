@@ -57,7 +57,7 @@ namespace glz
                      ++it;
                   }
                   else {
-                     ctx.error = error_code::syntax_error;  // Expected '\n' after '\r'
+                     ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
                      return;
                   }
                }
@@ -122,7 +122,7 @@ namespace glz
                      ++it;
                   }
                   else {
-                     ctx.error = error_code::syntax_error;  // Expected '\n' after '\r'
+                     ctx.error = error_code::syntax_error; // Expected '\n' after '\r'
                      return;
                   }
                }
@@ -262,7 +262,7 @@ namespace glz
             });
          }
       };
-   }  // namespace detail
+   } // namespace detail
 
    template <class T, class Buffer>
    [[nodiscard]] inline auto read_ndjson(T& value, Buffer&& buffer)

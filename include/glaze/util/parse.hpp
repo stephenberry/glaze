@@ -284,7 +284,7 @@ namespace glz::detail
 
       static_assert(LengthRange < 8);
       if constexpr (LengthRange == 7) {
-         uint64_t chunk;  // no need to default initialize
+         uint64_t chunk; // no need to default initialize
          std::memcpy(&chunk, it, LengthRange + 1);
          const uint64_t test_chunk = has_quote(chunk);
          if (test_chunk != 0) {
@@ -432,18 +432,18 @@ namespace glz::detail
       case '0':
       case '1':
       case '2':
-      case '3':  //
+      case '3': //
       case '4':
       case '5':
       case '6':
-      case '7':  //
+      case '7': //
       case '8':
-      case '9':  //
+      case '9': //
       case '.':
       case '+':
-      case '-':  //
+      case '-': //
       case 'e':
-      case 'E':  //
+      case 'E': //
          return true;
       }
       return false;
@@ -462,7 +462,7 @@ namespace glz::detail
          return stoui(s.substr(1), (s[0] - '0') + value * 10);
       }
       else {
-         return {};  // not a digit
+         return {}; // not a digit
       }
    }
 

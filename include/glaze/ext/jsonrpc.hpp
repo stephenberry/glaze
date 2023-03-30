@@ -62,7 +62,7 @@ namespace glz::rpc
 
    namespace detail
    {
-      std::string id_to_string(jsonrpc_id_type const& id)
+      std::string id_to_string(const jsonrpc_id_type& id)
       {
          if (std::holds_alternative<glz::json_t::null_t>(id)) {
             return "null";
@@ -97,7 +97,7 @@ namespace glz::rpc
          constexpr operator std::basic_string_view<char_type>() const noexcept { return {&data_[0], N}; }
 
          template <unsigned M>
-         constexpr auto operator==(basic_fixed_string<char_type, M> const& r) const noexcept
+         constexpr auto operator==(const basic_fixed_string<char_type, M>& r) const noexcept
          {
             return N == M && view() == r.view();
          }
@@ -110,7 +110,7 @@ namespace glz::rpc
    class error
    {
      public:
-      static error invalid(parse_error const& pe, auto& buffer)
+      static error invalid(const parse_error& pe, auto& buffer)
       {
          std::string format_err{format_error(pe, buffer)};
          return error(rpc::error_e::invalid_request, format_err.empty() ? glz::json_t{} : format_err);
@@ -133,7 +133,7 @@ namespace glz::rpc
 
       [[nodiscard]] auto get_code() const noexcept -> std::optional<error_e>
       {
-         auto const it{std::find_if(std::cbegin(error_e_iterable), std::cend(error_e_iterable),
+         const auto it{std::find_if(std::cbegin(error_e_iterable), std::cend(error_e_iterable),
                                     [this](error_e err_val) { return util::to_underlying(err_val) == this->code; })};
          if (it == std::cend(error_e_iterable)) {
             return std::nullopt;
@@ -141,25 +141,25 @@ namespace glz::rpc
          return *it;
       }
       [[nodiscard]] auto get_raw_code() const noexcept -> int { return code; }
-      [[nodiscard]] auto get_message() const noexcept -> std::string const& { return message; }
-      [[nodiscard]] auto get_data() const noexcept -> glz::json_t const& { return data; }
+      [[nodiscard]] auto get_message() const noexcept -> const std::string& { return message; }
+      [[nodiscard]] auto get_data() const noexcept -> const glz::json_t& { return data; }
 
       operator bool() const noexcept
       {
-         auto const my_code{get_code()};
+         const auto my_code{get_code()};
          return my_code.has_value() && my_code.value() != rpc::error_e::no_error;
       }
 
       bool operator==(const rpc::error_e err) const noexcept
       {
-         auto const my_code{get_code()};
+         const auto my_code{get_code()};
          return my_code.has_value() && my_code.value() == err;
       }
 
      private:
       std::underlying_type_t<error_e> code{util::to_underlying(error_e::no_error)};
-      std::string message{code_as_string(error_e::no_error)};  // string reflection of member variable code
-      glz::json_t data{};                                      // Optional detailed error information
+      std::string message{code_as_string(error_e::no_error)}; // string reflection of member variable code
+      glz::json_t data{}; // Optional detailed error information
 
       static auto code_as_string(error_e error_code) -> std::string
       {
@@ -233,7 +233,7 @@ namespace glz::rpc
 
       jsonrpc_id_t id{};
       std::string version{};
-      std::optional<result_t> result{};  // todo can this be instead expected<result_t, error>
+      std::optional<result_t> result{}; // todo can this be instead expected<result_t, error>
       std::optional<rpc::error> error{};
       struct glaze
       {
@@ -253,8 +253,8 @@ namespace glz::rpc
       using jsonrpc_id_t = jsonrpc_id_type;
       using request_t = rpc::request_t<params_t>;
       using response_t = rpc::response_t<result_t>;
-      std::function<expected<result_t, rpc::error>(params_t const&)> callback{
-         [](auto const&) { return glz::unexpected{rpc::error(rpc::error_e::internal, "Not implemented")}; }};
+      std::function<expected<result_t, rpc::error>(const params_t&)> callback{
+         [](const auto&) { return glz::unexpected{rpc::error(rpc::error_e::internal, "Not implemented")}; }};
    };
 
    template <detail::basic_fixed_string name, typename params_type, typename result_type>
@@ -266,48 +266,45 @@ namespace glz::rpc
       using jsonrpc_id_t = jsonrpc_id_type;
       using request_t = rpc::request_t<params_t>;
       using response_t = rpc::response_t<result_t>;
-      using callback_t = std::function<void(glz::expected<result_t, rpc::error> const&, jsonrpc_id_type const&)>;
+      using callback_t = std::function<void(const glz::expected<result_t, rpc::error>&, const jsonrpc_id_type&)>;
       std::unordered_map<jsonrpc_id_type, callback_t> pending_requests;
    };
    namespace concepts
    {
       template <typename method_t>
       concept method_type = requires(method_t meth) {
-                               method_t::name_v;
-                               {
-                                  std::same_as<decltype(method_t::name_v), std::string_view>
-                               };
-                               typename method_t::params_t;
-                               typename method_t::jsonrpc_id_t;
-                               typename method_t::request_t;
-                               typename method_t::response_t;
-                            };
+         method_t::name_v;
+         {
+            std::same_as<decltype(method_t::name_v), std::string_view>
+         };
+         typename method_t::params_t;
+         typename method_t::jsonrpc_id_t;
+         typename method_t::request_t;
+         typename method_t::response_t;
+      };
 
       template <typename method_t>
-      concept server_method_type =
-         requires(method_t meth) {
-            requires method_type<method_t>;
-            {
-               meth.callback
-            };
-            requires std::same_as<
-               decltype(meth.callback),
-               std::function<expected<typename method_t::result_t, rpc::error>(typename method_t::params_t const&)>>;
+      concept server_method_type = requires(method_t meth) {
+         requires method_type<method_t>;
+         {
+            meth.callback
          };
+         requires std::same_as<decltype(meth.callback), std::function<expected<typename method_t::result_t, rpc::error>(
+                                                           typename method_t::params_t const&)>>;
+      };
 
       template <typename method_t>
-      concept client_method_type =
-         requires(method_t meth) {
-            requires method_type<method_t>;
-            {
-               meth.pending_requests
-            };
-            requires std::same_as<
-               decltype(meth.pending_requests),
-               std::unordered_map<jsonrpc_id_type,
-                                  std::function<void(glz::expected<typename method_t::result_t, rpc::error> const&,
-                                                     jsonrpc_id_type const&)>>>;
+      concept client_method_type = requires(method_t meth) {
+         requires method_type<method_t>;
+         {
+            meth.pending_requests
          };
+         requires std::same_as<
+            decltype(meth.pending_requests),
+            std::unordered_map<jsonrpc_id_type,
+                               std::function<void(glz::expected<typename method_t::result_t, rpc::error> const&,
+                                                  jsonrpc_id_type const&)>>>;
+      };
 
       template <typename call_return_t>
       concept call_return_type =
@@ -317,7 +314,7 @@ namespace glz::rpc
    namespace detail
    {
       template <detail::basic_fixed_string name, typename... method_type>
-      inline constexpr void set_callback(glz::tuplet::tuple<method_type...>& methods, auto const& callback)
+      inline constexpr void set_callback(glz::tuplet::tuple<method_type...>& methods, const auto& callback)
       {
          constexpr bool method_found = ((method_type::name_v == name) || ...);
          static_assert(method_found, "Method not settable in given tuple.");
@@ -365,12 +362,12 @@ namespace glz::rpc
             using meth_t = std::remove_reference_t<decltype(method)>;
             if constexpr (name == meth_t::name_v) {
                return_ptr = &method.pending_requests;
-               return true;  // break methods loop
+               return true; // break methods loop
             }
             return false;
          });
 
-         assert(return_ptr != nullptr);  // static_assert above should guarantee this
+         assert(return_ptr != nullptr); // static_assert above should guarantee this
 
          return *return_ptr;
       }
@@ -385,7 +382,7 @@ namespace glz::rpc
       glz::tuplet::tuple<method_type...> methods{};
 
       template <detail::basic_fixed_string name>
-      constexpr void on(auto const& callback)  // std::function<expected<result_t, rpc::error>(params_t const&)>
+      constexpr void on(const auto& callback) // std::function<expected<result_t, rpc::error>(params_t const&)>
       {
          detail::set_callback<name>(methods, callback);
       }
@@ -399,8 +396,7 @@ namespace glz::rpc
       template <concepts::call_return_type return_t = std::string>
       return_t call(std::string_view json_request)
       {
-         constexpr auto return_helper = []<typename input_type>(input_type && response) -> auto
-         {
+         constexpr auto return_helper = []<typename input_type>(input_type&& response) -> auto {
             if constexpr (std::same_as<return_t, std::string>) {
                return glz::write_json(std::forward<input_type>(response));
             }
@@ -591,9 +587,9 @@ namespace glz::rpc
          methods.any([&inserted, &req, cb = std::forward<decltype(callback)>(callback)](auto&& method) -> bool {
             using meth_t = std::remove_reference_t<decltype(method)>;
             if constexpr (method_name == meth_t::name_v) {
-               [[maybe_unused]] decltype(method.pending_requests.begin()) unused{};  // iterator_t
+               [[maybe_unused]] decltype(method.pending_requests.begin()) unused{}; // iterator_t
                std::tie(unused, inserted) = method.pending_requests.emplace(std::make_pair(req.id, cb));
-               return true;  // break methods loop
+               return true; // break methods loop
             }
             return false;
          });
@@ -609,7 +605,7 @@ namespace glz::rpc
       }
 
       template <detail::basic_fixed_string method_name>
-      [[nodiscard]] auto const& get_request_map() const
+      [[nodiscard]] const auto& get_request_map() const
       {
          constexpr auto idx = detail::index_of_name<decltype(method_name), method_name, method_type...>::index;
          using method_element = std::tuple_element_t<idx, std::tuple<method_type...>>;
@@ -625,4 +621,4 @@ namespace glz::rpc
          return detail::get_request_map<request_map_t, method_name>(methods);
       }
    };
-}  // namespace glz::rpc
+} // namespace glz::rpc

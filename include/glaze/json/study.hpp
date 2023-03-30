@@ -22,23 +22,23 @@ namespace glz
       struct param
       {
          std::string ptr{};
-         std::string distribution{};  // TODO: make an enum
+         std::string distribution{}; // TODO: make an enum
          std::vector<raw_json> range{};
       };
 
       struct design
       {
-         std::vector<param> params{};  //!< study parameters
+         std::vector<param> params{}; //!< study parameters
          std::vector<std::unordered_map<std::string, raw_json>>
-            states{};                                            //!< map of pointer syntax and json representation
-         std::unordered_map<std::string, raw_json> overwrite{};  //!< pointer syntax and json representation
-         std::default_random_engine::result_type seed{};         //!< Seed for randomized study
-         size_t random_samples{};                                //!< Number of runs to perform in randomized study.
-                                                                 //! If zero it will run a full
-                                                                 //!< factorial ignoring random distributions
-                                                                 //!< instead instead of a randomized study
+            states{}; //!< map of pointer syntax and json representation
+         std::unordered_map<std::string, raw_json> overwrite{}; //!< pointer syntax and json representation
+         std::default_random_engine::result_type seed{}; //!< Seed for randomized study
+         size_t random_samples{}; //!< Number of runs to perform in randomized study.
+                                  //! If zero it will run a full
+                                  //!< factorial ignoring random distributions
+                                  //!< instead instead of a randomized study
       };
-   }  // namespace study
+   } // namespace study
 
    template <>
    struct meta<study::param>
@@ -66,7 +66,7 @@ namespace glz
 
       struct param_set
       {
-         basic_ptr param_ptr{};  // to only seek once
+         basic_ptr param_ptr{}; // to only seek once
          std::vector<basic> elements{};
       };
 
@@ -148,8 +148,8 @@ namespace glz
                      param_set.param_ptr = &val;
                   }
                   else {
-                     pe.ec = error_code::no_matching_variant_type;  // Study params only support basic types like
-                                                                    // double, int, bool, or std::string
+                     pe.ec = error_code::no_matching_variant_type; // Study params only support basic types like
+                                                                   // double, int, bool, or std::string
                   }
                },
                state, dist.ptr);
@@ -182,7 +182,7 @@ namespace glz
             else if (dist.distribution == "linspace") {
                if (dist.range.size() != 3) {
                   return unexpected(parse_error{
-                     error_code::invalid_distribution_elements});  // distribution's range must have 3 elements
+                     error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
                }
 
                double start{};
@@ -217,9 +217,9 @@ namespace glz
 
       template <class T>
       concept generator = requires(T g) {
-                             g.generate();
-                             g.done();
-                          };
+         g.generate();
+         g.done();
+      };
 
       // Takes a state generator and a function on which to invoke the state
       void run_study(generator auto& g, auto&& f)
@@ -340,8 +340,8 @@ namespace glz
                      result.param_ptr = &val;
                   }
                   else {
-                     pe.ec = error_code::no_matching_variant_type;  // Study params only support basic types like
-                                                                    // double, int, bool, or std::string
+                     pe.ec = error_code::no_matching_variant_type; // Study params only support basic types like
+                                                                   // double, int, bool, or std::string
                   }
                },
                state, dist.ptr);
@@ -377,7 +377,7 @@ namespace glz
             else if (dist.distribution == "linspace") {
                if (dist.range.size() != 3) {
                   return unexpected(parse_error{
-                     error_code::invalid_distribution_elements});  // distribution's range must have 3 elements
+                     error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
                }
 
                double start{};
@@ -401,7 +401,7 @@ namespace glz
             else if (dist.distribution == "uniform") {
                if (dist.range.size() != 2) {
                   return unexpected(parse_error{
-                     error_code::invalid_distribution_elements});  // distribution's range must have 3 elements
+                     error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
                }
 
                double start{};
@@ -425,7 +425,7 @@ namespace glz
             else if (dist.distribution == "normal") {
                if (dist.range.size() != 2) {
                   return unexpected(parse_error{
-                     error_code::invalid_distribution_elements});  // distribution's range must have 3 elements
+                     error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
                }
 
                double mean{};

@@ -19,8 +19,8 @@ namespace glz
          struct glaze
          {
             using T = schema_ref;
-            static constexpr auto value = glz::object("$ref", &T::ref,                //
-                                                      "description", &T::description  //
+            static constexpr auto value = glz::object("$ref", &T::ref, //
+                                                      "description", &T::description //
             );
          };
       };
@@ -30,11 +30,11 @@ namespace glz
          std::optional<std::vector<std::string_view>> type{};
          std::optional<std::string_view> _const{};
          std::optional<std::string_view> description{};
-         std::optional<std::map<std::string_view, schema_ref, std::less<>>> properties{};  // glaze_object
-         std::optional<schema_ref> items{};                                                // array
-         std::optional<std::variant<bool, schema_ref>> additionalProperties{};             // map
+         std::optional<std::map<std::string_view, schema_ref, std::less<>>> properties{}; // glaze_object
+         std::optional<schema_ref> items{}; // array
+         std::optional<std::variant<bool, schema_ref>> additionalProperties{}; // map
          std::optional<std::map<std::string_view, schema, std::less<>>> defs{};
-         std::optional<std::vector<std::string_view>> _enum{};  // enum
+         std::optional<std::vector<std::string_view>> _enum{}; // enum
          std::optional<std::vector<schema>> oneOf{};
       };
 
@@ -46,14 +46,14 @@ struct glz::meta<glz::detail::schema>
 {
    static constexpr std::string_view name = "glz::detail::schema";
    using T = glz::detail::schema;
-   static constexpr auto value = glz::object("type", &T::type,                                  //
-                                             "description", &T::description,                    //
-                                             "properties", &T::properties,                      //
-                                             "items", &T::items,                                //
-                                             "additionalProperties", &T::additionalProperties,  //
-                                             "$defs", &T::defs,                                 //
-                                             "enum", &T::_enum,                                 //
-                                             "oneOf", &T::oneOf,                                //
+   static constexpr auto value = glz::object("type", &T::type, //
+                                             "description", &T::description, //
+                                             "properties", &T::properties, //
+                                             "items", &T::items, //
+                                             "additionalProperties", &T::additionalProperties, //
+                                             "$defs", &T::defs, //
+                                             "enum", &T::_enum, //
+                                             "oneOf", &T::oneOf, //
                                              "const", &T::_const);
 };
 
