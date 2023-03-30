@@ -59,3 +59,6 @@ void example() {
 }
 ```
 
+Notes:
+
+The templated `Opts` parameter contains the compile time options. The `args...` can be broken out into the runtime context (runtime options), iterators, and the buffer index when reading.
