@@ -35,7 +35,7 @@ std::string input_col =
 
 my_struct obj{};
 
-read_csv<false>(obj, input_col);
+read_csv<colwise>(obj, input_col);
 
 expect(obj.num1[0] == 11);
 expect(obj.num2[2] == 66);
@@ -47,7 +47,7 @@ expect(obj.v3s[3] == std::array{4, 4, 4});
 
 std::string out{};
 
-write<opts{.format = csv, .row_wise = false}>(obj, out);
+write<opts{.format = csv, .layout = colwise}>(obj, out);
 expect(out ==
        R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -56,6 +56,6 @@ expect(out ==
 77,88,0,4,4,4
 )");
 
-expect(!write_file_csv<false>(obj, "csv_test_colwise.csv"));
+expect(!write_file_csv<colwise>(obj, "csv_test_colwise.csv"));
 ```
 
