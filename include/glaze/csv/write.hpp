@@ -72,7 +72,7 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             if constexpr (resizeable<T>) {
-               if constexpr (Opts.row_wise) {
+               if constexpr (Opts.layout == rowwise) {
                   const auto n = value.size();
                   for (size_t i = 0; i < n; ++i) {
                      write<csv>::op<Opts>(value[i], ctx, b, ix);
@@ -116,7 +116,7 @@ namespace glz
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            if constexpr (Opts.row_wise) {
+            if constexpr (Opts.layout == rowwise) {
                for (auto& [name, data] : value) {
                   dump(name, b, ix);
                   dump<','>(b, ix);
@@ -182,7 +182,7 @@ namespace glz
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
 
-            if constexpr (Opts.row_wise) {
+            if constexpr (Opts.layout == rowwise) {
                for_each<N>([&](auto I) {
                   static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                   static constexpr sv key = glz::tuplet::get<0>(item);
@@ -318,11 +318,11 @@ namespace glz
       return buffer;
    }
 
-   template <bool RowWise = true, class T>
+   template <uint32_t layout = rowwise, class T>
    [[nodiscard]] inline write_error write_file_csv(T&& value, const std::string& file_name)
    {
       std::string buffer{};
-      write<opts{.format = csv, .row_wise = RowWise}>(std::forward<T>(value), buffer);
+      write<opts{.format = csv, .layout = layout}>(std::forward<T>(value), buffer);
       return {buffer_to_file(buffer, file_name)};
    }
 }
