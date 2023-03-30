@@ -161,7 +161,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            if constexpr (Opts.row_wise) {
+            if constexpr (Opts.layout == rowwise) {
                while (it != end) {
                   auto start = it;
                   goto_delim<','>(it, end);
@@ -293,7 +293,7 @@ namespace glz
             static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
             // static constexpr auto N = std::tuple_size_v<meta_t<T>>;
 
-            if constexpr (Opts.row_wise) {
+            if constexpr (Opts.layout == rowwise) {
                while (it != end) {
                   auto start = it;
                   goto_delim<','>(it, end);
@@ -438,21 +438,21 @@ namespace glz
       };
    }
 
-   template <bool RowWise = true, class T, class Buffer>
+   template <uint32_t layout = rowwise, class T, class Buffer>
    inline auto read_csv(T&& value, Buffer&& buffer) noexcept
    {
-      return read<opts{.format = csv, .row_wise = RowWise}>(value, std::forward<Buffer>(buffer));
+      return read<opts{.format = csv, .layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
-   template <bool RowWise = true, class T, class Buffer>
+   template <uint32_t layout = rowwise, class T, class Buffer>
    inline auto read_csv(Buffer&& buffer) noexcept
    {
       T value{};
-      read<opts{.format = csv, .row_wise = RowWise}>(value, std::forward<Buffer>(buffer));
+      read<opts{.format = csv, .layout = rowwise}>(value, std::forward<Buffer>(buffer));
       return value;
    }
 
-   template <bool RowWise = true, class T>
+   template <uint32_t layout = rowwise, class T>
    inline parse_error read_file_csv(T& value, const sv file_name)
    {
       context ctx{};
@@ -465,6 +465,6 @@ namespace glz
          return {ec};
       }
 
-      return read<opts{.format = csv, .row_wise = RowWise}>(value, buffer, ctx);
+      return read<opts{.format = csv, .layout = rowwise}>(value, buffer, ctx);
    }
 }
