@@ -309,6 +309,7 @@ namespace glz::detail
          else {
             it += 8;
             static constexpr auto rest = LengthRange + 1 - 8;
+            chunk = 0; // must zero out the chunk
             std::memcpy(&chunk, it, rest);
             test_chunk = has_quote(chunk);
             if (test_chunk != 0) {
