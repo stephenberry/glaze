@@ -130,7 +130,7 @@ namespace glz
          constexpr expected<std::reference_wrapper<Value>, error_code> at(auto&& key) const noexcept
          {
             const auto hash = xsm1<HashType>{}(key, seed);
-            const auto index = table[hash % m];  // modulus should be fast because m is known compile time
+            const auto index = table[hash % m]; // modulus should be fast because m is known compile time
             const auto& item = items[index];
             if constexpr (allow_hash_check) {
                if (hashes[index] != hash) [[unlikely]] {
@@ -340,7 +340,7 @@ namespace glz
       {
          std::array<std::pair<sv, T>, 1> items{};
 
-         static constexpr auto s = S;  // Needed for MSVC to avoid an internal compiler error
+         static constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
 
          constexpr decltype(auto) begin() const { return items.begin(); }
          constexpr decltype(auto) end() const { return items.end(); }
@@ -371,11 +371,11 @@ namespace glz
       {
          std::array<std::pair<sv, T>, 2> items{};
 
-         static constexpr auto s0 = S0;  // Needed for MSVC to avoid an internal compiler error
-         static constexpr auto s1 = S1;  // Needed for MSVC to avoid an internal compiler error
+         static constexpr auto s0 = S0; // Needed for MSVC to avoid an internal compiler error
+         static constexpr auto s1 = S1; // Needed for MSVC to avoid an internal compiler error
 
          static constexpr bool same_size =
-            s0.size() == s1.size();  // if we need to check the size again on the second compare
+            s0.size() == s1.size(); // if we need to check the size again on the second compare
          static constexpr bool check_size = !same_size;
 
          constexpr decltype(auto) begin() const { return items.begin(); }

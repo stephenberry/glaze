@@ -39,7 +39,7 @@ namespace glz
    {
       // convert an integer to a string_view at compile time
 
-      inline constexpr uint64_t num_digits(auto x) noexcept  // number of digits needed, including minus sign
+      inline constexpr uint64_t num_digits(auto x) noexcept // number of digits needed, including minus sign
       {
          return x < 10 ? 1 : 1 + num_digits(x / 10);
       }

@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include <Eigen/Core>  //Note: You are expected to provide eigen if including this header
+#include <Eigen/Core> //Note: You are expected to provide eigen if including this header
 #include <span>
 
 #include "glaze/api/name.hpp"
@@ -21,19 +21,18 @@ namespace glz
    {
       template <class T>
       concept matrix_t = requires(T matrix) {
-                            matrix.resize(2, 4);
-                            matrix.data();
-                            {
-                               matrix.rows()
-                               } -> std::convertible_to<size_t>;
-                            {
-                               matrix.cols()
-                               } -> std::convertible_to<size_t>;
-                            {
-                               matrix.size()
-                               } -> std::convertible_to<size_t>;
-                         } && !
-      range<T>;
+         matrix.resize(2, 4);
+         matrix.data();
+         {
+            matrix.rows()
+         } -> std::convertible_to<size_t>;
+         {
+            matrix.cols()
+         } -> std::convertible_to<size_t>;
+         {
+            matrix.size()
+         } -> std::convertible_to<size_t>;
+      } && !range<T>;
 
       template <matrix_t T>
       struct from_binary<T>
@@ -86,14 +85,14 @@ namespace glz
             detail::write<json>::op<Opts>(view, ctx, b, ix);
          }
       };
-   }  // namespace detail
-}  // namespace glaze
+   } // namespace detail
+} // namespace glaze
 
 template <class Scalar, int Rows, int Cols>
 struct glz::meta<Eigen::Matrix<Scalar, Rows, Cols>>
 {
-   static constexpr std::string_view name = detail::join_v<chars<"Eigen::Matrix<">, name_v<Scalar>, chars<",">,  //
-                                                           chars<num_to_string<Rows>::value>, chars<",">,        //
-                                                           chars<num_to_string<Cols>::value>, chars<",">,        //
+   static constexpr std::string_view name = detail::join_v<chars<"Eigen::Matrix<">, name_v<Scalar>, chars<",">, //
+                                                           chars<num_to_string<Rows>::value>, chars<",">, //
+                                                           chars<num_to_string<Cols>::value>, chars<",">, //
                                                            chars<">">>;
 };

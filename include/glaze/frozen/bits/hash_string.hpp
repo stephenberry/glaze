@@ -26,4 +26,4 @@ namespace glz::frozen
       return d >> 8;
    }
 
-}  // namespace frozen
+} // namespace frozen

@@ -167,7 +167,7 @@ namespace glz
             dump_type(header64{3, i}, std::forward<Args>(args)...);
          }
          else {
-            std::abort();  // this should never happen because we should never allocate containers of this size
+            std::abort(); // this should never happen because we should never allocate containers of this size
          }
       }
 
@@ -268,8 +268,8 @@ namespace glz
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
             if constexpr (Opts.use_cx_tags) {
-               dump_int<N>(args...);  // even though N is known at compile time in this case, it is not known for
-                                      // partial cases, so we still use a compressed integer
+               dump_int<N>(args...); // even though N is known at compile time in this case, it is not known for
+                                     // partial cases, so we still use a compressed integer
             }
 
             for_each<N>([&](auto I) {
@@ -332,7 +332,7 @@ namespace glz
    template <auto& Partial, opts Opts, class T, output_buffer Buffer>
    [[nodiscard]] GLZ_ALWAYS_INLINE write_error write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
    {
-      static constexpr auto partial = Partial;  // MSVC 16.11 hack
+      static constexpr auto partial = Partial; // MSVC 16.11 hack
 
       write_error we{};
 
@@ -354,7 +354,7 @@ namespace glz
                using group_t = std::tuple_element_t<I, decltype(groups)>;
                static constexpr auto group = []([[maybe_unused]] index_t Index) constexpr -> group_t {
                   return glz::tuplet::get<decltype(I)::value>(groups);
-               }({});  // MSVC internal compiler error workaround
+               }({}); // MSVC internal compiler error workaround
 
                static constexpr auto key = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
@@ -375,7 +375,7 @@ namespace glz
                using group_t = std::tuple_element_t<I, decltype(groups)>;
                static constexpr auto group = []([[maybe_unused]] index_t Index) constexpr -> group_t {
                   return glz::tuplet::get<decltype(I)::value>(groups);
-               }({});  // MSVC internal compiler error workaround
+               }({}); // MSVC internal compiler error workaround
 
                static constexpr auto key_value = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
@@ -391,7 +391,7 @@ namespace glz
                }
                else {
                   static thread_local auto key =
-                     typename std::decay_t<T>::key_type(key_value);  // TODO handle numeric keys
+                     typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
                   detail::write<binary>::op<Opts>(key, ctx, buffer);
                   auto it = value.find(key);
                   if (it != value.end()) {

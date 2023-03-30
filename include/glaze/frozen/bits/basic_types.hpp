@@ -42,16 +42,16 @@ namespace glz::frozen
       template <class T, std::size_t N>
       class cvector
       {
-         T data[N] = {};  // zero-initialization for scalar type T, default-initialized otherwise
+         T data[N] = {}; // zero-initialization for scalar type T, default-initialized otherwise
          std::size_t dsize = 0;
 
         public:
          // Container typdefs
          using value_type = T;
-         using reference = value_type &;
-         using const_reference = const value_type &;
-         using pointer = value_type *;
-         using const_pointer = const value_type *;
+         using reference = value_type&;
+         using const_reference = const value_type&;
+         using pointer = value_type*;
+         using const_pointer = const value_type*;
          using iterator = pointer;
          using const_iterator = const_pointer;
          using size_type = std::size_t;
@@ -59,7 +59,7 @@ namespace glz::frozen
 
          // Constructors
          constexpr cvector(void) = default;
-         constexpr cvector(size_type count, const T &value) : dsize(count)
+         constexpr cvector(size_type count, const T& value) : dsize(count)
          {
             for (std::size_t i = 0; i < N; ++i) data[i] = value;
          }
@@ -79,8 +79,8 @@ namespace glz::frozen
          constexpr const_reference back() const { return data[dsize - 1]; }
 
          // Modifiers
-         constexpr void push_back(const T &a) { data[dsize++] = a; }
-         constexpr void push_back(T &&a) { data[dsize++] = std::move(a); }
+         constexpr void push_back(const T& a) { data[dsize++] = a; }
+         constexpr void push_back(T&& a) { data[dsize++] = std::move(a); }
          constexpr void pop_back() { --dsize; }
 
          constexpr void clear() { dsize = 0; }
@@ -89,7 +89,7 @@ namespace glz::frozen
       template <class T, std::size_t N>
       class carray
       {
-         T data_[N] = {};  // zero-initialization for scalar type T, default-initialized otherwise
+         T data_[N] = {}; // zero-initialization for scalar type T, default-initialized otherwise
 
          template <std::size_t M, std::size_t... I>
          constexpr carray(T const (&init)[M], std::index_sequence<I...>) : data_{init[I]...}
@@ -101,10 +101,10 @@ namespace glz::frozen
         public:
          // Container typdefs
          using value_type = T;
-         using reference = value_type &;
-         using const_reference = const value_type &;
-         using pointer = value_type *;
-         using const_pointer = const value_type *;
+         using reference = value_type&;
+         using const_reference = const value_type&;
+         using pointer = value_type*;
+         using const_pointer = const value_type*;
          using iterator = pointer;
          using const_iterator = const_pointer;
          using reverse_iterator = std::reverse_iterator<iterator>;
@@ -120,7 +120,7 @@ namespace glz::frozen
             static_assert(M >= N, "Cannot initialize a carray with an smaller array");
          }
          template <std::size_t M>
-         constexpr carray(std::array<T, M> const &init) : carray(&init[0], std::make_index_sequence<N>())
+         constexpr carray(const std::array<T, M>& init) : carray(&init[0], std::make_index_sequence<N>())
          {
             static_assert(M >= N, "Cannot initialize a carray with an smaller array");
          }
@@ -174,11 +174,11 @@ namespace glz::frozen
          constexpr reference back() { return data_[N - 1]; }
          constexpr const_reference back() const { return data_[N - 1]; }
 
-         constexpr value_type *data() noexcept { return data_; }
-         constexpr const value_type *data() const noexcept { return data_; }
+         constexpr value_type* data() noexcept { return data_; }
+         constexpr const value_type* data() const noexcept { return data_; }
 
          // Modifiers
-         constexpr void fill(const value_type &val)
+         constexpr void fill(const value_type& val)
          {
             for (std::size_t i = 0; i < N; ++i) data_[i] = val;
          }
@@ -189,10 +189,10 @@ namespace glz::frozen
         public:
          // Container typdefs
          using value_type = T;
-         using reference = value_type &;
-         using const_reference = const value_type &;
-         using pointer = value_type *;
-         using const_pointer = const value_type *;
+         using reference = value_type&;
+         using const_reference = const value_type&;
+         using pointer = value_type*;
+         using const_pointer = const value_type*;
          using iterator = pointer;
          using const_iterator = const_pointer;
          using reverse_iterator = std::reverse_iterator<iterator>;
@@ -204,5 +204,5 @@ namespace glz::frozen
          constexpr carray(void) = default;
       };
 
-   }  // namespace bits
-}  // namespace frozen
+   } // namespace bits
+} // namespace frozen

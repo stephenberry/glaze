@@ -176,7 +176,7 @@ namespace glz
                   dump<"\\t">(b, ix);
                   break;
                default:
-                  dump(value, b, ix);  // TODO: This warning is an error We need to be able to dump wider char types
+                  dump(value, b, ix); // TODO: This warning is an error We need to be able to dump wider char types
                }
                dump<'"'>(b, ix);
             }
@@ -630,7 +630,7 @@ namespace glz
       template <const std::string_view& S>
       GLZ_ALWAYS_INLINE constexpr auto array_from_sv() noexcept
       {
-         constexpr auto s = S;  // Needed for MSVC to avoid an internal compiler error
+         constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
          constexpr auto N = s.size();
          std::array<char, N> arr;
          std::copy_n(s.data(), N, arr.data());
@@ -758,7 +758,7 @@ namespace glz
             dump<'}'>(b, ix);
          }
       };
-   }  // namespace detail
+   } // namespace detail
 
    template <class T, class Buffer>
    GLZ_ALWAYS_INLINE auto write_json(T&& value, Buffer&& buffer)

@@ -17,7 +17,7 @@ namespace glz
 
    /** Multiplies two 64-bit unsigned integers (a * b),
        returns the 128-bit result as 'hi' and 'lo'. */
-   inline void u128_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo) noexcept
+   inline void u128_mul(uint64_t a, uint64_t b, uint64_t* hi, uint64_t* lo) noexcept
    {
 #ifdef __SIZEOF_INT128__
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -51,7 +51,7 @@ namespace glz
 
    /** Multiplies two 64-bit unsigned integers and add a value (a * b + c),
        returns the 128-bit result as 'hi' and 'lo'. */
-   inline void u128_mul_add(uint64_t a, uint64_t b, uint64_t c, uint64_t *hi, uint64_t *lo) noexcept
+   inline void u128_mul_add(uint64_t a, uint64_t b, uint64_t c, uint64_t* hi, uint64_t* lo) noexcept
    {
 #ifdef __SIZEOF_INT128__
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -768,7 +768,7 @@ namespace glz
       0xA1E53AF46F801C53, 0x60495AE3C1097FD0, /* ~= 10^321 */
       0xCA5E89B18B602368, 0x385BB19CB14BDFC4, /* ~= 10^322 */
       0xFCF62C1DEE382C42, 0x46729E03DD9ED7B5, /* ~= 10^323 */
-      0x9E19DB92B4E31BA9, 0x6C07A2C26A8346D1  /* ~= 10^324 */
+      0x9E19DB92B4E31BA9, 0x6C07A2C26A8346D1 /* ~= 10^324 */
    };
 
    /**
@@ -813,8 +813,8 @@ namespace glz
     @param exp_dec The output value of exponent in decimal.
     @warning The input double number should not be 0, inf, nan.
     */
-   inline void f64_bin_to_dec(uint64_t sig_raw, int32_t exp_raw, uint64_t sig_bin, int32_t exp_bin, uint64_t *sig_dec,
-                              int32_t *exp_dec) noexcept
+   inline void f64_bin_to_dec(uint64_t sig_raw, int32_t exp_raw, uint64_t sig_bin, int32_t exp_bin, uint64_t* sig_dec,
+                              int32_t* exp_dec) noexcept
    {
       uint64_t sp, mid;
 
@@ -840,8 +840,8 @@ namespace glz
 
       uint64_t pow10hilo[2];
       pow10_table_get_sig_128(exp10, pow10hilo);
-      const uint64_t &pow10hi = pow10hilo[0];
-      uint64_t &pow10lo = pow10hilo[1];
+      const uint64_t& pow10hi = pow10hilo[0];
+      uint64_t& pow10lo = pow10hilo[1];
       pow10lo += (exp10 < POW10_SIG_TABLE_128_MIN_EXACT_EXP || exp10 > POW10_SIG_TABLE_128_MAX_EXACT_EXP);
       const uint64_t vbl = round_to_odd(pow10hi, pow10lo, cbl << h);
       const uint64_t vb = round_to_odd(pow10hi, pow10lo, cb << h);
@@ -886,19 +886,19 @@ namespace glz
     These digits are named as "aabbccddeeffgghhii" here.
     For example, input 1234567890123000, output "1234567890123".
     */
-   inline char *write_u64_len_15_to_17_trim(char *buf, uint64_t sig) noexcept
+   inline char* write_u64_len_15_to_17_trim(char* buf, uint64_t sig) noexcept
    {
-      bool lz;               /* leading zero */
+      bool lz; /* leading zero */
       uint32_t tz1, tz2, tz; /* trailing zero */
 
       uint32_t abbccddee = uint32_t(sig / 100000000);
       uint32_t ffgghhii = uint32_t(sig - uint64_t(abbccddee) * 100000000);
-      uint32_t abbcc = abbccddee / 10000;                        /* (abbccddee / 10000) */
-      uint32_t ddee = abbccddee - abbcc * 10000;                 /* (abbccddee % 10000) */
+      uint32_t abbcc = abbccddee / 10000; /* (abbccddee / 10000) */
+      uint32_t ddee = abbccddee - abbcc * 10000; /* (abbccddee % 10000) */
       uint32_t abb = uint32_t((uint64_t(abbcc) * 167773) >> 24); /* (abbcc / 100) */
-      uint32_t a = (abb * 41) >> 12;                             /* (abb / 100) */
-      uint32_t bb = abb - a * 100;                               /* (abb % 100) */
-      uint32_t cc = abbcc - abb * 100;                           /* (abbcc % 100) */
+      uint32_t a = (abb * 41) >> 12; /* (abb / 100) */
+      uint32_t bb = abb - a * 100; /* (abb % 100) */
+      uint32_t cc = abbcc - abb * 100; /* (abbcc % 100) */
 
       /* write abbcc */
       buf[0] = uint8_t(a + '0');
@@ -909,12 +909,12 @@ namespace glz
       std::memcpy(buf + 2, char_table + 2 * cc, 2);
 
       if (ffgghhii) {
-         uint32_t dd = (ddee * 5243) >> 19;                                /* (ddee / 100) */
-         uint32_t ee = ddee - dd * 100;                                    /* (ddee % 100) */
+         uint32_t dd = (ddee * 5243) >> 19; /* (ddee / 100) */
+         uint32_t ee = ddee - dd * 100; /* (ddee % 100) */
          uint32_t ffgg = uint32_t((uint64_t(ffgghhii) * 109951163) >> 40); /* (val / 10000) */
-         uint32_t hhii = ffgghhii - ffgg * 10000;                          /* (val % 10000) */
-         uint32_t ff = (ffgg * 5243) >> 19;                                /* (aabb / 100) */
-         uint32_t gg = ffgg - ff * 100;                                    /* (aabb % 100) */
+         uint32_t hhii = ffgghhii - ffgg * 10000; /* (val % 10000) */
+         uint32_t ff = (ffgg * 5243) >> 19; /* (aabb / 100) */
+         uint32_t gg = ffgg - ff * 100; /* (aabb % 100) */
          //((uint16_t *)buf)[2] = ((const uint16_t *)char_table)[dd];
          std::memcpy(buf + 4, char_table + 2 * dd, 2);
          //((uint16_t *)buf)[3] = ((const uint16_t *)char_table)[ee];
@@ -925,7 +925,7 @@ namespace glz
          std::memcpy(buf + 10, char_table + 2 * gg, 2);
          if (hhii) {
             uint32_t hh = (hhii * 5243) >> 19; /* (ccdd / 100) */
-            uint32_t ii = hhii - hh * 100;     /* (ccdd % 100) */
+            uint32_t ii = hhii - hh * 100; /* (ccdd % 100) */
             //((uint16_t *)buf)[6] = ((const uint16_t *)char_table)[hh];
             std::memcpy(buf + 12, char_table + 2 * hh, 2);
             //((uint16_t *)buf)[7] = ((const uint16_t *)char_table)[ii];
@@ -947,7 +947,7 @@ namespace glz
       else {
          if (ddee) {
             uint32_t dd = (ddee * 5243) >> 19; /* (ddee / 100) */
-            uint32_t ee = ddee - dd * 100;     /* (ddee % 100) */
+            uint32_t ee = ddee - dd * 100; /* (ddee % 100) */
             //((uint16_t *)buf)[2] = ((const uint16_t *)char_table)[dd];
             std::memcpy(buf + 4, char_table + 2 * dd, 2);
             //((uint16_t *)buf)[3] = ((const uint16_t *)char_table)[ee];
@@ -971,7 +971,7 @@ namespace glz
    consteval uint32_t numbits(uint32_t x) noexcept { return x < 2 ? x : 1 + numbits(x >> 1); }
 
    template <std::floating_point T>
-   inline char *to_chars(char *buffer, T val) noexcept
+   inline char* to_chars(char* buffer, T val) noexcept
    {
       static_assert(std::numeric_limits<T>::is_iec559);
       static_assert(std::numeric_limits<T>::radix == 2);
@@ -1080,7 +1080,7 @@ namespace glz
             }
             else {
                const uint32_t hi = (uint32_t(exp_dec) * 656) >> 16; /* exp / 100 */
-               const uint32_t lo = uint32_t(exp_dec) - hi * 100;    /* exp % 100 */
+               const uint32_t lo = uint32_t(exp_dec) - hi * 100; /* exp % 100 */
                buffer[0] = uint8_t(hi) + '0';
                std::memcpy(&buffer[1], char_table + (lo * 2), 2);
                return buffer + 3;

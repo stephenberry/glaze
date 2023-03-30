@@ -91,8 +91,9 @@ namespace glz
       }
 
       template <class Arg_tuple, class F, class Parent, size_t... Is>
-         requires std::invocable<F, Parent, ref_t<std::tuple_element_t<Is, Arg_tuple>>...> decltype(auto)
-      call_args(F&& f, Parent&& parent, [[maybe_unused]] std::span<void*> args, std::index_sequence<Is...>)
+         requires std::invocable<F, Parent, ref_t<std::tuple_element_t<Is, Arg_tuple>>...>
+      decltype(auto) call_args(F&& f, Parent&& parent, [[maybe_unused]] std::span<void*> args,
+                               std::index_sequence<Is...>)
       {
          return f(parent, to_ref<std::tuple_element_t<Is, Arg_tuple>>(args[Is])...);
       }
@@ -155,7 +156,7 @@ namespace glz
                   },
                   parent, last_ptr);
             },
-            user, parent_ptr);  // seek to parent
+            user, parent_ptr); // seek to parent
 
          if (found) {
             return true;
@@ -277,7 +278,7 @@ namespace glz
                   },
                   parent, last_ptr);
             },
-            std::forward<T>(root_value), parent_ptr);  // seek to parent
+            std::forward<T>(root_value), parent_ptr); // seek to parent
 
          if (error.empty() && result == nullptr) {
             error = "invalid path";

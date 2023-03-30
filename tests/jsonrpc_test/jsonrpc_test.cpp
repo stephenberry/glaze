@@ -40,7 +40,7 @@ ut::suite valid_vector_test_cases_server = [] {
 
       ut::test("response:" + *stripped) = [&server, &raw_json, stripped]() {
          std::string response = server.call(raw_json);
-         if (stripped->empty()) {  // if no id is supplied expected response should be none
+         if (stripped->empty()) { // if no id is supplied expected response should be none
             ut::expect(response.empty());
             return;
          }
@@ -74,7 +74,7 @@ ut::suite vector_test_cases = [] {
 
       [[maybe_unused]] auto& requests = client.get_request_map<"summer">();
       ut::expect(requests.size() == 1);
-      ut::expect(requests.contains(1));  // the id is 1
+      ut::expect(requests.contains(1)); // the id is 1
 
       server.on<"summer">([](request_vec const& vec) -> glz::expected<int, rpc::error> {
          ut::expect(vec == std::vector{1, 2, 3});
@@ -103,7 +103,7 @@ struct method_foo_result
 {
    bool foo_c{};
    std::string foo_d{};
-   bool operator==(method_foo_result const& rhs) const noexcept { return foo_c == rhs.foo_c && foo_d == rhs.foo_d; }
+   bool operator==(const method_foo_result& rhs) const noexcept { return foo_c == rhs.foo_c && foo_d == rhs.foo_d; }
 };
 template <>
 struct glz::meta<method_foo_result>
@@ -125,7 +125,7 @@ struct method_bar_result
 {
    bool bar_c{};
    std::string bar_d{};
-   bool operator==(method_bar_result const& rhs) const noexcept { return bar_c == rhs.bar_c && bar_d == rhs.bar_d; }
+   bool operator==(const method_bar_result& rhs) const noexcept { return bar_c == rhs.bar_c && bar_d == rhs.bar_d; }
 };
 template <>
 struct glz::meta<method_bar_result>

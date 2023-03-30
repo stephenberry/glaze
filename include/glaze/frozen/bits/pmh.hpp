@@ -42,7 +42,7 @@ namespace glz::frozen
       struct bucket_size_compare
       {
          template <typename B>
-         bool constexpr operator()(B const &b0, B const &b1) const
+         bool constexpr operator()(const B& b0, const B& b1) const
          {
             return b0.size() > b1.size();
          }
@@ -69,14 +69,14 @@ namespace glz::frozen
          struct bucket_ref
          {
             unsigned hash;
-            const bucket_t *ptr;
+            const bucket_t* ptr;
 
             // Forward some interface of bucket
             using value_type = typename bucket_t::value_type;
             using const_iterator = typename bucket_t::const_iterator;
 
             constexpr auto size() const { return ptr->size(); }
-            constexpr const auto &operator[](std::size_t idx) const { return (*ptr)[idx]; }
+            constexpr const auto& operator[](std::size_t idx) const { return (*ptr)[idx]; }
             constexpr auto begin() const { return ptr->begin(); }
             constexpr auto end() const { return ptr->end(); }
          };
@@ -98,21 +98,21 @@ namespace glz::frozen
       };
 
       template <size_t M, class Item, size_t N, class Hash, class Key, class PRG>
-      pmh_buckets<M> constexpr make_pmh_buckets(const carray<Item, N> &items, Hash const &hash, Key const &key,
-                                                PRG &prg)
+      pmh_buckets<M> constexpr make_pmh_buckets(const carray<Item, N>& items, const Hash& hash, const Key& key,
+                                                PRG& prg)
       {
          using result_t = pmh_buckets<M>;
          result_t result{};
          bool rejected = false;
          // Continue until all items are placed without exceeding bucket_max
          while (1) {
-            for (auto &b : result.buckets) {
+            for (auto& b : result.buckets) {
                b.clear();
             }
             result.seed = prg();
             rejected = false;
             for (std::size_t i = 0; i < N; ++i) {
-               auto &bucket = result.buckets[hash(key(items[i]), static_cast<size_t>(result.seed)) % M];
+               auto& bucket = result.buckets[hash(key(items[i]), static_cast<size_t>(result.seed)) % M];
                if (bucket.size() >= result_t::bucket_max) {
                   rejected = true;
                   break;
@@ -127,7 +127,7 @@ namespace glz::frozen
 
       // Check if an item appears in a cvector
       template <class T, size_t N>
-      constexpr bool all_different_from(cvector<T, N> &data, T &a)
+      constexpr bool all_different_from(cvector<T, N>& data, T& a)
       {
          for (std::size_t i = 0; i < data.size(); ++i)
             if (data[i] == a) return false;
@@ -156,8 +156,8 @@ namespace glz::frozen
          {}
 
          constexpr seed_or_index() = default;
-         constexpr seed_or_index(const seed_or_index &) = default;
-         constexpr seed_or_index &operator=(const seed_or_index &) = default;
+         constexpr seed_or_index(const seed_or_index&) = default;
+         constexpr seed_or_index& operator=(const seed_or_index&) = default;
       };
 
       // Represents the perfect hash function created by pmh algorithm
@@ -170,7 +170,7 @@ namespace glz::frozen
          Hasher hash_;
 
          template <typename KeyType>
-         constexpr std::size_t lookup(const KeyType &key) const
+         constexpr std::size_t lookup(const KeyType& key) const
          {
             return lookup(key, hash_);
          }
@@ -178,12 +178,12 @@ namespace glz::frozen
          // Looks up a given key, to find its expected index in carray<Item, N>
          // Always returns a valid index, must use KeyEqual test after to confirm.
          template <typename KeyType, typename HasherType>
-         constexpr std::size_t lookup(const KeyType &key, const HasherType &hasher) const
+         constexpr std::size_t lookup(const KeyType& key, const HasherType& hasher) const
          {
-            auto const d = first_table_[hasher(key, static_cast<size_t>(first_seed_)) % M];
+            const auto d = first_table_[hasher(key, static_cast<size_t>(first_seed_)) % M];
             if (!d.is_seed()) {
                return static_cast<std::size_t>(d.value());
-            }  // this is narrowing uint64 -> size_t but should be fine
+            } // this is narrowing uint64 -> size_t but should be fine
             else {
                return second_table_[hasher(key, static_cast<std::size_t>(d.value())) % M];
             }
@@ -192,7 +192,7 @@ namespace glz::frozen
 
       // Make pmh tables for given items, hash function, prg, etc.
       template <std::size_t M, class Item, std::size_t N, class Hash, class Key, class PRG>
-      pmh_tables<M, Hash> constexpr make_pmh_tables(const carray<Item, N> &items, Hash const &hash, Key const &key,
+      pmh_tables<M, Hash> constexpr make_pmh_tables(const carray<Item, N>& items, const Hash& hash, const Key& key,
                                                     PRG prg)
       {
          // Step 1: Place all of the keys into buckets
@@ -202,7 +202,7 @@ namespace glz::frozen
          auto buckets = step_one.get_sorted_buckets();
 
          // G becomes the first hash table in the resulting pmh function
-         carray<seed_or_index, M> G;  // Default constructed to "index 0"
+         carray<seed_or_index, M> G; // Default constructed to "index 0"
 
          // H becomes the second hash table in the resulting pmh function
          constexpr std::size_t UNUSED = (std::numeric_limits<std::size_t>::max)();
@@ -210,8 +210,8 @@ namespace glz::frozen
          H.fill(UNUSED);
 
          // Step 3: Map the items in buckets into hash tables.
-         for (const auto &bucket : buckets) {
-            auto const bsize = bucket.size();
+         for (const auto& bucket : buckets) {
+            const auto bsize = bucket.size();
 
             if (bsize == 1) {
                // Store index to the (single) item in G
@@ -253,6 +253,6 @@ namespace glz::frozen
          return {step_one.seed, G, H, hash};
       }
 
-   }  // namespace bits
+   } // namespace bits
 
-}  // namespace frozen
+} // namespace frozen

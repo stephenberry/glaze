@@ -38,10 +38,10 @@ struct glz::meta<my_struct>
    static constexpr std::string_view name = "my_struct";
    using T = my_struct;
    static constexpr auto value = object(
-      "i", [](auto&& v) { return v.i; },  //
-      "d", &T::d,                         //
-      "hello", &T::hello,                 //
-      "arr", &T::arr                      //
+      "i", [](auto&& v) { return v.i; }, //
+      "d", &T::d, //
+      "hello", &T::hello, //
+      "arr", &T::arr //
    );
 };
 
@@ -75,8 +75,8 @@ struct glz::meta<sub_thing>
 {
    static constexpr std::string_view name = "sub_thing";
    static constexpr auto value = object(
-      "a", &sub_thing::a, "Test comment 1",                         //
-      "b", [](auto&& v) -> auto& { return v.b; }, "Test comment 2"  //
+      "a", &sub_thing::a, "Test comment 1", //
+      "b", [](auto&& v) -> auto& { return v.b; }, "Test comment 2" //
    );
 };
 
@@ -97,14 +97,14 @@ struct glz::meta<sub_thing2>
 {
    using T = sub_thing2;
    static constexpr std::string_view name = "sub_thing2";
-   static constexpr auto value = object("a", &T::a, "Test comment 1",  //
-                                        "b", &T::b, "Test comment 2",  //
-                                        "c", &T::c,                    //
-                                        "d", &T::d,                    //
-                                        "e", &T::e,                    //
-                                        "f", &T::f,                    //
-                                        "g", &T::g,                    //
-                                        "h", &T::h                     //
+   static constexpr auto value = object("a", &T::a, "Test comment 1", //
+                                        "b", &T::b, "Test comment 2", //
+                                        "c", &T::c, //
+                                        "d", &T::d, //
+                                        "e", &T::e, //
+                                        "f", &T::f, //
+                                        "g", &T::g, //
+                                        "h", &T::h //
    );
 };
 
@@ -130,9 +130,9 @@ template <>
 struct glz::meta<Color>
 {
    static constexpr std::string_view name = "Color";
-   static constexpr auto value = enumerate("Red", Color::Red,      //
-                                           "Green", Color::Green,  //
-                                           "Blue", Color::Blue     //
+   static constexpr auto value = enumerate("Red", Color::Red, //
+                                           "Green", Color::Green, //
+                                           "Blue", Color::Blue //
    );
 };
 
@@ -195,25 +195,25 @@ struct glz::meta<Thing>
    using T = Thing;
    static constexpr std::string_view name = "Thing";
    static constexpr auto value = object(
-      "thing", &T::thing,                                    //
-      "thing2array", &T::thing2array,                        //
-      "vec3", &T::vec3,                                      //
-      "list", &T::list,                                      //
-      "deque", &T::deque,                                    //
-      "vector", [](auto&& v) -> auto& { return v.vector; },  //
-      "i", [](auto&& v) -> auto& { return v.i; },            //
-      "d", &T::d, "double is the best type",                 //
-      "b", &T::b,                                            //
-      "c", &T::c,                                            //
-      "v", &T::v,                                            //
-      "color", &T::color,                                    //
-      "vb", &T::vb,                                          //
-      "sptr", &T::sptr,                                      //
-      "optional", &T::optional,                              //
-      "array", &T::array,                                    //
-      "map", &T::map,                                        //
-      "mapi", &T::mapi,                                      //
-      "thing_ptr", &T::thing_ptr                             //
+      "thing", &T::thing, //
+      "thing2array", &T::thing2array, //
+      "vec3", &T::vec3, //
+      "list", &T::list, //
+      "deque", &T::deque, //
+      "vector", [](auto&& v) -> auto& { return v.vector; }, //
+      "i", [](auto&& v) -> auto& { return v.i; }, //
+      "d", &T::d, "double is the best type", //
+      "b", &T::b, //
+      "c", &T::c, //
+      "v", &T::v, //
+      "color", &T::color, //
+      "vb", &T::vb, //
+      "sptr", &T::sptr, //
+      "optional", &T::optional, //
+      "array", &T::array, //
+      "map", &T::map, //
+      "mapi", &T::mapi, //
+      "thing_ptr", &T::thing_ptr //
    );
 };
 
@@ -229,7 +229,7 @@ struct glz::meta<Escaped>
 {
    static constexpr std::string_view name = "Escaped";
    using T = Escaped;
-   static constexpr auto value = object(R"(escaped"key)", &T::escaped_key,  //
+   static constexpr auto value = object(R"(escaped"key)", &T::escaped_key, //
                                         R"(escaped""key2)", &T::escaped_key2, R"(escape_chars)", &T::escape_chars);
 };
 
@@ -816,7 +816,7 @@ suite user_types = [] {
       obj.mapi = {{5, 5.0}, {7, 7.1}, {2, 2.22222}};
 
       // glz::write_json(obj, buffer);
-      glz::write<glz::opts{.skip_null_members = false}>(obj, buffer);  // Sets sptr to null
+      glz::write<glz::opts{.skip_null_members = false}>(obj, buffer); // Sets sptr to null
 
       Thing obj2{};
       expect(glz::read_json(obj2, buffer) == glz::error_code::none);
@@ -922,7 +922,7 @@ suite json_pointer = [] {
    };
 
    "valid"_test = [] {
-      [[maybe_unused]] constexpr bool is_valid = glz::valid<Thing, "/thing/a", double>();  // Verify constexpr
+      [[maybe_unused]] constexpr bool is_valid = glz::valid<Thing, "/thing/a", double>(); // Verify constexpr
 
       expect(glz::valid<Thing, "/thing_ptr/a", double>() == true);
       expect(glz::valid<Thing, "/thing_ptr/a", int>() == false);
@@ -1085,7 +1085,7 @@ suite read_tests = [] {
       {
          std::string str = "0.96875";
          std::vector<char> s(str.begin(), str.end());
-         s.emplace_back('\0');  // null terminate buffer
+         s.emplace_back('\0'); // null terminate buffer
          double f{};
          expect(glz::read_json(f, s) == glz::error_code::none);
          expect(f == 0.96875);
@@ -1642,15 +1642,15 @@ suite write_tests = [] {
          char v{'a'};
          glz::write_json(v, s);
          // Is this what we want instead?
-         expect(s == R"("a")");  // std::to_string(static_cast<int>('a')));
+         expect(s == R"("a")"); // std::to_string(static_cast<int>('a')));
       }
       {
          std::string s;
          wchar_t v{'a'};
-         glz::write_json(v, s);  // This line gives warning about converting wchar to char, is that fine? Should we
-                                 // write a to_buffer template to handle type wchar?
+         glz::write_json(v, s); // This line gives warning about converting wchar to char, is that fine? Should we
+                                // write a to_buffer template to handle type wchar?
          // Is the below what we actually expect?
-         expect(s == R"("a")");  // std::to_string(static_cast<int>('a')));
+         expect(s == R"("a")"); // std::to_string(static_cast<int>('a')));
       }
       {
          std::string s;
@@ -2093,7 +2093,7 @@ struct local_meta
    {
       static constexpr std::string_view name = "local_meta";
       using T = local_meta;
-      static constexpr auto value = glz::object("x", &T::x, "A comment for x",  //
+      static constexpr auto value = glz::object("x", &T::x, "A comment for x", //
                                                 "y", &T::y, "A comment for y");
    };
 };
@@ -2223,7 +2223,7 @@ template <>
 struct glz::meta<tagged_variant>
 {
    static constexpr std::string_view tag = "action";
-   static constexpr auto ids = std::array{"PUT", "DELETE"};  // Defaults to glz::name_v of the type
+   static constexpr auto ids = std::array{"PUT", "DELETE"}; // Defaults to glz::name_v of the type
 };
 
 // Test automatic ids
@@ -2847,8 +2847,8 @@ struct glz::meta<hide_struct>
 {
    static constexpr std::string_view name = "hide_struct";
    using T = hide_struct;
-   static constexpr auto value = object("i", &T::i,  //
-                                        "d", &T::d,  //
+   static constexpr auto value = object("i", &T::i, //
+                                        "d", &T::d, //
                                         "hello", hide{&T::hello});
 };
 
@@ -2881,7 +2881,7 @@ struct glz::meta<mem_f_struct>
 {
    static constexpr std::string_view name = "mem_f_struct";
    using T = mem_f_struct;
-   static constexpr auto value = object("i", &T::i,  //
+   static constexpr auto value = object("i", &T::i, //
                                         "access", &T::access);
 };
 

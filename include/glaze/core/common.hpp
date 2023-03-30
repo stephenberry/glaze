@@ -42,19 +42,19 @@ namespace glz
    {
       T value;
 
-      constexpr decltype(auto) operator()(auto &&) const { return hidden{}; }
+      constexpr decltype(auto) operator()(auto&&) const { return hidden{}; }
    };
 
    template <class T>
    hide(T) -> hide<T>;
 
    struct skip
-   {};  // to skip a keyed value in input
+   {}; // to skip a keyed value in input
 
    template <class T>
    struct includer
    {
-      T &value;
+      T& value;
    };
 
    template <class T>
@@ -66,19 +66,19 @@ namespace glz
    // Register this with an object to allow file including (direct writes) to the meta object
    struct file_include
    {
-      constexpr decltype(auto) operator()(auto &&value) const { return includer<std::decay_t<decltype(value)>>{value}; }
+      constexpr decltype(auto) operator()(auto&& value) const { return includer<std::decay_t<decltype(value)>>{value}; }
    };
 
    template <class T>
-   concept range = requires(T &t) {
-                      typename T::value_type;
-                      requires !std::same_as<void, decltype(t.begin())>;
-                      requires !std::same_as<void, decltype(t.end())>;
-                   };
+   concept range = requires(T& t) {
+      typename T::value_type;
+      requires !std::same_as<void, decltype(t.begin())>;
+      requires !std::same_as<void, decltype(t.end())>;
+   };
 
    // range like
    template <class T>
-   using iterator_t = decltype(std::begin(std::declval<T &>()));
+   using iterator_t = decltype(std::begin(std::declval<T&>()));
 
    template <range R>
    using range_value_t = std::iter_value_t<iterator_t<R>>;
@@ -129,7 +129,7 @@ namespace glz
       template <int N>
       using make_is = std::make_integer_sequence<int, N>;
 
-      constexpr auto size(const char *s) noexcept
+      constexpr auto size(const char* s) noexcept
       {
          int i = 0;
          while (*s != 0) {
@@ -139,16 +139,16 @@ namespace glz
          return i;
       }
 
-      template <const char *, typename, const char *, typename>
+      template <const char*, typename, const char*, typename>
       struct concat_impl;
 
-      template <const char *S1, int... I1, const char *S2, int... I2>
+      template <const char* S1, int... I1, const char* S2, int... I2>
       struct concat_impl<S1, is<I1...>, S2, is<I2...>>
       {
          static constexpr const char value[]{S1[I1]..., S2[I2]..., 0};
       };
 
-      template <const char *S1, const char *S2>
+      template <const char* S1, const char* S2>
       constexpr auto concat_char()
       {
          return concat_impl<S1, make_is<size(S1)>, S2, make_is<size(S2)>>::value;
@@ -165,14 +165,14 @@ namespace glz
       {};
 
       template <size_t N1, size_t... I1, size_t N2, size_t... I2>
-      constexpr std::array<char const, N1 + N2 - 1> concat(char const (&a1)[N1], char const (&a2)[N2], seq<I1...>,
+      constexpr std::array<const char, N1 + N2 - 1> concat(const char (&a1)[N1], const char (&a2)[N2], seq<I1...>,
                                                            seq<I2...>)
       {
          return {{a1[I1]..., a2[I2]...}};
       }
 
       template <size_t N1, size_t N2>
-      constexpr std::array<char const, N1 + N2 - 1> concat_arrays(char const (&a1)[N1], char const (&a2)[N2])
+      constexpr std::array<const char, N1 + N2 - 1> concat_arrays(const char (&a1)[N1], const char (&a2)[N2])
       {
          return concat(a1, a2, gen_seq<N1 - 1>{}, gen_seq<N2>{});
       }
@@ -184,7 +184,7 @@ namespace glz
       template <uint32_t Format>
       struct write
       {};
-   }  // namespace detail
+   } // namespace detail
 
    // Use std::stringview if you know the buffer is going to outlive this
    template <class string_type = std::string>
@@ -196,13 +196,13 @@ namespace glz
 
       template <class T>
          requires(!std::same_as<std::decay_t<T>, basic_raw_json>)
-      basic_raw_json(T &&s) : str(std::forward<T>(s))
+      basic_raw_json(T&& s) : str(std::forward<T>(s))
       {}
 
-      basic_raw_json(const basic_raw_json &) = default;
-      basic_raw_json(basic_raw_json &&) = default;
-      basic_raw_json &operator=(const basic_raw_json &) = default;
-      basic_raw_json &operator=(basic_raw_json &&) = default;
+      basic_raw_json(const basic_raw_json&) = default;
+      basic_raw_json(basic_raw_json&&) = default;
+      basic_raw_json& operator=(const basic_raw_json&) = default;
+      basic_raw_json& operator=(basic_raw_json&&) = default;
    };
 
    using raw_json = basic_raw_json<std::string>;
@@ -219,9 +219,9 @@ namespace glz
                    float, int, unsigned int, long, unsigned long, double, long long, unsigned long long, std::string>;
 
    // Explicitly defining basic_ptr to avoid additional template instantiations
-   using basic_ptr = std::variant<bool *, char *, char8_t *, unsigned char *, signed char *, char16_t *, short *,
-                                  unsigned short *, wchar_t *, char32_t *, float *, int *, unsigned int *, long *,
-                                  unsigned long *, double *, long long *, unsigned long long *, std::string *>;
+   using basic_ptr = std::variant<bool*, char*, char8_t*, unsigned char*, signed char*, char16_t*, short*,
+                                  unsigned short*, wchar_t*, char32_t*, float*, int*, unsigned int*, long*,
+                                  unsigned long*, double*, long long*, unsigned long long*, std::string*>;
 
    namespace detail
    {
@@ -234,8 +234,7 @@ namespace glz
          std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>;
 
       template <class T>
-      concept int_t = std::integral<std::decay_t<T>> && !
-      char_t<std::decay_t<T>> && !bool_t<T>;
+      concept int_t = std::integral<std::decay_t<T>> && !char_t<std::decay_t<T>> && !bool_t<T>;
 
       template <class T>
       concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
@@ -247,13 +246,12 @@ namespace glz
       concept complex_t = glaze_t<std::decay_t<T>>;
 
       template <class T>
-      concept str_t = !
-      complex_t<T> && !std::same_as<std::nullptr_t, T> && std::convertible_to<std::decay_t<T>, std::string_view>;
+      concept str_t =
+         !complex_t<T> && !std::same_as<std::nullptr_t, T> && std::convertible_to<std::decay_t<T>, std::string_view>;
 
       // this concept requires that T is string and copies the string in json
       template <class T>
-      concept string_t = str_t<T> && !
-      std::same_as<std::decay_t<T>, std::string_view>;
+      concept string_t = str_t<T> && !std::same_as<std::decay_t<T>, std::string_view>;
 
       // this concept requires that T is just a view
       template <class T>
@@ -261,55 +259,54 @@ namespace glz
 
       template <class T>
       concept pair_t = requires(T pair) {
-                          {
-                             pair.first
-                             } -> std::same_as<typename T::first_type &>;
-                          {
-                             pair.second
-                             } -> std::same_as<typename T::second_type &>;
-                       };
+         {
+            pair.first
+         } -> std::same_as<typename T::first_type&>;
+         {
+            pair.second
+         } -> std::same_as<typename T::second_type&>;
+      };
 
       template <class T>
       concept map_subscriptable = requires(T container) {
-                                     {
-                                        container[std::declval<typename T::key_type>()]
-                                        } -> std::same_as<typename T::mapped_type &>;
-                                  };
+         {
+            container[std::declval<typename T::key_type>()]
+         } -> std::same_as<typename T::mapped_type&>;
+      };
 
       template <class T>
-      concept map_t = !
-      complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> && map_subscriptable<T>;
+      concept map_t = !complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> && map_subscriptable<T>;
 
       template <class T>
       concept array_t = (!complex_t<T> && !str_t<T> && !map_t<T> && range<T>);
 
       template <class T>
       concept emplace_backable = requires(T container) {
-                                    {
-                                       container.emplace_back()
-                                       } -> std::same_as<typename T::reference>;
-                                 };
+         {
+            container.emplace_back()
+         } -> std::same_as<typename T::reference>;
+      };
 
       template <class T>
       concept emplaceable = requires(T container) {
-                               {
-                                  container.emplace(std::declval<typename T::value_type>())
-                               };
-                            };
+         {
+            container.emplace(std::declval<typename T::value_type>())
+         };
+      };
 
       template <class T>
       concept push_backable = requires(T container) {
-                                 {
-                                    container.push_back(std::declval<typename T::value_type>())
-                                 };
-                              };
+         {
+            container.push_back(std::declval<typename T::value_type>())
+         };
+      };
 
       template <class T>
       concept resizeable = requires(T container) { container.resize(0); };
 
       template <class T>
-      concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> && !
-      resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
+      concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> &&
+                                    !resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
 
       template <class T>
       concept has_size = requires(T container) { container.size(); };
@@ -322,10 +319,10 @@ namespace glz
 
       template <class T>
       concept accessible = requires(T container) {
-                              {
-                                 container[size_t{}]
-                                 } -> std::same_as<typename T::reference>;
-                           };
+         {
+            container[size_t{}]
+         } -> std::same_as<typename T::reference>;
+      };
 
       template <class T>
       concept boolean_like = std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> ||
@@ -336,20 +333,19 @@ namespace glz
 
       template <class T>
       concept is_span = requires(T t) {
-                           T::extent;
-                           typename T::element_type;
-                        };
+         T::extent;
+         typename T::element_type;
+      };
 
       template <class T>
       concept is_dynamic_span = T::extent == static_cast<size_t>(-1);
 
       template <class T>
-      concept has_static_size = (is_span<T> && !is_dynamic_span<T>) ||
-                                (requires(T container) {
-                                    {
-                                       std::bool_constant<(std::decay_t<T>{}.size(), true)>()
-                                       } -> std::same_as<std::true_type>;
-                                 } && std::decay_t<T>{}.size() > 0);
+      concept has_static_size = (is_span<T> && !is_dynamic_span<T>) || (requires(T container) {
+                                   {
+                                      std::bool_constant<(std::decay_t<T>{}.size(), true)>()
+                                   } -> std::same_as<std::true_type>;
+                                } && std::decay_t<T>{}.size() > 0);
 
       template <class T>
       constexpr size_t get_size() noexcept
@@ -367,26 +363,23 @@ namespace glz
 
       template <class T>
       concept tuple_t = requires(T t) {
-                           std::tuple_size<T>::value;
-                           glz::tuplet::get<0>(t);
-                        } && !
-      complex_t<T> && !range<T>;
+         std::tuple_size<T>::value;
+         glz::tuplet::get<0>(t);
+      } && !complex_t<T> && !range<T>;
 
       template <class T>
-      concept nullable_t = !
-      complex_t<T> && !str_t<T> && requires(T t) {
-                                      bool(t);
-                                      {
-                                         *t
-                                      };
-                                   };
+      concept nullable_t = !complex_t<T> && !str_t<T> && requires(T t) {
+         bool(t);
+         {
+            *t
+         };
+      };
 
       template <class T>
       concept func_t = requires(T t) {
-                          typename T::result_type;
-                          std::function(t);
-                       } && !
-      glaze_t<T>;
+         typename T::result_type;
+         std::function(t);
+      } && !glaze_t<T>;
 
       template <class T>
       concept glaze_array_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Array>;
@@ -407,12 +400,12 @@ namespace glz
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to) {
 #if __GNUC__
-                                             // TODO: guard gcc against narrowing conversions when fixed
-                                             to = from;
+         // TODO: guard gcc against narrowing conversions when fixed
+         to = from;
 #else
-                                             To{from};
+         To{from};
 #endif
-                                          };
+      };
 
       // from
       // https://stackoverflow.com/questions/55941964/how-to-filter-duplicate-types-from-tuple-c
@@ -493,7 +486,7 @@ namespace glz
       }
 
       template <class Tuple>
-      inline auto get_runtime(Tuple &&t, const size_t index)
+      inline auto get_runtime(Tuple&& t, const size_t index)
       {
          using T = std::decay_t<Tuple>;
          static constexpr auto indices = std::make_index_sequence<std::tuple_size_v<T>>{};
@@ -543,7 +536,7 @@ namespace glz
                std::make_pair<sv, value_t>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
                                            glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...};
          }
-         else if constexpr (n_128)  // don't even attempt a first character hash if we have too many keys
+         else if constexpr (n_128) // don't even attempt a first character hash if we have too many keys
          {
             constexpr auto front_desc =
                single_char_hash<n>(std::array<sv, n>{sv{glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))}...});
@@ -698,7 +691,7 @@ namespace glz
       }
 
       template <class T, size_t... I>
-      constexpr auto make_variant_deduction_base_map(std::index_sequence<I...>, auto &&keys)
+      constexpr auto make_variant_deduction_base_map(std::index_sequence<I...>, auto&& keys)
       {
          using V = bit_array<std::variant_size_v<T>>;
          return frozen::make_unordered_map<frozen::string, V, sizeof...(I)>(
@@ -725,7 +718,7 @@ namespace glz
       }
 
       template <is_variant T, size_t... I>
-      constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto &&variant_ids)
+      constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
       {
          return frozen::make_unordered_map<frozen::string, size_t, std::variant_size_v<T>>(
             {std::make_pair<frozen::string, size_t>(frozen::string(variant_ids[I]), I)...});
@@ -739,7 +732,7 @@ namespace glz
          return make_variant_id_map_impl<T>(indices, ids_v<T>);
       }
 
-      inline decltype(auto) get_member(auto &&value, auto &member_ptr)
+      inline decltype(auto) get_member(auto&& value, auto& member_ptr)
       {
          using V = std::decay_t<decltype(member_ptr)>;
          if constexpr (std::is_member_object_pointer_v<V>) {
@@ -761,16 +754,16 @@ namespace glz
       struct wrap
       {
          Wrapped wrapped;
-         constexpr decltype(auto) operator()(auto &&value) const
+         constexpr decltype(auto) operator()(auto&& value) const
          {
             return Wrapper<std::decay_t<decltype(get_member(value, wrapped))>>{get_member(value, wrapped)};
          }
 
-         constexpr decltype(auto) unwrap(auto &&value) const { return get_member(value, wrapped); }
+         constexpr decltype(auto) unwrap(auto&& value) const { return get_member(value, wrapped); }
       };
 
       template <class T, class mptr_t>
-      using member_t = decltype(get_member(std::declval<T>(), std::declval<std::decay_t<mptr_t> &>()));
+      using member_t = decltype(get_member(std::declval<T>(), std::declval<std::decay_t<mptr_t>&>()));
 
       template <class T, class = std::make_index_sequence<std::tuple_size<meta_t<T>>::value>>
       struct members_from_meta;
@@ -801,7 +794,7 @@ namespace glz
       template <is_variant T>
       struct array_var_wrapper
       {
-         T &value;
+         T& value;
       };
       // TODO: Could do this if the compiler supports alias template deduction
       // template <class T>
@@ -810,7 +803,7 @@ namespace glz
       struct array_variant : wrap<array_var_wrapper, T>
       {};
       template <class T>
-      array_variant(T) -> array_variant<T>;  // Only needed on older compilers until we move to template alias deduction
+      array_variant(T) -> array_variant<T>; // Only needed on older compilers until we move to template alias deduction
 
       template <class T, auto Opts>
       constexpr auto required_fields()
@@ -826,11 +819,11 @@ namespace glz
          }
          return fields;
       }
-   }  // namespace detail
+   } // namespace detail
 
-   constexpr auto array(auto &&...args) { return detail::Array{glz::tuplet::make_copy_tuple(args...)}; }
+   constexpr auto array(auto&&... args) { return detail::Array{glz::tuplet::make_copy_tuple(args...)}; }
 
-   constexpr auto object(auto &&...args)
+   constexpr auto object(auto&&... args)
    {
       if constexpr (sizeof...(args) == 0) {
          return glz::detail::Object{glz::tuplet::tuple{}};
@@ -841,13 +834,13 @@ namespace glz
       }
    }
 
-   constexpr auto enumerate(auto &&...args)
+   constexpr auto enumerate(auto&&... args)
    {
       return glz::detail::Enum{group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(args...))>>::op(
          glz::tuplet::make_copy_tuple(args...))};
    }
 
-   constexpr auto flags(auto &&...args)
+   constexpr auto flags(auto&&... args)
    {
       return glz::detail::Flags{group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(args...))>>::op(
          glz::tuplet::make_copy_tuple(args...))};
@@ -859,57 +852,57 @@ struct glz::meta<glz::error_code>
 {
    static constexpr sv name = "glz::error_code";
    static constexpr auto value =
-      enumerate("none", glz::error_code::none,                                                              //
-                "no_read_input", glz::error_code::no_read_input,                                            //
-                "data_must_be_null_terminated", glz::error_code::data_must_be_null_terminated,              //
-                "parse_number_failure", glz::error_code::parse_number_failure,                              //
-                "expected_brace", glz::error_code::expected_brace,                                          //
-                "expected_bracket", glz::error_code::expected_bracket,                                      //
-                "expected_quote", glz::error_code::expected_quote,                                          //
-                "exceeded_static_array_size", glz::error_code::exceeded_static_array_size,                  //
-                "unexpected_end", glz::error_code::unexpected_end,                                          //
-                "expected_end_comment", glz::error_code::expected_end_comment,                              //
-                "syntax_error", glz::error_code::syntax_error,                                              //
-                "key_not_found", glz::error_code::key_not_found,                                            //
-                "unexpected_enum", glz::error_code::unexpected_enum,                                        //
-                "attempt_member_func_read", glz::error_code::attempt_member_func_read,                      //
-                "attempt_read_hidden", glz::error_code::attempt_read_hidden,                                //
-                "invalid_nullable_read", glz::error_code::invalid_nullable_read,                            //
-                "invalid_variant_object", glz::error_code::invalid_variant_object,                          //
-                "invalid_variant_array", glz::error_code::invalid_variant_array,                            //
-                "invalid_variant_string", glz::error_code::invalid_variant_string,                          //
-                "no_matching_variant_type", glz::error_code::no_matching_variant_type,                      //
-                "expected_true_or_false", glz::error_code::expected_true_or_false,                          //
-                "unknown_key", glz::error_code::unknown_key,                                                //
-                "invalid_flag_input", glz::error_code::invalid_flag_input,                                  //
-                "invalid_escape", glz::error_code::invalid_escape,                                          //
-                "u_requires_hex_digits", glz::error_code::u_requires_hex_digits,                            //
-                "file_extension_not_supported", glz::error_code::file_extension_not_supported,              //
-                "could_not_determine_extension", glz::error_code::could_not_determine_extension,            //
-                "seek_failure", glz::error_code::seek_failure,                                              //
-                "unicode_escape_conversion_failure", glz::error_code::unicode_escape_conversion_failure,    //
-                "file_open_failure", glz::error_code::file_open_failure,                                    //
-                "file_include_error", glz::error_code::file_include_error,                                  //
-                "dump_int_error", glz::error_code::dump_int_error,                                          //
-                "get_nonexistent_json_ptr", glz::error_code::get_nonexistent_json_ptr,                      //
-                "get_wrong_type", glz::error_code::get_wrong_type,                                          //
-                "cannot_be_referenced", glz::error_code::cannot_be_referenced,                              //
-                "invalid_get", glz::error_code::invalid_get,                                                //
-                "invalid_get_fn", glz::error_code::invalid_get_fn,                                          //
-                "invalid_call", glz::error_code::invalid_call,                                              //
-                "invalid_partial_key", glz::error_code::invalid_partial_key,                                //
-                "name_mismatch", glz::error_code::name_mismatch,                                            //
-                "array_element_not_found", glz::error_code::array_element_not_found,                        //
-                "elements_not_convertible_to_design", glz::error_code::elements_not_convertible_to_design,  //
-                "unknown_distribution", glz::error_code::unknown_distribution,                              //
-                "invalid_distribution_elements", glz::error_code::invalid_distribution_elements,            //
-                "missing_key", glz::error_code::missing_key                                                 //
+      enumerate("none", glz::error_code::none, //
+                "no_read_input", glz::error_code::no_read_input, //
+                "data_must_be_null_terminated", glz::error_code::data_must_be_null_terminated, //
+                "parse_number_failure", glz::error_code::parse_number_failure, //
+                "expected_brace", glz::error_code::expected_brace, //
+                "expected_bracket", glz::error_code::expected_bracket, //
+                "expected_quote", glz::error_code::expected_quote, //
+                "exceeded_static_array_size", glz::error_code::exceeded_static_array_size, //
+                "unexpected_end", glz::error_code::unexpected_end, //
+                "expected_end_comment", glz::error_code::expected_end_comment, //
+                "syntax_error", glz::error_code::syntax_error, //
+                "key_not_found", glz::error_code::key_not_found, //
+                "unexpected_enum", glz::error_code::unexpected_enum, //
+                "attempt_member_func_read", glz::error_code::attempt_member_func_read, //
+                "attempt_read_hidden", glz::error_code::attempt_read_hidden, //
+                "invalid_nullable_read", glz::error_code::invalid_nullable_read, //
+                "invalid_variant_object", glz::error_code::invalid_variant_object, //
+                "invalid_variant_array", glz::error_code::invalid_variant_array, //
+                "invalid_variant_string", glz::error_code::invalid_variant_string, //
+                "no_matching_variant_type", glz::error_code::no_matching_variant_type, //
+                "expected_true_or_false", glz::error_code::expected_true_or_false, //
+                "unknown_key", glz::error_code::unknown_key, //
+                "invalid_flag_input", glz::error_code::invalid_flag_input, //
+                "invalid_escape", glz::error_code::invalid_escape, //
+                "u_requires_hex_digits", glz::error_code::u_requires_hex_digits, //
+                "file_extension_not_supported", glz::error_code::file_extension_not_supported, //
+                "could_not_determine_extension", glz::error_code::could_not_determine_extension, //
+                "seek_failure", glz::error_code::seek_failure, //
+                "unicode_escape_conversion_failure", glz::error_code::unicode_escape_conversion_failure, //
+                "file_open_failure", glz::error_code::file_open_failure, //
+                "file_include_error", glz::error_code::file_include_error, //
+                "dump_int_error", glz::error_code::dump_int_error, //
+                "get_nonexistent_json_ptr", glz::error_code::get_nonexistent_json_ptr, //
+                "get_wrong_type", glz::error_code::get_wrong_type, //
+                "cannot_be_referenced", glz::error_code::cannot_be_referenced, //
+                "invalid_get", glz::error_code::invalid_get, //
+                "invalid_get_fn", glz::error_code::invalid_get_fn, //
+                "invalid_call", glz::error_code::invalid_call, //
+                "invalid_partial_key", glz::error_code::invalid_partial_key, //
+                "name_mismatch", glz::error_code::name_mismatch, //
+                "array_element_not_found", glz::error_code::array_element_not_found, //
+                "elements_not_convertible_to_design", glz::error_code::elements_not_convertible_to_design, //
+                "unknown_distribution", glz::error_code::unknown_distribution, //
+                "invalid_distribution_elements", glz::error_code::invalid_distribution_elements, //
+                "missing_key", glz::error_code::missing_key //
       );
 };
 
 namespace glz
 {
-   [[nodiscard]] inline std::string format_error(const parse_error &pe, auto &buffer)
+   [[nodiscard]] inline std::string format_error(const parse_error& pe, auto& buffer)
    {
       static constexpr auto arr = detail::make_enum_to_string_array<error_code>();
 

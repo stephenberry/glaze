@@ -75,11 +75,11 @@ namespace glz::frozen
       }
       static constexpr result_type min_value() { return increment == 0u ? 1u : 0u; }
       static constexpr result_type max_value() { return modulus - 1u; }
-      friend constexpr bool operator==(linear_congruential_engine const &self, linear_congruential_engine const &other)
+      friend constexpr bool operator==(const linear_congruential_engine& self, const linear_congruential_engine& other)
       {
          return self.state_ == other.state_;
       }
-      friend constexpr bool operator!=(linear_congruential_engine const &self, linear_congruential_engine const &other)
+      friend constexpr bool operator!=(const linear_congruential_engine& self, const linear_congruential_engine& other)
       {
          return !(self == other);
       }
@@ -94,4 +94,4 @@ namespace glz::frozen
    // This generator is used by default in unordered frozen containers
    using default_prg_t = minstd_rand;
 
-}  // namespace frozen
+} // namespace frozen

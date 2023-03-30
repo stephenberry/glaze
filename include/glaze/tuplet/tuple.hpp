@@ -46,8 +46,7 @@ namespace glz
       concept same_as = std::is_same_v<T, U> && std::is_same_v<U, T>;
 
       template <class T, class U>
-      concept other_than = !
-      std::is_same_v<std::decay_t<T>, U>;
+      concept other_than = !std::is_same_v<std::decay_t<T>, U>;
 
       template <class Tup>
       using base_list_t = typename std::decay_t<Tup>::base_list;
@@ -67,18 +66,18 @@ namespace glz
       concept assignable_to = requires(U u, T t) { t = u; };
 
       template <class T>
-      concept ordered = requires(T const& t) {
-                           {
-                              t <=> t
-                           };
-                        };
+      concept ordered = requires(const T& t) {
+         {
+            t <=> t
+         };
+      };
       template <class T>
-      concept equality_comparable = requires(T const& t) {
-                                       {
-                                          t == t
-                                          } -> same_as<bool>;
-                                    };
-   }  // namespace tuplet
+      concept equality_comparable = requires(const T& t) {
+         {
+            t == t
+         } -> same_as<bool>;
+      };
+   } // namespace tuplet
 
    // tuplet::type_list implementation
    // tuplet::type_map implementation
@@ -105,8 +104,8 @@ namespace glz
          using base_list = type_list<Bases...>;
          using Bases::operator[]...;
          using Bases::decl_elem...;
-         auto operator<=>(type_map const&) const = default;
-         bool operator==(type_map const&) const = default;
+         auto operator<=>(const type_map&) const = default;
+         bool operator==(const type_map&) const = default;
       };
 
       template <size_t I, class T>
@@ -121,15 +120,15 @@ namespace glz
          constexpr decltype(auto) operator[](tag<I>) & { return (value); }
          constexpr decltype(auto) operator[](tag<I>) const& { return (value); }
          constexpr decltype(auto) operator[](tag<I>) && { return (std::move(*this).value); }
-         auto operator<=>(tuple_elem const&) const = default;
-         bool operator==(tuple_elem const&) const = default;
+         auto operator<=>(const tuple_elem&) const = default;
+         bool operator==(const tuple_elem&) const = default;
          // Implements comparison for tuples containing reference types
-         constexpr auto operator<=>(tuple_elem const& other) const noexcept(noexcept(value <=> other.value))
+         constexpr auto operator<=>(const tuple_elem& other) const noexcept(noexcept(value <=> other.value))
             requires(std::is_reference_v<T> && ordered<T>)
          {
             return value <=> other.value;
          }
-         constexpr bool operator==(tuple_elem const& other) const noexcept(noexcept(value == other.value))
+         constexpr bool operator==(const tuple_elem& other) const noexcept(noexcept(value == other.value))
             requires(std::is_reference_v<T> && equality_comparable<T>)
          {
             return value == other.value;
@@ -137,7 +136,7 @@ namespace glz
       };
       template <class T>
       using unwrap_ref_decay_t = typename std::unwrap_ref_decay<T>::type;
-   }  // namespace tuplet
+   } // namespace tuplet
 
    // tuplet::detail::get_tuple_base implementation
    // tuplet::detail::apply_impl
@@ -191,7 +190,7 @@ namespace glz
       {
          return {{{static_cast<type_t<Outer>&&>(tup.identity_t<Outer>::value).identity_t<Inner>::value}...}};
       }
-   }  // namespace tuplet::detail
+   } // namespace tuplet::detail
 
    // tuplet::tuple implementation
    namespace tuplet
@@ -209,7 +208,7 @@ namespace glz
          using element_list = type_list<T...>;
          using super::decl_elem;
 
-         template <other_than<tuple> U>  // Preserves default assignments
+         template <other_than<tuple> U> // Preserves default assignments
          constexpr auto& operator=(U&& tup)
          {
             using tuple2 = std::decay_t<U>;
@@ -229,8 +228,8 @@ namespace glz
             return *this;
          }*/
 
-         auto operator<=>(tuple const&) const = default;
-         bool operator==(tuple const&) const = default;
+         auto operator<=>(const tuple&) const = default;
+         bool operator==(const tuple&) const = default;
 
          // Applies a function to every element of the tuple. The order is the
          // declaration order, so first the function will be applied to element 0,
@@ -401,16 +400,16 @@ namespace glz
          using base_list = type_list<>;
          using element_list = type_list<>;
 
-         template <other_than<tuple> U>  // Preserves default assignments
-            requires stateless<U>        // Check that U is similarly stateless
+         template <other_than<tuple> U> // Preserves default assignments
+            requires stateless<U> // Check that U is similarly stateless
          constexpr auto& operator=(U&&) noexcept
          {
             return *this;
          }
 
          constexpr auto& assign() noexcept { return *this; }
-         auto operator<=>(tuple const&) const = default;
-         bool operator==(tuple const&) const = default;
+         auto operator<=>(const tuple&) const = default;
+         bool operator==(const tuple&) const = default;
 
          // Applies a function to every element of the tuple. The order is the
          // declaration order, so first the function will be applied to element 0,
@@ -456,7 +455,7 @@ namespace glz
       };
       template <class... Ts>
       tuple(Ts...) -> tuple<unwrap_ref_decay_t<Ts>...>;
-   }  // namespace tuplet
+   } // namespace tuplet
 
    // tuplet::pair implementation
    namespace tuplet
@@ -475,7 +474,7 @@ namespace glz
          constexpr decltype(auto) operator[](tag<1>) const& { return (second); }
          constexpr decltype(auto) operator[](tag<1>) && { return (std::move(*this).second); }
 
-         template <other_than<pair> Type>  // Preserves default assignments
+         template <other_than<pair> Type> // Preserves default assignments
          constexpr auto& operator=(Type&& tup)
          {
             auto&& [a, b] = static_cast<Type&&>(tup);
@@ -491,12 +490,12 @@ namespace glz
             second = static_cast<S2&&>(s);
             return *this;
          }
-         auto operator<=>(pair const&) const = default;
-         bool operator==(pair const&) const = default;
+         auto operator<=>(const pair&) const = default;
+         bool operator==(const pair&) const = default;
       };
       template <class A, class B>
       pair(A, B) -> pair<unwrap_ref_decay_t<A>, unwrap_ref_decay_t<B>>;
-   }  // namespace tuplet
+   } // namespace tuplet
 
    // tuplet::convert implementation
    namespace tuplet
@@ -523,10 +522,10 @@ namespace glz
       template <class Tuple>
       convert(Tuple&) -> convert<Tuple&>;
       template <class Tuple>
-      convert(Tuple const&) -> convert<Tuple const&>;
+      convert(const Tuple&) -> convert<const Tuple&>;
       template <class Tuple>
       convert(Tuple&&) -> convert<Tuple>;
-   }  // namespace tuplet
+   } // namespace tuplet
 
    // tuplet::get implementation
    // tuplet::tie implementation
@@ -557,7 +556,7 @@ namespace glz
          return static_cast<F&&>(func)(pair.first, pair.second);
       }
       template <class F, class A, class B>
-      constexpr decltype(auto) apply(F&& func, tuplet::pair<A, B> const& pair)
+      constexpr decltype(auto) apply(F&& func, const tuplet::pair<A, B>& pair)
       {
          return static_cast<F&&>(func)(pair.first, pair.second);
       }
@@ -566,7 +565,7 @@ namespace glz
       {
          return static_cast<F&&>(func)(std::move(pair).first, std::move(pair).second);
       }
-   }  // namespace tuplet
+   } // namespace tuplet
 
    // tuplet::tuple_cat implementation
    // tuplet::make_tuple implementation
@@ -626,7 +625,7 @@ namespace glz
       {
          return tuple<T&&...>{static_cast<T&&>(a)...};
       }
-   }  // namespace tuplet
+   } // namespace tuplet
 
    // tuplet literals
    namespace tuplet::literals
@@ -636,8 +635,8 @@ namespace glz
       {
          return {};
       }
-   }  // namespace tuplet::literals
-}  // namespace glz
+   } // namespace tuplet::literals
+} // namespace glz
 
 // std::tuple_size specialization
 // std::tuple_element specialization
@@ -662,5 +661,5 @@ namespace std
       static_assert(I < 2, "tuplet::pair only has 2 elements");
       using type = std::conditional_t<I == 0, A, B>;
    };
-}  // namespace std
+} // namespace std
 #endif

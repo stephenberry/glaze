@@ -18,7 +18,7 @@ namespace glz
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
       auto b = reinterpret_cast<const char*>(buffer.data());
-      auto e = reinterpret_cast<const char*>(buffer.data());  // to be incrementd
+      auto e = reinterpret_cast<const char*>(buffer.data()); // to be incrementd
 
       using Buffer = std::decay_t<decltype(buffer)>;
       if constexpr (is_specialization_v<Buffer, std::basic_string> ||
@@ -51,7 +51,7 @@ namespace glz
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
       auto b = reinterpret_cast<const char*>(buffer.data());
-      auto e = reinterpret_cast<const char*>(buffer.data());  // to be incrementd
+      auto e = reinterpret_cast<const char*>(buffer.data()); // to be incrementd
 
       auto start = b;
 
@@ -101,8 +101,7 @@ namespace glz
    }
 
    template <class T>
-   concept string_viewable = std::convertible_to<std::decay_t<T>, std::string_view> && !
-   detail::has_data<T>;
+   concept string_viewable = std::convertible_to<std::decay_t<T>, std::string_view> && !detail::has_data<T>;
 
    // for char array input
    template <opts Opts, class T, string_viewable Buffer>

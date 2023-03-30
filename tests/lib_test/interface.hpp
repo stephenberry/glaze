@@ -24,11 +24,11 @@ template <>
 struct glz::meta<my_api>
 {
    using T = my_api;
-   static constexpr auto value = glz::object("x", &T::x,  //
-                                             "y", &T::y,  //
-                                             "z", &T::z,  //
-                                             "s", &T::s,  //
-                                             "f", &T::f,  //
+   static constexpr auto value = glz::object("x", &T::x, //
+                                             "y", &T::y, //
+                                             "z", &T::z, //
+                                             "s", &T::s, //
+                                             "f", &T::f, //
                                              "init", &T::init);
 
    static constexpr std::string_view name = "my_api";

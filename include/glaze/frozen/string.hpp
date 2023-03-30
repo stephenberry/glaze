@@ -38,19 +38,19 @@ namespace glz::frozen
    {
       using chr_t = _CharT;
 
-      chr_t const *data_;
+      const chr_t* data_;
       std::size_t size_;
 
      public:
       template <std::size_t N>
       constexpr basic_string(chr_t const (&data)[N]) : data_(data), size_(N - 1)
       {}
-      constexpr basic_string(chr_t const *data, std::size_t size) : data_(data), size_(size) {}
+      constexpr basic_string(const chr_t* data, std::size_t size) : data_(data), size_(size) {}
 
       constexpr basic_string(std::basic_string_view<chr_t> data) : data_(data.data()), size_(data.size()) {}
 
-      constexpr basic_string(const basic_string &) noexcept = default;
-      constexpr basic_string &operator=(const basic_string &) noexcept = default;
+      constexpr basic_string(const basic_string&) noexcept = default;
+      constexpr basic_string& operator=(const basic_string&) noexcept = default;
 
       constexpr std::size_t size() const { return size_; }
 
@@ -64,7 +64,7 @@ namespace glz::frozen
          return true;
       }
 
-      constexpr bool operator<(const basic_string &other) const
+      constexpr bool operator<(const basic_string& other) const
       {
          unsigned i = 0;
          while (i < size() && i < other.size()) {
@@ -79,9 +79,9 @@ namespace glz::frozen
          return size() < other.size();
       }
 
-      constexpr const chr_t *data() const { return data_; }
-      constexpr const chr_t *begin() const { return data(); }
-      constexpr const chr_t *end() const { return data() + size(); }
+      constexpr const chr_t* data() const { return data_; }
+      constexpr const chr_t* begin() const { return data(); }
+      constexpr const chr_t* end() const { return data() + size(); }
    };
 
    template <typename _CharT>

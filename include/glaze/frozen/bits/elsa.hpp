@@ -35,14 +35,14 @@ namespace glz::frozen
       static_assert(std::is_integral<T>::value || std::is_enum<T>::value,
                     "only supports integral types, specialize for other types");
 
-      constexpr std::size_t operator()(T const &value, std::size_t seed) const
+      constexpr std::size_t operator()(const T& value, std::size_t seed) const
       {
          std::size_t key = seed ^ static_cast<std::size_t>(value);
-         key = (~key) + (key << 21);  // key = (key << 21) - key - 1;
+         key = (~key) + (key << 21); // key = (key << 21) - key - 1;
          key = key ^ (key >> 24);
-         key = (key + (key << 3)) + (key << 8);  // key * 265
+         key = (key + (key << 3)) + (key << 8); // key * 265
          key = key ^ (key >> 14);
-         key = (key + (key << 2)) + (key << 4);  // key * 21
+         key = (key + (key << 2)) + (key << 4); // key * 21
          key = key ^ (key >> 28);
          key = key + (key << 31);
          return key;
@@ -53,7 +53,7 @@ namespace glz::frozen
    struct elsa<void>
    {
       template <class T>
-      constexpr std::size_t operator()(T const &value, std::size_t seed) const
+      constexpr std::size_t operator()(const T& value, std::size_t seed) const
       {
          return elsa<T>{}(value, seed);
       }
