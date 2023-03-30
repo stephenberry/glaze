@@ -91,7 +91,7 @@ v3s[2],1,2,3,4)");
       expect(!write_file_csv(obj, "csv_test_rowwise.csv"));
    };
 
-   "std::map"_test = [] {
+   "std::map row wise"_test = [] {
       std::map<std::string, std::vector<uint64_t>> m;
       auto& x = m["x"];
       auto& y = m["y"];
@@ -108,13 +108,51 @@ y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
+      write<opts{.format = csv}>(m, out);
+
+      m.clear();
+      expect(!read<opts{.format = csv}>(m, out));
+      
+      expect(m["x"] == std::vector<uint64_t>{0,1,2,3,4,5,6,7,8,9});
+      expect(m["y"] == std::vector<uint64_t>{1,2,3,4,5,6,7,8,9,10});
+   };
+   
+   "std::map column wise"_test = [] {
+      std::map<std::string, std::vector<uint64_t>> m;
+      auto& x = m["x"];
+      auto& y = m["y"];
+
+      for (size_t i = 0; i < 10; ++i) {
+         x.emplace_back(i);
+         y.emplace_back(i + 1);
+      }
+
+      std::string out{};
+      write<opts{.format = csv, .row_wise = false}>(m, out);
+      expect(out == R"(x,y
+0,1
+1,2
+2,3
+3,4
+4,5
+5,6
+6,7
+7,8
+8,9
+9,10
+)");
+
+      out.clear();
       write<opts{.format = csv, .row_wise = false}>(m, out);
 
-      // m.clear();
-      // read<opts{.format = csv}>(m, out);
+      m.clear();
+      expect(!read<opts{.format = csv, .row_wise = false}>(m, out));
+      
+      expect(m["x"] == std::vector<uint64_t>{0,1,2,3,4,5,6,7,8,9});
+      expect(m["y"] == std::vector<uint64_t>{1,2,3,4,5,6,7,8,9,10});
    };
 
-   "std::unordered_map"_test = [] {
+   "std::unordered_map row wise"_test = [] {
       std::unordered_map<std::string, std::vector<uint64_t>> m;
       auto& x = m["x"];
       auto& y = m["y"];
@@ -133,10 +171,13 @@ y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
-      write<opts{.format = csv, .row_wise = false}>(m, out);
+      write<opts{.format = csv}>(m, out);
 
-      // m.clear();
-      // read<opts{.format = csv}>(m, out);
+      m.clear();
+      expect(!read<opts{.format = csv}>(m, out));
+      
+      expect(m["x"] == std::vector<uint64_t>{0,1,2,3,4,5,6,7,8,9});
+      expect(m["y"] == std::vector<uint64_t>{1,2,3,4,5,6,7,8,9,10});
    };
 }
 
