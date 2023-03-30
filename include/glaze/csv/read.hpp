@@ -106,7 +106,7 @@ namespace glz
          while (++it != end && *it != delim)
             ;
       }
-      
+
       inline auto read_column_wise_keys(auto&& ctx, auto&& it, auto&& end)
       {
          std::vector<std::pair<sv, size_t>> keys;
@@ -151,7 +151,7 @@ namespace glz
                ++it;
             }
          }
-         
+
          return keys;
       }
 
@@ -166,9 +166,9 @@ namespace glz
                   auto start = it;
                   goto_delim<','>(it, end);
                   sv key{start, static_cast<size_t>(it - start)};
-                  
+
                   size_t csv_index;
-                  
+
                   const auto brace_pos = key.find('[');
                   if (brace_pos != sv::npos) {
                      const auto close_brace = key.find(']');
@@ -182,7 +182,7 @@ namespace glz
                   }
 
                   match<','>(ctx, it, end);
-                  
+
                   using key_type = typename std::decay_t<decltype(value)>::key_type;
                   auto& member = value[key_type(key)];
                   using M = std::decay_t<decltype(member)>;
@@ -232,10 +232,10 @@ namespace glz
                   }
                }
             }
-            else // column wise
+            else  // column wise
             {
                const auto keys = read_column_wise_keys(ctx, it, end);
-               
+
                if (bool(ctx.error)) {
                   return;
                }
@@ -378,7 +378,7 @@ namespace glz
             else  // column wise
             {
                const auto keys = read_column_wise_keys(ctx, it, end);
-               
+
                if (bool(ctx.error)) {
                   return;
                }

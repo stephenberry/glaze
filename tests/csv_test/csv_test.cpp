@@ -112,11 +112,11 @@ y,1,2,3,4,5,6,7,8,9,10
 
       m.clear();
       expect(!read<opts{.format = csv}>(m, out));
-      
-      expect(m["x"] == std::vector<uint64_t>{0,1,2,3,4,5,6,7,8,9});
-      expect(m["y"] == std::vector<uint64_t>{1,2,3,4,5,6,7,8,9,10});
+
+      expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+      expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
    };
-   
+
    "std::map column wise"_test = [] {
       std::map<std::string, std::vector<uint64_t>> m;
       auto& x = m["x"];
@@ -147,9 +147,9 @@ y,1,2,3,4,5,6,7,8,9,10
 
       m.clear();
       expect(!read<opts{.format = csv, .row_wise = false}>(m, out));
-      
-      expect(m["x"] == std::vector<uint64_t>{0,1,2,3,4,5,6,7,8,9});
-      expect(m["y"] == std::vector<uint64_t>{1,2,3,4,5,6,7,8,9,10});
+
+      expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+      expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
    };
 
    "std::unordered_map row wise"_test = [] {
@@ -175,9 +175,9 @@ y,1,2,3,4,5,6,7,8,9,10
 
       m.clear();
       expect(!read<opts{.format = csv}>(m, out));
-      
-      expect(m["x"] == std::vector<uint64_t>{0,1,2,3,4,5,6,7,8,9});
-      expect(m["y"] == std::vector<uint64_t>{1,2,3,4,5,6,7,8,9,10});
+
+      expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+      expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
    };
 }
 
