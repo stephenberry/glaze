@@ -1155,7 +1155,7 @@ namespace glz
          }
          else {
             static constexpr auto stats = key_stats<T, tag>();
-            if constexpr (stats.length_range < 8 && Opts.error_on_unknown_keys) {
+            if constexpr (stats.length_range < 16 && Opts.error_on_unknown_keys) {
                if ((it + stats.max_length) < end) [[likely]] {
                   if constexpr (stats.length_range == 0) {
                      const sv key{it, stats.max_length};

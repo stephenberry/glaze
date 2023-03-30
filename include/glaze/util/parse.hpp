@@ -280,14 +280,14 @@ namespace glz::detail
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
       auto start = it;
-      it += MinLength;
+      it += MinLength; // immediately skip minimum length
 
-      static_assert(LengthRange < 8);
+      static_assert(LengthRange < 16);
       if constexpr (LengthRange == 7) {
          uint64_t chunk; // no need to default initialize
-         std::memcpy(&chunk, it, LengthRange + 1);
+         std::memcpy(&chunk, it, 8);
          const uint64_t test_chunk = has_quote(chunk);
-         if (test_chunk != 0) {
+         if (test_chunk != 0) [[likely]] {
             it += (std::countr_zero(test_chunk) >> 3);
 
             sv ret{start, static_cast<size_t>(it - start)};
@@ -295,11 +295,36 @@ namespace glz::detail
             return ret;
          }
       }
+      else if constexpr (LengthRange > 7) {
+         uint64_t chunk; // no need to default initialize
+         std::memcpy(&chunk, it, 8);
+         uint64_t test_chunk = has_quote(chunk);
+         if (test_chunk != 0) {
+            it += (std::countr_zero(test_chunk) >> 3);
+
+            sv ret{start, static_cast<size_t>(it - start)};
+            ++it;
+            return ret;
+         }
+         else {
+            it += 8;
+            static constexpr auto rest = LengthRange + 1 - 8;
+            std::memcpy(&chunk, it, rest);
+            test_chunk = has_quote(chunk);
+            if (test_chunk != 0) {
+               it += (std::countr_zero(test_chunk) >> 3);
+
+               sv ret{start, static_cast<size_t>(it - start)};
+               ++it;
+               return ret;
+            }
+         }
+      }
       else {
          uint64_t chunk{};
          std::memcpy(&chunk, it, LengthRange + 1);
          const uint64_t test_chunk = has_quote(chunk);
-         if (test_chunk != 0) {
+         if (test_chunk != 0) [[likely]] {
             it += (std::countr_zero(test_chunk) >> 3);
 
             sv ret{start, static_cast<size_t>(it - start)};
