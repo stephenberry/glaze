@@ -59,7 +59,11 @@ namespace glz
    using expected = std::expected<expected_t, unexpected_t>;
 
    template <class unexpected_t>
-   using unexpected = std::unexpected<unexpected_t>;
+   struct unexpected : public std::unexpected<unexpected_t> {
+      using std::unexpected<unexpected_t>::unexpected;
+   };
+   template <class unexpected_t>
+   unexpected(unexpected_t) -> unexpected<unexpected_t>;
 }
 #else
 
