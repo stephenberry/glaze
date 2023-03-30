@@ -107,14 +107,181 @@ namespace glz
             ;
       }
 
+      inline auto read_column_wise_keys(auto&& ctx, auto&& it, auto&& end)
+      {
+         std::vector<std::pair<sv, size_t>> keys;
+
+         auto read_key = [&](auto&& start, auto&& it) {
+            sv key{start, size_t(it - start)};
+
+            size_t csv_index{};
+
+            const auto brace_pos = key.find('[');
+            if (brace_pos != sv::npos) {
+               const auto close_brace = key.find(']');
+               const auto index = key.substr(brace_pos + 1, close_brace - (brace_pos + 1));
+               key = key.substr(0, brace_pos);
+               const auto [ptr, ec] = std::from_chars(index.data(), index.data() + index.size(), csv_index);
+               if (ec != std::errc()) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+
+            keys.emplace_back(std::pair{key, csv_index});
+         };
+
+         auto start = it;
+         while (it != end) {
+            if (*it == ',') {
+               read_key(start, it);
+               ++it;
+               start = it;
+            }
+            else if (*it == '\n') {
+               if (start == it) {
+                  // trailing comma or empty
+               }
+               else {
+                  read_key(start, it);
+               }
+               break;
+            }
+            else {
+               ++it;
+            }
+         }
+
+         return keys;
+      }
+
       template <map_t T>
       struct from_csv<T>
       {
-         /*template <auto Opts, class It>
+         template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
+            if constexpr (Opts.row_wise) {
+               while (it != end) {
+                  auto start = it;
+                  goto_delim<','>(it, end);
+                  sv key{start, static_cast<size_t>(it - start)};
 
-         }*/
+                  size_t csv_index;
+
+                  const auto brace_pos = key.find('[');
+                  if (brace_pos != sv::npos) {
+                     const auto close_brace = key.find(']');
+                     const auto index = key.substr(brace_pos + 1, close_brace - (brace_pos + 1));
+                     key = key.substr(0, brace_pos);
+                     const auto [ptr, ec] = std::from_chars(index.data(), index.data() + index.size(), csv_index);
+                     if (ec != std::errc()) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+
+                  match<','>(ctx, it, end);
+
+                  using key_type = typename std::decay_t<decltype(value)>::key_type;
+                  auto& member = value[key_type(key)];
+                  using M = std::decay_t<decltype(member)>;
+                  if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
+                     size_t col = 0;
+                     while (it != end) {
+                        if (col < member.size()) [[likely]] {
+                           read<csv>::op<Opts>(member[col][csv_index], ctx, it, end);
+                        }
+                        else [[unlikely]] {
+                           read<csv>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
+                        }
+
+                        if (*it == '\n') {
+                           ++it;
+                           break;
+                        }
+
+                        if (*it == ',') {
+                           ++it;
+                        }
+                        else {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+
+                        ++col;
+                     }
+                  }
+                  else {
+                     while (it != end) {
+                        read<csv>::op<Opts>(member, ctx, it, end);
+
+                        if (*it == '\n') {
+                           ++it;
+                           break;
+                        }
+
+                        if (*it == ',') {
+                           ++it;
+                        }
+                        else {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                     }
+                  }
+               }
+            }
+            else  // column wise
+            {
+               const auto keys = read_column_wise_keys(ctx, it, end);
+
+               if (bool(ctx.error)) {
+                  return;
+               }
+
+               if (*it == '\n') {
+                  ++it;  // skip new line
+               }
+               else {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               const auto n_keys = keys.size();
+
+               size_t row = 0;
+
+               while (it != end) {
+                  for (size_t i = 0; i < n_keys; ++i) {
+                     using key_type = typename std::decay_t<decltype(value)>::key_type;
+                     auto& member = value[key_type(keys[i].first)];
+                     using M = std::decay_t<decltype(member)>;
+                     if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
+                        const auto index = keys[i].second;
+                        if (row < member.size()) [[likely]] {
+                           read<csv>::op<Opts>(member[row][index], ctx, it, end);
+                        }
+                        else [[unlikely]] {
+                           read<csv>::op<Opts>(member.emplace_back()[index], ctx, it, end);
+                        }
+                     }
+                     else {
+                        read<csv>::op<Opts>(member, ctx, it, end);
+                     }
+
+                     if (*it == ',') {
+                        ++it;
+                     }
+                  }
+
+                  if (*it == '\n') {
+                     ++it;  // skip new line
+                     ++row;
+                  }
+               }
+            }
+         }
       };
 
       template <glaze_object_t T>
@@ -210,47 +377,10 @@ namespace glz
             }
             else  // column wise
             {
-               std::vector<std::pair<sv, size_t>> keys;
+               const auto keys = read_column_wise_keys(ctx, it, end);
 
-               auto read_key = [&](auto&& start, auto&& it) {
-                  sv key{start, size_t(it - start)};
-
-                  size_t csv_index{};
-
-                  const auto brace_pos = key.find('[');
-                  if (brace_pos != sv::npos) {
-                     const auto close_brace = key.find(']');
-                     const auto index = key.substr(brace_pos + 1, close_brace - (brace_pos + 1));
-                     key = key.substr(0, brace_pos);
-                     const auto [ptr, ec] = std::from_chars(index.data(), index.data() + index.size(), csv_index);
-                     if (ec != std::errc()) {
-                        ctx.error = error_code::syntax_error;
-                        return;
-                     }
-                  }
-
-                  keys.emplace_back(std::pair{key, csv_index});
-               };
-
-               auto start = it;
-               while (it != end) {
-                  if (*it == ',') {
-                     read_key(start, it);
-                     ++it;
-                     start = it;
-                  }
-                  else if (*it == '\n') {
-                     if (start == it) {
-                        // trailing comma or empty
-                     }
-                     else {
-                        read_key(start, it);
-                     }
-                     break;
-                  }
-                  else {
-                     ++it;
-                  }
+               if (bool(ctx.error)) {
+                  return;
                }
 
                if (*it == '\n') {
