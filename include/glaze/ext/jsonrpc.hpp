@@ -62,7 +62,7 @@ namespace glz::rpc
 
    namespace detail
    {
-      std::string id_to_string(const jsonrpc_id_type& id)
+      static std::string id_to_string(const jsonrpc_id_type& id)
       {
          if (std::holds_alternative<glz::json_t::null_t>(id)) {
             return "null";
