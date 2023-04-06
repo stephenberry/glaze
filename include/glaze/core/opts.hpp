@@ -24,7 +24,7 @@ namespace glz
       bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
-      uint32_t layout = rowwise; // csv row wise output
+      uint32_t layout = rowwise; // CSV row wise output/input
 
       // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled
