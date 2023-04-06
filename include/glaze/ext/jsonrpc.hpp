@@ -64,12 +64,11 @@ namespace glz::rpc
    {
       inline std::string id_to_string(const jsonrpc_id_type& id)
       {
-         return std::visit(overload {
-            [](const json_t::null_t&) -> std::string { return "null"; },
-            [](const std::string& x) { return x; },
-            [](const std::int64_t& x) { return std::to_string(x); },
-            [](auto&&) -> std::string { return "unknown"; }
-         }, id);
+         return std::visit(
+            overload{[](const json_t::null_t&) -> std::string { return "null"; },
+                     [](const std::string& x) { return x; }, [](const std::int64_t& x) { return std::to_string(x); },
+                     [](auto&&) -> std::string { return "unknown"; }},
+            id);
       }
 
       template <class CharType, unsigned N>
@@ -611,7 +610,7 @@ namespace glz::rpc
          using request_map_t = decltype(method_element().pending_requests);
          return detail::get_request_map<request_map_t, method_name>(methods);
       }
-      
+
       template <detail::basic_fixed_string method_name>
       [[nodiscard]] auto& get_request_map()
       {
