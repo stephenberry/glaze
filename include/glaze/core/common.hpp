@@ -30,6 +30,10 @@
 
 namespace glz
 {
+   template <class... T> struct overload : T... { using T::operator()...; };
+   // explicit deduction guide (not needed as of C++20)
+   template <class... T> overload(T...) -> overload<T...>;
+   
    template <class T, class... U>
    concept is_any_of = (std::same_as<T, U> || ...);
 

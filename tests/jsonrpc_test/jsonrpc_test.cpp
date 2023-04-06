@@ -97,7 +97,8 @@ struct method_foo_params
 template <>
 struct glz::meta<method_foo_params>
 {
-   static constexpr auto value{glz::object("foo_a", &method_foo_params::foo_a, "foo_b", &method_foo_params::foo_b)};
+   using T = method_foo_params;
+   static constexpr auto value{glz::object("foo_a", &T::foo_a, "foo_b", &T::foo_b)};
 };
 struct method_foo_result
 {
@@ -108,7 +109,8 @@ struct method_foo_result
 template <>
 struct glz::meta<method_foo_result>
 {
-   static constexpr auto value{glz::object("foo_c", &method_foo_result::foo_c, "foo_d", &method_foo_result::foo_d)};
+   using T = method_foo_result;
+   static constexpr auto value{glz::object("foo_c", &T::foo_c, "foo_d", &T::foo_d)};
 };
 
 struct method_bar_params
@@ -119,7 +121,8 @@ struct method_bar_params
 template <>
 struct glz::meta<method_bar_params>
 {
-   static constexpr auto value{glz::object("bar_a", &method_bar_params::bar_a, "bar_b", &method_bar_params::bar_b)};
+   using T = method_bar_params;
+   static constexpr auto value{glz::object("bar_a", &T::bar_a, "bar_b", &T::bar_b)};
 };
 struct method_bar_result
 {
@@ -130,7 +133,8 @@ struct method_bar_result
 template <>
 struct glz::meta<method_bar_result>
 {
-   static constexpr auto value{glz::object("bar_c", &method_bar_result::bar_c, "bar_d", &method_bar_result::bar_d)};
+   using T = method_bar_result;
+   static constexpr auto value{glz::object("bar_c", &T::bar_c, "bar_d", &T::bar_d)};
 };
 
 ut::suite struct_test_cases = [] {
