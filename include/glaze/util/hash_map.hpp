@@ -92,15 +92,11 @@ namespace glz::detail
    // With perfect hash tables we can sacrifice quality of the hash function since
    // we keep generating seeds until its perfect. This allows for the usage of fast
    // but terible hashing algs.
-   // This is one such terible hashing alg dubbed one xor shift multiply
-   struct xsm1
+   // This is one such terible hashing alg
+   struct naive_hash
    {
       // TODO Use better constants calculated by something like
       // skeeto/hash-prospector.
-      // Will not impact runtime perf but may reduce compiletime costs
-      static constexpr uint64_t prime = 1099511628211;
-      static constexpr uint64_t offset_basis = 0xcbf29ce484222325;
-
       static constexpr uint64_t bitmix(uint64_t x)
       {
          x ^= x >> 33;
@@ -109,6 +105,13 @@ namespace glz::detail
          return x;
       };
 
+      // static constexpr uint64_t bitmix(uint64_t x)
+      // {
+      //   x *= 0x9FB21C651E98DF25L;
+      //   x ^= std::rotr(x, 49);
+      //   return x;
+      // };
+
       constexpr uint64_t operator()(std::integral auto value, const uint64_t seed)
       {
          return bitmix(uint64_t(value) ^ seed);
@@ -116,7 +119,7 @@ namespace glz::detail
 
       constexpr uint64_t operator()(const std::string_view value, const uint64_t seed) noexcept
       {
-         uint64_t h = (offset_basis ^ seed) * prime;
+         uint64_t h = (0xcbf29ce484222325 ^ seed) * 1099511628211;
          const auto n = value.size();
 
          if (n < 8) {
@@ -158,9 +161,9 @@ namespace glz::detail
       // Birthday paradox makes this unsuitable for large numbers of keys without
       // using a ton of memory Could resonably use it for 64 or so keys if the
       // bucketsize scalled more agressively But I would swhitch to a more space
-      // efficient map
-      static_assert(N <= 20, "Not suitable for large numbers of keys");
-      static constexpr size_t bucket_size = N < 8 ? 2 * N : 4 * N;
+      // efficient perfect map
+      static_assert(N <= 32, "Not suitable for large numbers of keys");
+      static constexpr size_t bucket_size = 4 * std::bit_ceil(N);
       uint64_t seed{};
       std::array<std::pair<std::string_view, Value>, N> items{};
       std::array<uint64_t, N * allow_hash_check> hashes{};
@@ -177,7 +180,7 @@ namespace glz::detail
          }
 
          for (size_t i = 0; i < N; ++i) {
-            const auto hash = xsm1{}(items[i].first, seed);
+            const auto hash = naive_hash{}(items[i].first, seed);
             if constexpr (allow_hash_check) {
                hashes[i] = hash;
             }
@@ -190,9 +193,9 @@ namespace glz::detail
 
       constexpr size_t size() const { return items.size(); }
 
-      [[gnu::flatten]] constexpr decltype(auto) find(auto&& key) const noexcept
+      constexpr decltype(auto) find(auto&& key) const noexcept
       {
-         const auto hash = xsm1{}(key, seed);
+         const auto hash = naive_hash{}(key, seed);
          // constexpr bucket_size means the compiler can replace the modulos with
          // more efficient instructions So this is not as expensive as this looks
          const auto index = table[hash % bucket_size];
@@ -213,7 +216,6 @@ namespace glz::detail
 
       consteval uint64_t naive_perfect_hash() noexcept
       {
-         std::array<size_t, N> hashes{};
          std::array<size_t, N> bucket_index{};
 
          naive_prng gen{};
@@ -221,14 +223,12 @@ namespace glz::detail
             uint64_t seed = gen();
             size_t index = 0;
             for (const auto& kv : items) {
-               const auto hash = xsm1{}(kv.first, seed);
-               if (contains(std::span{hashes.data(), index}, hash)) break;
-               hashes[index] = hash;
-
-               auto bucket = hash % bucket_size;
-               if (detail::contains(std::span{bucket_index.data(), index}, bucket)) break;
+               const auto hash = naive_hash{}(kv.first, seed);
+               const auto bucket = hash % bucket_size;
+               if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                  break;
+               }
                bucket_index[index] = bucket;
-
                ++index;
             }
 
@@ -245,7 +245,7 @@ namespace glz::detail
       // From serge-sans-paille/frozen
       static constexpr std::size_t storage_size = std::bit_ceil(N) * (N < 32 ? 2 : 1);
       static constexpr auto max_bucket_size = 2 * std::bit_width(N);
-      using hash_alg = xsm1;
+      using hash_alg = naive_hash;
       uint64_t seed{};
       // TODO: We can probably save space by using smaller items in the table (We know the range stored)
       // The extra info in the bucket most likely does not need to be 64 bits
