@@ -347,7 +347,7 @@ namespace glz::detail
          std::sort(buckets_index.begin(), buckets_index.end(),
                    [&bucket_sizes](size_t i1, size_t i2) { return bucket_sizes[i1] > bucket_sizes[i2]; });
 
-         std::ranges::fill(table, size_t(-1));
+         std::fill(table.begin(), table.end(), size_t(-1));
          for (auto bucket_index : buckets_index) {
             const auto bucket_size = bucket_sizes[bucket_index];
             if (bucket_size < 1) break;

@@ -9,6 +9,7 @@
 #include <type_traits>
 #include <utility>
 #include <tuple>
+#include <vector>
 
 // TODO: optionally include with a templated struct
 #include <filesystem>
