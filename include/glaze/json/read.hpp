@@ -20,6 +20,7 @@
 #include "glaze/util/strod.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
+#include "glaze/core/common.hpp"
 
 namespace glz
 {
@@ -584,7 +585,7 @@ namespace glz
                return;
 
             static constexpr auto frozen_map = detail::make_string_to_enum_map<T>();
-            const auto& member_it = frozen_map.find(frozen::string(key));
+            const auto& member_it = frozen_map.find(key);
             if (member_it != frozen_map.end()) {
                value = member_it->second;
             }

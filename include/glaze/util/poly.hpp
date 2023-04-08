@@ -26,9 +26,9 @@ namespace glz
    inline constexpr auto make_mem_fn_wrapper_map_impl(std::index_sequence<I...>)
    {
       constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
-      return frozen::make_unordered_map<frozen::string, fn_variant<Spec>, N>(
-         {std::make_pair<frozen::string, fn_variant<Spec>>(
-            tuplet::get<0>(tuplet::get<I>(meta_v<Spec>)),
+      return detail::normal_map<sv, fn_variant<Spec>, N>(
+         {std::make_pair<sv, fn_variant<Spec>>(
+            sv(tuplet::get<0>(tuplet::get<I>(meta_v<Spec>))),
             get_argument<tuplet::get<1>(tuplet::get<I>(meta_v<Spec>))>())...});
    }
 
@@ -62,7 +62,7 @@ namespace glz
             static constexpr sv key = tuplet::get<0>(tuplet::get<I>(spec));
             static constexpr auto member_it = frozen_map.find(key);
             if constexpr (member_it != frozen_map.end()) {
-               static constexpr auto index = cmap.table_lookup(key);
+               static constexpr auto index = cmap.index(key);
                static constexpr auto member_ptr = std::get<member_it->second.index()>(member_it->second);
 
                using SpecElement = std::decay_t<decltype(tuplet::get<1>(tuplet::get<I>(spec)))>;
@@ -110,7 +110,7 @@ namespace glz
          static constexpr auto member_it = cmap.find(key);
 
          if constexpr (member_it != cmap.end()) {
-            static constexpr auto index = cmap.table_lookup(key);
+            static constexpr auto index = cmap.index(key);
             using X = std::decay_t<decltype(std::get<member_it->second.index()>(cmap.find(key)->second))>;
             auto* v = reinterpret_cast<X>(map[index].fptr);
             using V = std::decay_t<decltype(v)>;
@@ -133,7 +133,7 @@ namespace glz
          static constexpr auto member_it = cmap.find(key);
 
          if constexpr (member_it != cmap.end()) {
-            static constexpr auto index = cmap.table_lookup(key);
+            static constexpr auto index = cmap.index(key);
             using X = decltype(std::get<member_it->second.index()>(cmap.find(key)->second));
             auto* v = reinterpret_cast<X>(map[index].ptr);
             return *v;
