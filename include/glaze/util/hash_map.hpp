@@ -120,14 +120,15 @@ namespace glz::detail
          const auto n = value.size();
 
          if (n < 8) {
+            // Page boundary check for buffer preread/overread
             if (!std::is_constant_evaluated() && (reinterpret_cast<std::uintptr_t>(value.data()) & (4096 - 8)))
                [[likely]] {
-               return bitmix(h ^ to_uint64(value.data(), n));
-               // return bitmix(h ^ to_uint64_unsafe_preread(value.data(), n));
+               // return bitmix(h ^ to_uint64(value.data(), n));
+               return bitmix(h ^ to_uint64_unsafe_preread(value.data(), n));
             }
             else {
-               return bitmix(h ^ to_uint64(value.data(), n));
-               // return bitmix(h ^ to_uint64<true>(value.data(), n));
+               //return bitmix(h ^ to_uint64(value.data(), n));
+               return bitmix(h ^ to_uint64<true>(value.data(), n));
             }
          }
 
