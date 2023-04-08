@@ -526,13 +526,13 @@ namespace glz
             // these variables needed for MSVC
             if constexpr (n <= 20) {
                return glz::detail::naive_map<value_t, n, allow_hash_check>(
-                  {std::make_pair<sv, value_t>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                               glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
+                  {std::pair<sv, value_t>{sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                               glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))}...});
             }
             else {
                return glz::detail::normal_map<sv, value_t, n, allow_hash_check>(
-                  {std::make_pair<sv, value_t>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                               glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
+                  {std::pair<sv, value_t>{sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
+                                               glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))}...});
             }
          };
 

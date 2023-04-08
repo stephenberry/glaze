@@ -220,7 +220,7 @@ namespace glz::detail
 
          naive_prng gen{};
          for (size_t i = 0; i < 1024; ++i) {
-            uint64_t seed = gen();
+            seed = gen();
             size_t index = 0;
             for (const auto& kv : items) {
                const auto hash = naive_hash{}(kv.first, seed);
@@ -235,7 +235,7 @@ namespace glz::detail
             if (index == N) return seed;
          }
 
-         return -1;
+         return uint64_t(-1);
       }
    };
 
