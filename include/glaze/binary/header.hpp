@@ -6,6 +6,7 @@
 #include <concepts>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 
 #include "glaze/util/inline.hpp"
 
