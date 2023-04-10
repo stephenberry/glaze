@@ -20,7 +20,6 @@ namespace glz
       uint8_t indentation_width = 3; // Prettified JSON indentation size
       bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
       bool write_type_info = true; // Write type info for meta objects in variants
-      bool use_cx_tags = true; // Whether binary output should write compile time known tags
       bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members

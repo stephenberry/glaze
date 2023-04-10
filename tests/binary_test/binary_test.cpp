@@ -502,24 +502,6 @@ struct glz::meta<some_struct>
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/read.hpp"
 
-suite no_cx_tag_test = [] {
-   "no_cx_tags"_test = [] {
-      some_struct s{};
-
-      std::string b{};
-
-      glz::write<glz::opts{.format = glz::binary, .use_cx_tags = false}>(s, b);
-
-      s.i = 0;
-      s.d = 0.0;
-
-      expect(glz::read<glz::opts{.format = glz::binary, .use_cx_tags = false}>(s, b) == false);
-
-      expect(s.i == 287);
-      expect(s.d = 3.14);
-   };
-};
-
 void test_partial()
 {
    expect(

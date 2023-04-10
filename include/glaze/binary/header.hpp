@@ -125,27 +125,9 @@ namespace glz::detail
       }
    }
 
-   GLZ_ALWAYS_INLINE constexpr size_t byte_count(std::integral auto i) noexcept
+   template <class T>
+   GLZ_ALWAYS_INLINE constexpr size_t to_byte_count() noexcept
    {
-      switch (i) {
-      case 0:
-         return 1;
-      case 1:
-         return 2;
-      case 2:
-         return 4;
-      case 3:
-         return 8;
-      case 4:
-         return 16;
-      case 5:
-         return 32;
-      case 6:
-         return 64;
-      case 7:
-         return 128;
-      default:
-         return 0;
-      }
+      return std::bit_width(sizeof(T)) - 1;
    }
 }

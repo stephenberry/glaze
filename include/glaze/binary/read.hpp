@@ -80,7 +80,7 @@ namespace glz
                return;
             }
             
-            if (get_bits<4, 4>(tag) != sizeof(value)) {
+            if (get_bits<4, 4>(tag) != to_byte_count<decltype(value)>()) {
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -172,7 +172,7 @@ namespace glz
             
             using V = typename std::decay_t<T>::value_type;
             
-            if (get_bits<3, 5>(tag) != sizeof(V)) {
+            if (get_bits<3, 5>(tag) != to_byte_count<V>()) {
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -247,7 +247,7 @@ namespace glz
                   return;
                }
                
-               if (get_bits<5, 3>(tag) != sizeof(V)) {
+               if (get_bits<5, 3>(tag) != to_byte_count<V>()) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -286,7 +286,7 @@ namespace glz
                   return;
                }
                
-               if (get_bits<5, 3>(tag) != sizeof(decltype(*std::declval<V>().data()))) {
+               if (get_bits<5, 3>(tag) != to_byte_count<decltype(*std::declval<V>().data())>()) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -447,12 +447,18 @@ namespace glz
             
             const auto n_keys = int_from_compressed(it, end);
 
-            static constexpr auto storage = detail::make_crusher_map<T>();
+            static constexpr auto storage = detail::make_map<T, Opts.allow_hash_check>();
 
             for (size_t i = 0; i < n_keys; ++i) {
-               uint32_t key;
-               std::memcpy(&key, &(*it), 4);
-               std::advance(it, 4);
+               if (get_bits<3>(uint8_t(*it)) != tag::string) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               ++it;
+               
+               [[maybe_unused]] const auto length = int_from_compressed(it, end);
+               
+               const std::string_view key{ it, length };
 
                const auto& p = storage.find(key);
 
@@ -460,6 +466,10 @@ namespace glz
                   std::visit(
                      [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
                      p->second);
+               }
+               else {
+                  ctx.error = error_code::unknown_key;
+                  return;
                }
             }
          }
