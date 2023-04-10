@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <bit>
 #include <concepts>
 #include <cstdint>
 #include <cstring>
