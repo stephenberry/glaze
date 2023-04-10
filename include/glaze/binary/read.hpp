@@ -459,13 +459,16 @@ namespace glz
                [[maybe_unused]] const auto length = int_from_compressed(it, end);
                
                const std::string_view key{ it, length };
+               
+               std::advance(it, length);
 
                const auto& p = storage.find(key);
 
                if (p != storage.end()) {
                   std::visit(
-                     [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
-                     p->second);
+                     [&](auto&& member_ptr) {
+                        read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
+                     }, p->second);
                }
                else {
                   ctx.error = error_code::unknown_key;
@@ -521,13 +524,13 @@ namespace glz
    }
 
    template <class T, class Buffer>
-   GLZ_ALWAYS_INLINE parse_error read_binary(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE parse_error read_binary(T&& value, Buffer&& buffer) noexcept
    {
       return read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
    }
 
    template <class T, class Buffer>
-   GLZ_ALWAYS_INLINE expected<T, parse_error> read_binary(Buffer&& buffer) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE expected<T, parse_error> read_binary(Buffer&& buffer) noexcept
    {
       T value{};
       const auto pe = read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
@@ -538,7 +541,7 @@ namespace glz
    }
 
    template <class T>
-   GLZ_ALWAYS_INLINE parse_error read_file_binary(T& value, const sv file_name) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE parse_error read_file_binary(T& value, const sv file_name) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;
