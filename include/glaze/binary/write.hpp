@@ -237,11 +237,66 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            if constexpr (!has_static_size<T>) {
-               dump_int<Opts>(value.size(), std::forward<Args>(args)...);
+            using V = typename std::decay_t<T>::value_type;
+            
+            uint8_t tag;
+            
+            if constexpr (boolean_like<V>) {
+               tag = tag::typed_array;
+               set_bits<3, 2, uint8_t>(tag, 0);
+               dump_type(tag, args...);
+               dump_int<Opts>(value.size(), args...);
+               
+               // booleans must be dumped using single bits
+               if constexpr (has_static_size<T>) {
+                  // TODO:
+               }
+               else {
+                  // TODO:
+               }
             }
-            for (auto&& x : value) {
-               write<binary>::op<Opts>(x, ctx, std::forward<Args>(args)...);
+            else if constexpr (num_t<V>) {
+               tag = tag::typed_array;
+               if constexpr (std::is_floating_point_v<V>) {
+                  set_bits<3, 2, uint8_t>(tag, 2);
+               }
+               else {
+                  set_bits<3, 2, uint8_t>(tag, 1);
+               }
+               set_bits<5, 3, uint8_t>(tag, sizeof(V));
+               dump_type(tag, args...);
+               dump_int<Opts>(value.size(), args...);
+               
+               if constexpr (contiguous<T>) {
+                  dump(std::as_bytes(std::span{value.data(), value.size()}), args...);
+               }
+               else {
+                  for (auto& x : value) {
+                     dump_type(x, args...);
+                  }
+               }
+            }
+            else if constexpr (str_t<V>) {
+               tag = tag::typed_array;
+               set_bits<3, 2, uint8_t>(tag, 3);
+               set_bits<5, 3, uint8_t>(tag, sizeof(std::decay_t<decltype(*std::declval<V>().data())>));
+               dump_type(tag, args...);
+               dump_int<Opts>(value.size(), args...);
+               
+               for (auto& x : value) {
+                  dump_type(x.size(), args...);
+                  dump(std::as_bytes(std::span{x.data(), x.size()}), args...);
+               }
+            }
+            else {
+               tag = tag::untyped_array;
+               set_bits<3, 5, uint8_t>(tag, sizeof(V));
+               dump_type(tag, args...);
+               dump_int<Opts>(value.size(), args...);
+               
+               for (auto&& x : value) {
+                  write<binary>::op<Opts>(x, ctx, args...);
+               }
             }
          }
       };

@@ -193,12 +193,91 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if constexpr (has_static_size<T>) {
-               for (auto&& item : value) {
-                  read<binary>::op<Opts>(item, ctx, it, end);
+            using V = typename std::decay_t<T>::value_type;
+            
+            const auto tag = uint8_t(*it);
+            
+            if constexpr (boolean_like<V>) {
+               // TODO: 
+            }
+            else if constexpr (num_t<V>) {
+               if (get_bits<3>(tag) != tag::typed_array) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               
+               if (get_bits<3, 2>(tag) != (std::is_floating_point_v<V> + 1)) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               
+               if (get_bits<5, 3>(tag) != sizeof(V)) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               
+               ++it;
+               
+               const auto n = int_from_compressed(it, end);
+               
+               if constexpr (resizeable<T>) {
+                  value.resize(n);
+
+                  if constexpr (Opts.shrink_to_fit) {
+                     value.shrink_to_fit();
+                  }
+               }
+               
+               if constexpr (contiguous<T>) {
+                  std::memcpy(value.data(), &*it, n * sizeof(V));
+                  std::advance(it, n * sizeof(V));
+               }
+               else {
+                  for (auto&& x : value) {
+                     std::memcpy(&x, &*it, sizeof(V));
+                     std::advance(it, sizeof(V));
+                  }
+               }
+            }
+            else if constexpr (str_t<V>) {
+               if (get_bits<3>(tag) != tag::typed_array) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               
+               if (get_bits<3, 2>(tag) != 3) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               
+               if (get_bits<5, 3>(tag) != sizeof(decltype(*std::declval<V>().data()))) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               
+               ++it;
+               
+               const auto n = int_from_compressed(it, end);
+               
+               if constexpr (resizeable<T>) {
+                  value.resize(n);
+
+                  if constexpr (Opts.shrink_to_fit) {
+                     value.shrink_to_fit();
+                  }
+               }
+               
+               for (auto&& x : value) {
+                  std::memcpy(x.data(), &*it, x.size());
+                  std::advance(it, x.size());
                }
             }
             else {
+               if (get_bits<3>(tag) != tag::untyped_array) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               
                const auto n = int_from_compressed(it, end);
 
                if constexpr (resizeable<T>) {
