@@ -301,7 +301,7 @@ namespace glz
                dump_int<Opts>(value.size(), args...);
                
                for (auto& x : value) {
-                  dump_type(x.size(), args...);
+                  dump_int<Opts>(x.size(), args...);
                   dump(std::as_bytes(std::span{x.data(), x.size()}), args...);
                }
             }
