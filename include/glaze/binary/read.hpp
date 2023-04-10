@@ -145,6 +145,13 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            const auto tag = uint8_t(*it);
+            if (get_bits<3>(tag) != tag::type) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+            
             const auto type_index = int_from_compressed(it, end);
             if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
             std::visit([&](auto&& v) { read<binary>::op<Opts>(v, ctx, it, end); }, value);

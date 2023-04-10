@@ -193,6 +193,9 @@ namespace glz
                      T var = V{};
                      return var.index();
                   }();
+                  
+                  uint8_t tag = tag::type;
+                  dump_type(tag, args...);
                   dump_int<index>(args...);
                   write<binary>::op<Opts>(v, ctx, std::forward<Args>(args)...);
                },
