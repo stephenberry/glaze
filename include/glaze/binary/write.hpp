@@ -95,7 +95,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args) noexcept
          {
             dump<static_cast<std::byte>(0)>(args...); // boolean tag
-            
+
             if (value) {
                dump<static_cast<std::byte>(1)>(args...);
             }
