@@ -3,8 +3,9 @@
 
 #pragma once
 
-#include <cstdint>
 #include <concepts>
+#include <cstdint>
+#include <cstring>
 
 #include "glaze/util/inline.hpp"
 
