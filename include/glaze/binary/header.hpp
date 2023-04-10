@@ -10,6 +10,18 @@
 
 #include "glaze/util/inline.hpp"
 
+namespace glz::tag
+{
+   inline constexpr uint8_t boolean = 0;
+   inline constexpr uint8_t null = 1;
+   inline constexpr uint8_t number = 2;
+   inline constexpr uint8_t string = 3;
+   inline constexpr uint8_t object = 4;
+   inline constexpr uint8_t typed_array = 5;
+   inline constexpr uint8_t untyped_array = 6;
+   inline constexpr uint8_t type = 7;
+}
+
 namespace glz::detail
 {
    template <uint32_t N, std::unsigned_integral T>

@@ -67,8 +67,14 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto&&) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
          {
+            if (uint8_t(*it) != tag::number) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+            
             using V = std::decay_t<T>;
             std::memcpy(&value, &(*it), sizeof(V));
             std::advance(it, sizeof(V));
@@ -81,8 +87,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& /* end */) noexcept
          {
-            // read boolean tag
-            if (uint8_t(*it) != 0) {
+            if (uint8_t(*it) != tag::boolean) {
                ctx.error = error_code::syntax_error;
                return;
             }

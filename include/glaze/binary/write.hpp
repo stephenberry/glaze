@@ -94,7 +94,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args) noexcept
          {
-            dump<static_cast<std::byte>(0)>(args...); // boolean tag
+            dump<static_cast<std::byte>(tag::boolean)>(args...);
 
             if (value) {
                dump<static_cast<std::byte>(1)>(args...);
@@ -212,6 +212,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
+            dump<static_cast<std::byte>(tag::number)>(args...);
             dump_type(value, std::forward<Args>(args)...);
          }
       };
@@ -263,11 +264,11 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if (value) {
-               dump<static_cast<std::byte>(1)>(std::forward<Args>(args)...);
-               write<binary>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
+               dump<static_cast<std::byte>(1)>(args...);
+               write<binary>::op<Opts>(*value, ctx, args...);
             }
             else {
-               dump<static_cast<std::byte>(0)>(std::forward<Args>(args)...);
+               dump<static_cast<std::byte>(0)>(args...);
             }
          }
       };
