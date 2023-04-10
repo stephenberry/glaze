@@ -446,7 +446,10 @@ suite binary_helpers = [] {
 
       b = glz::write_binary(v);
 
-      auto v2 = *glz::read_binary<my_struct>(b);
+      auto res = glz::read_binary<my_struct>(b);
+      expect(bool(res));
+      auto v2 = *res;
+
 
       expect(v2.i == 22);
       expect(v2.d == 5.76);
@@ -624,7 +627,7 @@ void container_types()
    };
    "vector bool roundtrip"_test = [] {
       std::vector<bool> vec(100);
-      for (auto&& item : vec) item = rand() / (1.0 + rand());
+      for (auto&& item : vec) item = rand() / (1.0 + rand()) > 0.5;
       std::string buffer{};
       std::vector<bool> vec2{};
       glz::write_binary(vec, buffer);

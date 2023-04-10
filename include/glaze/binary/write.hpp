@@ -249,22 +249,20 @@ namespace glz
                
                // booleans must be dumped using single bits
                if constexpr (has_static_size<T>) {
-                  constexpr auto num_bytes = value.size() / 8;
+                  constexpr auto num_bytes = (value.size() + 7) / 8;
                   std::array<uint8_t, num_bytes> bytes{};
-                  size_t i{};
-                  for (size_t byte_i{}; byte_i < num_bytes; ++byte_i) {
-                     for (size_t bit_i{}; bit_i < 8; ++bit_i, ++i) {
-                        bytes[num_bytes] |= uint8_t(value[i]) << bit_i;
+                  for (size_t byte_i{}, i{}; byte_i < num_bytes - 1; ++byte_i) {
+                     for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
+                        bytes[byte_i] |= uint8_t(value[i]) << bit_i;
                      }
                   }
-                  dump(std::as_bytes(std::span{value.data(), value.size()}), args...);
+                  dump(bytes, args...);
                }
                else {
-                  constexpr auto num_bytes = value.size() / 8;
-                  size_t i{};
-                  for (size_t byte_i{}; byte_i < num_bytes; ++byte_i) {
+                  const auto num_bytes = (value.size() + 7) / 8;
+                  for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
                      uint8_t byte{};
-                     for (size_t bit_i{}; bit_i < 8; ++bit_i, ++i) {
+                     for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
                         byte |= uint8_t(value[i]) << bit_i;
                      }
                      dump_type(byte, args...);

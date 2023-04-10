@@ -198,7 +198,36 @@ namespace glz
             const auto tag = uint8_t(*it);
             
             if constexpr (boolean_like<V>) {
-               // TODO: 
+               if (get_bits<3>(tag) != tag::typed_array) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               if (get_bits<3, 2>(tag) != 0) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               ++it;
+
+               const auto n = int_from_compressed(it, end);
+
+               if constexpr (resizeable<T>) {
+                  value.resize(n);
+
+                  if constexpr (Opts.shrink_to_fit) {
+                     value.shrink_to_fit();
+                  }
+               }
+
+               const auto num_bytes = (value.size() + 7) / 8;
+               for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
+                  uint8_t byte;
+                  std::memcpy(&byte, &*it, 1);
+                  for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
+                     value[i] = byte >> bit_i & uint8_t(1);
+                  }
+               }
             }
             else if constexpr (num_t<V>) {
                if (get_bits<3>(tag) != tag::typed_array) {
