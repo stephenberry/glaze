@@ -333,11 +333,10 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if (value) {
-               dump<static_cast<std::byte>(1)>(args...);
                write<binary>::op<Opts>(*value, ctx, args...);
             }
             else {
-               dump<static_cast<std::byte>(0)>(args...);
+               dump<std::byte(tag::null)>(args...);
             }
          }
       };
