@@ -385,9 +385,9 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto tag = uint8_t(*it);
-            ++it;
             
             if (get_bits<3>(tag) == tag::null) {
+               ++it;
                if constexpr (is_specialization_v<T, std::optional>)
                   value = std::nullopt;
                else if constexpr (is_specialization_v<T, std::unique_ptr>)
