@@ -157,7 +157,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args) noexcept
          {
             uint8_t tag = tag::boolean;
-            set_bits<1, 1, uint8_t>(tag, value);
+            set_bits<3, 1, uint8_t>(tag, value);
             dump_type(tag, args...);
          }
       };
@@ -222,7 +222,10 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
-            dump<std::byte(tag::string)>(args...);
+            uint8_t tag = tag::string;
+            set_bits<3, 5, uint8_t>(tag, sizeof(std::decay_t<decltype(*value.data())>));
+            dump_type(tag, args...);
+            
             dump_int<Opts>(value.size(), std::forward<Args>(args)...);
             dump(std::as_bytes(std::span{value.data(), value.size()}), std::forward<Args>(args)...);
          }

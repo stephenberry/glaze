@@ -100,12 +100,12 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& /* end */) noexcept
          {
             const auto tag = uint8_t(*it);
-            if (get_bits<1>(tag) != tag::boolean) {
+            if (get_bits<3>(tag) != tag::boolean) {
                ctx.error = error_code::syntax_error;
                return;
             }
             
-            value = get_bits<1, 1, uint8_t>(tag);
+            value = get_bits<3, 1, uint8_t>(tag);
             ++it;
          }
       };
@@ -157,14 +157,22 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if (uint8_t(*it) != tag::string) {
+            const auto tag = uint8_t(*it);
+            if (get_bits<3>(tag) != tag::string) {
                ctx.error = error_code::syntax_error;
                return;
             }
+            
+            using V = typename std::decay_t<T>::value_type;
+            
+            if (get_bits<3, 5>(tag) != sizeof(V)) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            
             ++it;
             
             const auto n = int_from_compressed(it, end);
-            using V = typename std::decay_t<T>::value_type;
             if constexpr (sizeof(V) == 1) {
                value.resize(n);
                std::memcpy(value.data(), &(*it), n);
