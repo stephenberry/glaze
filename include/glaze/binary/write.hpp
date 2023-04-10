@@ -307,10 +307,21 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump_int<Opts>(value.size(), std::forward<Args>(args)...);
+            using Key = typename T::key_type;
+            
+            uint8_t tag = tag::object;
+            if constexpr (str_t<Key>) {
+               set_bits<3, 1, uint8_t>(tag, 1);
+            }
+            else {
+               set_bits<3, 1, uint8_t>(tag, 0);
+            }
+            dump_type(tag, args...);
+            
+            dump_int<Opts>(value.size(), args...);
             for (auto&& [k, v] : value) {
-               write<binary>::op<Opts>(k, ctx, std::forward<Args>(args)...);
-               write<binary>::op<Opts>(v, ctx, std::forward<Args>(args)...);
+               write<binary>::op<Opts>(k, ctx, args...);
+               write<binary>::op<Opts>(v, ctx, args...);
             }
          }
       };
@@ -337,7 +348,11 @@ namespace glz
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
-         {
+         {            
+            uint8_t tag = tag::object;
+            set_bits<3, 1, uint8_t>(tag, 1);
+            dump_type(tag, args...);
+            
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
             dump_int<N>(args...);
