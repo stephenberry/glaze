@@ -313,6 +313,7 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
+               ++it;
                
                const auto n = int_from_compressed(it, end);
 
@@ -469,6 +470,10 @@ namespace glz
                      [&](auto&& member_ptr) {
                         read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
                      }, p->second);
+                  
+                  if (bool(ctx.error)) {
+                     return;
+                  }
                }
                else {
                   ctx.error = error_code::unknown_key;
