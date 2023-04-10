@@ -304,8 +304,8 @@ namespace glz
                }
                
                for (auto&& x : value) {
-                  std::memcpy(x.data(), &*it, x.size());
-                  std::advance(it, x.size());
+                  std::memcpy(x.data(), &*it, n);
+                  std::advance(it, n);
                }
             }
             else {
