@@ -321,6 +321,8 @@ namespace glz
                }
             }
             
+            ++it;
+            
             const auto n = int_from_compressed(it, end);
 
             if constexpr (std::is_arithmetic_v<std::decay_t<typename T::key_type>>) {
@@ -395,6 +397,8 @@ namespace glz
                ctx.error = error_code::syntax_error;
                return;
             }
+            
+            ++it;
             
             const auto n_keys = int_from_compressed(it, end);
 
