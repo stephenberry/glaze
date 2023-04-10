@@ -145,6 +145,13 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            const auto tag = uint8_t(*it);
+            if (get_bits<3>(tag) != tag::type) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+            
             const auto type_index = int_from_compressed(it, end);
             if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
             std::visit([&](auto&& v) { read<binary>::op<Opts>(v, ctx, it, end); }, value);
@@ -377,26 +384,35 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            const auto has_value = bool(*it);
+            const auto tag = uint8_t(*it);
             ++it;
-
-            if (has_value) {
-               if constexpr (is_specialization_v<T, std::optional>)
-                  value = std::make_optional<typename T::value_type>();
-               else if constexpr (is_specialization_v<T, std::unique_ptr>)
-                  value = std::make_unique<typename T::element_type>();
-               else if constexpr (is_specialization_v<T, std::shared_ptr>)
-                  value = std::make_shared<typename T::element_type>();
-
-               read<binary>::op<Opts>(*value, ctx, it, end);
-            }
-            else {
+            
+            if (get_bits<3>(tag) == tag::null) {
                if constexpr (is_specialization_v<T, std::optional>)
                   value = std::nullopt;
                else if constexpr (is_specialization_v<T, std::unique_ptr>)
                   value = nullptr;
                else if constexpr (is_specialization_v<T, std::shared_ptr>)
                   value = nullptr;
+            }
+            else {
+               if (!value) {
+                  if constexpr (is_specialization_v<T, std::optional>)
+                     value = std::make_optional<typename T::value_type>();
+                  else if constexpr (is_specialization_v<T, std::unique_ptr>)
+                     value = std::make_unique<typename T::element_type>();
+                  else if constexpr (is_specialization_v<T, std::shared_ptr>)
+                     value = std::make_shared<typename T::element_type>();
+                  else if constexpr (constructible<T>) {
+                     value = meta_construct_v<T>();
+                  }
+                  else {
+                     ctx.error = error_code::invalid_nullable_read;
+                     return;
+                     // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or std::shared_ptr
+                  }
+               }
+               read<binary>::op<Opts>(*value, ctx, it, end);
             }
          }
       };
