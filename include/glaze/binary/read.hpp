@@ -75,13 +75,19 @@ namespace glz
          }
       };
 
-      template <class T>
-         requires(std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>)
+      template <boolean_like T>
       struct from_binary<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto&& /* end */) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& /* end */) noexcept
          {
+            // read boolean tag
+            if (uint8_t(*it) != 0) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+            
             value = bool(*it);
             ++it;
          }
