@@ -46,28 +46,28 @@ namespace glz::detail
       return res;
    }
 
-   // Super unfafe be careful when using this
-   // https://stackoverflow.com/questions/37800739/is-it-safe-to-read-past-the-end-of-a-buffer-within-the-same-page-on-x86-and-x64
-   constexpr uint64_t to_uint64_unsafe_preread(const char* bytes, const size_t N) noexcept
-   {
-      static_assert(std::endian::native == std::endian::little);
-      constexpr auto num_bytes = sizeof(uint64_t);
-      uint64_t res{};
-      if (std::is_constant_evaluated()) {
-         for (size_t i = 0; i < N; ++i) {
-            res |= uint64_t(bytes[i]) << (i << 3);
-         }
-      }
-      else {
-         // Compiletime memcpy size is way faster with unsafe = true.
-         // So we load in 8 bytes and then throw away the trash with a shift
-         const auto extra = (num_bytes - N);
-         std::memcpy(&res, bytes - extra, num_bytes);
-         auto shift = uint64_t(extra) << 3;
-         res = (res >> shift);
-      }
-      return res;
-   }
+   //// Super unfafe be careful when using this
+   //// https://stackoverflow.com/questions/37800739/is-it-safe-to-read-past-the-end-of-a-buffer-within-the-same-page-on-x86-and-x64
+   //constexpr uint64_t to_uint64_unsafe_preread(const char* bytes, const size_t N) noexcept
+   //{
+   //   static_assert(std::endian::native == std::endian::little);
+   //   constexpr auto num_bytes = sizeof(uint64_t);
+   //   uint64_t res{};
+   //   if (std::is_constant_evaluated()) {
+   //      for (size_t i = 0; i < N; ++i) {
+   //         res |= uint64_t(bytes[i]) << (i << 3);
+   //      }
+   //   }
+   //   else {
+   //      // Compiletime memcpy size is way faster with unsafe = true.
+   //      // So we load in 8 bytes and then throw away the trash with a shift
+   //      const auto extra = (num_bytes - N);
+   //      std::memcpy(&res, bytes - extra, num_bytes);
+   //      auto shift = uint64_t(extra) << 3;
+   //      res = (res >> shift);
+   //   }
+   //   return res;
+   //}
 
    template <size_t N = 8>
    constexpr uint64_t to_uint64(const char* bytes) noexcept
@@ -126,12 +126,13 @@ namespace glz::detail
             // Page boundary check for buffer preread/overread
             if (!std::is_constant_evaluated() && (reinterpret_cast<std::uintptr_t>(value.data()) & (4096 - 8)))
                [[likely]] {
-               // return bitmix(h ^ to_uint64(value.data(), n));
-               return bitmix(h ^ to_uint64_unsafe_preread(value.data(), n));
+               return bitmix(h ^ to_uint64(value.data(), n));
+               // We need masked loads
+               //return bitmix(h ^ to_uint64_unsafe_preread(value.data(), n));
             }
             else {
-               //return bitmix(h ^ to_uint64(value.data(), n));
-               return bitmix(h ^ to_uint64<true>(value.data(), n));
+               return bitmix(h ^ to_uint64(value.data(), n));
+               //return bitmix(h ^ to_uint64<true>(value.data(), n));
             }
          }
 
@@ -169,7 +170,7 @@ namespace glz::detail
       std::array<uint64_t, N * allow_hash_check> hashes{};
       std::array<uint8_t, bucket_size> table{};
 
-      explicit consteval naive_map(const std::array<std::pair<std::string_view, Value>, N>& pairs) : items(pairs)
+      explicit constexpr naive_map(const std::array<std::pair<std::string_view, Value>, N>& pairs) : items(pairs)
       {
          seed = naive_perfect_hash();
          if (seed == std::numeric_limits<uint64_t>::max()) {
@@ -214,7 +215,7 @@ namespace glz::detail
          return items.begin() + index;
       }
 
-      consteval uint64_t naive_perfect_hash() noexcept
+      constexpr uint64_t naive_perfect_hash() noexcept
       {
          std::array<size_t, N> bucket_index{};
 
@@ -353,7 +354,7 @@ namespace glz::detail
             const auto bucket_size = bucket_sizes[bucket_index];
             if (bucket_size < 1) break;
             if (bucket_size == 1) {
-               buckets[bucket_index] = -full_buckets[bucket_index][0];
+               buckets[bucket_index] = -int64_t(full_buckets[bucket_index][0]);
                continue;
             }
             const auto table_old = table;
