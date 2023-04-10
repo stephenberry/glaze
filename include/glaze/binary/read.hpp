@@ -116,48 +116,13 @@ namespace glz
          }
       };
 
-      GLZ_ALWAYS_INLINE constexpr size_t int_from_header(auto&& it, auto&& /*end*/) noexcept
-      {
-         header8 h8;
-         std::memcpy(&h8, &(*it), 1);
-         switch (h8.config) {
-         case 0:
-            ++it;
-            return h8.size;
-            break;
-         case 1: {
-            header16 h;
-            std::memcpy(&h, &(*it), 2);
-            std::advance(it, 2);
-            return h.size;
-            break;
-         }
-         case 2: {
-            header32 h;
-            std::memcpy(&h, &(*it), 4);
-            std::advance(it, 4);
-            return h.size;
-            break;
-         }
-         case 3: {
-            header64 h;
-            std::memcpy(&h, &(*it), 8);
-            std::advance(it, 8);
-            return h.size;
-            break;
-         }
-         default:
-            return 0;
-         }
-      }
-
       template <is_variant T>
       struct from_binary<T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            const auto type_index = int_from_header(it, end);
+            const auto type_index = int_from_compressed(it, end);
             if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
             std::visit([&](auto&& v) { read<binary>::op<Opts>(v, ctx, it, end); }, value);
          }
@@ -169,7 +134,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto&& end) noexcept
          {
-            const auto n = int_from_header(it, end);
+            const auto n = int_from_compressed(it, end);
             using V = typename std::decay_t<T>::value_type;
             if constexpr (sizeof(V) == 1) {
                value.resize(n);
@@ -197,7 +162,7 @@ namespace glz
                }
             }
             else {
-               const auto n = int_from_header(it, end);
+               const auto n = int_from_compressed(it, end);
 
                if constexpr (resizeable<T>) {
                   value.resize(n);
@@ -220,7 +185,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            const auto n = int_from_header(it, end);
+            const auto n = int_from_compressed(it, end);
 
             if constexpr (std::is_arithmetic_v<std::decay_t<typename T::key_type>>) {
                typename T::key_type key;
@@ -285,7 +250,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (Opts.use_cx_tags) {
-               const auto n_keys = int_from_header(it, end);
+               const auto n_keys = int_from_compressed(it, end);
 
                static constexpr auto storage = detail::make_crusher_map<T>();
 

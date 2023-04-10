@@ -131,20 +131,24 @@ namespace glz
       GLZ_ALWAYS_INLINE void dump_int(Args&&... args) noexcept
       {
          if constexpr (i < 64) {
-            static constexpr auto h = header8{0, static_cast<uint8_t>(i)};
-            return dump_type(h, std::forward<Args>(args)...);
+            auto c = set_bits<2, uint8_t>(0);
+            set_bits<2, 6>(c, uint8_t(i));
+            dump_type(c, args...);
          }
          else if constexpr (i < 16384) {
-            static constexpr auto h = header16{1, static_cast<uint16_t>(i)};
-            return dump_type(h, std::forward<Args>(args)...);
+            auto c = set_bits<2, uint16_t>(1);
+            set_bits<2, 14>(c, uint16_t(i));
+            dump_type(c, args...);
          }
          else if constexpr (i < 1073741824) {
-            static constexpr auto h = header32{2, static_cast<uint32_t>(i)};
-            return dump_type(h, std::forward<Args>(args)...);
+            auto c = set_bits<2, uint32_t>(2);
+            set_bits<2, 30>(c, uint32_t(i));
+            dump_type(c, args...);
          }
          else if constexpr (i < 4611686018427387904) {
-            static constexpr auto h = header64{3, i};
-            return dump_type(h, std::forward<Args>(args)...);
+            auto c = set_bits<2, uint64_t>(3);
+            set_bits<2, 62>(c, uint64_t(i));
+            dump_type(c, args...);
          }
          else {
             static_assert(i >= 4611686018427387904, "size not supported");
@@ -155,16 +159,24 @@ namespace glz
       GLZ_ALWAYS_INLINE void dump_int(size_t i, Args&&... args) noexcept
       {
          if (i < 64) {
-            dump_type(header8{0, static_cast<uint8_t>(i)}, std::forward<Args>(args)...);
+            auto c = set_bits<2, uint8_t>(0);
+            set_bits<2, 6>(c, uint8_t(i));
+            dump_type(c, args...);
          }
          else if (i < 16384) {
-            dump_type(header16{1, static_cast<uint16_t>(i)}, std::forward<Args>(args)...);
+            auto c = set_bits<2, uint16_t>(1);
+            set_bits<2, 14>(c, uint16_t(i));
+            dump_type(c, args...);
          }
          else if (i < 1073741824) {
-            dump_type(header32{2, static_cast<uint32_t>(i)}, std::forward<Args>(args)...);
+            auto c = set_bits<2, uint32_t>(2);
+            set_bits<2, 30>(c, uint32_t(i));
+            dump_type(c, args...);
          }
          else if (i < 4611686018427387904) {
-            dump_type(header64{3, i}, std::forward<Args>(args)...);
+            auto c = set_bits<2, uint64_t>(3);
+            set_bits<2, 62>(c, uint64_t(i));
+            dump_type(c, args...);
          }
          else {
             std::abort(); // this should never happen because we should never allocate containers of this size
