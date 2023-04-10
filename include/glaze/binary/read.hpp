@@ -69,10 +69,22 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
          {
-            if (uint8_t(*it) != tag::number) {
+            const auto tag = uint8_t(*it);
+            if (get_bits<3>(tag) != tag::number) {
                ctx.error = error_code::syntax_error;
                return;
             }
+            
+            if (get_bits<3, 1>(tag) != std::is_floating_point_v<T>) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            
+            if (get_bits<4, 4>(tag) != sizeof(value)) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            
             ++it;
             
             using V = std::decay_t<T>;
@@ -87,13 +99,13 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& /* end */) noexcept
          {
-            if (uint8_t(*it) != tag::boolean) {
+            const auto tag = uint8_t(*it);
+            if (get_bits<1>(tag) != tag::boolean) {
                ctx.error = error_code::syntax_error;
                return;
             }
-            ++it;
             
-            value = bool(*it);
+            value = get_bits<1, 1, uint8_t>(tag);
             ++it;
          }
       };
@@ -143,8 +155,14 @@ namespace glz
       struct from_binary<T> final
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            if (uint8_t(*it) != tag::string) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+            
             const auto n = int_from_compressed(it, end);
             using V = typename std::decay_t<T>::value_type;
             if constexpr (sizeof(V) == 1) {

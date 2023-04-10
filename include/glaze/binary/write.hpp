@@ -19,6 +19,68 @@ namespace glz
 {
    namespace detail
    {
+      template <class... Args>
+      GLZ_ALWAYS_INLINE void dump_type(auto&& value, Args&&... args) noexcept
+      {
+         dump(std::as_bytes(std::span{&value, 1}), std::forward<Args>(args)...);
+      }
+
+      template <uint64_t i, class... Args>
+      GLZ_ALWAYS_INLINE void dump_int(Args&&... args) noexcept
+      {
+         if constexpr (i < 64) {
+            auto c = set_bits<2, uint8_t>(0);
+            set_bits<2, 6>(c, uint8_t(i));
+            dump_type(c, args...);
+         }
+         else if constexpr (i < 16384) {
+            auto c = set_bits<2, uint16_t>(1);
+            set_bits<2, 14>(c, uint16_t(i));
+            dump_type(c, args...);
+         }
+         else if constexpr (i < 1073741824) {
+            auto c = set_bits<2, uint32_t>(2);
+            set_bits<2, 30>(c, uint32_t(i));
+            dump_type(c, args...);
+         }
+         else if constexpr (i < 4611686018427387904) {
+            auto c = set_bits<2, uint64_t>(3);
+            set_bits<2, 62>(c, uint64_t(i));
+            dump_type(c, args...);
+         }
+         else {
+            static_assert(i >= 4611686018427387904, "size not supported");
+         }
+      }
+
+      template <auto Opts, class... Args>
+      GLZ_ALWAYS_INLINE void dump_int(size_t i, Args&&... args) noexcept
+      {
+         if (i < 64) {
+            auto c = set_bits<2, uint8_t>(0);
+            set_bits<2, 6>(c, uint8_t(i));
+            dump_type(c, args...);
+         }
+         else if (i < 16384) {
+            auto c = set_bits<2, uint16_t>(1);
+            set_bits<2, 14>(c, uint16_t(i));
+            dump_type(c, args...);
+         }
+         else if (i < 1073741824) {
+            auto c = set_bits<2, uint32_t>(2);
+            set_bits<2, 30>(c, uint32_t(i));
+            dump_type(c, args...);
+         }
+         else if (i < 4611686018427387904) {
+            auto c = set_bits<2, uint64_t>(3);
+            set_bits<2, 62>(c, uint64_t(i));
+            dump_type(c, args...);
+         }
+         else {
+            std::abort(); // this should never happen because we should never allocate containers of this size
+         }
+      }
+      
       template <class T = void>
       struct to_binary
       {};
@@ -94,14 +156,9 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args) noexcept
          {
-            dump<static_cast<std::byte>(tag::boolean)>(args...);
-
-            if (value) {
-               dump<static_cast<std::byte>(1)>(args...);
-            }
-            else {
-               dump<static_cast<std::byte>(0)>(args...);
-            }
+            uint8_t tag = tag::boolean;
+            set_bits<1, 1, uint8_t>(tag, value);
+            dump_type(tag, args...);
          }
       };
 
@@ -122,68 +179,6 @@ namespace glz
             write<binary>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
          }
       };
-
-      template <class... Args>
-      GLZ_ALWAYS_INLINE void dump_type(auto&& value, Args&&... args) noexcept
-      {
-         dump(std::as_bytes(std::span{&value, 1}), std::forward<Args>(args)...);
-      }
-
-      template <uint64_t i, class... Args>
-      GLZ_ALWAYS_INLINE void dump_int(Args&&... args) noexcept
-      {
-         if constexpr (i < 64) {
-            auto c = set_bits<2, uint8_t>(0);
-            set_bits<2, 6>(c, uint8_t(i));
-            dump_type(c, args...);
-         }
-         else if constexpr (i < 16384) {
-            auto c = set_bits<2, uint16_t>(1);
-            set_bits<2, 14>(c, uint16_t(i));
-            dump_type(c, args...);
-         }
-         else if constexpr (i < 1073741824) {
-            auto c = set_bits<2, uint32_t>(2);
-            set_bits<2, 30>(c, uint32_t(i));
-            dump_type(c, args...);
-         }
-         else if constexpr (i < 4611686018427387904) {
-            auto c = set_bits<2, uint64_t>(3);
-            set_bits<2, 62>(c, uint64_t(i));
-            dump_type(c, args...);
-         }
-         else {
-            static_assert(i >= 4611686018427387904, "size not supported");
-         }
-      }
-
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE void dump_int(size_t i, Args&&... args) noexcept
-      {
-         if (i < 64) {
-            auto c = set_bits<2, uint8_t>(0);
-            set_bits<2, 6>(c, uint8_t(i));
-            dump_type(c, args...);
-         }
-         else if (i < 16384) {
-            auto c = set_bits<2, uint16_t>(1);
-            set_bits<2, 14>(c, uint16_t(i));
-            dump_type(c, args...);
-         }
-         else if (i < 1073741824) {
-            auto c = set_bits<2, uint32_t>(2);
-            set_bits<2, 30>(c, uint32_t(i));
-            dump_type(c, args...);
-         }
-         else if (i < 4611686018427387904) {
-            auto c = set_bits<2, uint64_t>(3);
-            set_bits<2, 62>(c, uint64_t(i));
-            dump_type(c, args...);
-         }
-         else {
-            std::abort(); // this should never happen because we should never allocate containers of this size
-         }
-      }
 
       template <is_variant T>
       struct to_binary<T> final
@@ -212,7 +207,11 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
-            dump<static_cast<std::byte>(tag::number)>(args...);
+            uint8_t tag = tag::number;
+            set_bits<3, 1, uint8_t>(tag, std::is_floating_point_v<T>);
+            set_bits<4, 4, uint8_t>(tag, sizeof(value));
+            dump_type(tag, args...);
+            
             dump_type(value, std::forward<Args>(args)...);
          }
       };
@@ -223,6 +222,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
+            dump<std::byte(tag::string)>(args...);
             dump_int<Opts>(value.size(), std::forward<Args>(args)...);
             dump(std::as_bytes(std::span{value.data(), value.size()}), std::forward<Args>(args)...);
          }
