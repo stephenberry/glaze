@@ -285,7 +285,7 @@ namespace glz
                dump_int<Opts>(value.size(), args...);
                
                if constexpr (contiguous<T>) {
-                  dump(std::as_bytes(std::span{value.data(), value.size()}), args...);
+                  dump(std::as_bytes(std::span{value.data(), static_cast<size_t>(value.size())}), args...);
                }
                else {
                   for (auto& x : value) {

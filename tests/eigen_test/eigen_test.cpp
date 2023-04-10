@@ -42,7 +42,7 @@ int main()
       std::vector<std::byte> b;
       glz::write_binary(m, b);
       Eigen::Matrix<double, 2, 2> e{};
-      glz::read_binary(e, b);
+      expect(!glz::read_binary(e, b));
       const bool boolean = m == e;
       expect(boolean);
    };
@@ -52,7 +52,7 @@ int main()
       std::vector<std::byte> b;
       glz::write_binary(m, b);
       Eigen::Vector3d e{};
-      glz::read_binary(e, b);
+      expect(!glz::read_binary(e, b));
       const bool boolean = m == e;
       expect(boolean);
    };
@@ -78,7 +78,7 @@ int main()
       std::vector<std::byte> b;
       glz::write_binary(m, b);
       Eigen::VectorXd e{};
-      glz::read_binary(e, b);
+      expect(!glz::read_binary(e, b));
       const bool boolean = m == e;
       expect(boolean);
    };
