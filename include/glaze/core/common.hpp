@@ -8,7 +8,6 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
-#include <tuple>
 #include <vector>
 
 // TODO: optionally include with a templated struct
@@ -527,12 +526,12 @@ namespace glz
             if constexpr (n <= 20) {
                return glz::detail::naive_map<value_t, n, allow_hash_check>(
                   {std::pair<sv, value_t>{sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                               glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))}...});
+                                          glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))}...});
             }
             else {
                return glz::detail::normal_map<sv, value_t, n, allow_hash_check>(
                   {std::pair<sv, value_t>{sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                               glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))}...});
+                                          glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))}...});
             }
          };
 
@@ -606,8 +605,7 @@ namespace glz
       constexpr auto make_key_int_map_impl(std::index_sequence<I...>)
       {
          return normal_map<sv, size_t, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<sv, size_t>(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>)),
-                                                    I)...});
+            {std::make_pair<sv, size_t>(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>)), I)...});
       }
 
       template <class T>
@@ -640,9 +638,8 @@ namespace glz
       {
          using key_t = std::underlying_type_t<T>;
          return normal_map<key_t, sv, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<key_t, sv>(
-               static_cast<key_t>(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))),
-               sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))))...});
+            {std::make_pair<key_t, sv>(static_cast<key_t>(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))),
+                                       sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))))...});
       }
 
       template <class T>
@@ -667,7 +664,7 @@ namespace glz
       {
          return normal_map<sv, T, std::tuple_size_v<meta_t<T>>>(
             {std::make_pair<sv, T>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                               T(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))))...});
+                                   T(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))))...});
       }
 
       template <class T>
@@ -709,8 +706,7 @@ namespace glz
       consteval auto make_variant_deduction_base_map(std::index_sequence<I...>, auto&& keys)
       {
          using V = bit_array<std::variant_size_v<T>>;
-         return normal_map<sv, V, sizeof...(I)>(
-            {std::make_pair<sv, V>(sv(std::get<I>(keys)), V{})...});
+         return normal_map<sv, V, sizeof...(I)>({std::make_pair<sv, V>(sv(std::get<I>(keys)), V{})...});
       }
 
       template <class T>
@@ -735,8 +731,7 @@ namespace glz
       template <is_variant T, size_t... I>
       constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
       {
-         return normal_map<sv, size_t, std::variant_size_v<T>>(
-            {std::make_pair<sv, size_t>(sv(variant_ids[I]), I)...});
+         return normal_map<sv, size_t, std::variant_size_v<T>>({std::make_pair<sv, size_t>(sv(variant_ids[I]), I)...});
       }
 
       template <is_variant T>

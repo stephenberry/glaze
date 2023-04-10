@@ -11,6 +11,7 @@
 #include <ranges>
 #include <sstream>
 
+#include "glaze/core/common.hpp"
 #include "glaze/core/format.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
@@ -20,7 +21,6 @@
 #include "glaze/util/strod.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
-#include "glaze/core/common.hpp"
 
 namespace glz
 {

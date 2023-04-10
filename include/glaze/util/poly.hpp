@@ -27,9 +27,8 @@ namespace glz
    {
       constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
       return detail::normal_map<sv, fn_variant<Spec>, N>(
-         {std::make_pair<sv, fn_variant<Spec>>(
-            sv(tuplet::get<0>(tuplet::get<I>(meta_v<Spec>))),
-            get_argument<tuplet::get<1>(tuplet::get<I>(meta_v<Spec>))>())...});
+         {std::make_pair<sv, fn_variant<Spec>>(sv(tuplet::get<0>(tuplet::get<I>(meta_v<Spec>))),
+                                               get_argument<tuplet::get<1>(tuplet::get<I>(meta_v<Spec>))>())...});
    }
 
    template <class Spec>
