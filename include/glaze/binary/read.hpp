@@ -472,6 +472,13 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            const auto tag = uint8_t(*it);
+            if (get_bits<3>(tag) != tag::untyped_array) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+            
             [[maybe_unused]] const auto n = int_from_compressed(it, end);
             
             using V = std::decay_t<T>;
@@ -488,6 +495,13 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            const auto tag = uint8_t(*it);
+            if (get_bits<3>(tag) != tag::untyped_array) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            ++it;
+            
             [[maybe_unused]] const auto n = int_from_compressed(it, end);
             
             using V = std::decay_t<T>;
