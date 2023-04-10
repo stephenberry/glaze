@@ -305,6 +305,12 @@ namespace glz
                
                for (auto&& x : value) {
                   const auto length = int_from_compressed(it, end);
+                  x.resize(length);
+                  
+                  if constexpr (Opts.shrink_to_fit) {
+                     value.shrink_to_fit();
+                  }
+                  
                   std::memcpy(x.data(), &*it, length);
                   std::advance(it, length);
                }
