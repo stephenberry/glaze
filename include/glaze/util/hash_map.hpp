@@ -46,28 +46,28 @@ namespace glz::detail
       return res;
    }
 
-   //// Super unfafe be careful when using this
-   //// https://stackoverflow.com/questions/37800739/is-it-safe-to-read-past-the-end-of-a-buffer-within-the-same-page-on-x86-and-x64
-   //constexpr uint64_t to_uint64_unsafe_preread(const char* bytes, const size_t N) noexcept
-   //{
-   //   static_assert(std::endian::native == std::endian::little);
-   //   constexpr auto num_bytes = sizeof(uint64_t);
-   //   uint64_t res{};
-   //   if (std::is_constant_evaluated()) {
-   //      for (size_t i = 0; i < N; ++i) {
-   //         res |= uint64_t(bytes[i]) << (i << 3);
-   //      }
-   //   }
-   //   else {
-   //      // Compiletime memcpy size is way faster with unsafe = true.
-   //      // So we load in 8 bytes and then throw away the trash with a shift
-   //      const auto extra = (num_bytes - N);
-   //      std::memcpy(&res, bytes - extra, num_bytes);
-   //      auto shift = uint64_t(extra) << 3;
-   //      res = (res >> shift);
-   //   }
-   //   return res;
-   //}
+   // Super unfafe be careful when using this
+   // https://stackoverflow.com/questions/37800739/is-it-safe-to-read-past-the-end-of-a-buffer-within-the-same-page-on-x86-and-x64
+   constexpr uint64_t to_uint64_unsafe_preread(const char* bytes, const size_t N) noexcept
+   {
+      static_assert(std::endian::native == std::endian::little);
+      constexpr auto num_bytes = sizeof(uint64_t);
+      uint64_t res{};
+      if (std::is_constant_evaluated()) {
+         for (size_t i = 0; i < N; ++i) {
+            res |= uint64_t(bytes[i]) << (i << 3);
+         }
+      }
+      else {
+         // Compiletime memcpy size is way faster with unsafe = true.
+         // So we load in 8 bytes and then throw away the trash with a shift
+         const auto extra = (num_bytes - N);
+         std::memcpy(&res, bytes - extra, num_bytes);
+         auto shift = uint64_t(extra) << 3;
+         res = (res >> shift);
+      }
+      return res;
+   }
 
    template <size_t N = 8>
    constexpr uint64_t to_uint64(const char* bytes) noexcept
@@ -126,13 +126,18 @@ namespace glz::detail
             // Page boundary check for buffer preread/overread
             if (!std::is_constant_evaluated() && (reinterpret_cast<std::uintptr_t>(value.data()) & (4096 - 8)))
                [[likely]] {
+#ifdef __SANITIZE_ADDRESS__
                return bitmix(h ^ to_uint64(value.data(), n));
-               // We need masked loads
-               //return bitmix(h ^ to_uint64_unsafe_preread(value.data(), n));
+#else
+               return bitmix(h ^ to_uint64_unsafe_preread(value.data(), n));
+#endif
             }
             else {
+#ifdef __SANITIZE_ADDRESS__
                return bitmix(h ^ to_uint64(value.data(), n));
-               //return bitmix(h ^ to_uint64<true>(value.data(), n));
+#else
+               return bitmix(h ^ to_uint64<true>(value.data(), n));
+#endif
             }
          }
 
