@@ -323,10 +323,21 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump_int<Opts>(value.size(), std::forward<Args>(args)...);
+            using Key = typename T::key_type;
+            
+            uint8_t tag = tag::object;
+            if constexpr (str_t<Key>) {
+               set_bits<3, 1, uint8_t>(tag, 1);
+            }
+            else {
+               set_bits<3, 1, uint8_t>(tag, 0);
+            }
+            dump_type(tag, args...);
+            
+            dump_int<Opts>(value.size(), args...);
             for (auto&& [k, v] : value) {
-               write<binary>::op<Opts>(k, ctx, std::forward<Args>(args)...);
-               write<binary>::op<Opts>(v, ctx, std::forward<Args>(args)...);
+               write<binary>::op<Opts>(k, ctx, args...);
+               write<binary>::op<Opts>(v, ctx, args...);
             }
          }
       };
@@ -353,13 +364,14 @@ namespace glz
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
-         {
+         {            
+            uint8_t tag = tag::object;
+            set_bits<3, 1, uint8_t>(tag, 1);
+            dump_type(tag, args...);
+            
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
-            if constexpr (Opts.use_cx_tags) {
-               dump_int<N>(args...); // even though N is known at compile time in this case, it is not known for
-                                     // partial cases, so we still use a compressed integer
-            }
+            dump_int<N>(args...);
 
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
@@ -379,6 +391,9 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
+            static constexpr auto N = std::tuple_size_v<meta_t<T>>;
+            dump_int<N>(args...);
+            
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
                write<binary>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<V>)), ctx,
@@ -394,6 +409,9 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
+            static constexpr auto N = std::tuple_size_v<T>;
+            dump_int<N>(args...);
+            
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<V>>(
                [&](auto I) { write<binary>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...); });

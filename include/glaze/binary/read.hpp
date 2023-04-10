@@ -301,6 +301,28 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            const auto tag = uint8_t(*it);
+            if (get_bits<3>(tag) != tag::object) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            
+            using Key = typename T::key_type;
+            if constexpr (str_t<Key>) {
+               if (get_bits<3, 1>(tag) != 1) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+            else {
+               if (get_bits<3, 1>(tag) != 0) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+            
+            ++it;
+            
             const auto n = int_from_compressed(it, end);
 
             if constexpr (std::is_arithmetic_v<std::decay_t<typename T::key_type>>) {
@@ -365,31 +387,35 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if constexpr (Opts.use_cx_tags) {
-               const auto n_keys = int_from_compressed(it, end);
-
-               static constexpr auto storage = detail::make_crusher_map<T>();
-
-               for (size_t i = 0; i < n_keys; ++i) {
-                  uint32_t key;
-                  std::memcpy(&key, &(*it), 4);
-                  std::advance(it, 4);
-
-                  const auto& p = storage.find(key);
-
-                  if (p != storage.end()) {
-                     std::visit(
-                        [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
-                        p->second);
-                  }
-               }
+            const auto tag = uint8_t(*it);
+            if (get_bits<3>(tag) != tag::object) {
+               ctx.error = error_code::syntax_error;
+               return;
             }
-            else {
-               using V = std::decay_t<T>;
-               for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-                  read<binary>::op<Opts>(get_member(value, glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<V>))), ctx,
-                                         it, end);
-               });
+            
+            if (get_bits<3, 1>(tag) != 1) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            
+            ++it;
+            
+            const auto n_keys = int_from_compressed(it, end);
+
+            static constexpr auto storage = detail::make_crusher_map<T>();
+
+            for (size_t i = 0; i < n_keys; ++i) {
+               uint32_t key;
+               std::memcpy(&key, &(*it), 4);
+               std::advance(it, 4);
+
+               const auto& p = storage.find(key);
+
+               if (p != storage.end()) {
+                  std::visit(
+                     [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
+                     p->second);
+               }
             }
          }
       };
@@ -401,6 +427,8 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            [[maybe_unused]] const auto n = int_from_compressed(it, end);
+            
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
                read<binary>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<V>)), ctx, it, end);
@@ -415,6 +443,8 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            [[maybe_unused]] const auto n = int_from_compressed(it, end);
+            
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<V>>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
          }
