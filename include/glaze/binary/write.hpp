@@ -453,6 +453,10 @@ namespace glz
          static constexpr auto sorted = sort_json_ptrs(partial);
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
          static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
+         
+         uint8_t tag = tag::object;
+         detail::set_bits<3, 1, uint8_t>(tag, 1);
+         detail::dump_type(tag, buffer);
 
          detail::dump_int<N>(buffer);
 
@@ -472,8 +476,7 @@ namespace glz
                static constexpr auto ix = member_it->second.index();
                static constexpr decltype(auto) member_ptr = std::get<ix>(member_it->second);
 
-               static constexpr uint32_t hash = murmur3_32(key);
-               detail::dump_type(hash, buffer);
+               detail::write<binary>::op<Opts>(key, ctx, buffer);
                std::ignore = write<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), buffer, ctx);
             });
          }

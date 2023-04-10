@@ -530,7 +530,7 @@ void test_partial()
       std::cout << '\n';
    });
 
-   glz::write_binary<partial>(s, out);
+   expect(!glz::write_binary<partial>(s, out));
 
    s2.i = 5;
    s2.hello = "text";
