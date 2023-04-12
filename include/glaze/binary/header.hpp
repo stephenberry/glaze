@@ -30,7 +30,7 @@ namespace glz::detail
    {
       static_assert(N > 0 && N <= sizeof(T) * 8, "Invalid number of bits to write specified");
       // create a mask with N 1s
-      constexpr auto mask = (1ul << N) - 1;
+      constexpr auto mask = (uint64_t(1) << N) - 1;
 
       T x{};
       // clear the bits in x that will be set by y
@@ -46,7 +46,7 @@ namespace glz::detail
    {
       static_assert(N > 0 && N <= sizeof(T) * 8, "Invalid number of bits to write specified");
       // create a mask with N 1s
-      constexpr auto mask = (1ul << N) - 1;
+      constexpr auto mask = (uint64_t(1) << N) - 1;
 
       // clear the bits in x that will be set by y
       x &= ~mask;
@@ -61,7 +61,7 @@ namespace glz::detail
       static_assert(K >= 0 && K <= sizeof(T) * 8, "Invalid number of bits to discard specified");
       static_assert(N > 0 && N <= sizeof(T) * 8 - K, "Invalid number of bits to write specified");
       // create a mask with N 1s starting from the K-th bit
-      constexpr auto mask = ((1ul << N) - 1) << K;
+      constexpr auto mask = ((uint64_t(1) << N) - 1) << K;
 
       // clear the bits in x that will be set by y
       x &= ~mask;
@@ -76,7 +76,7 @@ namespace glz::detail
       static_assert(K >= 0 && K <= sizeof(T) * 8, "Invalid number of bits to discard specified");
       static_assert(N > 0 && N <= sizeof(T) * 8 - K, "Invalid number of bits to write specified");
       // create a mask with N 1s starting from the K-th bit
-      constexpr auto mask = ((1ul << N) - 1) << K;
+      constexpr auto mask = ((uint64_t(1) << N) - 1) << K;
 
       // clear the bits in x that will be set by y
       x &= ~mask;
@@ -91,7 +91,7 @@ namespace glz::detail
    {
       static_assert(N > 0 && N <= sizeof(T) * 8, "Invalid number of bits to read specified");
       // Create a bit mask with N bits set
-      constexpr auto mask = (1ul << N) - 1;
+      constexpr auto mask = (uint64_t(1) << N) - 1;
 
       // Extract the bits from x using the mask
       return x & mask;
@@ -103,7 +103,7 @@ namespace glz::detail
       static_assert(K >= 0 && K <= sizeof(T) * 8, "Invalid number of bits to discard specified");
       static_assert(N > 0 && N <= sizeof(T) * 8 - K, "Invalid number of bits to read specified");
       // Create a bit mask with N bits set starting at bit K
-      constexpr auto mask = ((1ul << N) - 1) << K;
+      constexpr auto mask = ((uint64_t(1) << N) - 1) << K;
 
       // Extract the bits from x using the mask
       return (x & mask) >> K;
