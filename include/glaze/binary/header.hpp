@@ -109,7 +109,7 @@ namespace glz::detail
       return (x & mask) >> K;
    }
 
-   GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& it, auto&&) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& it, auto&&) noexcept
    {
       uint8_t header;
       std::memcpy(&header, &(*it), 1);
@@ -139,6 +139,33 @@ namespace glz::detail
       }
       default:
          return 0;
+      }
+   }
+   
+   GLZ_ALWAYS_INLINE constexpr void skip_compressed_int(auto&& it, auto&&) noexcept
+   {
+      uint8_t header;
+      std::memcpy(&header, &(*it), 1);
+      const uint8_t config = get_bits<2>(header);
+
+      switch (config) {
+      case 0:
+         ++it;
+            return;
+      case 1: {
+         std::advance(it, 2);
+         return;
+      }
+      case 2: {
+         std::advance(it, 4);
+         return;
+      }
+      case 3: {
+         std::advance(it, 8);
+         return;
+      }
+      default:
+         return;
       }
    }
 

@@ -410,7 +410,7 @@ namespace glz
          static constexpr uint8_t header = set_bits<3, 1, uint8_t>(set_bits<3>(tag::object), 1);
          
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto tag = uint8_t(*it);
             if (tag != header) {
@@ -471,7 +471,7 @@ namespace glz
             }
             ++it;
             
-            [[maybe_unused]] const auto n = int_from_compressed(it, end);
+            skip_compressed_int(it, end);
             
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
@@ -494,7 +494,7 @@ namespace glz
             }
             ++it;
             
-            [[maybe_unused]] const auto n = int_from_compressed(it, end);
+            skip_compressed_int(it, end);
             
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<V>>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
