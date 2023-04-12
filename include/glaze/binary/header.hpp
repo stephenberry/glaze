@@ -69,7 +69,7 @@ namespace glz::detail
       // set the bits in x with y
       x |= (y << K) & mask;
    }
-   
+
    template <uint32_t K, uint32_t N, std::unsigned_integral T>
    [[nodiscard]] GLZ_ALWAYS_INLINE constexpr auto set_bits(T&& x, T y)
    {
@@ -141,7 +141,7 @@ namespace glz::detail
          return 0;
       }
    }
-   
+
    GLZ_ALWAYS_INLINE constexpr void skip_compressed_int(auto&& it, auto&&) noexcept
    {
       uint8_t header;
@@ -151,7 +151,7 @@ namespace glz::detail
       switch (config) {
       case 0:
          ++it;
-            return;
+         return;
       case 1: {
          std::advance(it, 2);
          return;

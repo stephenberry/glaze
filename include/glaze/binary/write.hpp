@@ -80,7 +80,7 @@ namespace glz
             std::abort(); // this should never happen because we should never allocate containers of this size
          }
       }
-      
+
       template <class T = void>
       struct to_binary
       {};
@@ -193,7 +193,7 @@ namespace glz
                      T var = V{};
                      return var.index();
                   }();
-                  
+
                   uint8_t tag = tag::type;
                   dump_type(tag, args...);
                   dump_int<index>(args...);
@@ -214,7 +214,7 @@ namespace glz
             set_bits<3, 1, uint8_t>(tag, std::is_floating_point_v<T>);
             set_bits<4, 4, uint8_t>(tag, to_byte_count<decltype(value)>());
             dump_type(tag, args...);
-            
+
             dump_type(value, std::forward<Args>(args)...);
          }
       };
@@ -228,7 +228,7 @@ namespace glz
             uint8_t tag = tag::string;
             set_bits<3, 5, uint8_t>(tag, to_byte_count<std::decay_t<decltype(*value.data())>>());
             dump_type(tag, args...);
-            
+
             dump_int<Opts>(value.size(), std::forward<Args>(args)...);
             dump(std::as_bytes(std::span{value.data(), value.size()}), std::forward<Args>(args)...);
          }
@@ -241,15 +241,15 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using V = typename std::decay_t<T>::value_type;
-            
+
             uint8_t tag;
-            
+
             if constexpr (boolean_like<V>) {
                tag = tag::typed_array;
                set_bits<3, 2, uint8_t>(tag, 0);
                dump_type(tag, args...);
                dump_int<Opts>(value.size(), args...);
-               
+
                // booleans must be dumped using single bits
                if constexpr (has_static_size<T>) {
                   constexpr auto num_bytes = (value.size() + 7) / 8;
@@ -283,7 +283,7 @@ namespace glz
                set_bits<5, 3, uint8_t>(tag, to_byte_count<V>());
                dump_type(tag, args...);
                dump_int<Opts>(value.size(), args...);
-               
+
                if constexpr (contiguous<T>) {
                   dump(std::as_bytes(std::span{value.data(), static_cast<size_t>(value.size())}), args...);
                }
@@ -299,7 +299,7 @@ namespace glz
                set_bits<5, 3, uint8_t>(tag, to_byte_count<std::decay_t<decltype(*std::declval<V>().data())>>());
                dump_type(tag, args...);
                dump_int<Opts>(value.size(), args...);
-               
+
                for (auto& x : value) {
                   dump_int<Opts>(x.size(), args...);
                   dump(std::as_bytes(std::span{x.data(), x.size()}), args...);
@@ -310,7 +310,7 @@ namespace glz
                set_bits<3, 5, uint8_t>(tag, to_byte_count<V>());
                dump_type(tag, args...);
                dump_int<Opts>(value.size(), args...);
-               
+
                for (auto&& x : value) {
                   write<binary>::op<Opts>(x, ctx, args...);
                }
@@ -325,7 +325,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using Key = typename T::key_type;
-            
+
             uint8_t tag = tag::object;
             if constexpr (str_t<Key>) {
                set_bits<3, 1, uint8_t>(tag, 1);
@@ -334,7 +334,7 @@ namespace glz
                set_bits<3, 1, uint8_t>(tag, 0);
             }
             dump_type(tag, args...);
-            
+
             dump_int<Opts>(value.size(), args...);
             for (auto&& [k, v] : value) {
                write<binary>::op<Opts>(k, ctx, args...);
@@ -364,15 +364,15 @@ namespace glz
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
-         {            
+         {
             uint8_t tag = tag::object;
             set_bits<3, 1, uint8_t>(tag, 1);
             dump_type(tag, args...);
-            
+
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
             dump_int<N>(args...);
-            
+
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                write<binary>::op<Opts>(glz::tuplet::get<0>(item), ctx, args...);
@@ -389,10 +389,10 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<std::byte(tag::untyped_array)>(args...);
-            
+
             static constexpr auto N = std::tuple_size_v<meta_t<T>>;
             dump_int<N>(args...);
-            
+
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
                write<binary>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<V>)), ctx,
@@ -409,10 +409,10 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<std::byte(tag::untyped_array)>(args...);
-            
+
             static constexpr auto N = std::tuple_size_v<T>;
             dump_int<N>(args...);
-            
+
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<V>>(
                [&](auto I) { write<binary>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...); });
@@ -453,7 +453,7 @@ namespace glz
          static constexpr auto sorted = sort_json_ptrs(partial);
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
          static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
-         
+
          uint8_t tag = tag::object;
          detail::set_bits<3, 1, uint8_t>(tag, 1);
          detail::dump_type(tag, buffer);

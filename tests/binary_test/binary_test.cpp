@@ -450,7 +450,6 @@ suite binary_helpers = [] {
       expect(bool(res));
       auto v2 = *res;
 
-
       expect(v2.i == 22);
       expect(v2.d == 5.76);
       expect(v2.hello == "ufo");
