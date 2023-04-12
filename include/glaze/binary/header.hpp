@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <bit>
 #include <concepts>
 #include <cstdint>
 #include <cstring>
@@ -10,10 +11,22 @@
 
 #include "glaze/util/inline.hpp"
 
+namespace glz::tag
+{
+   inline constexpr uint8_t boolean = 0;
+   inline constexpr uint8_t null = 1;
+   inline constexpr uint8_t number = 2;
+   inline constexpr uint8_t string = 3;
+   inline constexpr uint8_t object = 4;
+   inline constexpr uint8_t typed_array = 5;
+   inline constexpr uint8_t untyped_array = 6;
+   inline constexpr uint8_t type = 7;
+}
+
 namespace glz::detail
 {
    template <uint32_t N, std::unsigned_integral T>
-   [[nodiscard]] inline constexpr auto set_bits(T y)
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr auto set_bits(T y)
    {
       static_assert(N > 0 && N <= sizeof(T) * 8, "Invalid number of bits to write specified");
       // create a mask with N 1s
@@ -29,7 +42,7 @@ namespace glz::detail
    }
 
    template <uint32_t N, std::unsigned_integral T>
-   inline constexpr void set_bits(T& x, T y)
+   GLZ_ALWAYS_INLINE constexpr void set_bits(T& x, T y)
    {
       static_assert(N > 0 && N <= sizeof(T) * 8, "Invalid number of bits to write specified");
       // create a mask with N 1s
@@ -43,7 +56,7 @@ namespace glz::detail
    }
 
    template <uint32_t K, uint32_t N, std::unsigned_integral T>
-   inline constexpr void set_bits(T& x, T y)
+   GLZ_ALWAYS_INLINE constexpr void set_bits(T& x, T y)
    {
       static_assert(K >= 0 && K <= sizeof(T) * 8, "Invalid number of bits to discard specified");
       static_assert(N > 0 && N <= sizeof(T) * 8 - K, "Invalid number of bits to write specified");
@@ -56,9 +69,25 @@ namespace glz::detail
       // set the bits in x with y
       x |= (y << K) & mask;
    }
+   
+   template <uint32_t K, uint32_t N, std::unsigned_integral T>
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr auto set_bits(T&& x, T y)
+   {
+      static_assert(K >= 0 && K <= sizeof(T) * 8, "Invalid number of bits to discard specified");
+      static_assert(N > 0 && N <= sizeof(T) * 8 - K, "Invalid number of bits to write specified");
+      // create a mask with N 1s starting from the K-th bit
+      constexpr auto mask = ((1ul << N) - 1) << K;
+
+      // clear the bits in x that will be set by y
+      x &= ~mask;
+
+      // set the bits in x with y
+      x |= (y << K) & mask;
+      return x;
+   }
 
    template <uint32_t N, std::unsigned_integral T>
-   inline constexpr auto get_bits(T x)
+   GLZ_ALWAYS_INLINE constexpr auto get_bits(T x)
    {
       static_assert(N > 0 && N <= sizeof(T) * 8, "Invalid number of bits to read specified");
       // Create a bit mask with N bits set
@@ -69,7 +98,7 @@ namespace glz::detail
    }
 
    template <uint32_t K, uint32_t N, std::unsigned_integral T>
-   inline constexpr auto get_bits(T x)
+   GLZ_ALWAYS_INLINE constexpr auto get_bits(T x)
    {
       static_assert(K >= 0 && K <= sizeof(T) * 8, "Invalid number of bits to discard specified");
       static_assert(N > 0 && N <= sizeof(T) * 8 - K, "Invalid number of bits to read specified");
@@ -80,7 +109,7 @@ namespace glz::detail
       return (x & mask) >> K;
    }
 
-   GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& it, auto&&) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& it, auto&&) noexcept
    {
       uint8_t header;
       std::memcpy(&header, &(*it), 1);
@@ -112,28 +141,37 @@ namespace glz::detail
          return 0;
       }
    }
-
-   GLZ_ALWAYS_INLINE constexpr size_t byte_count(std::integral auto i) noexcept
+   
+   GLZ_ALWAYS_INLINE constexpr void skip_compressed_int(auto&& it, auto&&) noexcept
    {
-      switch (i) {
+      uint8_t header;
+      std::memcpy(&header, &(*it), 1);
+      const uint8_t config = get_bits<2>(header);
+
+      switch (config) {
       case 0:
-         return 1;
-      case 1:
-         return 2;
-      case 2:
-         return 4;
-      case 3:
-         return 8;
-      case 4:
-         return 16;
-      case 5:
-         return 32;
-      case 6:
-         return 64;
-      case 7:
-         return 128;
-      default:
-         return 0;
+         ++it;
+            return;
+      case 1: {
+         std::advance(it, 2);
+         return;
       }
+      case 2: {
+         std::advance(it, 4);
+         return;
+      }
+      case 3: {
+         std::advance(it, 8);
+         return;
+      }
+      default:
+         return;
+      }
+   }
+
+   template <class T>
+   GLZ_ALWAYS_INLINE constexpr size_t to_byte_count() noexcept
+   {
+      return std::bit_width(sizeof(T)) - 1;
    }
 }

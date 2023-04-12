@@ -208,7 +208,7 @@ void write_tests()
          std::vector<std::byte> out;
          write_binary(b, out);
          bool b2{};
-         read_binary(b2, out);
+         expect(!read_binary(b2, out));
          expect(b == b2);
       }
    };
@@ -219,7 +219,7 @@ void write_tests()
          std::vector<std::byte> out;
          write_binary(f, out);
          float f2{};
-         read_binary(f2, out);
+         expect(!read_binary(f2, out));
          expect(f == f2);
       }
    };
@@ -230,7 +230,7 @@ void write_tests()
          std::vector<std::byte> out;
          write_binary(s, out);
          std::string s2{};
-         read_binary(s2, out);
+         expect(!read_binary(s2, out));
          expect(s == s2);
       }
    };
@@ -241,7 +241,7 @@ void write_tests()
          std::vector<std::byte> out;
          write_binary(arr, out);
          std::array<float, 3> arr2{};
-         read_binary(arr2, out);
+         expect(!read_binary(arr2, out));
          expect(arr == arr2);
       }
    };
@@ -252,7 +252,7 @@ void write_tests()
          std::vector<std::byte> out;
          write_binary(v, out);
          std::vector<float> v2;
-         read_binary(v2, out);
+         expect(!read_binary(v2, out));
          expect(v == v2);
       }
    };
@@ -264,7 +264,7 @@ void write_tests()
       std::vector<std::byte> out;
       write_binary(s, out);
       my_struct s2{};
-      read_binary(s2, out);
+      expect(!read_binary(s2, out));
       expect(s.i == s2.i);
       expect(s.hello == s2.hello);
    };
@@ -276,7 +276,7 @@ void write_tests()
       write_binary(op_int, out);
 
       std::optional<int> new_op{};
-      read_binary(new_op, out);
+      expect(!read_binary(new_op, out));
 
       expect(op_int == new_op);
 
@@ -284,7 +284,7 @@ void write_tests()
       out.clear();
 
       write_binary(op_int, out);
-      read_binary(new_op, out);
+      expect(!read_binary(new_op, out));
 
       expect(op_int == new_op);
 
@@ -294,7 +294,7 @@ void write_tests()
       write_binary(sh_float, out);
 
       std::shared_ptr<float> out_flt;
-      read_binary(out_flt, out);
+      expect(!read_binary(out_flt, out));
 
       expect(*sh_float == *out_flt);
 
@@ -304,7 +304,7 @@ void write_tests()
       write_binary(uni_dbl, out);
 
       std::shared_ptr<double> out_dbl;
-      read_binary(out_dbl, out);
+      expect(!read_binary(out_dbl, out));
 
       expect(*uni_dbl == *out_dbl);
    };
@@ -318,7 +318,7 @@ void write_tests()
 
       std::map<std::string, int> str_read;
 
-      read_binary(str_read, out);
+      expect(!read_binary(str_read, out));
 
       for (auto& item : str_map) {
          expect(str_read[item.first] == item.second);
@@ -330,7 +330,7 @@ void write_tests()
       write_binary(dbl_map, out);
 
       std::map<int, double> dbl_read{};
-      read_binary(dbl_read, out);
+      expect(!read_binary(dbl_read, out));
 
       for (auto& item : dbl_map) {
          expect(dbl_read[item.first] == item.second);
@@ -343,7 +343,7 @@ void write_tests()
       glz::write_binary(color, buffer);
 
       Color color_read = Color::Red;
-      glz::read_binary(color_read, buffer);
+      expect(!glz::read_binary(color_read, buffer));
       expect(color == color_read);
    };
 
@@ -373,7 +373,7 @@ void write_tests()
       glz::write_binary(obj, buffer);
 
       Thing obj2{};
-      glz::read_binary(obj2, buffer);
+      expect(!glz::read_binary(obj2, buffer));
 
       expect(obj2.thing.a == 5.7);
       expect(obj2.thing.a == 5.7);
@@ -426,7 +426,7 @@ void bench()
 
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
-         glz::read_binary(thing, buffer);
+         expect(!glz::read_binary(thing, buffer));
       }
       tend = std::chrono::high_resolution_clock::now();
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
@@ -446,7 +446,10 @@ suite binary_helpers = [] {
 
       b = glz::write_binary(v);
 
-      auto v2 = *glz::read_binary<my_struct>(b);
+      auto res = glz::read_binary<my_struct>(b);
+      expect(bool(res));
+      auto v2 = *res;
+
 
       expect(v2.i == 22);
       expect(v2.d == 5.76);
@@ -499,24 +502,6 @@ struct glz::meta<some_struct>
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/read.hpp"
 
-suite no_cx_tag_test = [] {
-   "no_cx_tags"_test = [] {
-      some_struct s{};
-
-      std::string b{};
-
-      glz::write<glz::opts{.format = glz::binary, .use_cx_tags = false}>(s, b);
-
-      s.i = 0;
-      s.d = 0.0;
-
-      expect(glz::read<glz::opts{.format = glz::binary, .use_cx_tags = false}>(s, b) == false);
-
-      expect(s.i == 287);
-      expect(s.d = 3.14);
-   };
-};
-
 void test_partial()
 {
    expect(
@@ -545,14 +530,14 @@ void test_partial()
       std::cout << '\n';
    });
 
-   glz::write_binary<partial>(s, out);
+   expect(!glz::write_binary<partial>(s, out));
 
    s2.i = 5;
    s2.hello = "text";
    s2.d = 5.5;
    s2.sub.x = 0.0;
    s2.sub.y = 20;
-   glz::read_binary(s2, out);
+   expect(!glz::read_binary(s2, out));
 
    expect(s2.i == 2);
    expect(s2.d == 3.14);
@@ -598,7 +583,7 @@ void container_types()
       std::string buffer{};
       std::vector<int> vec2{};
       glz::write_binary(vec, buffer);
-      glz::read_binary(vec2, buffer);
+      expect(!glz::read_binary(vec2, buffer));
       expect(vec == vec2);
    };
    "vector uint64_t roundtrip"_test = [] {
@@ -610,7 +595,7 @@ void container_types()
       std::string buffer{};
       std::vector<uint64_t> vec2{};
       glz::write_binary(vec, buffer);
-      glz::read_binary(vec2, buffer);
+      expect(!glz::read_binary(vec2, buffer));
       expect(vec == vec2);
    };
    "vector double roundtrip"_test = [] {
@@ -619,16 +604,16 @@ void container_types()
       std::string buffer{};
       std::vector<double> vec2{};
       glz::write_binary(vec, buffer);
-      glz::read_binary(vec2, buffer);
+      expect(!glz::read_binary(vec2, buffer));
       expect(vec == vec2);
    };
    "vector bool roundtrip"_test = [] {
       std::vector<bool> vec(100);
-      for (auto&& item : vec) item = rand() / (1.0 + rand());
+      for (auto&& item : vec) item = rand() / (1.0 + rand()) > 0.5;
       std::string buffer{};
       std::vector<bool> vec2{};
       glz::write_binary(vec, buffer);
-      glz::read_binary(vec2, buffer);
+      expect(!glz::read_binary(vec2, buffer));
       expect(vec == vec2);
    };
    "deque roundtrip"_test = [] {
@@ -637,7 +622,7 @@ void container_types()
       std::string buffer{};
       std::vector<int> deq2{};
       glz::write_binary(deq, buffer);
-      glz::read_binary(deq2, buffer);
+      expect(!glz::read_binary(deq2, buffer));
       expect(deq == deq2);
    };
    "list roundtrip"_test = [] {
@@ -646,7 +631,7 @@ void container_types()
       std::string buffer{};
       std::list<int> lis2{};
       glz::write_binary(lis, buffer);
-      glz::read_binary(lis2, buffer);
+      expect(!glz::read_binary(lis2, buffer));
       expect(lis == lis2);
    };
    "map string keys roundtrip"_test = [] {
@@ -660,7 +645,7 @@ void container_types()
       std::string buffer{};
       std::map<std::string, int> map2{};
       glz::write_binary(map1, buffer);
-      glz::read_binary(map2, buffer);
+      expect(!glz::read_binary(map2, buffer));
       for (auto& it : map1) {
          expect(map2[it.first] == it.second);
       }
@@ -673,7 +658,7 @@ void container_types()
       std::string buffer{};
       std::map<int, int> map2{};
       glz::write_binary(map1, buffer);
-      glz::read_binary(map2, buffer);
+      expect(!glz::read_binary(map2, buffer));
       for (auto& it : map1) {
          expect(map2[it.first] == it.second);
       }
@@ -686,7 +671,7 @@ void container_types()
       std::string buffer{};
       std::unordered_map<int, int> map2{};
       glz::write_binary(map1, buffer);
-      glz::read_binary(map2, buffer);
+      expect(!glz::read_binary(map2, buffer));
       for (auto& it : map1) {
          expect(map2[it.first] == it.second);
       }
@@ -696,7 +681,7 @@ void container_types()
       decltype(tuple1) tuple2{};
       std::string buffer{};
       glz::write_binary(tuple1, buffer);
-      glz::read_binary(tuple2, buffer);
+      expect(!glz::read_binary(tuple2, buffer));
       expect(tuple1 == tuple2);
    };
    "pair roundtrip"_test = [] {
@@ -704,7 +689,7 @@ void container_types()
       decltype(pair) pair2{};
       std::string buffer{};
       glz::write_binary(pair, buffer);
-      glz::read_binary(pair2, buffer);
+      expect(!glz::read_binary(pair2, buffer));
       expect(pair == pair2);
    };
 }
@@ -741,7 +726,7 @@ suite value_test = [] {
       glz::write_binary(v, s);
       v.x = 0;
 
-      glz::read_binary(v, s);
+      expect(!glz::read_binary(v, s));
       expect(v.x == 5);
    };
 
@@ -753,7 +738,7 @@ suite value_test = [] {
       glz::write_binary(v, s);
       v.x = 0;
 
-      glz::read_binary(v, s);
+      expect(!glz::read_binary(v, s));
       expect(v.x == 5);
    };
 };
@@ -785,7 +770,7 @@ suite byte_buffer = [] {
       msg.id = 0;
       msg.val = "";
 
-      glz::read_binary(msg, buffer);
+      expect(!glz::read_binary(msg, buffer));
       expect(msg.id == 5);
       expect(msg.val == "hello");
    };
@@ -802,7 +787,7 @@ suite byte_buffer = [] {
       msg.id = 0;
       msg.val = "";
 
-      glz::read_binary(msg, buffer);
+      expect(!glz::read_binary(msg, buffer));
       expect(msg.id == 5);
       expect(msg.val == "hello");
    };
@@ -819,7 +804,7 @@ suite byte_buffer = [] {
       msg.id = 0;
       msg.val = "";
 
-      glz::read_binary(msg, buffer);
+      expect(!glz::read_binary(msg, buffer));
       expect(msg.id == 5);
       expect(msg.val == "hello");
    };
@@ -849,7 +834,7 @@ suite flag_test = [] {
       s.x = false;
       s.z = false;
 
-      glz::read_binary(s, b);
+      expect(!glz::read_binary(s, b));
 
       expect(s.x);
       expect(s.z);

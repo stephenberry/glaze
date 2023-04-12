@@ -19,6 +19,68 @@ namespace glz
 {
    namespace detail
    {
+      template <class... Args>
+      GLZ_ALWAYS_INLINE void dump_type(auto&& value, Args&&... args) noexcept
+      {
+         dump(std::as_bytes(std::span{&value, 1}), std::forward<Args>(args)...);
+      }
+
+      template <uint64_t i, class... Args>
+      GLZ_ALWAYS_INLINE void dump_int(Args&&... args) noexcept
+      {
+         if constexpr (i < 64) {
+            auto c = set_bits<2, uint8_t>(0);
+            set_bits<2, 6>(c, uint8_t(i));
+            dump_type(c, args...);
+         }
+         else if constexpr (i < 16384) {
+            auto c = set_bits<2, uint16_t>(1);
+            set_bits<2, 14>(c, uint16_t(i));
+            dump_type(c, args...);
+         }
+         else if constexpr (i < 1073741824) {
+            auto c = set_bits<2, uint32_t>(2);
+            set_bits<2, 30>(c, uint32_t(i));
+            dump_type(c, args...);
+         }
+         else if constexpr (i < 4611686018427387904) {
+            auto c = set_bits<2, uint64_t>(3);
+            set_bits<2, 62>(c, uint64_t(i));
+            dump_type(c, args...);
+         }
+         else {
+            static_assert(i >= 4611686018427387904, "size not supported");
+         }
+      }
+
+      template <auto Opts, class... Args>
+      GLZ_ALWAYS_INLINE void dump_int(size_t i, Args&&... args) noexcept
+      {
+         if (i < 64) {
+            auto c = set_bits<2, uint8_t>(0);
+            set_bits<2, 6>(c, uint8_t(i));
+            dump_type(c, args...);
+         }
+         else if (i < 16384) {
+            auto c = set_bits<2, uint16_t>(1);
+            set_bits<2, 14>(c, uint16_t(i));
+            dump_type(c, args...);
+         }
+         else if (i < 1073741824) {
+            auto c = set_bits<2, uint32_t>(2);
+            set_bits<2, 30>(c, uint32_t(i));
+            dump_type(c, args...);
+         }
+         else if (i < 4611686018427387904) {
+            auto c = set_bits<2, uint64_t>(3);
+            set_bits<2, 62>(c, uint64_t(i));
+            dump_type(c, args...);
+         }
+         else {
+            std::abort(); // this should never happen because we should never allocate containers of this size
+         }
+      }
+      
       template <class T = void>
       struct to_binary
       {};
@@ -94,14 +156,9 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args) noexcept
          {
-            // dump<static_cast<std::byte>(0)>(args...); // boolean tag
-
-            if (value) {
-               dump<static_cast<std::byte>(1)>(args...);
-            }
-            else {
-               dump<static_cast<std::byte>(0)>(args...);
-            }
+            uint8_t tag = tag::boolean;
+            set_bits<3, 1, uint8_t>(tag, value);
+            dump_type(tag, args...);
          }
       };
 
@@ -123,68 +180,6 @@ namespace glz
          }
       };
 
-      template <class... Args>
-      GLZ_ALWAYS_INLINE void dump_type(auto&& value, Args&&... args) noexcept
-      {
-         dump(std::as_bytes(std::span{&value, 1}), std::forward<Args>(args)...);
-      }
-
-      template <uint64_t i, class... Args>
-      GLZ_ALWAYS_INLINE void dump_int(Args&&... args) noexcept
-      {
-         if constexpr (i < 64) {
-            auto c = set_bits<2, uint8_t>(0);
-            set_bits<2, 6>(c, uint8_t(i));
-            dump_type(c, args...);
-         }
-         else if constexpr (i < 16384) {
-            auto c = set_bits<2, uint16_t>(1);
-            set_bits<2, 14>(c, uint16_t(i));
-            dump_type(c, args...);
-         }
-         else if constexpr (i < 1073741824) {
-            auto c = set_bits<2, uint32_t>(2);
-            set_bits<2, 30>(c, uint32_t(i));
-            dump_type(c, args...);
-         }
-         else if constexpr (i < 4611686018427387904) {
-            auto c = set_bits<2, uint64_t>(3);
-            set_bits<2, 62>(c, uint64_t(i));
-            dump_type(c, args...);
-         }
-         else {
-            static_assert(i >= 4611686018427387904, "size not supported");
-         }
-      }
-
-      template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE void dump_int(size_t i, Args&&... args) noexcept
-      {
-         if (i < 64) {
-            auto c = set_bits<2, uint8_t>(0);
-            set_bits<2, 6>(c, uint8_t(i));
-            dump_type(c, args...);
-         }
-         else if (i < 16384) {
-            auto c = set_bits<2, uint16_t>(1);
-            set_bits<2, 14>(c, uint16_t(i));
-            dump_type(c, args...);
-         }
-         else if (i < 1073741824) {
-            auto c = set_bits<2, uint32_t>(2);
-            set_bits<2, 30>(c, uint32_t(i));
-            dump_type(c, args...);
-         }
-         else if (i < 4611686018427387904) {
-            auto c = set_bits<2, uint64_t>(3);
-            set_bits<2, 62>(c, uint64_t(i));
-            dump_type(c, args...);
-         }
-         else {
-            std::abort(); // this should never happen because we should never allocate containers of this size
-         }
-      }
-
       template <is_variant T>
       struct to_binary<T> final
       {
@@ -198,6 +193,9 @@ namespace glz
                      T var = V{};
                      return var.index();
                   }();
+                  
+                  uint8_t tag = tag::type;
+                  dump_type(tag, args...);
                   dump_int<index>(args...);
                   write<binary>::op<Opts>(v, ctx, std::forward<Args>(args)...);
                },
@@ -212,6 +210,11 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
+            uint8_t tag = tag::number;
+            set_bits<3, 1, uint8_t>(tag, std::is_floating_point_v<T>);
+            set_bits<4, 4, uint8_t>(tag, to_byte_count<decltype(value)>());
+            dump_type(tag, args...);
+            
             dump_type(value, std::forward<Args>(args)...);
          }
       };
@@ -222,6 +225,10 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
+            uint8_t tag = tag::string;
+            set_bits<3, 5, uint8_t>(tag, to_byte_count<std::decay_t<decltype(*value.data())>>());
+            dump_type(tag, args...);
+            
             dump_int<Opts>(value.size(), std::forward<Args>(args)...);
             dump(std::as_bytes(std::span{value.data(), value.size()}), std::forward<Args>(args)...);
          }
@@ -233,11 +240,80 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            if constexpr (!has_static_size<T>) {
-               dump_int<Opts>(value.size(), std::forward<Args>(args)...);
+            using V = typename std::decay_t<T>::value_type;
+            
+            uint8_t tag;
+            
+            if constexpr (boolean_like<V>) {
+               tag = tag::typed_array;
+               set_bits<3, 2, uint8_t>(tag, 0);
+               dump_type(tag, args...);
+               dump_int<Opts>(value.size(), args...);
+               
+               // booleans must be dumped using single bits
+               if constexpr (has_static_size<T>) {
+                  constexpr auto num_bytes = (value.size() + 7) / 8;
+                  std::array<uint8_t, num_bytes> bytes{};
+                  for (size_t byte_i{}, i{}; byte_i < num_bytes - 1; ++byte_i) {
+                     for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
+                        bytes[byte_i] |= uint8_t(value[i]) << bit_i;
+                     }
+                  }
+                  dump(bytes, args...);
+               }
+               else {
+                  const auto num_bytes = (value.size() + 7) / 8;
+                  for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
+                     uint8_t byte{};
+                     for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
+                        byte |= uint8_t(value[i]) << bit_i;
+                     }
+                     dump_type(byte, args...);
+                  }
+               }
             }
-            for (auto&& x : value) {
-               write<binary>::op<Opts>(x, ctx, std::forward<Args>(args)...);
+            else if constexpr (num_t<V>) {
+               tag = tag::typed_array;
+               if constexpr (std::is_floating_point_v<V>) {
+                  set_bits<3, 2, uint8_t>(tag, 2);
+               }
+               else {
+                  set_bits<3, 2, uint8_t>(tag, 1);
+               }
+               set_bits<5, 3, uint8_t>(tag, to_byte_count<V>());
+               dump_type(tag, args...);
+               dump_int<Opts>(value.size(), args...);
+               
+               if constexpr (contiguous<T>) {
+                  dump(std::as_bytes(std::span{value.data(), static_cast<size_t>(value.size())}), args...);
+               }
+               else {
+                  for (auto& x : value) {
+                     dump_type(x, args...);
+                  }
+               }
+            }
+            else if constexpr (str_t<V>) {
+               tag = tag::typed_array;
+               set_bits<3, 2, uint8_t>(tag, 3);
+               set_bits<5, 3, uint8_t>(tag, to_byte_count<std::decay_t<decltype(*std::declval<V>().data())>>());
+               dump_type(tag, args...);
+               dump_int<Opts>(value.size(), args...);
+               
+               for (auto& x : value) {
+                  dump_int<Opts>(x.size(), args...);
+                  dump(std::as_bytes(std::span{x.data(), x.size()}), args...);
+               }
+            }
+            else {
+               tag = tag::untyped_array;
+               set_bits<3, 5, uint8_t>(tag, to_byte_count<V>());
+               dump_type(tag, args...);
+               dump_int<Opts>(value.size(), args...);
+               
+               for (auto&& x : value) {
+                  write<binary>::op<Opts>(x, ctx, args...);
+               }
             }
          }
       };
@@ -248,10 +324,21 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump_int<Opts>(value.size(), std::forward<Args>(args)...);
+            using Key = typename T::key_type;
+            
+            uint8_t tag = tag::object;
+            if constexpr (str_t<Key>) {
+               set_bits<3, 1, uint8_t>(tag, 1);
+            }
+            else {
+               set_bits<3, 1, uint8_t>(tag, 0);
+            }
+            dump_type(tag, args...);
+            
+            dump_int<Opts>(value.size(), args...);
             for (auto&& [k, v] : value) {
-               write<binary>::op<Opts>(k, ctx, std::forward<Args>(args)...);
-               write<binary>::op<Opts>(v, ctx, std::forward<Args>(args)...);
+               write<binary>::op<Opts>(k, ctx, args...);
+               write<binary>::op<Opts>(v, ctx, args...);
             }
          }
       };
@@ -263,11 +350,10 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if (value) {
-               dump<static_cast<std::byte>(1)>(std::forward<Args>(args)...);
-               write<binary>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
+               write<binary>::op<Opts>(*value, ctx, args...);
             }
             else {
-               dump<static_cast<std::byte>(0)>(std::forward<Args>(args)...);
+               dump<std::byte(tag::null)>(args...);
             }
          }
       };
@@ -278,20 +364,18 @@ namespace glz
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
-         {
+         {            
+            uint8_t tag = tag::object;
+            set_bits<3, 1, uint8_t>(tag, 1);
+            dump_type(tag, args...);
+            
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
-            if constexpr (Opts.use_cx_tags) {
-               dump_int<N>(args...); // even though N is known at compile time in this case, it is not known for
-                                     // partial cases, so we still use a compressed integer
-            }
-
+            dump_int<N>(args...);
+            
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
-               if constexpr (Opts.use_cx_tags) {
-                  static constexpr uint32_t hash = murmur3_32(glz::tuplet::get<0>(item));
-                  dump_type(hash, args...);
-               }
+               write<binary>::op<Opts>(glz::tuplet::get<0>(item), ctx, args...);
                write<binary>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, args...);
             });
          }
@@ -304,6 +388,11 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
+            dump<std::byte(tag::untyped_array)>(args...);
+            
+            static constexpr auto N = std::tuple_size_v<meta_t<T>>;
+            dump_int<N>(args...);
+            
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
                write<binary>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<V>)), ctx,
@@ -319,6 +408,11 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
+            dump<std::byte(tag::untyped_array)>(args...);
+            
+            static constexpr auto N = std::tuple_size_v<T>;
+            dump_int<N>(args...);
+            
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<V>>(
                [&](auto I) { write<binary>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...); });
@@ -359,6 +453,10 @@ namespace glz
          static constexpr auto sorted = sort_json_ptrs(partial);
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
          static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
+         
+         uint8_t tag = tag::object;
+         detail::set_bits<3, 1, uint8_t>(tag, 1);
+         detail::dump_type(tag, buffer);
 
          detail::dump_int<N>(buffer);
 
@@ -378,8 +476,7 @@ namespace glz
                static constexpr auto ix = member_it->second.index();
                static constexpr decltype(auto) member_ptr = std::get<ix>(member_it->second);
 
-               static constexpr uint32_t hash = murmur3_32(key);
-               detail::dump_type(hash, buffer);
+               detail::write<binary>::op<Opts>(key, ctx, buffer);
                std::ignore = write<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), buffer, ctx);
             });
          }
