@@ -431,7 +431,7 @@ namespace glz
                }
                ++it;
                
-               [[maybe_unused]] const auto length = int_from_compressed(it, end);
+               const auto length = int_from_compressed(it, end);
                
                const std::string_view key{ it, length };
                
@@ -439,7 +439,7 @@ namespace glz
 
                const auto& p = storage.find(key);
 
-               if (p != storage.end()) {
+               if (p != storage.end()) [[likely]] {
                   std::visit(
                      [&](auto&& member_ptr) {
                         read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end);
@@ -449,7 +449,7 @@ namespace glz
                      return;
                   }
                }
-               else {
+               else [[unlikely]] {
                   ctx.error = error_code::unknown_key;
                   return;
                }
