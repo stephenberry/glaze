@@ -1,4 +1,8 @@
 # Glaze
+> IMPORTANT BINARY SPECIFICATION BREAKING CHANGES
+>
+> In releases 1.2.+, the binary specification, [Crusher](https://github.com/stephenberry/crusher), has been significantly improved to allow one-to-one conversion to and from JSON. It is much like CBOR, but designed to be faster performing, simpler, and in some cases more efficiently compressed.
+
 One of the fastest JSON libraries in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
 
 ## Highlights
