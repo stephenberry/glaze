@@ -15,7 +15,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - Compile time maps with constant time lookups and perfect hashing
 - Nearly zero intermediate allocations
 - Direct memory access through JSON pointer syntax
-- Tagged binary spec through the same API for maximum performance
+- [Tagged binary spec](./docs/binary.md) through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
 - No runtime type information necessary (compiles with `-fno-rtti`)
 - [JSON-RPC 2.0 support](./docs/json-rpc.md)
