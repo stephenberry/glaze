@@ -461,11 +461,13 @@ namespace glz
          requires glaze_array_t<T>
       struct from_binary<T> final
       {
+         static constexpr uint8_t header = set_bits<3>(tag::untyped_array);
+         
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto tag = uint8_t(*it);
-            if (get_bits<3>(tag) != tag::untyped_array) {
+            if (tag != header) {
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -484,11 +486,13 @@ namespace glz
          requires is_std_tuple<T>
       struct from_binary<T> final
       {
+         static constexpr uint8_t header = set_bits<3>(tag::untyped_array);
+         
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto tag = uint8_t(*it);
-            if (get_bits<3>(tag) != tag::untyped_array) {
+            if (tag != header) {
                ctx.error = error_code::syntax_error;
                return;
             }
