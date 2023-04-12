@@ -4,8 +4,6 @@ Glaze provides a tagged binary format to send and receive messages like JSON, bu
 
 The binary specification is known as [Crusher](https://github.com/stephenberry/crusher).
 
-Most classes use `std::memcpy` for maximum performance.
-
 **Write Binary**
 
 ```c++
