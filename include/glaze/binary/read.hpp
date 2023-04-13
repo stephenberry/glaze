@@ -431,7 +431,7 @@ namespace glz
 
             const auto n_keys = int_from_compressed(it, end);
 
-            static constexpr auto storage = detail::make_map<T, Opts.allow_hash_check>();
+            static constexpr auto storage = detail::make_map<T, Opts.use_hash_comparison>();
 
             for (size_t i = 0; i < n_keys; ++i) {
                if (get_bits<3>(uint8_t(*it)) != tag::string) {

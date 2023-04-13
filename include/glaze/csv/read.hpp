@@ -290,7 +290,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
+            static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
             // static constexpr auto N = std::tuple_size_v<meta_t<T>>;
 
             if constexpr (Opts.layout == rowwise) {

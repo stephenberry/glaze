@@ -1256,7 +1256,7 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
+                  static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
                   const auto& member_it = frozen_map.find(key);
                   if (member_it != frozen_map.end()) [[likely]] {
                      if constexpr (Opts.error_on_missing_keys) {
