@@ -635,7 +635,7 @@ namespace glz
          return arr;
       }
 
-      consteval bool needs_escaping(const auto& S) noexcept
+      GLZ_ALWAYS_INLINE constexpr bool needs_escaping(const auto& S) noexcept
       {
          for (const auto& c : S) {
             if (c == '"') {
