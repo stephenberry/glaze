@@ -345,13 +345,13 @@ namespace glz
                   using Key = decltype(it->first);
                   if constexpr (str_t<Key> || char_t<Key>) {
                      write<json>::op<Opts>(it->first, ctx, args...);
+                     dump<':'>(args...);
                   }
                   else {
                      dump<'"'>(args...);
                      write<json>::op<Opts>(it->first, ctx, args...);
-                     dump<'"'>(args...);
+                     dump<R"(":)">(args...);
                   }
-                  dump<':'>(args...);
                   if constexpr (Opts.prettify) {
                      dump<' '>(args...);
                   }
