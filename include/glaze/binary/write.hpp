@@ -252,7 +252,7 @@ namespace glz
             if constexpr (boolean_like<V>) {
                tag = tag::typed_array;
                set_bits<3, 2, uint8_t>(tag, 3);
-               //set_bits<5, 1, uint8_t>(tag, 0); // no need to set bits to zero
+               // set_bits<5, 1, uint8_t>(tag, 0); // no need to set bits to zero
                dump_type(tag, args...);
                dump_int<Opts>(value.size(), args...);
 
@@ -281,7 +281,7 @@ namespace glz
             else if constexpr (num_t<V>) {
                tag = tag::typed_array;
                if constexpr (std::is_floating_point_v<V>) {
-                  //set_bits<3, 2, uint8_t>(tag, 0); // no need to set bits to zero
+                  // set_bits<3, 2, uint8_t>(tag, 0); // no need to set bits to zero
                }
                else {
                   set_bits<3, 2, uint8_t>(tag, 1 + std::unsigned_integral<V>);
