@@ -331,13 +331,13 @@ namespace glz
 
             using Key = typename T::key_type;
             if constexpr (str_t<Key>) {
-               if (get_bits<3, 1>(tag) != 1) {
+               if (get_bits<3, 2>(tag) != 0) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
             }
             else {
-               if (get_bits<3, 1>(tag) != 0) {
+               if (get_bits<3, 2>(tag) != 1 + std::unsigned_integral<Key>) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -415,11 +415,11 @@ namespace glz
          requires glaze_object_t<T>
       struct from_binary<T> final
       {
-         static constexpr uint8_t header = set_bits<3, 1, uint8_t>(set_bits<3>(tag::object), 1);
-
          template <auto Opts>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            static constexpr uint8_t header = set_bits<5, 3, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::object), 0), sizeof(decltype(*it)));
+            
             const auto tag = uint8_t(*it);
             if (tag != header) {
                ctx.error = error_code::syntax_error;
