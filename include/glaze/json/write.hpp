@@ -184,116 +184,48 @@ namespace glz
                // Example: if n were of length 1 and needed to be escaped, then it would require 4 characters
                // for the original, the escape, and the quote
                if constexpr (detail::resizeable<B>) {
-                  if ((ix + 4 * n) >= b.size()) [[unlikely]] {
-                     b.resize((std::max)(b.size() * 2, ix + 4 * n));
+                  const auto k = ix + 4 * n;
+                  if (k >= b.size()) [[unlikely]] {
+                     b.resize((std::max)(b.size() * 2, k));
                   }
                }
+               // now we don't have to check writing
 
                dump_unchecked<'"'>(b, ix);
-
-               using V = std::decay_t<decltype(b[0])>;
-               if constexpr (std::same_as<V, std::byte>) {
-                  // now we don't have to check writing
-                  for (auto&& c : str) {
-                     switch (c) {
-                     case '"':
-                        b[ix] = static_cast<std::byte>('\\');
-                        ++ix;
-                        b[ix] = static_cast<std::byte>('\"');
-                        ++ix;
-                        break;
-                     case '\\':
-                        b[ix] = static_cast<std::byte>('\\');
-                        ++ix;
-                        b[ix] = static_cast<std::byte>('\\');
-                        ++ix;
-                        break;
-                     case '\b':
-                        b[ix] = static_cast<std::byte>('\\');
-                        ++ix;
-                        b[ix] = static_cast<std::byte>('b');
-                        ++ix;
-                        break;
-                     case '\f':
-                        b[ix] = static_cast<std::byte>('\\');
-                        ++ix;
-                        b[ix] = static_cast<std::byte>('f');
-                        ++ix;
-                        break;
-                     case '\n':
-                        b[ix] = static_cast<std::byte>('\\');
-                        ++ix;
-                        b[ix] = static_cast<std::byte>('n');
-                        ++ix;
-                        break;
-                     case '\r':
-                        b[ix] = static_cast<std::byte>('\\');
-                        ++ix;
-                        b[ix] = static_cast<std::byte>('r');
-                        ++ix;
-                        break;
-                     case '\t':
-                        b[ix] = static_cast<std::byte>('\\');
-                        ++ix;
-                        b[ix] = static_cast<std::byte>('t');
-                        ++ix;
-                        break;
-                     default:
-                        b[ix] = static_cast<std::byte>(c);
-                        ++ix;
-                     }
-                  }
-               }
-               else {
-                  // now we don't have to check writing
-                  for (auto&& c : str) {
-                     switch (c) {
-                     case '"':
-                        b[ix] = '\\';
-                        ++ix;
-                        b[ix] = '\"';
-                        ++ix;
-                        break;
-                     case '\\':
-                        b[ix] = '\\';
-                        ++ix;
-                        b[ix] = '\\';
-                        ++ix;
-                        break;
-                     case '\b':
-                        b[ix] = '\\';
-                        ++ix;
-                        b[ix] = 'b';
-                        ++ix;
-                        break;
-                     case '\f':
-                        b[ix] = '\\';
-                        ++ix;
-                        b[ix] = 'f';
-                        ++ix;
-                        break;
-                     case '\n':
-                        b[ix] = '\\';
-                        ++ix;
-                        b[ix] = 'n';
-                        ++ix;
-                        break;
-                     case '\r':
-                        b[ix] = '\\';
-                        ++ix;
-                        b[ix] = 'r';
-                        ++ix;
-                        break;
-                     case '\t':
-                        b[ix] = '\\';
-                        ++ix;
-                        b[ix] = 't';
-                        ++ix;
-                        break;
-                     default:
-                        b[ix] = c;
-                        ++ix;
-                     }
+               
+               for (auto&& c : str) {
+                  switch (c) {
+                  case '"':
+                        std::memcpy(data_ptr(b) + ix, R"(\")", 2);
+                        ix += 2;
+                     break;
+                  case '\\':
+                        std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
+                        ix += 2;
+                     break;
+                  case '\b':
+                        std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
+                        ix += 2;
+                     break;
+                  case '\f':
+                        std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
+                        ix += 2;
+                     break;
+                  case '\n':
+                        std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
+                        ix += 2;
+                     break;
+                  case '\r':
+                        std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
+                        ix += 2;
+                     break;
+                  case '\t':
+                        std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
+                        ix += 2;
+                     break;
+                        [[likely]] default:
+                        std::memcpy(data_ptr(b) + ix, &c, 1);
+                     ++ix;
                   }
                }
 
