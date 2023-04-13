@@ -537,8 +537,8 @@ namespace glz
             dump<'['>(std::forward<Args>(args)...);
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(std::forward<Args>(args)...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
@@ -553,19 +553,19 @@ namespace glz
                // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
-                  dump<','>(std::forward<Args>(args)...);
+                  dump<','>(args...);
                   if constexpr (Opts.prettify) {
-                     dump<'\n'>(std::forward<Args>(args)...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                     dump<'\n'>(args...);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
                }
             });
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
-               dump<'\n'>(std::forward<Args>(args)...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
-            dump<']'>(std::forward<Args>(args)...);
+            dump<']'>(args...);
          }
       };
 
@@ -596,8 +596,8 @@ namespace glz
             dump<'['>(std::forward<Args>(args)...);
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(std::forward<Args>(args)...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
@@ -611,19 +611,19 @@ namespace glz
                // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
-                  dump<','>(std::forward<Args>(args)...);
+                  dump<','>(args...);
                   if constexpr (Opts.prettify) {
-                     dump<'\n'>(std::forward<Args>(args)...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                     dump<'\n'>(args...);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
                }
             });
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
-               dump<'\n'>(std::forward<Args>(args)...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
-            dump<']'>(std::forward<Args>(args)...);
+            dump<']'>(args...);
          }
       };
 
