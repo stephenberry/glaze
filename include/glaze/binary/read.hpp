@@ -70,7 +70,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
          {
             static constexpr uint8_t header =
-               set_bits<4, 4, uint8_t>(set_bits<3, 1, uint8_t>(set_bits<3>(tag::number), std::is_floating_point_v<T>),
+               set_bits<5, 3, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::number), !std::floating_point<T> + std::unsigned_integral<T>),
                                        to_byte_count<decltype(value)>());
 
             const auto tag = uint8_t(*it);
@@ -196,7 +196,7 @@ namespace glz
             const auto tag = uint8_t(*it);
 
             if constexpr (boolean_like<V>) {
-               static constexpr uint8_t header = set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array), 0);
+               static constexpr uint8_t header = set_bits<5, 1, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array), 3), 0);
 
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
@@ -226,7 +226,7 @@ namespace glz
             }
             else if constexpr (num_t<V>) {
                static constexpr uint8_t header = set_bits<5, 3, uint8_t>(
-                  set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array), std::is_floating_point_v<V> + 1),
+                  set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array), !std::floating_point<V> + std::unsigned_integral<V>),
                   to_byte_count<V>());
 
                if (tag != header) {
@@ -259,8 +259,8 @@ namespace glz
             }
             else if constexpr (str_t<V>) {
                static constexpr uint8_t header =
-                  set_bits<5, 3, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array), 3),
-                                          to_byte_count<decltype(*std::declval<V>().data())>());
+                  set_bits<6, 2, uint8_t>(set_bits<5, 1, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array), 3),
+                                          1), to_byte_count<decltype(*std::declval<V>().data())>());
 
                if (tag != header) {
                   ctx.error = error_code::syntax_error;

@@ -50,7 +50,7 @@ namespace glz
 
    /* This struct can help compiler generate 2-byte load/store */
    /* instructions on platforms that support unaligned access. */
-   struct pair
+   struct pair final
    {
       char c1, c2;
    };
@@ -147,7 +147,7 @@ namespace glz
       return to_chars(buf + sign, sign ? uint32_t(neg) : uint32_t(val));
    }
 
-   inline auto* to_chars_u64_len_8(auto* buf, uint32_t val) noexcept
+   GLZ_ALWAYS_INLINE auto* to_chars_u64_len_8(auto* buf, uint32_t val) noexcept
    {
       /* 8 digits: aabbccdd */
       uint32_t aa, bb, cc, dd, aabb, ccdd;
@@ -164,7 +164,7 @@ namespace glz
       return buf + 8;
    }
 
-   inline auto* to_chars_u64_len_4(auto* buf, uint32_t val) noexcept
+   GLZ_ALWAYS_INLINE auto* to_chars_u64_len_4(auto* buf, uint32_t val) noexcept
    {
       /* 4 digits: aabb */
       uint32_t aa, bb;

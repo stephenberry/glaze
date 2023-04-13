@@ -11,7 +11,7 @@
 namespace glz::detail
 {
    template <class T>
-   inline constexpr auto sized_integer_conversion() noexcept
+   GLZ_ALWAYS_INLINE constexpr auto sized_integer_conversion() noexcept
    {
       if constexpr (std::is_signed_v<T>) {
          if constexpr (sizeof(T) <= 32) {
@@ -40,7 +40,7 @@ namespace glz::detail
    struct write_chars
    {
       template <auto Opts, class B>
-      static void op(num_t auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
+      inline static void op(num_t auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
       {
          /*if constexpr (std::same_as<std::decay_t<B>, std::string>) {
             // more efficient strings in C++23:

@@ -82,9 +82,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args)
          {
-            dump<'"'>(args...);
-            dump("hidden type should not have been written", args...);
-            dump<'"'>(args...);
+            dump(R"("hidden type should not have been written")", args...);
          }
       };
 
@@ -94,9 +92,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args)
          {
-            dump<'"'>(args...);
-            dump("skip type should not have been written", args...);
-            dump<'"'>(args...);
+            dump(R"("skip type should not have been written")", args...);
          }
       };
 
@@ -184,7 +180,9 @@ namespace glz
                const sv str = value;
                const auto n = str.size();
 
-               // we use 4 * n to handle potential escape characters and quoted bounds (excessive safety)
+               // we use 4 * n to handle potential escape characters and quoted bounds
+               // Example: if n were of length 1 and needed to be escaped, then it would require 4 characters
+               // for the original, the escape, and the quote
                if constexpr (detail::resizeable<B>) {
                   if ((ix + 4 * n) >= b.size()) [[unlikely]] {
                      b.resize((std::max)(b.size() * 2, ix + 4 * n));
@@ -199,35 +197,35 @@ namespace glz
                   for (auto&& c : str) {
                      switch (c) {
                      case '"':
-                        b[ix++] = static_cast<std::byte>('\\');
-                        b[ix++] = static_cast<std::byte>('\"');
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
+                           b[ix] = static_cast<std::byte>('\"'); ++ix;
                         break;
                      case '\\':
-                        b[ix++] = static_cast<std::byte>('\\');
-                        b[ix++] = static_cast<std::byte>('\\');
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
                         break;
                      case '\b':
-                        b[ix++] = static_cast<std::byte>('\\');
-                        b[ix++] = static_cast<std::byte>('b');
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
+                           b[ix] = static_cast<std::byte>('b'); ++ix;
                         break;
                      case '\f':
-                        b[ix++] = static_cast<std::byte>('\\');
-                        b[ix++] = static_cast<std::byte>('f');
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
+                           b[ix] = static_cast<std::byte>('f'); ++ix;
                         break;
                      case '\n':
-                        b[ix++] = static_cast<std::byte>('\\');
-                        b[ix++] = static_cast<std::byte>('n');
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
+                           b[ix] = static_cast<std::byte>('n'); ++ix;
                         break;
                      case '\r':
-                        b[ix++] = static_cast<std::byte>('\\');
-                        b[ix++] = static_cast<std::byte>('r');
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
+                           b[ix] = static_cast<std::byte>('r'); ++ix;
                         break;
                      case '\t':
-                        b[ix++] = static_cast<std::byte>('\\');
-                        b[ix++] = static_cast<std::byte>('t');
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
+                           b[ix] = static_cast<std::byte>('t'); ++ix;
                         break;
                      default:
-                        b[ix++] = static_cast<std::byte>(c);
+                           b[ix] = static_cast<std::byte>(c); ++ix;
                      }
                   }
                }
@@ -236,35 +234,35 @@ namespace glz
                   for (auto&& c : str) {
                      switch (c) {
                      case '"':
-                        b[ix++] = '\\';
-                        b[ix++] = '\"';
+                           b[ix] = '\\'; ++ix;
+                           b[ix] = '\"'; ++ix;
                         break;
                      case '\\':
-                        b[ix++] = '\\';
-                        b[ix++] = '\\';
+                           b[ix] = '\\'; ++ix;
+                           b[ix] = '\\'; ++ix;
                         break;
                      case '\b':
-                        b[ix++] = '\\';
-                        b[ix++] = 'b';
+                           b[ix] = '\\'; ++ix;
+                           b[ix] = 'b'; ++ix;
                         break;
                      case '\f':
-                        b[ix++] = '\\';
-                        b[ix++] = 'f';
+                           b[ix] = '\\'; ++ix;
+                           b[ix] = 'f'; ++ix;
                         break;
                      case '\n':
-                        b[ix++] = '\\';
-                        b[ix++] = 'n';
+                           b[ix] = '\\'; ++ix;
+                           b[ix] = 'n'; ++ix;
                         break;
                      case '\r':
-                        b[ix++] = '\\';
-                        b[ix++] = 'r';
+                           b[ix] = '\\'; ++ix;
+                           b[ix] = 'r'; ++ix;
                         break;
                      case '\t':
-                        b[ix++] = '\\';
-                        b[ix++] = 't';
+                           b[ix] = '\\'; ++ix;
+                           b[ix] = 't'; ++ix;
                         break;
                      default:
-                        b[ix++] = c;
+                           b[ix] = c; ++ix;
                      }
                   }
                }
@@ -329,11 +327,11 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump<'['>(std::forward<Args>(args)...);
+            dump<'['>(args...);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(std::forward<Args>(args)...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             const auto is_empty = [&]() -> bool {
                if constexpr (has_size<T>) {
@@ -346,24 +344,24 @@ namespace glz
 
             if (!is_empty) {
                auto it = value.begin();
-               write<json>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
+               write<json>::op<Opts>(*it, ctx, args...);
                ++it;
                const auto end = value.end();
                for (; it != end; ++it) {
-                  dump<','>(std::forward<Args>(args)...);
+                  dump<','>(args...);
                   if constexpr (Opts.prettify) {
-                     dump<'\n'>(std::forward<Args>(args)...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                     dump<'\n'>(args...);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
-                  write<json>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(*it, ctx, args...);
                }
                if constexpr (Opts.prettify) {
                   ctx.indentation_level -= Opts.indentation_width;
-                  dump<'\n'>(std::forward<Args>(args)...);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                  dump<'\n'>(args...);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                }
             }
-            dump<']'>(std::forward<Args>(args)...);
+            dump<']'>(args...);
          }
       };
 
@@ -373,29 +371,29 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump<'{'>(std::forward<Args>(args)...);
+            dump<'{'>(args...);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(std::forward<Args>(args)...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             if (!value.empty()) {
                auto it = value.cbegin();
                auto write_pair = [&] {
                   using Key = decltype(it->first);
                   if constexpr (str_t<Key> || char_t<Key>) {
-                     write<json>::op<Opts>(it->first, ctx, std::forward<Args>(args)...);
+                     write<json>::op<Opts>(it->first, ctx, args...);
                   }
                   else {
-                     dump<'"'>(std::forward<Args>(args)...);
-                     write<json>::op<Opts>(it->first, ctx, std::forward<Args>(args)...);
-                     dump<'"'>(std::forward<Args>(args)...);
+                     dump<'"'>(args...);
+                     write<json>::op<Opts>(it->first, ctx, args...);
+                     dump<'"'>(args...);
                   }
-                  dump<':'>(std::forward<Args>(args)...);
+                  dump<':'>(args...);
                   if constexpr (Opts.prettify) {
-                     dump<' '>(std::forward<Args>(args)...);
+                     dump<' '>(args...);
                   }
-                  write<json>::op<Opts>(it->second, ctx, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(it->second, ctx, args...);
                };
                write_pair();
                ++it;
@@ -406,20 +404,20 @@ namespace glz
                   if constexpr (nullable_t<Value> && Opts.skip_null_members) {
                      if (!bool(it->second)) continue;
                   }
-                  dump<','>(std::forward<Args>(args)...);
+                  dump<','>(args...);
                   if constexpr (Opts.prettify) {
-                     dump<'\n'>(std::forward<Args>(args)...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                     dump<'\n'>(args...);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
                   write_pair();
                }
                if constexpr (Opts.prettify) {
                   ctx.indentation_level -= Opts.indentation_width;
-                  dump<'\n'>(std::forward<Args>(args)...);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                  dump<'\n'>(args...);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                }
             }
-            dump<'}'>(std::forward<Args>(args)...);
+            dump<'}'>(args...);
          }
       };
 
@@ -460,28 +458,28 @@ namespace glz
                   if constexpr (Opts.write_type_info && !tag_v<T>.empty() && glaze_object_t<V>) {
                      // must first write out type
                      if constexpr (Opts.prettify) {
-                        dump<"{\n">(std::forward<Args>(args)...);
+                        dump<"{\n">(args...);
                         ctx.indentation_level += Opts.indentation_width;
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
-                        dump<R"("type": ")">(std::forward<Args>(args)...);
-                        dump<'"'>(std::forward<Args>(args)...);
-                        dump(tag_v<T>, std::forward<Args>(args)...);
-                        dump<"\": \"">(std::forward<Args>(args)...);
-                        dump(ids_v<T>[value.index()], std::forward<Args>(args)...);
-                        dump<"\",\n">(std::forward<Args>(args)...);
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                        dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+                        dump<R"("type": ")">(args...);
+                        dump<'"'>(args...);
+                        dump(tag_v<T>, args...);
+                        dump<"\": \"">(args...);
+                        dump(ids_v<T>[value.index()], args...);
+                        dump<"\",\n">(args...);
+                        dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                      }
                      else {
-                        dump<"{\"">(std::forward<Args>(args)...);
-                        dump(tag_v<T>, std::forward<Args>(args)...);
-                        dump<"\":\"">(std::forward<Args>(args)...);
-                        dump(ids_v<T>[value.index()], std::forward<Args>(args)...);
-                        dump<R"(",)">(std::forward<Args>(args)...);
+                        dump<"{\"">(args...);
+                        dump(tag_v<T>, args...);
+                        dump<"\":\"">(args...);
+                        dump(ids_v<T>[value.index()], args...);
+                        dump<R"(",)">(args...);
                      }
-                     write<json>::op<opening_handled<Opts>()>(val, ctx, std::forward<Args>(args)...);
+                     write<json>::op<opening_handled<Opts>()>(val, ctx, args...);
                   }
                   else {
-                     write<json>::op<Opts>(val, ctx, std::forward<Args>(args)...);
+                     write<json>::op<Opts>(val, ctx, args...);
                   }
                },
                value);
@@ -537,8 +535,8 @@ namespace glz
             dump<'['>(std::forward<Args>(args)...);
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(std::forward<Args>(args)...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
@@ -553,19 +551,19 @@ namespace glz
                // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
-                  dump<','>(std::forward<Args>(args)...);
+                  dump<','>(args...);
                   if constexpr (Opts.prettify) {
-                     dump<'\n'>(std::forward<Args>(args)...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                     dump<'\n'>(args...);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
                }
             });
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
-               dump<'\n'>(std::forward<Args>(args)...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
-            dump<']'>(std::forward<Args>(args)...);
+            dump<']'>(args...);
          }
       };
 
@@ -593,37 +591,37 @@ namespace glz
                }
             }();
 
-            dump<'['>(std::forward<Args>(args)...);
+            dump<'['>(args...);
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(std::forward<Args>(args)...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, args...);
                }
                else {
-                  write<json>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(std::get<I>(value), ctx, args...);
                }
                // MSVC bug if this logic is in the `if constexpr`
                // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
-                  dump<','>(std::forward<Args>(args)...);
+                  dump<','>(args...);
                   if constexpr (Opts.prettify) {
-                     dump<'\n'>(std::forward<Args>(args)...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                     dump<'\n'>(args...);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
                }
             });
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
-               dump<'\n'>(std::forward<Args>(args)...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
-            dump<']'>(std::forward<Args>(args)...);
+            dump<']'>(args...);
          }
       };
 

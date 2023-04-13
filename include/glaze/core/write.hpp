@@ -16,7 +16,7 @@ namespace glz
    concept output_buffer = range<Buffer> && (sizeof(range_value_t<Buffer>) == sizeof(char));
 
    template <class T>
-   inline auto data_ptr(T& buffer)
+   GLZ_ALWAYS_INLINE auto data_ptr(T& buffer) noexcept
    {
       if constexpr (detail::resizeable<T>) {
          return buffer.data();
