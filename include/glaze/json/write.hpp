@@ -192,39 +192,39 @@ namespace glz
                // now we don't have to check writing
 
                dump_unchecked<'"'>(b, ix);
-               
+
                for (auto&& c : str) {
                   switch (c) {
                   case '"':
-                        std::memcpy(data_ptr(b) + ix, R"(\")", 2);
-                        ix += 2;
+                     std::memcpy(data_ptr(b) + ix, R"(\")", 2);
+                     ix += 2;
                      break;
                   case '\\':
-                        std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
-                        ix += 2;
+                     std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
+                     ix += 2;
                      break;
                   case '\b':
-                        std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
-                        ix += 2;
+                     std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
+                     ix += 2;
                      break;
                   case '\f':
-                        std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
-                        ix += 2;
+                     std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
+                     ix += 2;
                      break;
                   case '\n':
-                        std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
-                        ix += 2;
+                     std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
+                     ix += 2;
                      break;
                   case '\r':
-                        std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
-                        ix += 2;
+                     std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
+                     ix += 2;
                      break;
                   case '\t':
-                        std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
-                        ix += 2;
+                     std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
+                     ix += 2;
                      break;
-                        [[likely]] default:
-                        std::memcpy(data_ptr(b) + ix, &c, 1);
+                  [[likely]] default:
+                     std::memcpy(data_ptr(b) + ix, &c, 1);
                      ++ix;
                   }
                }

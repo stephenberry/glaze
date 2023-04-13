@@ -419,8 +419,9 @@ namespace glz
          template <auto Opts>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            static constexpr uint8_t header = set_bits<5, 3, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::object), 0), sizeof(decltype(*it)));
-            
+            static constexpr uint8_t header =
+               set_bits<5, 3, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::object), 0), sizeof(decltype(*it)));
+
             const auto tag = uint8_t(*it);
             if (tag != header) {
                ctx.error = error_code::syntax_error;

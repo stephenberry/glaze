@@ -10,7 +10,9 @@ namespace glz
    template <class = void, std::size_t... Is>
    constexpr auto indexer(std::index_sequence<Is...>) noexcept
    {
-      return [](auto&& f) noexcept -> decltype(auto) { return decltype(f)(f)(std::integral_constant<std::size_t, Is>{}...); };
+      return [](auto&& f) noexcept -> decltype(auto) {
+         return decltype(f)(f)(std::integral_constant<std::size_t, Is>{}...);
+      };
    }
 
    // takes a number N

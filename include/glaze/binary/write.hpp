@@ -335,7 +335,7 @@ namespace glz
 
             uint8_t tag = tag::object;
             if constexpr (str_t<Key>) {
-               //set_bits<3, 1, uint8_t>(tag, 0); // no need to set zero
+               // set_bits<3, 1, uint8_t>(tag, 0); // no need to set zero
             }
             else {
                set_bits<3, 2, uint8_t>(tag, 1 + std::unsigned_integral<Key>);
@@ -373,7 +373,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             uint8_t tag = tag::object;
-            //detail::set_bits<3, 2, uint8_t>(tag, 0); // no need to set zero
+            // detail::set_bits<3, 2, uint8_t>(tag, 0); // no need to set zero
             detail::set_bits<5, 3, uint8_t>(tag, 1);
             dump_type(tag, args...);
 
@@ -463,7 +463,7 @@ namespace glz
          static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
 
          uint8_t tag = tag::object;
-         //detail::set_bits<3, 2, uint8_t>(tag, 0); // no need to set zero
+         // detail::set_bits<3, 2, uint8_t>(tag, 0); // no need to set zero
          detail::set_bits<5, 3, uint8_t>(tag, sizeof(decltype(buffer[0])));
          detail::dump_type(tag, buffer);
 

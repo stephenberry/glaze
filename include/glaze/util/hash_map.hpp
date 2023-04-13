@@ -249,7 +249,7 @@ namespace glz::detail
          return uint64_t(-1);
       }
    };
-   
+
    template <uint64_t N>
    consteval auto fit_unsigned_type() noexcept
    {
