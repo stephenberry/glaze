@@ -82,9 +82,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args)
          {
-            dump<'"'>(args...);
-            dump("hidden type should not have been written", args...);
-            dump<'"'>(args...);
+            dump(R"("hidden type should not have been written")", args...);
          }
       };
 
@@ -94,9 +92,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args)
          {
-            dump<'"'>(args...);
-            dump("skip type should not have been written", args...);
-            dump<'"'>(args...);
+            dump(R"("skip type should not have been written")", args...);
          }
       };
 
@@ -593,7 +589,7 @@ namespace glz
                }
             }();
 
-            dump<'['>(std::forward<Args>(args)...);
+            dump<'['>(args...);
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
                dump<'\n'>(args...);
@@ -602,10 +598,10 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, args...);
                }
                else {
-                  write<json>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(std::get<I>(value), ctx, args...);
                }
                // MSVC bug if this logic is in the `if constexpr`
                // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
@@ -637,7 +633,7 @@ namespace glz
          return arr;
       }
 
-      GLZ_ALWAYS_INLINE constexpr bool needs_escaping(const auto& S) noexcept
+      consteval bool needs_escaping(const auto& S) noexcept
       {
          for (const auto& c : S) {
             if (c == '"') {
