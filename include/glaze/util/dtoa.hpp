@@ -17,7 +17,7 @@ namespace glz
 
    /** Multiplies two 64-bit unsigned integers (a * b),
        returns the 128-bit result as 'hi' and 'lo'. */
-   inline void u128_mul(uint64_t a, uint64_t b, uint64_t* hi, uint64_t* lo) noexcept
+   GLZ_ALWAYS_INLINE void u128_mul(uint64_t a, uint64_t b, uint64_t* hi, uint64_t* lo) noexcept
    {
 #ifdef __SIZEOF_INT128__
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -51,7 +51,7 @@ namespace glz
 
    /** Multiplies two 64-bit unsigned integers and add a value (a * b + c),
        returns the 128-bit result as 'hi' and 'lo'. */
-   inline void u128_mul_add(uint64_t a, uint64_t b, uint64_t c, uint64_t* hi, uint64_t* lo) noexcept
+   GLZ_ALWAYS_INLINE void u128_mul_add(uint64_t a, uint64_t b, uint64_t c, uint64_t* hi, uint64_t* lo) noexcept
    {
 #ifdef __SIZEOF_INT128__
 #if defined(__GNUC__) || defined(__GNUG__)
@@ -75,7 +75,7 @@ namespace glz
    }
 
    /** Multiplies 128-bit integer and returns highest 64-bit rounded value. */
-   inline uint64_t round_to_odd(uint64_t hi, uint64_t lo, uint64_t cp) noexcept
+   GLZ_ALWAYS_INLINE uint64_t round_to_odd(uint64_t hi, uint64_t lo, uint64_t cp) noexcept
    {
       uint64_t x_hi, x_lo, y_hi, y_lo;
       u128_mul(cp, lo, &x_hi, &x_lo);
