@@ -802,7 +802,7 @@ namespace glz
       // Output variants in the following format  ["variant_type", variant_json_data] with
       // glz::detail:array_variant(&T::var);
       template <is_variant T>
-      struct array_var_wrapper
+      struct array_variant_wrapper
       {
          T& value;
       };
@@ -810,7 +810,7 @@ namespace glz
       // template <class T>
       // using array_var = wrap<array_var_wrapper, T>;
       template <class T>
-      struct array_variant : wrap<array_var_wrapper, T>
+      struct array_variant : wrap<array_variant_wrapper, T>
       {};
       template <class T>
       array_variant(T) -> array_variant<T>; // Only needed on older compilers until we move to template alias deduction

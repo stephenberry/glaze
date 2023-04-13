@@ -479,7 +479,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             std::visit(
                [&](auto&& val) {
@@ -517,10 +517,10 @@ namespace glz
       };
 
       template <class T>
-      struct to_json<array_var_wrapper<T>>
+      struct to_json<array_variant_wrapper<T>>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& wrapper, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_FLATTEN static void op(auto&& wrapper, is_context auto&& ctx, Args&&... args) noexcept
          {
             auto& value = wrapper.value;
             dump<'['>(args...);
@@ -551,7 +551,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<std::decay_t<T>>) {
@@ -610,7 +610,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<std::decay_t<T>>) {
@@ -680,7 +680,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Options>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             if constexpr (!Options.opening_handled) {
                dump<'{'>(b, ix);

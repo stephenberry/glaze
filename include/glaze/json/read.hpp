@@ -1605,7 +1605,7 @@ namespace glz
       };
 
       template <class T>
-      struct from_json<array_var_wrapper<T>>
+      struct from_json<array_variant_wrapper<T>>
       {
          template <auto Options>
          GLZ_FLATTEN static void op(auto&& wrapper, is_context auto&& ctx, auto&& it, auto&& end)
