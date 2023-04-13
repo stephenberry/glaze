@@ -337,7 +337,8 @@ namespace glz
                }
             }
             else {
-               if (get_bits<3, 2>(tag) != 1 + std::unsigned_integral<Key>) {
+               static constexpr uint8_t type = 1 + std::unsigned_integral<Key>;
+               if (get_bits<3, 2>(tag) != type) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
