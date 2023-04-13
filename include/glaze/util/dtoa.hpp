@@ -785,7 +785,7 @@ namespace glz
       *lo = pow10_sig_table_128[idx * 2 + 1];
    }*/
 
-   inline void pow10_table_get_sig_128(int32_t exp10, uint64_t hilo[2]) noexcept
+   inline void pow10_table_get_sig_128(const int32_t exp10, uint64_t hilo[2]) noexcept
    {
       const int32_t idx = exp10 - (POW10_SIG_TABLE_128_MIN_EXP);
       std::memcpy(hilo, pow10_sig_table_128.data() + idx * 2, 16);
@@ -888,7 +888,6 @@ namespace glz
     */
    inline char* write_u64_len_15_to_17_trim(char* buf, uint64_t sig) noexcept
    {
-      bool lz; /* leading zero */
       uint32_t tz1, tz2, tz; /* trailing zero */
 
       uint32_t abbccddee = uint32_t(sig / 100000000);
@@ -903,7 +902,7 @@ namespace glz
       /* write abbcc */
       buf[0] = uint8_t(a + '0');
       buf += a > 0;
-      lz = bb < 10 && a == 0;
+      bool lz = bb < 10 && a == 0; /* leading zero */
       std::memcpy(buf, char_table + (bb * 2 + lz), 2);
       buf -= lz;
       std::memcpy(buf + 2, char_table + 2 * cc, 2);
