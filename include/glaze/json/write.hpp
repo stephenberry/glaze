@@ -199,35 +199,35 @@ namespace glz
                   for (auto&& c : str) {
                      switch (c) {
                      case '"':
-                        b[ix++] = static_cast<std::byte>('\\');
-                        b[ix++] = static_cast<std::byte>('\"');
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
+                           b[ix] = static_cast<std::byte>('\"'); ++ix;
                         break;
                      case '\\':
-                        b[ix++] = static_cast<std::byte>('\\');
-                        b[ix++] = static_cast<std::byte>('\\');
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
                         break;
                      case '\b':
-                        b[ix++] = static_cast<std::byte>('\\');
-                        b[ix++] = static_cast<std::byte>('b');
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
+                           b[ix] = static_cast<std::byte>('b'); ++ix;
                         break;
                      case '\f':
-                        b[ix++] = static_cast<std::byte>('\\');
-                        b[ix++] = static_cast<std::byte>('f');
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
+                           b[ix] = static_cast<std::byte>('f'); ++ix;
                         break;
                      case '\n':
-                        b[ix++] = static_cast<std::byte>('\\');
-                        b[ix++] = static_cast<std::byte>('n');
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
+                           b[ix] = static_cast<std::byte>('n'); ++ix;
                         break;
                      case '\r':
-                        b[ix++] = static_cast<std::byte>('\\');
-                        b[ix++] = static_cast<std::byte>('r');
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
+                           b[ix] = static_cast<std::byte>('r'); ++ix;
                         break;
                      case '\t':
-                        b[ix++] = static_cast<std::byte>('\\');
-                        b[ix++] = static_cast<std::byte>('t');
+                           b[ix] = static_cast<std::byte>('\\'); ++ix;
+                           b[ix] = static_cast<std::byte>('t'); ++ix;
                         break;
                      default:
-                        b[ix++] = static_cast<std::byte>(c);
+                           b[ix] = static_cast<std::byte>(c); ++ix;
                      }
                   }
                }
@@ -236,32 +236,32 @@ namespace glz
                   for (auto&& c : str) {
                      switch (c) {
                      case '"':
-                        b[ix++] = '\\';
-                        b[ix++] = '\"';
+                           b[ix] = '\\'; ++ix;
+                           b[ix] = '\"'; ++ix;
                         break;
                      case '\\':
-                        b[ix++] = '\\';
-                        b[ix++] = '\\';
+                           b[ix] = '\\'; ++ix;
+                           b[ix] = '\\'; ++ix;
                         break;
                      case '\b':
-                        b[ix++] = '\\';
-                        b[ix++] = 'b';
+                           b[ix] = '\\'; ++ix;
+                           b[ix] = 'b'; ++ix;
                         break;
                      case '\f':
-                        b[ix++] = '\\';
-                        b[ix++] = 'f';
+                           b[ix] = '\\'; ++ix;
+                           b[ix] = 'f'; ++ix;
                         break;
                      case '\n':
-                        b[ix++] = '\\';
-                        b[ix++] = 'n';
+                           b[ix] = '\\'; ++ix;
+                           b[ix] = 'n'; ++ix;
                         break;
                      case '\r':
-                        b[ix++] = '\\';
-                        b[ix++] = 'r';
+                           b[ix] = '\\'; ++ix;
+                           b[ix] = 'r'; ++ix;
                         break;
                      case '\t':
-                        b[ix++] = '\\';
-                        b[ix++] = 't';
+                           b[ix] = '\\'; ++ix;
+                           b[ix] = 't'; ++ix;
                         break;
                      default:
                         b[ix++] = c;
