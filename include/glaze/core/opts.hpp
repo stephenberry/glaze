@@ -14,7 +14,7 @@ namespace glz
       bool comments = false; // Write out comments
       bool error_on_unknown_keys = true; // Error when an unknown key is encountered
       bool skip_null_members = true; // Skip writing out params in an object if the value is null
-      bool allow_hash_check = true; // Will replace some string equality checks with hash checks
+      bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
       bool prettify = false; // Write out prettified JSON
       char indentation_char = ' '; // Prettified JSON indentation char
       uint8_t indentation_width = 3; // Prettified JSON indentation size

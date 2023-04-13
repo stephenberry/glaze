@@ -515,7 +515,7 @@ namespace glz
          static constexpr sv value = glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>));
       };
 
-      template <class T, bool allow_hash_check, size_t... I>
+      template <class T, bool use_hash_comparison, size_t... I>
       constexpr auto make_map_impl(std::index_sequence<I...>)
       {
          using value_t = value_tuple_variant_t<meta_t<T>>;
@@ -524,12 +524,12 @@ namespace glz
          auto naive_or_normal_hash = [&] {
             // these variables needed for MSVC
             if constexpr (n <= 20) {
-               return glz::detail::naive_map<value_t, n, allow_hash_check>(
+               return glz::detail::naive_map<value_t, n, use_hash_comparison>(
                   {std::pair<sv, value_t>{sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
                                           glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))}...});
             }
             else {
-               return glz::detail::normal_map<sv, value_t, n, allow_hash_check>(
+               return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
                   {std::pair<sv, value_t>{sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
                                           glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))}...});
             }
@@ -579,11 +579,11 @@ namespace glz
          }
       }
 
-      template <class T, bool allow_hash_check = false>
+      template <class T, bool use_hash_comparison = false>
       constexpr auto make_map()
       {
          constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_map_impl<std::decay_t<T>, allow_hash_check>(indices);
+         return make_map_impl<std::decay_t<T>, use_hash_comparison>(indices);
       }
 
       template <class T, size_t... I>
@@ -802,7 +802,7 @@ namespace glz
       // Output variants in the following format  ["variant_type", variant_json_data] with
       // glz::detail:array_variant(&T::var);
       template <is_variant T>
-      struct array_var_wrapper
+      struct array_variant_wrapper
       {
          T& value;
       };
@@ -810,7 +810,7 @@ namespace glz
       // template <class T>
       // using array_var = wrap<array_var_wrapper, T>;
       template <class T>
-      struct array_variant : wrap<array_var_wrapper, T>
+      struct array_variant : wrap<array_variant_wrapper, T>
       {};
       template <class T>
       array_variant(T) -> array_variant<T>; // Only needed on older compilers until we move to template alias deduction

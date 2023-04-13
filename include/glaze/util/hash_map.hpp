@@ -161,7 +161,7 @@ namespace glz::detail
       return false;
    }
 
-   template <class Value, std::size_t N, bool allow_hash_check = false>
+   template <class Value, std::size_t N, bool use_hash_comparison = false>
    struct naive_map
    {
       // Birthday paradox makes this unsuitable for large numbers of keys without
@@ -169,10 +169,10 @@ namespace glz::detail
       // bucketsize scalled more agressively But I would swhitch to a more space
       // efficient perfect map
       static_assert(N <= 32, "Not suitable for large numbers of keys");
-      static constexpr size_t bucket_size = 4 * std::bit_ceil(N);
+      static constexpr size_t bucket_size = (N > 16 ? 8 : 4) * std::bit_ceil(N);
       uint64_t seed{};
       std::array<std::pair<std::string_view, Value>, N> items{};
-      std::array<uint64_t, N * allow_hash_check> hashes{};
+      std::array<uint64_t, N * use_hash_comparison> hashes{};
       std::array<uint8_t, bucket_size> table{};
 
       explicit constexpr naive_map(const std::array<std::pair<std::string_view, Value>, N>& pairs) : items(pairs)
@@ -187,7 +187,7 @@ namespace glz::detail
 
          for (size_t i = 0; i < N; ++i) {
             const auto hash = naive_hash{}(items[i].first, seed);
-            if constexpr (allow_hash_check) {
+            if constexpr (use_hash_comparison) {
                hashes[i] = hash;
             }
             table[hash % bucket_size] = static_cast<uint8_t>(i);
@@ -205,7 +205,7 @@ namespace glz::detail
          // constexpr bucket_size means the compiler can replace the modulos with
          // more efficient instructions So this is not as expensive as this looks
          const auto index = table[hash % bucket_size];
-         if constexpr (allow_hash_check) {
+         if constexpr (use_hash_comparison) {
             // Odds of having a uint64_t hash collision is pretty small
             // And no valid keys could colide becuase of perfect hashing so this
             // isnt that bad
@@ -244,20 +244,40 @@ namespace glz::detail
          return uint64_t(-1);
       }
    };
+   
+   template <uint64_t N>
+   consteval auto fit_unsigned_type() noexcept
+   {
+      if constexpr (N <= std::numeric_limits<uint8_t>::max()) {
+         return uint8_t{};
+      }
+      else if constexpr (N <= std::numeric_limits<uint16_t>::max()) {
+         return uint16_t{};
+      }
+      else if constexpr (N <= std::numeric_limits<uint32_t>::max()) {
+         return uint32_t{};
+      }
+      else if constexpr (N <= std::numeric_limits<uint64_t>::max()) {
+         return uint64_t{};
+      }
+      else {
+         return;
+      }
+   }
 
-   template <class Key, class Value, size_t N, bool allow_hash_check = false>
+   template <class Key, class Value, size_t N, bool use_hash_comparison = false>
    struct normal_map
    {
       // From serge-sans-paille/frozen
-      static constexpr std::size_t storage_size = std::bit_ceil(N) * (N < 32 ? 2 : 1);
+      static constexpr uint64_t storage_size = std::bit_ceil(N) * (N < 32 ? 2 : 1);
       static constexpr auto max_bucket_size = 2 * std::bit_width(N);
       using hash_alg = naive_hash;
       uint64_t seed{};
       // TODO: We can probably save space by using smaller items in the table (We know the range stored)
       // The extra info in the bucket most likely does not need to be 64 bits
-      // Hashes are not typically needed
       std::array<int64_t, N> buckets{};
-      std::array<size_t, storage_size> table{};
+      using storage_type = decltype(fit_unsigned_type<N>());
+      std::array<storage_type, storage_size> table{};
       std::array<std::pair<Key, Value>, N> items{};
       std::array<uint64_t, N> hashes{};
 
@@ -278,7 +298,7 @@ namespace glz::detail
          // more efficient instructions So this is not as expensive as this looks
          const auto extra = buckets[hash % N];
          auto index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
-         if constexpr (!std::integral<Key> && allow_hash_check) {
+         if constexpr (!std::integral<Key> && use_hash_comparison) {
             // Odds of having a uint64_t hash collision is pretty small
             // And no valid keys could colide becuase of perfect hashing so this
             // isnt that bad
@@ -300,7 +320,7 @@ namespace glz::detail
          // more efficient instructions So this is not as expensive as this looks
          const auto extra = buckets[hash % N];
          auto index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
-         if constexpr (!std::integral<Key> && allow_hash_check) {
+         if constexpr (!std::integral<Key> && use_hash_comparison) {
             // Odds of having a uint64_t hash collision is pretty small
             // And no valid keys could colide becuase of perfect hashing so this
             // isnt that bad
@@ -325,7 +345,7 @@ namespace glz::detail
 
       constexpr void find_perfect_hash() noexcept
       {
-         std::array<std::array<size_t, max_bucket_size>, N> full_buckets{};
+         std::array<std::array<storage_type, max_bucket_size>, N> full_buckets{};
          std::array<size_t, N> bucket_sizes{};
          detail::naive_prng gen{};
 
@@ -333,7 +353,7 @@ namespace glz::detail
          do {
             failed = false;
             seed = gen() + 1;
-            for (size_t i{}; i < N; ++i) {
+            for (storage_type i{}; i < N; ++i) {
                const auto hash = hash_alg{}(items[i].first, seed);
                hashes[i] = hash;
                const auto bucket = hash % N;
@@ -354,7 +374,7 @@ namespace glz::detail
          std::sort(buckets_index.begin(), buckets_index.end(),
                    [&bucket_sizes](size_t i1, size_t i2) { return bucket_sizes[i1] > bucket_sizes[i2]; });
 
-         std::fill(table.begin(), table.end(), size_t(-1));
+         std::fill(table.begin(), table.end(), storage_type(-1));
          for (auto bucket_index : buckets_index) {
             const auto bucket_size = bucket_sizes[bucket_index];
             if (bucket_size < 1) break;
@@ -371,7 +391,7 @@ namespace glz::detail
                   const auto index = full_buckets[bucket_index][i];
                   const auto hash = hashes[index];
                   const auto slot = combine(hash, secondary_seed) % storage_size;
-                  if (table[slot] != size_t(-1)) {
+                  if (table[slot] != storage_type(-1)) {
                      failed = true;
                      table = table_old;
                      break;

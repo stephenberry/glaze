@@ -1256,7 +1256,7 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  static constexpr auto frozen_map = detail::make_map<T, Opts.allow_hash_check>();
+                  static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
                   const auto& member_it = frozen_map.find(key);
                   if (member_it != frozen_map.end()) [[likely]] {
                      if constexpr (Opts.error_on_missing_keys) {
@@ -1605,7 +1605,7 @@ namespace glz
       };
 
       template <class T>
-      struct from_json<array_var_wrapper<T>>
+      struct from_json<array_variant_wrapper<T>>
       {
          template <auto Options>
          GLZ_FLATTEN static void op(auto&& wrapper, is_context auto&& ctx, auto&& it, auto&& end)

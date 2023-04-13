@@ -81,10 +81,9 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void dump(char*& b) noexcept
    {
       static constexpr auto s = str.sv();
-      for (auto& c : s) {
-         *b = c;
-         ++b;
-      }
+      static constexpr auto n = s.size();
+      std::memcpy(b, s.data(), n);
+      b += n;
    }
 
    template <char c>
