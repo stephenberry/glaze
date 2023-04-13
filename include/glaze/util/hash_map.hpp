@@ -1,3 +1,8 @@
+// Glaze Library
+// For the license information refer to glaze.hpp
+
+#pragma once
+
 #include <algorithm>
 #include <array>
 #include <bit>
