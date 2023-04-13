@@ -211,8 +211,13 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
             uint8_t tag = tag::number;
-            set_bits<3, 1, uint8_t>(tag, std::is_floating_point_v<T>);
-            set_bits<4, 4, uint8_t>(tag, to_byte_count<decltype(value)>());
+            if constexpr (std::is_floating_point_v<T>) {
+               set_bits<3, 2, uint8_t>(tag, 0);
+            }
+            else {
+               set_bits<3, 2, uint8_t>(tag, 1 + std::unsigned_integral<T>);
+            }
+            set_bits<5, 3, uint8_t>(tag, to_byte_count<decltype(value)>());
             dump_type(tag, args...);
 
             dump_type(value, std::forward<Args>(args)...);
