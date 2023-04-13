@@ -180,7 +180,9 @@ namespace glz
                const sv str = value;
                const auto n = str.size();
 
-               // we use 4 * n to handle potential escape characters and quoted bounds (excessive safety)
+               // we use 4 * n to handle potential escape characters and quoted bounds
+               // Example: if n were of length 1 and needed to be escaped, then it would require 4 characters
+               // for the original, the escape, and the quote
                if constexpr (detail::resizeable<B>) {
                   if ((ix + 4 * n) >= b.size()) [[unlikely]] {
                      b.resize((std::max)(b.size() * 2, ix + 4 * n));
@@ -325,11 +327,11 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump<'['>(std::forward<Args>(args)...);
+            dump<'['>(args...);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(std::forward<Args>(args)...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             const auto is_empty = [&]() -> bool {
                if constexpr (has_size<T>) {
@@ -342,24 +344,24 @@ namespace glz
 
             if (!is_empty) {
                auto it = value.begin();
-               write<json>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
+               write<json>::op<Opts>(*it, ctx, args...);
                ++it;
                const auto end = value.end();
                for (; it != end; ++it) {
-                  dump<','>(std::forward<Args>(args)...);
+                  dump<','>(args...);
                   if constexpr (Opts.prettify) {
-                     dump<'\n'>(std::forward<Args>(args)...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                     dump<'\n'>(args...);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
-                  write<json>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(*it, ctx, args...);
                }
                if constexpr (Opts.prettify) {
                   ctx.indentation_level -= Opts.indentation_width;
-                  dump<'\n'>(std::forward<Args>(args)...);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                  dump<'\n'>(args...);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                }
             }
-            dump<']'>(std::forward<Args>(args)...);
+            dump<']'>(args...);
          }
       };
 
@@ -369,29 +371,29 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump<'{'>(std::forward<Args>(args)...);
+            dump<'{'>(args...);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(std::forward<Args>(args)...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             if (!value.empty()) {
                auto it = value.cbegin();
                auto write_pair = [&] {
                   using Key = decltype(it->first);
                   if constexpr (str_t<Key> || char_t<Key>) {
-                     write<json>::op<Opts>(it->first, ctx, std::forward<Args>(args)...);
+                     write<json>::op<Opts>(it->first, ctx, args...);
                   }
                   else {
-                     dump<'"'>(std::forward<Args>(args)...);
-                     write<json>::op<Opts>(it->first, ctx, std::forward<Args>(args)...);
-                     dump<'"'>(std::forward<Args>(args)...);
+                     dump<'"'>(args...);
+                     write<json>::op<Opts>(it->first, ctx, args...);
+                     dump<'"'>(args...);
                   }
-                  dump<':'>(std::forward<Args>(args)...);
+                  dump<':'>(args...);
                   if constexpr (Opts.prettify) {
-                     dump<' '>(std::forward<Args>(args)...);
+                     dump<' '>(args...);
                   }
-                  write<json>::op<Opts>(it->second, ctx, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(it->second, ctx, args...);
                };
                write_pair();
                ++it;
@@ -402,20 +404,20 @@ namespace glz
                   if constexpr (nullable_t<Value> && Opts.skip_null_members) {
                      if (!bool(it->second)) continue;
                   }
-                  dump<','>(std::forward<Args>(args)...);
+                  dump<','>(args...);
                   if constexpr (Opts.prettify) {
-                     dump<'\n'>(std::forward<Args>(args)...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                     dump<'\n'>(args...);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
                   write_pair();
                }
                if constexpr (Opts.prettify) {
                   ctx.indentation_level -= Opts.indentation_width;
-                  dump<'\n'>(std::forward<Args>(args)...);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                  dump<'\n'>(args...);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                }
             }
-            dump<'}'>(std::forward<Args>(args)...);
+            dump<'}'>(args...);
          }
       };
 
