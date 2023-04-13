@@ -264,7 +264,7 @@ namespace glz
                            b[ix] = 't'; ++ix;
                         break;
                      default:
-                        b[ix++] = c;
+                           b[ix] = c; ++ix;
                      }
                   }
                }
@@ -460,28 +460,28 @@ namespace glz
                   if constexpr (Opts.write_type_info && !tag_v<T>.empty() && glaze_object_t<V>) {
                      // must first write out type
                      if constexpr (Opts.prettify) {
-                        dump<"{\n">(std::forward<Args>(args)...);
+                        dump<"{\n">(args...);
                         ctx.indentation_level += Opts.indentation_width;
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
-                        dump<R"("type": ")">(std::forward<Args>(args)...);
-                        dump<'"'>(std::forward<Args>(args)...);
-                        dump(tag_v<T>, std::forward<Args>(args)...);
-                        dump<"\": \"">(std::forward<Args>(args)...);
-                        dump(ids_v<T>[value.index()], std::forward<Args>(args)...);
-                        dump<"\",\n">(std::forward<Args>(args)...);
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, std::forward<Args>(args)...);
+                        dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+                        dump<R"("type": ")">(args...);
+                        dump<'"'>(args...);
+                        dump(tag_v<T>, args...);
+                        dump<"\": \"">(args...);
+                        dump(ids_v<T>[value.index()], args...);
+                        dump<"\",\n">(args...);
+                        dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                      }
                      else {
-                        dump<"{\"">(std::forward<Args>(args)...);
-                        dump(tag_v<T>, std::forward<Args>(args)...);
-                        dump<"\":\"">(std::forward<Args>(args)...);
-                        dump(ids_v<T>[value.index()], std::forward<Args>(args)...);
-                        dump<R"(",)">(std::forward<Args>(args)...);
+                        dump<"{\"">(args...);
+                        dump(tag_v<T>, args...);
+                        dump<"\":\"">(args...);
+                        dump(ids_v<T>[value.index()], args...);
+                        dump<R"(",)">(args...);
                      }
-                     write<json>::op<opening_handled<Opts>()>(val, ctx, std::forward<Args>(args)...);
+                     write<json>::op<opening_handled<Opts>()>(val, ctx, args...);
                   }
                   else {
-                     write<json>::op<Opts>(val, ctx, std::forward<Args>(args)...);
+                     write<json>::op<Opts>(val, ctx, args...);
                   }
                },
                value);

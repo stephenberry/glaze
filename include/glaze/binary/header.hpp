@@ -13,8 +13,8 @@
 
 namespace glz::tag
 {
-   inline constexpr uint8_t boolean = 0;
-   inline constexpr uint8_t null = 1;
+   inline constexpr uint8_t null = 0;
+   inline constexpr uint8_t boolean = 1;
    inline constexpr uint8_t number = 2;
    inline constexpr uint8_t string = 3;
    inline constexpr uint8_t object = 4;
