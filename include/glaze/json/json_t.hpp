@@ -78,16 +78,10 @@ namespace glz
          }
          return iter->second;
       }
-      
-      json_t& at(std::convertible_to<std::string_view> auto&& key)
-      {
-         return operator[](key);
-      }
 
-      const json_t& at(std::convertible_to<std::string_view> auto&& key) const
-      {
-         return operator[](key);
-      }
+      json_t& at(std::convertible_to<std::string_view> auto&& key) { return operator[](key); }
+
+      const json_t& at(std::convertible_to<std::string_view> auto&& key) const { return operator[](key); }
 
       bool contains(std::convertible_to<std::string_view> auto&& key) const
       {
