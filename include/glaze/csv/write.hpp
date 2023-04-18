@@ -83,7 +83,7 @@ namespace glz
                   }
                }
                else {
-                  write<csv>::op<Opts>(value[ctx.csv_index], ctx, b, ix);
+                  static_assert(false_v<T>, "Dynamic arrays within dynamic arrays are unsupported");
                }
             }
             else {
