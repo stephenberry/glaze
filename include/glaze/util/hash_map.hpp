@@ -100,14 +100,14 @@ namespace glz::detail
    // This is one such terible hashing alg
    struct naive_hash
    {
-      // TODO Use better constants calculated by something like
-      // skeeto/hash-prospector.
-      static constexpr uint64_t bitmix(uint64_t x)
+      static constexpr uint64_t bitmix(uint64_t h)
       {
-         x ^= x >> 33;
-         x *= 0xff51afd7ed558ccdL;
-         x ^= x >> 31;
-         return x;
+         h ^= h >> 33;
+         h *= 0xff51afd7ed558ccdL;
+         h ^= h >> 33;
+         h *= 0xc4ceb9fe1a85ec53L;
+         h ^= h >> 33;
+         return h;
       };
 
       // static constexpr uint64_t bitmix(uint64_t x)
