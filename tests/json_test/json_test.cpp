@@ -4076,8 +4076,7 @@ struct A
 template <>
 struct glz::meta<A>
 {
-   // static constexpr auto value = object("x", [](auto&& val) { return qouted_t(val.x); });
-   static constexpr auto value = object("x", glz::qouted<&A::x>());
+   static constexpr auto value = object("x", glz::quoted<&A::x>());
 };
 
 suite lamda_wrapper = [] {

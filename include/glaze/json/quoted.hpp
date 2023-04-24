@@ -37,7 +37,7 @@ namespace glz
    }
    
    template <auto MemPtr>
-   inline constexpr decltype(auto) qouted() noexcept
+   inline constexpr decltype(auto) quoted() noexcept
    {
       return [](auto&& val) { return quoted_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
    }
