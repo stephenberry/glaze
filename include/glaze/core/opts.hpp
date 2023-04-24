@@ -62,7 +62,7 @@ namespace glz
       ret.ws_handled = false;
       return ret;
    }
-   
+
    template <opts Opts>
    constexpr auto set_quoted()
    {

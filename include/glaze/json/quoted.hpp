@@ -35,7 +35,7 @@ namespace glz
          }
       };
    }
-   
+
    template <auto MemPtr>
    inline constexpr decltype(auto) quoted() noexcept
    {

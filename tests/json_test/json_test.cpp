@@ -4082,7 +4082,7 @@ struct glz::meta<A>
 
 suite lamda_wrapper = [] {
    "lamda_wrapper"_test = [] {
-      A a{3.14, {1,2,3}};
+      A a{3.14, {1, 2, 3}};
       std::string buffer{};
       glz::write_json(a, buffer);
       expect(buffer == R"({"x":"3.14","y":["1","2","3"]})");
@@ -4090,10 +4090,10 @@ suite lamda_wrapper = [] {
       buffer = R"({"x":"999.2","y":["4","5","6"]})";
       expect(glz::read_json(a, buffer) == glz::error_code::none);
       expect(a.x == 999.2);
-      expect(a.y == std::vector<uint32_t>{4,5,6});
+      expect(a.y == std::vector<uint32_t>{4, 5, 6});
    };
    "lamda_wrapper_error_on_missing_keys"_test = [] {
-      A a{3.14, {1,2,3}};
+      A a{3.14, {1, 2, 3}};
       std::string buffer{};
       glz::write_json(a, buffer);
       expect(buffer == R"({"x":"3.14","y":["1","2","3"]})");
@@ -4101,7 +4101,7 @@ suite lamda_wrapper = [] {
       buffer = R"({"x":"999.2","y":["4","5","6"]})";
       expect(glz::read<glz::opts{.error_on_missing_keys = true}>(a, buffer) == glz::error_code::none);
       expect(a.x == 999.2);
-      expect(a.y == std::vector<uint32_t>{4,5,6});
+      expect(a.y == std::vector<uint32_t>{4, 5, 6});
    };
 };
 

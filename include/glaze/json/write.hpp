@@ -156,7 +156,7 @@ namespace glz
             if constexpr (Opts.quoted) {
                dump<'"'>(b, ix);
             }
-            
+
             if constexpr (char_t<T>) {
                dump<'"'>(b, ix);
                switch (value) {
@@ -241,7 +241,7 @@ namespace glz
 
                dump_unchecked<'"'>(b, ix);
             }
-            
+
             if constexpr (Opts.quoted) {
                dump<'"'>(b, ix);
             }

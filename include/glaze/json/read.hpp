@@ -162,7 +162,7 @@ namespace glz
                skip_ws<Options>(ctx, it, end);
                match<'"'>(ctx, it, end);
             }
-            
+
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
@@ -179,7 +179,7 @@ namespace glz
                ctx.error = error_code::parse_number_failure;
                return;
             }
-            
+
             if constexpr (Options.quoted) {
                match<'"'>(ctx, it, end);
             }
@@ -301,7 +301,7 @@ namespace glz
                skip_ws<Opts>(ctx, it, end);
                match<'"'>(ctx, it, end);
             }
-            
+
             if constexpr (!Opts.opening_handled) {
                if constexpr (!Opts.ws_handled) {
                   skip_ws<Opts>(ctx, it, end);
@@ -412,7 +412,7 @@ namespace glz
                   }
                }
             }
-            
+
             if constexpr (Opts.quoted) {
                match<'"'>(ctx, it, end);
             }
