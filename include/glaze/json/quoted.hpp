@@ -19,12 +19,9 @@ namespace glz
       struct from_json<quoted_t<T>>
       {
          template <auto Opts>
-         static void op(auto&& value, auto&&... args)
+         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args) noexcept
          {
-            skip_ws<Opts>(args...);
-            match<'"'>(args...);
-            read<json>::op<Opts>(value.val, args...);
-            match<'"'>(args...);
+            read<json>::op<set_quoted<Opts>()>(value.val, args...);
          }
       };
 
@@ -32,11 +29,9 @@ namespace glz
       struct to_json<quoted_t<T>>
       {
          template <auto Opts>
-         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            dump<'"'>(args...);
-            write<json>::op<Opts>(value.val, ctx, args...);
-            dump<'"'>(args...);
+            write<json>::op<set_quoted<Opts>()>(value.val, ctx, args...);
          }
       };
    }
