@@ -297,6 +297,11 @@ namespace glz
          template <auto Opts, class It, class End>
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
          {
+            if constexpr (Opts.quoted) {
+               skip_ws<Opts>(ctx, it, end);
+               match<'"'>(ctx, it, end);
+            }
+            
             if constexpr (!Opts.opening_handled) {
                if constexpr (!Opts.ws_handled) {
                   skip_ws<Opts>(ctx, it, end);
@@ -406,6 +411,10 @@ namespace glz
                      ++it;
                   }
                }
+            }
+            
+            if constexpr (Opts.quoted) {
+               match<'"'>(ctx, it, end);
             }
          }
       };
