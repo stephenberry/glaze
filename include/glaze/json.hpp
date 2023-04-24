@@ -7,6 +7,7 @@
 #include "glaze/json/ndjson.hpp"
 #include "glaze/json/prettify.hpp"
 #include "glaze/json/ptr.hpp"
+#include "glaze/json/quoted.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/schema.hpp"
 #include "glaze/json/study.hpp"

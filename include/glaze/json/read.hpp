@@ -158,6 +158,11 @@ namespace glz
          template <auto Options, class It>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
+            if constexpr (Options.quoted) {
+               skip_ws<Options>(ctx, it, end);
+               match<'"'>(ctx, it, end);
+            }
+            
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
@@ -173,6 +178,10 @@ namespace glz
             if (!s) [[unlikely]] {
                ctx.error = error_code::parse_number_failure;
                return;
+            }
+            
+            if constexpr (Options.quoted) {
+               match<'"'>(ctx, it, end);
             }
          }
       };
@@ -288,6 +297,11 @@ namespace glz
          template <auto Opts, class It, class End>
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
          {
+            if constexpr (Opts.quoted) {
+               skip_ws<Opts>(ctx, it, end);
+               match<'"'>(ctx, it, end);
+            }
+            
             if constexpr (!Opts.opening_handled) {
                if constexpr (!Opts.ws_handled) {
                   skip_ws<Opts>(ctx, it, end);
@@ -397,6 +411,10 @@ namespace glz
                      ++it;
                   }
                }
+            }
+            
+            if constexpr (Opts.quoted) {
+               match<'"'>(ctx, it, end);
             }
          }
       };

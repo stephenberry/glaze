@@ -28,6 +28,7 @@ namespace glz
       // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled
       bool ws_handled = false; // whitespace has already been parsed
+      bool quoted = false; // treat the value as quoted or array-like types as having quoted values
    };
 
    template <opts Opts>
@@ -59,6 +60,14 @@ namespace glz
    {
       opts ret = Opts;
       ret.ws_handled = false;
+      return ret;
+   }
+   
+   template <opts Opts>
+   constexpr auto set_quoted()
+   {
+      opts ret = Opts;
+      ret.quoted = true;
       return ret;
    }
 }
