@@ -1,8 +1,4 @@
 # Glaze
-> IMPORTANT BINARY SPECIFICATION BREAKING CHANGES
->
-> In releases 1.2.+, the binary specification, [Crusher](https://github.com/stephenberry/crusher), has been significantly improved to allow one-to-one conversion to and from JSON. It is much like CBOR, but designed to be faster performing, simpler, and in some cases more efficiently compressed.
-
 One of the fastest JSON libraries in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
 
 ## Highlights
@@ -650,6 +646,31 @@ hide_struct s{};
 auto b = glz::write_json(s);
 expect(b == R"({"i":287,"d":3.14})"); // notice that "hello" is hidden from the output
 ```
+
+## Quoted Numbers
+
+You can parse quoted JSON numbers directly to types like `double`, `int`, etc. by utilizing the `glz::quoted` wrapper.
+
+```c++
+struct A {
+   double x;
+   std::vector<uint32_t> y;
+};
+
+template <>
+struct glz::meta<A> {
+   static constexpr auto value = object("x", glz::quoted<&A::x>(), "y", glz::quoted<&A::y>());
+};
+```
+
+```json
+{
+  "x": "3.14",
+  "y": ["1", "2", "3"]
+}
+```
+
+The quoted JSON numbers will be parsed directly into the `double` and `std::vector<uint32_t>`. The `glz::quoted` function works for nested objects and arrays as well.
 
 ## NDJSON Support
 
