@@ -4078,12 +4078,13 @@ struct A
 template <>
 struct glz::meta<A>
 {
-   static constexpr auto value = object("x", glz::quoted<&A::x>(), "y", glz::quoted<&A::y>(), "z", glz::quoted<&A::z>());
+   static constexpr auto value =
+      object("x", glz::quoted<&A::x>(), "y", glz::quoted<&A::y>(), "z", glz::quoted<&A::z>());
 };
 
 suite lamda_wrapper = [] {
    "lamda_wrapper"_test = [] {
-      A a{3.14, {1, 2, 3}, {{1,2,3}}};
+      A a{3.14, {1, 2, 3}, {{1, 2, 3}}};
       std::string buffer{};
       glz::write_json(a, buffer);
       expect(buffer == R"({"x":"3.14","y":["1","2","3"],"z":[["1","2","3"]]})");
@@ -4095,7 +4096,7 @@ suite lamda_wrapper = [] {
       expect(a.z == std::vector<std::vector<uint32_t>>{{4, 5}});
    };
    "lamda_wrapper_error_on_missing_keys"_test = [] {
-      A a{3.14, {1, 2, 3}, {{1,2,3}}};
+      A a{3.14, {1, 2, 3}, {{1, 2, 3}}};
       std::string buffer{};
       glz::write_json(a, buffer);
       expect(buffer == R"({"x":"3.14","y":["1","2","3"],"z":[["1","2","3"]]})");
