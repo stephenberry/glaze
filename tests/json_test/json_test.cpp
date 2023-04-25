@@ -4072,36 +4072,39 @@ struct A
 {
    double x;
    std::vector<uint32_t> y;
+   std::vector<std::vector<uint32_t>> z;
 };
 
 template <>
 struct glz::meta<A>
 {
-   static constexpr auto value = object("x", glz::quoted<&A::x>(), "y", glz::quoted<&A::y>());
+   static constexpr auto value = object("x", glz::quoted<&A::x>(), "y", glz::quoted<&A::y>(), "z", glz::quoted<&A::z>());
 };
 
 suite lamda_wrapper = [] {
    "lamda_wrapper"_test = [] {
-      A a{3.14, {1, 2, 3}};
+      A a{3.14, {1, 2, 3}, {{1,2,3}}};
       std::string buffer{};
       glz::write_json(a, buffer);
-      expect(buffer == R"({"x":"3.14","y":["1","2","3"]})");
+      expect(buffer == R"({"x":"3.14","y":["1","2","3"],"z":[["1","2","3"]]})");
 
-      buffer = R"({"x":"999.2","y":["4","5","6"]})";
+      buffer = R"({"x":"999.2","y":["4","5","6"],"z":[["4","5"]]})";
       expect(glz::read_json(a, buffer) == glz::error_code::none);
       expect(a.x == 999.2);
       expect(a.y == std::vector<uint32_t>{4, 5, 6});
+      expect(a.z == std::vector<std::vector<uint32_t>>{{4, 5}});
    };
    "lamda_wrapper_error_on_missing_keys"_test = [] {
-      A a{3.14, {1, 2, 3}};
+      A a{3.14, {1, 2, 3}, {{1,2,3}}};
       std::string buffer{};
       glz::write_json(a, buffer);
-      expect(buffer == R"({"x":"3.14","y":["1","2","3"]})");
+      expect(buffer == R"({"x":"3.14","y":["1","2","3"],"z":[["1","2","3"]]})");
 
-      buffer = R"({"x":"999.2","y":["4","5","6"]})";
+      buffer = R"({"x":"999.2","y":["4","5","6"],"z":[["4","5"]]})";
       expect(glz::read<glz::opts{.error_on_missing_keys = true}>(a, buffer) == glz::error_code::none);
       expect(a.x == 999.2);
       expect(a.y == std::vector<uint32_t>{4, 5, 6});
+      expect(a.z == std::vector<std::vector<uint32_t>>{{4, 5}});
    };
 };
 
