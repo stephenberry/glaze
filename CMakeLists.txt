@@ -37,6 +37,6 @@ if(NOT CMAKE_SKIP_INSTALL_RULES)
   include(cmake/install-rules.cmake)
 endif()
 
-if (PROJECT_IS_TOP_LEVEL)
+if (glaze_DEVELOPER_MODE)
   include(cmake/dev-mode.cmake)
 endif()

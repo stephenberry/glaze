@@ -1,3 +1,5 @@
+include(CMakeDependentOption)
+
 # ---- Developer mode ----
 
 # Developer mode enables targets and code paths in the CMake scripts that are
@@ -5,7 +7,10 @@
 # Targets necessary to build the project must be provided unconditionally, so
 # consumers can trivially build and package the project
 if(PROJECT_IS_TOP_LEVEL)
-  option(glaze_DEVELOPER_MODE "Enable developer mode" OFF)
+  cmake_dependent_option(
+    glaze_DEVELOPER_MODE "Enable developer mode" ON
+    "PROJECT_IS_TOP_LEVEL" OFF
+  )
 endif()
 
 # ---- Warning guard ----
