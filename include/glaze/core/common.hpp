@@ -9,6 +9,9 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <variant>
+#include <optional>
+#include <cstddef>
 
 // TODO: optionally include with a templated struct
 #include <filesystem>
@@ -388,6 +391,10 @@ namespace glz
       complex_t<T> && !range<T>;
 
       template <class T>
+      concept always_null_t =
+         std::same_as<T, std::nullptr_t> || std::same_as<T, std::monostate> || std::same_as<T, std::nullopt_t>;
+
+      template <class T>
       concept nullable_t = !
       complex_t<T> && !str_t<T> && requires(T t) {
                                       bool(t);
@@ -395,6 +402,9 @@ namespace glz
                                          *t
                                       };
                                    };
+
+      template <class T>
+      concept null_t = nullable_t<T> || always_null_t<T>;
 
       template <class T>
       concept func_t = requires(T t) {
@@ -831,7 +841,7 @@ namespace glz
             for_each<n>([&](auto I) constexpr {
                fields[I] =
                   !bool(Opts.skip_null_members) ||
-                  !nullable_t<std::decay_t<member_t<T, std::tuple_element_t<1, std::tuple_element_t<I, meta_t<T>>>>>>;
+                  !null_t<std::decay_t<member_t<T, std::tuple_element_t<1, std::tuple_element_t<I, meta_t<T>>>>>>;
             });
          }
          return fields;
