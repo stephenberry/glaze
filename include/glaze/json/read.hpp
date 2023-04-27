@@ -114,7 +114,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            match<R"("std::monostate")">(args...);
+            match<R"("std::monostate")">(ctx, args...);
          }
       };
 
