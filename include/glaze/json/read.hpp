@@ -1474,7 +1474,7 @@ namespace glz
             meta_objects += glaze_object_t<V>;
             arrays += glaze_array_t<V>;
             arrays += array_t<V>;
-            //TODO null
+            // TODO null
          });
          return bools < 2 && numbers < 2 && strings < 2 && (objects < 2 || meta_objects == objects) && arrays < 2;
       }

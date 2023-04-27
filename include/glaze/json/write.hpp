@@ -640,7 +640,8 @@ namespace glz
                using val_t = member_t<V, mptr_t>;
 
                if constexpr (null_t<val_t> && Opts.skip_null_members) {
-                  if constexpr (always_null_t<T>) return;
+                  if constexpr (always_null_t<T>)
+                     return;
                   else {
                      auto is_null = [&]() {
                         if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {

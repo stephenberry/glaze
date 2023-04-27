@@ -3,15 +3,15 @@
 
 #pragma once
 
+#include <cstddef>
 #include <functional>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <type_traits>
 #include <utility>
-#include <vector>
 #include <variant>
-#include <optional>
-#include <cstddef>
+#include <vector>
 
 // TODO: optionally include with a templated struct
 #include <filesystem>
