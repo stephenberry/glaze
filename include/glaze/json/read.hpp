@@ -409,6 +409,116 @@ namespace glz
             }
          }
       };
+      
+      template <char_array_t T>
+      struct from_json<T>
+      {
+         template <auto Opts, class It, class End>
+         GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
+         {
+            if constexpr (!Opts.opening_handled) {
+               if constexpr (!Opts.ws_handled) {
+                  skip_ws<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+               }
+
+               match<'"'>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+            
+            auto handle_escaped = [&]() {
+               switch (*it) {
+               case '"':
+               case '\\':
+               case '/':
+               case 'b':
+               case 'f':
+               case 'n':
+               case 'r':
+               case 't':
+               case 'u': {
+                  ++it;
+                  break;
+               }
+               default: {
+                  ctx.error = error_code::invalid_escape;
+                  return;
+               }
+               }
+            };
+
+            auto start = it;
+            
+            auto write_to_char_buffer = [&] {
+               const size_t n = it - start - 1;
+               sv str{start, n};
+               
+               if (sizeof(value) < n) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               for (size_t i = 0; i < n; ++i) {
+                  value[i] = str[i];
+               }
+               value[n] = '\0';
+            };
+            
+            while (it < end) {
+               if constexpr (!Opts.force_conformance) {
+                  skip_till_escape_or_quote(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  if (*it == '"') {
+                     ++it;
+                     write_to_char_buffer();
+                     return;
+                  }
+                  else {
+                     ++it;
+                     handle_escaped();
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
+               }
+               else {
+                  switch (*it) {
+                  case '"': {
+                     ++it;
+                     return;
+                  }
+                  case '\b':
+                  case '\f':
+                  case '\n':
+                  case '\r':
+                  case '\t': {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  case '\0': {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+                  case '\\': {
+                     ++it;
+                     handle_escaped();
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     write_to_char_buffer();
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     break;
+                  }
+                  default:
+                     ++it;
+                  }
+               }
+            }
+            return;
+         }
+      };
 
       template <str_view_t T>
       struct from_json<T>
