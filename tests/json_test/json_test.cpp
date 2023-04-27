@@ -4135,7 +4135,7 @@ suite char_array = [] {
 
       s = R"("Text that is too long")";
       expect(glz::read_json(arr, s) != glz::error_code::none);
-      
+
       s = R"("Hello WorldX")";
       expect(glz::read_json(arr, s) != glz::error_code::none);
    };
