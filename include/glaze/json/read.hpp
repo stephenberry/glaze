@@ -409,7 +409,7 @@ namespace glz
             }
          }
       };
-      
+
       template <char_array_t T>
       struct from_json<T>
       {
@@ -427,7 +427,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            
+
             auto handle_escaped = [&]() {
                switch (*it) {
                case '"':
@@ -450,11 +450,11 @@ namespace glz
             };
 
             auto start = it;
-            
+
             auto write_to_char_buffer = [&] {
                const size_t n = it - start - 1;
                sv str{start, n};
-               
+
                if (sizeof(value) < n) {
                   ctx.error = error_code::unexpected_end;
                   return;
@@ -464,7 +464,7 @@ namespace glz
                }
                value[n] = '\0';
             };
-            
+
             while (it < end) {
                if constexpr (!Opts.force_conformance) {
                   skip_till_escape_or_quote(ctx, it, end);

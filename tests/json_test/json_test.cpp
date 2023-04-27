@@ -4112,27 +4112,27 @@ suite lamda_wrapper = [] {
 suite char_array = [] {
    "char array write"_test = [] {
       char arr[12] = "Hello World";
-      
+
       std::string s{};
       glz::write_json(arr, s);
       expect(s == R"("Hello World")");
-      
+
       char arr2[12] = "Hello\0World";
-      
+
       glz::write_json(arr2, s);
       expect(s == R"("Hello")");
    };
-   
+
    "char array read"_test = [] {
       char arr[12];
       std::string s = R"("Hello World")";
       expect(glz::read_json(arr, s) == glz::error_code::none);
       expect(std::string(arr) == "Hello World");
-      
+
       s = R"("Hello")";
       expect(glz::read_json(arr, s) == glz::error_code::none);
       expect(std::string(arr) == "Hello");
-      
+
       s = R"("Text that is too long")";
       expect(glz::read_json(arr, s) != glz::error_code::none);
    };

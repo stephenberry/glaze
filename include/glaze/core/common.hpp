@@ -257,17 +257,15 @@ namespace glz
       template <class T>
       concept str_t = !
       complex_t<T> && !std::same_as<std::nullptr_t, T> && std::convertible_to<std::decay_t<T>, std::string_view>;
-      
-      template<typename T>
-      concept has_push_back = requires(T t, typename T::value_type v) {
-          t.push_back(v);
-      };
+
+      template <typename T>
+      concept has_push_back = requires(T t, typename T::value_type v) { t.push_back(v); };
 
       // this concept requires that T is string and copies the string in json
       template <class T>
       concept string_t = str_t<T> && !
-      std::same_as<std::decay_t<T>, std::string_view> && has_push_back<T>;
-      
+      std::same_as<std::decay_t<T>, std::string_view>&& has_push_back<T>;
+
       template <class T>
       concept char_array_t = str_t<T> && !
       std::same_as<std::decay_t<T>, std::string_view> && !has_push_back<T>;
