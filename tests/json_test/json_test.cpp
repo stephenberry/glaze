@@ -2329,7 +2329,7 @@ suite variant_tests = [] {
 
       std::variant<std::monostate, int, std::string> m{};
       glz::write_json(m, s);
-      expect(s == R"("std::monostate")") << s;
+      expect(s == "null") << s;
    };
 
    "variant_read_"_test = [] {
@@ -2340,7 +2340,7 @@ suite variant_tests = [] {
 
    "variant_read_auto"_test = [] {
       // Auto deduce variant with no conflicting basic types
-      std::variant<int, std::string, bool, std::map<std::string, double>, std::vector<std::string>> m{};
+      std::variant<std::monostate, int, std::string, bool, std::map<std::string, double>, std::vector<std::string>> m{};
       expect(glz::read_json(m, R"("Hello World")") == glz::error_code::none);
       expect(std::holds_alternative<std::string>(m) == true);
       expect(std::get<std::string>(m) == "Hello World");
@@ -2360,6 +2360,9 @@ suite variant_tests = [] {
       expect(glz::read_json(m, R"(["a", "b", "c"])") == glz::error_code::none);
       expect(std::holds_alternative<std::vector<std::string>>(m) == true);
       expect(std::get<std::vector<std::string>>(m)[1] == "b");
+
+      expect(glz::read_json(m, "null") == glz::error_code::none);
+      expect(std::holds_alternative<std::monostate>(m) == true);
    };
 
    "variant_read_obj"_test = [] {
@@ -2403,11 +2406,19 @@ suite generic_json_tests = [] {
 
    "generic_json_read"_test = [] {
       glz::json_t json{};
-      std::string buffer = R"([5,"Hello World",{"pi":3.14}])";
+      std::string buffer = R"([5,"Hello World",{"pi":3.14},null])";
       expect(glz::read_json(json, buffer) == glz::error_code::none);
       expect(json[0].get<double>() == 5.0);
       expect(json[1].get<std::string>() == "Hello World");
       expect(json[2]["pi"].get<double>() == 3.14);
+      expect(json[3].holds<glz::json_t::null_t>());
+   };
+
+   "generic_json_roundtrip"_test = [] {
+      glz::json_t json{};
+      std::string buffer = R"([5,"Hello World",{"pi":3.14},null])";
+      expect(glz::read_json(json, buffer) == glz::error_code::none);
+      expect(glz::write_json(json) == buffer);
    };
 
    "generic_json_const"_test = [] {

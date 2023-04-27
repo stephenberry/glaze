@@ -369,7 +369,7 @@ namespace glz
                const auto end = value.cend();
                for (; it != end; ++it) {
                   using Value = std::decay_t<decltype(it->second)>;
-                  if constexpr (nullable_t<Value> && Opts.skip_null_members) {
+                  if constexpr (null_t<Value> && Opts.skip_null_members) {
                      if (!bool(it->second)) continue;
                   }
                   dump<','>(args...);
@@ -403,13 +403,13 @@ namespace glz
          }
       };
 
-      template <>
-      struct to_json<std::monostate>
+      template <always_null_t T>
+      struct to_json<T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
          {
-            dump<R"("std::monostate")">(args...);
+            dump<"null">(args...);
          }
       };
 
@@ -639,16 +639,19 @@ namespace glz
                using mptr_t = std::tuple_element_t<1, decltype(item)>;
                using val_t = member_t<V, mptr_t>;
 
-               if constexpr (nullable_t<val_t> && Opts.skip_null_members) {
-                  auto is_null = [&]() {
-                     if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {
-                        return !bool(value.*glz::tuplet::get<1>(item));
-                     }
-                     else {
-                        return !bool(glz::tuplet::get<1>(item)(value));
-                     }
-                  }();
-                  if (is_null) return;
+               if constexpr (null_t<val_t> && Opts.skip_null_members) {
+                  if constexpr (always_null_t<T>) return;
+                  else {
+                     auto is_null = [&]() {
+                        if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {
+                           return !bool(value.*glz::tuplet::get<1>(item));
+                        }
+                        else {
+                           return !bool(glz::tuplet::get<1>(item)(value));
+                        }
+                     }();
+                     if (is_null) return;
+                  }
                }
 
                // skip file_include

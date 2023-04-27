@@ -109,6 +109,16 @@ namespace glz
          }
       };
 
+      template <always_null_t T>
+      struct to_json_schema<T>
+      {
+         template <auto Opts>
+         static void op(auto& s, auto&) noexcept
+         {
+            s.type = {"null"};
+         }
+      };
+
       template <glaze_enum_t T>
       struct to_json_schema<T>
       {

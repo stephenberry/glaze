@@ -103,8 +103,8 @@ namespace glz
          }
       };
 
-      template <>
-      struct from_json<std::monostate>
+      template <always_null_t T>
+      struct from_json<T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&... args) noexcept
@@ -114,7 +114,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            match<R"("std::monostate")">(ctx, args...);
+            match<"null">(ctx, args...);
          }
       };
 
@@ -1474,6 +1474,7 @@ namespace glz
             meta_objects += glaze_object_t<V>;
             arrays += glaze_array_t<V>;
             arrays += array_t<V>;
+            //TODO null
          });
          return bools < 2 && numbers < 2 && strings < 2 && (objects < 2 || meta_objects == objects) && arrays < 2;
       }
@@ -1495,7 +1496,7 @@ namespace glz
          using array_types = decltype(std::tuple_cat(std::conditional_t < array_t<Ts> || glaze_array_t<Ts>,
                                                      std::tuple<Ts>, std::tuple < >> {}...));
          using nullable_types =
-            decltype(std::tuple_cat(std::conditional_t<nullable_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+            decltype(std::tuple_cat(std::conditional_t<null_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
       };
 
       template <is_variant T>
