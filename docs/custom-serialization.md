@@ -63,7 +63,7 @@ Notes:
 
 The templated `Opts` parameter contains the compile time options. The `args...` can be broken out into the runtime context (runtime options), iterators, and the buffer index when reading.
 
-## Another Example
+## UUID Example
 
 Say we have a UUID library for converting a `uuid_t` from a `std::string_view` and to a `std::string`.
 
