@@ -455,7 +455,7 @@ namespace glz
                const size_t n = it - start - 1;
                sv str{start, n};
 
-               if (sizeof(value) < n) {
+               if ((sizeof(value) - 1) < n) {
                   ctx.error = error_code::unexpected_end;
                   return;
                }
