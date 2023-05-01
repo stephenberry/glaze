@@ -28,10 +28,7 @@ namespace glz
          }
       }
 
-      size_t concurrency() const
-      {
-         return std::thread::hardware_concurrency();
-      }
+      size_t concurrency() const { return std::thread::hardware_concurrency(); }
 
       template <class F>
       std::future<std::invoke_result_t<std::decay_t<F>>> emplace_back(F&& func)
