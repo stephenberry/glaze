@@ -12,8 +12,6 @@
 #include <thread>
 #include <vector>
 
-#include "glaze/util/windows_nominmax.hpp"
-
 namespace glz
 {
    // A simple threadpool

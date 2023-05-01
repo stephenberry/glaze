@@ -13,7 +13,6 @@
 #include "glaze/thread/threadpool.hpp"
 #include "glaze/util/expected.hpp"
 #include "glaze/util/type_traits.hpp"
-#include "glaze/util/windows_nominmax.hpp"
 
 namespace glz
 {
