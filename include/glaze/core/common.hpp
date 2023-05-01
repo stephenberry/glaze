@@ -929,7 +929,7 @@ struct glz::meta<glz::error_code>
 
 namespace glz
 {
-   [[nodiscard]] inline std::string format_error(const parse_error& pe, auto& buffer)
+   [[nodiscard]] inline std::string format_error(const parse_error& pe, const auto& buffer)
    {
       static constexpr auto arr = detail::make_enum_to_string_array<error_code>();
 
