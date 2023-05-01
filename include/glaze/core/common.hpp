@@ -932,11 +932,12 @@ namespace glz
    [[nodiscard]] inline std::string format_error(const parse_error& pe, const auto& buffer)
    {
       static constexpr auto arr = detail::make_enum_to_string_array<error_code>();
+      const auto error_type_str = arr[static_cast<uint32_t>(pe.ec)];
 
       const auto info = detail::get_source_info(buffer, pe.location);
       if (info) {
-         return detail::generate_error_string(arr[static_cast<uint32_t>(pe.ec)], *info);
+         return detail::generate_error_string(error_type_str, *info);
       }
-      return "";
+      return std::string(error_type_str);
    }
 }

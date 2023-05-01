@@ -4240,6 +4240,15 @@ suite required_keys = [] {
                                                                                                order_book_str_missing);
       expect(ec == glz::error_code::missing_key);
    };
+
+   "required_keys_format_error"_test = [] {
+      my_struct obj{};
+      std::string buffer = R"({"i":287,"hello":"Hello World","arr":[1,2,3]})";
+      auto err = glz::read<glz::opts{.error_on_missing_keys = true}>(obj, buffer);
+      expect(err != glz::error_code::none);
+      expect(glz::format_error(err, buffer) == "missing_key");
+   };
+
 };
 
 int main()
