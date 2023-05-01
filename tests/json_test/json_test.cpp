@@ -4248,7 +4248,6 @@ suite required_keys = [] {
       expect(err != glz::error_code::none);
       expect(glz::format_error(err, buffer) == "missing_key");
    };
-
 };
 
 int main()
