@@ -25,42 +25,14 @@ namespace glz
 
       void n_threads(const size_t n)
       {
-#if defined(_WIN32) && !defined(__MINGW32__)
-         // NOT REQUIRED IN WINDOWS 11
-         // TODO smarter distrubution of threads among groups.
-         auto num_groups = GetActiveProcessorGroupCount();
-         WORD group = 0;
-         for (size_t i = threads.size(); i < n; ++i) {
-            auto thread = std::thread(&pool::worker, this, i);
-            auto hndl = thread.native_handle();
-            GROUP_AFFINITY affinity;
-            if (GetThreadGroupAffinity(hndl, &affinity) && affinity.Group != group) {
-               affinity.Group = group;
-               SetThreadGroupAffinity(hndl, &affinity, nullptr);
-            }
-            group++;
-            if (group >= num_groups) group = 0;
-            threads.emplace_back(std::move(thread));
-         }
-#else
          for (size_t i = threads.size(); i < n; ++i) {
             threads.emplace_back(std::thread(&pool::worker, this, i));
          }
-#endif
       }
 
       size_t concurrency() const
       {
-#if defined(_WIN32) && !defined(__MINGW32__)
-         auto num_groups = GetActiveProcessorGroupCount();
-         unsigned int sum = 0;
-         for (WORD i = 0; i < num_groups; ++i) {
-            sum += GetMaximumProcessorCount(i);
-         }
-         return sum;
-#else
          return std::thread::hardware_concurrency();
-#endif
       }
 
       template <class F>
