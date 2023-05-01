@@ -65,20 +65,6 @@ namespace glz
       return write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);
    }
 
-   // For writing json to std::ofstream, std::cout, or other streams
-   template <opts Opts, class T>
-   inline void write(T&& value, std::ostream& os, is_context auto&& ctx) noexcept
-   {
-      detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, std::ostreambuf_iterator<char>(os));
-   }
-
-   template <opts Opts, class T>
-   inline void write(T&& value, std::ostream& os) noexcept
-   {
-      context ctx{};
-      write<Opts>(std::forward<T>(value), os, ctx);
-   }
-
    [[nodiscard]] GLZ_ALWAYS_INLINE error_code buffer_to_file(auto&& buffer, auto&& file_name) noexcept
    {
       auto file = std::ofstream(file_name, std::ios::out);
