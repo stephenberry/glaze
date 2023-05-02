@@ -13,8 +13,15 @@
 
 namespace glz
 {
+
    namespace detail
    {
+      template <std::array V>
+      struct make_static
+      {
+         static constexpr auto value = V;
+      };
+
 #ifdef _MSC_VER
       // Workaround for problems with MSVC and passing refrences to stringviews as template params
       struct svw
@@ -48,8 +55,7 @@ namespace glz
             return arr;
          }
 
-         static constexpr auto arr = impl(); // Give the joined string static storage
-         static constexpr std::string_view value{arr.data(), arr.size() - 1};
+         static constexpr std::string_view value = {make_static<impl()>::value.data()};
       };
 // Helper to get the value out
 #ifdef _MSC_VER
