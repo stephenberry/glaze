@@ -17,8 +17,8 @@ namespace glz
       {
          return join_v<chars<"std::variant<">,
                        ((I != std::variant_size_v<Variant> - 1)
-                           ? join<name_v<std::variant_alternative_t<I, Variant>>, chars<",">>()
-                           : join<name_v<std::variant_alternative_t<I, Variant>>>())...,
+                           ? join_v<name_v<std::variant_alternative_t<I, Variant>>, chars<",">>
+                           : join_v<name_v<std::variant_alternative_t<I, Variant>>>)...,
                        chars<">">>;
       }
    }

@@ -37,7 +37,7 @@ namespace glz
 #else
       template <const std::string_view&... Strs>
 #endif
-      constexpr std::string_view join()
+      inline constexpr std::string_view join()
       {
          constexpr auto joined_arr = []() {
             constexpr size_t len = (Strs.size() + ... + 0);
@@ -49,7 +49,8 @@ namespace glz
             arr[len] = 0;
             return arr;
          }();
-         return {make_static<joined_arr>::value.data()};
+         auto& static_arr = make_static<joined_arr>::value;
+         return {static_arr.data(), static_arr.size() - 1};
       }
 // Helper to get the value out
 #ifdef _MSC_VER
