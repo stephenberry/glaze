@@ -15,6 +15,12 @@ namespace glz
 {
    namespace detail
    {
+      template <std::array V>
+      struct make_static
+      {
+         static constexpr auto value = V;
+      };
+
 #ifdef _MSC_VER
       // Workaround for problems with MSVC and passing refrences to stringviews as template params
       struct svw
@@ -31,13 +37,9 @@ namespace glz
 #else
       template <const std::string_view&... Strs>
 #endif
-      struct join
+      constexpr std::string_view join()
       {
-         // Join all strings into a single std::array of chars
-         static constexpr auto impl() noexcept
-         {
-            // This local copy to a tuple and avoiding of parameter pack expansion is needed to avoid MSVC internal
-            // compiler errors
+         constexpr auto joined_arr = []() {
             constexpr size_t len = (Strs.size() + ... + 0);
             std::array<char, len + 1> arr{};
             auto append = [i = 0, &arr](const auto& s) mutable {
@@ -46,18 +48,16 @@ namespace glz
             (append(Strs), ...);
             arr[len] = 0;
             return arr;
-         }
-
-         static constexpr auto arr = impl(); // Give the joined string static storage
-         static constexpr std::string_view value{arr.data(), arr.size() - 1};
-      };
+         }();
+         return {make_static<joined_arr>::value.data()};
+      }
 // Helper to get the value out
 #ifdef _MSC_VER
       template <svw... Strs>
 #else
       template <const std::string_view&... Strs>
 #endif
-      static constexpr auto join_v = join<Strs...>::value;
+      static constexpr auto join_v = join<Strs...>();
    }
 
    /*template <class T>
