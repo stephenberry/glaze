@@ -16,8 +16,8 @@ namespace glz
       constexpr std::string_view tuplet_name_impl(std::index_sequence<I...>)
       {
          return join_v<chars<"glz::tuplet::tuple<">,
-                ((I != std::tuple_size_v<Tuple> - 1) ? join_v<name_v<std::tuple_element_t<I, Tuple>>, chars<",">>
-                                                    : join_v<name_v<std::tuple_element_t<I, Tuple>>>)...,
+                       ((I != std::tuple_size_v<Tuple> - 1) ? join_v<name_v<std::tuple_element_t<I, Tuple>>, chars<",">>
+                                                            : join_v<name_v<std::tuple_element_t<I, Tuple>>>)...,
                        chars<">">>;
       }
    }
