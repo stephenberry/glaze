@@ -41,3 +41,37 @@ add_subdirectory(eigen_test)
 add_subdirectory(json_test)
 add_subdirectory(jsonrpc_test)
 add_subdirectory(lib_test)
+
+add_test(
+  NAME glaze-install_test
+  COMMAND
+  "${CMAKE_COMMAND}"
+  --install "${PROJECT_BINARY_DIR}"
+  --prefix "${CMAKE_CURRENT_BINARY_DIR}/install"
+  --config $<CONFIG>
+  --verbose
+)
+
+add_test(
+  NAME find_package_test
+  COMMAND
+  "${CMAKE_CTEST_COMMAND}"
+  --verbose
+  --output-on-failure
+  --build-noclean
+  --build-project "${PROJECT_NAME}" # helps msvc when --build-target
+  --build-generator "${CMAKE_GENERATOR}"
+  --build-config $<CONFIG>
+  --build-and-test
+  "${CMAKE_CURRENT_SOURCE_DIR}/find_package"
+  "${CMAKE_CURRENT_BINARY_DIR}/find_package"
+  --build-options
+  "-Dglaze_ROOT:PATH=${CMAKE_CURRENT_BINARY_DIR}/install"
+  "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+  "-DBUILD_TESTING=ON"
+  --test-command "${CMAKE_CTEST_COMMAND}" --verbose --output-on-failure # inner ctest command
+)
+
+set_tests_properties(glaze-install_test PROPERTIES FIXTURES_SETUP glaze-install-fixture)
+set_tests_properties(find_package_test PROPERTIES FIXTURES_REQUIRED glaze-install-fixture)
+

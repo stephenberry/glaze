@@ -18,9 +18,8 @@ int main()
    std::string another_buffer{};
    glz::write_json(another_directory, another_buffer);
 
-   if (buffer == another_buffer) {
-      std::cout << "Directories are the same!\n";
-   }
+   std::cout << "Directories are " << (buffer != another_buffer ? "NOT" : "") << "the same!\n";
 
-   return 0;
+   const auto success = buffer == another_buffer;
+   return static_cast<int>(!success);
 }
