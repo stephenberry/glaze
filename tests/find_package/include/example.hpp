@@ -1,6 +1,6 @@
 #pragma once
 
-#include "glaze/glaze.hpp"
+#include <glaze/glaze.hpp>
 
 namespace example
 {
