@@ -154,89 +154,95 @@ namespace glz
          template <auto Opts, class B>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
          {
-            if constexpr (char_t<T>) {
-               dump<'"'>(b, ix);
-               switch (value) {
-               case '"':
-                  dump<"\\\"">(b, ix);
-                  break;
-               case '\\':
-                  dump<"\\\\">(b, ix);
-                  break;
-               case '\b':
-                  dump<"\\b">(b, ix);
-                  break;
-               case '\f':
-                  dump<"\\f">(b, ix);
-                  break;
-               case '\n':
-                  dump<"\\n">(b, ix);
-                  break;
-               case '\r':
-                  dump<"\\r">(b, ix);
-                  break;
-               case '\t':
-                  dump<"\\t">(b, ix);
-                  break;
-               default:
-                  dump(value, b, ix); // TODO: This warning is an error We need to be able to dump wider char types
-               }
-               dump<'"'>(b, ix);
+            if constexpr (Opts.number) {
+               // TODO: Should we check if the string number is valid?
+               dump(value, b, ix);
             }
             else {
-               const sv str = value;
-               const auto n = str.size();
-
-               // we use 4 * n to handle potential escape characters and quoted bounds
-               // Example: if n were of length 1 and needed to be escaped, then it would require 4 characters
-               // for the original, the escape, and the quote
-               if constexpr (detail::resizeable<B>) {
-                  const auto k = ix + 4 * n;
-                  if (k >= b.size()) [[unlikely]] {
-                     b.resize((std::max)(b.size() * 2, k));
-                  }
-               }
-               // now we don't have to check writing
-
-               dump_unchecked<'"'>(b, ix);
-
-               for (auto&& c : str) {
-                  switch (c) {
+               if constexpr (char_t<T>) {
+                  dump<'"'>(b, ix);
+                  switch (value) {
                   case '"':
-                     std::memcpy(data_ptr(b) + ix, R"(\")", 2);
-                     ix += 2;
+                     dump<"\\\"">(b, ix);
                      break;
                   case '\\':
-                     std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
-                     ix += 2;
+                     dump<"\\\\">(b, ix);
                      break;
                   case '\b':
-                     std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
-                     ix += 2;
+                     dump<"\\b">(b, ix);
                      break;
                   case '\f':
-                     std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
-                     ix += 2;
+                     dump<"\\f">(b, ix);
                      break;
                   case '\n':
-                     std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
-                     ix += 2;
+                     dump<"\\n">(b, ix);
                      break;
                   case '\r':
-                     std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
-                     ix += 2;
+                     dump<"\\r">(b, ix);
                      break;
                   case '\t':
-                     std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
-                     ix += 2;
+                     dump<"\\t">(b, ix);
                      break;
-                  [[likely]] default:
-                     std::memcpy(data_ptr(b) + ix, &c, 1);
-                     ++ix;
+                  default:
+                     dump(value, b, ix); // TODO: This warning is an error We need to be able to dump wider char types
                   }
+                  dump<'"'>(b, ix);
                }
+               else {
+                  const sv str = value;
+                  const auto n = str.size();
 
-               dump_unchecked<'"'>(b, ix);
+                  // we use 4 * n to handle potential escape characters and quoted bounds
+                  // Example: if n were of length 1 and needed to be escaped, then it would require 4 characters
+                  // for the original, the escape, and the quote
+                  if constexpr (detail::resizeable<B>) {
+                     const auto k = ix + 4 * n;
+                     if (k >= b.size()) [[unlikely]] {
+                        b.resize((std::max)(b.size() * 2, k));
+                     }
+                  }
+                  // now we don't have to check writing
+
+                  dump_unchecked<'"'>(b, ix);
+
+                  for (auto&& c : str) {
+                     switch (c) {
+                     case '"':
+                        std::memcpy(data_ptr(b) + ix, R"(\")", 2);
+                        ix += 2;
+                        break;
+                     case '\\':
+                        std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
+                        ix += 2;
+                        break;
+                     case '\b':
+                        std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
+                        ix += 2;
+                        break;
+                     case '\f':
+                        std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
+                        ix += 2;
+                        break;
+                     case '\n':
+                        std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
+                        ix += 2;
+                        break;
+                     case '\r':
+                        std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
+                        ix += 2;
+                        break;
+                     case '\t':
+                        std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
+                        ix += 2;
+                        break;
+                     [[likely]] default:
+                        std::memcpy(data_ptr(b) + ix, &c, 1);
+                        ++ix;
+                     }
+                  }
+
+                  dump_unchecked<'"'>(b, ix);
+               }
             }
          }
       };
