@@ -300,7 +300,7 @@ namespace glz
             if constexpr (Opts.number) {
                auto start = it;
                skip_number<Opts>(ctx, it, end);
-               value = sv{ start, it };
+               value.append(start, static_cast<size_t>(it - start));
             }
             else {
                if constexpr (!Opts.opening_handled) {
