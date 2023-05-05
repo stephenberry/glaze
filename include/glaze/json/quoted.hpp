@@ -12,7 +12,7 @@ namespace glz
    {
       T& val;
    };
-   
+
    template <class T>
    struct number_t
    {
@@ -40,7 +40,7 @@ namespace glz
             write<json>::op<opt_true<Opts, &opts::quoted>>(value.val, ctx, args...);
          }
       };
-      
+
       template <class T>
       struct from_json<number_t<T>>
       {
@@ -67,7 +67,7 @@ namespace glz
    {
       return [](auto&& val) { return quoted_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
    }
-   
+
    template <auto MemPtr>
    inline constexpr decltype(auto) number() noexcept
    {

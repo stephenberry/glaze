@@ -4266,18 +4266,17 @@ struct glz::meta<numbers_as_strings>
 suite numbers_as_strings_suite = [] {
    "numbers_as_strings"_test = [] {
       numbers_as_strings obj{};
-      
+
       std::string input = R"({"x":555,"y":3.14})";
       expect(glz::read_json(obj, input) == glz::error_code::none);
       expect(obj.x == "555");
       expect(obj.y == "3.14");
-      
+
       std::string output;
       glz::write_json(obj, output);
       expect(input == output);
    };
 };
-
 
 int main()
 {

@@ -63,7 +63,7 @@ namespace glz
       ret.ws_handled = false;
       return ret;
    }
-   
+
    template <opts Opts, auto member_ptr>
    constexpr auto opt_on()
    {
@@ -71,10 +71,10 @@ namespace glz
       ret.*member_ptr = true;
       return ret;
    }
-   
+
    template <opts Opts, auto member_ptr>
    inline constexpr auto opt_true = opt_on<Opts, member_ptr>();
-   
+
    template <opts Opts, auto member_ptr>
    constexpr auto opt_off()
    {
@@ -82,7 +82,7 @@ namespace glz
       ret.*member_ptr = false;
       return ret;
    }
-   
+
    template <opts Opts, auto member_ptr>
    inline constexpr auto opt_false = opt_off<Opts, member_ptr>();
 }
