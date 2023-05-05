@@ -24,11 +24,12 @@ namespace glz
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
       uint32_t layout = rowwise; // CSV row wise output/input
+      bool quoted = false; // treat numbers as quoted or array-like types as having quoted numbers
+      bool number = false; // read numbers as strings and write these string as numbers
 
       // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled
       bool ws_handled = false; // whitespace has already been parsed
-      bool quoted = false; // treat the value as quoted or array-like types as having quoted values
    };
 
    template <opts Opts>
@@ -62,12 +63,26 @@ namespace glz
       ret.ws_handled = false;
       return ret;
    }
-
-   template <opts Opts>
-   constexpr auto set_quoted()
+   
+   template <opts Opts, auto member_ptr>
+   constexpr auto opt_on()
    {
       opts ret = Opts;
-      ret.quoted = true;
+      ret.*member_ptr = true;
       return ret;
    }
+   
+   template <opts Opts, auto member_ptr>
+   inline constexpr auto opt_true = opt_on<Opts, member_ptr>();
+   
+   template <opts Opts, auto member_ptr>
+   constexpr auto opt_off()
+   {
+      opts ret = Opts;
+      ret.*member_ptr = false;
+      return ret;
+   }
+   
+   template <opts Opts, auto member_ptr>
+   inline constexpr auto opt_false = opt_off<Opts, member_ptr>();
 }

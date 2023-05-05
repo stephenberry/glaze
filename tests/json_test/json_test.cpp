@@ -4250,6 +4250,35 @@ suite required_keys = [] {
    };
 };
 
+struct numbers_as_strings
+{
+   std::string x{};
+   std::string y{};
+};
+
+template <>
+struct glz::meta<numbers_as_strings>
+{
+   using T = numbers_as_strings;
+   static constexpr auto value = object("x", glz::number<&T::x>(), "y", glz::number<&T::y>());
+};
+
+suite numbers_as_strings_suite = [] {
+   "numbers_as_strings"_test = [] {
+      numbers_as_strings obj{};
+      
+      std::string input = R"({"x":555,"y":3.14})";
+      expect(glz::read_json(obj, input) == glz::error_code::none);
+      expect(obj.x == "555");
+      expect(obj.y == "3.14");
+      
+      std::string output;
+      glz::write_json(obj, output);
+      expect(input == output);
+   };
+};
+
+
 int main()
 {
    // Explicitly run registered test suites and report errors
