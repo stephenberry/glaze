@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <tuple>
 #include <functional>
 
 namespace glz
