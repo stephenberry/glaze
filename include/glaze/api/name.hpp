@@ -58,7 +58,7 @@ namespace glz
 #else
       template <const std::string_view&... Strs>
 #endif
-      static constexpr auto join_v = join<Strs...>();
+      constexpr auto join_v = join<Strs...>();
    }
 
    /*template <class T>
