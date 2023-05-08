@@ -138,24 +138,22 @@ struct glz::meta<bar_result>
 };
 
 ut::suite struct_test_cases = [] {
-   rpc::server<rpc::server_method_t<"foo", foo_params, foo_result>,
-               rpc::server_method_t<"bar", bar_params, bar_result>>
+   rpc::server<rpc::server_method_t<"foo", foo_params, foo_result>, rpc::server_method_t<"bar", bar_params, bar_result>>
       server;
-   rpc::client<rpc::client_method_t<"foo", foo_params, foo_result>,
-               rpc::client_method_t<"bar", bar_params, bar_result>>
+   rpc::client<rpc::client_method_t<"foo", foo_params, foo_result>, rpc::client_method_t<"bar", bar_params, bar_result>>
       client;
 
    ut::test("valid foo request") = [&server, &client] {
       bool called{};
-      auto request_str{client.request<"foo">(
-         "42", foo_params{.foo_a = 1337, .foo_b = "hello world"},
-         [&called](glz::expected<foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
-            called = true;
-            ut::expect(value.has_value());
-            ut::expect(value.value() == foo_result{.foo_c = true, .foo_d = "new world"});
-            ut::expect(std::holds_alternative<std::string>(id));
-            ut::expect(std::get<std::string>(id) == std::string{"42"});
-         })};
+      auto request_str{
+         client.request<"foo">("42", foo_params{.foo_a = 1337, .foo_b = "hello world"},
+                               [&called](glz::expected<foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
+                                  called = true;
+                                  ut::expect(value.has_value());
+                                  ut::expect(value.value() == foo_result{.foo_c = true, .foo_d = "new world"});
+                                  ut::expect(std::holds_alternative<std::string>(id));
+                                  ut::expect(std::get<std::string>(id) == std::string{"42"});
+                               })};
       ut::expect(request_str.first ==
                  R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})");
 
@@ -205,15 +203,15 @@ ut::suite struct_test_cases = [] {
 
    ut::test("foo request error") = [&server, &client] {
       bool called{};
-      auto request_str{client.request<"foo">(
-         "42", foo_params{.foo_a = 1337, .foo_b = "hello world"},
-         [&called](glz::expected<foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
-            called = true;
-            ut::expect(!value.has_value());
-            ut::expect(value.error() == rpc::error{rpc::error_e::server_error_lower, "my error"});
-            ut::expect(std::holds_alternative<std::string>(id));
-            ut::expect(std::get<std::string>(id) == std::string{"42"});
-         })};
+      auto request_str{
+         client.request<"foo">("42", foo_params{.foo_a = 1337, .foo_b = "hello world"},
+                               [&called](glz::expected<foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
+                                  called = true;
+                                  ut::expect(!value.has_value());
+                                  ut::expect(value.error() == rpc::error{rpc::error_e::server_error_lower, "my error"});
+                                  ut::expect(std::holds_alternative<std::string>(id));
+                                  ut::expect(std::get<std::string>(id) == std::string{"42"});
+                               })};
 
       ut::expect(request_str.first ==
                  R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})");
@@ -393,14 +391,12 @@ ut::suite struct_test_cases = [] {
    };
    "client request map"_test = [&client] {
       bool first_call{};
-      std::ignore =
-         client.request<"foo">("first_call", foo_params{}, [&first_call](auto, auto) { first_call = true; });
+      std::ignore = client.request<"foo">("first_call", foo_params{}, [&first_call](auto, auto) { first_call = true; });
       bool second_call{};
       std::ignore =
          client.request<"foo">("second_call", foo_params{}, [&second_call](auto, auto) { second_call = true; });
       bool third_call{};
-      std::ignore =
-         client.request<"foo">("third_call", foo_params{}, [&third_call](auto, auto) { third_call = true; });
+      std::ignore = client.request<"foo">("third_call", foo_params{}, [&third_call](auto, auto) { third_call = true; });
       decltype(auto) map = client.get_request_map<"foo">();
       map.at("first_call")({}, {});
       ut::expect(first_call);
