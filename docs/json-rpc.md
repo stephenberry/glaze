@@ -7,83 +7,83 @@ Compile time specification of JSON-RPC methods making it unnecessary to convert 
 ### Example
 
 ```C++
-struct method_foo_params
+struct foo_params
 {
    int foo_a{};
    std::string foo_b{};
 };
 template <>
-struct glz::meta<method_foo_params>
+struct glz::meta<foo_params>
 {
-   using T = method_foo_params;
+   using T = foo_params;
    static constexpr auto value{glz::object("foo_a", &T::foo_a, "foo_b", &T::foo_b)};
 };
-struct method_foo_result
+struct foo_result
 {
    bool foo_c{};
    std::string foo_d{};
-   bool operator==(const method_foo_result& rhs) const noexcept { return foo_c == rhs.foo_c && foo_d == rhs.foo_d; }
+   bool operator==(const foo_result& rhs) const noexcept { return foo_c == rhs.foo_c && foo_d == rhs.foo_d; }
 };
 template <>
-struct glz::meta<method_foo_result>
+struct glz::meta<foo_result>
 {
-   using T = method_foo_result;
+   using T = foo_result;
    static constexpr auto value{glz::object("foo_c", &T::foo_c, "foo_d", &T::foo_d)};
 };
 
-struct method_bar_params
+struct bar_params
 {
    int bar_a;
    std::string bar_b;
 };
 template <>
-struct glz::meta<method_bar_params>
+struct glz::meta<bar_params>
 {
-   using T = method_bar_params;
+   using T = bar_params;
    static constexpr auto value{glz::object("bar_a", &T::bar_a, "bar_b", &T::bar_b)};
 };
-struct method_bar_result
+struct bar_result
 {
    bool bar_c{};
    std::string bar_d{};
-   bool operator==(const method_bar_result& rhs) const noexcept { return bar_c == rhs.bar_c && bar_d == rhs.bar_d; }
+   bool operator==(const bar_result& rhs) const noexcept { return bar_c == rhs.bar_c && bar_d == rhs.bar_d; }
 };
 template <>
-struct glz::meta<method_bar_result>
+struct glz::meta<bar_result>
 {
-   using T = method_bar_result;
+   using T = bar_result;
    static constexpr auto value{glz::object("bar_c", &T::bar_c, "bar_d", &T::bar_d)};
 };
 
 namespace rpc = glz::rpc;
 
 auto main(int, char**) -> int {
-    rpc::server<rpc::server_method_t<"foo", method_foo_params, method_foo_result>,
-                rpc::server_method_t<"bar", method_bar_params, method_bar_result>>
+    rpc::server<rpc::server_method_t<"foo", foo_params, foo_result>,
+                rpc::server_method_t<"bar", bar_params, bar_result>>
        server;
-    rpc::client<rpc::client_method_t<"foo", method_foo_params, method_foo_result>,
-                rpc::client_method_t<"bar", method_bar_params, method_bar_result>>
+    rpc::client<rpc::client_method_t<"foo", foo_params, foo_result>,
+                rpc::client_method_t<"bar", bar_params, bar_result>>
        client;
    
     // One long living callback per method for the server
-    server.on<"foo">([](method_foo_params const& params) -> glz::expected<method_foo_result, rpc::error> {
+    server.on<"foo">([](foo_params const& params) -> glz::expected<foo_result, rpc::error> {
         // access to member variables for the request `foo`
         // params.foo_a 
         // params.foo_b
-        return method_foo_result{.foo_c = true, .foo_d = "new world"};
+        return foo_result{.foo_c = true, .foo_d = "new world"};
         // Or return an error:
         // return glz::unexpected(rpc::error(rpc::error_e::server_error_lower, "my error"));
     });
-    server.on<"bar">([](method_bar_params const& params) -> glz::expected<method_bar_result, rpc::error> {
-        return method_bar_result{.bar_c = true, .bar_d = "new world"};
+    server.on<"bar">([](bar_params const& params) -> glz::expected<bar_result, rpc::error> {
+        return bar_result{.bar_c = true, .bar_d = "new world"};
     });
     
     std::string uuid{"42"};
     // One callback per client request
     auto [request_str, inserted] = client.request<"foo">(
             uuid, 
-            method_foo_params{.foo_a = 1337, .foo_b = "hello world"}, 
-            [](glz::expected<method_foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
+            foo_params{.foo_a = 1337, .foo_b = "hello world"}, 
+            [](glz::expected<foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
         // Access to value and/or id
     });
     // request_str: R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})"
