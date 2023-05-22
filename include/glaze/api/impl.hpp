@@ -222,7 +222,7 @@ namespace glz
       }
 
       template <class T>
-      auto get_void_fn(T&& root_value, const sv json_ptr, const glz::hash_t type_hash)
+      auto get_void_fn(T& root_value, const sv json_ptr, const glz::hash_t type_hash)
       {
          std::unique_ptr<void, void (*)(void*)> result{nullptr, nullptr};
 
@@ -277,7 +277,7 @@ namespace glz
                   },
                   parent, last_ptr);
             },
-            std::forward<T>(root_value), parent_ptr); // seek to parent
+            root_value, parent_ptr); // seek to parent
 
          if (error.empty() && result == nullptr) {
             error = "invalid path";
