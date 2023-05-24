@@ -3483,11 +3483,11 @@ static_assert(glz::detail::emplaceable<std::set<std::string>>);
 suite sets = [] {
    "std::unordered_set"_test = [] {
       std::unordered_set<std::string> set;
-      set.emplace("hello");
-      set.emplace("world");
+      expect(glz::read_json(set, "[]") == glz::error_code::none);
+      expect(set.empty());
 
+      set = {"hello", "world"};
       std::string b{};
-
       glz::write_json(set, b);
 
       expect(b == R"(["hello","world"])" || b == R"(["world","hello"])");
@@ -3501,7 +3501,11 @@ suite sets = [] {
    };
 
    "std::set"_test = [] {
-      std::set<int> set = {5, 4, 3, 2, 1};
+      std::set<int> set;
+      expect(glz::read_json(set, "[]") == glz::error_code::none);
+      expect(set.empty());
+
+      set = {5, 4, 3, 2, 1};
       std::string b{};
       glz::write_json(set, b);
 
@@ -3515,6 +3519,28 @@ suite sets = [] {
       expect(set.count(2) == 1);
       expect(set.count(3) == 1);
       expect(set.count(4) == 1);
+      expect(set.count(5) == 1);
+   };
+
+   "std::multiset"_test = [] {
+      std::multiset<int> set;
+      expect(glz::read_json(set, "[]") == glz::error_code::none);
+      expect(set.empty());
+
+      set = {5, 4, 3, 2, 1, 4, 1};
+      std::string b{};
+      glz::write_json(set, b);
+
+      expect(b == R"([1,1,2,3,4,4,5])");
+
+      set.clear();
+
+      expect(glz::read_json(set, b) == glz::error_code::none);
+
+      expect(set.count(1) == 2);
+      expect(set.count(2) == 1);
+      expect(set.count(3) == 1);
+      expect(set.count(4) == 2);
       expect(set.count(5) == 1);
    };
 };

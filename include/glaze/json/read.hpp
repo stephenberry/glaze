@@ -781,6 +781,10 @@ namespace glz
                return;
 
             value.clear();
+            if (*it == ']') [[unlikely]] {
+               ++it;
+               return;
+            }
 
             while (true) {
                using V = typename T::value_type;
