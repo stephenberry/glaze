@@ -436,7 +436,6 @@ namespace glz
                         dump<"{\n">(args...);
                         ctx.indentation_level += Opts.indentation_width;
                         dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
-                        dump<R"("type": ")">(args...);
                         dump<'"'>(args...);
                         dump(tag_v<T>, args...);
                         dump<"\": \"">(args...);

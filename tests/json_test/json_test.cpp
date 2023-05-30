@@ -10,6 +10,7 @@
 #include <map>
 #include <random>
 #include <unordered_map>
+#include <variant>
 
 #include "boost/ut.hpp"
 #include "glaze/api/impl.hpp"
@@ -2194,6 +2195,7 @@ suite nan_tests = [] {
 struct put_action
 {
    std::map<std::string, int> data{};
+   [[nodiscard]] bool operator==(const put_action&) const = default;
 };
 
 template <>
@@ -2207,6 +2209,7 @@ struct glz::meta<put_action>
 struct delete_action
 {
    std::string data{};
+   [[nodiscard]] bool operator==(const delete_action&) const = default;
 };
 
 template <>
@@ -2249,6 +2252,16 @@ struct glz::meta<holds_some_num>
 };
 
 suite tagged_variant_tests = [] {
+   "tagged_variant_read_tests"_test = [] {
+      tagged_variant var{};
+      expect(glz::read_json(var, R"({"action":"DELETE","data":"the_internet"})") == glz::error_code::none);
+      expect(std::get<delete_action>(var).data == "the_internet");
+
+      tagged_variant2 var2{};
+      expect(glz::read_json(var2, R"({"type":"put_action","data":{"x":100,"y":200}})") == glz::error_code::none);
+      expect(std::get<put_action>(var2).data["y"] == 200);
+   };
+
    "tagged_variant_write_tests"_test = [] {
       // custom tagged discriminator ids
       tagged_variant var = delete_action{{"the_internet"}};
@@ -2261,16 +2274,13 @@ suite tagged_variant_tests = [] {
       tagged_variant2 var2 = put_action{{{"x", 100}, {"y", 200}}};
       glz::write_json(var2, s);
       expect(s == R"({"type":"put_action","data":{"x":100,"y":200}})");
-   };
+      s.clear();
 
-   "tagged_variant_read_tests"_test = [] {
-      tagged_variant var{};
-      expect(glz::read_json(var, R"({"action":"DELETE","data":"the_internet"})") == glz::error_code::none);
-      expect(std::get<delete_action>(var).data == "the_internet");
-
-      tagged_variant2 var2{};
-      expect(glz::read_json(var2, R"({"type":"put_action","data":{"x":100,"y":200}})") == glz::error_code::none);
-      expect(std::get<put_action>(var2).data["y"] == 200);
+      // prettifies valid JSON
+      glz::write<glz::opts{.prettify = true}>(var, s);
+      tagged_variant parsed_var;
+      expect(glz::read_json(parsed_var, s) == glz::error_code::none);
+      expect(parsed_var == var);
    };
 
    "array_variant_tests"_test = [] {
