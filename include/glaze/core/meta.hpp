@@ -19,6 +19,42 @@ namespace glz
    namespace detail
    {
       template <class T>
+      struct Array
+      {
+         T value;
+      };
+
+      template <class T>
+      Array(T) -> Array<T>;
+
+      template <class T>
+      struct Object
+      {
+         T value;
+      };
+
+      template <class T>
+      Object(T) -> Object<T>;
+
+      template <class T>
+      struct Enum
+      {
+         T value;
+      };
+
+      template <class T>
+      Enum(T) -> Enum<T>;
+
+      template <class T>
+      struct Flags
+      {
+         T value;
+      };
+
+      template <class T>
+      Flags(T) -> Flags<T>;
+      
+      template <class T>
       concept local_construct_t = requires { T::glaze::construct; };
 
       template <class T>

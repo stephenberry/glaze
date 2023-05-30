@@ -4328,6 +4328,17 @@ suite numeric_enums_suite = [] {
    };*/
 };
 
+suite json_object = [] {
+   "json_objectO"_test = [] {
+      auto obj = glz::obj{"pi", 3.141, "happy", true, "name", "Stephen", "arr", glz::arr{ "Hello", "World", 2 }};
+      
+      std::string s{};
+      glz::write_json(obj, s);
+      
+      expect(s == R"({"pi":3.141,"happy":true,"name":"Stephen","arr":["Hello","World",2]})");
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
