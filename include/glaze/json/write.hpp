@@ -489,7 +489,7 @@ namespace glz
             dump<']'>(args...);
          }
       };
-      
+
       template <class T>
          requires is_specialization_v<T, arr>
       struct to_json<T>
@@ -508,8 +508,7 @@ namespace glz
             }
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value.value, glz::tuplet::get<I>(meta_v<T>)), ctx,
-                                        args...);
+                  write<json>::op<Opts>(get_member(value.value, glz::tuplet::get<I>(meta_v<T>)), ctx, args...);
                }
                else {
                   write<json>::op<Opts>(glz::tuplet::get<I>(value.value), ctx, args...);
@@ -559,8 +558,7 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx,
-                                        args...);
+                  write<json>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx, args...);
                }
                else {
                   write<json>::op<Opts>(glz::tuplet::get<I>(value), ctx, args...);
@@ -662,7 +660,7 @@ namespace glz
          }
          return false;
       }
-      
+
       template <class T>
          requires is_specialization_v<T, glz::obj>
       struct to_json<T>
@@ -692,9 +690,7 @@ namespace glz
                   if constexpr (always_null_t<T>)
                      return;
                   else {
-                     auto is_null = [&]() {
-                        return !bool(item);
-                     }();
+                     auto is_null = [&]() { return !bool(item); }();
                      if (is_null) return;
                   }
                }

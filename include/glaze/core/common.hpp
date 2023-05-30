@@ -37,19 +37,19 @@ namespace glz
    {
       glz::tuplet::tuple<T...> value;
    };
-   
+
    template <class... T>
    obj(T...) -> obj<T...>;
-   
+
    template <class... T>
    struct arr final
    {
       glz::tuplet::tuple<T...> value;
    };
-   
+
    template <class... T>
    arr(T...) -> arr<T...>;
-   
+
    template <class... T>
    struct overload : T...
    {

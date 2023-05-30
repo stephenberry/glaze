@@ -53,7 +53,7 @@ namespace glz
 
       template <class T>
       Flags(T) -> Flags<T>;
-      
+
       template <class T>
       concept local_construct_t = requires { T::glaze::construct; };
 
