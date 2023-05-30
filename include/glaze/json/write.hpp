@@ -489,6 +489,50 @@ namespace glz
             dump<']'>(args...);
          }
       };
+      
+      template <class T>
+         requires is_specialization_v<T, arr>
+      struct to_json<T>
+      {
+         template <auto Opts, class... Args>
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            using V = std::decay_t<decltype(value.value)>;
+            static constexpr auto N = std::tuple_size_v<V>;
+
+            dump<'['>(args...);
+            if constexpr (N > 0 && Opts.prettify) {
+               ctx.indentation_level += Opts.indentation_width;
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            }
+            for_each<N>([&](auto I) {
+               if constexpr (glaze_array_t<V>) {
+                  write<json>::op<Opts>(get_member(value.value, glz::tuplet::get<I>(meta_v<T>)), ctx,
+                                        args...);
+               }
+               else {
+                  write<json>::op<Opts>(glz::tuplet::get<I>(value.value), ctx, args...);
+               }
+               // MSVC bug if this logic is in the `if constexpr`
+               // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
+               constexpr bool needs_comma = I < N - 1;
+               if constexpr (needs_comma) {
+                  dump<','>(args...);
+                  if constexpr (Opts.prettify) {
+                     dump<'\n'>(args...);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+                  }
+               }
+            });
+            if constexpr (N > 0 && Opts.prettify) {
+               ctx.indentation_level -= Opts.indentation_width;
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            }
+            dump<']'>(args...);
+         }
+      };
 
       template <class T>
          requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
@@ -506,7 +550,7 @@ namespace glz
                }
             }();
 
-            dump<'['>(std::forward<Args>(args)...);
+            dump<'['>(args...);
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
                dump<'\n'>(args...);
@@ -516,10 +560,10 @@ namespace glz
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
                   write<json>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx,
-                                        std::forward<Args>(args)...);
+                                        args...);
                }
                else {
-                  write<json>::op<Opts>(glz::tuplet::get<I>(value), ctx, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(glz::tuplet::get<I>(value), ctx, args...);
                }
                // MSVC bug if this logic is in the `if constexpr`
                // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
@@ -618,6 +662,91 @@ namespace glz
          }
          return false;
       }
+      
+      template <class T>
+         requires is_specialization_v<T, glz::obj>
+      struct to_json<T>
+      {
+         template <auto Options>
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         {
+            if constexpr (!Options.opening_handled) {
+               dump<'{'>(b, ix);
+               if constexpr (Options.prettify) {
+                  ctx.indentation_level += Options.indentation_width;
+                  dump<'\n'>(b, ix);
+                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+               }
+            }
+
+            using V = std::decay_t<decltype(value.value)>;
+            static constexpr auto N = std::tuple_size_v<V> / 2;
+
+            bool first = true;
+            for_each<N>([&](auto I) {
+               static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+               decltype(auto) item = glz::tuplet::get<2 * I + 1>(value.value);
+               using val_t = std::decay_t<decltype(item)>;
+
+               if constexpr (null_t<val_t> && Opts.skip_null_members) {
+                  if constexpr (always_null_t<T>)
+                     return;
+                  else {
+                     auto is_null = [&]() {
+                        return !bool(item);
+                     }();
+                     if (is_null) return;
+                  }
+               }
+
+               // skip file_include
+               if constexpr (std::is_same_v<val_t, includer<V>>) {
+                  return;
+               }
+               else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+                  return;
+               }
+               else {
+                  if (first) {
+                     first = false;
+                  }
+                  else {
+                     // Null members may be skipped so we cant just write it out for all but the last member unless
+                     // trailing commas are allowed
+                     dump<','>(b, ix);
+                     if constexpr (Opts.prettify) {
+                        dump<'\n'>(b, ix);
+                        dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                     }
+                  }
+
+                  using Key = typename std::decay_t<std::tuple_element_t<2 * I, V>>;
+
+                  if constexpr (str_t<Key> || char_t<Key>) {
+                     const sv key = glz::tuplet::get<2 * I>(value.value);
+                     write<json>::op<Opts>(key, ctx, b, ix);
+                     dump<':'>(b, ix);
+                     if constexpr (Opts.prettify) {
+                        dump<' '>(b, ix);
+                     }
+                  }
+                  else {
+                     dump<'"'>(b, ix);
+                     write<json>::op<Opts>(item, ctx, b, ix);
+                     dump(Opts.prettify ? "\": " : "\":", b, ix);
+                  }
+
+                  write<json>::op<Opts>(item, ctx, b, ix);
+               }
+            });
+            if constexpr (Options.prettify) {
+               ctx.indentation_level -= Options.indentation_width;
+               dump<'\n'>(b, ix);
+               dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+            }
+            dump<'}'>(b, ix);
+         }
+      };
 
       template <class T>
          requires glaze_object_t<T>

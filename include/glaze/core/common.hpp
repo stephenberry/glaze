@@ -33,6 +33,24 @@
 namespace glz
 {
    template <class... T>
+   struct obj final
+   {
+      glz::tuplet::tuple<T...> value;
+   };
+   
+   template <class... T>
+   obj(T...) -> obj<T...>;
+   
+   template <class... T>
+   struct arr final
+   {
+      glz::tuplet::tuple<T...> value;
+   };
+   
+   template <class... T>
+   arr(T...) -> arr<T...>;
+   
+   template <class... T>
    struct overload : T...
    {
       using T::operator()...;
@@ -99,42 +117,6 @@ namespace glz
 
    namespace detail
    {
-      template <class T>
-      struct Array
-      {
-         T value;
-      };
-
-      template <class T>
-      Array(T) -> Array<T>;
-
-      template <class T>
-      struct Object
-      {
-         T value;
-      };
-
-      template <class T>
-      Object(T) -> Object<T>;
-
-      template <class T>
-      struct Enum
-      {
-         T value;
-      };
-
-      template <class T>
-      Enum(T) -> Enum<T>;
-
-      template <class T>
-      struct Flags
-      {
-         T value;
-      };
-
-      template <class T>
-      Flags(T) -> Flags<T>;
-
       template <int... I>
       using is = std::integer_sequence<int, I...>;
       template <int N>
