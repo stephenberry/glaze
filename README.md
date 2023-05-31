@@ -512,6 +512,22 @@ Only `"x"` and `"z"` are written out, because they are true. Reading in the buff
 ## Variant Handling and Type Deduction
 See [Variant Handling](./docs/variant-handling.md) for details on `std::variant` support.
 
+## Logging JSON
+
+Sometimes you just want to write out JSON structures on the fly as efficiently as possible. Glaze provides tuple-like structures that allow you to stack allocate structures to write out JSON with high speed. These structures are named `glz::obj` for objects and `glz::arr` for arrays.
+
+Below is an example of building an object, which also contains an array, and writing it out.
+
+```c++
+auto obj = glz::obj{"pi", 3.141, "happy", true, "name", "Stephen", "arr", glz::arr{"Hello", "World", 2}};
+
+std::string s{};
+glz::write_json(obj, s);
+expect(s == R"({"pi":3.141,"happy":true,"name":"Stephen","arr":["Hello","World",2]})");
+```
+
+> This approach is significantly faster than `glz::json_t` for generic JSON. But, may not be suitable for all contexts.
+
 ## Generic JSON
 
 See [Generic JSON](./docs/generic-json.md) for `glz::json_t`.
