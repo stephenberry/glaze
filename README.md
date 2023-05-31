@@ -519,11 +519,11 @@ Sometimes you just want to write out JSON structures on the fly as efficiently a
 Below is an example of building an object, which also contains an array, and writing it out.
 
 ```c++
-auto obj = glz::obj{"pi", 3.141, "happy", true, "name", "Stephen", "arr", glz::arr{"Hello", "World", 2}};
+auto obj = glz::obj{"pi", 3.14, "happy", true, "name", "Stephen", "arr", glz::arr{"Hello", "World", 2}};
 
 std::string s{};
 glz::write_json(obj, s);
-expect(s == R"({"pi":3.141,"happy":true,"name":"Stephen","arr":["Hello","World",2]})");
+expect(s == R"({"pi":3.14,"happy":true,"name":"Stephen","arr":["Hello","World",2]})");
 ```
 
 > This approach is significantly faster than `glz::json_t` for generic JSON. But, may not be suitable for all contexts.
