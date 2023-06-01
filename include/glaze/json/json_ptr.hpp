@@ -622,16 +622,23 @@ namespace glz
                   ++it;
                   // Could optimize by counting commas
                   static constexpr auto n = stoui(key);
-                  for_each<n>([&](auto) {
-                     skip_value<Opts>(ctx, it, end);
-                     if (*it != ',') {
-                        ret = unexpected(parse_error{error_code::array_element_not_found,
-                                                     static_cast<size_t>(std::distance(start, it))});
-                        return;
-                     }
-                     ++it;
-                  });
-                  ret = parse_value<Opts>(ctx, it, end);
+                  if constexpr (n) {
+                     for_each<n.value()>([&](auto) {
+                        skip_value<Opts>(ctx, it, end);
+                        if (*it != ',') {
+                           ret = unexpected(parse_error{error_code::array_element_not_found,
+                                                        static_cast<size_t>(std::distance(start, it))});
+                           return;
+                        }
+                        ++it;
+                     });
+                     ret = parse_value<Opts>(ctx, it, end);
+                  }
+                  else {
+                     ret = unexpected(parse_error{error_code::array_element_not_found,
+                                                  static_cast<size_t>(std::distance(start, it))});
+                     return;
+                  }
                }
                }
             }
