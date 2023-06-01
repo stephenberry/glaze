@@ -3632,12 +3632,12 @@ suite get_sv = [] {
 
       expect(view == "5.5");
    };
-   
+
    "get_sv_arry"_test = [] {
       std::string s = R"({"obj":{"x":[0,1,2]}})";
-      
+
       auto x = glz::get_as_json<std::vector<int>, "/obj/x">(s);
-      expect(x == std::vector<int>{0,1,2});
+      expect(x == std::vector<int>{0, 1, 2});
       auto x0 = glz::get_as_json<int, "/obj/x/0">(s);
       expect(x0 == 0);
    };
@@ -4340,13 +4340,17 @@ suite numeric_enums_suite = [] {
 suite json_logging = [] {
    "json_logging"_test = [] {
       glz::arr vec = {1, 2, 3};
-      glz::obj map = {"a", 1,"b", 2,"c", 3};
-      auto obj = glz::obj{"pi", 3.141, "happy", true, "name", "Stephen", "map", map, "arr", glz::arr{"Hello", "World", 2}, "vec", vec};
+      glz::obj map = {"a", 1, "b", 2, "c", 3};
+      auto obj = glz::obj{
+         "pi", 3.141, "happy", true, "name", "Stephen", "map", map, "arr", glz::arr{"Hello", "World", 2}, "vec", vec};
 
       std::string s{};
       glz::write_json(obj, s);
 
-      expect(s == R"({"pi":3.141,"happy":true,"name":"Stephen","map":{"a":1,"b":2,"c":3},"arr":["Hello","World",2],"vec":[1,2,3]})") << s;
+      expect(
+         s ==
+         R"({"pi":3.141,"happy":true,"name":"Stephen","map":{"a":1,"b":2,"c":3},"arr":["Hello","World",2],"vec":[1,2,3]})")
+         << s;
    };
 };
 
