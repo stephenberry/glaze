@@ -4328,14 +4328,16 @@ suite numeric_enums_suite = [] {
    };*/
 };
 
-suite json_object = [] {
-   "json_objectO"_test = [] {
-      auto obj = glz::obj{"pi", 3.141, "happy", true, "name", "Stephen", "arr", glz::arr{"Hello", "World", 2}};
+suite json_logging = [] {
+   "json_logging"_test = [] {
+      glz::arr vec = {1, 2, 3};
+      glz::obj map = {"a", 1,"b", 2,"c", 3};
+      auto obj = glz::obj{"pi", 3.141, "happy", true, "name", "Stephen", "map", map, "arr", glz::arr{"Hello", "World", 2}, "vec", vec};
 
       std::string s{};
       glz::write_json(obj, s);
 
-      expect(s == R"({"pi":3.141,"happy":true,"name":"Stephen","arr":["Hello","World",2]})");
+      expect(s == R"({"pi":3.141,"happy":true,"name":"Stephen","map":{"a":1,"b":2,"c":3},"arr":["Hello","World",2],"vec":[1,2,3]})") << s;
    };
 };
 
