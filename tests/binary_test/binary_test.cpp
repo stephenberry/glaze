@@ -562,12 +562,12 @@ void file_include_test()
 {
    includer_struct obj{};
 
-   expect(glz::write_file_binary(obj, "../alabastar.crush") == glz::error_code::none);
+   expect(glz::write_file_binary(obj, "../alabastar.crush", std::string{}) == glz::error_code::none);
 
    obj.str = "";
    obj.i = 0;
 
-   expect(glz::read_file_binary(obj, "../alabastar.crush") == glz::error_code::none);
+   expect(glz::read_file_binary(obj, "../alabastar.crush", std::string{}) == glz::error_code::none);
 
    expect(obj.str == "Hello") << obj.str;
    expect(obj.i == 55) << obj.i;

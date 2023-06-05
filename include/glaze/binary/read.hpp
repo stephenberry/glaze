@@ -533,12 +533,11 @@ namespace glz
    }
 
    template <class T>
-   [[nodiscard]] GLZ_ALWAYS_INLINE parse_error read_file_binary(T& value, const sv file_name) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE parse_error read_file_binary(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;
 
-      std::string buffer;
       const auto file_error = file_to_buffer(buffer, ctx.current_file);
 
       if (bool(file_error)) {
@@ -546,5 +545,12 @@ namespace glz
       }
 
       return read<opts{.format = binary}>(value, buffer, ctx);
+   }
+   
+   template <class T>
+   [[deprecated("use the version that takes a buffer as the third argument")]] [[nodiscard]] GLZ_ALWAYS_INLINE parse_error read_file_binary(T& value, const sv file_name) noexcept
+   {
+      std::string buffer;
+      return read_file_binary(value, file_name, buffer);
    }
 }

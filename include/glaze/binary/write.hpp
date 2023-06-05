@@ -543,10 +543,8 @@ namespace glz
 
    // std::string file_name needed for std::ofstream
    template <class T>
-   [[nodiscard]] GLZ_ALWAYS_INLINE write_error write_file_binary(T&& value, const std::string& file_name) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE write_error write_file_binary(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
-      std::string buffer{};
-
       write<opts{.format = binary}>(std::forward<T>(value), buffer);
 
       std::ofstream file(file_name);
@@ -559,5 +557,12 @@ namespace glz
       }
 
       return {};
+   }
+   
+   template <class T>
+   [[deprecated("use the version that takes a buffer as the third argument")]] [[nodiscard]] GLZ_ALWAYS_INLINE write_error write_file_binary(T&& value, const std::string& file_name) noexcept
+   {
+      std::string buffer{};
+      return write_file_binary(std::forward<T>(value), file_name, buffer);
    }
 }
