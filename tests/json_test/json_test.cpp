@@ -2569,7 +2569,6 @@ struct file_struct
 };
 
 suite read_file_test = [] {
-   
    "read_file valid"_test = [] {
       std::string filename = "../file.json";
       {
@@ -2587,7 +2586,7 @@ suite read_file_test = [] {
       std::string buffer{};
       expect(glz::read_file(s, filename, buffer) == glz::error_code::none);
    };
-   
+
    "read_file invalid"_test = [] {
       std::string filename = "../file.json";
       {
@@ -2634,7 +2633,7 @@ suite file_include_test = [] {
    expect(obj.i == 100) << obj.i;
 
    obj.str = "";
-   
+
    std::string buffer{};
    glz::read_file_json(obj, "../alabastar.json", buffer);
    expect(obj.str == "Hello") << obj.str;
@@ -2741,7 +2740,7 @@ suite recorder_test = [] {
       glz::write_json(rec, s);
 
       expect(glz::read_json(rec, s) == glz::error_code::none);
-      
+
       expect(glz::write_file_json(rec, "recorder_out.json", std::string{}) == glz::error_code::none);
    };
 };

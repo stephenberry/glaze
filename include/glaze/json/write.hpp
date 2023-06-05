@@ -891,14 +891,17 @@ namespace glz
 
    // std::string file_name needed for std::ofstream
    template <class T>
-   [[nodiscard]] GLZ_ALWAYS_INLINE write_error write_file_json(T&& value, const std::string& file_name, auto&& buffer) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE write_error write_file_json(T&& value, const std::string& file_name,
+                                                               auto&& buffer) noexcept
    {
       write<opts{}>(std::forward<T>(value), buffer);
       return {buffer_to_file(buffer, file_name)};
    }
-   
+
    template <class T>
-   [[deprecated("use the version that takes a buffer as the third argument")]] [[nodiscard]] GLZ_ALWAYS_INLINE write_error write_file_json(T&& value, const std::string& file_name) noexcept
+   [[deprecated(
+      "use the version that takes a buffer as the third argument")]] [[nodiscard]] GLZ_ALWAYS_INLINE write_error
+   write_file_json(T&& value, const std::string& file_name) noexcept
    {
       std::string buffer{};
       return write_file_json(std::forward<T>(value), file_name, buffer);

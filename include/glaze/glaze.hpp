@@ -71,14 +71,15 @@ namespace glz
          return {error_code::could_not_determine_extension};
       }
    }
-   
+
    template <class T>
-   [[deprecated("use the version that takes a buffer as the third argument")]] inline parse_error read_file(T& value, const sv file_name) noexcept
+   [[deprecated("use the version that takes a buffer as the third argument")]] inline parse_error read_file(
+      T& value, const sv file_name) noexcept
    {
       std::string buffer{};
       return read_file(value, file_name, buffer);
    }
-   
+
    template <class T>
    [[nodiscard]] inline write_error write_file(T& value, const sv file_name, auto&& buffer) noexcept
    {
@@ -120,7 +121,8 @@ namespace glz
    }
 
    template <class T>
-   [[deprecated("use the version that takes a buffer as the third argument")]] [[nodiscard]] inline write_error write_file(T& value, const sv file_name) noexcept
+   [[deprecated("use the version that takes a buffer as the third argument")]] [[nodiscard]] inline write_error
+   write_file(T& value, const sv file_name) noexcept
    {
       std::string buffer{};
       return write_file(value, file_name, buffer);
