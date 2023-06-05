@@ -41,12 +41,10 @@
 namespace glz
 {
    template <class T>
-   inline parse_error read_file(T& value, const sv file_name) noexcept
+   inline parse_error read_file(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;
-
-      std::string buffer;
 
       std::filesystem::path path{file_name};
 
@@ -73,14 +71,19 @@ namespace glz
          return {error_code::could_not_determine_extension};
       }
    }
-
+   
    template <class T>
-   [[nodiscard]] inline write_error write_file(T& value, const sv file_name)
+   [[deprecated("use the version that takes a buffer as the third argument")]] inline parse_error read_file(T& value, const sv file_name) noexcept
+   {
+      std::string buffer{};
+      return read_file(value, file_name, buffer);
+   }
+   
+   template <class T>
+   [[nodiscard]] inline write_error write_file(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;
-
-      std::string buffer;
 
       std::filesystem::path path{file_name};
 
@@ -114,5 +117,12 @@ namespace glz
       }
 
       return {};
+   }
+
+   template <class T>
+   [[deprecated("use the version that takes a buffer as the third argument")]] [[nodiscard]] inline write_error write_file(T& value, const sv file_name) noexcept
+   {
+      std::string buffer{};
+      return write_file(value, file_name, buffer);
    }
 }

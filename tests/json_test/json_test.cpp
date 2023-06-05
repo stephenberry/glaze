@@ -2569,20 +2569,41 @@ struct file_struct
 };
 
 suite read_file_test = [] {
-   std::string filename = "../file.json";
-   {
-      std::ofstream out(filename);
-      expect(bool(out));
-      if (out) {
-         out << R"({
-  "name": "my",
-  "label": "label"
-})";
+   
+   "read_file valid"_test = [] {
+      std::string filename = "../file.json";
+      {
+         std::ofstream out(filename);
+         expect(bool(out));
+         if (out) {
+            out << R"({
+     "name": "my",
+     "label": "label"
+   })";
+         }
       }
-   }
 
-   file_struct s;
-   expect(glz::read_file(s, filename) == glz::error_code::none);
+      file_struct s;
+      std::string buffer{};
+      expect(glz::read_file(s, filename, buffer) == glz::error_code::none);
+   };
+   
+   "read_file invalid"_test = [] {
+      std::string filename = "../file.json";
+      {
+         std::ofstream out(filename);
+         expect(bool(out));
+         if (out) {
+            out << R"({
+     "name": "my",
+     "label": "label"
+   })";
+         }
+      }
+
+      file_struct s;
+      expect(glz::read_file(s, "../nonexsistant_file.json", std::string{}) != glz::error_code::none);
+   };
 };
 
 struct includer_struct
@@ -2602,7 +2623,7 @@ struct glz::meta<includer_struct>
 suite file_include_test = [] {
    includer_struct obj{};
 
-   expect(glz::write_file_json(obj, "../alabastar.json") == glz::error_code::none);
+   expect(glz::write_file_json(obj, "../alabastar.json", std::string{}) == glz::error_code::none);
 
    obj.str = "";
 
@@ -2613,8 +2634,9 @@ suite file_include_test = [] {
    expect(obj.i == 100) << obj.i;
 
    obj.str = "";
-
-   glz::read_file_json(obj, "../alabastar.json");
+   
+   std::string buffer{};
+   glz::read_file_json(obj, "../alabastar.json", buffer);
    expect(obj.str == "Hello") << obj.str;
    expect(obj.i == 55) << obj.i;
 };
@@ -2622,7 +2644,7 @@ suite file_include_test = [] {
 suite file_include_test_auto = [] {
    includer_struct obj{};
 
-   expect(glz::write_file(obj, "./auto.json") == false);
+   expect(glz::write_file(obj, "./auto.json", std::string{}) == false);
 
    obj.str = "";
 
@@ -2634,7 +2656,7 @@ suite file_include_test_auto = [] {
 
    obj.str = "";
 
-   glz::read_file(obj, "./auto.json");
+   glz::read_file(obj, "./auto.json", std::string{});
    expect(obj.str == "Hello") << obj.str;
    expect(obj.i == 55) << obj.i;
 };
@@ -2669,7 +2691,7 @@ suite nested_file_include_test = [] {
 
       obj.b.i = 13;
 
-      expect(glz::write_file_json(obj.b, "./b/b.json") == glz::error_code::none);
+      expect(glz::write_file_json(obj.b, "./b/b.json", std::string{}) == glz::error_code::none);
    }
 
    obj.b.i = 0;
@@ -2719,8 +2741,8 @@ suite recorder_test = [] {
       glz::write_json(rec, s);
 
       expect(glz::read_json(rec, s) == glz::error_code::none);
-
-      expect(glz::write_file_json(rec, "recorder_out.json") == glz::error_code::none);
+      
+      expect(glz::write_file_json(rec, "recorder_out.json", std::string{}) == glz::error_code::none);
    };
 };
 
