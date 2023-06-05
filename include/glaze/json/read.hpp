@@ -1883,9 +1883,10 @@ namespace glz
 
       return read<Opts>(value, buffer, ctx);
    }
-   
+
    template <auto Opts = opts{}, class T>
-   [[deprecated("use the version that takes a buffer as the third argument")]] GLZ_ALWAYS_INLINE parse_error read_file_json(T& value, const sv file_name) noexcept
+   [[deprecated("use the version that takes a buffer as the third argument")]] GLZ_ALWAYS_INLINE parse_error
+   read_file_json(T& value, const sv file_name) noexcept
    {
       std::string buffer{};
       return read_file_json(value, file_name, buffer);
