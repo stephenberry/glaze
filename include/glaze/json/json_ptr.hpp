@@ -564,10 +564,11 @@ namespace glz
       context ctx{};
       auto p = read_iterators<Opts>(ctx, buffer);
 
-      auto& it = p.first;
-      auto& end = p.second;
+      auto it = p.first;
+      auto end = p.second;
 
-      using span_t = std::span<std::remove_reference_t<decltype(*it)>>;
+      //using span_t = std::span<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>;
+      using span_t = std::span<const char>; // TODO: should be more generic, but currently broken with mingw
 
       auto start = it;
 

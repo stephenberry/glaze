@@ -13,12 +13,12 @@
 namespace glz
 {
    template <opts Opts>
-   inline auto read_iterators(is_context auto&& ctx, detail::contiguous auto&& buffer) noexcept
+   inline decltype(auto) read_iterators(is_context auto&& ctx, detail::contiguous auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
       auto b = reinterpret_cast<const char*>(buffer.data());
-      auto e = reinterpret_cast<const char*>(buffer.data()); // to be incrementd
+      auto e = reinterpret_cast<const char*>(buffer.data()); // to be incremented
 
       using Buffer = std::decay_t<decltype(buffer)>;
       if constexpr (is_specialization_v<Buffer, std::basic_string> ||
