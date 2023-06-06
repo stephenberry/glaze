@@ -303,11 +303,6 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<'['>(args...);
-            if constexpr (Opts.prettify) {
-               ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
-            }
             const auto is_empty = [&]() -> bool {
                if constexpr (has_size<T>) {
                   return value.size() ? false : true;
@@ -318,6 +313,12 @@ namespace glz
             }();
 
             if (!is_empty) {
+               if constexpr (Opts.prettify) {
+                  ctx.indentation_level += Opts.indentation_width;
+                  dump<'\n'>(args...);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               }
+
                auto it = value.begin();
                write<json>::op<Opts>(*it, ctx, args...);
                ++it;
