@@ -304,11 +304,11 @@ namespace glz
          {
             dump<'['>(args...);
             const auto is_empty = [&]() -> bool {
-               if constexpr (has_size<T>) {
-                  return value.size() ? false : true;
+               if constexpr (has_empty<T>) {
+                  return value.empty();
                }
                else {
-                  return value.empty();
+                  return value.size() ? false : true;
                }
             }();
 
