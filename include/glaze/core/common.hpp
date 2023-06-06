@@ -315,7 +315,11 @@ namespace glz
       concept has_size = requires(T container) { container.size(); };
 
       template <class T>
-      concept has_empty = requires(T container) { {container.empty()} -> std::convertible_to<bool>; };
+      concept has_empty = requires(T container) {
+                             {
+                                container.empty()
+                                } -> std::convertible_to<bool>;
+                          };
 
       template <class T>
       concept has_data = requires(T container) { container.data(); };
