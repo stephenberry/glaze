@@ -18,7 +18,7 @@ namespace glz
          std::string context;
       };
 
-      inline std::optional<source_info> get_source_info(const auto& buffer, const std::size_t index)
+      inline std::optional<source_info> get_source_info(const std::string_view buffer, const std::size_t index)
       {
          if (index >= buffer.size()) {
             return std::nullopt;
