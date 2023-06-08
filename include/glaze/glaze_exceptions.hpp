@@ -34,7 +34,7 @@ namespace glz::ex
    template <opts Opts, class T, raw_buffer Buffer>
    size_t write(T&& value, Buffer&& buffer) noexcept
    {
-      glz::write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return glz::write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 }
 
