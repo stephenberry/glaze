@@ -13,6 +13,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - Direct memory access through JSON pointer syntax
 - [Tagged binary spec](./docs/binary.md) through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
+- If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](./docs/exceptions.md)
 - No runtime type information necessary (compiles with `-fno-rtti`)
 - [JSON-RPC 2.0 support](./docs/json-rpc.md)
 - [JSON Schema generation](./docs/json-schema.md)

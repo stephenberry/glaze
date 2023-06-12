@@ -57,7 +57,7 @@ void csv_tests()
 77,88,0,4,4,4
 )");
 
-      expect(!write_file_csv<colwise>(obj, "csv_test_colwise.csv"));
+      expect(!write_file_csv<colwise>(obj, "csv_test_colwise.csv", std::string{}));
    };
 
    "read/write row wise"_test = [] {
@@ -88,7 +88,7 @@ v3s[0],1,2,3,4
 v3s[1],1,2,3,4
 v3s[2],1,2,3,4)");
 
-      expect(!write_file_csv(obj, "csv_test_rowwise.csv"));
+      expect(!write_file_csv(obj, "csv_test_rowwise.csv", std::string{}));
    };
 
    "std::map row wise"_test = [] {

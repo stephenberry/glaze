@@ -21,7 +21,7 @@ namespace glz
       struct write<csv>
       {
          template <auto Opts, class T, is_context Ctx, class B, class IX>
-         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
+         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             to_csv<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                        std::forward<B>(b), std::forward<IX>(ix));
@@ -32,7 +32,7 @@ namespace glz
       struct to_csv<T>
       {
          template <auto Opts, is_context Ctx, class B, class IX>
-         static void op(auto&& value, Ctx&& ctx, B&& b, IX&& ix)
+         static void op(auto&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
             to_csv<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
@@ -305,13 +305,13 @@ namespace glz
    }
 
    template <class T, class Buffer>
-   GLZ_ALWAYS_INLINE auto write_csv(T&& value, Buffer&& buffer)
+   GLZ_ALWAYS_INLINE auto write_csv(T&& value, Buffer&& buffer) noexcept
    {
       return write<opts{.format = csv}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
-   GLZ_ALWAYS_INLINE auto write_csv(T&& value)
+   GLZ_ALWAYS_INLINE auto write_csv(T&& value) noexcept
    {
       std::string buffer{};
       write<opts{.format = csv}>(std::forward<T>(value), buffer);
@@ -319,7 +319,15 @@ namespace glz
    }
 
    template <uint32_t layout = rowwise, class T>
-   [[nodiscard]] inline write_error write_file_csv(T&& value, const std::string& file_name)
+   [[nodiscard]] inline write_error write_file_csv(T&& value, const std::string& file_name, auto&& buffer) noexcept
+   {
+      write<opts{.format = csv, .layout = layout}>(std::forward<T>(value), buffer);
+      return {buffer_to_file(buffer, file_name)};
+   }
+   
+   template <uint32_t layout = rowwise, class T>
+   [[deprecated(
+      "use the version that takes a buffer as the third argument")]] inline write_error write_file_csv(T&& value, const std::string& file_name) noexcept
    {
       std::string buffer{};
       write<opts{.format = csv, .layout = layout}>(std::forward<T>(value), buffer);
