@@ -93,6 +93,55 @@ suite basic_types = [] {
    };
 };
 
+struct file_struct
+{
+   std::string name;
+   std::string label;
+
+   struct glaze
+   {
+      using T = file_struct;
+      static constexpr auto value = glz::object("name", &T::name, "label", &T::label);
+   };
+};
+
+suite read_file_test = [] {
+   "read_file valid"_test = [] {
+      std::string filename = "../file.json";
+      {
+         std::ofstream out(filename);
+         expect(bool(out));
+         if (out) {
+            out << R"({
+     "name": "my",
+     "label": "label"
+   })";
+         }
+      }
+
+      file_struct s;
+      std::string buffer{};
+      glz::ex::read_file(s, filename, buffer);
+   };
+
+   "read_file invalid"_test = [] {
+      std::string filename = "../file.json";
+      {
+         std::ofstream out(filename);
+         expect(bool(out));
+         if (out) {
+            out << R"({
+     "name": "my",
+     "label": "label"
+   })";
+         }
+      }
+
+      file_struct s;
+      expect(throws([&]{glz::ex::read_file(s, "../nonexsistant_file.json", std::string{});}));
+   };
+};
+
 
 int main()
 {
