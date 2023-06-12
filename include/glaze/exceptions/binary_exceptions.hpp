@@ -59,7 +59,7 @@ namespace glz::ex
       if (ec == glz::error_code::file_open_failure) {
          throw std::runtime_error("file failed to open: " + std::string(file_name));
       }
-      else {
+      else if (ec) {
          throw std::runtime_error("write_file_binary error for: " + std::string(file_name));
       }
    }
