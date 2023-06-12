@@ -319,7 +319,15 @@ namespace glz
    }
 
    template <uint32_t layout = rowwise, class T>
-   [[nodiscard]] inline write_error write_file_csv(T&& value, const std::string& file_name) noexcept
+   [[nodiscard]] inline write_error write_file_csv(T&& value, const std::string& file_name, auto&& buffer) noexcept
+   {
+      write<opts{.format = csv, .layout = layout}>(std::forward<T>(value), buffer);
+      return {buffer_to_file(buffer, file_name)};
+   }
+   
+   template <uint32_t layout = rowwise, class T>
+   [[deprecated(
+      "use the version that takes a buffer as the third argument")]] inline write_error write_file_csv(T&& value, const std::string& file_name) noexcept
    {
       std::string buffer{};
       write<opts{.format = csv, .layout = layout}>(std::forward<T>(value), buffer);
