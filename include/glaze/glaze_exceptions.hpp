@@ -9,6 +9,7 @@
 
 #include "glaze/exceptions/binary_exceptions.hpp"
 #include "glaze/exceptions/json_exceptions.hpp"
+#include "glaze/exceptions/csv_exceptions.hpp"
 
 namespace glz::ex
 {
