@@ -138,10 +138,9 @@ suite read_file_test = [] {
       }
 
       file_struct s;
-      expect(throws([&]{glz::ex::read_file(s, "../nonexsistant_file.json", std::string{});}));
+      expect(throws([&] { glz::ex::read_file(s, "../nonexsistant_file.json", std::string{}); }));
    };
 };
-
 
 int main()
 {

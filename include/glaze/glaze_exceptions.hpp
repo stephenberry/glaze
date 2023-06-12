@@ -8,8 +8,8 @@
 // These files provide convenience functions that throw C++ exceptions, which can make code cleaner for users
 
 #include "glaze/exceptions/binary_exceptions.hpp"
-#include "glaze/exceptions/json_exceptions.hpp"
 #include "glaze/exceptions/csv_exceptions.hpp"
+#include "glaze/exceptions/json_exceptions.hpp"
 
 namespace glz::ex
 {
@@ -26,13 +26,13 @@ namespace glz::ex
          }
       }
    }
-   
+
    template <opts Opts, class T, output_buffer Buffer>
    void write(T&& value, Buffer& buffer) noexcept
    {
       glz::write<Opts>(std::forward<T>(value), buffer);
    }
-   
+
    template <opts Opts, class T, raw_buffer Buffer>
    size_t write(T&& value, Buffer&& buffer) noexcept
    {
