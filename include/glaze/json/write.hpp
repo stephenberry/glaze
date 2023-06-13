@@ -348,12 +348,13 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<'{'>(args...);
-            if constexpr (Opts.prettify) {
-               ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
-            }
             if (!value.empty()) {
+               if constexpr (Opts.prettify) {
+                  ctx.indentation_level += Opts.indentation_width;
+                  dump<'\n'>(args...);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               }
+
                auto it = value.cbegin();
                auto write_pair = [&] {
                   using Key = decltype(it->first);
