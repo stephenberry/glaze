@@ -4401,11 +4401,20 @@ struct glz::meta<cx_values>
 };
 
 suite constexpr_values_test = [] {
-   "constexpr_values"_test = [] {
+   "constexpr_values_write"_test = [] {
       cx_values obj{};
       std::string s{};
       glz::write_json(obj, s);
       expect(s == R"({"info":"information","index":42,"value":""})");
+   };
+   
+   "constexpr_values_read"_test = [] {
+      cx_values obj{};
+      std::string s = R"({"info":"hello","index":2,"value":"special"})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.info == "information");
+      expect(obj.index == 42);
+      expect(obj.value == "special");
    };
 };
 

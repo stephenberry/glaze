@@ -45,8 +45,14 @@ namespace glz
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
-            from_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                          std::forward<It0>(it), std::forward<It1>(end));
+            if constexpr (std::is_const_v<std::remove_reference_t<T>>) {
+               // do not read anything into the const value
+               skip_value<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+            }
+            else {
+               from_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                             std::forward<It0>(it), std::forward<It1>(end));
+            }
          }
       };
 
