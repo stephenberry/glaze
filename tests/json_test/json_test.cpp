@@ -4407,7 +4407,7 @@ suite constexpr_values_test = [] {
       glz::write_json(obj, s);
       expect(s == R"({"info":"information","index":42,"value":""})");
    };
-   
+
    "constexpr_values_read"_test = [] {
       cx_values obj{};
       std::string s = R"({"info":"hello","index":2,"value":"special"})";
