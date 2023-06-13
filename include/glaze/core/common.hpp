@@ -760,6 +760,9 @@ namespace glz
          else if constexpr (std::invocable<decltype(member_ptr), decltype(value)>) {
             return std::invoke(member_ptr, value);
          }
+         else if constexpr (std::is_pointer_v<V>) {
+            return *member_ptr;
+         }
          else {
             return member_ptr;
          }
