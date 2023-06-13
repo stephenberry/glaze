@@ -776,7 +776,7 @@ namespace glz
                      return;
                   else {
                      auto is_null = [&]() {
-                        if constexpr (std::is_member_pointer_v<std::tuple_element_t<1, decltype(item)>>) {
+                        if constexpr (std::is_member_pointer_v<mptr_t>) {
                            return !bool(value.*glz::tuplet::get<1>(item));
                         }
                         else {

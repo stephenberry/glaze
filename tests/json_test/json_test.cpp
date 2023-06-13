@@ -4375,6 +4375,37 @@ suite json_logging = [] {
    };
 };
 
+struct non_cx_values {
+   std::string_view info{ "information" };
+   int index{ 42 };
+   std::string value{};
+};
+
+static_assert(std::is_same_v<glz::detail::member_t<non_cx_values, decltype(&non_cx_values::info)>, std::string_view&>);
+
+struct cx_values {
+   static constexpr std::string_view info{ "information" };
+   static constexpr auto index{ 42 };
+   std::string value{};
+};
+
+static_assert(std::is_same_v<glz::detail::member_t<cx_values, decltype(&cx_values::info)>, const std::string_view&>);
+
+template<>
+struct glz::meta<cx_values> {
+   using T = cx_values;
+   static constexpr auto value{ glz::object("info", &T::info, "index", &T::index, "value", &T::value) };
+};
+
+suite constexpr_values_test = [] {
+   "constexpr_values"_test = [] {
+      cx_values obj{};
+      std::string s{};
+      glz::write_json(obj, s);
+      expect(s == R"({"info":"information","index":42,"value":""})");
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
