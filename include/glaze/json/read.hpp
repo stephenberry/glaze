@@ -733,7 +733,10 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            read<json>::op<Opts>(*reinterpret_cast<std::underlying_type_t<std::decay_t<decltype(value)>>*>(&value), ctx, it, end);
+            // read<json>::op<Opts>(*reinterpret_cast<std::underlying_type_t<std::decay_t<decltype(value)>>*>(&value), ctx, it, end);
+            std::underlying_type_t<std::decay_t<T>> x{};
+            read<json>::op<Opts>(x, ctx, it, end);
+            value = static_cast<std::decay_t<T>>(x);
          }
       };
 
