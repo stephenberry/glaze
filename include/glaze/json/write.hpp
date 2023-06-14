@@ -273,14 +273,16 @@ namespace glz
             }
          }
       };
-      
-      template <class T> requires (std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T>)
+
+      template <class T>
+         requires(std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T>)
       struct to_json<T>
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            write<json>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx, std::forward<Args>(args)...);
+            write<json>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
+                                  std::forward<Args>(args)...);
          }
       };
 

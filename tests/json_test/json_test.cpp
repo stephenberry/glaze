@@ -4418,11 +4418,7 @@ suite constexpr_values_test = [] {
    };
 };
 
-enum class my_enum_type
-{
-   value_0,
-   value_1
-};
+enum class my_enum_type { value_0, value_1 };
 
 struct test_enum_struct
 {
@@ -4442,7 +4438,7 @@ suite numeric_enum_tests = [] {
       std::string s{};
       glz::write_json(obj, s);
       expect(s == R"({"type":1})");
-      
+
       obj.type = my_enum_type::value_0;
       expect(!glz::read_json(obj, s));
       expect(obj.type == my_enum_type::value_1);
