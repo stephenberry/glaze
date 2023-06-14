@@ -4418,6 +4418,37 @@ suite constexpr_values_test = [] {
    };
 };
 
+enum class my_enum_type
+{
+   value_0,
+   value_1
+};
+
+struct test_enum_struct
+{
+   my_enum_type type = my_enum_type::value_1;
+};
+
+template <>
+struct glz::meta<test_enum_struct>
+{
+   using T = test_enum_struct;
+   static constexpr auto value = object("type", &T::type);
+};
+
+suite numeric_enum_tests = [] {
+   "numeric_enum"_test = [] {
+      test_enum_struct obj{};
+      std::string s{};
+      glz::write_json(obj, s);
+      expect(s == R"({"type":1})");
+      
+      obj.type = my_enum_type::value_0;
+      expect(!glz::read_json(obj, s));
+      expect(obj.type == my_enum_type::value_1);
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
