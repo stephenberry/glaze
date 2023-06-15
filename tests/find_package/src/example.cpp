@@ -13,7 +13,7 @@ int main()
    std::cout << buffer << "\n\n";
 
    std::array<person, 2> another_directory;
-   glz::read_json(another_directory, buffer);
+   [[maybe_unused]] const auto err = glz::read_json(another_directory, buffer);
 
    std::string another_buffer{};
    glz::write_json(another_directory, another_buffer);
