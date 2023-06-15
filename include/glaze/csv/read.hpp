@@ -64,6 +64,46 @@ namespace glz
             it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
          }
       };
+      
+      template <string_t T>
+      struct from_csv<T>
+      {
+         template <auto Opts, class It>
+         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
+         {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            
+            value.clear();
+            auto start = it;
+            while (it < end) {
+               switch (*it) {
+               case ',':
+               case '\n': {
+                  value.append(start, static_cast<size_t>(it - start));
+                  return;
+               }
+               case '\\':
+               case '\b':
+               case '\f':
+               case '\r':
+               case '\t': {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               case '\0': {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+               default:
+                  ++it;
+               }
+            }
+            
+            value.append(start, static_cast<size_t>(it - start));
+         }
+      };
 
       template <bool_t T>
       struct from_csv<T>
