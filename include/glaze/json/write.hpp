@@ -367,39 +367,44 @@ namespace glz
                   dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                }
 
-               auto it = value.cbegin();
-               auto write_pair = [&] {
-                  using Key = decltype(it->first);
+               auto write_pair = [&]<class Key, class Value>(const Key& key, const Value& entry_val) {
+                  if constexpr (null_t<Value> && Opts.skip_null_members) {
+                     if (!bool(entry_val)) return;
+                  }
+
                   if constexpr (str_t<Key> || char_t<Key>) {
-                     write<json>::op<Opts>(it->first, ctx, args...);
+                     write<json>::op<Opts>(key, ctx, args...);
                      dump<':'>(args...);
                   }
                   else {
                      dump<'"'>(args...);
-                     write<json>::op<Opts>(it->first, ctx, args...);
+                     write<json>::op<Opts>(key, ctx, args...);
                      dump<R"(":)">(args...);
                   }
                   if constexpr (Opts.prettify) {
                      dump<' '>(args...);
                   }
-                  write<json>::op<Opts>(it->second, ctx, args...);
-               };
-               write_pair();
-               ++it;
 
-               const auto end = value.cend();
-               for (; it != end; ++it) {
-                  using Value = std::decay_t<decltype(it->second)>;
-                  if constexpr (null_t<Value> && Opts.skip_null_members) {
-                     if (!bool(it->second)) continue;
-                  }
+                  write<json>::op<Opts>(entry_val, ctx, args...);
+               };
+
+               auto it = value.cbegin();
+               {
+                  const auto& [first_key, first_val] = *it;
+                  write_pair(first_key, first_val);
+               }
+
+               for (++it; it != value.cend(); ++it) {
                   dump<','>(args...);
                   if constexpr (Opts.prettify) {
                      dump<'\n'>(args...);
                      dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
-                  write_pair();
+
+                  const auto& [key, entry_val] = *it;
+                  write_pair(key, entry_val);
                }
+
                if constexpr (Opts.prettify) {
                   ctx.indentation_level -= Opts.indentation_width;
                   dump<'\n'>(args...);
