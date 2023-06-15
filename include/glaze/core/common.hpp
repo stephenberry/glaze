@@ -100,7 +100,6 @@ namespace glz
 
    template <class T>
    concept range = requires(T& t) {
-      typename T::value_type;
       requires !std::same_as<void, decltype(t.begin())>;
       requires !std::same_as<void, decltype(t.end())>;
    };
@@ -281,7 +280,7 @@ namespace glz
       concept writable_map_t = !complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>>;
 
       template <class T>
-      concept array_t = (!complex_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
+      concept array_t = (!complex_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>)&&range<T>);
 
       template <class T>
       concept emplace_backable = requires(T container) {

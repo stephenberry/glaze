@@ -808,7 +808,7 @@ namespace glz
             }
 
             while (true) {
-               using V = typename T::value_type;
+               using V = range_value_t<T>;
                if constexpr (sizeof(V) > 8) {
                   static thread_local V v;
                   read<json>::op<Opts>(v, ctx, it, end);

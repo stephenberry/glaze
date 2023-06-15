@@ -245,7 +245,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            using V = typename std::decay_t<T>::value_type;
+            using V = range_value_t<std::decay_t<T>>;
 
             uint8_t tag;
 
