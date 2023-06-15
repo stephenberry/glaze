@@ -2352,27 +2352,27 @@ suite variant_tests = [] {
       // Auto deduce variant with no conflicting basic types
       std::variant<std::monostate, int, std::string, bool, std::map<std::string, double>, std::vector<std::string>> m{};
       expect(glz::read_json(m, R"("Hello World")") == glz::error_code::none);
-      expect(std::holds_alternative<std::string>(m) == true);
+      expect(std::holds_alternative<std::string>(m) >> fatal);
       expect(std::get<std::string>(m) == "Hello World");
 
       expect(glz::read_json(m, R"(872)") == glz::error_code::none);
-      expect(std::holds_alternative<int>(m) == true);
+      expect(std::holds_alternative<int>(m) >> fatal);
       expect(std::get<int>(m) == 872);
 
       expect(glz::read_json(m, R"({"pi":3.14})") == glz::error_code::none);
-      expect(std::holds_alternative<std::map<std::string, double>>(m) == true);
+      expect(std::holds_alternative<std::map<std::string, double>>(m) >> fatal);
       expect(std::get<std::map<std::string, double>>(m)["pi"] == 3.14);
 
       expect(glz::read_json(m, R"(true)") == glz::error_code::none);
-      expect(std::holds_alternative<bool>(m) == true);
+      expect(std::holds_alternative<bool>(m) >> fatal);
       expect(std::get<bool>(m) == true);
 
       expect(glz::read_json(m, R"(["a", "b", "c"])") == glz::error_code::none);
-      expect(std::holds_alternative<std::vector<std::string>>(m) == true);
+      expect(std::holds_alternative<std::vector<std::string>>(m) >> fatal);
       expect(std::get<std::vector<std::string>>(m)[1] == "b");
 
       expect(glz::read_json(m, "null") == glz::error_code::none);
-      expect(std::holds_alternative<std::monostate>(m) == true);
+      expect(std::holds_alternative<std::monostate>(m) >> fatal);
    };
 
    "variant_read_obj"_test = [] {
