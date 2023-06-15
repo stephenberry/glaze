@@ -24,6 +24,21 @@ struct glz::meta<my_struct>
    static constexpr auto value = glz::object("num1", &T::num1, "num2", &T::num2, "maybe", &T::maybe, "v3s", &T::v3s);
 };
 
+struct string_elements
+{
+    std::vector<int> id{};
+    std::vector<std::string> udl{};
+};
+
+template <> struct glz::meta<string_elements>
+{
+    using T                     = string_elements;
+    static constexpr auto value = glz::object("id",
+                                              &T::id,
+                                              "udl",
+                                              &T::udl);
+};
+
 void csv_tests()
 {
    "read/write column wise"_test = [] {
@@ -55,6 +70,41 @@ void csv_tests()
 33,44,1,2,2,2
 55,66,0,3,3,3
 77,88,0,4,4,4
+)");
+
+      expect(!write_file_csv<colwise>(obj, "csv_test_colwise.csv", std::string{}));
+   };
+   
+   "column wise string arguments"_test = [] {
+      std::string input_col =
+         R"(id,udl
+1,BRN
+2,STR
+3,ASD
+4,USN)";
+
+      string_elements obj{};
+
+      read_csv<colwise>(obj, input_col);
+
+      expect(obj.id[0] == 1);
+      expect(obj.id[1] == 2);
+      expect(obj.id[2] == 3);
+      expect(obj.id[3] == 4);
+      expect(obj.udl[0] == "BRN");
+      expect(obj.udl[1] == "STR");
+      expect(obj.udl[2] == "ASD");
+      expect(obj.udl[3] == "USN");
+
+      std::string out{};
+
+      write<opts{.format = csv, .layout = colwise}>(obj, out);
+      expect(out ==
+             R"(id,udl
+1,BRN
+2,STR
+3,ASD
+4,USN
 )");
 
       expect(!write_file_csv<colwise>(obj, "csv_test_colwise.csv", std::string{}));
