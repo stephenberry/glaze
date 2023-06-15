@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -102,6 +103,7 @@ namespace glz
    concept range = requires(T& t) {
       requires !std::same_as<void, decltype(t.begin())>;
       requires !std::same_as<void, decltype(t.end())>;
+      requires std::input_iterator<decltype(t.begin())>;
    };
 
    // range like
