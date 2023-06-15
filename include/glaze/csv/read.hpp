@@ -64,7 +64,7 @@ namespace glz
             it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
          }
       };
-      
+
       template <string_t T>
       struct from_csv<T>
       {
@@ -74,7 +74,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            
+
             value.clear();
             auto start = it;
             while (it < end) {
@@ -100,7 +100,7 @@ namespace glz
                   ++it;
                }
             }
-            
+
             value.append(start, static_cast<size_t>(it - start));
          }
       };

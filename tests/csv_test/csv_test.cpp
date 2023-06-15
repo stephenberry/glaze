@@ -26,17 +26,15 @@ struct glz::meta<my_struct>
 
 struct string_elements
 {
-    std::vector<int> id{};
-    std::vector<std::string> udl{};
+   std::vector<int> id{};
+   std::vector<std::string> udl{};
 };
 
-template <> struct glz::meta<string_elements>
+template <>
+struct glz::meta<string_elements>
 {
-    using T                     = string_elements;
-    static constexpr auto value = glz::object("id",
-                                              &T::id,
-                                              "udl",
-                                              &T::udl);
+   using T = string_elements;
+   static constexpr auto value = glz::object("id", &T::id, "udl", &T::udl);
 };
 
 void csv_tests()
@@ -74,7 +72,7 @@ void csv_tests()
 
       expect(!write_file_csv<colwise>(obj, "csv_test_colwise.csv", std::string{}));
    };
-   
+
    "column wise string arguments"_test = [] {
       std::string input_col =
          R"(id,udl
