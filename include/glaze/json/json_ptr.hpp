@@ -29,7 +29,7 @@ namespace glz
       seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
-         requires map_t<std::decay_t<T>> || glaze_object_t<T> bool
+         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T> bool
       seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
@@ -44,7 +44,7 @@ namespace glz
 
       // TODO: compile time search for `~` and optimize if escape does not exist
       template <class F, class T>
-         requires map_t<std::decay_t<T>> || glaze_object_t<T> bool
+         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T> bool
       seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
@@ -54,7 +54,7 @@ namespace glz
          if (json_ptr[0] != '/' || json_ptr.size() < 2) return false;
 
          static thread_local auto key = []() {
-            if constexpr (map_t<std::decay_t<T>>) {
+            if constexpr (writable_map_t<std::decay_t<T>>) {
                return typename std::decay_t<T>::key_type{};
             }
             else {
@@ -510,7 +510,7 @@ namespace glz
                return false;
             }
          }
-         else if constexpr (glz::detail::map_t<V>) {
+         else if constexpr (glz::detail::writable_map_t<V>) {
             return valid<typename V::mapped_type, rem_ptr, Expected_t>();
          }
          else if constexpr (glz::detail::glaze_array_t<V>) {

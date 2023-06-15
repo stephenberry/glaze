@@ -195,7 +195,7 @@ namespace glz
          return keys;
       }
 
-      template <map_t T>
+      template <readable_map_t T>
       struct from_csv<T>
       {
          template <auto Opts, class It>

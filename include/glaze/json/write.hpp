@@ -353,7 +353,7 @@ namespace glz
          }
       };
 
-      template <map_t T>
+      template <writable_map_t T>
       struct to_json<T>
       {
          template <auto Opts, class... Args>

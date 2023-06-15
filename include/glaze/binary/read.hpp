@@ -317,7 +317,7 @@ namespace glz
          }
       };
 
-      template <map_t T>
+      template <readable_map_t T>
       struct from_binary<T> final
       {
          template <auto Opts>

@@ -274,10 +274,14 @@ namespace glz
       };
 
       template <class T>
-      concept map_t = !complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> && map_subscriptable<T>;
+      concept readable_map_t =
+         !complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> && map_subscriptable<T>;
 
       template <class T>
-      concept array_t = (!complex_t<T> && !str_t<T> && !map_t<T> && range<T>);
+      concept writable_map_t = !complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>>;
+
+      template <class T>
+      concept array_t = (!complex_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
 
       template <class T>
       concept emplace_backable = requires(T container) {

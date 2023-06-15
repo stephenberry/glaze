@@ -325,7 +325,7 @@ namespace glz
          }
       };
 
-      template <map_t T>
+      template <writable_map_t T>
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
@@ -456,7 +456,7 @@ namespace glz
          detail::write<binary>::op<Opts>(value, ctx, buffer);
       }
       else {
-         static_assert(detail::glaze_object_t<std::decay_t<T>> || detail::map_t<std::decay_t<T>>,
+         static_assert(detail::glaze_object_t<std::decay_t<T>> || detail::writable_map_t<std::decay_t<T>>,
                        "Only object types are supported for partial.");
          static constexpr auto sorted = sort_json_ptrs(partial);
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
@@ -489,7 +489,7 @@ namespace glz
                std::ignore = write<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), buffer, ctx);
             });
          }
-         else if constexpr (detail::map_t<std::decay_t<T>>) {
+         else if constexpr (detail::writable_map_t<std::decay_t<T>>) {
             glz::for_each<N>([&](auto I) {
                using index_t = decltype(I);
                using group_t = std::tuple_element_t<I, decltype(groups)>;

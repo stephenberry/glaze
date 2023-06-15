@@ -1343,7 +1343,7 @@ namespace glz
       }
 
       template <class T>
-         requires map_t<T> || glaze_object_t<T>
+         requires readable_map_t<T> || glaze_object_t<T>
       struct from_json<T>
       {
          template <auto Options, string_literal tag = "">
@@ -1490,7 +1490,7 @@ namespace glz
       GLZ_ALWAYS_INLINE constexpr auto variant_is_auto_deducible()
       {
          // Contains at most one each of the basic json types bool, numeric, string, object, array
-         // If all objects are meta objects then we can attemt to deduce them as well either through a type tag or
+         // If all objects are meta objects then we can attempt to deduce them as well either through a type tag or
          // unique combinations of keys
          int bools{}, numbers{}, strings{}, objects{}, meta_objects{}, arrays{};
          constexpr auto N = std::variant_size_v<T>;
@@ -1501,7 +1501,8 @@ namespace glz
             numbers += num_t<V>;
             strings += str_t<V>;
             strings += glaze_enum_t<V>;
-            objects += map_t<V>;
+            objects += writable_map_t<V>;
+            objects += readable_map_t<V>;
             objects += glaze_object_t<V>;
             meta_objects += glaze_object_t<V>;
             arrays += glaze_array_t<V>;
@@ -1523,8 +1524,9 @@ namespace glz
             decltype(std::tuple_cat(std::conditional_t<num_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
          using string_types = decltype(std::tuple_cat(std::conditional_t < str_t<Ts> || glaze_enum_t<Ts>,
                                                       std::tuple<Ts>, std::tuple < >> {}...));
-         using object_types = decltype(std::tuple_cat(std::conditional_t < map_t<Ts> || glaze_object_t<Ts>,
-                                                      std::tuple<Ts>, std::tuple < >> {}...));
+         using object_types =
+            decltype(std::tuple_cat(std::conditional_t < readable_map_t<Ts> || writable_map_t<Ts> || glaze_object_t<Ts>,
+                                    std::tuple<Ts>, std::tuple < >> {}...));
          using array_types = decltype(std::tuple_cat(std::conditional_t < array_t<Ts> || glaze_array_t<Ts>,
                                                      std::tuple<Ts>, std::tuple < >> {}...));
          using nullable_types =
