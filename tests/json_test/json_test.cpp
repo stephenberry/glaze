@@ -5,6 +5,7 @@
 #include <chrono>
 #include <deque>
 #include <forward_list>
+#include <initializer_list>
 #include <iostream>
 #include <list>
 #include <map>
@@ -1615,6 +1616,7 @@ struct glz::meta<EmptyObject>
 
 suite write_tests = [] {
    using namespace boost::ut;
+   using std::string_view_literals::operator""sv;
 
    "Write floating point types"_test = [] {
       {
@@ -1816,6 +1818,15 @@ suite write_tests = [] {
       expect(s == "[1.1,2.2,3.3,4.4]");
    };
 
+   "Write array-like input range"_test = [] {
+      "sized range"_test = [] { expect(glz::write_json(std::views::iota(0, 3)) == R"([0,1,2])"sv); };
+
+      "initializer list"_test = [] {
+         auto init_list = {0, 1, 2};
+         expect(glz::write_json(init_list) == R"([0,1,2])"sv);
+      };
+   };
+
    "Write map"_test = [] {
       std::map<std::string, double> m{{"a", 2.2}, {"b", 11.111}, {"c", 211.2}};
       std::string s;
@@ -1825,8 +1836,6 @@ suite write_tests = [] {
    };
 
    "Write map-like input range"_test = [] {
-      using std::string_view_literals::operator""sv;
-
       "input range of pairs"_test = [] {
          auto num_view =
             std::views::iota(-2, 3) | std::views::transform([](const auto i) { return std::pair(i, i * i); });
@@ -1835,6 +1844,13 @@ suite write_tests = [] {
          auto str_view = std::views::iota(-2, 3) |
                          std::views::transform([](const auto i) { return std::pair(i, std::to_string(i * i)); });
          expect(glz::write_json(str_view) == R"({"-2":"4","-1":"1","0":"0","1":"1","2":"4"})"sv);
+      };
+
+      "initializer list w/ ranges"_test = [] {
+         auto remap_user_port = [](const auto port) { return port + 1024; };
+         auto user_ports = {std::pair("tcp", std::views::iota(80, 83) | std::views::transform(remap_user_port)),
+                            std::pair("udp", std::views::iota(21, 25) | std::views::transform(remap_user_port))};
+         expect(glz::write_json(user_ports) == R"({"tcp":[1104,1105,1106],"udp":[1045,1046,1047,1048]})"sv);
       };
 
       "single pair view"_test = [] {
