@@ -6,7 +6,6 @@
 #include <charconv>
 #include <iterator>
 #include <ostream>
-#include <ranges>
 #include <variant>
 
 #include "glaze/core/format.hpp"
@@ -316,7 +315,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(const auto& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<'['>(args...);
-            if (!std::ranges::empty(value)) {
+            if (!empty_range(value)) {
                if constexpr (Opts.prettify) {
                   ctx.indentation_level += Opts.indentation_width;
                   dump<'\n'>(args...);
@@ -351,7 +350,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<'{'>(args...);
-            if (!std::ranges::empty(value)) {
+            if (!empty_range(value)) {
                if constexpr (Opts.prettify) {
                   ctx.indentation_level += Opts.indentation_width;
                   dump<'\n'>(args...);

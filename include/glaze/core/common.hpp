@@ -113,6 +113,29 @@ namespace glz
    template <range R>
    using range_value_t = std::iter_value_t<iterator_t<R>>;
 
+   template <range R>
+   [[nodiscard]] bool empty_range(const R& rng)
+   {
+      // in lieu of std::ranges::empty
+      if constexpr (requires() {
+                       {
+                          rng.empty()
+                       } -> std::convertible_to<bool>;
+                    }) {
+         return rng.empty();
+      }
+      else if constexpr (requires() {
+                            {
+                               rng.size()
+                            } -> std::same_as<std::size_t>;
+                         }) {
+         return rng.size() == 0;
+      }
+      else {
+         return std::cbegin(rng) == std::cend(rng);
+      }
+   }
+
    template <class T>
    concept is_member_function_pointer = std::is_member_function_pointer_v<T>;
 
