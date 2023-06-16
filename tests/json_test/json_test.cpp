@@ -9,6 +9,7 @@
 #include <list>
 #include <map>
 #include <random>
+#include <ranges>
 #include <unordered_map>
 #include <variant>
 
@@ -1738,8 +1739,7 @@ suite write_tests = [] {
    };
 
    "Write c-string"_test = [] {
-      std::string s = "aasdf";
-      char* c = s.data();
+      const char* const c = "aasdf";
       std::string buf;
       glz::write_json(c, buf);
       expect(buf == R"("aasdf")");
@@ -1822,6 +1822,25 @@ suite write_tests = [] {
       glz::write_json(m, s);
 
       expect(s == R"({"a":2.2,"b":11.111,"c":211.2})");
+   };
+
+   "Write map-like input range"_test = [] {
+      using std::string_view_literals::operator""sv;
+
+      "input range of pairs"_test = [] {
+         auto num_view =
+            std::views::iota(-2, 3) | std::views::transform([](const auto i) { return std::pair(i, i * i); });
+         expect(glz::write_json(num_view) == R"({"-2":4,"-1":1,"0":0,"1":1,"2":4})"sv);
+
+         auto str_view = std::views::iota(-2, 3) |
+                         std::views::transform([](const auto i) { return std::pair(i, std::to_string(i * i)); });
+         expect(glz::write_json(str_view) == R"({"-2":"4","-1":"1","0":"0","1":"1","2":"4"})"sv);
+      };
+
+      "single pair view"_test = [] {
+         const auto single_pair = std::ranges::single_view{std::pair{false, true}};
+         expect(glz::write_json(single_pair) == R"({"false":true})"sv);
+      };
    };
 
    "Write integer map"_test = [] {
