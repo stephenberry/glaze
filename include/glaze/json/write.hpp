@@ -6,6 +6,7 @@
 #include <charconv>
 #include <iterator>
 #include <ostream>
+#include <ranges>
 #include <variant>
 
 #include "glaze/core/format.hpp"
@@ -312,30 +313,20 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(const auto& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<'['>(args...);
-            const auto is_empty = [&]() -> bool {
-               if constexpr (has_empty<T>) {
-                  return value.empty();
-               }
-               else {
-                  return value.size() ? false : true;
-               }
-            }();
-
-            if (!is_empty) {
+            if (!std::ranges::empty(value)) {
                if constexpr (Opts.prettify) {
                   ctx.indentation_level += Opts.indentation_width;
                   dump<'\n'>(args...);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                }
 
-               auto it = value.begin();
+               auto it = std::cbegin(value);
                write<json>::op<Opts>(*it, ctx, args...);
                ++it;
-               const auto end = value.end();
-               for (; it != end; ++it) {
+               for (; it != std::cend(value); ++it) {
                   dump<','>(args...);
                   if constexpr (Opts.prettify) {
                      dump<'\n'>(args...);
@@ -360,7 +351,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<'{'>(args...);
-            if (!value.empty()) {
+            if (!std::ranges::empty(value)) {
                if constexpr (Opts.prettify) {
                   ctx.indentation_level += Opts.indentation_width;
                   dump<'\n'>(args...);
@@ -388,13 +379,13 @@ namespace glz
                   write<json>::op<Opts>(entry_val, ctx, args...);
                };
 
-               auto it = value.cbegin();
+               auto it = std::cbegin(value);
                {
                   const auto& [first_key, first_val] = *it;
                   write_pair(first_key, first_val);
                }
 
-               for (++it; it != value.cend(); ++it) {
+               for (++it; it != std::cend(value); ++it) {
                   dump<','>(args...);
                   if constexpr (Opts.prettify) {
                      dump<'\n'>(args...);
