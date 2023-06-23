@@ -1737,7 +1737,7 @@ suite write_tests = [] {
       EmptyObject e;
       std::string buf;
       glz::write_json(e, buf);
-      // expect(buf == R"({})");
+      expect(buf == R"({})");
    };
 
    "Write c-string"_test = [] {
@@ -1819,7 +1819,9 @@ suite write_tests = [] {
    };
 
    "Write array-like input range"_test = [] {
+#ifdef __cpp_lib_ranges
       "sized range"_test = [] { expect(glz::write_json(std::views::iota(0, 3)) == R"([0,1,2])"sv); };
+#endif
 
       "initializer list"_test = [] {
          auto init_list = {0, 1, 2};
@@ -1835,6 +1837,7 @@ suite write_tests = [] {
       expect(s == R"({"a":2.2,"b":11.111,"c":211.2})");
    };
 
+#ifdef __cpp_lib_ranges
    "Write map-like input range"_test = [] {
       "input range of pairs"_test = [] {
          auto num_view =
@@ -1858,6 +1861,7 @@ suite write_tests = [] {
          expect(glz::write_json(single_pair) == R"({"false":true})"sv);
       };
    };
+#endif
 
    "Write integer map"_test = [] {
       std::map<int, double> m{{3, 2.2}, {5, 211.2}, {7, 11.111}};
