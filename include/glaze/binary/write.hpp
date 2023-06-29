@@ -212,12 +212,12 @@ namespace glz
          {
             uint8_t tag = tag::number;
             if constexpr (std::is_floating_point_v<T>) {
-               set_bits<3, 2, uint8_t>(tag, 0);
+               set_bits<3, 2, uint8_t>(tag, uint8_t(0));
             }
             else {
-               set_bits<3, 2, uint8_t>(tag, 1 + std::unsigned_integral<T>);
+               set_bits<3, 2, uint8_t>(tag, uint8_t(1 + std::unsigned_integral<T>));
             }
-            set_bits<5, 3, uint8_t>(tag, to_byte_count<decltype(value)>());
+            set_bits<5, 3, uint8_t>(tag, uint8_t(to_byte_count<decltype(value)>()));
             dump_type(tag, args...);
 
             dump_type(value, std::forward<Args>(args)...);
