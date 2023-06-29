@@ -4464,7 +4464,11 @@ struct glz::meta<invoker_struct>
 suite invoker_test = [] {
    "invoker"_test = [] {
       invoker_struct obj{};
-      std::string s = R"({"square":[5],"add_one":[]})";
+      std::string s = R"(
+{
+   "square":[5],
+   "add_one":[]
+})";
       expect(!glz::read_json(obj, s));
       expect(obj.y == 26); // 5 * 5 + 1
    };
