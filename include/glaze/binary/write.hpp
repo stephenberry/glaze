@@ -231,7 +231,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
             uint8_t tag = tag::string;
-            set_bits<3, 2, uint8_t>(tag, to_byte_count<std::decay_t<decltype(*value.data())>>());
+            set_bits<3, 2, uint8_t>(tag, uint8_t(to_byte_count<std::decay_t<decltype(*value.data())>>()));
             dump_type(tag, args...);
 
             dump_int<Opts>(value.size(), std::forward<Args>(args)...);
