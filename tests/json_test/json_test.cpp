@@ -4449,21 +4449,24 @@ struct invoker_struct
 {
    int y{};
    std::function<void(int x)> square = [&](int x) { y = x * x; };
+   void add_one() {
+      ++y;
+   }
 };
 
 template <>
 struct glz::meta<invoker_struct>
 {
    using T = invoker_struct;
-   static constexpr auto value = object("square", glz::invoker<&T::square>());
+   static constexpr auto value = object("square", invoker<&T::square>(), "add_one", invoker<&T::add_one>());
 };
 
 suite invoker_test = [] {
    "invoker"_test = [] {
       invoker_struct obj{};
-      std::string s = R"({"square":[5]})";
+      std::string s = R"({"square":[5],"add_one":[]})";
       expect(!glz::read_json(obj, s));
-      expect(obj.y == 25);
+      expect(obj.y == 26); // 5 * 5 + 1
    };
 };
 

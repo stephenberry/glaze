@@ -9,9 +9,21 @@ namespace glz
 {
    // invoker_t is intended to cause a funtion invocation when read
    template <class T>
-   struct invoker_t
+   struct invoker_t;
+   
+   template <class T> requires (!std::is_member_function_pointer_v<T>)
+   struct invoker_t<T> final
    {
       T& val;
+   };
+   
+   template <class T> requires (std::is_member_function_pointer_v<T>)
+   struct invoker_t<T> final
+   {
+      //using F = typename std_function_signature_decayed_keep_non_const_ref<T>::type;
+      using mem_fun = T;
+      typename parent_of_fn<T>::type& val;
+      mem_fun ptr;
    };
 
    namespace detail
@@ -24,30 +36,41 @@ namespace glz
          {
             using V = std::decay_t<decltype(value.val)>;
             
-            
-            /*if constexpr (std::is_member_function_pointer_v<V>) {
-               using F = typename std_function_signature_decayed_keep_non_const_ref<V>::type;
-               using Ret = typename return_type<V>::type;
-               using Tuple = typename inputs_as_tuple<V>::type;
-               static constexpr auto N = std::tuple_size_v<Tuple>;
-
+            if constexpr (std::is_member_function_pointer_v<T>) {
+               using M = typename std::decay_t<decltype(value)>::mem_fun;
+               using Ret = typename return_type<M>::type;
+               
                if constexpr (std::is_void_v<Ret>) {
-                  detail::call_args<Tuple>(std::mem_fn(val), parent, args, std::make_index_sequence<N>{});
+                  using Tuple = typename inputs_as_tuple<M>::type;
+                  if constexpr (std::tuple_size_v<Tuple> == 0) {
+                     skip_array<Opts>(ctx, it, end);
+                     (value.val.*value.ptr)();
+                  }
+                  else {
+                     Tuple inputs{};
+                     read<json>::op<Opts>(inputs, ctx, it, end);
+                     std::apply([&](auto&&... args) { return (value.val.*value.ptr)(std::forward<decltype(args)>(args)...); }, inputs);
+                  }
                }
                else {
-                  ctx.error = error_code::attempt_member_func_read;
+                  static_assert(false_v<T>, "function must have void return");
                }
-            }*/
-            
-            if constexpr (is_specialization_v<V, std::function>) {
+            }
+            else if constexpr (is_specialization_v<V, std::function>) {
                using Ret = typename function_traits<V>::result_type;
                
                if constexpr (std::is_void_v<Ret>)
                {
                   using Tuple = typename function_traits<V>::arguments;                  
-                  Tuple inputs{};
-                  read<json>::op<Opts>(inputs, ctx, it, end);
-                  std::apply(value.val, inputs);
+                  if constexpr (std::tuple_size_v<Tuple> == 0) {
+                     skip_array<Opts>(ctx, it, end);
+                     value.val();
+                  }
+                  else {
+                     Tuple inputs{};
+                     read<json>::op<Opts>(inputs, ctx, it, end);
+                     std::apply(value.val, inputs);
+                  }
                }
                else {
                   static_assert(false_v<T>, "std::function must have void return");
@@ -88,6 +111,12 @@ namespace glz
    template <auto MemPtr>
    inline constexpr decltype(auto) invoker() noexcept
    {
-      return [](auto&& val) { return invoker_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+      using V = decltype(MemPtr);
+      if constexpr (std::is_member_function_pointer_v<V>) {
+         return [](auto&& val) { return invoker_t<std::decay_t<V>>{val, MemPtr}; };
+      }
+      else {
+         return [](auto&& val) { return invoker_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+      }
    }
 }
