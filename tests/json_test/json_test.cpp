@@ -4445,6 +4445,28 @@ suite numeric_enum_tests = [] {
    };
 };
 
+struct invoker_struct
+{
+   int y{};
+   std::function<void(int x)> square = [&](int x) { y = x * x; };
+};
+
+template <>
+struct glz::meta<invoker_struct>
+{
+   using T = invoker_struct;
+   static constexpr auto value = object("square", glz::invoker<&T::square>());
+};
+
+suite invoker_test = [] {
+   "invoker"_test = [] {
+      invoker_struct obj{};
+      std::string s = R"({"square":[5]})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.y == 25);
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors

@@ -12,17 +12,6 @@ namespace glz
 {
    namespace detail
    {
-      template <class T>
-      struct function_traits;
-
-      template <class R, class... Args>
-      struct function_traits<std::function<R(Args...)>>
-      {
-         static constexpr size_t N = sizeof...(Args);
-         using result_type = R;
-         using arguments = std::tuple<Args...>;
-      };
-
       template <const std::string_view& Str, class Tuple, size_t I = 0>
       struct expander
       {
@@ -56,7 +45,7 @@ namespace glz
    {
       static constexpr auto impl() noexcept
       {
-         using fun = detail::function_traits<T>;
+         using fun = function_traits<T>;
          using R = typename fun::result_type;
          if constexpr (fun::N == 0 && named<R>) {
             return detail::join_v<chars<"std::function<">, name_v<R>, chars<"()>">>;
