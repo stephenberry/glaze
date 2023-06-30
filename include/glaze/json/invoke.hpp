@@ -3,6 +3,16 @@
 
 #pragma once
 
+#ifdef _MSC_VER
+#if _MSC_VER >= 1930 // invoke code requires MSVC 2022+
+#define GLZ_INCLUDE_INVOKE
+#endif
+#else
+#define GLZ_INCLUDE_INVOKE
+#endif
+
+#ifdef GLZ_INCLUDE_INVOKE
+
 #include "glaze/json.hpp"
 
 namespace glz
@@ -311,3 +321,5 @@ namespace glz
       }
    }
 }
+
+#endif
