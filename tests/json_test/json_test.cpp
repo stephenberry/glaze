@@ -4451,14 +4451,14 @@ suite optional_optional = [] {
       std::string s{};
       glz::write_json(o, s);
       expect(s == "null");
-      
+
       o = {};
       glz::write_json(o, s);
       expect(s == "null");
-      
+
       expect(!glz::read_json(o, s));
       expect(!o);
-      
+
       s = "5";
       expect(!glz::read_json(o, s));
       expect(o.value().value() == 5);
