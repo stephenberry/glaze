@@ -1842,23 +1842,23 @@ suite write_tests = [] {
       "input range of pairs"_test = [] {
          auto num_view =
             std::views::iota(-2, 3) | std::views::transform([](const auto i) { return std::pair(i, i * i); });
-         expect(glz::write_json(num_view) == R"({"-2":4,"-1":1,"0":0,"1":1,"2":4})"sv);
+         expect(glz::write_json(num_view) == glz::sv{R"({"-2":4,"-1":1,"0":0,"1":1,"2":4})"});
 
          auto str_view = std::views::iota(-2, 3) |
                          std::views::transform([](const auto i) { return std::pair(i, std::to_string(i * i)); });
-         expect(glz::write_json(str_view) == R"({"-2":"4","-1":"1","0":"0","1":"1","2":"4"})"sv);
+         expect(glz::write_json(str_view) == glz::sv{R"({"-2":"4","-1":"1","0":"0","1":"1","2":"4"})"});
       };
 
       "initializer list w/ ranges"_test = [] {
          auto remap_user_port = [](const auto port) { return port + 1024; };
          auto user_ports = {std::pair("tcp", std::views::iota(80, 83) | std::views::transform(remap_user_port)),
                             std::pair("udp", std::views::iota(21, 25) | std::views::transform(remap_user_port))};
-         expect(glz::write_json(user_ports) == R"({"tcp":[1104,1105,1106],"udp":[1045,1046,1047,1048]})"sv);
+         expect(glz::write_json(user_ports) == glz::sv{R"({"tcp":[1104,1105,1106],"udp":[1045,1046,1047,1048]})"});
       };
 
       "single pair view"_test = [] {
          const auto single_pair = std::ranges::single_view{std::pair{false, true}};
-         expect(glz::write_json(single_pair) == R"({"false":true})"sv);
+         expect(glz::write_json(single_pair) == glz::sv{R"({"false":true})"});
       };
    };
 #endif
