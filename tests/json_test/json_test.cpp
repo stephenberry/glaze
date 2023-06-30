@@ -4445,6 +4445,26 @@ suite numeric_enum_tests = [] {
    };
 };
 
+suite optional_optional = [] {
+   "optional_optional"_test = [] {
+      std::optional<std::optional<int>> o = std::optional<int>{};
+      std::string s{};
+      glz::write_json(o, s);
+      expect(s == "null");
+
+      o = {};
+      glz::write_json(o, s);
+      expect(s == "null");
+
+      expect(!glz::read_json(o, s));
+      expect(!o);
+
+      s = "5";
+      expect(!glz::read_json(o, s));
+      expect(o.value().value() == 5);
+   };
+};
+
 struct invoker_struct
 {
    int y{};
