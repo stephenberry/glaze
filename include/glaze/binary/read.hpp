@@ -160,7 +160,7 @@ namespace glz
          {
             using V = typename std::decay_t<T>::value_type;
 
-            static constexpr uint8_t header = set_bits<3, 2, uint8_t>(set_bits<3>(tag::string), to_byte_count<V>());
+            static constexpr uint8_t header = set_bits<3, 2, uint8_t>(set_bits<3>(tag::string), uint8_t(to_byte_count<V>()));
 
             const auto tag = uint8_t(*it);
             if (tag != header) {
