@@ -284,9 +284,9 @@ namespace glz
                   // set_bits<3, 2, uint8_t>(tag, 0); // no need to set bits to zero
                }
                else {
-                  set_bits<3, 2, uint8_t>(tag, 1 + std::unsigned_integral<V>);
+                  set_bits<3, 2, uint8_t>(tag, uint8_t(1 + std::unsigned_integral<V>));
                }
-               set_bits<5, 3, uint8_t>(tag, to_byte_count<V>());
+               set_bits<5, 3, uint8_t>(tag, uint8_t(to_byte_count<V>()));
                dump_type(tag, args...);
                dump_int<Opts>(value.size(), args...);
 
@@ -301,9 +301,9 @@ namespace glz
             }
             else if constexpr (str_t<V>) {
                tag = tag::typed_array;
-               set_bits<3, 2, uint8_t>(tag, 3);
-               set_bits<5, 1, uint8_t>(tag, 1);
-               set_bits<6, 2, uint8_t>(tag, to_byte_count<std::decay_t<decltype(*std::declval<V>().data())>>());
+               set_bits<3, 2, uint8_t>(tag, uint8_t(3));
+               set_bits<5, 1, uint8_t>(tag, uint8_t(1));
+               set_bits<6, 2, uint8_t>(tag, uint8_t(to_byte_count<std::decay_t<decltype(*std::declval<V>().data())>>()));
                dump_type(tag, args...);
                dump_int<Opts>(value.size(), args...);
 
@@ -314,7 +314,7 @@ namespace glz
             }
             else {
                tag = tag::untyped_array;
-               set_bits<3, 3, uint8_t>(tag, to_byte_count<V>());
+               set_bits<3, 3, uint8_t>(tag, uint8_t(to_byte_count<V>()));
                dump_type(tag, args...);
                dump_int<Opts>(value.size(), args...);
 
