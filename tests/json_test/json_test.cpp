@@ -4503,8 +4503,6 @@ suite optional_optional = [] {
    };
 };
 
-#ifdef GLZ_INCLUDE_INVOKE
-
 struct invoke_struct
 {
    int y{};
@@ -4579,8 +4577,6 @@ suite invoke_update_test = [] {
       expect(obj.y == 5);
    };
 };
-
-#endif
 
 int main()
 {
