@@ -212,12 +212,12 @@ namespace glz
          {
             uint8_t tag = tag::number;
             if constexpr (std::is_floating_point_v<T>) {
-               set_bits<3, 2, uint8_t>(tag, 0);
+               set_bits<3, 2, uint8_t>(tag, uint8_t(0));
             }
             else {
-               set_bits<3, 2, uint8_t>(tag, 1 + std::unsigned_integral<T>);
+               set_bits<3, 2, uint8_t>(tag, uint8_t(1 + std::unsigned_integral<T>));
             }
-            set_bits<5, 3, uint8_t>(tag, to_byte_count<decltype(value)>());
+            set_bits<5, 3, uint8_t>(tag, uint8_t(to_byte_count<decltype(value)>()));
             dump_type(tag, args...);
 
             dump_type(value, std::forward<Args>(args)...);
@@ -231,7 +231,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
             uint8_t tag = tag::string;
-            set_bits<3, 2, uint8_t>(tag, to_byte_count<std::decay_t<decltype(*value.data())>>());
+            set_bits<3, 2, uint8_t>(tag, uint8_t(to_byte_count<std::decay_t<decltype(*value.data())>>()));
             dump_type(tag, args...);
 
             dump_int<Opts>(value.size(), std::forward<Args>(args)...);
@@ -251,7 +251,7 @@ namespace glz
 
             if constexpr (boolean_like<V>) {
                tag = tag::typed_array;
-               set_bits<3, 2, uint8_t>(tag, 3);
+               set_bits<3, 2, uint8_t>(tag, uint8_t(3));
                // set_bits<5, 1, uint8_t>(tag, 0); // no need to set bits to zero
                dump_type(tag, args...);
                dump_int<Opts>(value.size(), args...);
@@ -262,7 +262,7 @@ namespace glz
                   std::array<uint8_t, num_bytes> bytes{};
                   for (size_t byte_i{}, i{}; byte_i < num_bytes - 1; ++byte_i) {
                      for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
-                        bytes[byte_i] |= uint8_t(value[i]) << bit_i;
+                        bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
                      }
                   }
                   dump(bytes, args...);
@@ -272,7 +272,7 @@ namespace glz
                   for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
                      uint8_t byte{};
                      for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
-                        byte |= uint8_t(value[i]) << bit_i;
+                        byte |= uint8_t(value[i]) << uint8_t(bit_i);
                      }
                      dump_type(byte, args...);
                   }
@@ -284,9 +284,9 @@ namespace glz
                   // set_bits<3, 2, uint8_t>(tag, 0); // no need to set bits to zero
                }
                else {
-                  set_bits<3, 2, uint8_t>(tag, 1 + std::unsigned_integral<V>);
+                  set_bits<3, 2, uint8_t>(tag, uint8_t(1 + std::unsigned_integral<V>));
                }
-               set_bits<5, 3, uint8_t>(tag, to_byte_count<V>());
+               set_bits<5, 3, uint8_t>(tag, uint8_t(to_byte_count<V>()));
                dump_type(tag, args...);
                dump_int<Opts>(value.size(), args...);
 
@@ -301,9 +301,10 @@ namespace glz
             }
             else if constexpr (str_t<V>) {
                tag = tag::typed_array;
-               set_bits<3, 2, uint8_t>(tag, 3);
-               set_bits<5, 1, uint8_t>(tag, 1);
-               set_bits<6, 2, uint8_t>(tag, to_byte_count<std::decay_t<decltype(*std::declval<V>().data())>>());
+               set_bits<3, 2, uint8_t>(tag, uint8_t(3));
+               set_bits<5, 1, uint8_t>(tag, uint8_t(1));
+               set_bits<6, 2, uint8_t>(tag,
+                                       uint8_t(to_byte_count<std::decay_t<decltype(*std::declval<V>().data())>>()));
                dump_type(tag, args...);
                dump_int<Opts>(value.size(), args...);
 
@@ -314,7 +315,7 @@ namespace glz
             }
             else {
                tag = tag::untyped_array;
-               set_bits<3, 3, uint8_t>(tag, to_byte_count<V>());
+               set_bits<3, 3, uint8_t>(tag, uint8_t(to_byte_count<V>()));
                dump_type(tag, args...);
                dump_int<Opts>(value.size(), args...);
 

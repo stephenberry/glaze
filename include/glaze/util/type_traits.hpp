@@ -39,6 +39,18 @@ namespace glz
       using type = T;
    };
 
+   // for std::function
+   template <class T>
+   struct function_traits;
+
+   template <class R, class... Args>
+   struct function_traits<std::function<R(Args...)>>
+   {
+      static constexpr size_t N = sizeof...(Args);
+      using result_type = R;
+      using arguments = std::tuple<Args...>;
+   };
+
    // Member object and function pointer type traits
    template <class T>
    struct function_signature;
