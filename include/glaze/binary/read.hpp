@@ -228,8 +228,8 @@ namespace glz
             else if constexpr (num_t<V>) {
                static constexpr uint8_t header =
                   set_bits<5, 3, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array),
-                                                                  !std::floating_point<V> + std::unsigned_integral<V>),
-                                          to_byte_count<V>());
+                                                                  uint8_t(!std::floating_point<V> + std::unsigned_integral<V>)),
+                                          uint8_t(to_byte_count<V>()));
 
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
