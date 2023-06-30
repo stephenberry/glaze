@@ -1820,12 +1820,12 @@ suite write_tests = [] {
 
    "Write array-like input range"_test = [] {
 #ifdef __cpp_lib_ranges
-      "sized range"_test = [] { expect(glz::write_json(std::views::iota(0, 3)) == R"([0,1,2])"sv); };
+      "sized range"_test = [] { expect(glz::write_json(std::views::iota(0, 3)) == glz::sv{R"([0,1,2])"}); };
 #endif
 
       "initializer list"_test = [] {
          auto init_list = {0, 1, 2};
-         expect(glz::write_json(init_list) == R"([0,1,2])"sv);
+         expect(glz::write_json(init_list) == glz::sv{R"([0,1,2])"});
       };
    };
 
