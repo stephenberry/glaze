@@ -70,8 +70,8 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
          {
             static constexpr uint8_t header = set_bits<5, 3, uint8_t>(
-               set_bits<3, 2, uint8_t>(set_bits<3>(tag::number), !std::floating_point<T> + std::unsigned_integral<T>),
-               to_byte_count<decltype(value)>());
+               set_bits<3, 2, uint8_t>(set_bits<3>(tag::number), uint8_t(!std::floating_point<T> + std::unsigned_integral<T>)),
+                                                                      uint8_t(to_byte_count<decltype(value)>()));
 
             const auto tag = uint8_t(*it);
             if (tag != header) {
