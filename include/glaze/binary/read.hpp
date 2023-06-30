@@ -261,7 +261,7 @@ namespace glz
             }
             else if constexpr (str_t<V>) {
                static constexpr uint8_t header = set_bits<6, 2, uint8_t>(
-                  set_bits<5, 1, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array), 3), 1),
+                  set_bits<5, 1, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array), uint8_t(3)), uint8_t(1)),
                   to_byte_count<decltype(*std::declval<V>().data())>());
 
                if (tag != header) {
