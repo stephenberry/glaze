@@ -251,7 +251,7 @@ namespace glz
 
             if constexpr (boolean_like<V>) {
                tag = tag::typed_array;
-               set_bits<3, 2, uint8_t>(tag, 3);
+               set_bits<3, 2, uint8_t>(tag, uint8_t(3));
                // set_bits<5, 1, uint8_t>(tag, 0); // no need to set bits to zero
                dump_type(tag, args...);
                dump_int<Opts>(value.size(), args...);
