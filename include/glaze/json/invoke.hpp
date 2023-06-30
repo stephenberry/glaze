@@ -122,18 +122,12 @@ namespace glz
       using V = decltype(MemPtr);
       if constexpr (std::is_member_function_pointer_v<V>) {
          return [](auto&& val) {
-            static constexpr auto mem_ptr = []() constexpr {
-               return MemPtr;
-            }(); // MSVC hack
-            return invoke_t<std::decay_t<V>>{val, mem_ptr};
+            return invoke_t<std::decay_t<V>>{val, MemPtr};
          };
       }
       else {
          return [](auto&& val) {
-            static constexpr auto mem_ptr = []() constexpr {
-               return MemPtr;
-            }(); // MSVC hack
-            return invoke_t<std::decay_t<decltype(val.*mem_ptr)>>{val.*mem_ptr};
+            return invoke_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr};
          };
       }
    }
@@ -307,18 +301,12 @@ namespace glz
       using V = decltype(MemPtr);
       if constexpr (std::is_member_function_pointer_v<V>) {
          return [](auto&& val) {
-            static constexpr auto mem_ptr = []() constexpr {
-               return MemPtr;
-            }(); // MSVC hack
-            return invoke_update_t<std::decay_t<V>>{val, mem_ptr};
+            return invoke_update_t<std::decay_t<V>>{val, MemPtr};
          };
       }
       else {
          return [](auto&& val) {
-            static constexpr auto mem_ptr = []() constexpr {
-               return MemPtr;
-            }(); // MSVC hack
-            return invoke_update_t<std::decay_t<decltype(val.*mem_ptr)>>{val.*mem_ptr};
+            return invoke_update_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr};
          };
       }
    }
