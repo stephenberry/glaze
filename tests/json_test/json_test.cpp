@@ -1616,7 +1616,6 @@ struct glz::meta<EmptyObject>
 
 suite write_tests = [] {
    using namespace boost::ut;
-   using std::string_view_literals::operator""sv;
 
    "Write floating point types"_test = [] {
       {
