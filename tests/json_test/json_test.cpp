@@ -4468,9 +4468,15 @@ suite optional_optional = [] {
 struct invoke_struct
 {
    int y{};
-   std::function<void(int x)> square = [&](int x) { y = x * x; };
+   std::function<void(int x)> square{};
    void add_one() {
       ++y;
+   }
+   
+   // MSVC requires this constructor for 'this' to be captured
+   invoke_struct()
+   {
+      square = [&](int x) { y = x * x; };
    }
 };
 
@@ -4497,9 +4503,14 @@ suite invoke_test = [] {
 struct invoke_update_struct
 {
    int y{};
-   std::function<void(int x)> square = [&](int x) { y = x * x; };
+   std::function<void(int x)> square{};
    void add_one() {
       ++y;
+   }
+   
+   // MSVC requires this constructor for 'this' to be captured
+   invoke_update_struct() {
+      square = [&](int x) { y = x * x; };
    }
 };
 
