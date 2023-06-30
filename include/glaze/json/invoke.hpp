@@ -168,7 +168,7 @@ namespace glz
                         return;
                      static thread_local bool initialized = false;
                      static thread_local sv prev{};
-                     const sv input = { start, it };
+                     const sv input = { start, size_t(it - start) };
                      if (initialized) {
                         if (input != prev) {
                            (value.val.*value.ptr)();
@@ -186,7 +186,7 @@ namespace glz
                         return;
                      static thread_local bool initialized = false;
                      static thread_local sv prev{};
-                     const sv input = { start, it };
+                     const sv input = { start, size_t(it - start) };
                      if (initialized) {
                         if (input != prev) {
                            Tuple inputs{};
@@ -220,7 +220,7 @@ namespace glz
                         return;
                      static thread_local bool initialized = false;
                      static thread_local sv prev{};
-                     const sv input = { start, it };
+                     const sv input = { start, size_t(it - start) };
                      if (initialized) {
                         if (input != prev) {
                            value.val();
@@ -238,7 +238,7 @@ namespace glz
                         return;
                      static thread_local bool initialized = false;
                      static thread_local sv prev{};
-                     const sv input = { start, it };
+                     const sv input = { start, size_t(it - start) };
                      if (initialized) {
                         if (input != prev) {
                            Tuple inputs{};
