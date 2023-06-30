@@ -262,7 +262,7 @@ namespace glz
                   std::array<uint8_t, num_bytes> bytes{};
                   for (size_t byte_i{}, i{}; byte_i < num_bytes - 1; ++byte_i) {
                      for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
-                        bytes[byte_i] |= uint8_t(value[i]) << bit_i;
+                        bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
                      }
                   }
                   dump(bytes, args...);
@@ -272,7 +272,7 @@ namespace glz
                   for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
                      uint8_t byte{};
                      for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
-                        byte |= uint8_t(value[i]) << bit_i;
+                        byte |= uint8_t(value[i]) << uint8_t(bit_i);
                      }
                      dump_type(byte, args...);
                   }
