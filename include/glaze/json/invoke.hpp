@@ -44,11 +44,15 @@ namespace glz
                   using Tuple = typename inputs_as_tuple<M>::type;
                   if constexpr (std::tuple_size_v<Tuple> == 0) {
                      skip_array<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                      (value.val.*value.ptr)();
                   }
                   else {
                      Tuple inputs{};
                      read<json>::op<Opts>(inputs, ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                      std::apply([&](auto&&... args) { return (value.val.*value.ptr)(std::forward<decltype(args)>(args)...); }, inputs);
                   }
                }
@@ -64,11 +68,15 @@ namespace glz
                   using Tuple = typename function_traits<V>::arguments;                  
                   if constexpr (std::tuple_size_v<Tuple> == 0) {
                      skip_array<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                      value.val();
                   }
                   else {
                      Tuple inputs{};
                      read<json>::op<Opts>(inputs, ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                      std::apply(value.val, inputs);
                   }
                }
@@ -154,13 +162,45 @@ namespace glz
                if constexpr (std::is_void_v<Ret>) {
                   using Tuple = typename inputs_as_tuple<M>::type;
                   if constexpr (std::tuple_size_v<Tuple> == 0) {
+                     auto start = it;
                      skip_array<Opts>(ctx, it, end);
-                     (value.val.*value.ptr)();
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     static thread_local bool initialized = false;
+                     static thread_local sv prev{};
+                     const sv input = { start, it };
+                     if (initialized) {
+                        if (input != prev) {
+                           (value.val.*value.ptr)();
+                        }
+                     }
+                     else {
+                        initialized = true;
+                     }
+                     prev = input;
                   }
                   else {
-                     Tuple inputs{};
-                     read<json>::op<Opts>(inputs, ctx, it, end);
-                     std::apply([&](auto&&... args) { return (value.val.*value.ptr)(std::forward<decltype(args)>(args)...); }, inputs);
+                     auto start = it;
+                     skip_array<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     static thread_local bool initialized = false;
+                     static thread_local sv prev{};
+                     const sv input = { start, it };
+                     if (initialized) {
+                        if (input != prev) {
+                           Tuple inputs{};
+                           it = start;
+                           read<json>::op<Opts>(inputs, ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           std::apply([&](auto&&... args) { return (value.val.*value.ptr)(std::forward<decltype(args)>(args)...); }, inputs);
+                        }
+                     }
+                     else {
+                        initialized = true;
+                     }
+                     prev = input;
                   }
                }
                else {
@@ -174,13 +214,45 @@ namespace glz
                {
                   using Tuple = typename function_traits<V>::arguments;
                   if constexpr (std::tuple_size_v<Tuple> == 0) {
+                     auto start = it;
                      skip_array<Opts>(ctx, it, end);
-                     value.val();
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     static thread_local bool initialized = false;
+                     static thread_local sv prev{};
+                     const sv input = { start, it };
+                     if (initialized) {
+                        if (input != prev) {
+                           value.val();
+                        }
+                     }
+                     else {
+                        initialized = true;
+                     }
+                     prev = input;
                   }
                   else {
-                     Tuple inputs{};
-                     read<json>::op<Opts>(inputs, ctx, it, end);
-                     std::apply(value.val, inputs);
+                     auto start = it;
+                     skip_array<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     static thread_local bool initialized = false;
+                     static thread_local sv prev{};
+                     const sv input = { start, it };
+                     if (initialized) {
+                        if (input != prev) {
+                           Tuple inputs{};
+                           it = start;
+                           read<json>::op<Opts>(inputs, ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           std::apply(value.val, inputs);
+                        }
+                     }
+                     else {
+                        initialized = true;
+                     }
+                     prev = input;
                   }
                }
                else {
@@ -224,10 +296,10 @@ namespace glz
    {
       using V = decltype(MemPtr);
       if constexpr (std::is_member_function_pointer_v<V>) {
-         return [](auto&& val) { return invoke_t<std::decay_t<V>>{val, MemPtr}; };
+         return [](auto&& val) { return invoke_update_t<std::decay_t<V>>{val, MemPtr}; };
       }
       else {
-         return [](auto&& val) { return invoke_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+         return [](auto&& val) { return invoke_update_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
       }
    }
 }

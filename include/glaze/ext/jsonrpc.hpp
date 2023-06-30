@@ -363,7 +363,9 @@ namespace glz::rpc
                return_ptr = &method.pending_requests;
                return true; // break methods loop
             }
-            return false;
+            else {
+               return false;
+            }
          });
 
          assert(return_ptr != nullptr); // static_assert above should guarantee this
