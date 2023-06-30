@@ -321,7 +321,9 @@ namespace glz::rpc
                method.callback = callback;
                return true;
             }
-            return false;
+            else {
+               return false;
+            }
          });
       }
 
@@ -361,7 +363,9 @@ namespace glz::rpc
                return_ptr = &method.pending_requests;
                return true; // break methods loop
             }
-            return false;
+            else {
+               return false;
+            }
          });
 
          assert(return_ptr != nullptr); // static_assert above should guarantee this
@@ -589,7 +593,9 @@ namespace glz::rpc
                std::tie(unused, inserted) = method.pending_requests.emplace(std::make_pair(req.id, cb));
                return true; // break methods loop
             }
-            return false;
+            else {
+               return false;
+            }
          });
 
          return {glz::write_json(std::move(req)), inserted};

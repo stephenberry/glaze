@@ -184,7 +184,8 @@ namespace glz
                      dump<"\\t">(b, ix);
                      break;
                   default:
-                     dump(value, b, ix); // TODO: This warning is an error We need to be able to dump wider char types
+                     // Hiding warning for build, this is an error with wider char types
+                     dump(static_cast<char>(value), b, ix); // TODO: This warning is an error We need to be able to dump wider char types
                   }
                   dump<'"'>(b, ix);
                }

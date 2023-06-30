@@ -4465,6 +4465,89 @@ suite optional_optional = [] {
    };
 };
 
+#ifdef GLZ_INCLUDE_INVOKE
+
+struct invoke_struct
+{
+   int y{};
+   std::function<void(int x)> square{};
+   void add_one() {
+      ++y;
+   }
+   
+   // MSVC requires this constructor for 'this' to be captured
+   invoke_struct()
+   {
+      square = [&](int x) { y = x * x; };
+   }
+};
+
+template <>
+struct glz::meta<invoke_struct>
+{
+   using T = invoke_struct;
+   static constexpr auto value = object("square", invoke<&T::square>(), "add_one", invoke<&T::add_one>());
+};
+
+suite invoke_test = [] {
+   "invoke"_test = [] {
+      invoke_struct obj{};
+      std::string s = R"(
+{
+   "square":[5],
+   "add_one":[]
+})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.y == 26); // 5 * 5 + 1
+   };
+};
+
+struct invoke_update_struct
+{
+   int y{};
+   std::function<void(int x)> square{};
+   void add_one() {
+      ++y;
+   }
+   
+   // MSVC requires this constructor for 'this' to be captured
+   invoke_update_struct() {
+      square = [&](int x) { y = x * x; };
+   }
+};
+
+template <>
+struct glz::meta<invoke_update_struct>
+{
+   using T = invoke_update_struct;
+   static constexpr auto value = object("square", invoke_update<&T::square>(), "add_one", invoke_update<&T::add_one>());
+};
+
+
+suite invoke_update_test = [] {
+   "invoke"_test = [] {
+      invoke_update_struct obj{};
+      std::string s = R"(
+{
+   "square":[5],
+   "add_one":[]
+})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.y == 0);
+      
+      // second read should invoke
+      std::string s2 = R"(
+{
+   "square":[2],
+   "add_one":[ ]
+})";
+      expect(!glz::read_json(obj, s2));
+      expect(obj.y == 5);
+   };
+};
+
+#endif
+
 int main()
 {
    // Explicitly run registered test suites and report errors
