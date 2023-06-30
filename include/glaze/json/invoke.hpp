@@ -13,7 +13,9 @@
 
 #ifdef GLZ_INCLUDE_INVOKE
 
-#include "glaze/json.hpp"
+#include "glaze/json/json_ptr.hpp"
+#include "glaze/json/read.hpp"
+#include "glaze/json/write.hpp"
 
 namespace glz
 {
