@@ -303,7 +303,8 @@ namespace glz
                tag = tag::typed_array;
                set_bits<3, 2, uint8_t>(tag, uint8_t(3));
                set_bits<5, 1, uint8_t>(tag, uint8_t(1));
-               set_bits<6, 2, uint8_t>(tag, uint8_t(to_byte_count<std::decay_t<decltype(*std::declval<V>().data())>>()));
+               set_bits<6, 2, uint8_t>(tag,
+                                       uint8_t(to_byte_count<std::decay_t<decltype(*std::declval<V>().data())>>()));
                dump_type(tag, args...);
                dump_int<Opts>(value.size(), args...);
 

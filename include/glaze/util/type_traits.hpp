@@ -38,7 +38,7 @@ namespace glz
    {
       using type = T;
    };
-   
+
    // for std::function
    template <class T>
    struct function_traits;

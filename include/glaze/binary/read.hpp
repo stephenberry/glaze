@@ -70,8 +70,9 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
          {
             static constexpr uint8_t header = set_bits<5, 3, uint8_t>(
-               set_bits<3, 2, uint8_t>(set_bits<3>(tag::number), uint8_t(!std::floating_point<T> + std::unsigned_integral<T>)),
-                                                                      uint8_t(to_byte_count<decltype(value)>()));
+               set_bits<3, 2, uint8_t>(set_bits<3>(tag::number),
+                                       uint8_t(!std::floating_point<T> + std::unsigned_integral<T>)),
+               uint8_t(to_byte_count<decltype(value)>()));
 
             const auto tag = uint8_t(*it);
             if (tag != header) {
@@ -160,7 +161,8 @@ namespace glz
          {
             using V = typename std::decay_t<T>::value_type;
 
-            static constexpr uint8_t header = set_bits<3, 2, uint8_t>(set_bits<3>(tag::string), uint8_t(to_byte_count<V>()));
+            static constexpr uint8_t header =
+               set_bits<3, 2, uint8_t>(set_bits<3>(tag::string), uint8_t(to_byte_count<V>()));
 
             const auto tag = uint8_t(*it);
             if (tag != header) {
@@ -226,10 +228,10 @@ namespace glz
                }
             }
             else if constexpr (num_t<V>) {
-               static constexpr uint8_t header =
-                  set_bits<5, 3, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array),
-                                                                  uint8_t(!std::floating_point<V> + std::unsigned_integral<V>)),
-                                          uint8_t(to_byte_count<V>()));
+               static constexpr uint8_t header = set_bits<5, 3, uint8_t>(
+                  set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array),
+                                          uint8_t(!std::floating_point<V> + std::unsigned_integral<V>)),
+                  uint8_t(to_byte_count<V>()));
 
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
@@ -261,8 +263,9 @@ namespace glz
             }
             else if constexpr (str_t<V>) {
                static constexpr uint8_t header = set_bits<6, 2, uint8_t>(
-                  set_bits<5, 1, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array), uint8_t(3)), uint8_t(1)),
-                                                                         uint8_t(to_byte_count<decltype(*std::declval<V>().data())>()));
+                  set_bits<5, 1, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array), uint8_t(3)),
+                                          uint8_t(1)),
+                  uint8_t(to_byte_count<decltype(*std::declval<V>().data())>()));
 
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
