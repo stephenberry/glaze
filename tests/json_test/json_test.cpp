@@ -4465,7 +4465,7 @@ suite optional_optional = [] {
    };
 };
 
-struct invoker_struct
+struct invoke_struct
 {
    int y{};
    std::function<void(int x)> square = [&](int x) { y = x * x; };
@@ -4475,15 +4475,15 @@ struct invoker_struct
 };
 
 template <>
-struct glz::meta<invoker_struct>
+struct glz::meta<invoke_struct>
 {
-   using T = invoker_struct;
-   static constexpr auto value = object("square", invoker<&T::square>(), "add_one", invoker<&T::add_one>());
+   using T = invoke_struct;
+   static constexpr auto value = object("square", invoke<&T::square>(), "add_one", invoke<&T::add_one>());
 };
 
-suite invoker_test = [] {
-   "invoker"_test = [] {
-      invoker_struct obj{};
+suite invoke_test = [] {
+   "invoke"_test = [] {
+      invoke_struct obj{};
       std::string s = R"(
 {
    "square":[5],
