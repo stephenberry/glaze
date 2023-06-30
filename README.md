@@ -357,7 +357,7 @@ Lambda functions by default copy returns, therefore the `auto&` return type is t
 
 By default enums will be written and read in integer form. No `glz::meta` is necessary if this is the desired behavior.
 
-However, if it is preferred to use enums as strings in JSON, they can be registered in the `glz::meta` as follows:
+However, if you prefer to use enums as strings in JSON, they can be registered in the `glz::meta` as follows:
 
 ```c++
 enum class Color { Red, Green, Blue };
