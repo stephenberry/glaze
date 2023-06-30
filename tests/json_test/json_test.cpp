@@ -4347,7 +4347,7 @@ suite numbers_as_strings_suite = [] {
 enum struct MyEnum { VALUE_1 = 200, VALUE_2 = 300, VALUE_3 = 400, UNUSED_VALUE = 500 };
 
 suite numeric_enums_suite = [] {
-   /*"numeric_enums"_test = [] {
+   "numeric_enums"_test = [] {
       std::vector<MyEnum> v{};
 
       std::string input = R"([200, 300, 400])";
@@ -4355,7 +4355,7 @@ suite numeric_enums_suite = [] {
       expect(v[0] == MyEnum::VALUE_1);
       expect(v[1] == MyEnum::VALUE_2);
       expect(v[2] == MyEnum::VALUE_3);
-   };*/
+   };
 };
 
 suite json_logging = [] {
