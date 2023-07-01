@@ -326,6 +326,30 @@ namespace glz
          }
       };
 
+      template <pair_t T>
+      struct to_binary<T> final
+      {
+         template <auto Opts, class... Args>
+         GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            using Key = typename T::first_type;
+
+            uint8_t tag = tag::object;
+            if constexpr (str_t<Key>) {
+               // set_bits<3, 1, uint8_t>(tag, 0); // no need to set zero
+            }
+            else {
+               set_bits<3, 2, uint8_t>(tag, 1 + std::unsigned_integral<Key>);
+            }
+            dump_type(tag, args...);
+
+            dump_int<Opts>(1, args...);
+            const auto& [k, v] = value;
+            write<binary>::op<Opts>(k, ctx, args...);
+            write<binary>::op<Opts>(v, ctx, args...);
+         }
+      };
+
       template <writable_map_t T>
       struct to_binary<T> final
       {

@@ -1331,21 +1331,20 @@ suite read_tests = [] {
       expect(glz::read_json(v, in) != glz::error_code::none);
    };
 
-   //*  ISSUE UT cannot run this test
    "Read map"_test = [] {
       {
          std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
          std::map<std::string, int> v, vr{{"as", 1}, {"so", 2}, {"make", 3}};
          expect(glz::read_json(v, in) == glz::error_code::none);
-
-         // expect(v == vr);
+         const bool equal = (v == vr);
+         expect(equal);
       }
       {
          std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
          std::map<std::string, int> v{{"as", -1}, {"make", 10000}}, vr{{"as", 1}, {"so", 2}, {"make", 3}};
          expect(glz::read_json(v, in) == glz::error_code::none);
-
-         // expect(v == vr);
+         const bool equal = (v == vr);
+         expect(equal);
       }
    };
 
