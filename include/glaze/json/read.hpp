@@ -1570,6 +1570,7 @@ namespace glz
             numbers += num_t<V>;
             strings += str_t<V>;
             strings += glaze_enum_t<V>;
+            objects += pair_t<V>;
             objects += (writable_map_t<V> || readable_map_t<V>);
             objects += glaze_object_t<V>;
             meta_objects += glaze_object_t<V>;
