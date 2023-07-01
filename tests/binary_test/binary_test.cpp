@@ -688,8 +688,8 @@ void container_types()
       decltype(pair) pair2{};
       std::string buffer{};
       glz::write_binary(pair, buffer);
-      // expect(!glz::read_binary(pair2, buffer));
-      // expect(pair == pair2);
+      expect(!glz::read_binary(pair2, buffer));
+      expect(pair == pair2);
    };
 }
 

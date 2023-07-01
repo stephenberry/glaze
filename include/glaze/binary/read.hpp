@@ -320,6 +320,46 @@ namespace glz
          }
       };
 
+      template <pair_t T>
+      struct from_binary<T> final
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            const auto tag = uint8_t(*it);
+            if (get_bits<3>(tag) != tag::object) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            using Key = typename T::first_type;
+            if constexpr (str_t<Key>) {
+               if (get_bits<3, 2>(tag) != 0) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+            else {
+               static constexpr uint8_t type_id = 1 + std::unsigned_integral<Key>;
+               if (get_bits<3, 2>(tag) != type_id) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+
+            ++it;
+
+            const auto n = int_from_compressed(it, end);
+            if (n != 1) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            read<binary>::op<Opts>(value.first, ctx, it, end);
+            read<binary>::op<Opts>(value.second, ctx, it, end);
+         }
+      };
+
       template <readable_map_t T>
       struct from_binary<T> final
       {
