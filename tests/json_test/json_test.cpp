@@ -1063,6 +1063,8 @@ struct Read_pair_test_case
    Pair_value expected_value{};
    std::string_view input_json{};
 };
+template <typename Pair_key, typename Pair_value>
+Read_pair_test_case(Pair_key, Pair_value, std::string_view) -> Read_pair_test_case<Pair_key, Pair_value>;
 
 suite read_tests = [] {
    using namespace boost::ut;
@@ -1643,6 +1645,8 @@ struct Write_pair_test_case
    Pair_value value{};
    std::string_view expected_json{};
 };
+template <typename Pair_key, typename Pair_value>
+Write_pair_test_case(Pair_key, Pair_value, std::string_view) -> Write_pair_test_case<Pair_key, Pair_value>;
 
 suite write_tests = [] {
    using namespace boost::ut;
