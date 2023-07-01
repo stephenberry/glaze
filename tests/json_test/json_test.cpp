@@ -1614,6 +1614,14 @@ struct glz::meta<EmptyObject>
    static constexpr auto value = object();
 };
 
+template <typename Pair_key, typename Pair_value>
+struct Write_pair_test_case
+{
+   Pair_key key{};
+   Pair_value value{};
+   std::string_view expected_json{};
+};
+
 suite write_tests = [] {
    using namespace boost::ut;
 
@@ -1834,6 +1842,20 @@ suite write_tests = [] {
       glz::write_json(m, s);
 
       expect(s == R"({"a":2.2,"b":11.111,"c":211.2})");
+   };
+
+   "Write pair"_test = [] {
+      "correct"_test =
+         [](const auto& test_case) {
+            const std::pair value{test_case.key, test_case.value};
+            expect(glz::write_json(value) == test_case.expected_json);
+         } |
+         std::tuple{
+            Write_pair_test_case{"key", "value", R"({"key":"value"})"},
+            Write_pair_test_case{0, "value", R"({"0":"value"})"},
+            Write_pair_test_case{0.78, std::array{1, 2, 3}, R"({"0.78":[1,2,3]})"},
+            Write_pair_test_case{"k", glz::obj{"in1", 1, "in2", "v"}, R"({"k":{"in1":1,"in2","v"}})"},
+         };
    };
 
 #ifdef __cpp_lib_ranges

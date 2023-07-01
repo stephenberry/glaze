@@ -345,6 +345,54 @@ namespace glz
          }
       };
 
+      template <opts Opts, typename Key, typename Value, is_context Ctx>
+      void write_pair_content(const Key& key, const Value& value, Ctx& ctx, auto&&... args) noexcept
+      {
+         if constexpr (null_t<Value> && Opts.skip_null_members) {
+            if (!bool(value)) return;
+         }
+
+         if constexpr (str_t<Key> || char_t<Key>) {
+            write<json>::op<Opts>(key, ctx, args...);
+            dump<':'>(args...);
+         }
+         else {
+            dump<'"'>(args...);
+            write<json>::op<Opts>(key, ctx, args...);
+            dump<R"(":)">(args...);
+         }
+         if constexpr (Opts.prettify) {
+            dump<' '>(args...);
+         }
+
+         write<json>::op<Opts>(value, ctx, args...);
+      }
+
+      template <pair_t T>
+      struct to_json<T>
+      {
+         template <auto Opts, class... Args>
+         GLZ_ALWAYS_INLINE static void op(const T& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            dump<'{'>(args...);
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level += Opts.indentation_width;
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            }
+
+            const auto& [key, val] = value;
+            write_pair_content<Opts>(key, val, ctx, args...);
+
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level -= Opts.indentation_width;
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            }
+            dump<'}'>(args...);
+         }
+      };
+
       template <writable_map_t T>
       struct to_json<T>
       {
@@ -359,31 +407,10 @@ namespace glz
                   dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                }
 
-               auto write_pair = [&]<class Key, class Value>(const Key& key, const Value& entry_val) {
-                  if constexpr (null_t<Value> && Opts.skip_null_members) {
-                     if (!bool(entry_val)) return;
-                  }
-
-                  if constexpr (str_t<Key> || char_t<Key>) {
-                     write<json>::op<Opts>(key, ctx, args...);
-                     dump<':'>(args...);
-                  }
-                  else {
-                     dump<'"'>(args...);
-                     write<json>::op<Opts>(key, ctx, args...);
-                     dump<R"(":)">(args...);
-                  }
-                  if constexpr (Opts.prettify) {
-                     dump<' '>(args...);
-                  }
-
-                  write<json>::op<Opts>(entry_val, ctx, args...);
-               };
-
                auto it = std::cbegin(value);
                {
                   const auto& [first_key, first_val] = *it;
-                  write_pair(first_key, first_val);
+                  write_pair_content<Opts>(first_key, first_val, ctx, args...);
                }
 
                for (++it; it != std::cend(value); ++it) {
@@ -394,7 +421,7 @@ namespace glz
                   }
 
                   const auto& [key, entry_val] = *it;
-                  write_pair(key, entry_val);
+                  write_pair_content<Opts>(key, entry_val, ctx, args...);
                }
 
                if constexpr (Opts.prettify) {
