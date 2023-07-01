@@ -1056,6 +1056,24 @@ struct glz::meta<oob>
    static constexpr auto value = object("v", &oob::v, "n", &oob::n);
 };
 
+template <typename Pair_key, typename Pair_value>
+struct Read_pair_test_case
+{
+   Pair_key expected_key{};
+   Pair_value expected_value{};
+   std::string_view input_json{};
+};
+
+template <typename T>
+std::string pull_error(const glz::expected<T, glz::parse_error>& exp, const auto& buffer)
+{
+   return exp
+      .transform_error([&buffer](const glz::parse_error& err) {
+         return glz::format_error(err, buffer); //
+      })
+      .error_or(std::string{});
+}
+
 suite read_tests = [] {
    using namespace boost::ut;
 
@@ -1330,6 +1348,23 @@ suite read_tests = [] {
 
       expect(glz::read_json(v, in) != glz::error_code::none);
    };
+
+   "Read pair"_test =
+      [](const auto& test_case) {
+         const std::pair expected{test_case.expected_key, test_case.expected_value};
+         using Pair = std::remove_cv_t<decltype(expected)>;
+         const auto parsed = glz::read_json<Pair>(test_case.input_json);
+         expect(parsed.has_value()) << pull_error(parsed, test_case.input_json);
+         if (parsed.has_value()) {
+            expect(parsed.value() == expected) << glz::write_json(parsed.value());
+         }
+      } |
+      std::tuple{
+         Read_pair_test_case{1, 2, R"({"1":2})"},
+         Read_pair_test_case{std::string{"key"}, 2, R"({"key":2})"},
+         Read_pair_test_case{std::string{"key"}, std::string{"value"}, R"({"key":"value"})"},
+         Read_pair_test_case{std::array{1, 2, 3}, std::array{4, 5, 6}, R"({"[1,2,3]":[4,5,6]})"},
+      };
 
    "Read map"_test = [] {
       {
@@ -1853,6 +1888,7 @@ suite write_tests = [] {
          Write_pair_test_case{0, "value", R"({"0":"value"})"},
          Write_pair_test_case{0.78, std::array{1, 2, 3}, R"({"0.78":[1,2,3]})"},
          Write_pair_test_case{"k", glz::obj{"in1", 1, "in2", "v"}, R"({"k":{"in1":1,"in2":"v"}})"},
+         Write_pair_test_case{std::array{1, 2}, 99, R"({"[1,2]":99})"},
       };
 
 #ifdef __cpp_lib_ranges
