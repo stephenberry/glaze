@@ -1342,6 +1342,75 @@ namespace glz
          }
       }
 
+      template <pair_t T>
+      struct from_json<T>
+      {
+         template <opts Options, string_literal tag = "">
+         GLZ_FLATTEN static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
+         {
+            if constexpr (!Options.opening_handled) {
+               if constexpr (!Options.ws_handled) {
+                  skip_ws<Options>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+               }
+               match<'{'>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+
+            skip_ws<Options>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+
+            // Only used if error_on_missing_keys = true
+            [[maybe_unused]] bit_array<1> fields{};
+
+            if (*it == '}') {
+               if constexpr (Opts.error_on_missing_keys) {
+                  ctx.error = error_code::missing_key;
+               }
+               return;
+            }
+
+            std::string& key = string_buffer();
+            read<json>::op<Opts>(key, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            skip_ws<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            match<':'>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            skip_ws<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            if constexpr (std::is_same_v<typename T::first_type, std::string>) {
+               value.first = std::move(key);
+            }
+            else {
+               read<json>::op<Opts>(value.first, ctx, key.data(), key.data() + key.size());
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+
+            read<json>::op<Opts>(value.second, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            skip_ws<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            match<'}'>(ctx, it, end);
+         }
+      };
+
       template <class T>
          requires readable_map_t<T> || glaze_object_t<T>
       struct from_json<T>
