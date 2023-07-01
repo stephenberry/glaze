@@ -1064,16 +1064,6 @@ struct Read_pair_test_case
    std::string_view input_json{};
 };
 
-template <typename T>
-std::string pull_error(const glz::expected<T, glz::parse_error>& exp, const auto& buffer)
-{
-   return exp
-      .transform_error([&buffer](const glz::parse_error& err) {
-         return glz::format_error(err, buffer); //
-      })
-      .error_or(std::string{});
-}
-
 suite read_tests = [] {
    using namespace boost::ut;
 
@@ -1352,12 +1342,10 @@ suite read_tests = [] {
    "Read pair"_test =
       [](const auto& test_case) {
          const std::pair expected{test_case.expected_key, test_case.expected_value};
-         using Pair = std::remove_cv_t<decltype(expected)>;
-         const auto parsed = glz::read_json<Pair>(test_case.input_json);
-         expect(parsed.has_value()) << pull_error(parsed, test_case.input_json);
-         if (parsed.has_value()) {
-            expect(parsed.value() == expected) << glz::write_json(parsed.value());
-         }
+         std::remove_cv_t<decltype(expected)> parsed{};
+         const auto err = glz::read_json(parsed, test_case.input_json);
+         expect(err == glz::error_code::none) << glz::format_error(err, test_case.input_json);
+         expect(parsed == expected) << glz::write_json(parsed);
       } |
       std::tuple{
          Read_pair_test_case{1, 2, R"({"1":2})"},
