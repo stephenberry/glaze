@@ -730,4 +730,4 @@ See the `ext` directory for extensions.
 
 # License
 
-Glaze is distributed under the MIT license.eee
+Glaze is distributed under the MIT license.
