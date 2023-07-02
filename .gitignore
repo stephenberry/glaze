@@ -1,4 +1,5 @@
 *build/
+*build-*/
 *bin/
 .idea/
 .vscode/

@@ -110,7 +110,7 @@ namespace glz
          }
       };
 
-      template <map_t T>
+      template <writable_map_t T>
       struct to_csv<T>
       {
          template <auto Opts, class B>

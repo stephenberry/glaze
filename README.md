@@ -1,6 +1,8 @@
 # Glaze
 One of the fastest JSON libraries in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
 
+> BREAKING v1.3.0 CHANGE: `std::pair`  is now handled as a JSON object (`{"first":second}`}. If you require a JSON array of two items, use `std::array` or `std::tuple`.
+
 ## Highlights
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
@@ -728,4 +730,4 @@ See the `ext` directory for extensions.
 
 # License
 
-Glaze is distributed under the MIT license.
+Glaze is distributed under the MIT license.eee

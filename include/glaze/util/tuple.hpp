@@ -12,7 +12,7 @@
 namespace glz
 {
    template <class T>
-   concept is_std_tuple = is_specialization_v<T, std::tuple> || is_specialization_v<T, std::pair>;
+   concept is_std_tuple = is_specialization_v<T, std::tuple>;
 
    inline constexpr auto size_impl(auto&& t) { return std::tuple_size_v<std::decay_t<decltype(t)>>; }
 

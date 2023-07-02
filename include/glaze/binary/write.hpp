@@ -245,7 +245,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            using V = typename std::decay_t<T>::value_type;
+            using V = range_value_t<std::decay_t<T>>;
 
             uint8_t tag;
 
@@ -326,7 +326,31 @@ namespace glz
          }
       };
 
-      template <map_t T>
+      template <pair_t T>
+      struct to_binary<T> final
+      {
+         template <auto Opts, class... Args>
+         GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            using Key = typename T::first_type;
+
+            uint8_t tag = tag::object;
+            if constexpr (str_t<Key>) {
+               // set_bits<3, 1, uint8_t>(tag, 0); // no need to set zero
+            }
+            else {
+               set_bits<3, 2, uint8_t>(tag, 1 + std::unsigned_integral<Key>);
+            }
+            dump_type(tag, args...);
+
+            dump_int<Opts>(1, args...);
+            const auto& [k, v] = value;
+            write<binary>::op<Opts>(k, ctx, args...);
+            write<binary>::op<Opts>(v, ctx, args...);
+         }
+      };
+
+      template <writable_map_t T>
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
@@ -457,7 +481,7 @@ namespace glz
          detail::write<binary>::op<Opts>(value, ctx, buffer);
       }
       else {
-         static_assert(detail::glaze_object_t<std::decay_t<T>> || detail::map_t<std::decay_t<T>>,
+         static_assert(detail::glaze_object_t<std::decay_t<T>> || detail::writable_map_t<std::decay_t<T>>,
                        "Only object types are supported for partial.");
          static constexpr auto sorted = sort_json_ptrs(partial);
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
@@ -490,7 +514,7 @@ namespace glz
                std::ignore = write<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), buffer, ctx);
             });
          }
-         else if constexpr (detail::map_t<std::decay_t<T>>) {
+         else if constexpr (detail::writable_map_t<std::decay_t<T>>) {
             glz::for_each<N>([&](auto I) {
                using index_t = decltype(I);
                using group_t = std::tuple_element_t<I, decltype(groups)>;
