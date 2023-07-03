@@ -4458,19 +4458,16 @@ suite json_logging = [] {
          R"({"pi":3.141,"happy":true,"name":"Stephen","map":{"a":1,"b":2,"c":3},"arr":["Hello","World",2],"vec":[1,2,3]})")
          << s;
    };
-   
+
    "merge_obj"_test = [] {
       glz::obj obj0{"pi", 3.141};
       glz::obj obj1{"happy", true};
       glz::obj obj2{"arr", glz::arr{"Hello", "World", 2}};
-      auto merged = glz::merge{ obj0, obj1, obj2 };
+      auto merged = glz::merge{obj0, obj1, obj2};
       std::string s{};
       glz::write_json(merged, s);
 
-      expect(
-         s ==
-         R"({"pi":3.141,"happy":true,"arr":["Hello","World",2]})")
-         << s;
+      expect(s == R"({"pi":3.141,"happy":true,"arr":["Hello","World",2]})") << s;
    };
 };
 

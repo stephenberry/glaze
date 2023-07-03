@@ -698,7 +698,7 @@ namespace glz
          }
          return false;
       }
-      
+
       template <class T, auto Options>
       GLZ_ALWAYS_INLINE void write_object(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
       {
@@ -779,7 +779,7 @@ namespace glz
             }
 
             write_object<T, Options>(value, ctx, b, ix);
-            
+
             if constexpr (Options.prettify) {
                ctx.indentation_level -= Options.indentation_width;
                dump<'\n'>(b, ix);
@@ -788,7 +788,7 @@ namespace glz
             dump<'}'>(b, ix);
          }
       };
-      
+
       template <class T>
          requires is_specialization_v<T, glz::merge>
       struct to_json<T>
@@ -804,17 +804,17 @@ namespace glz
                   dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
                }
             }
-            
+
             using V = std::decay_t<decltype(value.value)>;
             static constexpr auto N = std::tuple_size_v<V>;
-            
+
             for_each<N>([&](auto I) {
                write_object<T, Options>(glz::tuplet::get<I>(value.value), ctx, b, ix);
                if constexpr (I < N - 1) {
                   dump<','>(b, ix);
                }
             });
-            
+
             if constexpr (Options.prettify) {
                ctx.indentation_level -= Options.indentation_width;
                dump<'\n'>(b, ix);
