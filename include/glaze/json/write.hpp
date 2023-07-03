@@ -698,6 +698,69 @@ namespace glz
          }
          return false;
       }
+      
+      template <class T, auto Options>
+      GLZ_ALWAYS_INLINE void write_object(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+      {
+         using V = std::decay_t<decltype(value.value)>;
+         static constexpr auto N = std::tuple_size_v<V> / 2;
+
+         bool first = true;
+         for_each<N>([&](auto I) {
+            static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+            decltype(auto) item = glz::tuplet::get<2 * I + 1>(value.value);
+            using val_t = std::decay_t<decltype(item)>;
+
+            if constexpr (null_t<val_t> && Opts.skip_null_members) {
+               if constexpr (always_null_t<T>)
+                  return;
+               else {
+                  auto is_null = [&]() { return !bool(item); }();
+                  if (is_null) return;
+               }
+            }
+
+            // skip file_include
+            if constexpr (std::is_same_v<val_t, includer<V>>) {
+               return;
+            }
+            else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+               return;
+            }
+            else {
+               if (first) {
+                  first = false;
+               }
+               else {
+                  // Null members may be skipped so we cant just write it out for all but the last member unless
+                  // trailing commas are allowed
+                  dump<','>(b, ix);
+                  if constexpr (Opts.prettify) {
+                     dump<'\n'>(b, ix);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
+                  }
+               }
+
+               using Key = typename std::decay_t<std::tuple_element_t<2 * I, V>>;
+
+               if constexpr (str_t<Key> || char_t<Key>) {
+                  const sv key = glz::tuplet::get<2 * I>(value.value);
+                  write<json>::op<Opts>(key, ctx, b, ix);
+                  dump<':'>(b, ix);
+                  if constexpr (Opts.prettify) {
+                     dump<' '>(b, ix);
+                  }
+               }
+               else {
+                  dump<'"'>(b, ix);
+                  write<json>::op<Opts>(item, ctx, b, ix);
+                  dump(Opts.prettify ? "\": " : "\":", b, ix);
+               }
+
+               write<json>::op<Opts>(item, ctx, b, ix);
+            }
+         });
+      }
 
       template <class T>
          requires is_specialization_v<T, glz::obj>
@@ -715,64 +778,43 @@ namespace glz
                }
             }
 
+            write_object<T, Options>(value, ctx, b, ix);
+            
+            if constexpr (Options.prettify) {
+               ctx.indentation_level -= Options.indentation_width;
+               dump<'\n'>(b, ix);
+               dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+            }
+            dump<'}'>(b, ix);
+         }
+      };
+      
+      template <class T>
+         requires is_specialization_v<T, glz::merge>
+      struct to_json<T>
+      {
+         template <auto Options>
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         {
+            if constexpr (!Options.opening_handled) {
+               dump<'{'>(b, ix);
+               if constexpr (Options.prettify) {
+                  ctx.indentation_level += Options.indentation_width;
+                  dump<'\n'>(b, ix);
+                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+               }
+            }
+            
             using V = std::decay_t<decltype(value.value)>;
-            static constexpr auto N = std::tuple_size_v<V> / 2;
-
-            bool first = true;
+            static constexpr auto N = std::tuple_size_v<V>;
+            
             for_each<N>([&](auto I) {
-               static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
-               decltype(auto) item = glz::tuplet::get<2 * I + 1>(value.value);
-               using val_t = std::decay_t<decltype(item)>;
-
-               if constexpr (null_t<val_t> && Opts.skip_null_members) {
-                  if constexpr (always_null_t<T>)
-                     return;
-                  else {
-                     auto is_null = [&]() { return !bool(item); }();
-                     if (is_null) return;
-                  }
-               }
-
-               // skip file_include
-               if constexpr (std::is_same_v<val_t, includer<V>>) {
-                  return;
-               }
-               else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
-                  return;
-               }
-               else {
-                  if (first) {
-                     first = false;
-                  }
-                  else {
-                     // Null members may be skipped so we cant just write it out for all but the last member unless
-                     // trailing commas are allowed
-                     dump<','>(b, ix);
-                     if constexpr (Opts.prettify) {
-                        dump<'\n'>(b, ix);
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
-                     }
-                  }
-
-                  using Key = typename std::decay_t<std::tuple_element_t<2 * I, V>>;
-
-                  if constexpr (str_t<Key> || char_t<Key>) {
-                     const sv key = glz::tuplet::get<2 * I>(value.value);
-                     write<json>::op<Opts>(key, ctx, b, ix);
-                     dump<':'>(b, ix);
-                     if constexpr (Opts.prettify) {
-                        dump<' '>(b, ix);
-                     }
-                  }
-                  else {
-                     dump<'"'>(b, ix);
-                     write<json>::op<Opts>(item, ctx, b, ix);
-                     dump(Opts.prettify ? "\": " : "\":", b, ix);
-                  }
-
-                  write<json>::op<Opts>(item, ctx, b, ix);
+               write_object<T, Options>(glz::tuplet::get<I>(value.value), ctx, b, ix);
+               if constexpr (I < N - 1) {
+                  dump<','>(b, ix);
                }
             });
+            
             if constexpr (Options.prettify) {
                ctx.indentation_level -= Options.indentation_width;
                dump<'\n'>(b, ix);
