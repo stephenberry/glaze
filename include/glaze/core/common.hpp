@@ -55,11 +55,11 @@ namespace glz
    template <class... T>
    struct merge final
    {
-      glz::tuplet::tuple<T...> value;
+      glz::tuplet::tuple<T&...> value;
    };
 
    template <class... T>
-   merge(T...) -> merge<T...>;
+   merge(T&...) -> merge<T&...>;
 
    template <class... T>
    struct overload : T...
