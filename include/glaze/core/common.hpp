@@ -50,6 +50,16 @@ namespace glz
 
    template <class... T>
    arr(T...) -> arr<T...>;
+   
+   // used to merge multiple JSON objects into a single JSON object
+   template <class... T>
+   struct merge final
+   {
+      glz::tuplet::tuple<T...> value;
+   };
+   
+   template <class... T>
+   merge(T...) -> merge<T...>;
 
    template <class... T>
    struct overload : T...
