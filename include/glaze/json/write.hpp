@@ -760,7 +760,7 @@ namespace glz
                write<json>::op<Opts>(item, ctx, b, ix);
             }
          });
-      };
+      }
 
       template <class T>
          requires is_specialization_v<T, glz::obj>
