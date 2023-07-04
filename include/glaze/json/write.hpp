@@ -183,6 +183,9 @@ namespace glz
                   case '\t':
                      dump<"\\t">(b, ix);
                      break;
+                  case '\0':
+                     // escape character treated as empty string
+                     break;
                   default:
                      // Hiding warning for build, this is an error with wider char types
                      dump(static_cast<char>(value), b,
