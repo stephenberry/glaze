@@ -191,6 +191,10 @@ struct Thing
 
    Thing() : thing_ptr(&thing){};
 };
+struct int_metadata{
+   int min{};
+   static constexpr auto schema_attributes{ true };
+};
 
 template <>
 struct glz::meta<Thing>
@@ -204,7 +208,7 @@ struct glz::meta<Thing>
       "list", &T::list, //
       "deque", &T::deque, //
       "vector", [](auto&& v) -> auto& { return v.vector; }, //
-      "i", [](auto&& v) -> auto& { return v.i; }, //
+      "i", [](auto&& v) -> auto& { return v.i; }, int_metadata{.min=2}, //
       "d", &T::d, "double is the best type", //
       "b", &T::b, //
       "c", &T::c, //

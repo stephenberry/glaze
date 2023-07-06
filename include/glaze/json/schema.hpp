@@ -263,8 +263,12 @@ namespace glz
                   to_json_schema<val_t>::template op<Opts>(def, defs);
                }
                auto ref_val = schema_ref{join_v<chars<"#/$defs/">, name_v<val_t>>};
-               if constexpr (std::tuple_size_v < decltype(item) >> 2) {
-                  ref_val.description = glz::tuplet::get<2>(item);
+               // clang-format off
+               if constexpr (std::tuple_size_v<decltype(item)> > 2) {
+               // clang-format on
+                  if constexpr (std::is_convertible_v<decltype(glz::tuplet::get<2>(item)), std::string_view>) {
+                     ref_val.description = glz::tuplet::get<2>(item);
+                  }
                }
                (*s.properties)[glz::tuplet::get<0>(item)] = ref_val;
             });

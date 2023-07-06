@@ -922,14 +922,16 @@ namespace glz
 
                   static constexpr auto S = std::tuple_size_v<decltype(item)>;
                   if constexpr (Opts.comments && S > 2) {
-                     static constexpr sv comment = glz::tuplet::get<2>(item);
-                     if constexpr (comment.size() > 0) {
-                        if constexpr (Opts.prettify) {
-                           dump<' '>(b, ix);
+                     if constexpr (std::is_convertible_v<decltype(glz::tuplet::get<2>(item)), std::string_view>) {
+                        static constexpr sv comment = glz::tuplet::get<2>(item);
+                        if constexpr (comment.size() > 0) {
+                           if constexpr (Opts.prettify) {
+                              dump<' '>(b, ix);
+                           }
+                           dump<"/*">(b, ix);
+                           dump(comment, b, ix);
+                           dump<"*/">(b, ix);
                         }
-                        dump<"/*">(b, ix);
-                        dump(comment, b, ix);
-                        dump<"*/">(b, ix);
                      }
                   }
                }
