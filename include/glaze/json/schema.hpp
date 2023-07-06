@@ -7,6 +7,44 @@
 
 namespace glz
 {
+   struct schema
+   {
+      using schema_number = std::optional<std::variant<std::int64_t, std::uint64_t, double>>;
+      using schema_any = std::variant<bool, std::int64_t, std::uint64_t, double, std::string_view>;
+      // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
+      std::optional<std::string_view> title{};
+      std::optional<std::string_view> description{};
+      std::optional<schema_any> default_value{};
+      std::optional<bool> deprecated{};
+      std::optional<std::vector<schema_any>> examples{};
+      std::optional<bool> read_only{};
+      std::optional<bool> write_only{};
+      // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
+      std::optional<bool> constant{};
+      // string only keywords
+      std::optional<std::uint64_t> min_length{};
+      std::optional<std::uint64_t> max_length{};
+      std::optional<std::string_view> pattern{};
+      // number only keywords
+      schema_number minimum{};
+      schema_number maximum{};
+      schema_number exclusive_minimum{};
+      schema_number exclusive_maximum{};
+      schema_number multiple_of{};
+      // object only keywords
+      std::optional<std::uint64_t> min_properties{};
+      std::optional<std::uint64_t> max_properties{};
+      std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
+      std::optional<std::vector<std::string_view>> required{};
+      // array only keywords
+      std::optional<std::uint64_t> min_items{};
+      std::optional<std::uint64_t> max_items{};
+      std::optional<std::uint64_t> min_contains{};
+      std::optional<std::uint64_t> max_contains{};
+      std::optional<bool> unique_items{};
+
+      static constexpr auto schema_attributes{true}; // allowance flag to indicate metadata within glz::Object
+   };
    namespace detail
    {
       // TODO switch to using variants when we have write support to get rid of nulls
@@ -14,13 +52,38 @@ namespace glz
       struct schema_ref
       {
          std::string_view ref{};
-         std::optional<std::string_view> description{};
+         glz::schema attributes{};
 
          struct glaze
          {
             using T = schema_ref;
-            static constexpr auto value = glz::object("$ref", &T::ref, //
-                                                      "description", &T::description //
+            static constexpr auto value = glz::object(
+               "$ref", &T::ref, //
+               "title", [](auto&& self) -> auto& { return self.attributes.title; }, //
+               "description", [](auto&& self) -> auto& { return self.attributes.description; }, //
+               "default", [](auto&& self) -> auto& { return self.attributes.default_value; }, //
+               "deprecated", [](auto&& self) -> auto& { return self.attributes.deprecated; }, //
+               "examples", [](auto&& self) -> auto& { return self.attributes.examples; }, //
+               "readOnly", [](auto&& self) -> auto& { return self.attributes.read_only; }, //
+               "writeOnly", [](auto&& self) -> auto& { return self.attributes.write_only; }, //
+               "const", [](auto&& self) -> auto& { return self.attributes.constant; }, //
+               "minLength", [](auto&& self) -> auto& { return self.attributes.min_length; }, //
+               "maxLength", [](auto&& self) -> auto& { return self.attributes.max_length; }, //
+               "pattern", [](auto&& self) -> auto& { return self.attributes.pattern; },
+               "minimum", [](auto&& self) -> auto& { return self.attributes.minimum; }, //
+               "maximum", [](auto&& self) -> auto& { return self.attributes.maximum; }, //
+               "exclusiveMinimum", [](auto&& self) -> auto& { return self.attributes.exclusive_minimum; }, //
+               "exclusiveMaximum", [](auto&& self) -> auto& { return self.attributes.exclusive_maximum; }, //
+               "multipleOf", [](auto&& self) -> auto& { return self.attributes.multiple_of; }, //
+               "minProperties", [](auto&& self) -> auto& { return self.attributes.min_properties; }, //
+               "maxProperties", [](auto&& self) -> auto& { return self.attributes.max_properties; }, //
+               "dependentRequired", [](auto&& self) -> auto& { return self.attributes.dependent_required; }, //
+               "required", [](auto&& self) -> auto& { return self.attributes.required; }, //
+               "minItems", [](auto&& self) -> auto& { return self.attributes.min_items; }, //
+               "maxItems", [](auto&& self) -> auto& { return self.attributes.max_items; }, //
+               "minContains", [](auto&& self) -> auto& { return self.attributes.min_contains; }, //
+               "maxContains", [](auto&& self) -> auto& { return self.attributes.max_contains; }, //
+               "uniqueItems", [](auto&& self) -> auto& { return self.attributes.unique_items; } //
             );
          };
       };
@@ -265,9 +328,13 @@ namespace glz
                auto ref_val = schema_ref{join_v<chars<"#/$defs/">, name_v<val_t>>};
                // clang-format off
                if constexpr (std::tuple_size_v<decltype(item)> > 2) {
-               // clang-format on
-                  if constexpr (std::is_convertible_v<decltype(glz::tuplet::get<2>(item)), std::string_view>) {
-                     ref_val.description = glz::tuplet::get<2>(item);
+                  // clang-format on
+                  using additional_data_type = decltype(glz::tuplet::get<2>(item));
+                  if constexpr (std::is_convertible_v<additional_data_type, std::string_view>) {
+                     ref_val.attributes.description = glz::tuplet::get<2>(item);
+                  }
+                  else if constexpr (std::is_convertible_v<additional_data_type, glz::schema>) {
+                     ref_val.attributes = glz::tuplet::get<2>(item);
                   }
                }
                (*s.properties)[glz::tuplet::get<0>(item)] = ref_val;
