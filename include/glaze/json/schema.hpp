@@ -34,7 +34,7 @@ namespace glz
       // object only keywords
       std::optional<std::uint64_t> min_properties{};
       std::optional<std::uint64_t> max_properties{};
-      std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
+//      std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
       std::optional<std::vector<std::string_view>> required{};
       // array only keywords
       std::optional<std::uint64_t> min_items{};
@@ -77,7 +77,7 @@ namespace glz
                "multipleOf", [](auto&& self) -> auto& { return self.attributes.multiple_of; }, //
                "minProperties", [](auto&& self) -> auto& { return self.attributes.min_properties; }, //
                "maxProperties", [](auto&& self) -> auto& { return self.attributes.max_properties; }, //
-               "dependentRequired", [](auto&& self) -> auto& { return self.attributes.dependent_required; }, //
+//               "dependentRequired", [](auto&& self) -> auto& { return self.attributes.dependent_required; }, //
                "required", [](auto&& self) -> auto& { return self.attributes.required; }, //
                "minItems", [](auto&& self) -> auto& { return self.attributes.min_items; }, //
                "maxItems", [](auto&& self) -> auto& { return self.attributes.max_items; }, //
