@@ -16,7 +16,7 @@ namespace glz
       std::optional<std::string_view> description{};
       std::optional<schema_any> default_value{};
       std::optional<bool> deprecated{};
-      std::optional<std::vector<schema_any>> examples{};
+//      std::optional<std::vector<schema_any>> examples{};
       std::optional<bool> read_only{};
       std::optional<bool> write_only{};
       // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
@@ -35,7 +35,7 @@ namespace glz
       std::optional<std::uint64_t> min_properties{};
       std::optional<std::uint64_t> max_properties{};
 //      std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
-      std::optional<std::vector<std::string_view>> required{};
+//      std::optional<std::vector<std::string_view>> required{};
       // array only keywords
       std::optional<std::uint64_t> min_items{};
       std::optional<std::uint64_t> max_items{};
@@ -63,7 +63,7 @@ namespace glz
                "description", [](auto&& self) -> auto& { return self.attributes.description; }, //
                "default", [](auto&& self) -> auto& { return self.attributes.default_value; }, //
                "deprecated", [](auto&& self) -> auto& { return self.attributes.deprecated; }, //
-               "examples", [](auto&& self) -> auto& { return self.attributes.examples; }, //
+//               "examples", [](auto&& self) -> auto& { return self.attributes.examples; }, //
                "readOnly", [](auto&& self) -> auto& { return self.attributes.read_only; }, //
                "writeOnly", [](auto&& self) -> auto& { return self.attributes.write_only; }, //
                "const", [](auto&& self) -> auto& { return self.attributes.constant; }, //
@@ -78,7 +78,7 @@ namespace glz
                "minProperties", [](auto&& self) -> auto& { return self.attributes.min_properties; }, //
                "maxProperties", [](auto&& self) -> auto& { return self.attributes.max_properties; }, //
 //               "dependentRequired", [](auto&& self) -> auto& { return self.attributes.dependent_required; }, //
-               "required", [](auto&& self) -> auto& { return self.attributes.required; }, //
+//               "required", [](auto&& self) -> auto& { return self.attributes.required; }, //
                "minItems", [](auto&& self) -> auto& { return self.attributes.min_items; }, //
                "maxItems", [](auto&& self) -> auto& { return self.attributes.max_items; }, //
                "minContains", [](auto&& self) -> auto& { return self.attributes.min_contains; }, //
