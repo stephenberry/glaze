@@ -183,7 +183,7 @@ namespace glz::detail
       explicit constexpr naive_map(const std::array<std::pair<std::string_view, Value>, N>& pairs) : items(pairs)
       {
          seed = naive_perfect_hash();
-         if (seed == std::numeric_limits<uint64_t>::max()) {
+         if (seed == (std::numeric_limits<uint64_t>::max)()) {
             // Failed to find perfect hash
             // TODO find better way of creating compiletime error
             // Dont want to use the exception trick incase they are disabled
@@ -253,16 +253,16 @@ namespace glz::detail
    template <uint64_t N>
    consteval auto fit_unsigned_type() noexcept
    {
-      if constexpr (N <= std::numeric_limits<uint8_t>::max()) {
+      if constexpr (N <= (std::numeric_limits<uint8_t>::max)()) {
          return uint8_t{};
       }
-      else if constexpr (N <= std::numeric_limits<uint16_t>::max()) {
+      else if constexpr (N <= (std::numeric_limits<uint16_t>::max)()) {
          return uint16_t{};
       }
-      else if constexpr (N <= std::numeric_limits<uint32_t>::max()) {
+      else if constexpr (N <= (std::numeric_limits<uint32_t>::max)()) {
          return uint32_t{};
       }
-      else if constexpr (N <= std::numeric_limits<uint64_t>::max()) {
+      else if constexpr (N <= (std::numeric_limits<uint64_t>::max)()) {
          return uint64_t{};
       }
       else {
