@@ -194,10 +194,10 @@ namespace glz
                   dump<'"'>(b, ix);
                }
                else {
-                  const sv str = [&]() -> const std::decay_t<T>& {
+                  const sv str = [&]() -> sv {
                      if constexpr (std::is_pointer_v<std::decay_t<T>>) {
                         if (value == nullptr) {
-                           return const_cast<std::decay_t<T>>("");
+                           return "";
                         }
                      }
 
