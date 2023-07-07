@@ -196,7 +196,7 @@ namespace glz
                else {
                   const sv str = [&]() -> sv {
                      if constexpr (std::is_pointer_v<std::decay_t<T>>) {
-                        if (value == nullptr) {
+                        if (*&value == nullptr) {
                            return "";
                         }
                      }
