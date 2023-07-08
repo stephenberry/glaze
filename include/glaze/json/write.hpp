@@ -194,7 +194,14 @@ namespace glz
                   dump<'"'>(b, ix);
                }
                else {
-                  const sv str = value;
+                  const sv str = [&]() -> sv {
+                     if constexpr (std::is_pointer_v<std::decay_t<T>>) {
+                        return value ? value : "";
+                     }
+                     else {
+                        return value;
+                     }
+                  }();
                   const auto n = str.size();
 
                   // we use 4 * n to handle potential escape characters and quoted bounds
