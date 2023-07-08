@@ -4636,6 +4636,25 @@ suite invoke_update_test = [] {
    };
 };
 
+suite char_buffer = [] {
+   "null char*"_test = [] {
+      char* str{};
+      std::string s{};
+      glz::write_json(str, s);
+      expect(s == R"("")");
+   };
+   
+   "char*"_test = [] {
+      std::string str = "Spiders";
+      char* ptr = str.data();
+      std::string s{};
+      glz::write_json(ptr, s);
+      expect(s == R"("Spiders")");
+   };
+};
+
+static_assert(!glz::detail::char_array_t<char*>);
+
 int main()
 {
    // Explicitly run registered test suites and report errors
