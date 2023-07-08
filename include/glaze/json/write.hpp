@@ -31,7 +31,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
          {
             to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                        std::forward<B>(b), std::forward<IX>(ix));
+                                                               std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 

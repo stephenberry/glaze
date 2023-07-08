@@ -4643,7 +4643,7 @@ suite char_buffer = [] {
       glz::write_json(str, s);
       expect(s == R"("")");
    };
-   
+
    "char*"_test = [] {
       std::string str = "Spiders";
       char* ptr = str.data();
