@@ -285,7 +285,7 @@ namespace glz
       std::same_as<std::decay_t<T>, std::string_view>&& has_push_back<T>;
       
       template <class T>
-      concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<T>>;
+      concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
 
       // this concept requires that T is just a view
       template <class T>

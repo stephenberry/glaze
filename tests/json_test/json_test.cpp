@@ -4653,6 +4653,8 @@ suite char_buffer = [] {
    };
 };
 
+static_assert(!glz::detail::char_array_t<char*>);
+
 int main()
 {
    // Explicitly run registered test suites and report errors

@@ -30,7 +30,7 @@ namespace glz
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
          {
-            to_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+            to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                         std::forward<B>(b), std::forward<IX>(ix));
          }
       };
@@ -195,7 +195,10 @@ namespace glz
                }
                else {
                   const sv str = [&]() -> sv {
-                     if constexpr (std::is_pointer_v<std::decay_t<T>>) {
+                     if constexpr (detail::char_array_t<T>) {
+                        return value;
+                     }
+                     else if constexpr (std::is_pointer_v<std::decay_t<T>>) {
                         return value ? value : "";
                      }
                      else {
