@@ -276,7 +276,7 @@ namespace glz
                   std::mbstate_t statew{};
                   auto buffer_ptr = reinterpret_cast<const char*>(buffer);
                   auto n = std::mbsrtowcs(bufferw, &buffer_ptr, MB_LEN_MAX, &statew);
-                  if (n == std::numeric_limits<std::size_t>::max()) [[unlikely]] {
+                  if (n == (std::numeric_limits<std::size_t>::max)()) [[unlikely]] {
                      ctx.error = error_code::unicode_escape_conversion_failure;
                      return;
                   }
