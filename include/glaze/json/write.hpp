@@ -195,10 +195,7 @@ namespace glz
                }
                else {
                   const sv str = [&]() -> sv {
-                     if constexpr (detail::char_array_t<T>) {
-                        return value;
-                     }
-                     else if constexpr (std::is_pointer_v<std::decay_t<T>>) {
+                     if constexpr (!detail::char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                         return value ? value : "";
                      }
                      else {
