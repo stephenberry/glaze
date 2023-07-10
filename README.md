@@ -535,6 +535,21 @@ expect(s == R"({"pi":3.14,"happy":true,"name":"Stephen","arr":["Hello","World",2
 
 > This approach is significantly faster than `glz::json_t` for generic JSON. But, may not be suitable for all contexts.
 
+## Merge
+
+`glz::merge` allows the user to merge multiple JSON object types into a single object.
+
+```c++
+glz::obj o{"pi", 3.141};
+std::map<std::string_view, int> map = {{"a", 1}, {"b", 2}, {"c", 3}};
+auto merged = glz::merge{o, map};
+std::string s{};
+glz::write_json(merged, s); // will write out a single, merged object
+// s is now: {"pi":3.141,"a":0,"b":2,"c":3}
+```
+
+> `glz::merge` stores references to lvalues to avoid copies
+
 ## Generic JSON
 
 See [Generic JSON](./docs/generic-json.md) for `glz::json_t`.
