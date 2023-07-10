@@ -14,7 +14,7 @@
 
 namespace glz
 {
-   // A simple threadpool
+   // A thread pool
    struct pool
    {
       pool() : pool(concurrency()) {}
@@ -106,6 +106,8 @@ namespace glz
       }
 
       bool computing() const { return (working != 0); }
+      
+      size_t number_working() const { return working; }
 
       void wait()
       {
@@ -133,7 +135,7 @@ namespace glz
       std::unordered_map<size_t, std::function<void(const size_t)>> queue;
       std::atomic<size_t> front_index{};
       std::atomic<size_t> last_index{};
-      std::atomic<unsigned int> working = 0;
+      std::atomic<size_t> working = 0;
       bool closed = false;
       std::mutex mtx;
       std::condition_variable work_cv;
