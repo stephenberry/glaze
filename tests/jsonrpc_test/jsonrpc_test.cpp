@@ -10,11 +10,11 @@ using ut::operator""_test;
 using ut::operator/;
 
 ut::suite valid_vector_test_cases_server = [] {
-   using request_vec = std::vector<int>;
+   using vec_t = std::vector<int>;
 
-   rpc::server<rpc::server_method_t<"add", request_vec, int>> server;
+   rpc::server<rpc::method<"add", vec_t, int>> server;
 
-   server.on<"add">([](request_vec const& vec) -> glz::expected<int, rpc::error> {
+   server.on<"add">([](vec_t const& vec) -> glz::expected<int, rpc::error> {
       int sum{std::reduce(std::cbegin(vec), std::cend(vec))};
       return sum;
    });
@@ -50,12 +50,12 @@ ut::suite valid_vector_test_cases_server = [] {
 };
 
 ut::suite vector_test_cases = [] {
-   using request_vec = std::vector<int>;
+   using vec_t = std::vector<int>;
 
-   rpc::server<rpc::server_method_t<"summer", request_vec, int>> server;
-   rpc::client<rpc::client_method_t<"summer", request_vec, int>> client;
+   rpc::server<rpc::method<"summer", vec_t, int>> server;
+   rpc::client<rpc::method<"summer", vec_t, int>> client;
 
-   server.on<"summer">([](request_vec const& vec) -> glz::expected<int, rpc::error> {
+   server.on<"summer">([](vec_t const& vec) -> glz::expected<int, rpc::error> {
       int sum{std::reduce(std::cbegin(vec), std::cend(vec))};
       return sum;
    });
@@ -76,7 +76,7 @@ ut::suite vector_test_cases = [] {
       ut::expect(requests.size() == 1);
       ut::expect(requests.contains(1)); // the id is 1
 
-      server.on<"summer">([](request_vec const& vec) -> glz::expected<int, rpc::error> {
+      server.on<"summer">([](vec_t const& vec) -> glz::expected<int, rpc::error> {
          ut::expect(vec == std::vector{1, 2, 3});
          int sum{std::reduce(std::cbegin(vec), std::cend(vec))};
          return sum;
@@ -138,9 +138,9 @@ struct glz::meta<bar_result>
 };
 
 ut::suite struct_test_cases = [] {
-   rpc::server<rpc::server_method_t<"foo", foo_params, foo_result>, rpc::server_method_t<"bar", bar_params, bar_result>>
+   rpc::server<rpc::method<"foo", foo_params, foo_result>, rpc::method<"bar", bar_params, bar_result>>
       server;
-   rpc::client<rpc::client_method_t<"foo", foo_params, foo_result>, rpc::client_method_t<"bar", bar_params, bar_result>>
+   rpc::client<rpc::method<"foo", foo_params, foo_result>, rpc::method<"bar", bar_params, bar_result>>
       client;
 
    ut::test("valid foo request") = [&server, &client] {
