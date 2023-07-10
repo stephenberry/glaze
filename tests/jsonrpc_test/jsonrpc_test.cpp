@@ -151,8 +151,8 @@ ut::suite struct_test_cases = [] {
                                   called = true;
                                   ut::expect(value.has_value());
                                   ut::expect(value.value() == foo_result{.foo_c = true, .foo_d = "new world"});
-                                  ut::expect(std::holds_alternative<std::string>(id));
-                                  ut::expect(std::get<std::string>(id) == std::string{"42"});
+                                  ut::expect(std::holds_alternative<std::string_view>(id));
+                                  ut::expect(std::get<std::string_view>(id) == "42");
                                })};
       ut::expect(request_str.first ==
                  R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})");
@@ -180,8 +180,8 @@ ut::suite struct_test_cases = [] {
             called = true;
             ut::expect(value.has_value());
             ut::expect(value.value() == bar_result{.bar_c = true, .bar_d = "new world"});
-            ut::expect(std::holds_alternative<std::string>(id));
-            ut::expect(std::get<std::string>(id) == std::string{"bar-uuid"});
+            ut::expect(std::holds_alternative<std::string_view>(id));
+            ut::expect(std::get<std::string_view>(id) == "bar-uuid");
          })};
       ut::expect(request_str.first ==
                  R"({"jsonrpc":"2.0","method":"bar","params":{"bar_a":1337,"bar_b":"hello world"},"id":"bar-uuid"})");
@@ -209,8 +209,8 @@ ut::suite struct_test_cases = [] {
                                   called = true;
                                   ut::expect(!value.has_value());
                                   ut::expect(value.error() == rpc::error{rpc::error_e::server_error_lower, "my error"});
-                                  ut::expect(std::holds_alternative<std::string>(id));
-                                  ut::expect(std::get<std::string>(id) == std::string{"42"});
+                                  ut::expect(std::holds_alternative<std::string_view>(id));
+                                  ut::expect(std::get<std::string_view>(id) == "42");
                                })};
 
       ut::expect(request_str.first ==

@@ -1,3 +1,6 @@
+// Glaze Library
+// For the license information refer to glaze.hpp
+
 #pragma once
 
 #include <algorithm>
@@ -49,7 +52,7 @@ namespace glz::rpc
 // jsonrpc
 namespace glz::rpc
 {
-   using jsonrpc_id_type = std::variant<glz::json_t::null_t, std::string, std::int64_t>;
+   using jsonrpc_id_type = std::variant<glz::json_t::null_t, std::string_view, std::int64_t>;
    static constexpr std::string_view supported_version{"2.0"};
 
    namespace detail
@@ -57,9 +60,10 @@ namespace glz::rpc
       inline std::string id_to_string(const jsonrpc_id_type& id)
       {
          return std::visit(
-            overload{[](const json_t::null_t&) -> std::string { return "null"; },
-                     [](const std::string& x) { return x; }, [](const std::int64_t& x) { return std::to_string(x); },
-                     [](auto&&) -> std::string { return "unknown"; }},
+            overload{[](const json_t::null_t&) { return std::string("null"); }, //
+                     [](const std::string_view& x) { return std::string(x); }, //
+                     [](const std::int64_t& x) { return std::to_string(x); }, //
+                     [](auto&&) { return std::string("unknown"); }}, //
             id);
       }
 
