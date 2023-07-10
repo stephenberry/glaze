@@ -260,43 +260,17 @@ namespace glz::rpc
    };
    namespace concepts
    {
-      template <typename method_t>
-      concept method_type = requires(method_t meth) {
-                               method_t::name_v;
+      template <class T>
+      concept method_type = requires(T) {
+         T::name_v;
                                {
-                                  std::same_as<decltype(method_t::name_v), std::string_view>
+                                  std::same_as<decltype(T::name_v), std::string_view>
                                };
-                               typename method_t::params_t;
-                               typename method_t::jsonrpc_id_t;
-                               typename method_t::request_t;
-                               typename method_t::response_t;
+                               typename T::params_t;
+                               typename T::jsonrpc_id_t;
+                               typename T::request_t;
+                               typename T::response_t;
                             };
-
-      template <class method_t>
-      concept server_method_type =
-         requires(method_t meth) {
-            requires method_type<method_t>;
-            {
-               meth.callback
-            };
-            requires std::same_as<
-               decltype(meth.callback),
-               std::function<expected<typename method_t::result_t, rpc::error>(typename method_t::params_t const&)>>;
-         };
-
-      template <class method_t>
-      concept client_method_type =
-         requires(method_t meth) {
-            requires method_type<method_t>;
-            {
-               meth.pending_requests
-            };
-            requires std::same_as<
-               decltype(meth.pending_requests),
-               std::unordered_map<jsonrpc_id_type,
-                                  std::function<void(glz::expected<typename method_t::result_t, rpc::error> const&,
-                                                     jsonrpc_id_type const&)>>>;
-         };
 
       template <class call_return_t>
       concept call_return_type =
