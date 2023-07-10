@@ -151,7 +151,7 @@ namespace glz::rpc
       std::string message{code_as_string(error_e::no_error)}; // string reflection of member variable code
       glz::json_t data{}; // Optional detailed error information
 
-      static std::string_view code_as_string(error_e error_code)
+      static std::string_view code_as_string(error_e error_code) noexcept
       {
          switch (error_code) {
          case error_e::no_error:
