@@ -345,7 +345,7 @@ namespace glz
    inline void write_json_schema(Buffer&& buffer) noexcept
    {
       detail::schematic s{};
-      s.defs = std::map<std::string_view, detail::schematic, std::less<>>{};
+      s.defs.emplace();
       detail::to_json_schema<std::decay_t<T>>::template op<opts{}>(s, *s.defs);
       write<opts{}>(std::move(s), std::forward<Buffer>(buffer));
    }
@@ -355,7 +355,7 @@ namespace glz
    {
       std::string buffer{};
       detail::schematic s{};
-      s.defs = std::map<std::string_view, detail::schematic, std::less<>>{};
+      s.defs.emplace();
       detail::to_json_schema<std::decay_t<T>>::template op<opts{}>(s, *s.defs);
       write<opts{.write_type_info = false}>(std::move(s), buffer);
       return buffer;
