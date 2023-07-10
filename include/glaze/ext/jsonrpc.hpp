@@ -229,32 +229,7 @@ namespace glz::rpc
       using params_t = params_type;
       using result_t = result_type;
    };
-
-   template <const std::string_view& name, class params_type, class result_type>
-   struct server_method_t
-   {
-      static constexpr std::string_view name_v{name};
-      using params_t = params_type;
-      using result_t = result_type;
-      using jsonrpc_id_t = jsonrpc_id_type;
-      using request_t = rpc::request_t<params_t>;
-      using response_t = rpc::response_t<result_t>;
-      std::function<expected<result_t, rpc::error>(const params_t&)> callback{
-         [](const auto&) { return glz::unexpected{rpc::error(rpc::error_e::internal, "Not implemented")}; }};
-   };
-
-   template <const std::string_view& name, class params_type, class result_type>
-   struct client_method_t
-   {
-      static constexpr std::string_view name_v{name};
-      using params_t = params_type;
-      using result_t = result_type;
-      using jsonrpc_id_t = jsonrpc_id_type;
-      using request_t = rpc::request_t<params_t>;
-      using response_t = rpc::response_t<result_t>;
-      using callback_t = std::function<void(const glz::expected<result_t, rpc::error>&, const jsonrpc_id_type&)>;
-      std::unordered_map<jsonrpc_id_type, callback_t> pending_requests;
-   };
+   
    namespace concepts
    {
       template <class T>
@@ -271,6 +246,32 @@ namespace glz::rpc
       concept call_return_type =
          requires { requires glz::is_any_of<call_return_t, std::string, std::vector<response_t<glz::raw_json>>>; };
    }
+
+   template <concepts::method_type Method>
+   struct server_method_t
+   {
+      static constexpr std::string_view name_v = Method::name_v;
+      using params_t = typename Method::params_t;
+      using result_t = typename Method::result_t;
+      using jsonrpc_id_t = jsonrpc_id_type;
+      using request_t = rpc::request_t<params_t>;
+      using response_t = rpc::response_t<result_t>;
+      std::function<expected<result_t, rpc::error>(const params_t&)> callback{
+         [](const auto&) { return glz::unexpected{rpc::error(rpc::error_e::internal, "Not implemented")}; }};
+   };
+
+   template <concepts::method_type Method>
+   struct client_method_t
+   {
+      static constexpr std::string_view name_v = Method::name_v;
+      using params_t = typename Method::params_t;
+      using result_t = typename Method::result_t;
+      using jsonrpc_id_t = jsonrpc_id_type;
+      using request_t = rpc::request_t<params_t>;
+      using response_t = rpc::response_t<result_t>;
+      using callback_t = std::function<void(const glz::expected<result_t, rpc::error>&, const jsonrpc_id_type&)>;
+      std::unordered_map<jsonrpc_id_type, callback_t> pending_requests;
+   };
 
    namespace detail
    {
@@ -343,7 +344,7 @@ namespace glz::rpc
    {
       using raw_response_t = response_t<glz::raw_json>;
 
-      glz::tuplet::tuple<server_method_t<method_type::name_v, typename method_type::params_t, typename method_type::result_t>...> methods{};
+      glz::tuplet::tuple<server_method_t<method_type>...> methods{};
 
       template <detail::basic_fixed_string name>
       constexpr void on(const auto& callback) // std::function<expected<result_t, rpc::error>(params_t const&)>
@@ -465,7 +466,7 @@ namespace glz::rpc
    struct client
    {
       std::size_t const queue_size{100};
-      glz::tuplet::tuple<client_method_t<method_type::name_v, typename method_type::params_t, typename method_type::result_t>...> methods{};
+      glz::tuplet::tuple<client_method_t<method_type>...> methods{};
 
       rpc::error call(std::string_view json_response)
       {
@@ -576,7 +577,7 @@ namespace glz::rpc
       [[nodiscard]] const auto& get_request_map() const
       {
          constexpr auto idx = detail::index_of_name<decltype(method_name), method_name, method_type...>::index;
-         using method_element = std::tuple_element_t<idx, std::tuple<client_method_t<method_type::name_v, typename method_type::params_t, typename method_type::result_t>...>>;
+         using method_element = std::tuple_element_t<idx, std::tuple<client_method_t<method_type>...>>;
          using request_map_t = decltype(method_element().pending_requests);
          return detail::get_request_map<request_map_t, method_name>(methods);
       }
@@ -585,7 +586,7 @@ namespace glz::rpc
       [[nodiscard]] auto& get_request_map()
       {
          constexpr auto idx = detail::index_of_name<decltype(method_name), method_name, method_type...>::index;
-         using method_element = std::tuple_element_t<idx, std::tuple<client_method_t<method_type::name_v, typename method_type::params_t, typename method_type::result_t>...>>;
+         using method_element = std::tuple_element_t<idx, std::tuple<client_method_t<method_type>...>>;
          using request_map_t = decltype(method_element().pending_requests);
          return detail::get_request_map<request_map_t, method_name>(methods);
       }
