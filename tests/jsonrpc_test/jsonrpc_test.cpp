@@ -20,15 +20,15 @@ ut::suite valid_vector_test_cases_server = [] {
    });
 
    const std::array valid_requests = {
-      std::make_pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": 1})",
-                     R"({"jsonrpc": "2.0","result": 6,"id": 1})"),
-      std::make_pair(
+      std::pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": 1})",
+         R"({"jsonrpc": "2.0","result": 6,"id": 1})"),
+      std::pair(
          // No id is valid
          R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3]})", ""),
-      std::make_pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": null})", ""),
-      std::make_pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": 2.0})",
+      std::pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": null})", ""),
+      std::pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": 2.0})",
                      R"({"jsonrpc": "2.0","result": 6, "id": 2})"),
-      std::make_pair(R"({"jsonrpc": "2.0","method": "add","params": [1, 2, 3],"id": "some_client_22"})",
+      std::pair(R"({"jsonrpc": "2.0","method": "add","params": [1, 2, 3],"id": "some_client_22"})",
                      R"({"jsonrpc": "2.0","result": 6, "id": "some_client_22"})")};
    std::string raw_json;
    std::string resulting_request;
