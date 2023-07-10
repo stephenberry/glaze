@@ -373,7 +373,6 @@ namespace glz::rpc
    {
       using raw_response_t = response_t<glz::raw_json>;
 
-      server() = default;
       glz::tuplet::tuple<method_type...> methods{};
 
       template <detail::basic_fixed_string name>
@@ -495,10 +494,6 @@ namespace glz::rpc
    template <concepts::client_method_type... method_type>
    struct client
    {
-      // Create client with default queue size of 100
-      client() = default;
-      // Create client given the queue size to store request ids
-      explicit client(std::size_t max_queue_size) : queue_size(max_queue_size) {}
       std::size_t const queue_size{100};
       glz::tuplet::tuple<method_type...> methods{};
 
