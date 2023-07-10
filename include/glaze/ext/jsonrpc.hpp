@@ -57,16 +57,6 @@ namespace glz::rpc
 
    namespace detail
    {
-      inline std::string id_to_string(const jsonrpc_id_type& id)
-      {
-         return std::visit(
-            overload{[](const json_t::null_t&) { return std::string("null"); }, //
-                     [](const std::string_view& x) { return std::string(x); }, //
-                     [](const std::int64_t& x) { return std::to_string(x); }, //
-                     [](auto&&) { return std::string("unknown"); }}, //
-            id);
-      }
-
       template <class CharType, unsigned N>
       struct [[nodiscard]] basic_fixed_string
       {
@@ -540,7 +530,12 @@ namespace glz::rpc
 
          if (!id_found) [[unlikely]] {
             if (!return_v) {
-               return_v = rpc::error(rpc::error_e::internal, "id: " + detail::id_to_string(res.id) + " not found");
+               if (std::holds_alternative<std::string_view>(res.id)) {
+                  return_v = rpc::error(rpc::error_e::internal, "id: '" + std::string(std::get<std::string_view>(res.id)) + "' not found");
+               }
+               else {
+                  return_v = rpc::error(rpc::error_e::internal, "id: " + glz::write_json(res.id) + " not found");
+               }
             }
          }
 
