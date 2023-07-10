@@ -17,7 +17,9 @@ namespace glz
       std::optional<std::string_view> description{};
       std::optional<schema_any> default_value{};
       std::optional<bool> deprecated{};
-//      std::optional<std::vector<schema_any>> examples{};
+#ifdef __cpp_lib_constexpr_vector
+      std::optional<std::vector<schema_any>> examples{};
+#endif
       std::optional<bool> read_only{};
       std::optional<bool> write_only{};
       // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
@@ -36,7 +38,9 @@ namespace glz
       std::optional<std::uint64_t> min_properties{};
       std::optional<std::uint64_t> max_properties{};
 //      std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
-//      std::optional<std::vector<std::string_view>> required{};
+#ifdef __cpp_lib_constexpr_vector
+      std::optional<std::vector<std::string_view>> required{};
+#endif
       // array only keywords
       std::optional<std::uint64_t> min_items{};
       std::optional<std::uint64_t> max_items{};
@@ -57,7 +61,9 @@ namespace glz
             "description", &T::description, //
             "default", &T::default_value, //
             "deprecated", &T::deprecated, //
-//               "examples", &T::examples, //
+#ifdef __cpp_lib_constexpr_vector
+            "examples", &T::examples, //
+#endif
             "readOnly", &T::read_only, //
             "writeOnly", &T::write_only, //
             "const", &T::constant, //
@@ -72,7 +78,9 @@ namespace glz
             "minProperties", &T::min_properties, //
             "maxProperties", &T::max_properties, //
 //               "dependentRequired", &T::dependent_required, //
-//               "required", &T::required, //
+#ifdef __cpp_lib_constexpr_vector
+            "required", &T::required, //
+#endif
             "minItems", &T::min_items, //
             "maxItems", &T::max_items, //
             "minContains", &T::min_contains, //
