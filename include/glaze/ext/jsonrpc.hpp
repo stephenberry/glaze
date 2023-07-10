@@ -182,22 +182,19 @@ namespace glz::rpc
    {
       using params_t = params_type;
       using jsonrpc_id_t = jsonrpc_id_type;
-
-      request_t() = default;
-      request_t(jsonrpc_id_t&& id, std::string_view&& method, params_t&& params)
-         : id(std::move(id)), version(rpc::supported_version), method(method), params(std::move(params))
-      {}
-
+      
       jsonrpc_id_t id{};
-      std::string version{};
-      std::string method{};
+      std::string_view method{};
       params_t params{};
+      std::string version{rpc::supported_version};
 
       struct glaze
       {
          using T = request_t;
-         static constexpr auto value{
-            glz::object("jsonrpc", &T::version, "method", &T::method, "params", &T::params, "id", &T::id)};
+         static constexpr auto value = glz::object("jsonrpc", &T::version, //
+                                                   "method", &T::method, //
+                                                   "params", &T::params, //
+                                                   "id", &T::id);
       };
    };
    using generic_request_t = request_t<glz::raw_json_view>;
@@ -569,8 +566,8 @@ namespace glz::rpc
              ...);
          static_assert(method_params_match, "Method name and given params type do not match.");
 
-         rpc::request_t<params_type> req(std::forward<jsonrpc_id_type>(id), method_name.view(),
-                                         std::forward<params_type>(params));
+         rpc::request_t<params_type> req{std::forward<jsonrpc_id_type>(id), method_name.view(),
+            std::forward<params_type>(params)};
 
          if (std::holds_alternative<glz::json_t::null_t>(id)) {
             return {glz::write_json(std::move(req)), false};
