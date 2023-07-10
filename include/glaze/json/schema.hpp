@@ -84,26 +84,26 @@ namespace glz
    
    namespace detail
    {
-      struct schema
+      struct schematic
       {
          std::optional<std::vector<std::string_view>> type{};
          std::optional<std::string_view> _const{};
          std::optional<std::string_view> description{};
-         std::optional<std::map<std::string_view, glz::schema, std::less<>>> properties{}; // glaze_object
-         std::optional<glz::schema> items{}; // array
-         std::optional<std::variant<bool, glz::schema>> additionalProperties{}; // map
-         std::optional<std::map<std::string_view, schema, std::less<>>> defs{};
+         std::optional<std::map<std::string_view, schema, std::less<>>> properties{}; // glaze_object
+         std::optional<schema> items{}; // array
+         std::optional<std::variant<bool, schema>> additionalProperties{}; // map
+         std::optional<std::map<std::string_view, schematic, std::less<>>> defs{};
          std::optional<std::vector<std::string_view>> _enum{}; // enum
-         std::optional<std::vector<schema>> oneOf{};
+         std::optional<std::vector<schematic>> oneOf{};
       };
    }
 }
 
 template <>
-struct glz::meta<glz::detail::schema>
+struct glz::meta<glz::detail::schematic>
 {
    static constexpr std::string_view name = "glz::detail::schema";
-   using T = glz::detail::schema;
+   using T = detail::schematic;
    static constexpr auto value = glz::object("type", &T::type, //
                                              "description", &T::description, //
                                              "properties", &T::properties, //
@@ -193,7 +193,7 @@ namespace glz
             //    static constexpr auto item = std::get<I>(meta_v<V>);
             //    (*s._enum)[I.value] = std::get<0>(item);
             // });
-            s.oneOf = std::vector<schema>(N);
+            s.oneOf = std::vector<schematic>(N);
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                auto& _enum = (*s.oneOf)[I.value];
@@ -227,7 +227,7 @@ namespace glz
             if (!def.type) {
                to_json_schema<V>::template op<Opts>(def, defs);
             }
-            s.items = glz::schema{join_v<chars<"#/$defs/">, name_v<V>>};
+            s.items = schema{join_v<chars<"#/$defs/">, name_v<V>>};
          }
       };
 
@@ -243,7 +243,7 @@ namespace glz
             if (!def.type) {
                to_json_schema<V>::template op<Opts>(def, defs);
             }
-            s.additionalProperties = glz::schema{join_v<chars<"#/$defs/">, name_v<V>>};
+            s.additionalProperties = schema{join_v<chars<"#/$defs/">, name_v<V>>};
          }
       };
 
@@ -267,7 +267,7 @@ namespace glz
          {
             static constexpr auto N = std::variant_size_v<T>;
             s.type = {"number", "string", "boolean", "object", "array", "null"};
-            s.oneOf = std::vector<schema>(N);
+            s.oneOf = std::vector<schematic>(N);
             for_each<N>([&](auto I) {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I.value];
@@ -280,7 +280,7 @@ namespace glz
                      to_json_schema<std::string>::template op<Opts>(def, defs);
                   }
                   if constexpr (!tag_v<T>.empty()) {
-                     (*schema_val.properties)[tag_v<T>] = glz::schema{join_v<chars<"#/$defs/">, name_v<std::string>>};
+                     (*schema_val.properties)[tag_v<T>] = schema{join_v<chars<"#/$defs/">, name_v<std::string>>};
                      // TODO use enum or oneOf to get the ids_v to validate type name
                   }
                }
@@ -311,7 +311,7 @@ namespace glz
 
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
-            s.properties = std::map<std::string_view, glz::schema, std::less<>>();
+            s.properties = std::map<std::string_view, schema, std::less<>>();
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                using mptr_t = decltype(glz::tuplet::get<1>(item));
@@ -320,7 +320,7 @@ namespace glz
                if (!def.type) {
                   to_json_schema<val_t>::template op<Opts>(def, defs);
                }
-               auto ref_val = glz::schema{join_v<chars<"#/$defs/">, name_v<val_t>>};
+               auto ref_val = schema{join_v<chars<"#/$defs/">, name_v<val_t>>};
                // clang-format off
                if constexpr (std::tuple_size_v<decltype(item)> > 2) {
                   // clang-format on
@@ -328,7 +328,7 @@ namespace glz
                   if constexpr (std::is_convertible_v<additional_data_type, std::string_view>) {
                      ref_val.description = glz::tuplet::get<2>(item);
                   }
-                  else if constexpr (std::is_convertible_v<additional_data_type, glz::schema>) {
+                  else if constexpr (std::is_convertible_v<additional_data_type, schema>) {
                      ref_val = glz::tuplet::get<2>(item);
                      ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
                   }
@@ -344,8 +344,8 @@ namespace glz
    template <class T, class Buffer>
    inline void write_json_schema(Buffer&& buffer)
    {
-      detail::schema s{};
-      s.defs = std::map<std::string_view, detail::schema, std::less<>>{};
+      detail::schematic s{};
+      s.defs = std::map<std::string_view, detail::schematic, std::less<>>{};
       detail::to_json_schema<std::decay_t<T>>::template op<opts{}>(s, *s.defs);
       write<opts{}>(std::move(s), std::forward<Buffer>(buffer));
    }
@@ -354,8 +354,8 @@ namespace glz
    inline auto write_json_schema()
    {
       std::string buffer{};
-      detail::schema s{};
-      s.defs = std::map<std::string_view, detail::schema, std::less<>>{};
+      detail::schematic s{};
+      s.defs = std::map<std::string_view, detail::schematic, std::less<>>{};
       detail::to_json_schema<std::decay_t<T>>::template op<opts{}>(s, *s.defs);
       write<opts{.write_type_info = false}>(std::move(s), buffer);
       return buffer;
