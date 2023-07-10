@@ -4449,7 +4449,7 @@ suite json_logging = [] {
       glz::obj map = {"a", 1, "b", 2, "c", 3};
       auto obj = glz::obj{
          "pi", 3.141, "happy", true, "name", "Stephen", "map", map, "arr", glz::arr{"Hello", "World", 2}, "vec", vec};
-      
+
       glz::tuplet::get<0>(map.value) = "aa"; // testing lvalue reference storage
 
       std::string s{};

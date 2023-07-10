@@ -57,7 +57,7 @@ namespace glz
    {
       glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
    };
-   
+
    template <class... T>
    merge(T&&...) -> merge<T...>;
 
