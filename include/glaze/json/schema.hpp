@@ -49,47 +49,45 @@ namespace glz
       std::optional<bool> unique_items{};
 
       static constexpr auto schema_attributes{true}; // allowance flag to indicate metadata within glz::Object
-      
+
       // TODO switch to using variants when we have write support to get rid of nulls
       // TODO We should be able to generate the json schema compiletime
       struct glaze
       {
          using T = schema;
-         static constexpr auto value = glz::object(
-            "$ref", &T::ref, //
-            "title", &T::title, //
-            "description", &T::description, //
-            "default", &T::default_value, //
-            "deprecated", &T::deprecated, //
+         static constexpr auto value = glz::object("$ref", &T::ref, //
+                                                   "title", &T::title, //
+                                                   "description", &T::description, //
+                                                   "default", &T::default_value, //
+                                                   "deprecated", &T::deprecated, //
 #ifdef __cpp_lib_constexpr_vector
-            "examples", &T::examples, //
+                                                   "examples", &T::examples, //
 #endif
-            "readOnly", &T::read_only, //
-            "writeOnly", &T::write_only, //
-            "const", &T::constant, //
-            "minLength", &T::min_length, //
-            "maxLength", &T::max_length, //
-            "pattern", &T::pattern,
-            "minimum", &T::minimum, //
-            "maximum", &T::maximum, //
-            "exclusiveMinimum", &T::exclusive_minimum, //
-            "exclusiveMaximum", &T::exclusive_maximum, //
-            "multipleOf", &T::multiple_of, //
-            "minProperties", &T::min_properties, //
-            "maxProperties", &T::max_properties, //
+                                                   "readOnly", &T::read_only, //
+                                                   "writeOnly", &T::write_only, //
+                                                   "const", &T::constant, //
+                                                   "minLength", &T::min_length, //
+                                                   "maxLength", &T::max_length, //
+                                                   "pattern", &T::pattern, "minimum", &T::minimum, //
+                                                   "maximum", &T::maximum, //
+                                                   "exclusiveMinimum", &T::exclusive_minimum, //
+                                                   "exclusiveMaximum", &T::exclusive_maximum, //
+                                                   "multipleOf", &T::multiple_of, //
+                                                   "minProperties", &T::min_properties, //
+                                                   "maxProperties", &T::max_properties, //
 //               "dependentRequired", &T::dependent_required, //
 #ifdef __cpp_lib_constexpr_vector
-            "required", &T::required, //
+                                                   "required", &T::required, //
 #endif
-            "minItems", &T::min_items, //
-            "maxItems", &T::max_items, //
-            "minContains", &T::min_contains, //
-            "maxContains", &T::max_contains, //
-            "uniqueItems", &T::unique_items //
+                                                   "minItems", &T::min_items, //
+                                                   "maxItems", &T::max_items, //
+                                                   "minContains", &T::min_contains, //
+                                                   "maxContains", &T::max_contains, //
+                                                   "uniqueItems", &T::unique_items //
          );
       };
    };
-   
+
    namespace detail
    {
       struct schematic final
