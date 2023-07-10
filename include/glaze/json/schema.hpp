@@ -7,7 +7,7 @@
 
 namespace glz
 {
-   struct schema
+   struct schema final
    {
       std::string_view ref{};
       using schema_number = std::optional<std::variant<std::int64_t, std::uint64_t, double>>;
@@ -84,16 +84,16 @@ namespace glz
    
    namespace detail
    {
-      struct schematic
+      struct schematic final
       {
          std::optional<std::vector<std::string_view>> type{};
-         std::optional<std::string_view> _const{};
+         std::optional<std::string_view> constant{};
          std::optional<std::string_view> description{};
          std::optional<std::map<std::string_view, schema, std::less<>>> properties{}; // glaze_object
          std::optional<schema> items{}; // array
          std::optional<std::variant<bool, schema>> additionalProperties{}; // map
          std::optional<std::map<std::string_view, schematic, std::less<>>> defs{};
-         std::optional<std::vector<std::string_view>> _enum{}; // enum
+         std::optional<std::vector<std::string_view>> enumeration{}; // enum
          std::optional<std::vector<schematic>> oneOf{};
       };
    }
@@ -110,9 +110,9 @@ struct glz::meta<glz::detail::schematic>
                                              "items", &T::items, //
                                              "additionalProperties", &T::additionalProperties, //
                                              "$defs", &T::defs, //
-                                             "enum", &T::_enum, //
+                                             "enum", &T::enumeration, //
                                              "oneOf", &T::oneOf, //
-                                             "const", &T::_const);
+                                             "const", &T::constant);
 };
 
 namespace glz
@@ -188,18 +188,18 @@ namespace glz
             // TODO use oneOf instead of enum to handle doc comments
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
-            // s._enum = std::vector<std::string_view>(N);
+            // s.enumeration = std::vector<std::string_view>(N);
             // for_each<N>([&](auto I) {
             //    static constexpr auto item = std::get<I>(meta_v<V>);
-            //    (*s._enum)[I.value] = std::get<0>(item);
+            //    (*s.enumeration)[I.value] = std::get<0>(item);
             // });
             s.oneOf = std::vector<schematic>(N);
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
-               auto& _enum = (*s.oneOf)[I.value];
-               _enum._const = glz::tuplet::get<0>(item);
+               auto& enumeration = (*s.oneOf)[I.value];
+               enumeration.constant = glz::tuplet::get<0>(item);
                if constexpr (std::tuple_size_v < decltype(item) >> 2) {
-                  _enum.description = std::get<2>(item);
+                  enumeration.description = std::get<2>(item);
                }
             });
          }
@@ -342,7 +342,7 @@ namespace glz
    }
 
    template <class T, class Buffer>
-   inline void write_json_schema(Buffer&& buffer)
+   inline void write_json_schema(Buffer&& buffer) noexcept
    {
       detail::schematic s{};
       s.defs = std::map<std::string_view, detail::schematic, std::less<>>{};
@@ -351,7 +351,7 @@ namespace glz
    }
 
    template <class T>
-   inline auto write_json_schema()
+   inline auto write_json_schema() noexcept
    {
       std::string buffer{};
       detail::schematic s{};
