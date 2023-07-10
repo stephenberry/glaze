@@ -29,9 +29,9 @@ namespace glz
          const auto start = std::begin(buffer) + index;
          const auto count = std::count(std::begin(buffer), start, static_cast<V>('\n'));
          const auto rstart = std::rbegin(buffer) + r_index;
-         const auto pnl = std::find(std::min(rstart + 1, std::rend(buffer)), std::rend(buffer), static_cast<V>('\n'));
+         const auto pnl = std::find((std::min)(rstart + 1, std::rend(buffer)), std::rend(buffer), static_cast<V>('\n'));
          const auto dist = std::distance(rstart, pnl);
-         const auto nnl = std::find(std::min(start + 1, std::end(buffer)), std::end(buffer), static_cast<V>('\n'));
+         const auto nnl = std::find((std::min)(start + 1, std::end(buffer)), std::end(buffer), static_cast<V>('\n'));
 
          if constexpr (std::same_as<V, std::byte>) {
             std::string context{

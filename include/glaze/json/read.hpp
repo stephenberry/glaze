@@ -50,8 +50,8 @@ namespace glz
                skip_value<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
             }
             else {
-               from_json<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                             std::forward<It0>(it), std::forward<It1>(end));
+               from_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                                    std::forward<It0>(it), std::forward<It1>(end));
             }
          }
       };
@@ -276,7 +276,7 @@ namespace glz
                   std::mbstate_t statew{};
                   auto buffer_ptr = reinterpret_cast<const char*>(buffer);
                   auto n = std::mbsrtowcs(bufferw, &buffer_ptr, MB_LEN_MAX, &statew);
-                  if (n == std::numeric_limits<std::size_t>::max()) [[unlikely]] {
+                  if (n == (std::numeric_limits<std::size_t>::max)()) [[unlikely]] {
                      ctx.error = error_code::unicode_escape_conversion_failure;
                      return;
                   }

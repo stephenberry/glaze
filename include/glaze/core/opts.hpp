@@ -29,6 +29,7 @@ namespace glz
 
       // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled
+      bool closing_handled = false; // the closing character has been handled
       bool ws_handled = false; // whitespace has already been parsed
    };
 
@@ -37,6 +38,15 @@ namespace glz
    {
       opts ret = Opts;
       ret.opening_handled = true;
+      return ret;
+   }
+
+   template <opts Opts>
+   constexpr auto opening_and_closing_handled()
+   {
+      opts ret = Opts;
+      ret.opening_handled = true;
+      ret.closing_handled = true;
       return ret;
    }
 

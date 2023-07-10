@@ -36,30 +36,30 @@ namespace glz
    template <class... T>
    struct obj final
    {
-      glz::tuplet::tuple<T...> value;
+      glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
    };
 
    template <class... T>
-   obj(T...) -> obj<T...>;
+   obj(T&&...) -> obj<T...>;
 
    template <class... T>
    struct arr final
    {
-      glz::tuplet::tuple<T...> value;
+      glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
    };
 
    template <class... T>
-   arr(T...) -> arr<T...>;
+   arr(T&&...) -> arr<T...>;
 
    // used to merge multiple JSON objects into a single JSON object
    template <class... T>
    struct merge final
    {
-      glz::tuplet::tuple<T&...> value;
+      glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
    };
 
    template <class... T>
-   merge(T&...) -> merge<T&...>;
+   merge(T&&...) -> merge<T...>;
 
    template <class... T>
    struct overload : T...
@@ -275,9 +275,9 @@ namespace glz
 
       template <class T>
       concept str_t = !
-      complex_t<T> && !std::same_as<std::nullptr_t, T> && std::convertible_to<std::decay_t<T>, std::string_view>;
+      std::same_as<std::nullptr_t, T>&& std::convertible_to<std::decay_t<T>, std::string_view>;
 
-      template <typename T>
+      template <class T>
       concept has_push_back = requires(T t, typename T::value_type v) { t.push_back(v); };
 
       // this concept requires that T is string and copies the string in json
@@ -286,12 +286,11 @@ namespace glz
       std::same_as<std::decay_t<T>, std::string_view>&& has_push_back<T>;
 
       template <class T>
-      concept char_array_t = str_t<T> && !
-      std::same_as<std::decay_t<T>, std::string_view> && !has_push_back<T>;
+      concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
 
       // this concept requires that T is just a view
       template <class T>
-      concept str_view_t = str_t<T> && std::same_as<std::decay_t<T>, std::string_view>;
+      concept str_view_t = std::same_as<std::decay_t<T>, std::string_view>;
 
       template <class T>
       concept pair_t = requires(T pair) {
