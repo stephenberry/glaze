@@ -412,7 +412,7 @@ namespace glz
             if constexpr (!Opts.opening_handled) {
                dump<'{'>(args...);
             }
-            
+
             if (!empty_range(value)) {
                if constexpr (!Opts.opening_handled) {
                   if constexpr (Opts.prettify) {
@@ -438,7 +438,7 @@ namespace glz
                   const auto& [key, entry_val] = *it;
                   write_pair_content<Opts>(key, entry_val, ctx, args...);
                }
-               
+
                if constexpr (!Opts.closing_handled) {
                   if constexpr (Opts.prettify) {
                      ctx.indentation_level -= Opts.indentation_width;
@@ -447,7 +447,7 @@ namespace glz
                   }
                }
             }
-            
+
             if constexpr (!Opts.closing_handled) {
                dump<'}'>(args...);
             }
@@ -793,7 +793,7 @@ namespace glz
                   write<json>::op<Opts>(item, ctx, b, ix);
                }
             });
-            
+
             if constexpr (!Options.closing_handled) {
                if constexpr (Options.prettify) {
                   ctx.indentation_level -= Options.indentation_width;

@@ -40,7 +40,7 @@ namespace glz
       ret.opening_handled = true;
       return ret;
    }
-   
+
    template <opts Opts>
    constexpr auto opening_and_closing_handled()
    {
