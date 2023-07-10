@@ -228,9 +228,6 @@ namespace glz::rpc
       static constexpr std::string_view name_v{name};
       using params_t = params_type;
       using result_t = result_type;
-      using jsonrpc_id_t = jsonrpc_id_type;
-      using request_t = rpc::request_t<params_t>;
-      using response_t = rpc::response_t<result_t>;
    };
 
    template <const std::string_view& name, class params_type, class result_type>
@@ -267,9 +264,7 @@ namespace glz::rpc
                                   std::same_as<decltype(T::name_v), std::string_view>
                                };
                                typename T::params_t;
-                               typename T::jsonrpc_id_t;
-                               typename T::request_t;
-                               typename T::response_t;
+                               typename T::result_t;
                             };
 
       template <class call_return_t>
