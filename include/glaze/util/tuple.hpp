@@ -47,6 +47,12 @@ namespace glz
       return res;
    }
 
+   template <class Type>
+   concept is_schema_class = requires {
+      requires std::is_class_v<Type>;
+      requires Type::schema_attributes;
+   };
+
    template <class Tuple>
    constexpr auto filter()
    {
@@ -55,7 +61,7 @@ namespace glz
       size_t i = 0;
       for_each<n>([&](auto I) {
          using V = std::decay_t<std::tuple_element_t<I, Tuple>>;
-         if constexpr (!std::convertible_to<V, std::string_view>) {
+         if constexpr (!(std::convertible_to<V, std::string_view> || is_schema_class<V>)) {
             indices[i++] = I - 1;
          }
       });
@@ -115,11 +121,12 @@ namespace glz
    {
       auto get_elem = [&](auto i) {
          constexpr auto I = decltype(i)::value;
-         if constexpr (I == 1) {
-            return glz::tuplet::get<Start + I>(t);
+         using type = decltype(glz::tuplet::get<Start + I>(t));
+         if constexpr (I == 0 || std::convertible_to<type, std::string_view>) {
+            return std::string_view(glz::tuplet::get<Start + I>(t));
          }
          else {
-            return std::string_view(glz::tuplet::get<Start + I>(t));
+            return glz::tuplet::get<Start + I>(t);
          }
       };
       auto r = glz::tuplet::make_copy_tuple(get_elem(std::integral_constant<size_t, Is>{})...);
