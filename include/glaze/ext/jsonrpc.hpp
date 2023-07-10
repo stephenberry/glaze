@@ -46,14 +46,6 @@ namespace glz::rpc
    };
 }
 
-template <>
-struct glz::meta<glz::rpc::error_e>
-{
-   // clang-format off
-   static constexpr auto value{[](auto&& enum_value) -> auto { return util::to_underlying(enum_value); }};
-};
-// clang-format on
-
 // jsonrpc
 namespace glz::rpc
 {
