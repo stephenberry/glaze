@@ -68,7 +68,8 @@ namespace glz
                                                    "const", &T::constant, //
                                                    "minLength", &T::min_length, //
                                                    "maxLength", &T::max_length, //
-                                                   "pattern", &T::pattern, "minimum", &T::minimum, //
+                                                   "pattern", &T::pattern, //
+                                                   "minimum", &T::minimum, //
                                                    "maximum", &T::maximum, //
                                                    "exclusiveMinimum", &T::exclusive_minimum, //
                                                    "exclusiveMaximum", &T::exclusive_maximum, //
