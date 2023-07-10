@@ -4449,25 +4449,27 @@ suite json_logging = [] {
       glz::obj map = {"a", 1, "b", 2, "c", 3};
       auto obj = glz::obj{
          "pi", 3.141, "happy", true, "name", "Stephen", "map", map, "arr", glz::arr{"Hello", "World", 2}, "vec", vec};
+      
+      glz::tuplet::get<0>(map.value) = "aa"; // testing lvalue reference storage
 
       std::string s{};
       glz::write_json(obj, s);
 
       expect(
          s ==
-         R"({"pi":3.141,"happy":true,"name":"Stephen","map":{"a":1,"b":2,"c":3},"arr":["Hello","World",2],"vec":[1,2,3]})")
+         R"({"pi":3.141,"happy":true,"name":"Stephen","map":{"aa":1,"b":2,"c":3},"arr":["Hello","World",2],"vec":[1,2,3]})")
          << s;
    };
 
    "merge_obj"_test = [] {
       glz::obj obj0{"pi", 3.141};
       glz::obj obj1{"happy", true};
-      glz::obj obj2{"arr", glz::arr{"Hello", "World", 2}};
-      auto merged = glz::merge{obj0, obj1, obj2};
+      auto merged = glz::merge{obj0, obj1, glz::obj{"arr", glz::arr{"Hello", "World", 2}}};
+      glz::tuplet::get<0>(obj0.value) = "pie"; // testing that we have an lvalue reference
       std::string s{};
       glz::write_json(merged, s);
 
-      expect(s == R"({"pi":3.141,"happy":true,"arr":["Hello","World",2]})") << s;
+      expect(s == R"({"pie":3.141,"happy":true,"arr":["Hello","World",2]})") << s;
    };
 };
 

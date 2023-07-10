@@ -36,30 +36,30 @@ namespace glz
    template <class... T>
    struct obj final
    {
-      glz::tuplet::tuple<T...> value;
+      glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
    };
 
    template <class... T>
-   obj(T...) -> obj<T...>;
+   obj(T&&...) -> obj<T...>;
 
    template <class... T>
    struct arr final
    {
-      glz::tuplet::tuple<T...> value;
+      glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
    };
 
    template <class... T>
-   arr(T...) -> arr<T...>;
+   arr(T&&...) -> arr<T...>;
 
    // used to merge multiple JSON objects into a single JSON object
    template <class... T>
    struct merge final
    {
-      glz::tuplet::tuple<T&...> value;
+      glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
    };
-
+   
    template <class... T>
-   merge(T&...) -> merge<T&...>;
+   merge(T&&...) -> merge<T...>;
 
    template <class... T>
    struct overload : T...
