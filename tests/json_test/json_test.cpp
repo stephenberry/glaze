@@ -4460,6 +4460,23 @@ suite json_logging = [] {
          R"({"pi":3.141,"happy":true,"name":"Stephen","map":{"aa":1,"b":2,"c":3},"arr":["Hello","World",2],"vec":[1,2,3]})")
          << s;
    };
+   
+   "json_custom_logging"_test = [] {
+      std::vector vec = {1, 2, 3};
+      std::map<std::string_view, int> map = {{"a", 1}, {"b", 2}, {"c", 3}};
+      auto obj = glz::obj{
+         "pi", 3.141, "happy", true, "name", "Stephen", "map", map, "vec", vec, "my_struct", my_struct{}};
+      
+      map["a"] = 0; // testing lvalue reference storage
+
+      std::string s{};
+      glz::write_json(obj, s);
+
+      expect(
+         s ==
+         R"({"pi":3.141,"happy":true,"name":"Stephen","map":{"a":0,"b":2,"c":3},"vec":[1,2,3],"my_struct":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}})")
+         << s;
+   };
 
    "merge_obj"_test = [] {
       glz::obj obj0{"pi", 3.141};
@@ -4470,6 +4487,17 @@ suite json_logging = [] {
       glz::write_json(merged, s);
 
       expect(s == R"({"pie":3.141,"happy":true,"arr":["Hello","World",2]})") << s;
+   };
+   
+   "merge_custom"_test = [] {
+      glz::obj obj0{"pi", 3.141};
+      std::map<std::string_view, int> map = {{"a", 1}, {"b", 2}, {"c", 3}};
+      auto merged = glz::merge{obj0, map, my_struct{}};
+      map["a"] = 0; // testing lvalue reference storage
+      std::string s{};
+      glz::write_json(merged, s);
+
+      expect(s == R"({"pi":3.141,"a":0,"b":2,"c":3,"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})") << s;
    };
 };
 
