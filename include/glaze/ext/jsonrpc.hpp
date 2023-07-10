@@ -210,18 +210,19 @@ namespace glz::rpc
       using jsonrpc_id_t = jsonrpc_id_type;
 
       response_t() = default;
-      explicit response_t(rpc::error&& err) : version(rpc::supported_version), error(std::move(err)) {}
+      explicit response_t(rpc::error&& err) : error(std::move(err)) {}
       response_t(jsonrpc_id_t&& id, result_t&& result)
-         : id(std::move(id)), version(rpc::supported_version), result(std::move(result))
+         : id(std::move(id)), result(std::move(result))
       {}
       response_t(jsonrpc_id_t&& id, rpc::error&& err)
-         : id(std::move(id)), version(rpc::supported_version), error(std::move(err))
+         : id(std::move(id)), error(std::move(err))
       {}
 
       jsonrpc_id_t id{};
-      std::string version{};
       std::optional<result_t> result{}; // todo can this be instead expected<result_t, error>
       std::optional<rpc::error> error{};
+      std::string version{rpc::supported_version};
+      
       struct glaze
       {
          using T = response_t;
