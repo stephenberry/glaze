@@ -31,26 +31,24 @@ namespace glz::rpc
 
    struct error final
    {
+      error_e code{error_e::no_error};
+      std::optional<std::string> data{}; // Optional detailed error information
+      std::string message{code_as_string(code)}; // string reflection of member variable code
+      
       static error invalid(const parse_error& pe, auto& buffer)
       {
          std::string format_err{format_error(pe, buffer)};
-         return error(rpc::error_e::invalid_request, format_err.empty() ? std::nullopt : std::optional{format_err});
+         return {error_e::invalid_request, format_err.empty() ? std::nullopt : std::optional{format_err}, std::string(code_as_string(error_e::invalid_request))};
       }
       static error version(std::string_view presumed_version)
       {
-         return error(error_e::invalid_request, "Invalid version: " + std::string(presumed_version) +
-                                                   " only supported version is " + std::string(rpc::supported_version));
+         return {error_e::invalid_request, "Invalid version: " + std::string(presumed_version) +
+            " only supported version is " + std::string(rpc::supported_version), std::string(code_as_string(error_e::invalid_request))};
       }
       static error method(std::string_view presumed_method)
       {
-         return error(error_e::method_not_found, "Method: '" + std::string(presumed_method) + "' not found");
+         return {error_e::method_not_found, "Method: '" + std::string(presumed_method) + "' not found", std::string(code_as_string(error_e::method_not_found))};
       }
-
-      error() = default;
-
-      explicit error(error_e code, std::optional<std::string>&& data = {})
-         : code(code), message(code_as_string(code)), data(std::move(data))
-      {}
 
       [[nodiscard]] error_e get_code() const noexcept
       {
@@ -69,10 +67,6 @@ namespace glz::rpc
       }
 
      private:
-      error_e code{error_e::no_error};
-      std::string message{code_as_string(error_e::no_error)}; // string reflection of member variable code
-      std::optional<std::string> data{}; // Optional detailed error information
-
       static std::string_view code_as_string(const error_e error_code) noexcept
       {
          switch (error_code) {
@@ -186,7 +180,7 @@ namespace glz::rpc
       using request_t = rpc::request_t<params_t>;
       using response_t = rpc::response_t<result_t>;
       std::function<expected<result_t, rpc::error>(const params_t&)> callback{
-         [](const auto&) { return glz::unexpected{rpc::error(rpc::error_e::internal, "Not implemented")}; }};
+         [](const auto&) { return glz::unexpected{rpc::error{rpc::error_e::internal, "Not implemented"}}; }};
    };
 
    template <concepts::method_type Method>
@@ -304,12 +298,12 @@ namespace glz::rpc
 
          if (auto parse_err{glz::validate_json(json_request)}) {
             return return_helper(
-               raw_response_t{rpc::error(rpc::error_e::parse_error, format_error(parse_err, json_request))});
+                                 raw_response_t{rpc::error{error_e::parse_error, format_error(parse_err, json_request)}});
          }
 
          auto batch_requests{glz::read_json<std::vector<glz::raw_json_view>>(json_request)};
          if (batch_requests.has_value() && batch_requests.value().empty()) {
-            return return_helper(raw_response_t{rpc::error(rpc::error_e::invalid_request)});
+            return return_helper(raw_response_t{rpc::error{error_e::invalid_request}});
          }
          if (batch_requests.has_value()) {
             return return_helper(batch_request(batch_requests.value()));
@@ -406,7 +400,7 @@ namespace glz::rpc
 
          auto& res{response.value()};
 
-         rpc::error return_v;
+         rpc::error return_v{};
          bool id_found = methods.any([&json_response, &res, &return_v](auto&& method) -> bool {
             using meth_t = std::remove_reference_t<decltype(method)>;
 
@@ -440,10 +434,10 @@ namespace glz::rpc
          if (!id_found) [[unlikely]] {
             if (!return_v) {
                if (std::holds_alternative<std::string_view>(res.id)) {
-                  return_v = rpc::error(rpc::error_e::internal, "id: '" + std::string(std::get<std::string_view>(res.id)) + "' not found");
+                  return_v = rpc::error{error_e::internal, "id: '" + std::string(std::get<std::string_view>(res.id)) + "' not found"};
                }
                else {
-                  return_v = rpc::error(rpc::error_e::internal, "id: " + glz::write_json(res.id) + " not found");
+                  return_v = rpc::error{error_e::internal, "id: " + glz::write_json(res.id) + " not found"};
                }
             }
          }

@@ -219,7 +219,7 @@ ut::suite struct_test_cases = [] {
       server.on<"foo">([](foo_params const& params) -> glz::expected<foo_result, rpc::error> {
          ut::expect(params.foo_a == 1337);
          ut::expect(params.foo_b == "hello world");
-         return glz::unexpected(rpc::error(rpc::error_e::server_error_lower, "my error"));
+         return glz::unexpected(rpc::error{rpc::error_e::server_error_lower, "my error"});
       });
 
       std::string response = server.call(request_str.first);
@@ -268,8 +268,9 @@ ut::suite struct_test_cases = [] {
          R"({"jsonrpc":"2.0","method":"invalid_method_name","params":{},"id:"uuid"}")");
       ut::expect(response_vec.size() == 1);
       [[maybe_unused]] auto dbg{glz::write_json(response_vec)};
+      auto s = glz::write_json(response_vec);
       ut::expect(
-         glz::write_json(response_vec) ==
+         s ==
          R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:66: syntax_error\n   {\"jsonrpc\":\"2.0\",\"method\":\"invalid_method_name\",\"params\":{},\"id:\"uuid\"}\"\n                                                                    ^\n"},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
       ut::expect(response_vec.at(0).error->get_code() == rpc::error_e::parse_error);
@@ -282,8 +283,8 @@ ut::suite struct_test_cases = [] {
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(
          R"([{"jsonrpc":"2.0","method":"invalid_method_name","params":{},"id":"uuid"},{"jsonrpc":"2.0","method":"invalid_method_name","params":]")");
       ut::expect(response_vec.size() == 1);
-      ut::expect(
-         glz::write_json(response_vec) ==
+      auto s = glz::write_json(response_vec);
+      ut::expect(s ==
          R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:132: syntax_error\n   [{\"jsonrpc\":\"2.0\",\"method\":\"invalid_method_name\",\"params\":{},\"id\":\"uuid\"},{\"jsonrpc\":\"2.0\",\"method\":\"invalid_method_name\",\"params\":]\"\n                                                                                                                                      ^\n"},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
       ut::expect(response_vec.at(0).error->get_code() == rpc::error_e::parse_error);
