@@ -99,7 +99,6 @@ namespace glz::rpc
       {
          return code;
       }
-      [[nodiscard]] auto get_raw_code() const noexcept { return code; }
       [[nodiscard]] auto get_message() const noexcept -> const std::string& { return message; }
       [[nodiscard]] auto get_data() const noexcept -> const glz::json_t& { return data; }
 
