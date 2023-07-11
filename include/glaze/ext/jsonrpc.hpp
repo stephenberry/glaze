@@ -27,10 +27,6 @@ namespace glz::rpc
       internal = -32603,
       parse_error = -32700,
    };
-   static constexpr std::array<error_e, 8> error_e_iterable{
-      error_e::no_error,         error_e::server_error_lower, error_e::server_error_upper, error_e::invalid_request,
-      error_e::method_not_found, error_e::invalid_params,     error_e::internal,           error_e::parse_error,
-   };
 }
 
 // jsonrpc
