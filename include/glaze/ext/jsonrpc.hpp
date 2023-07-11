@@ -381,7 +381,6 @@ namespace glz::rpc
    template <concepts::method_type... method_type>
    struct client
    {
-      std::size_t const queue_size{100};
       glz::tuplet::tuple<client_method_t<method_type>...> methods{};
 
       rpc::error call(std::string_view json_response)
