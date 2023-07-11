@@ -21,6 +21,28 @@ namespace glz::rpc
       internal = -32603,
       parse_error = -32700,
    };
+   
+   inline std::string_view code_as_sv(const error_e error_code) noexcept
+   {
+      switch (error_code) {
+      case error_e::no_error:
+         return "No error";
+      case error_e::parse_error:
+         return "Parse error";
+      case error_e::server_error_lower:
+      case error_e::server_error_upper:
+         return "Server error";
+      case error_e::invalid_request:
+         return "Invalid request";
+      case error_e::method_not_found:
+         return "Method not found";
+      case error_e::invalid_params:
+         return "Invalid params";
+      case error_e::internal:
+         return "Internal error";
+      }
+      return "Unknown";
+   }
 }
 
 // jsonrpc
@@ -33,21 +55,21 @@ namespace glz::rpc
    {
       error_e code{error_e::no_error};
       std::optional<std::string> data{}; // Optional detailed error information
-      std::string_view message{code_as_string(code)}; // string reflection of member variable code
+      std::string_view message{code_as_sv(code)}; // string reflection of member variable code
       
       static error invalid(const parse_error& pe, auto& buffer)
       {
          std::string format_err{format_error(pe, buffer)};
-         return {error_e::invalid_request, format_err.empty() ? std::nullopt : std::optional{format_err}, code_as_string(error_e::invalid_request)};
+         return {error_e::invalid_request, format_err.empty() ? std::nullopt : std::optional{format_err}, code_as_sv(error_e::invalid_request)};
       }
       static error version(std::string_view presumed_version)
       {
          return {error_e::invalid_request, "Invalid version: " + std::string(presumed_version) +
-            " only supported version is " + std::string(rpc::supported_version), code_as_string(error_e::invalid_request)};
+            " only supported version is " + std::string(rpc::supported_version), code_as_sv(error_e::invalid_request)};
       }
       static error method(std::string_view presumed_method)
       {
-         return {error_e::method_not_found, "Method: '" + std::string(presumed_method) + "' not found", code_as_string(error_e::method_not_found)};
+         return {error_e::method_not_found, "Method: '" + std::string(presumed_method) + "' not found", code_as_sv(error_e::method_not_found)};
       }
       
       operator bool() const noexcept
@@ -58,29 +80,6 @@ namespace glz::rpc
       bool operator==(const rpc::error_e err) const noexcept
       {
          return code == err;
-      }
-
-     private:
-      static std::string_view code_as_string(const error_e error_code) noexcept
-      {
-         switch (error_code) {
-         case error_e::no_error:
-            return "No error";
-         case error_e::parse_error:
-            return "Parse error";
-         case error_e::server_error_lower:
-         case error_e::server_error_upper:
-            return "Server error";
-         case error_e::invalid_request:
-            return "Invalid request";
-         case error_e::method_not_found:
-            return "Method not found";
-         case error_e::invalid_params:
-            return "Invalid params";
-         case error_e::internal:
-            return "Internal error";
-         }
-         return "Unknown";
       }
 
      public:
