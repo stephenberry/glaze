@@ -295,8 +295,9 @@ ut::suite struct_test_cases = [] {
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(R"([])");
 
       ut::expect(response_vec.size() == 1);
-      ut::expect(glz::write_json(response_vec) ==
-                 R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":null},"id":null}])");
+      auto s = glz::write_json(response_vec);
+      ut::expect(s ==
+                 R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
       ut::expect(response_vec.at(0).error->get_code() == rpc::error_e::invalid_request);
    };

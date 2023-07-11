@@ -34,7 +34,7 @@ namespace glz::rpc
       static error invalid(const parse_error& pe, auto& buffer)
       {
          std::string format_err{format_error(pe, buffer)};
-         return error(rpc::error_e::invalid_request, format_err.empty() ? glz::json_t{} : format_err);
+         return error(rpc::error_e::invalid_request, format_err.empty() ? std::nullopt : std::optional{format_err});
       }
       static error version(std::string_view presumed_version)
       {
@@ -48,7 +48,7 @@ namespace glz::rpc
 
       error() = default;
 
-      explicit error(error_e code, glz::json_t&& data = {})
+      explicit error(error_e code, std::optional<std::string>&& data = {})
          : code(code), message(code_as_string(code)), data(std::move(data))
       {}
 
@@ -57,8 +57,7 @@ namespace glz::rpc
          return code;
       }
       [[nodiscard]] auto get_message() const noexcept -> const std::string& { return message; }
-      [[nodiscard]] auto get_data() const noexcept -> const glz::json_t& { return data; }
-
+      
       operator bool() const noexcept
       {
          return code != rpc::error_e::no_error;
@@ -72,7 +71,7 @@ namespace glz::rpc
      private:
       error_e code{error_e::no_error};
       std::string message{code_as_string(error_e::no_error)}; // string reflection of member variable code
-      glz::json_t data{}; // Optional detailed error information
+      std::optional<std::string> data{}; // Optional detailed error information
 
       static std::string_view code_as_string(const error_e error_code) noexcept
       {
