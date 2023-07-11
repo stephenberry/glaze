@@ -33,21 +33,21 @@ namespace glz::rpc
    {
       error_e code{error_e::no_error};
       std::optional<std::string> data{}; // Optional detailed error information
-      std::string message{code_as_string(code)}; // string reflection of member variable code
+      std::string_view message{code_as_string(code)}; // string reflection of member variable code
       
       static error invalid(const parse_error& pe, auto& buffer)
       {
          std::string format_err{format_error(pe, buffer)};
-         return {error_e::invalid_request, format_err.empty() ? std::nullopt : std::optional{format_err}, std::string(code_as_string(error_e::invalid_request))};
+         return {error_e::invalid_request, format_err.empty() ? std::nullopt : std::optional{format_err}, code_as_string(error_e::invalid_request)};
       }
       static error version(std::string_view presumed_version)
       {
          return {error_e::invalid_request, "Invalid version: " + std::string(presumed_version) +
-            " only supported version is " + std::string(rpc::supported_version), std::string(code_as_string(error_e::invalid_request))};
+            " only supported version is " + std::string(rpc::supported_version), code_as_string(error_e::invalid_request)};
       }
       static error method(std::string_view presumed_method)
       {
-         return {error_e::method_not_found, "Method: '" + std::string(presumed_method) + "' not found", std::string(code_as_string(error_e::method_not_found))};
+         return {error_e::method_not_found, "Method: '" + std::string(presumed_method) + "' not found", code_as_string(error_e::method_not_found)};
       }
       
       operator bool() const noexcept
