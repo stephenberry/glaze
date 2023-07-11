@@ -35,39 +35,6 @@ namespace glz::rpc
    using jsonrpc_id_t = std::variant<glz::json_t::null_t, std::string_view, std::int64_t>;
    static constexpr std::string_view supported_version{"2.0"};
 
-   namespace detail
-   {
-      template <class CharType, unsigned N>
-      struct [[nodiscard]] basic_fixed_string
-      {
-         using char_type = CharType;
-
-         char_type data_[N + 1]{};
-
-         constexpr basic_fixed_string() noexcept : data_{} {}
-
-         template <class other_char_type>
-            requires std::same_as<other_char_type, char_type>
-         constexpr basic_fixed_string(const other_char_type (&foo)[N + 1]) noexcept
-         {
-            std::copy_n(foo, N + 1, data_);
-         }
-
-         [[nodiscard]] constexpr std::basic_string_view<char_type> view() const noexcept { return {&data_[0], N}; }
-
-         constexpr operator std::basic_string_view<char_type>() const noexcept { return {&data_[0], N}; }
-
-         template <unsigned M>
-         constexpr auto operator==(const basic_fixed_string<char_type, M>& r) const noexcept
-         {
-            return N == M && view() == r.view();
-         }
-      };
-
-      template <class char_type, unsigned N>
-      basic_fixed_string(char_type const (&str)[N]) -> basic_fixed_string<char_type, N - 1>;
-   }
-
    struct error final
    {
       static error invalid(const parse_error& pe, auto& buffer)
@@ -192,7 +159,7 @@ namespace glz::rpc
    };
    using generic_response_t = response_t<glz::raw_json_view>;
    
-   template <detail::basic_fixed_string name, class params_type, class result_type>
+   template <basic_fixed_string name, class params_type, class result_type>
    struct method
    {
       static constexpr std::string_view name_v{name};
@@ -243,7 +210,7 @@ namespace glz::rpc
 
    namespace detail
    {
-      template <detail::basic_fixed_string name, class... method_type>
+      template <basic_fixed_string name, class... method_type>
       inline constexpr void set_callback(glz::tuplet::tuple<method_type...>& methods, const auto& callback)
       {
          constexpr bool method_found = ((method_type::name_v == name) || ...);
@@ -282,7 +249,7 @@ namespace glz::rpc
          static constexpr std::size_t index = std::numeric_limits<size_t>::max();
       };
 
-      template <class map_t, detail::basic_fixed_string name, class... method_type>
+      template <class map_t, basic_fixed_string name, class... method_type>
       auto get_request_map(glz::tuplet::tuple<method_type...>& methods) -> map_t&
       {
          constexpr bool method_found = ((method_type::name_v == name) || ...);
@@ -314,7 +281,7 @@ namespace glz::rpc
 
       glz::tuplet::tuple<server_method_t<method_type>...> methods{};
 
-      template <detail::basic_fixed_string name>
+      template <basic_fixed_string name>
       constexpr void on(const auto& callback) // std::function<expected<result_t, rpc::error>(params_t const&)>
       {
          detail::set_callback<name>(methods, callback);
@@ -495,7 +462,7 @@ namespace glz::rpc
       // const&)> where result_t is the result type declared for the given method name returns the request string and
       // whether the callback was inserted into the queue if the callback was not inserted into the queue it can mean
       // that the input was a notification or more serious, conflicting id, the provided id should be unique!
-      template <detail::basic_fixed_string method_name>
+      template <basic_fixed_string method_name>
       [[nodiscard]] auto request(jsonrpc_id_t&& id, auto&& params, auto&& callback) -> std::pair<std::string, bool>
       {
          constexpr bool method_found = ((method_type::name_v == method_name) || ...);
@@ -534,14 +501,14 @@ namespace glz::rpc
          return {glz::write_json(std::move(req)), inserted};
       }
 
-      template <detail::basic_fixed_string method_name>
+      template <basic_fixed_string method_name>
       [[nodiscard]] auto notify(auto&& params) -> std::string
       {
          auto placebo{[](auto&, auto&) {}};
          return request<method_name>(glz::json_t::null_t{}, params, std::move(placebo)).first;
       }
 
-      template <detail::basic_fixed_string method_name>
+      template <basic_fixed_string method_name>
       [[nodiscard]] const auto& get_request_map() const
       {
          constexpr auto idx = detail::index_of_name<decltype(method_name), method_name, method_type...>::index;
@@ -550,7 +517,7 @@ namespace glz::rpc
          return detail::get_request_map<request_map_t, method_name>(methods);
       }
 
-      template <detail::basic_fixed_string method_name>
+      template <basic_fixed_string method_name>
       [[nodiscard]] auto& get_request_map()
       {
          constexpr auto idx = detail::index_of_name<decltype(method_name), method_name, method_type...>::index;
