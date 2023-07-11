@@ -49,12 +49,6 @@ namespace glz::rpc
       {
          return {error_e::method_not_found, "Method: '" + std::string(presumed_method) + "' not found", std::string(code_as_string(error_e::method_not_found))};
       }
-
-      [[nodiscard]] error_e get_code() const noexcept
-      {
-         return code;
-      }
-      [[nodiscard]] auto get_message() const noexcept -> const std::string& { return message; }
       
       operator bool() const noexcept
       {
