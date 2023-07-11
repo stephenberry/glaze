@@ -22,7 +22,7 @@ namespace glz::rpc
       parse_error = -32700,
    };
    
-   inline std::string_view code_as_sv(const error_e error_code) noexcept
+   inline constexpr std::string_view code_as_sv(const error_e error_code) noexcept
    {
       switch (error_code) {
       case error_e::no_error:
@@ -55,7 +55,7 @@ namespace glz::rpc
    {
       error_e code{error_e::no_error};
       std::optional<std::string> data{}; // Optional detailed error information
-      std::string_view message{code_as_sv(code)}; // string reflection of member variable code
+      std::variant<std::string, std::string_view> message{code_as_sv(code)}; // string reflection of member variable code
       
       static error invalid(const parse_error& pe, auto& buffer)
       {
@@ -82,11 +82,10 @@ namespace glz::rpc
          return code == err;
       }
 
-     public:
       struct glaze
       {
          using T = error;
-         static constexpr auto value{glz::object("code", &T::code, "message", &T::message, "data", &T::data)};
+         static constexpr auto value = glz::object("code", &T::code, "message", &T::message, "data", &T::data);
       };
    };
 
