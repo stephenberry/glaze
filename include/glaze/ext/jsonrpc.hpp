@@ -92,11 +92,9 @@ namespace glz::rpc
    template <class params_type>
    struct request_t
    {
-      using params_t = params_type;
-      
       jsonrpc_id_t id{};
       std::string_view method{};
-      params_t params{};
+      params_type params{};
       std::string_view version{rpc::supported_version};
 
       struct glaze
@@ -108,6 +106,10 @@ namespace glz::rpc
                                                    "id", &T::id);
       };
    };
+   
+   template <class params_type>
+   request_t(jsonrpc_id_t&&, std::string_view, params_type&&) -> request_t<std::decay_t<params_type>>;
+   
    using generic_request_t = request_t<glz::raw_json_view>;
 
    template <class result_type>
@@ -442,7 +444,7 @@ namespace glz::rpc
       // whether the callback was inserted into the queue if the callback was not inserted into the queue it can mean
       // that the input was a notification or more serious, conflicting id, the provided id should be unique!
       template <basic_fixed_string method_name>
-      [[nodiscard]] auto request(jsonrpc_id_t&& id, auto&& params, auto&& callback) -> std::pair<std::string, bool>
+      [[nodiscard]] std::pair<std::string, bool> request(jsonrpc_id_t&& id, auto&& params, auto&& callback)
       {
          constexpr bool method_found = ((method_type::name_v == method_name) || ...);
          static_assert(method_found, "Method not declared in client.");
@@ -456,8 +458,8 @@ namespace glz::rpc
              ...);
          static_assert(method_params_match, "Method name and given params type do not match.");
 
-         rpc::request_t<params_type> req{std::forward<jsonrpc_id_t>(id), method_name.view(),
-            std::forward<params_type>(params)};
+         rpc::request_t req{std::forward<decltype(id)>(id), method_name.view(),
+            std::forward<decltype(params)>(params)};
 
          if (std::holds_alternative<glz::json_t::null_t>(id)) {
             return {glz::write_json(std::move(req)), false};
