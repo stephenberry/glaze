@@ -243,7 +243,7 @@ ut::suite struct_test_cases = [] {
          glz::write_json(response_vec) ==
          R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"Invalid version: 42.0 only supported version is 2.0"},"id":"uuid"}])");
       ut::expect(response_vec.at(0).error.has_value());
-      ut::expect(response_vec.at(0).error->get_code().value() == rpc::error_e::invalid_request);
+      ut::expect(response_vec.at(0).error->get_code() == rpc::error_e::invalid_request);
    };
 
    ut::test("server method not found") = [&server] {
@@ -257,7 +257,7 @@ ut::suite struct_test_cases = [] {
          glz::write_json(response_vec) ==
          R"([{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":"Method: \"invalid_method_name\" not found"},"id":"uuid"}])");
       ut::expect(response_vec.at(0).error.has_value());
-      ut::expect(response_vec.at(0).error->get_code().value() == rpc::error_e::method_not_found);
+      ut::expect(response_vec.at(0).error->get_code() == rpc::error_e::method_not_found);
    };
 
    ut::test("server invalid json") = [&server] {
@@ -272,7 +272,7 @@ ut::suite struct_test_cases = [] {
          glz::write_json(response_vec) ==
          R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:66: syntax_error\n   {\"jsonrpc\":\"2.0\",\"method\":\"invalid_method_name\",\"params\":{},\"id:\"uuid\"}\"\n                                                                    ^\n"},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
-      ut::expect(response_vec.at(0).error->get_code().value() == rpc::error_e::parse_error);
+      ut::expect(response_vec.at(0).error->get_code() == rpc::error_e::parse_error);
    };
 
    ut::test("server invalid json batch") = [&server] {
@@ -286,7 +286,7 @@ ut::suite struct_test_cases = [] {
          glz::write_json(response_vec) ==
          R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:132: syntax_error\n   [{\"jsonrpc\":\"2.0\",\"method\":\"invalid_method_name\",\"params\":{},\"id\":\"uuid\"},{\"jsonrpc\":\"2.0\",\"method\":\"invalid_method_name\",\"params\":]\"\n                                                                                                                                      ^\n"},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
-      ut::expect(response_vec.at(0).error->get_code().value() == rpc::error_e::parse_error);
+      ut::expect(response_vec.at(0).error->get_code() == rpc::error_e::parse_error);
    };
 
    ut::test("server invalid json batch empty array") = [&server] {
@@ -298,7 +298,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(glz::write_json(response_vec) ==
                  R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":null},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
-      ut::expect(response_vec.at(0).error->get_code().value() == rpc::error_e::invalid_request);
+      ut::expect(response_vec.at(0).error->get_code() == rpc::error_e::invalid_request);
    };
 
    ut::test("server invalid json illformed batch one item") = [&server] {
@@ -311,7 +311,7 @@ ut::suite struct_test_cases = [] {
          glz::write_json(response_vec) ==
          R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   1\n   ^\n"},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
-      ut::expect(response_vec.at(0).error->get_code().value() == rpc::error_e::invalid_request);
+      ut::expect(response_vec.at(0).error->get_code() == rpc::error_e::invalid_request);
    };
 
    ut::test("server invalid json illformed batch three items") = [&server] {
@@ -325,7 +325,7 @@ ut::suite struct_test_cases = [] {
          R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   1\n   ^\n"},"id":null},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   2\n   ^\n"},"id":null},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   3\n   ^\n"},"id":null}])");
       for (auto& response : response_vec) {
          ut::expect(response.error.has_value());
-         ut::expect(response.error->get_code().value() == glz::rpc::error_e::invalid_request);
+         ut::expect(response.error->get_code() == glz::rpc::error_e::invalid_request);
       }
    };
 
@@ -371,7 +371,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(response_vec.size() == 2);
       for (auto& response : response_vec) {
          ut::expect(response.error.has_value());
-         ut::expect(response.error->get_code().value() == glz::rpc::error_e::invalid_request);
+         ut::expect(response.error->get_code() == glz::rpc::error_e::invalid_request);
       }
    };
    "server invalid jsonrpc value"_test = [&server] {
@@ -386,7 +386,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(response_vec.size() == 2);
       for (auto& response : response_vec) {
          ut::expect(response.error.has_value());
-         ut::expect(response.error->get_code().value() == glz::rpc::error_e::invalid_request);
+         ut::expect(response.error->get_code() == glz::rpc::error_e::invalid_request);
       }
    };
    "client request map"_test = [&client] {
@@ -460,7 +460,7 @@ ut::suite struct_test_cases = [] {
       for (auto& response : response_vec) {
          ut::expect(response.error.has_value());
          if (response.error.has_value()) {
-            ut::expect(response.error->get_code().value() == glz::rpc::error_e::invalid_params);
+            ut::expect(response.error->get_code() == glz::rpc::error_e::invalid_params);
          }
       }
    };

@@ -15,22 +15,6 @@
 #include <variant>
 #include <vector>
 
-#if __cpp_lib_to_underlying
-namespace util
-{
-   using std::to_underlying;
-}
-#else
-namespace util
-{
-   template <typename T>
-   [[nodiscard]] constexpr std::underlying_type_t<T> to_underlying(T value) noexcept
-   {
-      return static_cast<std::underlying_type_t<T>>(value);
-   }
-}
-#endif
-
 namespace glz::rpc
 {
    enum struct error_e : int {
@@ -88,7 +72,7 @@ namespace glz::rpc
       basic_fixed_string(char_type const (&str)[N]) -> basic_fixed_string<char_type, N - 1>;
    }
 
-   struct error
+   struct error final
    {
       static error invalid(const parse_error& pe, auto& buffer)
       {
@@ -108,17 +92,12 @@ namespace glz::rpc
       error() = default;
 
       explicit error(error_e code, glz::json_t&& data = {})
-         : code(util::to_underlying(code)), message(code_as_string(code)), data(std::move(data))
+         : code(code), message(code_as_string(code)), data(std::move(data))
       {}
 
-      [[nodiscard]] auto get_code() const noexcept -> std::optional<error_e>
+      [[nodiscard]] error_e get_code() const noexcept
       {
-         const auto it{std::find_if(std::cbegin(error_e_iterable), std::cend(error_e_iterable),
-                                    [this](error_e err_val) { return util::to_underlying(err_val) == this->code; })};
-         if (it == std::cend(error_e_iterable)) {
-            return std::nullopt;
-         }
-         return *it;
+         return code;
       }
       [[nodiscard]] auto get_raw_code() const noexcept { return code; }
       [[nodiscard]] auto get_message() const noexcept -> const std::string& { return message; }
@@ -126,18 +105,16 @@ namespace glz::rpc
 
       operator bool() const noexcept
       {
-         const auto my_code{get_code()};
-         return my_code.has_value() && my_code.value() != rpc::error_e::no_error;
+         return code != rpc::error_e::no_error;
       }
 
       bool operator==(const rpc::error_e err) const noexcept
       {
-         const auto my_code{get_code()};
-         return my_code.has_value() && my_code.value() == err;
+         return code == err;
       }
 
      private:
-      std::underlying_type_t<error_e> code{util::to_underlying(error_e::no_error)};
+      error_e code{error_e::no_error};
       std::string message{code_as_string(error_e::no_error)}; // string reflection of member variable code
       glz::json_t data{}; // Optional detailed error information
 
