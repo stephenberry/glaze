@@ -99,7 +99,7 @@ namespace glz::rpc
       jsonrpc_id_t id{};
       std::string_view method{};
       params_t params{};
-      std::string version{rpc::supported_version};
+      std::string_view version{rpc::supported_version};
 
       struct glaze
       {
