@@ -616,7 +616,7 @@ namespace glz
                      handle_escaped();
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     value = std::string_view{start, it - start - 1};
+                     value = std::string_view{start, size_t(it - start - 1)};
                      break;
                   }
                   default:
@@ -1390,7 +1390,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            if constexpr (std::is_same_v<typename T::first_type, std::string>) {
+            if constexpr (str_t<typename T::first_type>) {
                value.first = std::move(key);
             }
             else {
@@ -1517,7 +1517,7 @@ namespace glz
                   }
                }
                else {
-                  std::string& key = string_buffer();
+                  std::string_view key{};
                   read<json>::op<Opts>(key, ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
@@ -1532,8 +1532,9 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  if constexpr (std::is_same_v<typename T::key_type, std::string>) {
-                     read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
+                  using k_t = typename T::key_type;
+                  if constexpr (str_t<k_t>) {
+                     read<json>::op<ws_handled<Opts>()>(value[k_t(key)], ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
