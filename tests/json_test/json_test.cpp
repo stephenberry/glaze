@@ -1371,6 +1371,20 @@ suite read_tests = [] {
          const bool equal = (v == vr);
          expect(equal);
       }
+      {
+         std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
+         std::map<std::string_view, int> v, vr{{"as", 1}, {"so", 2}, {"make", 3}};
+         expect(glz::read_json(v, in) == glz::error_code::none);
+         const bool equal = (v == vr);
+         expect(equal);
+      }
+      {
+         std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
+         std::map<std::string_view, int> v{{"as", -1}, {"make", 10000}}, vr{{"as", 1}, {"so", 2}, {"make", 3}};
+         expect(glz::read_json(v, in) == glz::error_code::none);
+         const bool equal = (v == vr);
+         expect(equal);
+      }
    };
 
    "Read partial map"_test = [] {
