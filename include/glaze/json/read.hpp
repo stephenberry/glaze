@@ -616,7 +616,7 @@ namespace glz
                      handle_escaped();
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     value = std::string_view{start, size_t(it - start - 1)};
+                     value = sv{start, size_t(it - start - 1)};
                      break;
                   }
                   default:
@@ -1375,11 +1375,21 @@ namespace glz
                return;
             }
 
-            std::string& key = string_buffer();
-            read<json>::op<Opts>(key, ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
+            if constexpr (str_t<typename T::first_type>) {
+               read<json>::op<Opts>(value.first, ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+            else {
+               std::string_view key;
+               read<json>::op<Opts>(key, ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               read<json>::op<Opts>(value.first, ctx, key.data(), key.data() + key.size());
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+            
             skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -1389,15 +1399,6 @@ namespace glz
             skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-
-            if constexpr (str_t<typename T::first_type>) {
-               value.first = std::move(key);
-            }
-            else {
-               read<json>::op<Opts>(value.first, ctx, key.data(), key.data() + key.size());
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-            }
 
             read<json>::op<Opts>(value.second, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
@@ -1517,32 +1518,65 @@ namespace glz
                   }
                }
                else {
-                  std::string_view key{};
-                  read<json>::op<Opts>(key, ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-
-                  skip_ws<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  match<':'>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  skip_ws<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-
+                  //using k_t = std::conditional_t<heterogeneous_map<T>, sv, typename T::key_type>;
                   using k_t = typename T::key_type;
-                  if constexpr (str_t<k_t>) {
-                     read<json>::op<ws_handled<Opts>()>(value[k_t(key)], ctx, it, end);
+                  if constexpr (std::is_same_v<k_t, std::string>) {
+                     static thread_local k_t key;
+                     read<json>::op<Opts>(key, ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     match<':'>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     
+                     read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
+                  else if constexpr (str_t<k_t>) {
+                     k_t key;
+                     read<json>::op<Opts>(key, ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     match<':'>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     
+                     read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
                   else {
-                     static thread_local typename T::key_type key_value{};
-                     read<json>::op<Opts>(key_value, ctx, key.data(), key.data() + key.size());
+                     static_assert(std::is_arithmetic_v<k_t>);
+                     k_t key_value{};
+                     read<json>::op<opt_true<Opts, &opts::quoted>>(key_value, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
+
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     match<':'>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     
                      read<json>::op<Opts>(value[key_value], ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
