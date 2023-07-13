@@ -52,10 +52,10 @@ namespace glz
          raw_ptr = anything.data();
 
          static constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
-         static constexpr auto spec = meta_v<Spec>;
          static constexpr auto frozen_map = detail::make_map<std::remove_pointer_t<T>, false>();
 
-         for_each<N>([&](auto I) {            
+         for_each<N>([&](auto I) {
+            static constexpr auto spec = meta_v<Spec>;
 
             static constexpr sv key = tuplet::get<0>(tuplet::get<I>(spec));
             static constexpr auto member_it = frozen_map.find(key);
