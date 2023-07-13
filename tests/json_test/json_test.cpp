@@ -4705,12 +4705,12 @@ suite enum_map = [] {
       color_map[Color::Red] = "red";
       color_map[Color::Green] = "green";
       color_map[Color::Blue] = "blue";
-      
+
       std::string s{};
       glz::write_json(color_map, s);
-      
+
       expect(s == R"({"Red":"red","Green":"green","Blue":"blue"})");
-      
+
       color_map.clear();
       expect(!glz::read_json(color_map, s));
       expect(color_map.at(Color::Red) == "red");
