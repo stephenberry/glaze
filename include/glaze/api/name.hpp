@@ -21,22 +21,7 @@ namespace glz
          static constexpr auto value = V;
       };
 
-#ifdef _MSC_VER
-      // Workaround for problems with MSVC and passing refrences to stringviews as template params
-      struct svw
-      {
-         const char* start{};
-         size_t n{};
-         constexpr svw(std::string_view sv) : start(sv.data()), n(sv.size()) {}
-         constexpr auto data() const { return start; }
-         constexpr auto begin() const { return data(); }
-         constexpr auto end() const { return data() + n; }
-         constexpr auto size() const { return n; }
-      };
-      template <svw... Strs>
-#else
       template <const std::string_view&... Strs>
-#endif
       inline constexpr std::string_view join()
       {
          constexpr auto joined_arr = []() {
@@ -53,11 +38,7 @@ namespace glz
          return {static_arr.data(), static_arr.size() - 1};
       }
 // Helper to get the value out
-#ifdef _MSC_VER
-      template <svw... Strs>
-#else
       template <const std::string_view&... Strs>
-#endif
       constexpr auto join_v = join<Strs...>();
    }
 

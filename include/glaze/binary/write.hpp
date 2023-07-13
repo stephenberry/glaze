@@ -473,17 +473,15 @@ namespace glz
    template <auto& Partial, opts Opts, class T, output_buffer Buffer>
    [[nodiscard]] GLZ_ALWAYS_INLINE write_error write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
    {
-      static constexpr auto partial = Partial; // MSVC 16.11 hack
-
       write_error we{};
 
-      if constexpr (std::count(partial.begin(), partial.end(), "") > 0) {
+      if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
          detail::write<binary>::op<Opts>(value, ctx, buffer);
       }
       else {
          static_assert(detail::glaze_object_t<std::decay_t<T>> || detail::writable_map_t<std::decay_t<T>>,
                        "Only object types are supported for partial.");
-         static constexpr auto sorted = sort_json_ptrs(partial);
+         static constexpr auto sorted = sort_json_ptrs(Partial);
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
          static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
 
@@ -496,11 +494,7 @@ namespace glz
 
          if constexpr (detail::glaze_object_t<std::decay_t<T>>) {
             glz::for_each<N>([&](auto I) {
-               using index_t = decltype(I);
-               using group_t = std::tuple_element_t<I, decltype(groups)>;
-               static constexpr auto group = []([[maybe_unused]] index_t Index) constexpr -> group_t {
-                  return glz::tuplet::get<decltype(I)::value>(groups);
-               }({}); // MSVC internal compiler error workaround
+               static constexpr auto group = glz::tuplet::get<I>(groups);
 
                static constexpr auto key = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
@@ -516,11 +510,7 @@ namespace glz
          }
          else if constexpr (detail::writable_map_t<std::decay_t<T>>) {
             glz::for_each<N>([&](auto I) {
-               using index_t = decltype(I);
-               using group_t = std::tuple_element_t<I, decltype(groups)>;
-               static constexpr auto group = []([[maybe_unused]] index_t Index) constexpr -> group_t {
-                  return glz::tuplet::get<decltype(I)::value>(groups);
-               }({}); // MSVC internal compiler error workaround
+               static constexpr auto group = glz::tuplet::get<I>(groups);
 
                static constexpr auto key_value = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);

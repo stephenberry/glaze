@@ -1171,9 +1171,7 @@ namespace glz
          bool may_escape = false;
          constexpr auto N = std::tuple_size_v<meta_t<T>>;
          for_each<N>([&](auto I) {
-            constexpr auto s = [] {
-               return glz::tuplet::get<0>(glz::tuplet::get<decltype(I)::value>(meta_v<T>));
-            }(); // MSVC internal compiler error workaround
+            constexpr auto s = glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>));
             for (auto& c : s) {
                if (c == '\\' || c == '"' || is_unicode(c)) {
                   may_escape = true;
@@ -1223,9 +1221,7 @@ namespace glz
 
          constexpr auto N = std::tuple_size_v<meta_t<T>>;
          for_each<N>([&](auto I) {
-            constexpr auto s = [] {
-               return glz::tuplet::get<0>(glz::tuplet::get<decltype(I)::value>(meta_v<T>));
-            }(); // MSVC internal compiler error workaround
+            constexpr auto s = glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>));
             const auto n = s.size();
             if (n < stats.min_length) {
                stats.min_length = n;
