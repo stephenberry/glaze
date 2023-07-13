@@ -1389,7 +1389,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            
+
             skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -1518,7 +1518,7 @@ namespace glz
                   }
                }
                else {
-                  //using k_t = std::conditional_t<heterogeneous_map<T>, sv, typename T::key_type>;
+                  // using k_t = std::conditional_t<heterogeneous_map<T>, sv, typename T::key_type>;
                   using k_t = typename T::key_type;
                   if constexpr (std::is_same_v<k_t, std::string>) {
                      static thread_local k_t key;
@@ -1535,7 +1535,7 @@ namespace glz
                      skip_ws<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     
+
                      read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
@@ -1555,7 +1555,7 @@ namespace glz
                      skip_ws<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     
+
                      read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
@@ -1576,7 +1576,7 @@ namespace glz
                      skip_ws<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     
+
                      read<json>::op<Opts>(value[key_value], ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;

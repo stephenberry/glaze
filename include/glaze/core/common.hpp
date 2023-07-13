@@ -316,14 +316,14 @@ namespace glz
       template <class T>
       concept writable_map_t = !
       complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>>;
-      
+
       template <class Map>
       concept heterogeneous_map = requires {
-        typename Map::key_compare;
-        requires (std::same_as<typename Map::key_compare, std::less<>> ||
-                 std::same_as<typename Map::key_compare, std::greater<>> ||
-                 requires { typename Map::key_compare::is_transparent; });
-      };
+                                     typename Map::key_compare;
+                                     requires(std::same_as<typename Map::key_compare, std::less<>> ||
+                                              std::same_as<typename Map::key_compare, std::greater<>> ||
+                                              requires { typename Map::key_compare::is_transparent; });
+                                  };
 
       template <class T>
       concept array_t = (!complex_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
