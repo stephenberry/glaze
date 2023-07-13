@@ -4699,6 +4699,26 @@ suite char_buffer = [] {
 
 static_assert(!glz::detail::char_array_t<char*>);
 
+suite enum_map = [] {
+   "enum map"_test = [] {
+      std::map<Color, std::string> color_map;
+      color_map[Color::Red] = "red";
+      color_map[Color::Green] = "green";
+      color_map[Color::Blue] = "blue";
+      
+      std::string s{};
+      glz::write_json(color_map, s);
+      
+      expect(s == R"({"Red":"red","Green":"green","Blue":"blue"})");
+      
+      color_map.clear();
+      expect(!glz::read_json(color_map, s));
+      expect(color_map.at(Color::Red) == "red");
+      expect(color_map.at(Color::Green) == "green");
+      expect(color_map.at(Color::Blue) == "blue");
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
