@@ -473,17 +473,15 @@ namespace glz
    template <auto& Partial, opts Opts, class T, output_buffer Buffer>
    [[nodiscard]] GLZ_ALWAYS_INLINE write_error write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
    {
-      static constexpr auto partial = Partial; // MSVC 16.11 hack
-
       write_error we{};
 
-      if constexpr (std::count(partial.begin(), partial.end(), "") > 0) {
+      if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
          detail::write<binary>::op<Opts>(value, ctx, buffer);
       }
       else {
          static_assert(detail::glaze_object_t<std::decay_t<T>> || detail::writable_map_t<std::decay_t<T>>,
                        "Only object types are supported for partial.");
-         static constexpr auto sorted = sort_json_ptrs(partial);
+         static constexpr auto sorted = sort_json_ptrs(Partial);
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
          static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
 
