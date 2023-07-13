@@ -587,10 +587,7 @@ namespace glz
          expected<span_t, parse_error> ret;
 
          for_each<N>([&](auto I) {
-            using index_t = decltype(I);
-            static constexpr auto key = []([[maybe_unused]] index_t Index) constexpr -> sv {
-               return std::get<decltype(I)::value>(tokens);
-            }({}); // MSVC internal compiler error workaround
+            static constexpr auto key = std::get<I>(tokens);
             if constexpr (maybe_numeric_key(key)) {
                switch (*it) {
                case '{': {
