@@ -37,7 +37,7 @@ namespace glz
          auto& static_arr = make_static<joined_arr>::value;
          return {static_arr.data(), static_arr.size() - 1};
       }
-// Helper to get the value out
+      // Helper to get the value out
       template <const std::string_view&... Strs>
       constexpr auto join_v = join<Strs...>();
    }
