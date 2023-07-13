@@ -494,11 +494,7 @@ namespace glz
 
          if constexpr (detail::glaze_object_t<std::decay_t<T>>) {
             glz::for_each<N>([&](auto I) {
-               using index_t = decltype(I);
-               using group_t = std::tuple_element_t<I, decltype(groups)>;
-               static constexpr auto group = []([[maybe_unused]] index_t Index) constexpr -> group_t {
-                  return glz::tuplet::get<decltype(I)::value>(groups);
-               }({}); // MSVC internal compiler error workaround
+               static constexpr auto group = glz::tuplet::get<I>(groups);
 
                static constexpr auto key = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
@@ -514,11 +510,7 @@ namespace glz
          }
          else if constexpr (detail::writable_map_t<std::decay_t<T>>) {
             glz::for_each<N>([&](auto I) {
-               using index_t = decltype(I);
-               using group_t = std::tuple_element_t<I, decltype(groups)>;
-               static constexpr auto group = []([[maybe_unused]] index_t Index) constexpr -> group_t {
-                  return glz::tuplet::get<decltype(I)::value>(groups);
-               }({}); // MSVC internal compiler error workaround
+               static constexpr auto group = glz::tuplet::get<I>(groups);
 
                static constexpr auto key_value = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
