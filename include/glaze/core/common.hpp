@@ -573,7 +573,6 @@ namespace glz
          constexpr auto n = std::tuple_size_v<meta_t<T>>;
 
          auto naive_or_normal_hash = [&] {
-            // these variables needed for MSVC
             if constexpr (n <= 20) {
                return glz::detail::naive_map<value_t, n, use_hash_comparison>(
                   {std::pair<sv, value_t>{sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
@@ -586,8 +585,6 @@ namespace glz
             }
          };
 
-         // these variables needed for MSVC
-         constexpr bool n_128 = n < 128;
          if constexpr (n == 0) {
             static_assert(false_v<T>, "empty object in glz::meta");
          }
@@ -601,7 +598,7 @@ namespace glz
                std::make_pair<sv, value_t>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
                                            glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...};
          }
-         else if constexpr (n_128) // don't even attempt a first character hash if we have too many keys
+         else if constexpr (n < 128) // don't even attempt a first character hash if we have too many keys
          {
             constexpr auto front_desc =
                single_char_hash<n>(std::array<sv, n>{sv{glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))}...});
