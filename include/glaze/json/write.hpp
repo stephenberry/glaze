@@ -362,7 +362,7 @@ namespace glz
             if (!bool(value)) return;
          }
 
-         if constexpr (str_t<Key> || char_t<Key>) {
+         if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key>) {
             write<json>::op<Opts>(key, ctx, args...);
             dump<':'>(args...);
          }

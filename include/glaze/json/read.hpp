@@ -1561,9 +1561,14 @@ namespace glz
                         return;
                   }
                   else {
-                     static_assert(std::is_arithmetic_v<k_t>);
+                     static_assert(std::is_arithmetic_v<k_t> || glaze_enum_t<k_t>);
                      k_t key_value{};
-                     read<json>::op<opt_true<Opts, &opts::quoted>>(key_value, ctx, it, end);
+                     if constexpr (std::is_arithmetic_v<k_t>) {
+                        read<json>::op<opt_true<Opts, &opts::quoted>>(key_value, ctx, it, end);
+                     }
+                     else {
+                        read<json>::op<Opts>(key_value, ctx, it, end);
+                     }
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
