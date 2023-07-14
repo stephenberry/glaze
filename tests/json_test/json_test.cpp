@@ -1858,10 +1858,9 @@ suite write_tests = [] {
    };
 
    "Write array"_test = [] {
-      std::array<double, 4> v{1.1, 2.2, 3.3, 4.4};
       std::string s;
+      std::array<double, 4> v{1.1, 2.2, 3.3, 4.4};
       glz::write_json(v, s);
-
       expect(s == "[1.1,2.2,3.3,4.4]");
    };
 
@@ -1877,11 +1876,14 @@ suite write_tests = [] {
    };
 
    "Write map"_test = [] {
-      std::map<std::string, double> m{{"a", 2.2}, {"b", 11.111}, {"c", 211.2}};
       std::string s;
+      std::map<std::string, double> m{{"a", 2.2}, {"b", 11.111}, {"c", 211.2}};
       glz::write_json(m, s);
-
       expect(s == R"({"a":2.2,"b":11.111,"c":211.2})");
+
+      std::map<std::string, std::optional<double>> nullable{{"a", std::nullopt}, {"b", std::nullopt}, {"c", 211.2}};
+      glz::write_json(nullable, s);
+      expect(s == glz::sv{R"({"c":211.2})"});
    };
 
    "Write pair"_test =
@@ -1895,6 +1897,8 @@ suite write_tests = [] {
          Write_pair_test_case{0.78, std::array{1, 2, 3}, R"({"0.78":[1,2,3]})"},
          Write_pair_test_case{"k", glz::obj{"in1", 1, "in2", "v"}, R"({"k":{"in1":1,"in2":"v"}})"},
          Write_pair_test_case{std::array{1, 2}, 99, R"({"[1,2]":99})"},
+         Write_pair_test_case{"knot", std::nullopt, "{}"}, // nullopt_t, not std::optional
+         Write_pair_test_case{"kmaybe", std::optional<int>{}, "{}"},
       };
 
 #ifdef __cpp_lib_ranges
