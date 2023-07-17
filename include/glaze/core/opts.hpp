@@ -57,7 +57,7 @@ namespace glz
       ret.opening_handled = false;
       return ret;
    }
-   
+
    template <opts Opts>
    constexpr auto opening_and_closing_handled_off()
    {

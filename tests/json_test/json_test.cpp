@@ -4738,10 +4738,9 @@ suite obj_handling = [] {
 };
 
 suite obj_nested_merge = [] {
-   
    "obj_nested_merge"_test = [] {
-      glz::obj o {"not", "important"};
-      glz::obj o2 {"map", glz::obj{"a", 1, "b", 2, "c", 3}};
+      glz::obj o{"not", "important"};
+      glz::obj o2{"map", glz::obj{"a", 1, "b", 2, "c", 3}};
       auto merged = glz::merge{o, o2};
       std::string s{};
       glz::write_json(merged, s);
