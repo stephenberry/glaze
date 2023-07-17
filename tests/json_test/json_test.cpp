@@ -4723,6 +4723,32 @@ suite enum_map = [] {
    };
 };
 
+suite obj_handling = [] {
+   "obj handling"_test = [] {
+      size_t cnt = 0;
+      glz::obj o{"count", size_t{cnt}};
+      std::vector<std::decay_t<decltype(o)>> vec;
+      for (; cnt < 10; ++cnt) {
+         vec.emplace_back(glz::obj{"count", size_t{cnt}});
+      }
+      for (size_t i = 0; i < vec.size(); ++i) {
+         expect(i == glz::tuplet::get<1>(vec[i].value));
+      }
+   };
+};
+
+suite obj_nested_merge = [] {
+   
+   "obj_nested_merge"_test = [] {
+      glz::obj o {"not", "important"};
+      glz::obj o2 {"map", glz::obj{"a", 1, "b", 2, "c", 3}};
+      auto merged = glz::merge{o, o2};
+      std::string s{};
+      glz::write_json(merged, s);
+      expect(s == R"({"not":"important","map":{"a":1,"b":2,"c":3}})") << s;
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors

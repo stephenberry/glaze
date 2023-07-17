@@ -57,6 +57,15 @@ namespace glz
       ret.opening_handled = false;
       return ret;
    }
+   
+   template <opts Opts>
+   constexpr auto opening_and_closing_handled_off()
+   {
+      opts ret = Opts;
+      ret.opening_handled = false;
+      ret.closing_handled = false;
+      return ret;
+   }
 
    template <opts Opts>
    constexpr auto ws_handled()
