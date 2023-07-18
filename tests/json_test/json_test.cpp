@@ -4746,11 +4746,12 @@ suite obj_nested_merge = [] {
       glz::write_json(merged, s);
       expect(s == R"({"not":"important","map":{"a":1,"b":2,"c":3}})") << s;
    };
-   
+
    "obj_json_t_merge"_test = [] {
       glz::json_t json;
-      expect(!glz::read_json(json,"{\"key1\":42,\"key2\":\"hello world\",\"v\":[1,2,3],\"m\":{\"a\":1,\"b\":2,\"c\":3}}"));
-      glz::obj obj {"not", "important"};
+      expect(
+         !glz::read_json(json, "{\"key1\":42,\"key2\":\"hello world\",\"v\":[1,2,3],\"m\":{\"a\":1,\"b\":2,\"c\":3}}"));
+      glz::obj obj{"not", "important"};
       auto s = glz::write_json(glz::merge{obj, json});
       expect(s == R"({"not":"important","key1":42,"key2":"hello world","m":{"a":1,"b":2,"c":3},"v":[1,2,3]})") << s;
    };
