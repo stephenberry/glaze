@@ -3731,7 +3731,6 @@ suite sets = [] {
         {"field": [4,5]}
       ])";
       expect(!glz::read_json(things, input_string));
-      // parsed incorrectly
       auto s = glz::write_json(things);
       expect(s == R"([{"field":[1]},{"field":[2,3]},{"field":[4,5]}])") << s;
    };
