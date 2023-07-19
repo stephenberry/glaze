@@ -3614,18 +3614,16 @@ suite custom_unique_tests = [] {
 
 static_assert(glz::detail::emplaceable<std::set<std::string>>);
 
-struct set_object {
+struct set_object
+{
    std::set<int> field{};
-   
-   bool operator==(const set_object& other) const {
-           return field == other.field;
-       }
 
-       bool operator<(const set_object& other) const {
-           return field < other.field;
-       }
-   
-   struct glaze {
+   bool operator==(const set_object& other) const { return field == other.field; }
+
+   bool operator<(const set_object& other) const { return field < other.field; }
+
+   struct glaze
+   {
       using T = set_object;
       static constexpr auto value = glz::object("field", &T::field);
    };
@@ -3671,12 +3669,12 @@ suite sets = [] {
       expect(set.count(3) == 1);
       expect(set.count(4) == 1);
       expect(set.count(5) == 1);
-      
+
       b = "[6,7,8,9,10]";
       expect(!glz::read_json(set, b)); // second reading
       expect(set.size() == 5);
    };
-   
+
    "std::set<std::string>"_test = [] {
       std::set<std::string> set;
       expect(glz::read_json(set, "[]") == glz::error_code::none);
@@ -3697,7 +3695,7 @@ suite sets = [] {
       expect(set.count("c") == 1);
       expect(set.count("d") == 1);
       expect(set.count("e") == 1);
-      
+
       b = R"(["f","g","h","i","j"])";
       expect(!glz::read_json(set, b)); // second reading
       expect(set.size() == 5);
@@ -3724,7 +3722,7 @@ suite sets = [] {
       expect(set.count(4) == 2);
       expect(set.count(5) == 1);
    };
-   
+
    "std::set<set_object>"_test = [] {
       std::set<set_object> things;
       const auto input_string = R"([
