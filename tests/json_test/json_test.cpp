@@ -4757,6 +4757,35 @@ suite obj_nested_merge = [] {
    };
 };
 
+suite write_to_map = [] {
+   "write_obj_to_map"_test = [] {
+      std::map<std::string, glz::raw_json> map;
+      glz::obj obj{ "arr", glz::arr{ 1, 2, 3 }, "hello", "world" };
+      using T = std::decay_t<decltype(obj.value)>;
+      glz::for_each<std::tuple_size_v<T>>([&](auto I) {
+         if constexpr (I % 2 == 0) {
+            map[std::string(glz::tuplet::get<I>(obj.value))] = glz::write_json(glz::tuplet::get<I + 1>(obj.value));
+         }
+      });
+      
+      auto s = glz::write_json(map);
+      expect(s == R"({"arr":[1,2,3],"hello":"world"})") << s;
+   };
+   
+   "write_json_t_to_map"_test = [] {
+      std::map<std::string, glz::raw_json> map;
+      
+      glz::json_t obj{{ "arr", { 1, 2, 3 }}, { "hello", "world" }};
+      auto& o = obj.get<glz::json_t::object_t>();
+      for (auto&[key, value] : o) {
+         map[key] = glz::write_json(value);
+      }
+      
+      auto s = glz::write_json(map);
+      expect(s == R"({"arr":[1,2,3],"hello":"world"})") << s;
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
