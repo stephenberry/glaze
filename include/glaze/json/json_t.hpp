@@ -143,7 +143,7 @@ namespace glz
       template <class T>
       T as() const
       {
-         // Prefer get becuase it returs a refrence
+         // Prefer get becuase it returns a reference
          return get<T>();
       }
 
