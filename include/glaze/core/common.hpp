@@ -41,6 +41,15 @@ namespace glz
 
    template <class... T>
    obj(T&&...) -> obj<T...>;
+   
+   template <class... T>
+   struct obj_copy final
+   {
+      glz::tuplet::tuple<T...> value;
+   };
+
+   template <class... T>
+   obj_copy(T...) -> obj_copy<T...>;
 
    template <class... T>
    struct arr final
@@ -50,6 +59,15 @@ namespace glz
 
    template <class... T>
    arr(T&&...) -> arr<T...>;
+   
+   template <class... T>
+   struct arr_copy final
+   {
+      glz::tuplet::tuple<T...> value;
+   };
+
+   template <class... T>
+   arr_copy(T...) -> arr_copy<T...>;
 
    // used to merge multiple JSON objects into a single JSON object
    template <class... T>

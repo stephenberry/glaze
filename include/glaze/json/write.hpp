@@ -738,7 +738,7 @@ namespace glz
       }
 
       template <class T>
-         requires is_specialization_v<T, glz::obj>
+         requires is_specialization_v<T, glz::obj> || is_specialization_v<T, glz::obj_copy>
       struct to_json<T>
       {
          template <auto Options>
