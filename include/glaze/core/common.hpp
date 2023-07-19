@@ -41,7 +41,7 @@ namespace glz
 
    template <class... T>
    obj(T&&...) -> obj<T...>;
-   
+
    template <class... T>
    struct obj_copy final
    {
@@ -59,7 +59,7 @@ namespace glz
 
    template <class... T>
    arr(T&&...) -> arr<T...>;
-   
+
    template <class... T>
    struct arr_copy final
    {

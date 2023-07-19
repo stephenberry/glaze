@@ -4792,7 +4792,7 @@ suite obj_handling = [] {
          expect(i == glz::tuplet::get<1>(vec[i].value));
       }
    };
-   
+
    "obj_copy handling"_test = [] {
       size_t cnt = 0;
       glz::obj_copy o{"cnt", cnt};
@@ -4803,7 +4803,7 @@ suite obj_handling = [] {
       for (size_t i = 0; i < vec.size(); ++i) {
          expect(i == glz::tuplet::get<1>(vec[i].value));
       }
-      
+
       auto s = glz::write_json(vec);
       expect(s == R"([{"cnt":0},{"cnt":1},{"cnt":2},{"cnt":3},{"cnt":4}])") << s;
    };
