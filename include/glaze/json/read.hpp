@@ -809,20 +809,11 @@ namespace glz
 
             while (true) {
                using V = range_value_t<T>;
-               if constexpr (sizeof(V) > 8) {
-                  static thread_local V v;
-                  read<json>::op<Opts>(v, ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  value.emplace(v);
-               }
-               else {
-                  V v;
-                  read<json>::op<Opts>(v, ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  value.emplace(std::move(v));
-               }
+               V v;
+               read<json>::op<Opts>(v, ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               value.emplace(std::move(v));
                skip_ws<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
