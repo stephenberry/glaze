@@ -7,11 +7,11 @@
 #include <vector>
 
 #include "glaze/core/common.hpp"
+#include "glaze/csv.hpp" // TODO: split out recorder specializations so this isn't necessary
+#include "glaze/json.hpp" // TODO: split out recorder specializations so this isn't necessary
 #include "glaze/util/string_view.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
-#include "glaze/csv.hpp" // TODO: split out recorder specializations so this isn't necessary
-#include "glaze/json.hpp" // TODO: split out recorder specializations so this isn't necessary
 
 namespace glz
 {
@@ -164,7 +164,7 @@ namespace glz
             match<'}'>(ctx, it, end);
          }
       };
-      
+
       template <is_recorder T>
       struct to_csv<T>
       {
@@ -178,11 +178,13 @@ namespace glz
                   dump(name, args...);
 
                   dump<','>(args...);
-                  
-                  std::visit([&](auto& x){
-                     write<csv>::op<Opts>(x, ctx, args...); // write deque
-                  }, v.first);
-                  
+
+                  std::visit(
+                     [&](auto& x) {
+                        write<csv>::op<Opts>(x, ctx, args...); // write deque
+                     },
+                     v.first);
+
                   if (i < n - 1) {
                      dump<'\n'>(args...);
                   }
@@ -207,21 +209,22 @@ namespace glz
                while (true) {
                   i = 0;
                   for (auto& [name, data] : value.data) {
-                     
                      bool breakout = false;
-                     std::visit([&](auto& v){
-                        if (row >= v.size()) {
-                           end = true;
-                           breakout = true;
-                           return;
-                        }
-                        write<csv>::op<Opts>(v[row], ctx, args...); // write deque
-                     }, data.first);
-                     
+                     std::visit(
+                        [&](auto& v) {
+                           if (row >= v.size()) {
+                              end = true;
+                              breakout = true;
+                              return;
+                           }
+                           write<csv>::op<Opts>(v[row], ctx, args...); // write deque
+                        },
+                        data.first);
+
                      if (breakout) {
                         break;
                      }
-                     
+
                      ++i;
                      if (i < n) {
                         dump<','>(args...);

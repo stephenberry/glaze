@@ -228,44 +228,44 @@ y,1,2,3,4,5,6,7,8,9,10
       expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
    };
-   
+
    "recorder rowwise"_test = [] {
       uint64_t t{};
       uint64_t x{1};
-      
+
       glz::recorder<uint64_t> recorder;
       recorder["t"] = t;
       recorder["x"] = x;
-      
+
       for (size_t i = 0; i < 5; ++i) {
          recorder.update();
          ++t;
          ++x;
       }
-      
+
       auto s = write_csv(recorder);
       expect(s == R"(t,0,1,2,3,4
 x,1,2,3,4,5)");
    };
-   
+
    "recorder colwise"_test = [] {
       uint64_t t{};
       uint64_t x{1};
-      
+
       glz::recorder<uint64_t> recorder;
       recorder["t"] = t;
       recorder["x"] = x;
-      
+
       for (size_t i = 0; i < 5; ++i) {
          recorder.update();
          ++t;
          ++x;
       }
-      
+
       std::string s;
       write<opts{.format = csv, .layout = colwise}>(recorder, s);
       expect(s ==
-R"(t,x
+             R"(t,x
 0,1
 1,2
 2,3
