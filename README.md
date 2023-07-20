@@ -620,17 +620,21 @@ The struct below shows the available options and the default behavior.
 ```c++
 struct opts {
    uint32_t format = json;
-   bool comments = false; // write out comments
-   bool error_on_unknown_keys = true; // error when an unknown key is encountered
-   bool skip_null_members = true; // skip writing out params in an object if the value is null
-   bool allow_hash_check = false; // Will replace some string equality checks with hash checks
-   bool prettify = false;         // write out prettified JSON
-   char indentation_char = ' ';   // prettified JSON indentation char
-   uint8_t indentation_width = 3; // prettified JSON indentation size
-   bool shrink_to_fit = false; // shrinks dynamic containers to new size to save memory
-   bool write_type_info = true; // Write type info for meta objects in variants
-   bool force_conformance = false; // Do not allow invalid json normally accepted when reading such as comments.
-   bool error_on_missing_keys = false;  // Require all non nullable keys to be present in the object. Use skip_null_members = false to require nullable members
+      bool comments = false; // Write out comments
+      bool error_on_unknown_keys = true; // Error when an unknown key is encountered
+      bool skip_null_members = true; // Skip writing out params in an object if the value is null
+      bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
+      bool prettify = false; // Write out prettified JSON
+      char indentation_char = ' '; // Prettified JSON indentation char
+      uint8_t indentation_width = 3; // Prettified JSON indentation size
+      bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
+      bool write_type_info = true; // Write type info for meta objects in variants
+      bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
+      bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
+                                          // skip_null_members = false to require nullable members
+      uint32_t layout = rowwise; // CSV row wise output/input
+      bool quoted = false; // treat numbers as quoted or array-like types as having quoted numbers
+      bool number = false; // read numbers as strings and write these string as numbers
 };
 ```
 
