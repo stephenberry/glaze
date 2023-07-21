@@ -3614,21 +3614,6 @@ suite custom_unique_tests = [] {
 
 static_assert(glz::detail::emplaceable<std::set<std::string>>);
 
-struct set_object
-{
-   std::set<int> field{};
-
-   bool operator==(const set_object& other) const { return field == other.field; }
-
-   bool operator<(const set_object& other) const { return field < other.field; }
-
-   struct glaze
-   {
-      using T = set_object;
-      static constexpr auto value = glz::object("field", &T::field);
-   };
-};
-
 suite sets = [] {
    "std::unordered_set"_test = [] {
       std::unordered_set<std::string> set;
@@ -3723,16 +3708,20 @@ suite sets = [] {
       expect(set.count(5) == 1);
    };
 
-   "std::set<set_object>"_test = [] {
-      std::set<set_object> things;
+   "std::set<std::map<>>"_test = [] {
+      // test is important: map is amended in its parsing, not replaced like other entry types
+      using Entry = std::map<std::string, int>;
+      std::set<Entry> things;
       const auto input_string = R"([
-        {"field": [1] },
-        {"field": [2,3]},
-        {"field": [4,5]}
+        {"one": 1},
+        {"two": 2},
+        {"three": 3},
+        {"four": 4},
+        {"five": 5}
       ])";
       expect(!glz::read_json(things, input_string));
       auto s = glz::write_json(things);
-      expect(s == R"([{"field":[1]},{"field":[2,3]},{"field":[4,5]}])") << s;
+      expect(s == R"([{"five":5},{"four":4},{"one":1},{"three":3},{"two":2}])") << s;
    };
 };
 
