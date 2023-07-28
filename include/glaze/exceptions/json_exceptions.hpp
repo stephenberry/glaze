@@ -28,7 +28,7 @@ namespace glz::ex
    }
 
    template <class T, class Buffer>
-   [[nodiscard]] T read_json(Buffer&& buffer) noexcept
+   [[nodiscard]] T read_json(Buffer&& buffer)
    {
       const auto ex = glz::read_json<T>(std::forward<Buffer>(buffer));
       if (ex) {
