@@ -195,11 +195,7 @@ namespace glz
                   value = static_cast<V>(i);
                }
                else {
-                  if (i > std::numeric_limits<V>::max()) [[unlikely]] {
-                     ctx.error = error_code::parse_number_failure;
-                     return;
-                  }
-                  if (i < std::numeric_limits<V>::min()) [[unlikely]] {
+                  if (i > std::numeric_limits<V>::max() || i < std::numeric_limits<V>::min()) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
