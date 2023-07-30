@@ -967,13 +967,13 @@ namespace glz
    } // namespace detail
 
    template <class T, class Buffer>
-   [[nodiscard]] GLZ_ALWAYS_INLINE auto write_json(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline auto write_json(T&& value, Buffer&& buffer) noexcept
    {
       return write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
-   [[nodiscard]] GLZ_ALWAYS_INLINE auto write_json(T&& value) noexcept
+   [[nodiscard]] inline auto write_json(T&& value) noexcept
    {
       std::string buffer{};
       write<opts{}>(std::forward<T>(value), buffer);
@@ -981,13 +981,13 @@ namespace glz
    }
 
    template <class T, class Buffer>
-   GLZ_ALWAYS_INLINE void write_jsonc(T&& value, Buffer&& buffer) noexcept
+   inline void write_jsonc(T&& value, Buffer&& buffer) noexcept
    {
       write<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
-   [[nodiscard]] GLZ_ALWAYS_INLINE auto write_jsonc(T&& value) noexcept
+   [[nodiscard]] inline auto write_jsonc(T&& value) noexcept
    {
       std::string buffer{};
       write<opts{.comments = true}>(std::forward<T>(value), buffer);
@@ -996,7 +996,7 @@ namespace glz
 
    // std::string file_name needed for std::ofstream
    template <class T>
-   [[nodiscard]] GLZ_ALWAYS_INLINE write_error write_file_json(T&& value, const std::string& file_name,
+   [[nodiscard]] inline write_error write_file_json(T&& value, const std::string& file_name,
                                                                auto&& buffer) noexcept
    {
       write<opts{}>(std::forward<T>(value), buffer);

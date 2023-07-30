@@ -1962,7 +1962,7 @@ namespace glz
    } // namespace detail
 
    template <class Buffer>
-   [[nodiscard]] GLZ_ALWAYS_INLINE parse_error validate_json(Buffer&& buffer) noexcept
+   [[nodiscard]] inline parse_error validate_json(Buffer&& buffer) noexcept
    {
       context ctx{};
       glz::skip skip_value{};
@@ -1970,14 +1970,14 @@ namespace glz
    }
 
    template <class T, class Buffer>
-   [[nodiscard]] GLZ_ALWAYS_INLINE parse_error read_json(T& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline parse_error read_json(T& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <class T, class Buffer>
-   [[nodiscard]] GLZ_ALWAYS_INLINE expected<T, parse_error> read_json(Buffer&& buffer) noexcept
+   [[nodiscard]] inline expected<T, parse_error> read_json(Buffer&& buffer) noexcept
    {
       T value{};
       context ctx{};
@@ -1989,7 +1989,7 @@ namespace glz
    }
 
    template <auto Opts = opts{}, class T>
-   GLZ_ALWAYS_INLINE parse_error read_file_json(T& value, const sv file_name, auto&& buffer) noexcept
+   inline parse_error read_file_json(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;
