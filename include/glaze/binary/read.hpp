@@ -559,13 +559,13 @@ namespace glz
    }
 
    template <class T, class Buffer>
-   [[nodiscard]] GLZ_ALWAYS_INLINE parse_error read_binary(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline parse_error read_binary(T&& value, Buffer&& buffer) noexcept
    {
       return read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
    }
 
    template <class T, class Buffer>
-   [[nodiscard]] GLZ_ALWAYS_INLINE expected<T, parse_error> read_binary(Buffer&& buffer) noexcept
+   [[nodiscard]] inline expected<T, parse_error> read_binary(Buffer&& buffer) noexcept
    {
       T value{};
       const auto pe = read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
@@ -576,7 +576,7 @@ namespace glz
    }
 
    template <class T>
-   [[nodiscard]] GLZ_ALWAYS_INLINE parse_error read_file_binary(T& value, const sv file_name, auto&& buffer) noexcept
+   [[nodiscard]] inline parse_error read_file_binary(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;

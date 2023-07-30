@@ -56,11 +56,37 @@ namespace glz
             using X = std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
                                          const uint8_t*, uint8_t*>;
             auto cur = reinterpret_cast<X>(it);
-            auto s = parse_number(value, cur);
-            if (!s) [[unlikely]] {
-               ctx.error = error_code::parse_number_failure;
-               return;
+            using V = std::decay_t<decltype(value)>;
+            if constexpr (sizeof(V) < 8 && int_t<V>) {
+               std::conditional_t<std::is_unsigned_v<V>, uint64_t, int64_t> i{};
+               auto s = parse_number<std::decay_t<decltype(i)>, Opts.force_conformance>(i, cur);
+               if (!s) [[unlikely]] {
+                  ctx.error = error_code::parse_number_failure;
+                  return;
+               }
+               if constexpr (std::is_unsigned_v<V>) {
+                  if (i > std::numeric_limits<V>::max()) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+                  value = static_cast<V>(i);
+               }
+               else {
+                  if (i > std::numeric_limits<V>::max() || i < std::numeric_limits<V>::min()) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+                  value = static_cast<V>(i);
+               }
             }
+            else {
+               auto s = parse_number<V, Opts.force_conformance>(value, cur);
+               if (!s) [[unlikely]] {
+                  ctx.error = error_code::parse_number_failure;
+                  return;
+               }
+            }
+            
             it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
          }
       };

@@ -454,13 +454,13 @@ namespace glz
    }
 
    template <class T, class Buffer>
-   GLZ_ALWAYS_INLINE void write_binary(T&& value, Buffer&& buffer)
+   inline void write_binary(T&& value, Buffer&& buffer)
    {
       write<opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
-   GLZ_ALWAYS_INLINE auto write_binary(T&& value)
+   inline auto write_binary(T&& value)
    {
       std::string buffer{};
       write<opts{.format = binary}>(std::forward<T>(value), buffer);
@@ -471,7 +471,7 @@ namespace glz
    concept findable = requires(Map& map, const Key& key) { map.find(key); };
 
    template <auto& Partial, opts Opts, class T, output_buffer Buffer>
-   [[nodiscard]] GLZ_ALWAYS_INLINE write_error write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
+   [[nodiscard]] inline write_error write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
    {
       write_error we{};
 
@@ -544,21 +544,21 @@ namespace glz
    }
 
    template <auto& Partial, opts Opts, class T, output_buffer Buffer>
-   [[nodiscard]] GLZ_ALWAYS_INLINE write_error write(T&& value, Buffer& buffer) noexcept
+   [[nodiscard]] inline write_error write(T&& value, Buffer& buffer) noexcept
    {
       context ctx{};
       return write<Partial, Opts>(std::forward<T>(value), buffer, ctx);
    }
 
    template <auto& Partial, class T, class Buffer>
-   GLZ_ALWAYS_INLINE auto write_binary(T&& value, Buffer&& buffer)
+   inline auto write_binary(T&& value, Buffer&& buffer)
    {
       return write<Partial, opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    // std::string file_name needed for std::ofstream
    template <class T>
-   [[nodiscard]] GLZ_ALWAYS_INLINE write_error write_file_binary(T&& value, const std::string& file_name,
+   [[nodiscard]] inline write_error write_file_binary(T&& value, const std::string& file_name,
                                                                  auto&& buffer) noexcept
    {
       write<opts{.format = binary}>(std::forward<T>(value), buffer);

@@ -406,6 +406,12 @@ namespace glz::detail
    template <class T, bool force_conformance = false>
    inline bool parse_number(T& val, auto*& cur) noexcept
    {
+      // reject negative numbers if unsigned
+      if constexpr (std::is_unsigned_v<T>) {
+         if (*cur == '-') {
+            return false;
+         }
+      }
       const uint8_t* sig_cut = nullptr; /* significant part cutting position for long number */
       [[maybe_unused]] const uint8_t* sig_end = nullptr; /* significant part ending position */
       const uint8_t* dot_pos = nullptr; /* decimal point position */
@@ -419,8 +425,13 @@ namespace glz::detail
       const uint8_t* tmp; /* temporary cursor for reading */
       const uint8_t* hdr = cur;
       bool sign;
-      sign = (*hdr == '-');
-      cur += sign;
+      if constexpr (std::is_unsigned_v<T>) {
+         sign = false;
+      }
+      else {
+         sign = (*hdr == '-');
+         cur += sign;
+      }
       auto apply_sign = [&](auto&& val) -> T {
          if constexpr (std::is_unsigned_v<T>) {
             return static_cast<T>(val);
