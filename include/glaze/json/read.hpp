@@ -180,9 +180,9 @@ namespace glz
                                          const uint8_t*, uint8_t*>;
             auto cur = reinterpret_cast<X>(it);
             using V = std::decay_t<decltype(value)>;
-            if constexpr (sizeof(V) < 8) {
+            if constexpr (sizeof(V) < 8 && int_t<V>) {
                std::conditional_t<std::is_unsigned_v<V>, uint64_t, int64_t> i{};
-               auto s = parse_number(i, cur);
+               auto s = parse_number<std::decay_t<decltype(i)>, Options.force_conformance>(i, cur);
                if (!s) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;
@@ -207,7 +207,7 @@ namespace glz
                }
             }
             else {
-               auto s = parse_number(value, cur);
+               auto s = parse_number<V, Options.force_conformance>(value, cur);
                if (!s) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;
