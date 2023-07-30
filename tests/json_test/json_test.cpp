@@ -4847,49 +4847,49 @@ suite write_to_map = [] {
    };
 };
 
-suite negatives_with_unsiged = []{
+suite negatives_with_unsiged = [] {
    "negatives_with_unsiged"_test = [] {
       uint8_t x8{};
       std::string s = "-8";
       expect(glz::read_json(x8, s) == glz::error_code::parse_number_failure);
-      
+
       uint16_t x16{};
       expect(glz::read_json(x16, s) == glz::error_code::parse_number_failure);
-      
+
       uint32_t x32{};
       expect(glz::read_json(x32, s) == glz::error_code::parse_number_failure);
-      
+
       uint64_t x64{};
       expect(glz::read_json(x64, s) == glz::error_code::parse_number_failure);
-      
+
       s = "  -8";
       expect(glz::read_json(x64, s) == glz::error_code::parse_number_failure);
-      
+
       s = "  -  8";
       expect(glz::read_json(x64, s) == glz::error_code::parse_number_failure);
    };
 };
 
-suite integer_over_under_flow = []{
+suite integer_over_under_flow = [] {
    "integer_over_under_flow"_test = [] {
       int8_t x8{};
       std::string s = "300";
       expect(glz::read_json(x8, s) == glz::error_code::parse_number_failure);
-      
+
       s = "-300";
       expect(glz::read_json(x8, s) == glz::error_code::parse_number_failure);
-      
+
       int16_t x16{};
       s = "209380980";
       expect(glz::read_json(x16, s) == glz::error_code::parse_number_failure);
-      
+
       s = "-209380980";
       expect(glz::read_json(x16, s) == glz::error_code::parse_number_failure);
-      
+
       int32_t x32{};
       s = "4294967297";
       expect(glz::read_json(x32, s) == glz::error_code::parse_number_failure);
-      
+
       s = "-4294967297";
       expect(glz::read_json(x32, s) == glz::error_code::parse_number_failure);
    };

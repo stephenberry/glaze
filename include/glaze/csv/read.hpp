@@ -86,7 +86,7 @@ namespace glz
                   return;
                }
             }
-            
+
             it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
          }
       };
