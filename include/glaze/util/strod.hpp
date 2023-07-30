@@ -425,8 +425,13 @@ namespace glz::detail
       const uint8_t* tmp; /* temporary cursor for reading */
       const uint8_t* hdr = cur;
       bool sign;
-      sign = (*hdr == '-');
-      cur += sign;
+      if constexpr (std::is_unsigned_v<T>) {
+         sign = false;
+      }
+      else {
+         sign = (*hdr == '-');
+         cur += sign;
+      }
       auto apply_sign = [&](auto&& val) -> T {
          if constexpr (std::is_unsigned_v<T>) {
             return static_cast<T>(val);

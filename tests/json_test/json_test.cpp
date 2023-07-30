@@ -4870,13 +4870,30 @@ suite negatives_with_unsiged = []{
    };
 };
 
-/*suite integer_over_under_flow = []{
+suite integer_over_under_flow = []{
    "integer_over_under_flow"_test = [] {
-      int8_t x{};
+      int8_t x8{};
       std::string s = "300";
-      expect(glz::read_json(x, s) == glz::error_code::syntax_error);
+      expect(glz::read_json(x8, s) == glz::error_code::parse_number_failure);
+      
+      s = "-300";
+      expect(glz::read_json(x8, s) == glz::error_code::parse_number_failure);
+      
+      int16_t x16{};
+      s = "209380980";
+      expect(glz::read_json(x16, s) == glz::error_code::parse_number_failure);
+      
+      s = "-209380980";
+      expect(glz::read_json(x16, s) == glz::error_code::parse_number_failure);
+      
+      int32_t x32{};
+      s = "4294967297";
+      expect(glz::read_json(x32, s) == glz::error_code::parse_number_failure);
+      
+      s = "-4294967297";
+      expect(glz::read_json(x32, s) == glz::error_code::parse_number_failure);
    };
-};*/
+};
 
 int main()
 {
