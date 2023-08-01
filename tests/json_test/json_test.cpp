@@ -4895,6 +4895,20 @@ suite integer_over_under_flow = [] {
    };
 };
 
+suite integer_reading = [] {
+   "long float"_test = [] {
+      std::string_view buffer{"0.00666666666666666600"};
+      int i{5};
+      expect(!glz::read_json(i, buffer));
+      expect(i == 0);
+      
+      buffer = "0.0000666666666666666600";
+      i = 5;
+      expect(!glz::read_json(i, buffer));
+      expect(i == 0);
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
