@@ -4901,7 +4901,7 @@ suite integer_reading = [] {
       int i{5};
       expect(!glz::read_json(i, buffer));
       expect(i == 0);
-      
+
       buffer = "0.0000666666666666666600";
       i = 5;
       expect(!glz::read_json(i, buffer));
