@@ -6,6 +6,7 @@
 #include <charconv>
 #include <climits>
 #include <cwchar>
+#include <filesystem>
 #include <iterator>
 #include <locale>
 #include <ranges>
