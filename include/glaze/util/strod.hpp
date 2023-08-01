@@ -26,7 +26,7 @@ namespace glz::detail
    // Wontfix: Numbers with more than 19 sigfigs may be off by 1ulp. No algorithm should be outputing more than 17
    // digits so I dont think roundtripping matters if you supply extra digits
 
-   inline constexpr std::array<uint64_t, 21> powers_of_ten_int{1ull,
+   inline constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
                                                                10ull,
                                                                100ull,
                                                                1000ull,
@@ -662,11 +662,22 @@ namespace glz::detail
          if constexpr (!std::is_unsigned_v<T>) {
             val *= sign ? -1 : 1;
          }
+         static constexpr auto n_powers_of_ten_int = powers_of_ten_int.size();
+         const uint32_t abs_exp = std::abs(exp);
+         if (abs_exp >= n_powers_of_ten_int) [[unlikely]] {
+            if (exp > 0) {
+               return false;
+            }
+            else {
+               val = T(0);
+               return true;
+            }
+         }
          if (exp >= 0) {
-            val *= T(powers_of_ten_int[exp]);
+            val *= T(powers_of_ten_int[abs_exp]);
          }
          else {
-            val /= T(powers_of_ten_int[-exp]);
+            val /= T(powers_of_ten_int[abs_exp]);
          }
          return true;
       }
