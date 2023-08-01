@@ -15,7 +15,6 @@
 #include <vector>
 
 // TODO: optionally include with a templated struct
-#include <filesystem>
 #include <fstream>
 
 #include "glaze/api/name.hpp"

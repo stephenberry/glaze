@@ -1,5 +1,7 @@
 #include "example.hpp"
 
+#include <iostream>
+
 int main()
 {
    using namespace example;

@@ -3,13 +3,11 @@
 #include <array>
 #include <bit>
 #include <bitset>
-#include <cassert>
 #include <cfenv>
 #include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <iostream>
 #include <limits>
 #include <string>
 #include <type_traits>
@@ -321,6 +319,7 @@ namespace glz::detail
    struct bigint_t
    {
       std::vector<uint32_t> data = {};
+      // To print: for (auto item : data) std::cout << std::bitset<32>(item) << '\n';
 
       bigint_t(uint64_t num)
       {
@@ -395,11 +394,6 @@ namespace glz::detail
             if (data[i] > rhs.data[i]) return 1;
          }
          return 0;
-      }
-
-      void print()
-      {
-         for (auto item : data) std::cout << std::bitset<32>(item) << '\n';
       }
    };
 
