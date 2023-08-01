@@ -663,15 +663,14 @@ namespace glz::detail
             val *= sign ? -1 : 1;
          }
          static constexpr auto n_powers_of_ten_int = powers_of_ten_int.size();
-         uint32_t abs_exp = std::abs(exp);
-         if constexpr (std::same_as<T, uint64_t>) {
-            if (abs_exp > n_powers_of_ten_int) [[unlikely]] {
-               if (exp >= 0) {
-                  return false;
-               }
-               else {
-                  return T(0);
-               }
+         const uint32_t abs_exp = std::abs(exp);
+         if (abs_exp >= n_powers_of_ten_int) [[unlikely]] {
+            if (exp > 0) {
+               return false;
+            }
+            else {
+               val = T(0);
+               return true;
             }
          }
          if (exp >= 0) {
