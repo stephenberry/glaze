@@ -18,66 +18,88 @@
 #include <span>
 #include <string_view>
 
+// Notes on padding:
+// We only need to do buffer extensions on very short keys (n < 8)
+// Our static thread_local string_buffer always has enough padding for short strings (n < 8)
+// Only short string_view keys from the primary buffer are potentially an issue
+// Typically short keys are not going to be at the end of the buffer
+// For valid keys we always have a quote and a null character '\0'
+// Our key can be empty, which means we need 6 bytes of additional padding
+// Getting rid of the page boundary check is an improvement to performance and safer overall
+
 namespace glz::detail
 {
-   // Utility for SWAR. Can be unsafe so use with caution.
-   // This is used for buffer overeads which is undefinded behavior.
-   // But should be fine on as long as the load is aligned,
-   // or we check for page boundaries,
-   // or if in the middle of a buffer with padding.
-   // Page boundary checks is not garanteed does work on all major achitectures
-   // This can be flagged by undefined behavior sanitizers
-   // Read more here:
-   // https://stackoverflow.com/questions/37800739/is-it-safe-to-read-past-the-end-of-a-buffer-within-the-same-page-on-x86-and-x64
-   template <bool unsafe = false>
-   constexpr uint64_t to_uint64(const char* bytes, const size_t N) noexcept
+   inline constexpr uint64_t to_uint64(const char* bytes, const size_t N) noexcept
    {
       static_assert(std::endian::native == std::endian::little);
-      constexpr auto num_bytes = sizeof(uint64_t);
       uint64_t res{};
       if (std::is_constant_evaluated()) {
          for (size_t i = 0; i < N; ++i) {
             res |= uint64_t(bytes[i]) << (i << 3);
          }
       }
-      else {
-         // Compiletime memcpy size is way faster with unsafe = true.
-         // So we load in 8 bytes and then throw away the trash with a shift
-         std::memcpy(&res, bytes, unsafe ? num_bytes : N);
-         auto shift = uint64_t(num_bytes - N) << 3;
-         res = (res << shift) >> shift;
-      }
-      return res;
-   }
-
-   // Super unfafe be careful when using this
-   // https://stackoverflow.com/questions/37800739/is-it-safe-to-read-past-the-end-of-a-buffer-within-the-same-page-on-x86-and-x64
-   constexpr uint64_t to_uint64_unsafe_preread(const char* bytes, const size_t N) noexcept
-   {
-      static_assert(std::endian::native == std::endian::little);
-      constexpr auto num_bytes = sizeof(uint64_t);
-      uint64_t res{};
-      if (std::is_constant_evaluated()) {
-         for (size_t i = 0; i < N; ++i) {
-            res |= uint64_t(bytes[i]) << (i << 3);
+      else {         
+         switch (N) {
+            case 1: {
+               std::memcpy(&res, bytes, 1);
+               break;
+            }
+            case 2: {
+               std::memcpy(&res, bytes, 2);
+               break;
+            }
+            case 3: {
+               std::memcpy(&res, bytes, 3);
+               break;
+            }
+            case 4: {
+               std::memcpy(&res, bytes, 4);
+               break;
+            }
+            case 5: {
+               std::memcpy(&res, bytes, 5);
+               break;
+            }
+            case 6: {
+               std::memcpy(&res, bytes, 6);
+               break;
+            }
+            case 7: {
+               std::memcpy(&res, bytes, 7);
+               break;
+            }
+            default: {
+               break;
+            }
          }
       }
-      else {
-         // Compiletime memcpy size is way faster with unsafe = true.
-         // So we load in 8 bytes and then throw away the trash with a shift
-         const auto extra = (num_bytes - N);
-         std::memcpy(&res, bytes - extra, num_bytes);
-         auto shift = uint64_t(extra) << 3;
-         res = (res >> shift);
-      }
       return res;
    }
-
+   
    template <size_t N = 8>
    constexpr uint64_t to_uint64(const char* bytes) noexcept
    {
       static_assert(N <= sizeof(uint64_t));
-      return to_uint64(bytes, N);
+      static_assert(std::endian::native == std::endian::little);
+      if (std::is_constant_evaluated()) {
+         uint64_t res{};
+         for (size_t i = 0; i < N; ++i) {
+            res |= uint64_t(bytes[i]) << (i << 3);
+         }
+         return res;
+      }
+      else {
+         uint64_t res{};
+         std::memcpy(&res, bytes, N);
+         constexpr auto num_bytes = sizeof(uint64_t);
+         constexpr auto shift = uint64_t(num_bytes - N) << 3;
+         if constexpr (shift == 0) {
+            return res;
+         }
+         else {
+            return (res << shift) >> shift;
+         }
+      }
    }
 
    // https://en.wikipedia.org/wiki/Xorshift
@@ -127,29 +149,14 @@ namespace glz::detail
          const auto n = value.size();
 
          if (n < 8) {
-            // Page boundary check for buffer preread/overread
-            if (!std::is_constant_evaluated() && (reinterpret_cast<std::uintptr_t>(value.data()) & (4096 - 8)))
-               [[likely]] {
-#ifdef __SANITIZE_ADDRESS__
-               return bitmix(h ^ to_uint64(value.data(), n));
-#else
-               return bitmix(h ^ to_uint64_unsafe_preread(value.data(), n));
-#endif
-            }
-            else {
-#ifdef __SANITIZE_ADDRESS__
-               return bitmix(h ^ to_uint64(value.data(), n));
-#else
-               return bitmix(h ^ to_uint64<true>(value.data(), n));
-#endif
-            }
+            return bitmix(h ^ to_uint64(value.data(), n));
          }
 
          const char* end7 = value.data() + n - 7;
          for (auto d0 = value.data(); d0 < end7; d0 += 8) {
             h = bitmix(h ^ to_uint64(d0));
          }
-         // Handle potential tail. We know we have atleast
+         // Handle potential tail. We know we have at least 8
          return bitmix(h ^ to_uint64(value.data() + n - 8));
       }
    };
