@@ -16,7 +16,7 @@ namespace glz
       template <class T = void>
       struct skip_binary
       {};
-      
+
       // TODO: UNDER CONSTRUCTION
       template <class T>
          requires glaze_object_t<T>
@@ -35,7 +35,7 @@ namespace glz
             }
 
             ++it;
-            
+
             const auto n_keys = int_from_compressed(it, end);
 
             static constexpr auto storage = detail::make_map<T, Opts.use_hash_comparison>();
@@ -52,43 +52,42 @@ namespace glz
                const std::string_view key{it, length};
 
                std::advance(it, length);
-               
+
                const auto value_tag = uint8_t(*it);
-               
+
                const auto value_type = get_bits<3>(value_tag);
-               switch (value_type){
-                  case tag::null: {
-                     break;
-                  }
-                  case tag::boolean: {
-                     break;
-                  }
-                  case tag::number: {
-                     break;
-                  }
-                  case tag::string: {
-                     break;
-                  }
-                  case tag::object: {
-                     break;
-                  }
-                  case tag::typed_array: {
-                     break;
-                  }
-                  case tag::untyped_array: {
-                     break;
-                  }
-                  case tag::type: {
-                     break;
-                  }
-                  default: {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
+               switch (value_type) {
+               case tag::null: {
+                  break;
+               }
+               case tag::boolean: {
+                  break;
+               }
+               case tag::number: {
+                  break;
+               }
+               case tag::string: {
+                  break;
+               }
+               case tag::object: {
+                  break;
+               }
+               case tag::typed_array: {
+                  break;
+               }
+               case tag::untyped_array: {
+                  break;
+               }
+               case tag::type: {
+                  break;
+               }
+               default: {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                }
             }
          }
       };
    }
 }
-

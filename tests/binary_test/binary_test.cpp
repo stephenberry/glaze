@@ -867,10 +867,10 @@ struct glz::meta<falcon1>
 
 suite falcon_test = [] {
    "partial read"_test = [] {
-      falcon0 f0{ 3.14 };
+      falcon0 f0{3.14};
       std::string s;
       glz::write_binary(f0, s);
-      
+
       falcon1 f1{};
       expect(!glz::read_binary(f1, s));
       expect(f1.d == 3.14);

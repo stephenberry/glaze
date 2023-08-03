@@ -38,44 +38,44 @@ namespace glz::detail
             res |= uint64_t(bytes[i]) << (i << 3);
          }
       }
-      else {         
+      else {
          switch (N) {
-            case 1: {
-               std::memcpy(&res, bytes, 1);
-               break;
-            }
-            case 2: {
-               std::memcpy(&res, bytes, 2);
-               break;
-            }
-            case 3: {
-               std::memcpy(&res, bytes, 3);
-               break;
-            }
-            case 4: {
-               std::memcpy(&res, bytes, 4);
-               break;
-            }
-            case 5: {
-               std::memcpy(&res, bytes, 5);
-               break;
-            }
-            case 6: {
-               std::memcpy(&res, bytes, 6);
-               break;
-            }
-            case 7: {
-               std::memcpy(&res, bytes, 7);
-               break;
-            }
-            default: {
-               break;
-            }
+         case 1: {
+            std::memcpy(&res, bytes, 1);
+            break;
+         }
+         case 2: {
+            std::memcpy(&res, bytes, 2);
+            break;
+         }
+         case 3: {
+            std::memcpy(&res, bytes, 3);
+            break;
+         }
+         case 4: {
+            std::memcpy(&res, bytes, 4);
+            break;
+         }
+         case 5: {
+            std::memcpy(&res, bytes, 5);
+            break;
+         }
+         case 6: {
+            std::memcpy(&res, bytes, 6);
+            break;
+         }
+         case 7: {
+            std::memcpy(&res, bytes, 7);
+            break;
+         }
+         default: {
+            break;
+         }
          }
       }
       return res;
    }
-   
+
    template <size_t N = 8>
    constexpr uint64_t to_uint64(const char* bytes) noexcept
    {
