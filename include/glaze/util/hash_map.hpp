@@ -29,7 +29,7 @@
 
 namespace glz::detail
 {
-   inline constexpr uint64_t to_uint64(const char* bytes, const size_t N) noexcept
+   inline constexpr uint64_t to_uint64_n_below_8(const char* bytes, const size_t N) noexcept
    {
       static_assert(std::endian::native == std::endian::little);
       uint64_t res{};
@@ -149,7 +149,7 @@ namespace glz::detail
          const auto n = value.size();
 
          if (n < 8) {
-            return bitmix(h ^ to_uint64(value.data(), n));
+            return bitmix(h ^ to_uint64_n_below_8(value.data(), n));
          }
 
          const char* end7 = value.data() + n - 7;
