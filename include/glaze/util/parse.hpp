@@ -13,9 +13,9 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/util/expected.hpp"
 #include "glaze/util/inline.hpp"
+#include "glaze/util/stoui64.hpp"
 #include "glaze/util/string_literal.hpp"
 #include "glaze/util/string_view.hpp"
-#include "glaze/util/stoui64.hpp"
 
 namespace glz::detail
 {
@@ -446,7 +446,7 @@ namespace glz::detail
       }
       return false;
    }
-   
+
    // TODO: don't recurse
    inline constexpr std::optional<size_t> stoui(std::string_view s, size_t value = 0) noexcept
    {

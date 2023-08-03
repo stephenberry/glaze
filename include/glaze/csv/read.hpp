@@ -51,7 +51,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            
+
             using V = std::decay_t<decltype(value)>;
             if constexpr (int_t<V>) {
                if constexpr (std::is_unsigned_v<V>) {
@@ -65,7 +65,7 @@ namespace glz
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  
+
                   if (i > std::numeric_limits<V>::max()) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
@@ -84,7 +84,7 @@ namespace glz
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  
+
                   if (i > std::numeric_limits<V>::max()) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
@@ -94,8 +94,9 @@ namespace glz
             }
             else {
                // TODO: fix this also, taken from json
-               using X = std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
-                                            const uint8_t*, uint8_t*>;
+               using X =
+                  std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
+                                     const uint8_t*, uint8_t*>;
                auto cur = reinterpret_cast<X>(it);
                auto s = parse_number<V, Opts.force_conformance>(value, cur);
                if (!s) [[unlikely]] {
