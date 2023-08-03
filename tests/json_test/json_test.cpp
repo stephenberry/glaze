@@ -4895,7 +4895,7 @@ suite integer_over_under_flow = [] {
    };
 };
 
-suite integer_reading = [] {
+suite number_reading = [] {
    "long float"_test = [] {
       std::string_view buffer{"0.00666666666666666600"};
       int i{5};
@@ -4903,6 +4903,11 @@ suite integer_reading = [] {
       expect(i == 0);
 
       buffer = "0.0000666666666666666600";
+      i = 5;
+      expect(!glz::read_json(i, buffer));
+      expect(i == 0);
+      
+      buffer = "0.00000000000000000000000";
       i = 5;
       expect(!glz::read_json(i, buffer));
       expect(i == 0);
