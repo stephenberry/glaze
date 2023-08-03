@@ -1,8 +1,6 @@
 # Glaze
 One of the fastest JSON libraries in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
 
-> BREAKING v1.3.0 CHANGE: `std::pair`  is now handled as a JSON object (`{"first":second}`}. If you require a JSON array of two items, use `std::array` or `std::tuple`.
-
 ## Highlights
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
@@ -26,13 +24,13 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.20**           | **903**      | **1134**    |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1294**    |
-| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.78**           | **628**      | **999**     |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.86**           | **358**      | **492**     |
-| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.59**           | **301**      | **498**     |
-| [**json_struct**](https://github.com/jorgen/json_struct)     | **4.43**           | **230**      | **326**     |
-| [**nlohmann**](https://github.com/nlohmann/json)             | **15.65**          | **88**       | **85**      |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.23**           | **897**      | **1094**    |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1286**    |
+| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.77**           | **628**      | **1000**    |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.89**           | **354**      | **490**     |
+| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.59**           | **304**      | **507**     |
+| [**json_struct**](https://github.com/jorgen/json_struct)     | **4.30**           | **235**      | **332**     |
+| [**nlohmann**](https://github.com/nlohmann/json)             | **15.35**          | **89**       | **85**      |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
@@ -42,8 +40,8 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.66**           | **1264**     | **1072**    |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **169**     |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **2.25**           | **1269**     | **639**     |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **171**     |
 
 ## Binary Performance
 
