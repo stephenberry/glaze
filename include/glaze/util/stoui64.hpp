@@ -70,7 +70,7 @@ namespace glz::detail
       }
       
       if (n == 20) [[unlikely]] {
-         for (int32_t k = 0; k < 19; ++k) {
+         for (uint32_t k = 0; k < 19; ++k) {
             res = 10 * res + digits[k];
          }
          
