@@ -840,6 +840,43 @@ suite flag_test = [] {
    };
 };
 
+struct falcon0
+{
+   double d{};
+};
+
+template <>
+struct glz::meta<falcon0>
+{
+   using T = falcon0;
+   static constexpr auto value = object("d", &T::d);
+};
+
+struct falcon1
+{
+   int i{};
+   double d{};
+};
+
+template <>
+struct glz::meta<falcon1>
+{
+   using T = falcon1;
+   static constexpr auto value = object("i", &T::i, "d", &T::d);
+};
+
+suite falcon_test = [] {
+   "partial read"_test = [] {
+      falcon0 f0{ 3.14 };
+      std::string s;
+      glz::write_binary(f0, s);
+      
+      falcon1 f1{};
+      expect(!glz::read_binary(f1, s));
+      expect(f1.d == 3.14);
+   };
+};
+
 int main()
 {
    using namespace boost::ut;

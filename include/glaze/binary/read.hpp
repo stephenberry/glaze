@@ -8,6 +8,7 @@
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/dump.hpp"
+#include "glaze/binary/skip.hpp"
 
 namespace glz
 {
