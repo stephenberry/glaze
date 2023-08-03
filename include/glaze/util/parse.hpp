@@ -15,6 +15,7 @@
 #include "glaze/util/inline.hpp"
 #include "glaze/util/string_literal.hpp"
 #include "glaze/util/string_view.hpp"
+#include "glaze/util/stoui64.hpp"
 
 namespace glz::detail
 {
@@ -445,9 +446,7 @@ namespace glz::detail
       }
       return false;
    }
-
-   GLZ_ALWAYS_INLINE constexpr bool is_digit(char c) noexcept { return c <= '9' && c >= '0'; }
-
+   
    // TODO: don't recurse
    inline constexpr std::optional<size_t> stoui(std::string_view s, size_t value = 0) noexcept
    {

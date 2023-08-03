@@ -176,19 +176,21 @@ namespace glz
                   return;
             }
 
-            // TODO: fix this
-            using X = std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
-                                         const uint8_t*, uint8_t*>;
-            auto cur = reinterpret_cast<X>(it);
+            
             using V = std::decay_t<decltype(value)>;
-            if constexpr (sizeof(V) < 8 && int_t<V>) {
-               std::conditional_t<std::is_unsigned_v<V>, uint64_t, int64_t> i{};
-               auto s = parse_number<std::decay_t<decltype(i)>, Options.force_conformance>(i, cur);
-               if (!s) [[unlikely]] {
-                  ctx.error = error_code::parse_number_failure;
-                  return;
-               }
+            if constexpr (int_t<V>) {
                if constexpr (std::is_unsigned_v<V>) {
+                  uint64_t i{};
+                  if (*it == '-') {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+                  auto e = stoui64(i, it);
+                  if (!e) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+                  
                   if (i > std::numeric_limits<V>::max()) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
@@ -196,23 +198,38 @@ namespace glz
                   value = static_cast<V>(i);
                }
                else {
-                  if (i > std::numeric_limits<V>::max() || i < std::numeric_limits<V>::min()) [[unlikely]] {
+                  uint64_t i{};
+                  int sign = 1;
+                  if (*it == '-') {
+                     sign = -1;
+                     ++it;
+                  }
+                  auto e = stoui64(i, it);
+                  if (!e) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  value = static_cast<V>(i);
+                  
+                  if (i > std::numeric_limits<V>::max()) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+                  value = sign * static_cast<V>(i);
                }
             }
             else {
+               // TODO: fix this
+               using X = std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
+                                            const uint8_t*, uint8_t*>;
+               auto cur = reinterpret_cast<X>(it);
                auto s = parse_number<V, Options.force_conformance>(value, cur);
                if (!s) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;
                }
+               it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
             }
-
-            it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
-
+            
             if constexpr (Options.quoted) {
                match<'"'>(ctx, it, end);
             }
