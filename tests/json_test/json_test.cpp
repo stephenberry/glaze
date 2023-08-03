@@ -4911,6 +4911,29 @@ suite number_reading = [] {
       i = 5;
       expect(!glz::read_json(i, buffer));
       expect(i == 0);
+      
+      buffer = "6E19";
+      expect(glz::read_json(i, buffer) == glz::error_code::parse_number_failure);
+   };
+   
+   "long float uint64_t"_test = [] {
+      std::string_view buffer{"0.00666666666666666600"};
+      uint64_t i{5};
+      expect(!glz::read_json(i, buffer));
+      expect(i == 0);
+
+      buffer = "0.0000666666666666666600";
+      i = 5;
+      expect(!glz::read_json(i, buffer));
+      expect(i == 0);
+      
+      buffer = "0.00000000000000000000000";
+      i = 5;
+      expect(!glz::read_json(i, buffer));
+      expect(i == 0);
+      
+      buffer = "6E19";
+      expect(glz::read_json(i, buffer) == glz::error_code::parse_number_failure);
    };
 };
 

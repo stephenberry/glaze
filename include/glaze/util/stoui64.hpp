@@ -13,6 +13,11 @@ namespace glz::detail
        return a <= std::numeric_limits<uint64_t>::max() - b;
    }
    
+   GLZ_ALWAYS_INLINE constexpr bool is_safe_multiplication10(uint64_t a) noexcept {
+       constexpr auto b = std::numeric_limits<uint64_t>::max() / 10;
+       return a <= b;
+   }
+   
    inline constexpr bool stoui64(uint64_t& res, const char*& c) noexcept {
       std::array<uint8_t, 20> digits{};
       
@@ -74,7 +79,12 @@ namespace glz::detail
             res = 10 * res + digits[k];
          }
          
-         res *= 10;
+         if (is_safe_multiplication10(res)) [[likely]] {
+            res *= 10;
+         }
+         else [[unlikely]] {
+            return false;
+         }
          if (is_safe_addition(res, digits[19])) [[likely]] {
             res += digits[19];
          }
