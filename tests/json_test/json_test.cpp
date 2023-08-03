@@ -1429,7 +1429,7 @@ suite read_tests = [] {
          std::string in = R"(null)";
          int res{};
 
-         expect(glz::read_json(res, in) != glz::error_code::none);
+         expect(glz::read_json(res, in) != glz::error_code::parse_number_failure);
       }
    };
 
