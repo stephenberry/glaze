@@ -20,13 +20,13 @@ namespace glz::detail
       return a <= b;
    }
 
-   inline constexpr bool stoui64(uint64_t& res, const char*& c) noexcept
+   GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, const char*& c) noexcept
    {
       std::array<uint8_t, 20> digits{};
 
       uint32_t i{};
       if (*c == '0') {
-         digits[i] = 0;
+         //digits[i] = 0; already set to zero
          ++c;
          ++i;
 
@@ -42,7 +42,7 @@ namespace glz::detail
          ++c;
          ++i;
       }
-      uint32_t upper = i;
+      int32_t n = i;
 
       if (*c == '.') {
          ++c;
@@ -55,7 +55,6 @@ namespace glz::detail
          }
       }
 
-      int32_t exp = 0;
       if (*c == 'e' || *c == 'E') {
          ++c;
 
@@ -64,22 +63,22 @@ namespace glz::detail
             negative = (*c == '-');
             ++c;
          }
-         while (is_digit(*c)) {
+         uint8_t exp = 0;
+         while (is_digit(*c) && exp < 128) {
             exp = 10 * exp + (*c - '0');
             ++c;
          }
-         exp = negative ? -exp : exp;
+         n += negative ? -exp : exp;
       }
-
-      res = 0;
-      const int32_t n = upper + exp;
+      
       if (n < 0) [[unlikely]] {
          return true;
       }
       if (n > 20) [[unlikely]] {
          return false;
       }
-
+      
+      res = 0;
       if (n == 20) [[unlikely]] {
          for (uint32_t k = 0; k < 19; ++k) {
             res = 10 * res + digits[k];
