@@ -191,8 +191,6 @@ namespace glz::detail
          seed = naive_perfect_hash();
          if (seed == (std::numeric_limits<uint64_t>::max)()) {
             // Failed to find perfect hash
-            // TODO find better way of creating compiletime error
-            // Dont want to use the exception trick incase they are disabled
             std::abort();
          }
 

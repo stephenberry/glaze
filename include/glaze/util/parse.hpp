@@ -447,19 +447,19 @@ namespace glz::detail
       return false;
    }
 
-   // TODO: don't recurse
-   inline constexpr std::optional<size_t> stoui(std::string_view s, size_t value = 0) noexcept
+   inline constexpr std::optional<uint64_t> stoui(const std::string_view s) noexcept
    {
       if (s.empty()) {
-         return value;
+         return {};
       }
-
-      else if (is_digit(s[0])) {
-         return stoui(s.substr(1), (s[0] - '0') + value * 10);
+      
+      uint64_t ret;
+      auto* c = s.data();
+      bool valid = detail::stoui64(ret, c);
+      if (valid) {
+         return ret;
       }
-      else {
-         return {}; // not a digit
-      }
+      return {};
    }
 
    GLZ_ALWAYS_INLINE void skip_number_with_validation(is_context auto&& ctx, auto&& it, auto&& end) noexcept

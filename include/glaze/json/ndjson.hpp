@@ -309,12 +309,10 @@ namespace glz
       write<opts{.format = ndjson}>(std::forward<T>(value), buffer);
       return buffer;
    }
-
-   // std::string file_name needed for std::ofstream
+   
    template <class T>
-   inline write_error write_file_ndjson(T&& value, const std::string& file_name)
+   [[nodiscard]] inline write_error write_file_ndjson(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
-      std::string buffer{};
       write<opts{.format = ndjson}>(std::forward<T>(value), buffer);
       return {buffer_to_file(buffer, file_name)};
    }
