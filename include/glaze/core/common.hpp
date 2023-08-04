@@ -14,9 +14,6 @@
 #include <variant>
 #include <vector>
 
-// TODO: optionally include with a templated struct
-#include <fstream>
-
 #include "glaze/api/name.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
