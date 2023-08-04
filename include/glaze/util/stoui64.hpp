@@ -20,7 +20,7 @@ namespace glz::detail
       return a <= b;
    }
 
-   inline constexpr bool stoui64(uint64_t& res, const char*& c) noexcept
+   GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, const char*& c) noexcept
    {
       std::array<uint8_t, 20> digits{};
 
@@ -42,7 +42,7 @@ namespace glz::detail
          ++c;
          ++i;
       }
-      uint32_t upper = i;
+      const uint32_t upper = i;
 
       if (*c == '.') {
          ++c;
