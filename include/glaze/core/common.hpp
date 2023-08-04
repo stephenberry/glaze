@@ -895,11 +895,12 @@ namespace glz
          return fields;
       }
    } // namespace detail
-   
-   constexpr decltype(auto) conv_sv(auto&& value) noexcept {
+
+   constexpr decltype(auto) conv_sv(auto&& value) noexcept
+   {
       using V = std::decay_t<decltype(value)>;
       if constexpr (std::is_convertible_v<V, sv>) {
-         return sv{ value };
+         return sv{value};
       }
       else {
          return value;
@@ -914,21 +915,24 @@ namespace glz
          return glz::detail::Object{glz::tuplet::tuple{}};
       }
       else {
-         return glz::detail::Object{group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(conv_sv(args)...))>>::op(
-            glz::tuplet::make_copy_tuple(conv_sv(args)...))};
+         return glz::detail::Object{
+            group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(conv_sv(args)...))>>::op(
+               glz::tuplet::make_copy_tuple(conv_sv(args)...))};
       }
    }
 
    constexpr auto enumerate(auto&&... args)
    {
-      return glz::detail::Enum{group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(conv_sv(args)...))>>::op(
-         glz::tuplet::make_copy_tuple(conv_sv(args)...))};
+      return glz::detail::Enum{
+         group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(conv_sv(args)...))>>::op(
+            glz::tuplet::make_copy_tuple(conv_sv(args)...))};
    }
 
    constexpr auto flags(auto&&... args)
    {
-      return glz::detail::Flags{group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(conv_sv(args)...))>>::op(
-         glz::tuplet::make_copy_tuple(conv_sv(args)...))};
+      return glz::detail::Flags{
+         group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(conv_sv(args)...))>>::op(
+            glz::tuplet::make_copy_tuple(conv_sv(args)...))};
    }
 }
 

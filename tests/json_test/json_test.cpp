@@ -1937,12 +1937,12 @@ suite write_tests = [] {
 
    "Write object"_test = [] {
       ThreeODetic t{};
-      
+
       std::string s;
       s.reserve(1000);
       glz::write_json(t, s);
       expect(s == R"(["geo",[0,0,0],"int",0])") << s;
-      
+
       Named n{"Hello, world!", {{{21, 15, 13}, 0}, {0}}};
       glz::write_json(n, s);
 
