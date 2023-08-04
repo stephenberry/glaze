@@ -413,9 +413,7 @@ namespace glz::detail
       const uint8_t* hdr = cur;
       bool sign = (*hdr == '-');
       cur += sign;
-      auto apply_sign = [&](auto&& val) -> T {
-         return sign ? -static_cast<T>(val) : static_cast<T>(val);
-      };
+      auto apply_sign = [&](auto&& val) -> T { return sign ? -static_cast<T>(val) : static_cast<T>(val); };
       /* begin with non-zero digit */
       sig = uint64_t(*cur - '0');
       if (sig > 9) {
@@ -544,7 +542,9 @@ namespace glz::detail
       exp_sig += (dot_pos < sig_cut);
       // ignore trailing zeros
       tmp = cur - 1;
-      while (*tmp == '0' || *tmp == '.') { --tmp; }
+      while (*tmp == '0' || *tmp == '.') {
+         --tmp;
+      }
       if (tmp < sig_cut) {
          sig_cut = nullptr;
       }
@@ -719,8 +719,8 @@ namespace glz::detail
          else if ((exp < pow10_sig_table_min_exact ||
                    exp > pow10_sig_table_max_exact) // If there are ones after 64 bits in sig2 then there will be
                                                     // ones after the rounding bit in the product
-                  || (mantisa &
-                      (round_mask << 1)) // Odd nums need to round up regardless of if the rest is nonzero or not
+                  ||
+                  (mantisa & (round_mask << 1)) // Odd nums need to round up regardless of if the rest is nonzero or not
                   || (static_cast<size_t>(std::countr_zero(sig_norm) + std::countr_zero(sig2_norm)) <
                       128 - std::numeric_limits<T>::digits -
                          (2 - sig_product_starts_with_1)) // Check where the least significant one is

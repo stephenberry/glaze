@@ -26,7 +26,7 @@ namespace glz::detail
 
       uint32_t i{};
       if (*c == '0') {
-         //digits[i] = 0; already set to zero
+         // digits[i] = 0; already set to zero
          ++c;
          ++i;
 
@@ -70,14 +70,14 @@ namespace glz::detail
          }
          n += negative ? -exp : exp;
       }
-      
+
       if (n < 0) [[unlikely]] {
          return true;
       }
       if (n > 20) [[unlikely]] {
          return false;
       }
-      
+
       res = 0;
       if (n == 20) [[unlikely]] {
          for (uint32_t k = 0; k < 19; ++k) {
