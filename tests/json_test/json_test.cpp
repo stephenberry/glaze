@@ -4920,6 +4920,9 @@ suite number_reading = [] {
 
       buffer = "6E19";
       expect(glz::read_json(i, buffer) == glz::error_code::parse_number_failure);
+      
+      buffer = "e5555511116";
+      expect(glz::read_json(i, buffer) == glz::error_code::parse_number_failure);
    };
 
    "long float uint64_t"_test = [] {
