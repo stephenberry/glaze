@@ -70,15 +70,15 @@ namespace glz::detail
          }
          n += negative ? -exp : exp;
       }
-
+      
+      res = 0;
       if (n < 0) [[unlikely]] {
          return true;
       }
       if (n > 20) [[unlikely]] {
          return false;
       }
-
-      res = 0;
+      
       if (n == 20) [[unlikely]] {
          for (uint32_t k = 0; k < 19; ++k) {
             res = 10 * res + digits[k];
