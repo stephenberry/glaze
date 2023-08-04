@@ -446,7 +446,9 @@ namespace glz::detail
    }
       repeat_in_1_18(expr_intg);
 #undef expr_intg
-      if (*cur == zero) [[unlikely]] { return false; }
+      if (*cur == zero) [[unlikely]] {
+         return false;
+      }
       cur += 19; /* skip continuous 19 digits */
       if (!digi_is_digit_or_fp(*cur)) {
          val = static_cast<T>(sig);
@@ -581,7 +583,9 @@ namespace glz::detail
             goto digi_finish;
          }
       }
-      while (*cur == '0') { ++cur; }
+      while (*cur == '0') {
+         ++cur;
+      }
       // read exponent literal
       tmp = cur;
       uint8_t c;
