@@ -65,7 +65,7 @@ namespace glz::detail
 #elif defined(_M_X64) || defined(_M_ARM64)
 #define mulhi64 __umulh
 #else
-   uint64_t mulhi64(uint64_t a, uint64_t b)
+   uint64_t mulhi64(uint64_t a, uint64_t b) noexcept
    {
       uint64_t a_lo = (uint32_t)a;
       uint64_t a_hi = a >> 32;
@@ -231,21 +231,21 @@ namespace glz::detail
    /*==============================================================================
     * Digit Character Matcher
     *============================================================================*/
-   /** Digit type */
+   // Digit type
    using digi_type = uint8_t;
-   /** Digit: '0'. */
+   // Digit: '0'.
    inline constexpr digi_type DIGI_TYPE_ZERO = 1 << 0;
-   /** Digit: [1-9]. */
+   // Digit: [1-9].
    inline constexpr digi_type DIGI_TYPE_NONZERO = 1 << 1;
-   /** Plus sign (positive): '+'. */
+   // Plus sign (positive): '+'.
    inline constexpr digi_type DIGI_TYPE_POS = 1 << 2;
-   /** Minus sign (negative): '-'. */
+   // Minus sign (negative): '-'.
    inline constexpr digi_type DIGI_TYPE_NEG = 1 << 3;
-   /** Decimal point: '.' */
+   // Decimal point: '.'
    inline constexpr digi_type DIGI_TYPE_DOT = 1 << 4;
-   /** Exponent sign: 'e, 'E'. */
+   // Exponent sign: 'e, 'E'.
    inline constexpr digi_type DIGI_TYPE_EXP = 1 << 5;
-   /** Digit type table (generate with misc/make_tables.c) */
+   // Digit type table (generate with misc/make_tables.c)
    inline constexpr std::array<digi_type, 256> digi_table = {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -308,19 +308,19 @@ namespace glz::detail
    /*==============================================================================
     * IEEE-754 Double Number Constants
     *============================================================================*/
-   /* maximum decimal power of double number (1.7976931348623157e308) */
+   // maximum decimal power of double number (1.7976931348623157e308)
    inline constexpr auto F64_MAX_DEC_EXP = 308;
-   /* minimum decimal power of double number (4.9406564584124654e-324) */
+   // minimum decimal power of double number (4.9406564584124654e-324)
    inline constexpr auto F64_MIN_DEC_EXP = (-324);
 
    consteval uint32_t ceillog2(uint32_t x) { return x < 2 ? x : 1 + ceillog2(x >> 1); }
 
-   struct bigint_t
+   struct bigint_t final
    {
       std::vector<uint32_t> data = {};
       // To print: for (auto item : data) std::cout << std::bitset<32>(item) << '\n';
 
-      bigint_t(uint64_t num)
+      bigint_t(uint64_t num) noexcept
       {
          uint32_t lower_word = uint32_t(num);
          uint32_t upper_word = uint32_t(num >> 32);
@@ -332,7 +332,7 @@ namespace glz::detail
          }
       }
 
-      void mul_u32(uint32_t num)
+      void mul_u32(uint32_t num) noexcept
       {
          uint32_t carry = 0;
          for (std::size_t i = 0; i < data.size(); i++) {
@@ -347,7 +347,7 @@ namespace glz::detail
          }
       }
 
-      void mul_pow10(uint32_t pow10)
+      void mul_pow10(uint32_t pow10) noexcept
       {
          for (; pow10 >= 9; pow10 -= 9) {
             mul_u32(static_cast<uint32_t>(powers_of_ten_int[9]));
@@ -357,7 +357,7 @@ namespace glz::detail
          }
       }
 
-      void mul_pow2(uint32_t exp)
+      void mul_pow2(uint32_t exp) noexcept
       {
          uint32_t shft = exp % 32;
          uint32_t move = exp / 32;
@@ -383,7 +383,7 @@ namespace glz::detail
          }
       }
 
-      auto operator<=>(const bigint_t& rhs) const
+      auto operator<=>(const bigint_t& rhs) const noexcept
       {
          if (data.size() < rhs.data.size()) return -1;
          if (data.size() > rhs.data.size()) return 1;
@@ -446,9 +446,7 @@ namespace glz::detail
    }
       repeat_in_1_18(expr_intg);
 #undef expr_intg
-      if constexpr (force_conformance) {
-         if (*cur == zero) return false;
-      }
+      if (*cur == zero) [[unlikely]] { return false; }
       cur += 19; /* skip continuous 19 digits */
       if (!digi_is_digit_or_fp(*cur)) {
          val = static_cast<T>(sig);
@@ -583,7 +581,7 @@ namespace glz::detail
             goto digi_finish;
          }
       }
-      while (*cur == '0') cur++;
+      while (*cur == '0') { ++cur; }
       // read exponent literal
       tmp = cur;
       uint8_t c;

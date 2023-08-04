@@ -2574,10 +2574,10 @@ suite generic_json_tests = [] {
       expect(json->contains("foo"));
    };
 
-   boost::ut::skip / "buffer underrun"_test = [] {
+   "buffer underrun"_test = [] {
       std::string buffer{"000000000000000000000"};
       glz::json_t json{};
-      expect(!glz::read_json(json, buffer));
+      expect(glz::read_json(json, buffer) == glz::error_code::parse_number_failure);
    };
 };
 
