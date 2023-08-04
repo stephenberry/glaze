@@ -590,13 +590,4 @@ namespace glz
 
       return read<opts{.format = binary}>(value, buffer, ctx);
    }
-
-   template <class T>
-   [[deprecated(
-      "use the version that takes a buffer as the third argument")]] [[nodiscard]] GLZ_ALWAYS_INLINE parse_error
-   read_file_binary(T& value, const sv file_name) noexcept
-   {
-      std::string buffer;
-      return read_file_binary(value, file_name, buffer);
-   }
 }
