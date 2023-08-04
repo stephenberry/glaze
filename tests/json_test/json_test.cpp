@@ -948,7 +948,7 @@ suite early_end = [] {
    "early_end"_test = [] {
       Thing obj{};
       glz::json_t json{};
-      glz::skip skip_json{};
+      glz::skip skip_me{};
       std::string buffer_data =
          R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2/*double is the best type*/,"b":false,"c":"W","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/}})";
       std::string_view buffer = buffer_data;
@@ -962,7 +962,7 @@ suite early_end = [] {
          err = glz::read_json(json, buffer);
          expect(err != glz::error_code::none);
          expect(err.location <= buffer.size());
-         err = glz::read_json(skip_json, buffer);
+         err = glz::read_json(skip_me, buffer);
          expect(err != glz::error_code::none);
          expect(err.location <= buffer.size());
       }
