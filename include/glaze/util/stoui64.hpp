@@ -70,7 +70,7 @@ namespace glz::detail
          }
          n += negative ? -exp : exp;
       }
-      
+
       res = 0;
       if (n < 0) [[unlikely]] {
          return true;
@@ -78,7 +78,7 @@ namespace glz::detail
       if (n > 20) [[unlikely]] {
          return false;
       }
-      
+
       if (n == 20) [[unlikely]] {
          for (uint32_t k = 0; k < 19; ++k) {
             res = 10 * res + digits[k];
