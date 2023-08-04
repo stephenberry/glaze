@@ -251,7 +251,7 @@ namespace glz
       template <class T, class Val, class It, class End>
       GLZ_ALWAYS_INLINE void read_escaped_unicode(Val& value, is_context auto&& ctx, It&& it, End&& end)
       {
-         // TODO: this is slow but who is escaping unicode nowadays
+         // This is slow but who is escaping unicode nowadays
          // codecvt is problematic on mingw hence mixing with the c character conversion functions
          if (std::distance(it, end) < 4 || !std::all_of(it, it + 4, ::isxdigit)) [[unlikely]] {
             ctx.error = error_code::u_requires_hex_digits;
