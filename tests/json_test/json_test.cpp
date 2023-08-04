@@ -2574,6 +2574,12 @@ suite generic_json_tests = [] {
       expect(!json->contains("id"));
       expect(json->contains("foo"));
    };
+   
+   boost::ut::skip / "buffer underrun"_test = [] {
+      std::string buffer{"000000000000000000000"};
+      glz::json_t json{};
+      expect(!glz::read_json(json, buffer));
+   };
 };
 
 struct holder0_t

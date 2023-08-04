@@ -98,7 +98,7 @@ namespace glz
                   std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
                                      const uint8_t*, uint8_t*>;
                auto cur = reinterpret_cast<X>(it);
-               auto s = parse_number<V, Opts.force_conformance>(value, cur);
+               auto s = parse_float<V, Opts.force_conformance>(value, cur);
                if (!s) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;
@@ -158,18 +158,13 @@ namespace glz
                return;
             }
 
-            // TODO: fix this also, taken from json
-            using X = std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
-                                         const uint8_t*, uint8_t*>;
-            auto cur = reinterpret_cast<X>(it);
-            int temp;
-            auto s = parse_number(temp, cur);
+            uint64_t temp;
+            auto s = stoui64(temp, it);
             if (!s) [[unlikely]] {
                ctx.error = error_code::expected_true_or_false;
                return;
             }
-            value = temp;
-            it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
+            value = static_cast<bool>(temp);
          }
       };
 
