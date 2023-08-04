@@ -1628,7 +1628,7 @@ struct glz::meta<Named>
 {
    static constexpr std::string_view name = "Named";
    using n = Named;
-   static constexpr auto glaze = glz::object("name", &n::name, "value", &n::value);
+   static constexpr auto value = glz::object("name", &n::name, "value", &n::value);
 };
 
 struct EmptyArray
@@ -1935,19 +1935,18 @@ suite write_tests = [] {
       expect(s == R"({"3":2.2,"5":211.2,"7":11.111})");
    };
 
-   //* TODO: Gives 23 errors. Errors come from an MSVC include file "utility": it claims that the base class is
-   // undefined.
    "Write object"_test = [] {
-      Named n{"Hello, world!", {{{21, 15, 13}, 0}, {0}}};
-
+      ThreeODetic t{};
+      
       std::string s;
       s.reserve(1000);
-      [[maybe_unused]] auto i = std::back_inserter(s);
-      // glaze::write_json(n, s);
+      glz::write_json(t, s);
+      expect(s == R"(["geo",[0,0,0],"int",0])") << s;
+      
+      Named n{"Hello, world!", {{{21, 15, 13}, 0}, {0}}};
+      glz::write_json(n, s);
 
-      // expect(
-      // s ==
-      // R"({"name":"Hello, world!","value":[{"geo":[21,15,13],"int":0},[0,0,0]]})");
+      expect(s == R"({"name":"Hello, world!","value":[["geo",[21,15,13],"int",0],[0,0,0]]})") << s;
    };
 
    "Write boolean"_test = [] {
