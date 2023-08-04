@@ -26,7 +26,7 @@ namespace glz::detail
 
       uint32_t i{};
       if (*c == '0') {
-         digits[i] = 0;
+         //digits[i] = 0; already set to zero
          ++c;
          ++i;
 
