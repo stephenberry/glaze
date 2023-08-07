@@ -293,7 +293,7 @@ namespace glz
                }
             }
             else {
-               if (get_bits<3>(tag) != tag::untyped_array) {
+               if ((tag & 0b00000'111) != tag::untyped_array) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -323,7 +323,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto tag = uint8_t(*it);
-            if (get_bits<3>(tag) != tag::object) {
+            if ((tag & 0b00000'111) != tag::object) {
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -475,7 +475,7 @@ namespace glz
             static constexpr auto storage = detail::make_map<T, Opts.use_hash_comparison>();
 
             for (size_t i = 0; i < n_keys; ++i) {
-               if (get_bits<3>(uint8_t(*it)) != tag::string) {
+               if ((uint8_t(*it) & 0b00000'111) != tag::string) {
                   ctx.error = error_code::syntax_error;
                   return;
                }

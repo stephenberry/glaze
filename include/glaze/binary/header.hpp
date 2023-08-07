@@ -152,7 +152,7 @@ namespace glz::detail
    {
       uint8_t header;
       std::memcpy(&header, &(*it), 1);
-      const uint8_t config = uint8_t(get_bits<2>(header));
+      const uint8_t config = header & 0b000000'11;
 
       switch (config) {
       case 0:

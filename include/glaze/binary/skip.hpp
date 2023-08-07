@@ -41,7 +41,7 @@ namespace glz
             static constexpr auto storage = detail::make_map<T, Opts.use_hash_comparison>();
 
             for (size_t i = 0; i < n_keys; ++i) {
-               if (get_bits<3>(uint8_t(*it)) != tag::string) {
+               if ((uint8_t(*it) & 0b00000'111) != tag::string) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -55,7 +55,7 @@ namespace glz
 
                const auto value_tag = uint8_t(*it);
 
-               const auto value_type = get_bits<3>(value_tag);
+               const auto value_type = value_tag & 0b00000'111;
                switch (value_type) {
                case tag::null: {
                   break;
