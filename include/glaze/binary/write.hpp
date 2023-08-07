@@ -305,14 +305,9 @@ namespace glz
          GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using Key = typename T::first_type;
-
-            uint8_t tag = tag::object;
-            if constexpr (str_t<Key>) {
-               // set_bits<3, 1, uint8_t>(tag, 0); // no need to set zero
-            }
-            else {
-               set_bits<3, 2, uint8_t>(tag, 1 + std::unsigned_integral<Key>);
-            }
+            
+            constexpr uint8_t type = str_t<Key> ? 0 : (std::unsigned_integral<Key> ? 0b000'10'000 : 0b000'01'000);
+            constexpr uint8_t tag = tag::object | type;
             dump_type(tag, args...);
 
             dump_compressed_int<Opts>(1, args...);
