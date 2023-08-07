@@ -90,12 +90,6 @@ namespace glz::detail
          return;
       }
    }
-
-   template <class T>
-   GLZ_ALWAYS_INLINE constexpr size_t to_byte_count() noexcept
-   {
-      return std::bit_width(sizeof(T)) - 1;
-   }
    
    template <class T>
    GLZ_ALWAYS_INLINE constexpr uint8_t byte_cnt = uint8_t(std::bit_width(sizeof(T)) - 1);
