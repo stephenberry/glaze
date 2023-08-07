@@ -94,12 +94,12 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& /* end */) noexcept
          {
             const auto tag = uint8_t(*it);
-            if (get_bits<3>(tag) != tag::boolean) {
+            if ((tag & 0b00000'111) != tag::boolean) {
                ctx.error = error_code::syntax_error;
                return;
             }
 
-            value = get_bits<3, 1, uint8_t>(tag);
+            value = tag >> 3;
             ++it;
          }
       };
@@ -413,7 +413,7 @@ namespace glz
          {
             const auto tag = uint8_t(*it);
 
-            if (get_bits<3>(tag) == tag::null) {
+            if (tag == tag::null) {
                ++it;
                if constexpr (is_specialization_v<T, std::optional>)
                   value = std::nullopt;
