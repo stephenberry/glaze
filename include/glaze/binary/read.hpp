@@ -70,7 +70,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
          {
-            constexpr uint8_t type = std::floating_point<T> ? 0 : (std::unsigned_integral<T> ? 0b000'10'000 : 0b000'01'000);
+            constexpr uint8_t type = std::floating_point<T> ? 0 : (std::is_signed_v<T> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t header = tag::number | type | (byte_count<T> << 5);
 
             const auto tag = uint8_t(*it);
@@ -226,7 +226,7 @@ namespace glz
                }
             }
             else if constexpr (num_t<V>) {
-               constexpr uint8_t type = std::floating_point<V> ? 0 : (std::unsigned_integral<V> ? 0b000'10'000 : 0b000'01'000);
+               constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
                constexpr uint8_t header = tag::typed_array | type | (byte_count<V> << 5);
 
                if (tag != header) {
@@ -324,7 +324,7 @@ namespace glz
          {
             using Key = typename T::first_type;
             
-            constexpr uint8_t type = str_t<Key> ? 0 : (std::unsigned_integral<Key> ? 0b000'10'000 : 0b000'01'000);
+            constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t byte_count = str_t<Key> ? 1 : sizeof(Key);
             constexpr uint8_t header = tag::object | type | (byte_count << 5);
             
@@ -355,7 +355,7 @@ namespace glz
          {
             using Key = typename T::key_type;
             
-            constexpr uint8_t type = str_t<Key> ? 0 : (std::unsigned_integral<Key> ? 0b000'10'000 : 0b000'01'000);
+            constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t byte_count = str_t<Key> ? 1 : sizeof(Key);
             constexpr uint8_t header = tag::object | type | (byte_count << 5);
             
