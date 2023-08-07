@@ -21,6 +21,12 @@ namespace glz::tag
    inline constexpr uint8_t typed_array = 5;
    inline constexpr uint8_t untyped_array = 6;
    inline constexpr uint8_t type = 7;
+   
+   inline constexpr uint8_t bool_false = 0b00000001;
+   inline constexpr uint8_t bool_true = 0b00001001;
+   
+   inline constexpr uint8_t float32 = 0b010'00'010;
+   inline constexpr uint8_t float64 = 0b011'00'010;
 }
 
 namespace glz::detail
