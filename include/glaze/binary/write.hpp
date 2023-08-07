@@ -329,14 +329,9 @@ namespace glz
          GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using Key = typename T::key_type;
-
-            uint8_t tag = tag::object;
-            if constexpr (str_t<Key>) {
-               // set_bits<3, 1, uint8_t>(tag, 0); // no need to set zero
-            }
-            else {
-               set_bits<3, 2, uint8_t>(tag, 1 + std::unsigned_integral<Key>);
-            }
+            
+            constexpr uint8_t type = str_t<Key> ? 0 : (std::unsigned_integral<Key> ? 0b000'10'000 : 0b000'01'000);
+            constexpr uint8_t tag = tag::object | type;
             dump_type(tag, args...);
 
             dump_compressed_int<Opts>(value.size(), args...);
@@ -451,7 +446,8 @@ namespace glz
          detail::write<binary>::op<Opts>(value, ctx, buffer);
       }
       else {
-         static_assert(detail::glaze_object_t<std::decay_t<T>> || detail::writable_map_t<std::decay_t<T>>,
+         using V = std::decay_t<T>;
+         static_assert(detail::glaze_object_t<V> || detail::writable_map_t<V>,
                        "Only object types are supported for partial.");
          static constexpr auto sorted = sort_json_ptrs(Partial);
          static constexpr auto groups = glz::group_json_ptrs<sorted>();

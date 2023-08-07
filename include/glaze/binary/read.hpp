@@ -362,13 +362,14 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            using Key = typename T::key_type;
+            
             const auto tag = uint8_t(*it);
             if (get_bits<3>(tag) != tag::object) {
                ctx.error = error_code::syntax_error;
                return;
             }
-
-            using Key = typename T::key_type;
+            
             if constexpr (str_t<Key>) {
                if (get_bits<3, 2>(tag) != 0) {
                   ctx.error = error_code::syntax_error;
@@ -387,15 +388,15 @@ namespace glz
 
             const auto n = int_from_compressed(it, end);
 
-            if constexpr (std::is_arithmetic_v<std::decay_t<typename T::key_type>>) {
-               typename T::key_type key;
+            if constexpr (std::is_arithmetic_v<std::decay_t<Key>>) {
+               Key key;
                for (size_t i = 0; i < n; ++i) {
                   read<binary>::op<Opts>(key, ctx, it, end);
                   read<binary>::op<Opts>(value[key], ctx, it, end);
                }
             }
             else {
-               static thread_local typename T::key_type key;
+               static thread_local Key key;
                for (size_t i = 0; i < n; ++i) {
                   read<binary>::op<Opts>(key, ctx, it, end);
                   read<binary>::op<Opts>(value[key], ctx, it, end);
