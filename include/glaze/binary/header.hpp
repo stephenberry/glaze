@@ -119,29 +119,29 @@ namespace glz::detail
    {
       uint8_t header;
       std::memcpy(&header, &(*it), 1);
-      const uint8_t config = uint8_t(get_bits<2>(header));
+      const uint8_t config = header & 0b000000'11;
 
       switch (config) {
       case 0:
          ++it;
-         return get_bits<2, 6>(header);
+         return header >> 2;
       case 1: {
          uint16_t h;
          std::memcpy(&h, &(*it), 2);
          std::advance(it, 2);
-         return get_bits<2, 14>(h);
+         return h >> 2;
       }
       case 2: {
          uint32_t h;
          std::memcpy(&h, &(*it), 4);
          std::advance(it, 4);
-         return get_bits<2, 30>(h);
+         return h >> 2;
       }
       case 3: {
          uint64_t h;
          std::memcpy(&h, &(*it), 8);
          std::advance(it, 8);
-         return get_bits<2, 62>(h);
+         return h >> 2;
       }
       default:
          return 0;
