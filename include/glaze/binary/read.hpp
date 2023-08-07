@@ -364,24 +364,14 @@ namespace glz
          {
             using Key = typename T::key_type;
             
+            constexpr uint8_t type = str_t<Key> ? 0 : (std::unsigned_integral<Key> ? 0b000'10'000 : 0b000'01'000);
+            constexpr uint8_t byte_count = str_t<Key> ? 1 : sizeof(Key);
+            constexpr uint8_t header = tag::object | type | (byte_count << 5);
+            
             const auto tag = uint8_t(*it);
-            if (get_bits<3>(tag) != tag::object) {
+            if (tag != header) {
                ctx.error = error_code::syntax_error;
                return;
-            }
-            
-            if constexpr (str_t<Key>) {
-               if (get_bits<3, 2>(tag) != 0) {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-            }
-            else {
-               static constexpr uint8_t type_id = 1 + std::unsigned_integral<Key>;
-               if (get_bits<3, 2>(tag) != type_id) {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
             }
 
             ++it;
