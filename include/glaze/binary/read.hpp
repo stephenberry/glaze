@@ -70,10 +70,8 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
          {
-            static constexpr uint8_t header = set_bits<5, 3, uint8_t>(
-               set_bits<3, 2, uint8_t>(set_bits<3>(tag::number),
-                                       uint8_t(!std::floating_point<T> + std::unsigned_integral<T>)),
-               uint8_t(to_byte_count<decltype(value)>()));
+            constexpr uint8_t type = std::floating_point<T> ? 0 : (std::unsigned_integral<T> ? 0b000'10'000 : 0b000'01'000);
+            constexpr uint8_t header = tag::number | type | (byte_cnt<T> << 5);
 
             const auto tag = uint8_t(*it);
             if (tag != header) {
@@ -149,7 +147,7 @@ namespace glz
             ++it;
 
             const auto type_index = int_from_compressed(it, end);
-            if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+            if (value.index() != type_index) { value = runtime_variant_map<T>()[type_index]; }
             std::visit([&](auto&& v) { read<binary>::op<Opts>(v, ctx, it, end); }, value);
          }
       };
@@ -161,9 +159,8 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using V = typename std::decay_t<T>::value_type;
-
-            static constexpr uint8_t header =
-               set_bits<3, 2, uint8_t>(set_bits<3>(tag::string), uint8_t(to_byte_count<V>()));
+            
+            constexpr uint8_t header = tag::string | (byte_cnt<V> << 3);
 
             const auto tag = uint8_t(*it);
             if (tag != header) {
