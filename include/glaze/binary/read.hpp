@@ -147,7 +147,9 @@ namespace glz
             ++it;
 
             const auto type_index = int_from_compressed(it, end);
-            if (value.index() != type_index) { value = runtime_variant_map<T>()[type_index]; }
+            if (value.index() != type_index) {
+               value = runtime_variant_map<T>()[type_index];
+            }
             std::visit([&](auto&& v) { read<binary>::op<Opts>(v, ctx, it, end); }, value);
          }
       };
@@ -159,7 +161,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using V = typename std::decay_t<T>::value_type;
-            
+
             constexpr uint8_t header = tag::string | (byte_count<V> << 3);
 
             const auto tag = uint8_t(*it);
@@ -198,7 +200,7 @@ namespace glz
             if constexpr (boolean_like<V>) {
                constexpr uint8_t type = uint8_t(3) << 3;
                constexpr uint8_t header = tag::typed_array | type;
-               
+
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
                   return;
@@ -226,7 +228,8 @@ namespace glz
                }
             }
             else if constexpr (num_t<V>) {
-               constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+               constexpr uint8_t type =
+                  std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
                constexpr uint8_t header = tag::typed_array | type | (byte_count<V> << 5);
 
                if (tag != header) {
@@ -323,11 +326,11 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using Key = typename T::first_type;
-            
+
             constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t byte_count = str_t<Key> ? 1 : sizeof(Key);
             constexpr uint8_t header = tag::object | type | (byte_count << 5);
-            
+
             const auto tag = uint8_t(*it);
             if (tag != header) {
                ctx.error = error_code::syntax_error;
@@ -354,11 +357,11 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using Key = typename T::key_type;
-            
+
             constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t byte_count = str_t<Key> ? 1 : sizeof(Key);
             constexpr uint8_t header = tag::object | type | (byte_count << 5);
-            
+
             const auto tag = uint8_t(*it);
             if (tag != header) {
                ctx.error = error_code::syntax_error;
@@ -439,7 +442,7 @@ namespace glz
       {
          template <auto Opts>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
-         {            
+         {
             constexpr uint8_t type = 0;
             constexpr uint8_t byte_count = 1;
             constexpr uint8_t header = tag::object | type | (byte_count << 5);

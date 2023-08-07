@@ -84,14 +84,14 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b) noexcept
          {
             to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                          std::forward<B>(b));
+                                                                 std::forward<B>(b));
          }
 
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                          std::forward<B>(b), std::forward<IX>(ix));
+                                                                 std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
@@ -258,7 +258,8 @@ namespace glz
                }
             }
             else if constexpr (num_t<V>) {
-               constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+               constexpr uint8_t type =
+                  std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
                constexpr uint8_t tag = tag::typed_array | type | (byte_count<V> << 5);
                dump_type(tag, args...);
                dump_compressed_int<Opts>(value.size(), args...);
@@ -304,7 +305,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using Key = typename T::first_type;
-            
+
             constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t byte_count = str_t<Key> ? 1 : sizeof(Key);
             constexpr uint8_t tag = tag::object | type | (byte_count << 5);
@@ -324,7 +325,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using Key = typename T::key_type;
-            
+
             constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t byte_count = str_t<Key> ? 1 : sizeof(Key);
             constexpr uint8_t tag = tag::object | type | (byte_count << 5);
