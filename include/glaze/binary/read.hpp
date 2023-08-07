@@ -71,7 +71,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
          {
             constexpr uint8_t type = std::floating_point<T> ? 0 : (std::unsigned_integral<T> ? 0b000'10'000 : 0b000'01'000);
-            constexpr uint8_t header = tag::number | type | (byte_cnt<T> << 5);
+            constexpr uint8_t header = tag::number | type | (byte_count<T> << 5);
 
             const auto tag = uint8_t(*it);
             if (tag != header) {
@@ -160,7 +160,7 @@ namespace glz
          {
             using V = typename std::decay_t<T>::value_type;
             
-            constexpr uint8_t header = tag::string | (byte_cnt<V> << 3);
+            constexpr uint8_t header = tag::string | (byte_count<V> << 3);
 
             const auto tag = uint8_t(*it);
             if (tag != header) {
@@ -227,7 +227,7 @@ namespace glz
             }
             else if constexpr (num_t<V>) {
                constexpr uint8_t type = std::floating_point<V> ? 0 : (std::unsigned_integral<V> ? 0b000'10'000 : 0b000'01'000);
-               constexpr uint8_t header = tag::typed_array | type | (byte_cnt<V> << 5);
+               constexpr uint8_t header = tag::typed_array | type | (byte_count<V> << 5);
 
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
@@ -261,7 +261,7 @@ namespace glz
                constexpr uint8_t type = uint8_t(3) << 3;
                constexpr uint8_t string_indicator = uint8_t(1) << 5;
                using char_type = std::decay_t<decltype(*std::declval<V>().data())>;
-               constexpr uint8_t header = tag::typed_array | type | string_indicator | (byte_cnt<char_type> << 6);
+               constexpr uint8_t header = tag::typed_array | type | string_indicator | (byte_count<char_type> << 6);
 
                if (tag != header) {
                   ctx.error = error_code::syntax_error;

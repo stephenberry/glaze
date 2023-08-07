@@ -92,5 +92,5 @@ namespace glz::detail
    }
    
    template <class T>
-   GLZ_ALWAYS_INLINE constexpr uint8_t byte_cnt = uint8_t(std::bit_width(sizeof(T)) - 1);
+   GLZ_ALWAYS_INLINE constexpr uint8_t byte_count = uint8_t(std::bit_width(sizeof(T)) - 1);
 }
