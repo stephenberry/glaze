@@ -196,9 +196,9 @@ namespace glz
             const auto tag = uint8_t(*it);
 
             if constexpr (boolean_like<V>) {
-               static constexpr uint8_t header =
-                  set_bits<5, 1, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array), 3), 0);
-
+               constexpr uint8_t type = uint8_t(3) << 3;
+               constexpr uint8_t header = tag::typed_array | type;
+               
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
                   return;
@@ -226,10 +226,8 @@ namespace glz
                }
             }
             else if constexpr (num_t<V>) {
-               static constexpr uint8_t header = set_bits<5, 3, uint8_t>(
-                  set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array),
-                                          uint8_t(!std::floating_point<V> + std::unsigned_integral<V>)),
-                  uint8_t(to_byte_count<V>()));
+               constexpr uint8_t type = std::floating_point<V> ? 0 : (std::unsigned_integral<V> ? 0b000'10'000 : 0b000'01'000);
+               constexpr uint8_t header = tag::typed_array | type | (byte_cnt<V> << 5);
 
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
@@ -260,10 +258,10 @@ namespace glz
                }
             }
             else if constexpr (str_t<V>) {
-               static constexpr uint8_t header = set_bits<6, 2, uint8_t>(
-                  set_bits<5, 1, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::typed_array), uint8_t(3)),
-                                          uint8_t(1)),
-                  uint8_t(to_byte_count<decltype(*std::declval<V>().data())>()));
+               constexpr uint8_t type = uint8_t(3) << 3;
+               constexpr uint8_t string_indicator = uint8_t(1) << 5;
+               using char_type = std::decay_t<decltype(*std::declval<V>().data())>;
+               constexpr uint8_t header = tag::typed_array | type | string_indicator | (byte_cnt<char_type> << 6);
 
                if (tag != header) {
                   ctx.error = error_code::syntax_error;
