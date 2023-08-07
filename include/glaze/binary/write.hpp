@@ -240,12 +240,9 @@ namespace glz
          {
             using V = range_value_t<std::decay_t<T>>;
 
-            uint8_t tag;
-
             if constexpr (boolean_like<V>) {
-               tag = tag::typed_array;
-               set_bits<3, 2, uint8_t>(tag, uint8_t(3));
-               // set_bits<5, 1, uint8_t>(tag, 0); // no need to set bits to zero
+               constexpr uint8_t type = uint8_t(3) << 3;
+               constexpr uint8_t tag = tag::typed_array | type;
                dump_type(tag, args...);
                dump_compressed_int<Opts>(value.size(), args...);
 
@@ -272,14 +269,9 @@ namespace glz
                }
             }
             else if constexpr (num_t<V>) {
-               tag = tag::typed_array;
-               if constexpr (std::is_floating_point_v<V>) {
-                  // set_bits<3, 2, uint8_t>(tag, 0); // no need to set bits to zero
-               }
-               else {
-                  set_bits<3, 2, uint8_t>(tag, uint8_t(1 + std::unsigned_integral<V>));
-               }
-               set_bits<5, 3, uint8_t>(tag, uint8_t(to_byte_count<V>()));
+               constexpr uint8_t type = std::floating_point<V> ? 0 : (std::unsigned_integral<V> ? 0b000'10'000 : 0b000'01'000);
+               constexpr uint8_t byte_count = uint8_t(std::bit_width(sizeof(V)) - 1) << 5;
+               constexpr uint8_t tag = tag::typed_array | type | byte_count;
                dump_type(tag, args...);
                dump_compressed_int<Opts>(value.size(), args...);
 
@@ -293,11 +285,11 @@ namespace glz
                }
             }
             else if constexpr (str_t<V>) {
-               tag = tag::typed_array;
-               set_bits<3, 2, uint8_t>(tag, uint8_t(3));
-               set_bits<5, 1, uint8_t>(tag, uint8_t(1));
-               set_bits<6, 2, uint8_t>(tag,
-                                       uint8_t(to_byte_count<std::decay_t<decltype(*std::declval<V>().data())>>()));
+               constexpr uint8_t type = uint8_t(3) << 3;
+               constexpr uint8_t string_indicator = uint8_t(1) << 5;
+               using char_type = std::decay_t<decltype(*std::declval<V>().data())>;
+               constexpr uint8_t byte_count = uint8_t(std::bit_width(sizeof(char_type)) - 1) << 6;
+               constexpr uint8_t tag = tag::typed_array | type | string_indicator | byte_count;
                dump_type(tag, args...);
                dump_compressed_int<Opts>(value.size(), args...);
 
@@ -307,8 +299,8 @@ namespace glz
                }
             }
             else {
-               tag = tag::untyped_array;
-               set_bits<3, 3, uint8_t>(tag, uint8_t(to_byte_count<V>()));
+               constexpr uint8_t byte_count = uint8_t(std::bit_width(sizeof(V)) - 1) << 3;
+               constexpr uint8_t tag = tag::untyped_array | byte_count;
                dump_type(tag, args...);
                dump_compressed_int<Opts>(value.size(), args...);
 
