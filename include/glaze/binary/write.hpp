@@ -184,8 +184,7 @@ namespace glz
                      return var.index();
                   }();
 
-                  uint8_t tag = tag::type;
-                  dump_type(tag, args...);
+                  dump_type(tag::type, args...);
                   dump_compressed_int<index>(args...);
                   write<binary>::op<Opts>(v, ctx, std::forward<Args>(args)...);
                },
@@ -213,8 +212,8 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
-            using char_type = std::decay_t<decltype(*value.data())>;
-            constexpr uint8_t tag = tag::string | (byte_count<char_type> << 3);
+            using V = typename std::decay_t<T>::value_type;
+            constexpr uint8_t tag = tag::string | (byte_count<V> << 3);
             dump_type(tag, args...);
 
             dump_compressed_int<Opts>(value.size(), args...);
