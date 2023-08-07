@@ -25,8 +25,9 @@ namespace glz
          template <auto Opts>
          GLZ_FLATTEN static void op(is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            static constexpr uint8_t header =
-               set_bits<5, 3, uint8_t>(set_bits<3, 2, uint8_t>(set_bits<3>(tag::object), 0), sizeof(decltype(*it)));
+            constexpr uint8_t type = 0;
+            constexpr uint8_t byte_count = 1;
+            constexpr uint8_t header = tag::object | type | (byte_count << 5);
 
             const auto tag = uint8_t(*it);
             if (tag != header) {
@@ -41,7 +42,7 @@ namespace glz
             static constexpr auto storage = detail::make_map<T, Opts.use_hash_comparison>();
 
             for (size_t i = 0; i < n_keys; ++i) {
-               if (get_bits<3>(uint8_t(*it)) != tag::string) {
+               if ((uint8_t(*it) & 0b00000'111) != tag::string) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -55,7 +56,7 @@ namespace glz
 
                const auto value_tag = uint8_t(*it);
 
-               const auto value_type = get_bits<3>(value_tag);
+               const auto value_type = value_tag & 0b00000'111;
                switch (value_type) {
                case tag::null: {
                   break;
