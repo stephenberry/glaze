@@ -29,23 +29,19 @@ namespace glz
       GLZ_ALWAYS_INLINE void dump_compressed_int(Args&&... args) noexcept
       {
          if constexpr (i < 64) {
-            auto c = set_bits<2, uint8_t>(0);
-            set_bits<2, 6>(c, uint8_t(i));
+            const uint8_t c = uint8_t(i) << 2;
             dump_type(c, args...);
          }
          else if constexpr (i < 16384) {
-            auto c = set_bits<2, uint16_t>(1);
-            set_bits<2, 14>(c, uint16_t(i));
+            const uint16_t c = uint16_t(1) | (uint16_t(i) << 2);
             dump_type(c, args...);
          }
          else if constexpr (i < 1073741824) {
-            auto c = set_bits<2, uint32_t>(2);
-            set_bits<2, 30>(c, uint32_t(i));
+            const uint32_t c = uint32_t(2) | (uint32_t(i) << 2);
             dump_type(c, args...);
          }
          else if constexpr (i < 4611686018427387904) {
-            auto c = set_bits<2, uint64_t>(3);
-            set_bits<2, 62>(c, uint64_t(i));
+            const uint64_t c = uint64_t(3) | (uint64_t(i) << 2);
             dump_type(c, args...);
          }
          else {
@@ -57,23 +53,19 @@ namespace glz
       GLZ_ALWAYS_INLINE void dump_compressed_int(size_t i, Args&&... args) noexcept
       {
          if (i < 64) {
-            auto c = set_bits<2, uint8_t>(0);
-            set_bits<2, 6>(c, uint8_t(i));
+            const uint8_t c = uint8_t(i) << 2;
             dump_type(c, args...);
          }
          else if (i < 16384) {
-            auto c = set_bits<2, uint16_t>(1);
-            set_bits<2, 14>(c, uint16_t(i));
+            const uint16_t c = uint16_t(1) | (uint16_t(i) << 2);
             dump_type(c, args...);
          }
          else if (i < 1073741824) {
-            auto c = set_bits<2, uint32_t>(2);
-            set_bits<2, 30>(c, uint32_t(i));
+            const uint32_t c = uint32_t(2) | (uint32_t(i) << 2);
             dump_type(c, args...);
          }
          else if (i < 4611686018427387904) {
-            auto c = set_bits<2, uint64_t>(3);
-            set_bits<2, 62>(c, uint64_t(i));
+            const uint64_t c = uint64_t(3) | (uint64_t(i) << 2);
             dump_type(c, args...);
          }
          else {
@@ -91,14 +83,14 @@ namespace glz
          template <auto Opts, class T, is_context Ctx, class B>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b) noexcept
          {
-            to_binary<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+            to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                           std::forward<B>(b));
          }
 
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
-            to_binary<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+            to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                           std::forward<B>(b), std::forward<IX>(ix));
          }
       };
