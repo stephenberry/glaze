@@ -93,6 +93,20 @@ namespace glz
             to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                                  std::forward<B>(b), std::forward<IX>(ix));
          }
+         
+         template <auto Opts, class T, is_context Ctx, class B>
+         GLZ_ALWAYS_INLINE static void no_header(T&& value, Ctx&& ctx, B&& b) noexcept
+         {
+            to_binary<std::remove_cvref_t<T>>::template no_header<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                                 std::forward<B>(b));
+         }
+         
+         template <auto Opts, class T, is_context Ctx, class B, class IX>
+         GLZ_ALWAYS_INLINE static void no_header(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
+         {
+            to_binary<std::remove_cvref_t<T>>::template no_header<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                                 std::forward<B>(b), std::forward<IX>(ix));
+         }
       };
 
       template <glaze_value_t T>
@@ -204,6 +218,12 @@ namespace glz
             dump_type(tag, args...);
             dump_type(value, args...);
          }
+         
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&&... args) noexcept
+         {
+            dump_type(value, args...);
+         }
       };
 
       template <str_t T>
@@ -216,6 +236,13 @@ namespace glz
             constexpr uint8_t tag = tag::string | (byte_count<V> << 3);
             dump_type(tag, args...);
 
+            dump_compressed_int<Opts>(value.size(), args...);
+            dump(std::as_bytes(std::span{value.data(), value.size()}), args...);
+         }
+         
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&&... args) noexcept
+         {
             dump_compressed_int<Opts>(value.size(), args...);
             dump(std::as_bytes(std::span{value.data(), value.size()}), args...);
          }
@@ -313,7 +340,7 @@ namespace glz
 
             dump_compressed_int<Opts>(1, args...);
             const auto& [k, v] = value;
-            write<binary>::op<Opts>(k, ctx, args...);
+            write<binary>::no_header<Opts>(k, ctx, args...);
             write<binary>::op<Opts>(v, ctx, args...);
          }
       };
@@ -333,7 +360,7 @@ namespace glz
 
             dump_compressed_int<Opts>(value.size(), args...);
             for (auto&& [k, v] : value) {
-               write<binary>::op<Opts>(k, ctx, args...);
+               write<binary>::no_header<Opts>(k, ctx, args...);
                write<binary>::op<Opts>(v, ctx, args...);
             }
          }
@@ -372,7 +399,7 @@ namespace glz
 
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
-               write<binary>::op<Opts>(glz::tuplet::get<0>(item), ctx, args...);
+               write<binary>::no_header<Opts>(glz::tuplet::get<0>(item), ctx, args...);
                write<binary>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, args...);
             });
          }
@@ -469,7 +496,7 @@ namespace glz
                static constexpr auto ix = member_it->second.index();
                static constexpr decltype(auto) member_ptr = std::get<ix>(member_it->second);
 
-               detail::write<binary>::op<Opts>(key, ctx, buffer);
+               detail::write<binary>::no_header<Opts>(key, ctx, buffer);
                std::ignore = write<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), buffer, ctx);
             });
          }
@@ -480,7 +507,7 @@ namespace glz
                static constexpr auto key_value = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
                if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
-                  detail::write<binary>::op<Opts>(key_value, ctx, buffer);
+                  detail::write<binary>::no_header<Opts>(key_value, ctx, buffer);
                   auto it = value.find(key_value);
                   if (it != value.end()) {
                      std::ignore = write<sub_partial, Opts>(it->second, buffer, ctx);
@@ -492,7 +519,7 @@ namespace glz
                else {
                   static thread_local auto key =
                      typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
-                  detail::write<binary>::op<Opts>(key, ctx, buffer);
+                  detail::write<binary>::no_header<Opts>(key, ctx, buffer);
                   auto it = value.find(key);
                   if (it != value.end()) {
                      std::ignore = write<sub_partial, Opts>(it->second, buffer, ctx);
