@@ -198,7 +198,7 @@ namespace glz
                      return var.index();
                   }();
 
-                  dump_type(tag::type, args...);
+                  dump_type(tag::additional, args...);
                   dump_compressed_int<index>(args...);
                   write<binary>::op<Opts>(v, ctx, std::forward<Args>(args)...);
                },

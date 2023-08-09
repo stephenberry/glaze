@@ -149,7 +149,7 @@ namespace glz::detail
          unskip_typed_array_binary(ctx, it, end);
          break;
       }
-      case tag::type: {
+      case tag::additional: {
          skip_additional_binary(ctx, it, end);
          break;
       }
