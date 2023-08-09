@@ -155,7 +155,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto tag = uint8_t(*it);
-            if ((tag & 0b00000'111) != tag::type) {
+            if ((tag & 0b00000'111) != tag::additional) {
                ctx.error = error_code::syntax_error;
                return;
             }

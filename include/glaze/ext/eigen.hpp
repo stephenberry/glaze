@@ -35,37 +35,85 @@ namespace glz
                          } && !
       range<T>;
 
-      template <matrix_t T>
+      template <matrix_t T> requires (T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
       struct from_binary<T>
       {
-         static_assert(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0, "Does not handle dynamic matrices");
-
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
+            constexpr uint8_t layout = uint8_t(uint64_t(T::Flags) & uint64_t(Eigen::ColMajor)) << 6;
+            if ((uint8_t(*it) & 0b11000000) != layout) {
+               ctx.error = error_code::syntax_error;
+            }
+            ++it;
+            std::array<Eigen::Index, 2> extents;
+            detail::read<binary>::op<Opts>(extents, ctx, it, end);
+            
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
             detail::read<binary>::op<Opts>(view, ctx, it, end);
          }
       };
-
-      template <matrix_t T>
-      struct to_binary<T>
+      
+      template <matrix_t T> requires (T::RowsAtCompileTime < 0 || T::ColsAtCompileTime < 0)
+      struct from_binary<T>
       {
-         static_assert(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0, "Does not handle dynamic matrices");
-
-         template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         template <auto Opts>
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::write<binary>::op<Opts>(view, ctx, std::forward<Args>(args)...);
+            constexpr uint8_t layout = uint8_t(uint64_t(T::Flags) & uint64_t(Eigen::ColMajor)) << 6;
+            if ((uint8_t(*it) & 0b11000000) != layout) {
+               ctx.error = error_code::syntax_error;
+            }
+            ++it;
+            std::array<Eigen::Index, 2> extents;
+            detail::read<binary>::op<Opts>(extents, ctx, it, end);
+            
+            std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
+            detail::read<binary>::op<Opts>(view, ctx, it, end);
          }
       };
 
-      template <matrix_t T>
+      template <matrix_t T> requires (T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
+      struct to_binary<T>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         {
+            constexpr uint8_t matrix = 0b00'010'000;
+            constexpr uint8_t layout = uint8_t(uint64_t(T::Flags) & uint64_t(Eigen::ColMajor)) << 6;
+            constexpr uint8_t tag = tag::additional | matrix | layout;
+            dump_type(tag, args...);
+            
+            std::array<Eigen::Index, 2> extents{ T::RowsAtCompileTime, T::ColsAtCompileTime };
+            detail::write<binary>::op<Opts>(extents, ctx, args...);
+            
+            std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
+            detail::write<binary>::op<Opts>(view, ctx, args...);
+         }
+      };
+      
+      template <matrix_t T> requires (T::RowsAtCompileTime < 0 || T::ColsAtCompileTime < 0)
+      struct to_binary<T>
+      {
+         template <auto Opts>
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         {
+            constexpr uint8_t matrix = 0b00'010'000;
+            constexpr uint8_t layout = uint8_t(uint64_t(T::Flags) & uint64_t(Eigen::ColMajor)) << 6;
+            constexpr uint8_t tag = tag::additional | matrix | layout;
+            dump_type(tag, args...);
+            
+            std::array<Eigen::Index, 2> extents{ value.rows(), value.cols() };
+            detail::write<binary>::op<Opts>(extents, ctx, args...);
+            
+            std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
+            detail::write<binary>::op<Opts>(view, ctx, args...);
+         }
+      };
+
+      template <matrix_t T> requires (T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
       struct from_json<T>
       {
-         static_assert(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0, "Does not handle dynamic matrices");
-
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
@@ -74,11 +122,9 @@ namespace glz
          }
       };
 
-      template <matrix_t T>
+      template <matrix_t T> requires (T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
       struct to_json<T>
       {
-         static_assert(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0, "Does not handle dynamic matrices");
-
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
