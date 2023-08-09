@@ -27,6 +27,13 @@ namespace glz
             from_binary<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                             std::forward<It0>(it), std::forward<It1>(end));
          }
+         
+         template <auto Opts, class T, is_context Ctx, class It0, class It1>
+         GLZ_ALWAYS_INLINE static void no_header(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
+         {
+            from_binary<std::decay_t<T>>::template no_header<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                            std::forward<It0>(it), std::forward<It1>(end));
+         }
       };
 
       template <glaze_value_t T>
@@ -81,6 +88,14 @@ namespace glz
 
             ++it;
 
+            using V = std::decay_t<T>;
+            std::memcpy(&value, &(*it), sizeof(V));
+            std::advance(it, sizeof(V));
+         }
+         
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&& it, auto&&) noexcept
+         {
             using V = std::decay_t<T>;
             std::memcpy(&value, &(*it), sizeof(V));
             std::advance(it, sizeof(V));
@@ -172,6 +187,25 @@ namespace glz
 
             ++it;
 
+            const auto n = int_from_compressed(it, end);
+            if constexpr (sizeof(V) == 1) {
+               value.resize(n);
+               std::memcpy(value.data(), &(*it), n);
+               std::advance(it, n);
+            }
+            else {
+               const auto n_bytes = sizeof(V) * n;
+               value.resize(n);
+               std::memcpy(value.data(), &(*it), n_bytes);
+               std::advance(it, n_bytes);
+            }
+         }
+         
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&& it, auto&& end) noexcept
+         {
+            using V = typename std::decay_t<T>::value_type;
+            
             const auto n = int_from_compressed(it, end);
             if constexpr (sizeof(V) == 1) {
                value.resize(n);
@@ -345,7 +379,7 @@ namespace glz
                return;
             }
 
-            read<binary>::op<Opts>(value.first, ctx, it, end);
+            read<binary>::no_header<Opts>(value.first, ctx, it, end);
             read<binary>::op<Opts>(value.second, ctx, it, end);
          }
       };
@@ -375,14 +409,14 @@ namespace glz
             if constexpr (std::is_arithmetic_v<std::decay_t<Key>>) {
                Key key;
                for (size_t i = 0; i < n; ++i) {
-                  read<binary>::op<Opts>(key, ctx, it, end);
+                  read<binary>::no_header<Opts>(key, ctx, it, end);
                   read<binary>::op<Opts>(value[key], ctx, it, end);
                }
             }
             else {
                static thread_local Key key;
                for (size_t i = 0; i < n; ++i) {
-                  read<binary>::op<Opts>(key, ctx, it, end);
+                  read<binary>::no_header<Opts>(key, ctx, it, end);
                   read<binary>::op<Opts>(value[key], ctx, it, end);
                }
             }
@@ -460,12 +494,6 @@ namespace glz
             static constexpr auto storage = detail::make_map<T, Opts.use_hash_comparison>();
 
             for (size_t i = 0; i < n_keys; ++i) {
-               if ((uint8_t(*it) & 0b00000'111) != tag::string) {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-               ++it;
-
                const auto length = int_from_compressed(it, end);
 
                const std::string_view key{it, length};
