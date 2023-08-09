@@ -1,12 +1,6 @@
 # Glaze
 One of the fastest JSON libraries in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
 
-> Breaking binary format change (for Crusher):
->
-> Objects no longer write out headers for keys, as the key type was already defined. This was wasting space and useless.
->
-> The binary format Crusher is under active testing and development. So, it is best not to use for archival yet. As a data transport it should be fine to use. It will be locked for archival use after thorough testing and using in various scenarios.
-
 ## Highlights
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
