@@ -42,7 +42,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            constexpr uint8_t layout = uint8_t(uint64_t(T::Flags) & uint64_t(Eigen::ColMajor)) << 6;
+            constexpr uint8_t layout = uint8_t(!T::IsRowMajor) << 6;
             if ((uint8_t(*it) & 0b11000000) != layout) {
                ctx.error = error_code::syntax_error;
             }
@@ -62,7 +62,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            constexpr uint8_t layout = uint8_t(uint64_t(T::Flags) & uint64_t(Eigen::ColMajor)) << 6;
+            constexpr uint8_t layout = uint8_t(!T::IsRowMajor) << 6;
             if ((uint8_t(*it) & 0b11000000) != layout) {
                ctx.error = error_code::syntax_error;
             }
@@ -83,7 +83,7 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             constexpr uint8_t matrix = 0b00'010'000;
-            constexpr uint8_t layout = uint8_t(uint64_t(T::Flags) & uint64_t(Eigen::ColMajor)) << 6;
+            constexpr uint8_t layout = uint8_t(!T::IsRowMajor) << 6;
             constexpr uint8_t tag = tag::additional | matrix | layout;
             dump_type(tag, args...);
 
@@ -103,7 +103,7 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             constexpr uint8_t matrix = 0b00'010'000;
-            constexpr uint8_t layout = uint8_t(uint64_t(T::Flags) & uint64_t(Eigen::ColMajor)) << 6;
+            constexpr uint8_t layout = uint8_t(!T::IsRowMajor) << 6;
             constexpr uint8_t tag = tag::additional | matrix | layout;
             dump_type(tag, args...);
 
