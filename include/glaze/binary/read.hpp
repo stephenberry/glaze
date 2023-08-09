@@ -27,12 +27,12 @@ namespace glz
             from_binary<std::decay_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                             std::forward<It0>(it), std::forward<It1>(end));
          }
-         
+
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void no_header(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
             from_binary<std::decay_t<T>>::template no_header<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                            std::forward<It0>(it), std::forward<It1>(end));
+                                                                   std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 
@@ -92,7 +92,7 @@ namespace glz
             std::memcpy(&value, &(*it), sizeof(V));
             std::advance(it, sizeof(V));
          }
-         
+
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&& it, auto&&) noexcept
          {
@@ -200,12 +200,12 @@ namespace glz
                std::advance(it, n_bytes);
             }
          }
-         
+
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&& it, auto&& end) noexcept
          {
             using V = typename std::decay_t<T>::value_type;
-            
+
             const auto n = int_from_compressed(it, end);
             if constexpr (sizeof(V) == 1) {
                value.resize(n);

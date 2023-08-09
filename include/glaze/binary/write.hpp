@@ -93,19 +93,19 @@ namespace glz
             to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                                  std::forward<B>(b), std::forward<IX>(ix));
          }
-         
+
          template <auto Opts, class T, is_context Ctx, class B>
          GLZ_ALWAYS_INLINE static void no_header(T&& value, Ctx&& ctx, B&& b) noexcept
          {
             to_binary<std::remove_cvref_t<T>>::template no_header<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                 std::forward<B>(b));
+                                                                        std::forward<B>(b));
          }
-         
+
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void no_header(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             to_binary<std::remove_cvref_t<T>>::template no_header<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                 std::forward<B>(b), std::forward<IX>(ix));
+                                                                        std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
@@ -218,7 +218,7 @@ namespace glz
             dump_type(tag, args...);
             dump_type(value, args...);
          }
-         
+
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&&... args) noexcept
          {
@@ -239,7 +239,7 @@ namespace glz
             dump_compressed_int<Opts>(value.size(), args...);
             dump(std::as_bytes(std::span{value.data(), value.size()}), args...);
          }
-         
+
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&&... args) noexcept
          {
