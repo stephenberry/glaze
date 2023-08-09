@@ -554,10 +554,10 @@ namespace glz
    {
       write<opts{.format = binary}>(std::forward<T>(value), buffer);
 
-      std::ofstream file(file_name);
+      std::ofstream file(file_name, std::ios::binary);
 
       if (file) {
-         file << buffer;
+         file.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
       }
       else {
          return {error_code::file_open_failure};
