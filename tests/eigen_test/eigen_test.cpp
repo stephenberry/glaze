@@ -46,7 +46,7 @@ int main()
       const bool boolean = m == e;
       expect(boolean);
    };
-   
+
    "binary"_test = [] {
       Eigen::MatrixXd m(2, 2);
       m << 1, 2, 3, 4;

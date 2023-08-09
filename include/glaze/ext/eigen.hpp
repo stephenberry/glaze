@@ -35,7 +35,8 @@ namespace glz
                          } && !
       range<T>;
 
-      template <matrix_t T> requires (T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
+      template <matrix_t T>
+         requires(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
       struct from_binary<T>
       {
          template <auto Opts>
@@ -48,13 +49,14 @@ namespace glz
             ++it;
             std::array<Eigen::Index, 2> extents;
             detail::read<binary>::op<Opts>(extents, ctx, it, end);
-            
+
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
             detail::read<binary>::op<Opts>(view, ctx, it, end);
          }
       };
-      
-      template <matrix_t T> requires (T::RowsAtCompileTime < 0 || T::ColsAtCompileTime < 0)
+
+      template <matrix_t T>
+         requires(T::RowsAtCompileTime < 0 || T::ColsAtCompileTime < 0)
       struct from_binary<T>
       {
          template <auto Opts>
@@ -67,13 +69,14 @@ namespace glz
             ++it;
             std::array<Eigen::Index, 2> extents;
             detail::read<binary>::op<Opts>(extents, ctx, it, end);
-            
+
             std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
             detail::read<binary>::op<Opts>(view, ctx, it, end);
          }
       };
 
-      template <matrix_t T> requires (T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
+      template <matrix_t T>
+         requires(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
       struct to_binary<T>
       {
          template <auto Opts>
@@ -83,16 +86,17 @@ namespace glz
             constexpr uint8_t layout = uint8_t(uint64_t(T::Flags) & uint64_t(Eigen::ColMajor)) << 6;
             constexpr uint8_t tag = tag::additional | matrix | layout;
             dump_type(tag, args...);
-            
-            std::array<Eigen::Index, 2> extents{ T::RowsAtCompileTime, T::ColsAtCompileTime };
+
+            std::array<Eigen::Index, 2> extents{T::RowsAtCompileTime, T::ColsAtCompileTime};
             detail::write<binary>::op<Opts>(extents, ctx, args...);
-            
+
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
             detail::write<binary>::op<Opts>(view, ctx, args...);
          }
       };
-      
-      template <matrix_t T> requires (T::RowsAtCompileTime < 0 || T::ColsAtCompileTime < 0)
+
+      template <matrix_t T>
+         requires(T::RowsAtCompileTime < 0 || T::ColsAtCompileTime < 0)
       struct to_binary<T>
       {
          template <auto Opts>
@@ -102,16 +106,17 @@ namespace glz
             constexpr uint8_t layout = uint8_t(uint64_t(T::Flags) & uint64_t(Eigen::ColMajor)) << 6;
             constexpr uint8_t tag = tag::additional | matrix | layout;
             dump_type(tag, args...);
-            
-            std::array<Eigen::Index, 2> extents{ value.rows(), value.cols() };
+
+            std::array<Eigen::Index, 2> extents{value.rows(), value.cols()};
             detail::write<binary>::op<Opts>(extents, ctx, args...);
-            
+
             std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
             detail::write<binary>::op<Opts>(view, ctx, args...);
          }
       };
 
-      template <matrix_t T> requires (T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
+      template <matrix_t T>
+         requires(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
       struct from_json<T>
       {
          template <auto Opts>
@@ -122,7 +127,8 @@ namespace glz
          }
       };
 
-      template <matrix_t T> requires (T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
+      template <matrix_t T>
+         requires(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
       struct to_json<T>
       {
          template <auto Opts>
