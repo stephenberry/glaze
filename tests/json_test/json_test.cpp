@@ -4945,14 +4945,13 @@ suite number_reading = [] {
    };
 };
 
-suite whitespace_testing = []
-{
+suite whitespace_testing = [] {
    "whitespace error"_test = [] {
-        std::string_view buffer{"{\"0\"/\n/"};
-        my_struct value{};
-        glz::context ctx{};
-        expect(glz::read_json(value, buffer) == glz::error_code::expected_end_comment);
-     };
+      std::string_view buffer{"{\"0\"/\n/"};
+      my_struct value{};
+      glz::context ctx{};
+      expect(glz::read_json(value, buffer) == glz::error_code::expected_end_comment);
+   };
 };
 
 int main()
