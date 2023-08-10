@@ -23,6 +23,11 @@ namespace glz
 
       void n_threads(const size_t n)
       {
+         finish_work(); // finish any active work
+         closed = false;
+         
+         threads.clear();
+         threads.reserve(n);
          for (size_t i = threads.size(); i < n; ++i) {
             threads.emplace_back(std::thread(&pool::worker, this, i));
          }
@@ -119,15 +124,7 @@ namespace glz
 
       ~pool()
       {
-         // Close the queue and finish all the remaining work
-         std::unique_lock lock(mtx);
-         closed = true;
-         work_cv.notify_all();
-         lock.unlock();
-
-         for (auto& t : threads) {
-            if (t.joinable()) t.join();
-         }
+         finish_work();
       }
 
      private:
@@ -138,6 +135,19 @@ namespace glz
       std::mutex mtx;
       std::condition_variable work_cv;
       std::condition_variable done_cv;
+      
+      void finish_work()
+      {
+         // Close the queue and finish all the remaining work
+         std::unique_lock lock(mtx);
+         closed = true;
+         work_cv.notify_all();
+         lock.unlock();
+
+         for (auto& t : threads) {
+            if (t.joinable()) t.join();
+         }
+      }
 
       void worker(const size_t thread_number)
       {
