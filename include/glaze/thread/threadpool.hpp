@@ -5,7 +5,7 @@
 
 #include <atomic>
 #include <condition_variable>
-#include <deque>
+#include <list>
 #include <functional>
 #include <future>
 #include <mutex>
@@ -130,7 +130,8 @@ namespace glz
 
      private:
       std::vector<std::thread> threads;
-      std::deque<std::function<void(const size_t)>> queue;
+      // using std::deque for the queue causes random function call issues
+      std::list<std::function<void(const size_t)>> queue;
       std::atomic<uint32_t> working = 0;
       std::atomic<bool> closed = false;
       std::mutex mtx;
