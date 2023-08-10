@@ -39,7 +39,7 @@ namespace glz
 
          auto promise = std::make_shared<std::promise<result_type>>();
 
-         queue.emplace(last_index++, [=, f = std::move(func)](const size_t /*thread_number*/) {
+         queue.emplace_back([=, f = std::move(func)](const size_t /*thread_number*/) {
 #if __cpp_exceptions
             try {
                if constexpr (std::is_void_v<result_type>) {
@@ -78,7 +78,7 @@ namespace glz
 
          auto promise = std::make_shared<std::promise<result_type>>();
 
-         queue.emplace(last_index++, [=, f = std::move(func)](const size_t thread_number) {
+         queue.emplace_back([=, f = std::move(func)](const size_t thread_number) {
 #if __cpp_exceptions
             try {
                if constexpr (std::is_void_v<result_type>) {
@@ -131,9 +131,7 @@ namespace glz
 
      private:
       std::vector<std::thread> threads;
-      std::unordered_map<size_t, std::function<void(const size_t)>> queue;
-      std::atomic<size_t> front_index{};
-      std::atomic<size_t> last_index{};
+      std::deque<std::function<void(const size_t)>> queue;
       std::atomic<unsigned int> working = 0;
       bool closed = false;
       std::mutex mtx;
@@ -145,7 +143,7 @@ namespace glz
          while (true) {
             // Wait for work
             std::unique_lock<std::mutex> lock(mtx);
-            work_cv.wait(lock, [this]() { return closed || !(front_index == last_index); });
+            work_cv.wait(lock, [this]() { return closed || !queue.empty(); });
             if (queue.empty()) {
                if (closed) {
                   return;
@@ -155,13 +153,13 @@ namespace glz
 
             // Grab work
             ++working;
-            auto work = queue.find(front_index++);
+            auto work = std::move(queue.front());
+            queue.pop_front();
             lock.unlock();
 
-            work->second(thread_number);
+            work(thread_number);
 
             lock.lock();
-            queue.erase(work);
 
             // Notify that work is finished
             --working;
