@@ -24,11 +24,12 @@ namespace glz
       void n_threads(const size_t n)
       {
          finish_work(); // finish any active work
+         std::lock_guard lock(mtx);
          closed = false;
          
          threads.clear();
          threads.reserve(n);
-         for (size_t i = threads.size(); i < n; ++i) {
+         for (size_t i = 0; i < n; ++i) {
             threads.emplace_back(std::thread(&pool::worker, this, i));
          }
       }
