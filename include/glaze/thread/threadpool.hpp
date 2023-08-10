@@ -39,7 +39,7 @@ namespace glz
 
          auto promise = std::make_shared<std::promise<result_type>>();
 
-         queue.emplace_back([=, f = std::move(func)](const size_t /*thread_number*/) {
+         queue.emplace_back([promise, f = std::move(func)](const size_t /*thread_number*/) {
 #if __cpp_exceptions
             try {
                if constexpr (std::is_void_v<result_type>) {
@@ -78,7 +78,7 @@ namespace glz
 
          auto promise = std::make_shared<std::promise<result_type>>();
 
-         queue.emplace_back([=, f = std::move(func)](const size_t thread_number) {
+         queue.emplace_back([promise, f = std::move(func)](const size_t thread_number) {
 #if __cpp_exceptions
             try {
                if constexpr (std::is_void_v<result_type>) {
@@ -125,15 +125,16 @@ namespace glz
          work_cv.notify_all();
          lock.unlock();
 
-         for (auto& t : threads)
+         for (auto& t : threads) {
             if (t.joinable()) t.join();
+         }
       }
 
      private:
       std::vector<std::thread> threads;
       std::deque<std::function<void(const size_t)>> queue;
-      std::atomic<unsigned int> working = 0;
-      bool closed = false;
+      std::atomic<uint32_t> working = 0;
+      std::atomic<bool> closed = false;
       std::mutex mtx;
       std::condition_variable work_cv;
       std::condition_variable done_cv;
