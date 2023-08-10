@@ -153,28 +153,28 @@ namespace glz
       {
          while (true) {
             // Wait for work
-            std::unique_lock<std::mutex> lock(mtx);
+            std::unique_lock lock(mtx);
             work_cv.wait(lock, [this]() { return closed || !queue.empty(); });
             if (queue.empty()) {
                if (closed) {
                   return;
                }
-               continue;
             }
+            else {
+               // Grab work
+               ++working;
+               auto work = std::move(queue.front());
+               queue.pop_front();
+               lock.unlock();
 
-            // Grab work
-            ++working;
-            auto work = std::move(queue.front());
-            queue.pop_front();
-            lock.unlock();
+               work(thread_number);
 
-            work(thread_number);
+               lock.lock();
 
-            lock.lock();
-
-            // Notify that work is finished
-            --working;
-            done_cv.notify_all();
+               // Notify that work is finished
+               --working;
+               done_cv.notify_all();
+            }
          }
       }
    };
