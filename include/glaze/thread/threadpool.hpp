@@ -15,7 +15,7 @@
 namespace glz
 {
    // A simple threadpool
-   struct pool
+   struct pool final
    {
       pool() : pool(concurrency()) {}
 
@@ -28,7 +28,7 @@ namespace glz
          }
       }
 
-      size_t concurrency() const { return std::thread::hardware_concurrency(); }
+      size_t concurrency() const noexcept { return std::thread::hardware_concurrency(); }
 
       template <class F>
       std::future<std::invoke_result_t<std::decay_t<F>>> emplace_back(F&& func)
@@ -39,10 +39,10 @@ namespace glz
 
          auto promise = std::make_shared<std::promise<result_type>>();
 
-         queue.emplace(last_index++, [=, f = std::forward<F>(func)](const size_t /*thread_number*/) {
+         queue.emplace(last_index++, [=, f = std::move(func)](const size_t /*thread_number*/) {
 #if __cpp_exceptions
             try {
-               if constexpr (std::is_void<result_type>::value) {
+               if constexpr (std::is_void_v<result_type>) {
                   f();
                }
                else {
@@ -53,7 +53,7 @@ namespace glz
                promise->set_exception(std::current_exception());
             }
 #else
-            if constexpr (std::is_void<result_type>::value) {
+            if constexpr (std::is_void_v<result_type>) {
                f();
             }
             else {
@@ -66,7 +66,8 @@ namespace glz
 
          return promise->get_future();
       }
-
+      
+      // Takes a function whose input is the thread number (size_t)
       template <class F>
          requires std::invocable<std::decay_t<F>, size_t>
       std::future<std::invoke_result_t<std::decay_t<F>, size_t>> emplace_back(F&& func)
@@ -77,10 +78,10 @@ namespace glz
 
          auto promise = std::make_shared<std::promise<result_type>>();
 
-         queue.emplace(last_index++, [=, f = std::forward<F>(func)](const size_t thread_number) {
+         queue.emplace(last_index++, [=, f = std::move(func)](const size_t thread_number) {
 #if __cpp_exceptions
             try {
-               if constexpr (std::is_void<result_type>::value) {
+               if constexpr (std::is_void_v<result_type>) {
                   f(thread_number);
                }
                else {
@@ -91,7 +92,7 @@ namespace glz
                promise->set_exception(std::current_exception());
             }
 #else
-            if constexpr (std::is_void<result_type>::value) {
+            if constexpr (std::is_void_v<result_type>) {
                f(thread_number);
             }
             else {
@@ -105,7 +106,7 @@ namespace glz
          return promise->get_future();
       }
 
-      bool computing() const { return (working != 0); }
+      bool computing() const noexcept { return (working != 0); }
 
       void wait()
       {
