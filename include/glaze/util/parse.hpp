@@ -96,6 +96,9 @@ namespace glz::detail
             }
             else {
                skip_comment(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                break;
             }
          }
@@ -403,6 +406,9 @@ namespace glz::detail
             return;
          case '/':
             skip_comment(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             break;
          case '"':
             skip_string<opts{}>(ctx, it, end);
