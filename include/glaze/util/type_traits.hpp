@@ -112,6 +112,11 @@ namespace glz
    {
       using type = std::tuple<Args...>;
    };
+   
+   template <class Result, class... Args>
+   struct inputs_as_tuple<Result (*const)(Args...)> {
+       using type = std::tuple<Args...>;
+   };
 
    template <class T>
    struct parent_of_fn;

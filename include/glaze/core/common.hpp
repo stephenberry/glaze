@@ -104,6 +104,14 @@ namespace glz
 
    struct skip
    {}; // to skip a keyed value in input
+   
+   template <class T, class... Args>
+   T create(Args... args) {
+       return T{std::forward<Args>(args)...};
+   }
+
+   template <class T, class... Args>
+   inline constexpr auto constructor = &create<T, Args...>;
 
    template <class T>
    struct includer

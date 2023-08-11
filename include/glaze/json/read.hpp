@@ -2023,13 +2023,31 @@ namespace glz
    template <class T, class Buffer>
    [[nodiscard]] inline expected<T, parse_error> read_json(Buffer&& buffer) noexcept
    {
-      T value{};
-      context ctx{};
-      const auto ec = read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
-      if (ec) {
-         return unexpected(ec);
+      if constexpr (std::is_default_constructible_v<T>) {
+         T value{};
+         context ctx{};
+         const auto ec = read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
+         if (ec) {
+            return unexpected(ec);
+         }
+         return value;
       }
-      return value;
+      else if constexpr (detail::constructible<T>) {
+         using Tuple = typename inputs_as_tuple<decltype(meta_construct_v<T>)>::type;
+         Tuple inputs{};
+         auto value = std::apply(
+            [&](auto&&... args) { return meta_construct_v<T>(std::forward<decltype(args)>(args)...); },
+            inputs);
+         context ctx{};
+         const auto ec = read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
+         if (ec) {
+            return unexpected(ec);
+         }
+         return value;
+      }
+      else {
+         static_assert(false_v<T>, "Type must be default constructible or define a `construct` in glz::meta");
+      }
    }
 
    template <auto Opts = opts{}, class T>

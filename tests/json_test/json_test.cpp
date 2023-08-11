@@ -3614,6 +3614,32 @@ suite custom_unique_tests = [] {
    };
 };
 
+struct MyNonDefaultConstructibleClass
+{
+   MyNonDefaultConstructibleClass(int x, double y) : x(x), y(y) {}
+   
+   int x;
+   double y;
+};
+
+template <>
+struct glz::meta<MyNonDefaultConstructibleClass>
+{
+   using T = MyNonDefaultConstructibleClass;
+   static constexpr auto value = object("x", &T::x, "y", &T::y);
+   static constexpr auto construct = constructor<T, int, double>;
+};
+
+suite non_default_constructible = [] {
+   "non_default_constructible"_test = [] {
+      std::string s = R"({"x":5,"y":1.1})";
+      auto c = glz::read_json<MyNonDefaultConstructibleClass>(s);
+      expect(c.has_value());
+      expect(c.value().x == 5);
+      expect(c.value().y == 1.1);
+   };
+};
+
 #include <set>
 #include <unordered_set>
 
