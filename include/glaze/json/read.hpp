@@ -908,6 +908,8 @@ namespace glz
             const auto n = value.size();
 
             auto value_it = value.begin();
+            
+            using V = std::decay_t<decltype(*value_it)>;
 
             for (size_t i = 0; i < n; ++i) {
                read<json>::op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
@@ -925,7 +927,21 @@ namespace glz
                else if (*it == ']') {
                   ++it;
                   if constexpr (resizeable<T>) {
-                     value.resize(i + 1);
+                     if constexpr (std::is_default_constructible_v<V>) {
+                        value.resize(i + 1);
+                     }
+                     else if constexpr (constructible<V>) {
+                        using Tuple = typename inputs_as_tuple<decltype(meta_construct_v<V>)>::type;
+                        Tuple inputs{};
+                        auto element = std::apply(
+                           [&](auto&&... args) { return meta_construct_v<V>(std::forward<decltype(args)>(args)...); },
+                           inputs);
+                        value.resize(i + 1, element);
+                     }
+                     else {
+                        value.resize(i + 1);
+                        //static_assert(false_v<V>, "Type must be default constructible or define a `construct` in glz::meta");
+                     }
 
                      if constexpr (Opts.shrink_to_fit) {
                         value.shrink_to_fit();
@@ -942,7 +958,22 @@ namespace glz
             // growing
             if constexpr (emplace_backable<T>) {
                while (it < end) {
-                  read<json>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
+                  if constexpr (std::is_default_constructible_v<V>) {
+                     read<json>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
+                  }
+                  else if constexpr (constructible<V>) {
+                     using Tuple = typename inputs_as_tuple<decltype(meta_construct_v<V>)>::type;
+                     Tuple inputs{};
+                     auto element = std::apply(
+                        [&](auto&&... args) { return meta_construct_v<V>(std::forward<decltype(args)>(args)...); },
+                        inputs);
+                     read<json>::op<ws_handled<Opts>()>(value.emplace_back(element), ctx, it, end);
+                  }
+                  else {
+                     read<json>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
+                     //static_assert(false_v<V>, "Type must be default constructible or define a `construct` in glz::meta");
+                  }
+                  
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                   skip_ws<Opts>(ctx, it, end);

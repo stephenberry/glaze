@@ -3638,6 +3638,16 @@ suite non_default_constructible = [] {
       expect(c.value().x == 5);
       expect(c.value().y == 1.1);
    };
+   
+   "non_default_constructible_vector"_test = [] {
+      std::string s = R"([{"x":5,"y":1.1},{"x":10,"y":2.2}])";
+      auto c = glz::read_json<std::vector<MyNonDefaultConstructibleClass>>(s);
+      expect(c.has_value());
+      expect(c.value()[0].x == 5);
+      expect(c.value()[0].y == 1.1);
+      expect(c.value()[1].x == 10);
+      expect(c.value()[1].y == 2.2);
+   };
 };
 
 #include <set>
