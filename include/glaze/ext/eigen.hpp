@@ -87,7 +87,7 @@ namespace glz
             constexpr uint8_t matrix = 0b00010'000;
             constexpr uint8_t tag = tag::extensions | matrix;
             dump_type(tag, args...);
-            
+
             constexpr uint8_t layout = uint8_t(!T::IsRowMajor);
             dump_type(layout, args...);
 
@@ -109,7 +109,7 @@ namespace glz
             constexpr uint8_t matrix = 0b00010'000;
             constexpr uint8_t tag = tag::extensions | matrix;
             dump_type(tag, args...);
-            
+
             constexpr uint8_t layout = uint8_t(!T::IsRowMajor);
             dump_type(layout, args...);
 

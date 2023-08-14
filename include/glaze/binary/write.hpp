@@ -197,7 +197,7 @@ namespace glz
                      T var = V{};
                      return var.index();
                   }();
-                  
+
                   constexpr uint8_t tag = tag::extensions | 0b00001'000;
 
                   dump_type(tag, args...);
