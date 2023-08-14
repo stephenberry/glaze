@@ -60,7 +60,7 @@ namespace glz
          if (extension == ".json" || extension == ".jsonc") {
             return read<opts{}>(value, buffer, ctx);
          }
-         else if (extension == ".crush") {
+         else if (extension == ".eve") {
             return read<opts{.format = binary}>(value, buffer, ctx);
          }
          else {
@@ -89,7 +89,7 @@ namespace glz
          else if (extension == ".jsonc") {
             write<opts{.comments = true}>(value, buffer, ctx);
          }
-         else if (extension == ".crush") {
+         else if (extension == ".eve") {
             write<opts{.format = binary}>(value, buffer, ctx);
          }
          else {
