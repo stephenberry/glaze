@@ -19,8 +19,8 @@ namespace glz::tag
    inline constexpr uint8_t string = 3;
    inline constexpr uint8_t object = 4;
    inline constexpr uint8_t typed_array = 5;
-   inline constexpr uint8_t untyped_array = 6;
-   inline constexpr uint8_t additional = 7;
+   inline constexpr uint8_t generic_array = 6;
+   inline constexpr uint8_t extensions = 7;
 
    inline constexpr uint8_t bool_false = 0b00000001;
    inline constexpr uint8_t bool_true = 0b00001001;

@@ -42,8 +42,9 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            constexpr uint8_t layout = uint8_t(!T::IsRowMajor) << 6;
-            if ((uint8_t(*it) & 0b11000000) != layout) {
+            ++it;
+            constexpr uint8_t layout = uint8_t(!T::IsRowMajor);
+            if (uint8_t(*it) != layout) {
                ctx.error = error_code::syntax_error;
             }
             ++it;
@@ -62,8 +63,9 @@ namespace glz
          template <auto Opts>
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            constexpr uint8_t layout = uint8_t(!T::IsRowMajor) << 6;
-            if ((uint8_t(*it) & 0b11000000) != layout) {
+            ++it;
+            constexpr uint8_t layout = uint8_t(!T::IsRowMajor);
+            if (uint8_t(*it) != layout) {
                ctx.error = error_code::syntax_error;
             }
             ++it;
@@ -82,10 +84,12 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            constexpr uint8_t matrix = 0b00'010'000;
-            constexpr uint8_t layout = uint8_t(!T::IsRowMajor) << 6;
-            constexpr uint8_t tag = tag::additional | matrix | layout;
+            constexpr uint8_t matrix = 0b00010'000;
+            constexpr uint8_t tag = tag::extensions | matrix;
             dump_type(tag, args...);
+            
+            constexpr uint8_t layout = uint8_t(!T::IsRowMajor);
+            dump_type(layout, args...);
 
             std::array<Eigen::Index, 2> extents{T::RowsAtCompileTime, T::ColsAtCompileTime};
             detail::write<binary>::op<Opts>(extents, ctx, args...);
@@ -102,10 +106,12 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            constexpr uint8_t matrix = 0b00'010'000;
-            constexpr uint8_t layout = uint8_t(!T::IsRowMajor) << 6;
-            constexpr uint8_t tag = tag::additional | matrix | layout;
+            constexpr uint8_t matrix = 0b00010'000;
+            constexpr uint8_t tag = tag::extensions | matrix;
             dump_type(tag, args...);
+            
+            constexpr uint8_t layout = uint8_t(!T::IsRowMajor);
+            dump_type(layout, args...);
 
             std::array<Eigen::Index, 2> extents{value.rows(), value.cols()};
             detail::write<binary>::op<Opts>(extents, ctx, args...);

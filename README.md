@@ -45,7 +45,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 ## Binary Performance
 
-Tagged binary specification: [Crusher](https://github.com/stephenberry/crusher)
+Tagged binary specification: [EVE](https://github.com/stephenberry/eve)
 
 | Metric                | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | --------------------- | ------------------ | ------------ | ----------- |
