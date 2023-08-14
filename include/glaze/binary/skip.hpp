@@ -145,11 +145,11 @@ namespace glz::detail
          skip_typed_array_binary(ctx, it, end);
          break;
       }
-      case tag::untyped_array: {
+      case tag::generic_array: {
          unskip_typed_array_binary(ctx, it, end);
          break;
       }
-      case tag::additional: {
+      case tag::extensions: {
          skip_additional_binary(ctx, it, end);
          break;
       }

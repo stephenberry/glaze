@@ -197,8 +197,10 @@ namespace glz
                      T var = V{};
                      return var.index();
                   }();
+                  
+                  constexpr uint8_t tag = tag::extensions | 0b00001'000;
 
-                  dump_type(tag::additional, args...);
+                  dump_type(tag, args...);
                   dump_compressed_int<index>(args...);
                   write<binary>::op<Opts>(v, ctx, std::forward<Args>(args)...);
                },
@@ -314,7 +316,7 @@ namespace glz
                }
             }
             else {
-               constexpr uint8_t tag = tag::untyped_array | (byte_count<V> << 3);
+               constexpr uint8_t tag = tag::generic_array | (byte_count<V> << 3);
                dump_type(tag, args...);
                dump_compressed_int<Opts>(value.size(), args...);
 
@@ -412,7 +414,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump<std::byte(tag::untyped_array)>(args...);
+            dump<std::byte(tag::generic_array)>(args...);
 
             static constexpr auto N = std::tuple_size_v<meta_t<T>>;
             dump_compressed_int<N>(args...);
@@ -432,7 +434,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump<std::byte(tag::untyped_array)>(args...);
+            dump<std::byte(tag::generic_array)>(args...);
 
             static constexpr auto N = std::tuple_size_v<T>;
             dump_compressed_int<N>(args...);

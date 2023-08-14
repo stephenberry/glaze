@@ -84,7 +84,7 @@ namespace glz
          {
             constexpr uint8_t matrix = 0b00'010'000;
             constexpr uint8_t layout = uint8_t(!T::IsRowMajor) << 6;
-            constexpr uint8_t tag = tag::additional | matrix | layout;
+            constexpr uint8_t tag = tag::extensions | matrix | layout;
             dump_type(tag, args...);
 
             std::array<Eigen::Index, 2> extents{T::RowsAtCompileTime, T::ColsAtCompileTime};
@@ -104,7 +104,7 @@ namespace glz
          {
             constexpr uint8_t matrix = 0b00'010'000;
             constexpr uint8_t layout = uint8_t(!T::IsRowMajor) << 6;
-            constexpr uint8_t tag = tag::additional | matrix | layout;
+            constexpr uint8_t tag = tag::extensions | matrix | layout;
             dump_type(tag, args...);
 
             std::array<Eigen::Index, 2> extents{value.rows(), value.cols()};
