@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <span>
 
 #include "glaze/core/write.hpp"
@@ -13,7 +14,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void dump(const char c, vector_like auto& b, auto&& ix) noexcept
    {
       if (ix == b.size()) [[unlikely]] {
-         b.resize(b.size() * 2);
+         b.resize((std::max)(b.size() * 2, size_t{128}));
       }
 
       b[ix] = c;
@@ -30,7 +31,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void dump(vector_like auto& b, auto&& ix) noexcept
    {
       if (ix == b.size()) [[unlikely]] {
-         b.resize(b.size() * 2);
+         b.resize((std::max)(b.size() * 2, size_t{128}));
       }
 
       using V = std::decay_t<decltype(b[0])>;
@@ -198,7 +199,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void dump(B&& b, auto&& ix) noexcept
    {
       if (ix == b.size()) [[unlikely]] {
-         b.resize(b.size() * 2);
+         b.resize((std::max)(b.size() * 2, size_t{128}));
       }
 
       using value_t = range_value_t<std::decay_t<B>>;
@@ -234,7 +235,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void dump(std::byte c, auto&& b, auto&& ix) noexcept
    {
       if (ix == b.size()) [[unlikely]] {
-         b.resize(b.size() * 2);
+         b.resize((std::max)(b.size() * 2, size_t{128}));
       }
 
       using value_t = range_value_t<std::decay_t<B>>;
