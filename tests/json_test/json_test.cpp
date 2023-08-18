@@ -4954,6 +4954,15 @@ suite whitespace_testing = [] {
    };
 };
 
+suite read_as_json_raw = [] {
+   "read_as_json_raw"_test = [] {
+      static std::array<char, 128> b{};
+      my_struct obj{};
+      expect(glz::write_as_json(obj, "/i", b.data()));
+      expect(std::string_view{b.data()} == "287");
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
