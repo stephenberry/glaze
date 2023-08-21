@@ -16,7 +16,7 @@ namespace glz
    }
 
    template <class T, class B>
-   bool write_as_binary(T&& root_value, const sv json_ptr, B& buffer)
+   bool write_as_binary(T&& root_value, const sv json_ptr, B&& buffer)
    {
       return write_as<opts{.format = binary}>(std::forward<T>(root_value), json_ptr, buffer);
    }

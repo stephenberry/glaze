@@ -27,8 +27,13 @@ namespace glz
 
    // Given a JSON pointer path, writes into a buffer the specified value
    template <opts Opts, class T, class B>
-   bool write_as(T&& root_value, const sv json_ptr, B& buffer)
+   bool write_as(T&& root_value, const sv json_ptr, B&& buffer)
    {
-      return detail::seek_impl([&](auto&& val) { write<Opts>(val, buffer); }, std::forward<T>(root_value), json_ptr);
+      return detail::seek_impl(
+         [&](auto&& val) {
+            // TODO: handle raw buffer length output
+            write<Opts>(val, buffer);
+         },
+         std::forward<T>(root_value), json_ptr);
    }
 }
