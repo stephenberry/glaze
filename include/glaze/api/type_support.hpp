@@ -25,6 +25,24 @@ namespace glz
             template <class T>
             concept lvalue_reference = std::is_lvalue_reference_v<T>;
 
+   template <std::same_as<long long> long_long_t>
+      requires requires { !std::same_as<long long, int64_t>; }
+   struct meta<long_long_t>
+   {
+      static_assert(sizeof(long long) == 8);
+      static constexpr std::string_view name{"int64_t"};
+   };
+   static_assert(glz::name_v<int64_t> == glz::name_v<long long>);
+
+   template <std::same_as<unsigned long long> unsigned_long_long_t>
+      requires requires { !std::same_as<unsigned long long, uint64_t>; }
+   struct meta<unsigned_long_long_t>
+   {
+      static_assert(sizeof(unsigned long long) == 8);
+      static constexpr std::string_view name{"uint64_t"};
+   };
+   static_assert(glz::name_v<uint64_t> == glz::name_v<unsigned long long>);
+
    template <lvalue_reference T>
    struct meta<T>
    {
