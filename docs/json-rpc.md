@@ -83,7 +83,7 @@ int main() {
     auto [request_str, inserted] = client.request<"foo">(
             uuid, 
             foo_params{.foo_a = 1337, .foo_b = "hello world"}, 
-            [](glz::expected<foo_result, rpc::error> value, rpc::jsonrpc_id_t id) -> void {
+            [](glz::expected<foo_result, rpc::error> value, rpc::id_t id) -> void {
         // Access to value and/or id
     });
     // request_str: R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})"

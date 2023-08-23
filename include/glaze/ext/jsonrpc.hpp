@@ -48,7 +48,7 @@ namespace glz::rpc
 // jsonrpc
 namespace glz::rpc
 {
-   using jsonrpc_id_t = std::variant<glz::json_t::null_t, std::string_view, std::int64_t>;
+   using id_t = std::variant<glz::json_t::null_t, std::string_view, std::int64_t>;
    static constexpr std::string_view supported_version{"2.0"};
 
    struct error final
@@ -92,7 +92,7 @@ namespace glz::rpc
    template <class params_type>
    struct request_t
    {
-      jsonrpc_id_t id{};
+      id_t id{};
       std::string_view method{};
       params_type params{};
       std::string_view version{rpc::supported_version};
@@ -108,7 +108,7 @@ namespace glz::rpc
    };
    
    template <class params_type>
-   request_t(jsonrpc_id_t&&, std::string_view, params_type&&) -> request_t<std::decay_t<params_type>>;
+   request_t(id_t&&, std::string_view, params_type&&) -> request_t<std::decay_t<params_type>>;
    
    using generic_request_t = request_t<glz::raw_json_view>;
 
@@ -119,14 +119,14 @@ namespace glz::rpc
 
       response_t() = default;
       explicit response_t(rpc::error&& err) : error(std::move(err)) {}
-      response_t(jsonrpc_id_t&& id, result_t&& result)
+      response_t(id_t&& id, result_t&& result)
          : id(std::move(id)), result(std::move(result))
       {}
-      response_t(jsonrpc_id_t&& id, rpc::error&& err)
+      response_t(id_t&& id, rpc::error&& err)
          : id(std::move(id)), error(std::move(err))
       {}
 
-      jsonrpc_id_t id{};
+      id_t id{};
       std::optional<result_t> result{}; // todo can this be instead expected<result_t, error>
       std::optional<rpc::error> error{};
       std::string version{rpc::supported_version};
@@ -185,8 +185,8 @@ namespace glz::rpc
       using result_t = typename Method::result_t;
       using request_t = rpc::request_t<params_t>;
       using response_t = rpc::response_t<result_t>;
-      using callback_t = std::function<void(const glz::expected<result_t, rpc::error>&, const jsonrpc_id_t&)>;
-      std::unordered_map<jsonrpc_id_t, callback_t> pending_requests;
+      using callback_t = std::function<void(const glz::expected<result_t, rpc::error>&, const id_t&)>;
+      std::unordered_map<id_t, callback_t> pending_requests;
    };
 
    namespace detail
@@ -318,7 +318,7 @@ namespace glz::rpc
 
          if (!request.has_value()) {
             // Failed, but let's try to extract the `id`
-            auto id{glz::get_as_json<jsonrpc_id_t, "/id">(json_request)};
+            auto id{glz::get_as_json<id_t, "/id">(json_request)};
             if (!id.has_value()) {
                return raw_response_t{rpc::error::invalid(request.error(), json_request)};
             }
@@ -443,7 +443,7 @@ namespace glz::rpc
       // whether the callback was inserted into the queue if the callback was not inserted into the queue it can mean
       // that the input was a notification or more serious, conflicting id, the provided id should be unique!
       template <basic_fixed_string method_name>
-      [[nodiscard]] std::pair<std::string, bool> request(jsonrpc_id_t&& id, auto&& params, auto&& callback)
+      [[nodiscard]] std::pair<std::string, bool> request(id_t&& id, auto&& params, auto&& callback)
       {
          constexpr bool method_found = ((method_type::name_v == method_name) || ...);
          static_assert(method_found, "Method not declared in client.");

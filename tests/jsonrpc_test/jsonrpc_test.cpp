@@ -63,7 +63,7 @@ ut::suite vector_test_cases = [] {
    ut::test("sum_result = 6") = [&server, &client] {
       bool called{};
       auto request_str{client.request<"summer">(
-         1, std::vector{1, 2, 3}, [&called](glz::expected<int, rpc::error> value, rpc::jsonrpc_id_t id) -> void {
+         1, std::vector{1, 2, 3}, [&called](glz::expected<int, rpc::error> value, rpc::id_t id) -> void {
             called = true;
             ut::expect(value.has_value());
             ut::expect(value.value() == 6);
@@ -147,7 +147,7 @@ ut::suite struct_test_cases = [] {
       bool called{};
       auto request_str{
          client.request<"foo">("42", foo_params{.foo_a = 1337, .foo_b = "hello world"},
-                               [&called](glz::expected<foo_result, rpc::error> value, rpc::jsonrpc_id_t id) -> void {
+                               [&called](glz::expected<foo_result, rpc::error> value, rpc::id_t id) -> void {
                                   called = true;
                                   ut::expect(value.has_value());
                                   ut::expect(value.value() == foo_result{.foo_c = true, .foo_d = "new world"});
@@ -176,7 +176,7 @@ ut::suite struct_test_cases = [] {
       bool called{};
       auto request_str{client.request<"bar">(
          "bar-uuid", bar_params{.bar_a = 1337, .bar_b = "hello world"},
-         [&called](glz::expected<bar_result, rpc::error> const& value, rpc::jsonrpc_id_t const& id) -> void {
+         [&called](glz::expected<bar_result, rpc::error> const& value, rpc::id_t const& id) -> void {
             called = true;
             ut::expect(value.has_value());
             ut::expect(value.value() == bar_result{.bar_c = true, .bar_d = "new world"});
@@ -205,7 +205,7 @@ ut::suite struct_test_cases = [] {
       bool called{};
       auto request_str{
          client.request<"foo">("42", foo_params{.foo_a = 1337, .foo_b = "hello world"},
-                               [&called](glz::expected<foo_result, rpc::error> value, rpc::jsonrpc_id_t id) -> void {
+                               [&called](glz::expected<foo_result, rpc::error> value, rpc::id_t id) -> void {
                                   called = true;
                                   ut::expect(!value.has_value());
                                   bool e = value.error() == rpc::error{rpc::error_e::server_error_lower, "my error"};
