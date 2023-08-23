@@ -655,7 +655,7 @@ namespace glz::detail
             return true;
          }
       }
-      
+
       if (sig == 0) [[unlikely]] // fast path is more likely for zeros (0.00000000000000000000000 is uncommon)
       {
          val = T(0);
