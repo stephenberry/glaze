@@ -208,7 +208,8 @@ ut::suite struct_test_cases = [] {
                                [&called](glz::expected<foo_result, rpc::error> value, rpc::jsonrpc_id_t id) -> void {
                                   called = true;
                                   ut::expect(!value.has_value());
-                                  ut::expect(value.error() == rpc::error{rpc::error_e::server_error_lower, "my error"});
+                                  bool e = value.error() == rpc::error{rpc::error_e::server_error_lower, "my error"};
+                                  ut::expect(e);
                                   ut::expect(std::holds_alternative<std::string_view>(id));
                                   ut::expect(std::get<std::string_view>(id) == "42");
                                })};
