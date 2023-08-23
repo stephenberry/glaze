@@ -57,6 +57,16 @@ namespace glz::rpc
       std::optional<std::string> data{}; // Optional detailed error information
       std::string message{code_as_sv(code)}; // string reflection of member variable code
       
+      // TODO: remove all these constructors when MSVC is fixed
+      error() = default;
+      error(error_e code) : code(code) {}
+      error(error_e code, const std::optional<std::string>& data) : code(code), data(data) {}
+      error(error_e code, const std::optional<std::string>& data, const std::string& message) : code(code), data(data), message(message) {}
+      error(const error&) = default;
+      error(error&&) = default;
+      error& operator=(const error&) = default;
+      error& operator=(error&&) = default;
+      
       static error invalid(const parse_error& pe, auto& buffer)
       {
          std::string format_err{format_error(pe, buffer)};
