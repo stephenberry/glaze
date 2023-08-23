@@ -4943,6 +4943,13 @@ suite number_reading = [] {
       buffer = "6E19";
       expect(glz::read_json(i, buffer) == glz::error_code::parse_number_failure);
    };
+   
+   "long float double"_test = [] {
+      std::string_view buffer{"0.00000000000000000000000"};
+      double d{3.14};
+      expect(!glz::read_json(d, buffer));
+      expect(d == 0.0);
+   };
 };
 
 suite whitespace_testing = [] {

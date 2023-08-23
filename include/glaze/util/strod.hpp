@@ -655,6 +655,12 @@ namespace glz::detail
             return true;
          }
       }
+      
+      if (sig == 0) [[unlikely]] // fast path is more likely for zeros (0.00000000000000000000000 is uncommon)
+      {
+         val = T(0);
+         return true;
+      }
 
       static_assert(std::numeric_limits<T>::is_iec559);
       static_assert(std::numeric_limits<T>::radix == 2);
