@@ -47,6 +47,17 @@ int main()
       expect(boolean);
    };
 
+   "binary"_test = [] {
+      Eigen::MatrixXd m(2, 2);
+      m << 1, 2, 3, 4;
+      std::vector<std::byte> b;
+      glz::write_binary(m, b);
+      Eigen::MatrixXd e(2, 2);
+      expect(!glz::read_binary(e, b));
+      const bool boolean = m == e;
+      expect(boolean);
+   };
+
    "array"_test = [] {
       Eigen::Vector3d m{1, 2, 3};
       std::vector<std::byte> b;

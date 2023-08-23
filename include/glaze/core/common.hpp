@@ -14,10 +14,6 @@
 #include <variant>
 #include <vector>
 
-// TODO: optionally include with a templated struct
-#include <filesystem>
-#include <fstream>
-
 #include "glaze/api/name.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
@@ -44,6 +40,15 @@ namespace glz
    obj(T&&...) -> obj<T...>;
 
    template <class... T>
+   struct obj_copy final
+   {
+      glz::tuplet::tuple<T...> value;
+   };
+
+   template <class... T>
+   obj_copy(T...) -> obj_copy<T...>;
+
+   template <class... T>
    struct arr final
    {
       glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
@@ -51,6 +56,15 @@ namespace glz
 
    template <class... T>
    arr(T&&...) -> arr<T...>;
+
+   template <class... T>
+   struct arr_copy final
+   {
+      glz::tuplet::tuple<T...> value;
+   };
+
+   template <class... T>
+   arr_copy(T...) -> arr_copy<T...>;
 
    // used to merge multiple JSON objects into a single JSON object
    template <class... T>
@@ -318,6 +332,14 @@ namespace glz
       concept writable_map_t = !
       complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>>;
 
+      template <class Map>
+      concept heterogeneous_map = requires {
+                                     typename Map::key_compare;
+                                     requires(std::same_as<typename Map::key_compare, std::less<>> ||
+                                              std::same_as<typename Map::key_compare, std::greater<>> ||
+                                              requires { typename Map::key_compare::is_transparent; });
+                                  };
+
       template <class T>
       concept array_t = (!complex_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
 
@@ -566,7 +588,6 @@ namespace glz
          constexpr auto n = std::tuple_size_v<meta_t<T>>;
 
          auto naive_or_normal_hash = [&] {
-            // these variables needed for MSVC
             if constexpr (n <= 20) {
                return glz::detail::naive_map<value_t, n, use_hash_comparison>(
                   {std::pair<sv, value_t>{sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
@@ -579,8 +600,6 @@ namespace glz
             }
          };
 
-         // these variables needed for MSVC
-         constexpr bool n_128 = n < 128;
          if constexpr (n == 0) {
             static_assert(false_v<T>, "empty object in glz::meta");
          }
@@ -594,7 +613,7 @@ namespace glz
                std::make_pair<sv, value_t>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
                                            glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...};
          }
-         else if constexpr (n_128) // don't even attempt a first character hash if we have too many keys
+         else if constexpr (n < 128) // don't even attempt a first character hash if we have too many keys
          {
             constexpr auto front_desc =
                single_char_hash<n>(std::array<sv, n>{sv{glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))}...});
@@ -878,7 +897,18 @@ namespace glz
       }
    } // namespace detail
 
-   constexpr auto array(auto&&... args) { return detail::Array{glz::tuplet::make_copy_tuple(args...)}; }
+   constexpr decltype(auto) conv_sv(auto&& value) noexcept
+   {
+      using V = std::decay_t<decltype(value)>;
+      if constexpr (std::is_convertible_v<V, sv>) {
+         return sv{value};
+      }
+      else {
+         return value;
+      }
+   }
+
+   constexpr auto array(auto&&... args) { return detail::Array{glz::tuplet::make_copy_tuple(conv_sv(args)...)}; }
 
    constexpr auto object(auto&&... args)
    {
@@ -886,21 +916,24 @@ namespace glz
          return glz::detail::Object{glz::tuplet::tuple{}};
       }
       else {
-         return glz::detail::Object{group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(args...))>>::op(
-            glz::tuplet::make_copy_tuple(args...))};
+         return glz::detail::Object{
+            group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(conv_sv(args)...))>>::op(
+               glz::tuplet::make_copy_tuple(conv_sv(args)...))};
       }
    }
 
    constexpr auto enumerate(auto&&... args)
    {
-      return glz::detail::Enum{group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(args...))>>::op(
-         glz::tuplet::make_copy_tuple(args...))};
+      return glz::detail::Enum{
+         group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(conv_sv(args)...))>>::op(
+            glz::tuplet::make_copy_tuple(conv_sv(args)...))};
    }
 
    constexpr auto flags(auto&&... args)
    {
-      return glz::detail::Flags{group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(args...))>>::op(
-         glz::tuplet::make_copy_tuple(args...))};
+      return glz::detail::Flags{
+         group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(conv_sv(args)...))>>::op(
+            glz::tuplet::make_copy_tuple(conv_sv(args)...))};
    }
 }
 

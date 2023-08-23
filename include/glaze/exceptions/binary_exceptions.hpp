@@ -53,14 +53,14 @@ namespace glz::ex
    }
 
    template <class T>
-   void write_file_binary(T&& value, const sv file_name, auto&& buffer)
+   void write_file_binary(T&& value, const std::string& file_name, auto&& buffer)
    {
       auto ec = glz::write_file_binary(std::forward<T>(value), file_name, buffer);
       if (ec == glz::error_code::file_open_failure) {
-         throw std::runtime_error("file failed to open: " + std::string(file_name));
+         throw std::runtime_error("file failed to open: " + file_name);
       }
       else if (ec) {
-         throw std::runtime_error("write_file_binary error for: " + std::string(file_name));
+         throw std::runtime_error("write_file_binary error for: " + file_name);
       }
    }
 }

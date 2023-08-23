@@ -320,6 +320,16 @@ namespace glz
          }
       };
 
+      template <glz::opts Opts>
+      GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, auto&&... args)
+      {
+         dump<','>(args...);
+         if constexpr (Opts.prettify) {
+            dump<'\n'>(args...);
+            dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+         }
+      }
+
       template <array_t T>
       struct to_json<T>
       {
@@ -338,11 +348,7 @@ namespace glz
                write<json>::op<Opts>(*it, ctx, args...);
                ++it;
                for (; it != std::cend(value); ++it) {
-                  dump<','>(args...);
-                  if constexpr (Opts.prettify) {
-                     dump<'\n'>(args...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
-                  }
+                  write_entry_separator<Opts>(ctx, args...);
                   write<json>::op<Opts>(*it, ctx, args...);
                }
                if constexpr (Opts.prettify) {
@@ -358,11 +364,7 @@ namespace glz
       template <opts Opts, typename Key, typename Value, is_context Ctx>
       void write_pair_content(const Key& key, const Value& value, Ctx& ctx, auto&&... args) noexcept
       {
-         if constexpr (null_t<Value> && Opts.skip_null_members) {
-            if (!bool(value)) return;
-         }
-
-         if constexpr (str_t<Key> || char_t<Key>) {
+         if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key>) {
             write<json>::op<Opts>(key, ctx, args...);
             dump<':'>(args...);
          }
@@ -375,15 +377,33 @@ namespace glz
             dump<' '>(args...);
          }
 
-         write<json>::op<Opts>(value, ctx, args...);
+         write<json>::op<opening_and_closing_handled_off<Opts>()>(value, ctx, args...);
+      }
+
+      template <glz::opts Opts, typename Value>
+      [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool skip_member(const Value& value) noexcept
+      {
+         if constexpr (null_t<Value> && Opts.skip_null_members) {
+            if constexpr (always_null_t<Value>)
+               return true;
+            else {
+               return !bool(value);
+            }
+         }
+         return false;
       }
 
       template <pair_t T>
       struct to_json<T>
       {
-         template <auto Opts, class... Args>
+         template <glz::opts Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(const T& value, is_context auto&& ctx, Args&&... args) noexcept
          {
+            const auto& [key, val] = value;
+            if (skip_member<Opts>(val)) {
+               return dump<"{}">(args...);
+            }
+
             dump<'{'>(args...);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
@@ -391,7 +411,6 @@ namespace glz
                dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
 
-            const auto& [key, val] = value;
             write_pair_content<Opts>(key, val, ctx, args...);
 
             if constexpr (Opts.prettify) {
@@ -406,7 +425,7 @@ namespace glz
       template <writable_map_t T>
       struct to_json<T>
       {
-         template <auto Opts, class... Args>
+         template <glz::opts Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if constexpr (!Opts.opening_handled) {
@@ -422,21 +441,38 @@ namespace glz
                   }
                }
 
-               auto it = std::cbegin(value);
-               {
-                  const auto& [first_key, first_val] = *it;
+               auto write_first_entry = [&ctx, &args...](const auto first_it) {
+                  const auto& [first_key, first_val] = *first_it;
+                  if (skip_member<Opts>(first_val)) {
+                     return true;
+                  }
                   write_pair_content<Opts>(first_key, first_val, ctx, args...);
-               }
+                  return false;
+               };
 
+               auto it = std::cbegin(value);
+               [[maybe_unused]] bool previous_skipped = write_first_entry(it);
                for (++it; it != std::cend(value); ++it) {
-                  dump<','>(args...);
-                  if constexpr (Opts.prettify) {
-                     dump<'\n'>(args...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+                  const auto& [key, entry_val] = *it;
+                  if (skip_member<Opts>(entry_val)) {
+                     previous_skipped = true;
+                     continue;
                   }
 
-                  const auto& [key, entry_val] = *it;
+                  // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
+                  // conditional for every entry. Avoid this branch when not skipping null members.
+                  // Alternatively, write separator after each entry, except on last entry but then branch is permanent
+                  if constexpr (Opts.skip_null_members) {
+                     if (!previous_skipped) {
+                        write_entry_separator<Opts>(ctx, args...);
+                     }
+                  }
+                  else {
+                     write_entry_separator<Opts>(ctx, args...);
+                  }
+
                   write_pair_content<Opts>(key, entry_val, ctx, args...);
+                  previous_skipped = false;
                }
 
                if constexpr (!Opts.closing_handled) {
@@ -571,15 +607,9 @@ namespace glz
                else {
                   write<json>::op<Opts>(glz::tuplet::get<I>(value.value), ctx, args...);
                }
-               // MSVC bug if this logic is in the `if constexpr`
-               // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
-                  dump<','>(args...);
-                  if constexpr (Opts.prettify) {
-                     dump<'\n'>(args...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
-                  }
+                  write_entry_separator<Opts>(ctx, args...);
                }
             });
             if constexpr (N > 0 && Opts.prettify) {
@@ -621,15 +651,9 @@ namespace glz
                else {
                   write<json>::op<Opts>(glz::tuplet::get<I>(value), ctx, args...);
                }
-               // MSVC bug if this logic is in the `if constexpr`
-               // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
-                  dump<','>(args...);
-                  if constexpr (Opts.prettify) {
-                     dump<'\n'>(args...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
-                  }
+                  write_entry_separator<Opts>(ctx, args...);
                }
             });
             if constexpr (N > 0 && Opts.prettify) {
@@ -679,15 +703,9 @@ namespace glz
                else {
                   write<json>::op<Opts>(std::get<I>(value), ctx, args...);
                }
-               // MSVC bug if this logic is in the `if constexpr`
-               // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
-                  dump<','>(args...);
-                  if constexpr (Opts.prettify) {
-                     dump<'\n'>(args...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
-                  }
+                  write_entry_separator<Opts>(ctx, args...);
                }
             });
             if constexpr (N > 0 && Opts.prettify) {
@@ -720,7 +738,7 @@ namespace glz
       }
 
       template <class T>
-         requires is_specialization_v<T, glz::obj>
+         requires is_specialization_v<T, glz::obj> || is_specialization_v<T, glz::obj_copy>
       struct to_json<T>
       {
          template <auto Options>
@@ -740,17 +758,12 @@ namespace glz
 
             bool first = true;
             for_each<N>([&](auto I) {
-               static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+               static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
                decltype(auto) item = glz::tuplet::get<2 * I + 1>(value.value);
                using val_t = std::decay_t<decltype(item)>;
 
-               if constexpr (null_t<val_t> && Opts.skip_null_members) {
-                  if constexpr (always_null_t<T>)
-                     return;
-                  else {
-                     auto is_null = [&]() { return !bool(item); }();
-                     if (is_null) return;
-                  }
+               if (skip_member<Opts>(item)) {
+                  return;
                }
 
                // skip file_include
@@ -767,11 +780,7 @@ namespace glz
                   else {
                      // Null members may be skipped so we cant just write it out for all but the last member unless
                      // trailing commas are allowed
-                     dump<','>(b, ix);
-                     if constexpr (Opts.prettify) {
-                        dump<'\n'>(b, ix);
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
-                     }
+                     write_entry_separator<Opts>(ctx, b, ix);
                   }
 
                   using Key = typename std::decay_t<std::tuple_element_t<2 * I, V>>;
@@ -861,7 +870,7 @@ namespace glz
 
             bool first = true;
             for_each<N>([&](auto I) {
-               static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+               static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                using mptr_t = std::tuple_element_t<1, decltype(item)>;
                using val_t = member_t<V, mptr_t>;
@@ -896,11 +905,7 @@ namespace glz
                   else {
                      // Null members may be skipped so we cant just write it out for all but the last member unless
                      // trailing commas are allowed
-                     dump<','>(b, ix);
-                     if constexpr (Opts.prettify) {
-                        dump<'\n'>(b, ix);
-                        dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
-                     }
+                     write_entry_separator<Opts>(ctx, b, ix);
                   }
 
                   using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
@@ -962,13 +967,13 @@ namespace glz
    } // namespace detail
 
    template <class T, class Buffer>
-   [[nodiscard]] GLZ_ALWAYS_INLINE auto write_json(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline auto write_json(T&& value, Buffer&& buffer) noexcept
    {
       return write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
-   [[nodiscard]] GLZ_ALWAYS_INLINE auto write_json(T&& value) noexcept
+   [[nodiscard]] inline auto write_json(T&& value) noexcept
    {
       std::string buffer{};
       write<opts{}>(std::forward<T>(value), buffer);
@@ -976,34 +981,23 @@ namespace glz
    }
 
    template <class T, class Buffer>
-   GLZ_ALWAYS_INLINE void write_jsonc(T&& value, Buffer&& buffer) noexcept
+   inline void write_jsonc(T&& value, Buffer&& buffer) noexcept
    {
       write<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
-   [[nodiscard]] GLZ_ALWAYS_INLINE auto write_jsonc(T&& value) noexcept
+   [[nodiscard]] inline auto write_jsonc(T&& value) noexcept
    {
       std::string buffer{};
       write<opts{.comments = true}>(std::forward<T>(value), buffer);
       return buffer;
    }
 
-   // std::string file_name needed for std::ofstream
    template <class T>
-   [[nodiscard]] GLZ_ALWAYS_INLINE write_error write_file_json(T&& value, const std::string& file_name,
-                                                               auto&& buffer) noexcept
+   [[nodiscard]] inline write_error write_file_json(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
       write<opts{}>(std::forward<T>(value), buffer);
       return {buffer_to_file(buffer, file_name)};
-   }
-
-   template <class T>
-   [[deprecated(
-      "use the version that takes a buffer as the third argument")]] [[nodiscard]] GLZ_ALWAYS_INLINE write_error
-   write_file_json(T&& value, const std::string& file_name) noexcept
-   {
-      std::string buffer{};
-      return write_file_json(std::forward<T>(value), file_name, buffer);
    }
 }

@@ -219,8 +219,6 @@ namespace glz
                else {
                   write<json>::op<Opts>(glz::tuplet::get<I>(value), ctx, std::forward<Args>(args)...);
                }
-               // MSVC bug if this logic is in the `if constexpr`
-               // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
                constexpr bool needs_new_line = I < N - 1;
                if constexpr (needs_new_line) {
                   dump<'\n'>(std::forward<Args>(args)...);
@@ -253,8 +251,6 @@ namespace glz
                else {
                   write<json>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...);
                }
-               // MSVC bug if this logic is in the `if constexpr`
-               // https://developercommunity.visualstudio.com/t/stdc20-fatal-error-c1004-unexpected-end-of-file-fo/1509806
                constexpr bool needs_new_line = I < N - 1;
                if constexpr (needs_new_line) {
                   dump<'\n'>(std::forward<Args>(args)...);
@@ -314,11 +310,9 @@ namespace glz
       return buffer;
    }
 
-   // std::string file_name needed for std::ofstream
    template <class T>
-   inline write_error write_file_ndjson(T&& value, const std::string& file_name)
+   [[nodiscard]] inline write_error write_file_ndjson(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
-      std::string buffer{};
       write<opts{.format = ndjson}>(std::forward<T>(value), buffer);
       return {buffer_to_file(buffer, file_name)};
    }

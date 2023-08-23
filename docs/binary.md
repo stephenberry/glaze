@@ -2,7 +2,7 @@
 
 Glaze provides a tagged binary format to send and receive messages like JSON, but with significantly improved performance and message size savings.
 
-The binary specification is known as [Crusher](https://github.com/stephenberry/crusher).
+The binary specification is known as [EVE](https://github.com/stephenberry/eve).
 
 **Write Binary**
 
@@ -31,5 +31,3 @@ static constexpr auto partial = glz::json_ptrs("/i",
 std::vector<std::byte> out;
 glz::write_binary<partial>(s, out);
 ```
-
-# 

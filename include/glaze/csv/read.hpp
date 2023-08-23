@@ -52,16 +52,59 @@ namespace glz
                return;
             }
 
-            // TODO: fix this also, taken from json
-            using X = std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
-                                         const uint8_t*, uint8_t*>;
-            auto cur = reinterpret_cast<X>(it);
-            auto s = parse_number(value, cur);
-            if (!s) [[unlikely]] {
-               ctx.error = error_code::parse_number_failure;
-               return;
+            using V = std::decay_t<decltype(value)>;
+            if constexpr (int_t<V>) {
+               if constexpr (std::is_unsigned_v<V>) {
+                  uint64_t i{};
+                  if (*it == '-') {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+                  auto e = stoui64(i, it);
+                  if (!e) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+
+                  if (i > std::numeric_limits<V>::max()) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+                  value = static_cast<V>(i);
+               }
+               else {
+                  uint64_t i{};
+                  int sign = 1;
+                  if (*it == '-') {
+                     sign = -1;
+                     ++it;
+                  }
+                  auto e = stoui64(i, it);
+                  if (!e) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+
+                  if (i > std::numeric_limits<V>::max()) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+                  value = sign * static_cast<V>(i);
+               }
             }
-            it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
+            else {
+               // TODO: fix this also, taken from json
+               using X =
+                  std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
+                                     const uint8_t*, uint8_t*>;
+               auto cur = reinterpret_cast<X>(it);
+               auto s = parse_float<V, Opts.force_conformance>(value, cur);
+               if (!s) [[unlikely]] {
+                  ctx.error = error_code::parse_number_failure;
+                  return;
+               }
+               it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
+            }
          }
       };
 
@@ -115,18 +158,13 @@ namespace glz
                return;
             }
 
-            // TODO: fix this also, taken from json
-            using X = std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
-                                         const uint8_t*, uint8_t*>;
-            auto cur = reinterpret_cast<X>(it);
-            int temp;
-            auto s = parse_number(temp, cur);
+            uint64_t temp;
+            auto s = stoui64(temp, it);
             if (!s) [[unlikely]] {
                ctx.error = error_code::expected_true_or_false;
                return;
             }
-            value = temp;
-            it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
+            value = static_cast<bool>(temp);
          }
       };
 

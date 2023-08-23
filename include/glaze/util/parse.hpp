@@ -13,6 +13,7 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/util/expected.hpp"
 #include "glaze/util/inline.hpp"
+#include "glaze/util/stoui64.hpp"
 #include "glaze/util/string_literal.hpp"
 #include "glaze/util/string_view.hpp"
 
@@ -95,6 +96,9 @@ namespace glz::detail
             }
             else {
                skip_comment(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                break;
             }
          }
@@ -402,6 +406,9 @@ namespace glz::detail
             return;
          case '/':
             skip_comment(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             break;
          case '"':
             skip_string<opts{}>(ctx, it, end);
@@ -446,21 +453,19 @@ namespace glz::detail
       return false;
    }
 
-   GLZ_ALWAYS_INLINE constexpr bool is_digit(char c) noexcept { return c <= '9' && c >= '0'; }
-
-   // TODO: don't recurse
-   inline constexpr std::optional<size_t> stoui(std::string_view s, size_t value = 0) noexcept
+   inline constexpr std::optional<uint64_t> stoui(const std::string_view s) noexcept
    {
       if (s.empty()) {
-         return value;
+         return {};
       }
 
-      else if (is_digit(s[0])) {
-         return stoui(s.substr(1), (s[0] - '0') + value * 10);
+      uint64_t ret;
+      auto* c = s.data();
+      bool valid = detail::stoui64(ret, c);
+      if (valid) {
+         return ret;
       }
-      else {
-         return {}; // not a digit
-      }
+      return {};
    }
 
    GLZ_ALWAYS_INLINE void skip_number_with_validation(is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -539,195 +544,5 @@ namespace glz::detail
       if (bool(ctx.error)) [[unlikely]]
          return {};
       return sv{start, static_cast<size_t>(it++ - start)};
-   }
-
-   // Can't use GLZ_ALWAYS_INLINE here because we have to allow infinite recursion
-   template <opts Opts>
-   inline void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
-   {
-      if (bool(ctx.error)) [[unlikely]] {
-         return;
-      }
-
-      if constexpr (!Opts.force_conformance) {
-         skip_until_closed<'{', '}'>(ctx, it, end);
-      }
-      else {
-         ++it;
-         skip_ws<Opts>(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         if (*it == '}') {
-            ++it;
-            return;
-         }
-         while (true) {
-            if (*it != '"') {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            skip_string<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            skip_ws<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            match<':'>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            skip_ws<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            skip_value<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            skip_ws<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            if (*it != ',') break;
-            skip_ws<Opts>(ctx, ++it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-         }
-         match<'}'>(ctx, it, end);
-      }
-   }
-
-   // Can't use GLZ_ALWAYS_INLINE here because we have to allow infinite recursion
-   template <opts Opts>
-   inline void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
-   {
-      if (bool(ctx.error)) [[unlikely]] {
-         return;
-      }
-
-      if constexpr (!Opts.force_conformance) {
-         skip_until_closed<'[', ']'>(ctx, it, end);
-      }
-      else {
-         ++it;
-         skip_ws<Opts>(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         if (*it == ']') {
-            ++it;
-            return;
-         }
-         while (true) {
-            skip_value<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            skip_ws<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            if (*it != ',') break;
-            skip_ws<Opts>(ctx, ++it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-         }
-         match<']'>(ctx, it, end);
-      }
-   }
-
-   // Can't use GLZ_ALWAYS_INLINE here because we have to allow infinite recursion
-   template <opts Opts>
-   inline void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
-   {
-      if (bool(ctx.error)) [[unlikely]] {
-         return;
-      }
-
-      if constexpr (!Opts.force_conformance) {
-         if constexpr (!Opts.ws_handled) {
-            skip_ws<Opts>(ctx, it, end);
-         }
-         while (true) {
-            switch (*it) {
-            case '{':
-               skip_until_closed<'{', '}'>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               break;
-            case '[':
-               skip_until_closed<'[', ']'>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               break;
-            case '"':
-               skip_string<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               break;
-            case '/':
-               skip_comment(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-               continue;
-            case ',':
-            case '}':
-            case ']':
-               break;
-            case '\0':
-               ctx.error = error_code::unexpected_end;
-               return;
-            default: {
-               ++it;
-               continue;
-            }
-            }
-
-            break;
-         }
-      }
-      else {
-         if constexpr (!Opts.ws_handled) {
-            skip_ws<Opts>(ctx, it, end);
-         }
-         switch (*it) {
-         case '{': {
-            skip_object<Opts>(ctx, it, end);
-            break;
-         }
-         case '[': {
-            skip_array<Opts>(ctx, it, end);
-            break;
-         }
-         case '"': {
-            skip_string<Opts>(ctx, it, end);
-            break;
-         }
-         case 'n': {
-            ++it;
-            match<"ull">(ctx, it, end);
-            break;
-         }
-         case 'f': {
-            ++it;
-            match<"alse">(ctx, it, end);
-            break;
-         }
-         case 't': {
-            ++it;
-            match<"rue">(ctx, it, end);
-            break;
-         }
-         case '\0': {
-            ctx.error = error_code::unexpected_end;
-            break;
-         }
-         default: {
-            skip_number<Opts>(ctx, it, end);
-         }
-         }
-      }
-   }
-
-   // expects opening whitespace to be handled
-   template <opts Opts>
-   GLZ_ALWAYS_INLINE auto parse_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
-   {
-      auto start = it;
-      skip_value<Opts>(ctx, it, end);
-      return std::span{start, static_cast<size_t>(std::distance(start, it))};
    }
 }

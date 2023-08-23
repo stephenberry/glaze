@@ -60,7 +60,7 @@ namespace glz
          if (extension == ".json" || extension == ".jsonc") {
             return read<opts{}>(value, buffer, ctx);
          }
-         else if (extension == ".crush") {
+         else if (extension == ".eve") {
             return read<opts{.format = binary}>(value, buffer, ctx);
          }
          else {
@@ -70,14 +70,6 @@ namespace glz
       else {
          return {error_code::could_not_determine_extension};
       }
-   }
-
-   template <class T>
-   [[deprecated("use the version that takes a buffer as the third argument")]] inline parse_error read_file(
-      T& value, const sv file_name) noexcept
-   {
-      std::string buffer{};
-      return read_file(value, file_name, buffer);
    }
 
    template <class T>
@@ -97,7 +89,7 @@ namespace glz
          else if (extension == ".jsonc") {
             write<opts{.comments = true}>(value, buffer, ctx);
          }
-         else if (extension == ".crush") {
+         else if (extension == ".eve") {
             write<opts{.format = binary}>(value, buffer, ctx);
          }
          else {
@@ -118,13 +110,5 @@ namespace glz
       }
 
       return {};
-   }
-
-   template <class T>
-   [[deprecated("use the version that takes a buffer as the third argument")]] [[nodiscard]] inline write_error
-   write_file(T& value, const sv file_name) noexcept
-   {
-      std::string buffer{};
-      return write_file(value, file_name, buffer);
    }
 }

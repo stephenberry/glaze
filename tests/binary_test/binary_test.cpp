@@ -562,12 +562,12 @@ void file_include_test()
 {
    includer_struct obj{};
 
-   expect(glz::write_file_binary(obj, "../alabastar.crush", std::string{}) == glz::error_code::none);
+   expect(glz::write_file_binary(obj, "../alabastar.eve", std::string{}) == glz::error_code::none);
 
    obj.str = "";
    obj.i = 0;
 
-   expect(glz::read_file_binary(obj, "../alabastar.crush", std::string{}) == glz::error_code::none);
+   expect(glz::read_file_binary(obj, "../alabastar.eve", std::string{}) == glz::error_code::none);
 
    expect(obj.str == "Hello") << obj.str;
    expect(obj.i == 55) << obj.i;
@@ -837,6 +837,43 @@ suite flag_test = [] {
 
       expect(s.x);
       expect(s.z);
+   };
+};
+
+struct falcon0
+{
+   double d{};
+};
+
+template <>
+struct glz::meta<falcon0>
+{
+   using T = falcon0;
+   static constexpr auto value = object("d", &T::d);
+};
+
+struct falcon1
+{
+   int i{};
+   double d{};
+};
+
+template <>
+struct glz::meta<falcon1>
+{
+   using T = falcon1;
+   static constexpr auto value = object("i", &T::i, "d", &T::d);
+};
+
+suite falcon_test = [] {
+   "partial read"_test = [] {
+      falcon0 f0{3.14};
+      std::string s;
+      glz::write_binary(f0, s);
+
+      falcon1 f1{};
+      expect(!glz::read_binary(f1, s));
+      expect(f1.d == 3.14);
    };
 };
 

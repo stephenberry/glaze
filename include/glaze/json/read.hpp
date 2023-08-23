@@ -6,6 +6,7 @@
 #include <charconv>
 #include <climits>
 #include <cwchar>
+#include <filesystem>
 #include <iterator>
 #include <locale>
 #include <ranges>
@@ -16,8 +17,8 @@
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/json/json_t.hpp"
+#include "glaze/json/skip.hpp"
 #include "glaze/util/for_each.hpp"
-#include "glaze/util/parse.hpp"
 #include "glaze/util/strod.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
@@ -175,15 +176,58 @@ namespace glz
                   return;
             }
 
-            // TODO: fix this
-            using X = std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
-                                         const uint8_t*, uint8_t*>;
-            auto cur = reinterpret_cast<X>(it);
-            auto s = parse_number<std::decay_t<T>, Options.force_conformance>(value, cur);
-            it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
-            if (!s) [[unlikely]] {
-               ctx.error = error_code::parse_number_failure;
-               return;
+            using V = std::decay_t<decltype(value)>;
+            if constexpr (int_t<V>) {
+               if constexpr (std::is_unsigned_v<V>) {
+                  uint64_t i{};
+                  if (*it == '-') {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+                  auto e = stoui64(i, it);
+                  if (!e) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+
+                  if (i > std::numeric_limits<V>::max()) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+                  value = static_cast<V>(i);
+               }
+               else {
+                  uint64_t i{};
+                  int sign = 1;
+                  if (*it == '-') {
+                     sign = -1;
+                     ++it;
+                  }
+                  auto e = stoui64(i, it);
+                  if (!e) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+
+                  if (i > std::numeric_limits<V>::max()) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+                  value = sign * static_cast<V>(i);
+               }
+            }
+            else {
+               // TODO: fix this
+               using X =
+                  std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
+                                     const uint8_t*, uint8_t*>;
+               auto cur = reinterpret_cast<X>(it);
+               auto s = parse_float<V, Options.force_conformance>(value, cur);
+               if (!s) [[unlikely]] {
+                  ctx.error = error_code::parse_number_failure;
+                  return;
+               }
+               it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
             }
 
             if constexpr (Options.quoted) {
@@ -207,7 +251,7 @@ namespace glz
       template <class T, class Val, class It, class End>
       GLZ_ALWAYS_INLINE void read_escaped_unicode(Val& value, is_context auto&& ctx, It&& it, End&& end)
       {
-         // TODO: this is slow but who is escaping unicode nowadays
+         // This is slow but who is escaping unicode nowadays
          // codecvt is problematic on mingw hence mixing with the c character conversion functions
          if (std::distance(it, end) < 4 || !std::all_of(it, it + 4, ::isxdigit)) [[unlikely]] {
             ctx.error = error_code::u_requires_hex_digits;
@@ -616,7 +660,7 @@ namespace glz
                      handle_escaped();
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     value = std::string_view{start, it - start - 1};
+                     value = sv{start, size_t(it - start - 1)};
                      break;
                   }
                   default:
@@ -809,20 +853,11 @@ namespace glz
 
             while (true) {
                using V = range_value_t<T>;
-               if constexpr (sizeof(V) > 8) {
-                  static thread_local V v;
-                  read<json>::op<Opts>(v, ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  value.emplace(v);
-               }
-               else {
-                  V v;
-                  read<json>::op<Opts>(v, ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  value.emplace(std::move(v));
-               }
+               V v;
+               read<json>::op<Opts>(v, ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               value.emplace(std::move(v));
                skip_ws<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -959,11 +994,21 @@ namespace glz
                break;
             }
             case '/': {
-               skip_ws<Opts>(ctx, it, end);
+               skip_comment(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return {};
                break;
             }
+            case '{':
+               skip_until_closed<'{', '}'>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return {};
+               break;
+            case '[':
+               skip_until_closed<'[', ']'>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return {};
+               break;
             case '"': {
                skip_string<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
@@ -1171,9 +1216,7 @@ namespace glz
          bool may_escape = false;
          constexpr auto N = std::tuple_size_v<meta_t<T>>;
          for_each<N>([&](auto I) {
-            constexpr auto s = [] {
-               return glz::tuplet::get<0>(glz::tuplet::get<decltype(I)::value>(meta_v<T>));
-            }(); // MSVC internal compiler error workaround
+            constexpr auto s = glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>));
             for (auto& c : s) {
                if (c == '\\' || c == '"' || is_unicode(c)) {
                   may_escape = true;
@@ -1223,9 +1266,7 @@ namespace glz
 
          constexpr auto N = std::tuple_size_v<meta_t<T>>;
          for_each<N>([&](auto I) {
-            constexpr auto s = [] {
-               return glz::tuplet::get<0>(glz::tuplet::get<decltype(I)::value>(meta_v<T>));
-            }(); // MSVC internal compiler error workaround
+            constexpr auto s = glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>));
             const auto n = s.size();
             if (n < stats.min_length) {
                stats.min_length = n;
@@ -1375,10 +1416,20 @@ namespace glz
                return;
             }
 
-            std::string& key = string_buffer();
-            read<json>::op<Opts>(key, ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            if constexpr (str_t<typename T::first_type>) {
+               read<json>::op<Opts>(value.first, ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+            else {
+               std::string_view key;
+               read<json>::op<Opts>(key, ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               read<json>::op<Opts>(value.first, ctx, key.data(), key.data() + key.size());
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
 
             skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
@@ -1389,15 +1440,6 @@ namespace glz
             skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-
-            if constexpr (std::is_same_v<typename T::first_type, std::string>) {
-               value.first = std::move(key);
-            }
-            else {
-               read<json>::op<Opts>(value.first, ctx, key.data(), key.data() + key.size());
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-            }
 
             read<json>::op<Opts>(value.second, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
@@ -1517,31 +1559,70 @@ namespace glz
                   }
                }
                else {
-                  std::string& key = string_buffer();
-                  read<json>::op<Opts>(key, ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
+                  // using k_t = std::conditional_t<heterogeneous_map<T>, sv, typename T::key_type>;
+                  using k_t = typename T::key_type;
+                  if constexpr (std::is_same_v<k_t, std::string>) {
+                     static thread_local k_t key;
+                     read<json>::op<Opts>(key, ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
 
-                  skip_ws<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  match<':'>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  skip_ws<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     match<':'>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
 
-                  if constexpr (std::is_same_v<typename T::key_type, std::string>) {
+                     read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
+                  else if constexpr (str_t<k_t>) {
+                     k_t key;
+                     read<json>::op<Opts>(key, ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     match<':'>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+
                      read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
                   else {
-                     static thread_local typename T::key_type key_value{};
-                     read<json>::op<Opts>(key_value, ctx, key.data(), key.data() + key.size());
+                     static_assert(std::is_arithmetic_v<k_t> || glaze_enum_t<k_t>);
+                     k_t key_value{};
+                     if constexpr (std::is_arithmetic_v<k_t>) {
+                        read<json>::op<opt_true<Opts, &opts::quoted>>(key_value, ctx, it, end);
+                     }
+                     else {
+                        read<json>::op<Opts>(key_value, ctx, it, end);
+                     }
                      if (bool(ctx.error)) [[unlikely]]
                         return;
+
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     match<':'>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+
                      read<json>::op<Opts>(value[key_value], ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
@@ -1935,7 +2016,7 @@ namespace glz
    } // namespace detail
 
    template <class Buffer>
-   [[nodiscard]] GLZ_ALWAYS_INLINE parse_error validate_json(Buffer&& buffer) noexcept
+   [[nodiscard]] inline parse_error validate_json(Buffer&& buffer) noexcept
    {
       context ctx{};
       glz::skip skip_value{};
@@ -1943,14 +2024,14 @@ namespace glz
    }
 
    template <class T, class Buffer>
-   [[nodiscard]] GLZ_ALWAYS_INLINE parse_error read_json(T& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline parse_error read_json(T& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <class T, class Buffer>
-   [[nodiscard]] GLZ_ALWAYS_INLINE expected<T, parse_error> read_json(Buffer&& buffer) noexcept
+   [[nodiscard]] inline expected<T, parse_error> read_json(Buffer&& buffer) noexcept
    {
       T value{};
       context ctx{};
@@ -1962,7 +2043,7 @@ namespace glz
    }
 
    template <auto Opts = opts{}, class T>
-   GLZ_ALWAYS_INLINE parse_error read_file_json(T& value, const sv file_name, auto&& buffer) noexcept
+   inline parse_error read_file_json(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;
@@ -1974,13 +2055,5 @@ namespace glz
       }
 
       return read<Opts>(value, buffer, ctx);
-   }
-
-   template <auto Opts = opts{}, class T>
-   [[deprecated("use the version that takes a buffer as the third argument")]] GLZ_ALWAYS_INLINE parse_error
-   read_file_json(T& value, const sv file_name) noexcept
-   {
-      std::string buffer{};
-      return read_file_json(value, file_name, buffer);
    }
 }

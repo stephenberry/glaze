@@ -3,13 +3,11 @@
 #include <array>
 #include <bit>
 #include <bitset>
-#include <cassert>
 #include <cfenv>
 #include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
-#include <iostream>
 #include <limits>
 #include <string>
 #include <type_traits>
@@ -24,11 +22,10 @@ namespace glz::detail
    // Based on yyjson: https://github.com/ibireme/yyjson/blob/master/src/yyjson.c with some changes to rounding and
    // dirrect for floats
    // TODO: Subnormals are not handled right now.
-   // TODO: Check overflow for intss
    // Wontfix: Numbers with more than 19 sigfigs may be off by 1ulp. No algorithm should be outputing more than 17
    // digits so I dont think roundtripping matters if you supply extra digits
 
-   inline constexpr std::array<uint64_t, 21> powers_of_ten_int{1ull,
+   inline constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
                                                                10ull,
                                                                100ull,
                                                                1000ull,
@@ -68,7 +65,7 @@ namespace glz::detail
 #elif defined(_M_X64) || defined(_M_ARM64)
 #define mulhi64 __umulh
 #else
-   uint64_t mulhi64(uint64_t a, uint64_t b)
+   uint64_t mulhi64(uint64_t a, uint64_t b) noexcept
    {
       uint64_t a_lo = (uint32_t)a;
       uint64_t a_hi = a >> 32;
@@ -234,21 +231,21 @@ namespace glz::detail
    /*==============================================================================
     * Digit Character Matcher
     *============================================================================*/
-   /** Digit type */
+   // Digit type
    using digi_type = uint8_t;
-   /** Digit: '0'. */
+   // Digit: '0'.
    inline constexpr digi_type DIGI_TYPE_ZERO = 1 << 0;
-   /** Digit: [1-9]. */
+   // Digit: [1-9].
    inline constexpr digi_type DIGI_TYPE_NONZERO = 1 << 1;
-   /** Plus sign (positive): '+'. */
+   // Plus sign (positive): '+'.
    inline constexpr digi_type DIGI_TYPE_POS = 1 << 2;
-   /** Minus sign (negative): '-'. */
+   // Minus sign (negative): '-'.
    inline constexpr digi_type DIGI_TYPE_NEG = 1 << 3;
-   /** Decimal point: '.' */
+   // Decimal point: '.'
    inline constexpr digi_type DIGI_TYPE_DOT = 1 << 4;
-   /** Exponent sign: 'e, 'E'. */
+   // Exponent sign: 'e, 'E'.
    inline constexpr digi_type DIGI_TYPE_EXP = 1 << 5;
-   /** Digit type table (generate with misc/make_tables.c) */
+   // Digit type table (generate with misc/make_tables.c)
    inline constexpr std::array<digi_type, 256> digi_table = {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -311,18 +308,19 @@ namespace glz::detail
    /*==============================================================================
     * IEEE-754 Double Number Constants
     *============================================================================*/
-   /* maximum decimal power of double number (1.7976931348623157e308) */
+   // maximum decimal power of double number (1.7976931348623157e308)
    inline constexpr auto F64_MAX_DEC_EXP = 308;
-   /* minimum decimal power of double number (4.9406564584124654e-324) */
+   // minimum decimal power of double number (4.9406564584124654e-324)
    inline constexpr auto F64_MIN_DEC_EXP = (-324);
 
    consteval uint32_t ceillog2(uint32_t x) { return x < 2 ? x : 1 + ceillog2(x >> 1); }
 
-   struct bigint_t
+   struct bigint_t final
    {
       std::vector<uint32_t> data = {};
+      // To print: for (auto item : data) std::cout << std::bitset<32>(item) << '\n';
 
-      bigint_t(uint64_t num)
+      bigint_t(uint64_t num) noexcept
       {
          uint32_t lower_word = uint32_t(num);
          uint32_t upper_word = uint32_t(num >> 32);
@@ -334,7 +332,7 @@ namespace glz::detail
          }
       }
 
-      void mul_u32(uint32_t num)
+      void mul_u32(uint32_t num) noexcept
       {
          uint32_t carry = 0;
          for (std::size_t i = 0; i < data.size(); i++) {
@@ -349,7 +347,7 @@ namespace glz::detail
          }
       }
 
-      void mul_pow10(uint32_t pow10)
+      void mul_pow10(uint32_t pow10) noexcept
       {
          for (; pow10 >= 9; pow10 -= 9) {
             mul_u32(static_cast<uint32_t>(powers_of_ten_int[9]));
@@ -359,7 +357,7 @@ namespace glz::detail
          }
       }
 
-      void mul_pow2(uint32_t exp)
+      void mul_pow2(uint32_t exp) noexcept
       {
          uint32_t shft = exp % 32;
          uint32_t move = exp / 32;
@@ -385,7 +383,7 @@ namespace glz::detail
          }
       }
 
-      auto operator<=>(const bigint_t& rhs) const
+      auto operator<=>(const bigint_t& rhs) const noexcept
       {
          if (data.size() < rhs.data.size()) return -1;
          if (data.size() > rhs.data.size()) return 1;
@@ -396,15 +394,10 @@ namespace glz::detail
          }
          return 0;
       }
-
-      void print()
-      {
-         for (auto item : data) std::cout << std::bitset<32>(item) << '\n';
-      }
    };
 
-   template <class T, bool force_conformance = false>
-   inline bool parse_number(T& val, auto*& cur) noexcept
+   template <std::floating_point T, bool force_conformance = false>
+   inline bool parse_float(T& val, auto*& cur) noexcept
    {
       const uint8_t* sig_cut = nullptr; /* significant part cutting position for long number */
       [[maybe_unused]] const uint8_t* sig_end = nullptr; /* significant part ending position */
@@ -418,17 +411,9 @@ namespace glz::detail
       uint64_t num_tmp; /* temporary number for reading */
       const uint8_t* tmp; /* temporary cursor for reading */
       const uint8_t* hdr = cur;
-      bool sign;
-      sign = (*hdr == '-');
+      bool sign = (*hdr == '-');
       cur += sign;
-      auto apply_sign = [&](auto&& val) -> T {
-         if constexpr (std::is_unsigned_v<T>) {
-            return static_cast<T>(val);
-         }
-         else {
-            return sign ? -static_cast<T>(val) : static_cast<T>(val);
-         }
-      };
+      auto apply_sign = [&](auto&& val) -> T { return sign ? -static_cast<T>(val) : static_cast<T>(val); };
       /* begin with non-zero digit */
       sig = uint64_t(*cur - '0');
       if (sig > 9) {
@@ -461,8 +446,8 @@ namespace glz::detail
    }
       repeat_in_1_18(expr_intg);
 #undef expr_intg
-      if constexpr (force_conformance) {
-         if (*cur == zero) return false;
+      if (*cur == zero) [[unlikely]] {
+         return false;
       }
       cur += 19; /* skip continuous 19 digits */
       if (!digi_is_digit_or_fp(*cur)) {
@@ -555,9 +540,11 @@ namespace glz::detail
       }
       exp_sig = static_cast<int32_t>(dot_pos - sig_cut);
       exp_sig += (dot_pos < sig_cut);
-      /* ignore trailing zeros */
+      // ignore trailing zeros
       tmp = cur - 1;
-      while (*tmp == '0' || *tmp == '.') tmp--;
+      while (*tmp == '0' || *tmp == '.') {
+         --tmp;
+      }
       if (tmp < sig_cut) {
          sig_cut = nullptr;
       }
@@ -566,7 +553,7 @@ namespace glz::detail
       }
       if ((e_bit | *cur) == 'e') goto digi_exp_more;
       goto digi_exp_finish;
-      /* fraction part end */
+      // fraction part end
    digi_frac_end:
       sig_end = cur;
       exp_sig = -int32_t((cur - dot_pos) - 1);
@@ -584,7 +571,7 @@ namespace glz::detail
       else {
          goto digi_exp_more;
       }
-      /* read exponent part */
+      // read exponent part
    digi_exp_more:
       exp_sign = (*++cur == '-');
       cur += (*cur == '+' || *cur == '-');
@@ -596,8 +583,10 @@ namespace glz::detail
             goto digi_finish;
          }
       }
-      while (*cur == '0') cur++;
-      /* read exponent literal */
+      while (*cur == '0') {
+         ++cur;
+      }
+      // read exponent literal
       tmp = cur;
       uint8_t c;
       while (uint8_t(c = *cur - zero) < 10) {
@@ -619,165 +608,139 @@ namespace glz::detail
       exp_sig += exp_sign ? -exp_lit : exp_lit;
       // validate exponent value
    digi_exp_finish:
-      if constexpr (std::integral<T>) {
-         if (sig == 0) {
-            val = ((sign && !std::is_unsigned_v<T>) ? -0 : 0);
-            return true;
-         }
-         if (exp_sig < -20) {
-            val = apply_sign(0);
-            return true;
-         }
-         else if (exp_sig > 20) {
-            val = apply_sign(std::numeric_limits<T>::infinity());
-            return true;
-         }
-         exp = exp_sig;
+      if (sig == 0) {
+         val = (sign ? -T{0} : T{0});
+         return true;
       }
-      else {
-         if (sig == 0) {
-            val = (sign ? -T{0} : T{0});
-            return true;
-         }
-         if ((exp_sig < F64_MIN_DEC_EXP - 19)) [[unlikely]] {
-            val = (sign ? -T{0} : T{0});
-            return true;
-         }
-         else if ((exp_sig > F64_MAX_DEC_EXP)) [[unlikely]] {
-            val = sign ? -std::numeric_limits<T>::infinity() : std::numeric_limits<T>::infinity();
-            return true;
-         }
-         exp = exp_sig;
+      if ((exp_sig < F64_MIN_DEC_EXP - 19)) [[unlikely]] {
+         val = (sign ? -T{0} : T{0});
+         return true;
       }
-      /* all digit read finished */
+      else if ((exp_sig > F64_MAX_DEC_EXP)) [[unlikely]] {
+         val = sign ? -std::numeric_limits<T>::infinity() : std::numeric_limits<T>::infinity();
+         return true;
+      }
+      exp = exp_sig;
+      // all digit read finished
    digi_finish:
 
-      if constexpr (std::integral<T>) {
-         val = static_cast<T>(sig);
-         if constexpr (!std::is_unsigned_v<T>) {
-            val *= sign ? -1 : 1;
+      if constexpr (std::is_same_v<double, T>) {
+         // numbers must be exactly representable in this fast path
+         if (sig < (uint64_t(1) << 53) && std::abs(exp) <= 22) {
+            val = static_cast<T>(sig);
+            if constexpr (!std::is_unsigned_v<T>) {
+               val *= sign ? -1 : 1;
+            }
+            if (exp >= 0) {
+               val *= powers_of_ten_float[exp];
+            }
+            else {
+               val /= powers_of_ten_float[-exp];
+            }
+            return true;
          }
-         if (exp >= 0) {
-            val *= T(powers_of_ten_int[exp]);
-         }
-         else {
-            val /= T(powers_of_ten_int[-exp]);
-         }
-         return true;
       }
       else {
-         if constexpr (std::is_same_v<double, T>) {
-            // numbers must be exactly representable in this fast path
-            if (sig < (uint64_t(1) << 53) && std::abs(exp) <= 22) {
-               val = static_cast<T>(sig);
-               if constexpr (!std::is_unsigned_v<T>) {
-                  val *= sign ? -1 : 1;
-               }
-               if (exp >= 0) {
-                  val *= powers_of_ten_float[exp];
-               }
-               else {
-                  val /= powers_of_ten_float[-exp];
-               }
-               return true;
+         if (sig < (uint64_t(1) << 24) && std::abs(exp) <= 8) {
+            val = static_cast<T>(sig);
+            if constexpr (!std::is_unsigned_v<T>) {
+               val *= sign ? -1 : 1;
             }
-         }
-         else {
-            if (sig < (uint64_t(1) << 24) && std::abs(exp) <= 8) {
-               val = static_cast<T>(sig);
-               if constexpr (!std::is_unsigned_v<T>) {
-                  val *= sign ? -1 : 1;
-               }
-               if (exp >= 0) {
-                  val *= static_cast<T>(powers_of_ten_float[exp]);
-               }
-               else {
-                  val /= static_cast<T>(powers_of_ten_float[-exp]);
-               }
-               return true;
+            if (exp >= 0) {
+               val *= static_cast<T>(powers_of_ten_float[exp]);
             }
-         }
-
-         static_assert(std::numeric_limits<T>::is_iec559);
-         static_assert(std::numeric_limits<T>::radix == 2);
-         static_assert(std::is_same_v<float, std::decay_t<T>> || std::is_same_v<double, std::decay_t<T>>);
-         static_assert(sizeof(float) == 4 && sizeof(double) == 8);
-
-         using raw_t = std::conditional_t<std::is_same_v<float, std::decay_t<T>>, uint32_t, uint64_t>;
-         const auto sig_leading_zeros = std::countl_zero(sig);
-         const auto sig_norm = sig << sig_leading_zeros;
-         const auto sig2_norm = sig2_from_exp10(exp);
-         const auto sig_product = mulhi64(sig_norm, sig2_norm) + 1;
-         const auto sig_product_starts_with_1 = sig_product >> 63;
-         auto mantisa = sig_product << (2 - sig_product_starts_with_1);
-         constexpr uint64_t round_mask = uint64_t(1) << 63 >> (std::numeric_limits<T>::digits - 1);
-         constexpr uint32_t exponent_bits =
-            ceillog2(std::numeric_limits<T>::max_exponent - std::numeric_limits<T>::min_exponent + 1);
-         constexpr uint32_t mantisa_shift = exponent_bits + 1 + 64 - 8 * sizeof(raw_t);
-         int32_t exp2 = exp2_from_exp10(exp) + static_cast<uint32_t>(-sig_leading_zeros + sig_product_starts_with_1);
-
-         if (exp2 < std::numeric_limits<T>::min_exponent - 1) [[unlikely]] {
-            // TODO handle subnormal numbers
-            val = sign ? -T(0) : T(0);
+            else {
+               val /= static_cast<T>(powers_of_ten_float[-exp]);
+            }
             return true;
          }
-         else if (exp2 > std::numeric_limits<T>::max_exponent - 1) [[unlikely]] {
-            val = sign ? -std::numeric_limits<T>::infinity() : std::numeric_limits<T>::infinity();
-            return true;
-         }
+      }
 
-         uint64_t round = 0;
-         if (round_mask & mantisa) {
-            if (mantisa << (std::numeric_limits<T>::digits) == 0) {
-               // We added one to the product so this is the case were the trailing bits were 1.
-               // This is a problem since the product could underestimate by a bit and uness there is a zero bit to fall
-               // into we cant be sure if we need to round or not
-               auto sig_upper = (mantisa >> (mantisa_shift - 1)) | (uint64_t(1) << 63 >> (mantisa_shift - 2)) | 1;
-               int32_t exp2_upper = exp2 - std::numeric_limits<T>::digits;
-
-               bigint_t big_comp{sig_upper};
-               bigint_t big_full{sig}; // Not dealing will ulp from sig_cut since we only care about roundtriping
-                                       // machine doubles and only a human would use so many sigfigs
-               if (exp >= 0) {
-                  big_full.mul_pow10(exp);
-               }
-               else {
-                  big_comp.mul_pow10(-exp);
-               }
-               if (exp2_upper >= 0) {
-                  big_comp.mul_pow2(exp2_upper);
-               }
-               else {
-                  big_full.mul_pow2(-exp2_upper);
-               }
-               auto cmp = big_full <=> big_comp;
-               if (cmp != 0) [[likely]] {
-                  // round down or round up
-                  round = (cmp > 0);
-               }
-               else {
-                  // falls midway, round to even
-                  round = (mantisa & (round_mask << 1)) != 0;
-               }
-            }
-            else if ((exp < pow10_sig_table_min_exact ||
-                      exp > pow10_sig_table_max_exact) // If there are ones after 64 bits in sig2 then there will be
-                                                       // ones after the rounding bit in the product
-                     || (mantisa &
-                         (round_mask << 1)) // Odd nums need to round up regardless of if the rest is nonzero or not
-                     || (static_cast<size_t>(std::countr_zero(sig_norm) + std::countr_zero(sig2_norm)) <
-                         128 - std::numeric_limits<T>::digits -
-                            (2 - sig_product_starts_with_1)) // Check where the least significant one is
-            ) {
-               round = 1;
-            }
-         }
-
-         auto num = raw_t(sign) << (sizeof(raw_t) * 8 - 1) | raw_t(mantisa >> mantisa_shift) |
-                    (raw_t(exp2 + std::numeric_limits<T>::max_exponent - 1) << (std::numeric_limits<T>::digits - 1));
-         num += raw_t(round);
-         std::memcpy(&val, &num, sizeof(T));
+      if (sig == 0) [[unlikely]] // fast path is more likely for zeros (0.00000000000000000000000 is uncommon)
+      {
+         val = T(0);
          return true;
       }
+
+      static_assert(std::numeric_limits<T>::is_iec559);
+      static_assert(std::numeric_limits<T>::radix == 2);
+      static_assert(std::is_same_v<float, std::decay_t<T>> || std::is_same_v<double, std::decay_t<T>>);
+      static_assert(sizeof(float) == 4 && sizeof(double) == 8);
+
+      using raw_t = std::conditional_t<std::is_same_v<float, std::decay_t<T>>, uint32_t, uint64_t>;
+      const auto sig_leading_zeros = std::countl_zero(sig);
+      const auto sig_norm = sig << sig_leading_zeros;
+      const auto sig2_norm = sig2_from_exp10(exp);
+      const auto sig_product = mulhi64(sig_norm, sig2_norm) + 1;
+      const auto sig_product_starts_with_1 = sig_product >> 63;
+      auto mantisa = sig_product << (2 - sig_product_starts_with_1);
+      constexpr uint64_t round_mask = uint64_t(1) << 63 >> (std::numeric_limits<T>::digits - 1);
+      constexpr uint32_t exponent_bits =
+         ceillog2(std::numeric_limits<T>::max_exponent - std::numeric_limits<T>::min_exponent + 1);
+      constexpr uint32_t mantisa_shift = exponent_bits + 1 + 64 - 8 * sizeof(raw_t);
+      int32_t exp2 = exp2_from_exp10(exp) + static_cast<uint32_t>(-sig_leading_zeros + sig_product_starts_with_1);
+
+      if (exp2 < std::numeric_limits<T>::min_exponent - 1) [[unlikely]] {
+         // TODO handle subnormal numbers
+         val = sign ? -T(0) : T(0);
+         return true;
+      }
+      else if (exp2 > std::numeric_limits<T>::max_exponent - 1) [[unlikely]] {
+         val = sign ? -std::numeric_limits<T>::infinity() : std::numeric_limits<T>::infinity();
+         return true;
+      }
+
+      uint64_t round = 0;
+      if (round_mask & mantisa) {
+         if (mantisa << (std::numeric_limits<T>::digits) == 0) {
+            // We added one to the product so this is the case were the trailing bits were 1.
+            // This is a problem since the product could underestimate by a bit and uness there is a zero bit to fall
+            // into we cant be sure if we need to round or not
+            auto sig_upper = (mantisa >> (mantisa_shift - 1)) | (uint64_t(1) << 63 >> (mantisa_shift - 2)) | 1;
+            int32_t exp2_upper = exp2 - std::numeric_limits<T>::digits;
+
+            bigint_t big_comp{sig_upper};
+            bigint_t big_full{sig}; // Not dealing will ulp from sig_cut since we only care about roundtriping
+                                    // machine doubles and only a human would use so many sigfigs
+            if (exp >= 0) {
+               big_full.mul_pow10(exp);
+            }
+            else {
+               big_comp.mul_pow10(-exp);
+            }
+            if (exp2_upper >= 0) {
+               big_comp.mul_pow2(exp2_upper);
+            }
+            else {
+               big_full.mul_pow2(-exp2_upper);
+            }
+            auto cmp = big_full <=> big_comp;
+            if (cmp != 0) [[likely]] {
+               // round down or round up
+               round = (cmp > 0);
+            }
+            else {
+               // falls midway, round to even
+               round = (mantisa & (round_mask << 1)) != 0;
+            }
+         }
+         else if ((exp < pow10_sig_table_min_exact ||
+                   exp > pow10_sig_table_max_exact) // If there are ones after 64 bits in sig2 then there will be
+                                                    // ones after the rounding bit in the product
+                  ||
+                  (mantisa & (round_mask << 1)) // Odd nums need to round up regardless of if the rest is nonzero or not
+                  || (static_cast<size_t>(std::countr_zero(sig_norm) + std::countr_zero(sig2_norm)) <
+                      128 - std::numeric_limits<T>::digits -
+                         (2 - sig_product_starts_with_1)) // Check where the least significant one is
+         ) {
+            round = 1;
+         }
+      }
+
+      auto num = raw_t(sign) << (sizeof(raw_t) * 8 - 1) | raw_t(mantisa >> mantisa_shift) |
+                 (raw_t(exp2 + std::numeric_limits<T>::max_exponent - 1) << (std::numeric_limits<T>::digits - 1));
+      num += raw_t(round);
+      std::memcpy(&val, &num, sizeof(T));
+      return true;
    }
 }

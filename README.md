@@ -1,8 +1,6 @@
 # Glaze
 One of the fastest JSON libraries in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
 
-> BREAKING v1.3.0 CHANGE: `std::pair`  is now handled as a JSON object (`{"first":second}`}. If you require a JSON array of two items, use `std::array` or `std::tuple`.
-
 ## Highlights
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
@@ -26,13 +24,13 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.20**           | **903**      | **1134**    |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1294**    |
-| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.78**           | **628**      | **999**     |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.86**           | **358**      | **492**     |
-| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.59**           | **301**      | **498**     |
-| [**json_struct**](https://github.com/jorgen/json_struct)     | **4.43**           | **230**      | **326**     |
-| [**nlohmann**](https://github.com/nlohmann/json)             | **15.65**          | **88**       | **85**      |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.23**           | **897**      | **1094**    |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1286**    |
+| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.77**           | **628**      | **1000**    |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.89**           | **354**      | **490**     |
+| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.59**           | **304**      | **507**     |
+| [**json_struct**](https://github.com/jorgen/json_struct)     | **4.30**           | **235**      | **332**     |
+| [**nlohmann**](https://github.com/nlohmann/json)             | **15.35**          | **89**       | **85**      |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
@@ -42,21 +40,21 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.66**           | **1264**     | **1072**    |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **169**     |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **2.25**           | **1269**     | **639**     |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **171**     |
 
 ## Binary Performance
 
-Tagged binary specification: [Crusher](https://github.com/stephenberry/crusher)
+Tagged binary specification: [EVE](https://github.com/stephenberry/eve)
 
 | Metric                | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | --------------------- | ------------------ | ------------ | ----------- |
-| Raw performance       | **0.48**           | **2610**     | **1999**    |
-| Equivalent JSON data* | **0.48**           | **2744**     | **2101**    |
+| Raw performance       | **0.45**           | **2859**     | **2178**    |
+| Equivalent JSON data* | **0.45**           | **3123**     | **2379**    |
 
 JSON message size: 616 bytes
 
-Binary message size: 586 bytes
+Binary message size: 564 bytes
 
 *Binary data packs more efficiently than JSON, so transporting the same amount of information is even faster.
 
@@ -620,17 +618,21 @@ The struct below shows the available options and the default behavior.
 ```c++
 struct opts {
    uint32_t format = json;
-   bool comments = false; // write out comments
-   bool error_on_unknown_keys = true; // error when an unknown key is encountered
-   bool skip_null_members = true; // skip writing out params in an object if the value is null
-   bool allow_hash_check = false; // Will replace some string equality checks with hash checks
-   bool prettify = false;         // write out prettified JSON
-   char indentation_char = ' ';   // prettified JSON indentation char
-   uint8_t indentation_width = 3; // prettified JSON indentation size
-   bool shrink_to_fit = false; // shrinks dynamic containers to new size to save memory
-   bool write_type_info = true; // Write type info for meta objects in variants
-   bool force_conformance = false; // Do not allow invalid json normally accepted when reading such as comments.
-   bool error_on_missing_keys = false;  // Require all non nullable keys to be present in the object. Use skip_null_members = false to require nullable members
+      bool comments = false; // Write out comments
+      bool error_on_unknown_keys = true; // Error when an unknown key is encountered
+      bool skip_null_members = true; // Skip writing out params in an object if the value is null
+      bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
+      bool prettify = false; // Write out prettified JSON
+      char indentation_char = ' '; // Prettified JSON indentation char
+      uint8_t indentation_width = 3; // Prettified JSON indentation size
+      bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
+      bool write_type_info = true; // Write type info for meta objects in variants
+      bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
+      bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
+                                          // skip_null_members = false to require nullable members
+      uint32_t layout = rowwise; // CSV row wise output/input
+      bool quoted = false; // treat numbers as quoted or array-like types as having quoted numbers
+      bool number = false; // read numbers as strings and write these string as numbers
 };
 ```
 
