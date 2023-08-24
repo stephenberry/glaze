@@ -21,7 +21,7 @@ namespace glz::rpc
       internal = -32603,
       parse_error = -32700,
    };
-   
+
    inline constexpr std::string_view code_as_sv(const error_e error_code) noexcept
    {
       switch (error_code) {
@@ -56,41 +56,41 @@ namespace glz::rpc
       error_e code{error_e::no_error};
       std::optional<std::string> data{}; // Optional detailed error information
       std::string message{code_as_sv(code)}; // string reflection of member variable code
-      
+
       // TODO: remove all these constructors when MSVC is fixed
       error() = default;
       error(error_e code) : code(code) {}
       error(error_e code, const std::optional<std::string>& data) : code(code), data(data) {}
-      error(error_e code, const std::optional<std::string>& data, const std::string& message) : code(code), data(data), message(message) {}
+      error(error_e code, const std::optional<std::string>& data, const std::string& message)
+         : code(code), data(data), message(message)
+      {}
       error(const error&) = default;
       error(error&&) = default;
       error& operator=(const error&) = default;
       error& operator=(error&&) = default;
-      
+
       static error invalid(const parse_error& pe, auto& buffer)
       {
          std::string format_err{format_error(pe, buffer)};
-         return {error_e::invalid_request, format_err.empty() ? std::nullopt : std::optional{format_err}, std::string(code_as_sv(error_e::invalid_request))};
+         return {error_e::invalid_request, format_err.empty() ? std::nullopt : std::optional{format_err},
+                 std::string(code_as_sv(error_e::invalid_request))};
       }
       static error version(std::string_view presumed_version)
       {
-         return {error_e::invalid_request, "Invalid version: " + std::string(presumed_version) +
-            " only supported version is " + std::string(rpc::supported_version), std::string(code_as_sv(error_e::invalid_request))};
+         return {error_e::invalid_request,
+                 "Invalid version: " + std::string(presumed_version) + " only supported version is " +
+                    std::string(rpc::supported_version),
+                 std::string(code_as_sv(error_e::invalid_request))};
       }
       static error method(std::string_view presumed_method)
       {
-         return {error_e::method_not_found, "Method: '" + std::string(presumed_method) + "' not found", std::string(code_as_sv(error_e::method_not_found))};
-      }
-      
-      operator bool() const noexcept
-      {
-         return code != rpc::error_e::no_error;
+         return {error_e::method_not_found, "Method: '" + std::string(presumed_method) + "' not found",
+                 std::string(code_as_sv(error_e::method_not_found))};
       }
 
-      bool operator==(const rpc::error_e err) const noexcept
-      {
-         return code == err;
-      }
+      operator bool() const noexcept { return code != rpc::error_e::no_error; }
+
+      bool operator==(const rpc::error_e err) const noexcept { return code == err; }
 
       struct glaze
       {
@@ -116,10 +116,10 @@ namespace glz::rpc
                                                    "id", &T::id);
       };
    };
-   
+
    template <class params_type>
    request_t(id_t&&, std::string_view, params_type&&) -> request_t<std::decay_t<params_type>>;
-   
+
    using generic_request_t = request_t<glz::raw_json_view>;
 
    template <class result_type>
@@ -129,18 +129,14 @@ namespace glz::rpc
 
       response_t() = default;
       explicit response_t(rpc::error&& err) : error(std::move(err)) {}
-      response_t(id_t&& id, result_t&& result)
-         : id(std::move(id)), result(std::move(result))
-      {}
-      response_t(id_t&& id, rpc::error&& err)
-         : id(std::move(id)), error(std::move(err))
-      {}
+      response_t(id_t&& id, result_t&& result) : id(std::move(id)), result(std::move(result)) {}
+      response_t(id_t&& id, rpc::error&& err) : id(std::move(id)), error(std::move(err)) {}
 
       id_t id{};
       std::optional<result_t> result{}; // todo can this be instead expected<result_t, error>
       std::optional<rpc::error> error{};
       std::string version{rpc::supported_version};
-      
+
       struct glaze
       {
          using T = response_t;
@@ -149,7 +145,7 @@ namespace glz::rpc
       };
    };
    using generic_response_t = response_t<glz::raw_json_view>;
-   
+
    template <basic_fixed_string name, class params_type, class result_type>
    struct method
    {
@@ -157,12 +153,12 @@ namespace glz::rpc
       using params_t = params_type;
       using result_t = result_type;
    };
-   
+
    namespace concepts
    {
       template <class T>
       concept method_type = requires(T) {
-         T::name_v;
+                               T::name_v;
                                {
                                   std::same_as<decltype(T::name_v), std::string_view>
                                };
@@ -183,8 +179,9 @@ namespace glz::rpc
       using result_t = typename Method::result_t;
       using request_t = rpc::request_t<params_t>;
       using response_t = rpc::response_t<result_t>;
-      std::function<expected<result_t, rpc::error>(const params_t&)> callback{
-         [](const auto&) { return glz::unexpected{rpc::error{rpc::error_e::internal, "Not implemented"}}; }};
+      std::function<expected<result_t, rpc::error>(const params_t&)> callback{[](const auto&) {
+         return glz::unexpected{rpc::error{rpc::error_e::internal, "Not implemented"}};
+      }};
    };
 
    template <concepts::method_type Method>
@@ -302,7 +299,7 @@ namespace glz::rpc
 
          if (auto parse_err{glz::validate_json(json_request)}) {
             return return_helper(
-                                 raw_response_t{rpc::error{error_e::parse_error, format_error(parse_err, json_request)}});
+               raw_response_t{rpc::error{error_e::parse_error, format_error(parse_err, json_request)}});
          }
 
          auto batch_requests{glz::read_json<std::vector<glz::raw_json_view>>(json_request)};
@@ -437,7 +434,8 @@ namespace glz::rpc
          if (!id_found) [[unlikely]] {
             if (!return_v) {
                if (std::holds_alternative<std::string_view>(res.id)) {
-                  return_v = rpc::error{error_e::internal, "id: '" + std::string(std::get<std::string_view>(res.id)) + "' not found"};
+                  return_v = rpc::error{error_e::internal,
+                                        "id: '" + std::string(std::get<std::string_view>(res.id)) + "' not found"};
                }
                else {
                   return_v = rpc::error{error_e::internal, "id: " + glz::write_json(res.id) + " not found"};
@@ -467,8 +465,7 @@ namespace glz::rpc
              ...);
          static_assert(method_params_match, "Method name and given params type do not match.");
 
-         rpc::request_t req{std::forward<decltype(id)>(id), method_name.view(),
-            std::forward<decltype(params)>(params)};
+         rpc::request_t req{std::forward<decltype(id)>(id), method_name.view(), std::forward<decltype(params)>(params)};
 
          if (std::holds_alternative<glz::json_t::null_t>(id)) {
             return {glz::write_json(std::move(req)), false};

@@ -21,15 +21,15 @@ ut::suite valid_vector_test_cases_server = [] {
 
    const std::array valid_requests = {
       std::pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": 1})",
-         R"({"jsonrpc": "2.0","result": 6,"id": 1})"),
+                R"({"jsonrpc": "2.0","result": 6,"id": 1})"),
       std::pair(
          // No id is valid
          R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3]})", ""),
       std::pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": null})", ""),
       std::pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": 2.0})",
-                     R"({"jsonrpc": "2.0","result": 6, "id": 2})"),
+                R"({"jsonrpc": "2.0","result": 6, "id": 2})"),
       std::pair(R"({"jsonrpc": "2.0","method": "add","params": [1, 2, 3],"id": "some_client_22"})",
-                     R"({"jsonrpc": "2.0","result": 6, "id": "some_client_22"})")};
+                R"({"jsonrpc": "2.0","result": 6, "id": "some_client_22"})")};
    std::string raw_json;
    std::string resulting_request;
 
@@ -62,14 +62,14 @@ ut::suite vector_test_cases = [] {
 
    ut::test("sum_result = 6") = [&server, &client] {
       bool called{};
-      auto request_str{client.request<"summer">(
-         1, std::vector{1, 2, 3}, [&called](glz::expected<int, rpc::error> value, rpc::id_t id) -> void {
-            called = true;
-            ut::expect(value.has_value());
-            ut::expect(value.value() == 6);
-            ut::expect(std::holds_alternative<std::int64_t>(id));
-            ut::expect(std::get<std::int64_t>(id) == std::int64_t{1});
-         })};
+      auto request_str{client.request<"summer">(1, std::vector{1, 2, 3},
+                                                [&called](glz::expected<int, rpc::error> value, rpc::id_t id) -> void {
+                                                   called = true;
+                                                   ut::expect(value.has_value());
+                                                   ut::expect(value.value() == 6);
+                                                   ut::expect(std::holds_alternative<std::int64_t>(id));
+                                                   ut::expect(std::get<std::int64_t>(id) == std::int64_t{1});
+                                                })};
       ut::expect(request_str.first == R"({"jsonrpc":"2.0","method":"summer","params":[1,2,3],"id":1})");
 
       [[maybe_unused]] auto& requests = client.get_request_map<"summer">();
@@ -138,10 +138,8 @@ struct glz::meta<bar_result>
 };
 
 ut::suite struct_test_cases = [] {
-   rpc::server<rpc::method<"foo", foo_params, foo_result>, rpc::method<"bar", bar_params, bar_result>>
-      server;
-   rpc::client<rpc::method<"foo", foo_params, foo_result>, rpc::method<"bar", bar_params, bar_result>>
-      client;
+   rpc::server<rpc::method<"foo", foo_params, foo_result>, rpc::method<"bar", bar_params, bar_result>> server;
+   rpc::client<rpc::method<"foo", foo_params, foo_result>, rpc::method<"bar", bar_params, bar_result>> client;
 
    ut::test("valid foo request") = [&server, &client] {
       bool called{};
@@ -284,7 +282,8 @@ ut::suite struct_test_cases = [] {
          R"([{"jsonrpc":"2.0","method":"invalid_method_name","params":{},"id":"uuid"},{"jsonrpc":"2.0","method":"invalid_method_name","params":]")");
       ut::expect(response_vec.size() == 1);
       auto s = glz::write_json(response_vec);
-      ut::expect(s ==
+      ut::expect(
+         s ==
          R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:132: syntax_error\n   [{\"jsonrpc\":\"2.0\",\"method\":\"invalid_method_name\",\"params\":{},\"id\":\"uuid\"},{\"jsonrpc\":\"2.0\",\"method\":\"invalid_method_name\",\"params\":]\"\n                                                                                                                                      ^\n"},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
       ut::expect(response_vec.at(0).error->code == rpc::error_e::parse_error);
@@ -297,8 +296,7 @@ ut::suite struct_test_cases = [] {
 
       ut::expect(response_vec.size() == 1);
       auto s = glz::write_json(response_vec);
-      ut::expect(s ==
-                 R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}])");
+      ut::expect(s == R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
       ut::expect(response_vec.at(0).error->code == rpc::error_e::invalid_request);
    };

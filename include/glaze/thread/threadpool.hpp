@@ -5,9 +5,9 @@
 
 #include <atomic>
 #include <condition_variable>
-#include <list>
 #include <functional>
 #include <future>
+#include <list>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -26,7 +26,7 @@ namespace glz
          finish_work(); // finish any active work
          std::lock_guard lock(mtx);
          closed = false;
-         
+
          threads.clear();
          threads.reserve(n);
          for (size_t i = 0; i < n; ++i) {
@@ -72,7 +72,7 @@ namespace glz
 
          return promise->get_future();
       }
-      
+
       // Takes a function whose input is the thread number (size_t)
       template <class F>
          requires std::invocable<std::decay_t<F>, size_t>
@@ -123,10 +123,7 @@ namespace glz
 
       size_t size() const { return threads.size(); }
 
-      ~pool()
-      {
-         finish_work();
-      }
+      ~pool() { finish_work(); }
 
      private:
       std::vector<std::thread> threads;
@@ -137,7 +134,7 @@ namespace glz
       std::mutex mtx;
       std::condition_variable work_cv;
       std::condition_variable done_cv;
-      
+
       void finish_work()
       {
          // Close the queue and finish all the remaining work
