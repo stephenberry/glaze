@@ -57,12 +57,12 @@ struct glz::meta<bar_result>
 
 namespace rpc = glz::rpc;
 
-auto main(int, char**) -> int {
-    rpc::server<rpc::server_method_t<"foo", foo_params, foo_result>,
-                rpc::server_method_t<"bar", bar_params, bar_result>>
+int main() {
+    rpc::server<rpc::method<"foo", foo_params, foo_result>,
+                rpc::method<"bar", bar_params, bar_result>>
        server;
-    rpc::client<rpc::client_method_t<"foo", foo_params, foo_result>,
-                rpc::client_method_t<"bar", bar_params, bar_result>>
+    rpc::client<rpc::method<"foo", foo_params, foo_result>,
+                rpc::method<"bar", bar_params, bar_result>>
        client;
    
     // One long living callback per method for the server
@@ -72,7 +72,7 @@ auto main(int, char**) -> int {
         // params.foo_b
         return foo_result{.foo_c = true, .foo_d = "new world"};
         // Or return an error:
-        // return glz::unexpected(rpc::error(rpc::error_e::server_error_lower, "my error"));
+        // return glz::unexpected(rpc::error{rpc::error_e::server_error_lower, "my error"});
     });
     server.on<"bar">([](bar_params const& params) -> glz::expected<bar_result, rpc::error> {
         return bar_result{.bar_c = true, .bar_d = "new world"};
@@ -83,7 +83,7 @@ auto main(int, char**) -> int {
     auto [request_str, inserted] = client.request<"foo">(
             uuid, 
             foo_params{.foo_a = 1337, .foo_b = "hello world"}, 
-            [](glz::expected<foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
+            [](glz::expected<foo_result, rpc::error> value, rpc::id_t id) -> void {
         // Access to value and/or id
     });
     // request_str: R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})"

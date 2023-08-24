@@ -68,7 +68,8 @@ namespace glz
                                                    "const", &T::constant, //
                                                    "minLength", &T::min_length, //
                                                    "maxLength", &T::max_length, //
-                                                   "pattern", &T::pattern, "minimum", &T::minimum, //
+                                                   "pattern", &T::pattern, //
+                                                   "minimum", &T::minimum, //
                                                    "maximum", &T::maximum, //
                                                    "exclusiveMinimum", &T::exclusive_minimum, //
                                                    "exclusiveMaximum", &T::exclusive_maximum, //
@@ -327,9 +328,8 @@ namespace glz
                   to_json_schema<val_t>::template op<Opts>(def, defs);
                }
                auto ref_val = schema{join_v<chars<"#/$defs/">, name_v<val_t>>};
-               // clang-format off
-               if constexpr (std::tuple_size_v<decltype(item)> > 2) {
-                  // clang-format on
+               static constexpr auto Size = std::tuple_size_v<decltype(item)>;
+               if constexpr (Size > 2) {
                   using additional_data_type = decltype(glz::tuplet::get<2>(item));
                   if constexpr (std::is_convertible_v<additional_data_type, std::string_view>) {
                      ref_val.description = glz::tuplet::get<2>(item);
