@@ -10,26 +10,26 @@ using ut::operator""_test;
 using ut::operator/;
 
 ut::suite valid_vector_test_cases_server = [] {
-   using request_vec = std::vector<int>;
+   using vec_t = std::vector<int>;
 
-   rpc::server<rpc::server_method_t<"add", request_vec, int>> server;
+   rpc::server<rpc::method<"add", vec_t, int>> server;
 
-   server.on<"add">([](request_vec const& vec) -> glz::expected<int, rpc::error> {
+   server.on<"add">([](vec_t const& vec) -> glz::expected<int, rpc::error> {
       int sum{std::reduce(std::cbegin(vec), std::cend(vec))};
       return sum;
    });
 
    const std::array valid_requests = {
-      std::make_pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": 1})",
-                     R"({"jsonrpc": "2.0","result": 6,"id": 1})"),
-      std::make_pair(
+      std::pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": 1})",
+                R"({"jsonrpc": "2.0","result": 6,"id": 1})"),
+      std::pair(
          // No id is valid
          R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3]})", ""),
-      std::make_pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": null})", ""),
-      std::make_pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": 2.0})",
-                     R"({"jsonrpc": "2.0","result": 6, "id": 2})"),
-      std::make_pair(R"({"jsonrpc": "2.0","method": "add","params": [1, 2, 3],"id": "some_client_22"})",
-                     R"({"jsonrpc": "2.0","result": 6, "id": "some_client_22"})")};
+      std::pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": null})", ""),
+      std::pair(R"({"jsonrpc": "2.0","method": "add", "params": [1, 2, 3],"id": 2.0})",
+                R"({"jsonrpc": "2.0","result": 6, "id": 2})"),
+      std::pair(R"({"jsonrpc": "2.0","method": "add","params": [1, 2, 3],"id": "some_client_22"})",
+                R"({"jsonrpc": "2.0","result": 6, "id": "some_client_22"})")};
    std::string raw_json;
    std::string resulting_request;
 
@@ -50,33 +50,33 @@ ut::suite valid_vector_test_cases_server = [] {
 };
 
 ut::suite vector_test_cases = [] {
-   using request_vec = std::vector<int>;
+   using vec_t = std::vector<int>;
 
-   rpc::server<rpc::server_method_t<"summer", request_vec, int>> server;
-   rpc::client<rpc::client_method_t<"summer", request_vec, int>> client;
+   rpc::server<rpc::method<"summer", vec_t, int>> server;
+   rpc::client<rpc::method<"summer", vec_t, int>> client;
 
-   server.on<"summer">([](request_vec const& vec) -> glz::expected<int, rpc::error> {
+   server.on<"summer">([](vec_t const& vec) -> glz::expected<int, rpc::error> {
       int sum{std::reduce(std::cbegin(vec), std::cend(vec))};
       return sum;
    });
 
    ut::test("sum_result = 6") = [&server, &client] {
       bool called{};
-      auto request_str{client.request<"summer">(
-         1, std::vector{1, 2, 3}, [&called](glz::expected<int, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
-            called = true;
-            ut::expect(value.has_value());
-            ut::expect(value.value() == 6);
-            ut::expect(std::holds_alternative<std::int64_t>(id));
-            ut::expect(std::get<std::int64_t>(id) == std::int64_t{1});
-         })};
+      auto request_str{client.request<"summer">(1, std::vector{1, 2, 3},
+                                                [&called](glz::expected<int, rpc::error> value, rpc::id_t id) -> void {
+                                                   called = true;
+                                                   ut::expect(value.has_value());
+                                                   ut::expect(value.value() == 6);
+                                                   ut::expect(std::holds_alternative<std::int64_t>(id));
+                                                   ut::expect(std::get<std::int64_t>(id) == std::int64_t{1});
+                                                })};
       ut::expect(request_str.first == R"({"jsonrpc":"2.0","method":"summer","params":[1,2,3],"id":1})");
 
       [[maybe_unused]] auto& requests = client.get_request_map<"summer">();
       ut::expect(requests.size() == 1);
       ut::expect(requests.contains(1)); // the id is 1
 
-      server.on<"summer">([](request_vec const& vec) -> glz::expected<int, rpc::error> {
+      server.on<"summer">([](vec_t const& vec) -> glz::expected<int, rpc::error> {
          ut::expect(vec == std::vector{1, 2, 3});
          int sum{std::reduce(std::cbegin(vec), std::cend(vec))};
          return sum;
@@ -138,21 +138,19 @@ struct glz::meta<bar_result>
 };
 
 ut::suite struct_test_cases = [] {
-   rpc::server<rpc::server_method_t<"foo", foo_params, foo_result>, rpc::server_method_t<"bar", bar_params, bar_result>>
-      server;
-   rpc::client<rpc::client_method_t<"foo", foo_params, foo_result>, rpc::client_method_t<"bar", bar_params, bar_result>>
-      client;
+   rpc::server<rpc::method<"foo", foo_params, foo_result>, rpc::method<"bar", bar_params, bar_result>> server;
+   rpc::client<rpc::method<"foo", foo_params, foo_result>, rpc::method<"bar", bar_params, bar_result>> client;
 
    ut::test("valid foo request") = [&server, &client] {
       bool called{};
       auto request_str{
          client.request<"foo">("42", foo_params{.foo_a = 1337, .foo_b = "hello world"},
-                               [&called](glz::expected<foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
+                               [&called](glz::expected<foo_result, rpc::error> value, rpc::id_t id) -> void {
                                   called = true;
                                   ut::expect(value.has_value());
                                   ut::expect(value.value() == foo_result{.foo_c = true, .foo_d = "new world"});
-                                  ut::expect(std::holds_alternative<std::string>(id));
-                                  ut::expect(std::get<std::string>(id) == std::string{"42"});
+                                  ut::expect(std::holds_alternative<std::string_view>(id));
+                                  ut::expect(std::get<std::string_view>(id) == "42");
                                })};
       ut::expect(request_str.first ==
                  R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})");
@@ -176,12 +174,12 @@ ut::suite struct_test_cases = [] {
       bool called{};
       auto request_str{client.request<"bar">(
          "bar-uuid", bar_params{.bar_a = 1337, .bar_b = "hello world"},
-         [&called](glz::expected<bar_result, rpc::error> const& value, rpc::jsonrpc_id_type const& id) -> void {
+         [&called](glz::expected<bar_result, rpc::error> const& value, rpc::id_t const& id) -> void {
             called = true;
             ut::expect(value.has_value());
             ut::expect(value.value() == bar_result{.bar_c = true, .bar_d = "new world"});
-            ut::expect(std::holds_alternative<std::string>(id));
-            ut::expect(std::get<std::string>(id) == std::string{"bar-uuid"});
+            ut::expect(std::holds_alternative<std::string_view>(id));
+            ut::expect(std::get<std::string_view>(id) == "bar-uuid");
          })};
       ut::expect(request_str.first ==
                  R"({"jsonrpc":"2.0","method":"bar","params":{"bar_a":1337,"bar_b":"hello world"},"id":"bar-uuid"})");
@@ -205,12 +203,12 @@ ut::suite struct_test_cases = [] {
       bool called{};
       auto request_str{
          client.request<"foo">("42", foo_params{.foo_a = 1337, .foo_b = "hello world"},
-                               [&called](glz::expected<foo_result, rpc::error> value, rpc::jsonrpc_id_type id) -> void {
+                               [&called](glz::expected<foo_result, rpc::error> value, rpc::id_t id) -> void {
                                   called = true;
                                   ut::expect(!value.has_value());
                                   ut::expect(value.error() == rpc::error{rpc::error_e::server_error_lower, "my error"});
-                                  ut::expect(std::holds_alternative<std::string>(id));
-                                  ut::expect(std::get<std::string>(id) == std::string{"42"});
+                                  ut::expect(std::holds_alternative<std::string_view>(id));
+                                  ut::expect(std::get<std::string_view>(id) == "42");
                                })};
 
       ut::expect(request_str.first ==
@@ -219,7 +217,7 @@ ut::suite struct_test_cases = [] {
       server.on<"foo">([](foo_params const& params) -> glz::expected<foo_result, rpc::error> {
          ut::expect(params.foo_a == 1337);
          ut::expect(params.foo_b == "hello world");
-         return glz::unexpected(rpc::error(rpc::error_e::server_error_lower, "my error"));
+         return glz::unexpected(rpc::error{rpc::error_e::server_error_lower, "my error"});
       });
 
       std::string response = server.call(request_str.first);
@@ -243,7 +241,7 @@ ut::suite struct_test_cases = [] {
          glz::write_json(response_vec) ==
          R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"Invalid version: 42.0 only supported version is 2.0"},"id":"uuid"}])");
       ut::expect(response_vec.at(0).error.has_value());
-      ut::expect(response_vec.at(0).error->get_code().value() == rpc::error_e::invalid_request);
+      ut::expect(response_vec.at(0).error->code == rpc::error_e::invalid_request);
    };
 
    ut::test("server method not found") = [&server] {
@@ -255,9 +253,9 @@ ut::suite struct_test_cases = [] {
       ut::expect(response_vec.size() == 1);
       ut::expect(
          glz::write_json(response_vec) ==
-         R"([{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":"Method: \"invalid_method_name\" not found"},"id":"uuid"}])");
+         R"([{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":"Method: 'invalid_method_name' not found"},"id":"uuid"}])");
       ut::expect(response_vec.at(0).error.has_value());
-      ut::expect(response_vec.at(0).error->get_code().value() == rpc::error_e::method_not_found);
+      ut::expect(response_vec.at(0).error->code == rpc::error_e::method_not_found);
    };
 
    ut::test("server invalid json") = [&server] {
@@ -268,11 +266,12 @@ ut::suite struct_test_cases = [] {
          R"({"jsonrpc":"2.0","method":"invalid_method_name","params":{},"id:"uuid"}")");
       ut::expect(response_vec.size() == 1);
       [[maybe_unused]] auto dbg{glz::write_json(response_vec)};
+      auto s = glz::write_json(response_vec);
       ut::expect(
-         glz::write_json(response_vec) ==
+         s ==
          R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:66: syntax_error\n   {\"jsonrpc\":\"2.0\",\"method\":\"invalid_method_name\",\"params\":{},\"id:\"uuid\"}\"\n                                                                    ^\n"},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
-      ut::expect(response_vec.at(0).error->get_code().value() == rpc::error_e::parse_error);
+      ut::expect(response_vec.at(0).error->code == rpc::error_e::parse_error);
    };
 
    ut::test("server invalid json batch") = [&server] {
@@ -282,11 +281,12 @@ ut::suite struct_test_cases = [] {
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(
          R"([{"jsonrpc":"2.0","method":"invalid_method_name","params":{},"id":"uuid"},{"jsonrpc":"2.0","method":"invalid_method_name","params":]")");
       ut::expect(response_vec.size() == 1);
+      auto s = glz::write_json(response_vec);
       ut::expect(
-         glz::write_json(response_vec) ==
+         s ==
          R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:132: syntax_error\n   [{\"jsonrpc\":\"2.0\",\"method\":\"invalid_method_name\",\"params\":{},\"id\":\"uuid\"},{\"jsonrpc\":\"2.0\",\"method\":\"invalid_method_name\",\"params\":]\"\n                                                                                                                                      ^\n"},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
-      ut::expect(response_vec.at(0).error->get_code().value() == rpc::error_e::parse_error);
+      ut::expect(response_vec.at(0).error->code == rpc::error_e::parse_error);
    };
 
    ut::test("server invalid json batch empty array") = [&server] {
@@ -295,10 +295,10 @@ ut::suite struct_test_cases = [] {
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(R"([])");
 
       ut::expect(response_vec.size() == 1);
-      ut::expect(glz::write_json(response_vec) ==
-                 R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":null},"id":null}])");
+      auto s = glz::write_json(response_vec);
+      ut::expect(s == R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
-      ut::expect(response_vec.at(0).error->get_code().value() == rpc::error_e::invalid_request);
+      ut::expect(response_vec.at(0).error->code == rpc::error_e::invalid_request);
    };
 
    ut::test("server invalid json illformed batch one item") = [&server] {
@@ -311,7 +311,7 @@ ut::suite struct_test_cases = [] {
          glz::write_json(response_vec) ==
          R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   1\n   ^\n"},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
-      ut::expect(response_vec.at(0).error->get_code().value() == rpc::error_e::invalid_request);
+      ut::expect(response_vec.at(0).error->code == rpc::error_e::invalid_request);
    };
 
    ut::test("server invalid json illformed batch three items") = [&server] {
@@ -325,7 +325,7 @@ ut::suite struct_test_cases = [] {
          R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   1\n   ^\n"},"id":null},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   2\n   ^\n"},"id":null},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   3\n   ^\n"},"id":null}])");
       for (auto& response : response_vec) {
          ut::expect(response.error.has_value());
-         ut::expect(response.error->get_code().value() == glz::rpc::error_e::invalid_request);
+         ut::expect(response.error->code == glz::rpc::error_e::invalid_request);
       }
    };
 
@@ -349,14 +349,14 @@ ut::suite struct_test_cases = [] {
          R"([
 {"jsonrpc":"2.0","result":{"foo_c":false,"foo_d":""},"id":"42"},
 {"jsonrpc":"2.0","result":{"bar_c":false,"bar_d":""},"id":"bar-uuid"},
-{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":"Method: \"invalid_method_name\" not found"},"id":"2"},
+{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":"Method: 'invalid_method_name' not found"},"id":"2"},
 {"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:9: unknown_key\n   {\"foo\": \"boo\"}\n           ^\n"},"id":null},
 {"jsonrpc":"2.0","result":{"foo_c":false,"foo_d":""},"id":"4222222"},
 {"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:21: unknown_key\n   {\"jsonrpc\":\"2.0\",\"invalid_method_key\":\"foo\",\"params\":{},\"id\":\"4222222\"}\n                       ^\n"},"id":"4222222"}
 ])"};
       ut::expect(
          response ==
-         R"([{"jsonrpc":"2.0","result":{"foo_c":false,"foo_d":""},"id":"42"},{"jsonrpc":"2.0","result":{"bar_c":false,"bar_d":""},"id":"bar-uuid"},{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":"Method: \"invalid_method_name\" not found"},"id":"2"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:9: unknown_key\n   {\"foo\": \"boo\"}\n           ^\n"},"id":null},{"jsonrpc":"2.0","result":{"foo_c":false,"foo_d":""},"id":"4222222"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:21: unknown_key\n   {\"jsonrpc\":\"2.0\",\"invalid_method_key\":\"foo\",\"params\":{},\"id\":\"4222222\"}\n                       ^\n"},"id":"4222222"}])");
+         R"([{"jsonrpc":"2.0","result":{"foo_c":false,"foo_d":""},"id":"42"},{"jsonrpc":"2.0","result":{"bar_c":false,"bar_d":""},"id":"bar-uuid"},{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":"Method: 'invalid_method_name' not found"},"id":"2"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:9: unknown_key\n   {\"foo\": \"boo\"}\n           ^\n"},"id":null},{"jsonrpc":"2.0","result":{"foo_c":false,"foo_d":""},"id":"4222222"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:21: unknown_key\n   {\"jsonrpc\":\"2.0\",\"invalid_method_key\":\"foo\",\"params\":{},\"id\":\"4222222\"}\n                       ^\n"},"id":"4222222"}])");
    };
 
    "server weird id values"_test = [&server] {
@@ -371,7 +371,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(response_vec.size() == 2);
       for (auto& response : response_vec) {
          ut::expect(response.error.has_value());
-         ut::expect(response.error->get_code().value() == glz::rpc::error_e::invalid_request);
+         ut::expect(response.error->code == glz::rpc::error_e::invalid_request);
       }
    };
    "server invalid jsonrpc value"_test = [&server] {
@@ -386,7 +386,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(response_vec.size() == 2);
       for (auto& response : response_vec) {
          ut::expect(response.error.has_value());
-         ut::expect(response.error->get_code().value() == glz::rpc::error_e::invalid_request);
+         ut::expect(response.error->code == glz::rpc::error_e::invalid_request);
       }
    };
    "client request map"_test = [&client] {
@@ -460,7 +460,7 @@ ut::suite struct_test_cases = [] {
       for (auto& response : response_vec) {
          ut::expect(response.error.has_value());
          if (response.error.has_value()) {
-            ut::expect(response.error->get_code().value() == glz::rpc::error_e::invalid_params);
+            ut::expect(response.error->code == glz::rpc::error_e::invalid_params);
          }
       }
    };
