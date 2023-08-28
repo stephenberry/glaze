@@ -366,6 +366,9 @@ namespace glz
 
       template <class T>
       concept resizeable = requires(T container) { container.resize(0); };
+      
+      template <class T>
+      concept erasable = requires(T container) { container.erase(container.cbegin(), container.cend()); };
 
       template <class T>
       concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> && !
