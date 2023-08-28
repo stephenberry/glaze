@@ -69,12 +69,13 @@ namespace glz
             for (size_t i = 0; i < n; ++i) {
                read<json>::op<Opts>(*value_it++, ctx, it, end);
                if (it == end) {
-                  value.resize(i + 1);
+                  if constexpr (erasable<T>) {
+                     value.erase(value_it, value.end()); // use erase rather than resize for non-default constructible elements
 
-                  if constexpr (Opts.shrink_to_fit) {
-                     value.shrink_to_fit();
+                     if constexpr (Opts.shrink_to_fit) {
+                        value.shrink_to_fit();
+                     }
                   }
-
                   return;
                }
 
