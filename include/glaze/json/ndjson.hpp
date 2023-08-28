@@ -70,7 +70,8 @@ namespace glz
                read<json>::op<Opts>(*value_it++, ctx, it, end);
                if (it == end) {
                   if constexpr (erasable<T>) {
-                     value.erase(value_it, value.end()); // use erase rather than resize for non-default constructible elements
+                     value.erase(value_it,
+                                 value.end()); // use erase rather than resize for non-default constructible elements
 
                      if constexpr (Opts.shrink_to_fit) {
                         value.shrink_to_fit();

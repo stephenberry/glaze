@@ -366,7 +366,7 @@ namespace glz
 
       template <class T>
       concept resizeable = requires(T container) { container.resize(0); };
-      
+
       template <class T>
       concept erasable = requires(T container) { container.erase(container.cbegin(), container.cend()); };
 
