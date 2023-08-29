@@ -306,7 +306,7 @@ namespace glz::detail
          // constexpr bucket_size means the compiler can replace the modulos with
          // more efficient instructions So this is not as expensive as this looks
          const auto extra = buckets[hash % N];
-         auto index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
+         const size_t index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
          if constexpr (!std::integral<Key> && use_hash_comparison) {
             // Odds of having a uint64_t hash collision is pretty small
             // And no valid keys could colide becuase of perfect hashing so this
@@ -315,6 +315,9 @@ namespace glz::detail
                return items.end();
          }
          else {
+            if (index >= N) [[unlikely]] {
+               return items.end();
+            }
             const auto& item = items[index];
             if (item.first != key) [[unlikely]]
                return items.end();
