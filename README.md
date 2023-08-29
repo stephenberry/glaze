@@ -747,4 +747,8 @@ See the `ext` directory for extensions.
 
 # License
 
-Glaze is distributed under the MIT license.
+Glaze is distributed under the MIT license with an exception for embedded forms:
+
+> --- Optional exception to the license ---
+>
+> As an exception, if, as a result of your compiling your source code, portions of this Software are embedded into a machine-executable object form of such source code, you may redistribute such embedded portions in such object form without including the copyright and permission notices.
