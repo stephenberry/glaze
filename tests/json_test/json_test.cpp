@@ -636,7 +636,7 @@ suite enum_types = [] {
       glz::write_json(color, buffer);
       expect(buffer == "\"Green\"");
    };
-   
+
    "invalid enum"_test = [] {
       Color color = Color::Red;
       expect(glz::read_json(color, "\"Silver\"") == glz::error_code::unexpected_enum);
