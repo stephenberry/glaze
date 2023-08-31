@@ -30,8 +30,8 @@
 
 namespace glz
 {
-   // Allows developers to add `static constexpr auto custom_read = true;` to their glz::meta to prevent ambiguous partial
-   // specialization for custom parsers
+   // Allows developers to add `static constexpr auto custom_read = true;` to their glz::meta to prevent ambiguous
+   // partial specialization for custom parsers
    template <class T>
    concept custom_read = requires { meta<T>::custom_read == true; };
 
