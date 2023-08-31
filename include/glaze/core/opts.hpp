@@ -23,7 +23,8 @@ namespace glz
       bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
-      bool error_on_const_read = false; // Error if attempt is made to read into a const value, by default the value is skipped without error
+      bool error_on_const_read =
+         false; // Error if attempt is made to read into a const value, by default the value is skipped without error
       uint32_t layout = rowwise; // CSV row wise output/input
       bool quoted = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool number = false; // read numbers as strings and write these string as numbers

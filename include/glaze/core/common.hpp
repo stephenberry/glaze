@@ -30,17 +30,14 @@
 
 namespace glz
 {
-   // Allows developers to add `static constexpr auto custom_read = true;` to their classes to prevent ambiguous partial specialization for custom parsers
+   // Allows developers to add `static constexpr auto custom_read = true;` to their classes to prevent ambiguous partial
+   // specialization for custom parsers
    template <class T>
-   concept custom_read = requires {
-      T::glz_custom_read;
-   };
-   
+   concept custom_read = requires { T::glz_custom_read; };
+
    template <class T>
-   concept custom_write = requires {
-      T::glz_custom_write;
-   };
-   
+   concept custom_write = requires { T::glz_custom_write; };
+
    template <class... T>
    struct obj final
    {
@@ -336,12 +333,12 @@ namespace glz
                                   };
 
       template <class T>
-      concept readable_map_t = !custom_read<T> && !
-      complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> && map_subscriptable<T>;
+      concept readable_map_t = !
+      custom_read<T> && !complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> && map_subscriptable<T>;
 
       template <class T>
-      concept writable_map_t = !custom_write<T> && !
-      complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>>;
+      concept writable_map_t = !
+      custom_write<T> && !complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>>;
 
       template <class Map>
       concept heterogeneous_map = requires {
@@ -350,13 +347,13 @@ namespace glz
                                               std::same_as<typename Map::key_compare, std::greater<>> ||
                                               requires { typename Map::key_compare::is_transparent; });
                                   };
-      
+
       template <class T>
       concept array_t = (!complex_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
 
       template <class T>
       concept readable_array_t = (!custom_read<T> && array_t<T>);
-      
+
       template <class T>
       concept writable_array_t = (!custom_write<T> && array_t<T>);
 
