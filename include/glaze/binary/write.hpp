@@ -227,6 +227,33 @@ namespace glz
             dump_type(value, args...);
          }
       };
+      
+      template <class T>
+         requires complex_t<T>
+      struct to_binary<T> final
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&&... args) noexcept
+         {
+            constexpr uint8_t tag = tag::extensions | 0b00011'000;
+            dump_type(tag, args...);
+            
+            using V = typename T::value_type;
+            constexpr uint8_t complex_number = 0;
+            constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t complex_header = complex_number | type | (byte_count<V> << 5);
+            dump_type(complex_header, args...);
+            dump_type(value.real(), args...);
+            dump_type(value.imag(), args...);
+         }
+
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&&... args) noexcept
+         {
+            dump_type(value.real(), args...);
+            dump_type(value.imag(), args...);
+         }
+      };
 
       template <str_t T>
       struct to_binary<T> final
@@ -313,6 +340,22 @@ namespace glz
                for (auto& x : value) {
                   dump_compressed_int<Opts>(x.size(), args...);
                   dump(std::as_bytes(std::span{x.data(), x.size()}), args...);
+               }
+            }
+            else if constexpr (complex_t<V>) {
+               constexpr uint8_t tag = tag::extensions | 0b00011'000;
+               dump_type(tag, args...);
+               
+               using V = typename T::value_type;
+               constexpr uint8_t complex_array = 1;
+               constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+               constexpr uint8_t complex_header = complex_array | type | (byte_count<V> << 5);
+               dump_type(complex_header, args...);
+               
+               dump_compressed_int<Opts>(value.size(), args...);
+
+               for (auto&& x : value) {
+                  write<binary>::no_header<Opts>(x, ctx, args...);
                }
             }
             else {
