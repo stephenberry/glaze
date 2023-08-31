@@ -93,11 +93,11 @@ int main()
       const bool boolean = m == e;
       expect(boolean);
    };
-   
+
    "Eigen::VectorXcd"_test = [] {
       Eigen::VectorXcd m(10);
       for (int i = 0; i < m.size(); ++i) {
-         m[i] = {double(i),2*double(i)};
+         m[i] = {double(i), 2 * double(i)};
       }
       std::vector<std::byte> b;
       glz::write_binary(m, b);
@@ -106,11 +106,11 @@ int main()
       const bool boolean = m == e;
       expect(boolean);
    };
-   
+
    "Eigen::MatrixXcd"_test = [] {
       Eigen::MatrixXcd m(3, 3);
       for (int i = 0; i < m.size(); ++i) {
-         m.array()(i) = {double(i),2*double(i)};
+         m.array()(i) = {double(i), 2 * double(i)};
       }
       std::vector<std::byte> b;
       glz::write_binary(m, b);

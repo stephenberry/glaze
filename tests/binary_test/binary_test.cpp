@@ -878,21 +878,21 @@ suite falcon_test = [] {
 
 suite complex_test = [] {
    "std::complex"_test = [] {
-      std::complex<double> c{ 1.0, 0.5 };
+      std::complex<double> c{1.0, 0.5};
       std::string s{};
       glz::write_binary(c, s);
 
-      c = { 0.0 , 0.0 };
+      c = {0.0, 0.0};
       expect(!glz::read_binary(c, s));
       expect(c.real() == 1.0);
       expect(c.imag() == 0.5);
    };
-   
+
    "std::vector<std::complex<...>>"_test = [] {
-      std::vector<std::complex<double>> vc = { {1.0, 0.5}, {2.0, 1.0}, {3.0, 1.5} };
+      std::vector<std::complex<double>> vc = {{1.0, 0.5}, {2.0, 1.0}, {3.0, 1.5}};
       std::string s{};
       glz::write_binary(vc, s);
-      
+
       vc.clear();
       expect(!glz::read_binary(vc, s));
       expect(vc[0] == std::complex{1.0, 0.5});

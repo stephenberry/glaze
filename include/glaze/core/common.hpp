@@ -289,17 +289,31 @@ namespace glz
 
       template <class T>
       concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
-      
-      template<typename T>
+
+      template <typename T>
       concept complex_t = requires(T a, T b) {
-          { a.real() } -> std::convertible_to<typename T::value_type>;
-          { a.imag() } -> std::convertible_to<typename T::value_type>;
-          { T(a.real(), a.imag()) } -> std::same_as<T>;
-          { a + b } -> std::same_as<T>;
-          { a - b } -> std::same_as<T>;
-          { a * b } -> std::same_as<T>;
-          { a / b } -> std::same_as<T>;
-      };
+                             {
+                                a.real()
+                                } -> std::convertible_to<typename T::value_type>;
+                             {
+                                a.imag()
+                                } -> std::convertible_to<typename T::value_type>;
+                             {
+                                T(a.real(), a.imag())
+                                } -> std::same_as<T>;
+                             {
+                                a + b
+                                } -> std::same_as<T>;
+                             {
+                                a - b
+                                } -> std::same_as<T>;
+                             {
+                                a* b
+                                } -> std::same_as<T>;
+                             {
+                                a / b
+                                } -> std::same_as<T>;
+                          };
 
       template <class T>
       concept constructible = requires { meta<std::decay_t<T>>::construct; } || local_construct_t<std::decay_t<T>>;

@@ -101,7 +101,7 @@ namespace glz
             std::advance(it, sizeof(V));
          }
       };
-      
+
       template <class T>
          requires complex_t<T>
       struct from_binary<T>
@@ -110,14 +110,14 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
          {
             constexpr uint8_t header = tag::extensions | 0b00011'000;
-            
+
             const auto tag = uint8_t(*it);
             if (tag != header) {
                ctx.error = error_code::syntax_error;
                return;
             }
             ++it;
-            
+
             using V = typename T::value_type;
             constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t complex_number = 0;
@@ -378,10 +378,11 @@ namespace glz
                   return;
                }
                ++it;
-               
+
                using X = typename V::value_type;
                constexpr uint8_t complex_array = 1;
-               constexpr uint8_t type = std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
+               constexpr uint8_t type =
+                  std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
                constexpr uint8_t complex_header = complex_array | type | (byte_count<X> << 5);
                const auto complex_tag = uint8_t(*it);
                if (complex_tag != complex_header) {
@@ -389,7 +390,7 @@ namespace glz
                   return;
                }
                ++it;
-               
+
                const auto n = int_from_compressed(it, end);
 
                if constexpr (resizeable<T>) {
