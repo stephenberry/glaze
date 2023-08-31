@@ -26,7 +26,7 @@ namespace glz
       };
 
       template <class T>
-         requires array_t<T> && (emplace_backable<T> || !resizeable<T>)
+         requires readable_array_t<T> && (emplace_backable<T> || !resizeable<T>)
       struct from_ndjson<T>
       {
          template <auto Opts>
@@ -168,7 +168,7 @@ namespace glz
          }
       };
 
-      template <array_t T>
+      template <writable_array_t T>
       struct to_ndjson<T>
       {
          template <auto Opts, class... Args>

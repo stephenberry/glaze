@@ -222,7 +222,7 @@ namespace glz
          }
       };
 
-      template <array_t T>
+      template <readable_array_t T>
       struct from_binary<T> final
       {
          template <auto Opts>
