@@ -330,7 +330,7 @@ namespace glz
          }
       }
 
-      template <array_t T>
+      template <writable_array_t T>
       struct to_json<T>
       {
          template <auto Opts, class... Args>

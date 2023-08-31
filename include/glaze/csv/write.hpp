@@ -65,7 +65,7 @@ namespace glz
          }
       };
 
-      template <array_t T>
+      template <writable_array_t T>
       struct to_csv<T>
       {
          template <auto Opts, class B>
@@ -190,7 +190,7 @@ namespace glz
                   using item_type = std::decay_t<decltype(get_member(value, glz::tuplet::get<1>(item)))>;
                   using V = typename item_type::value_type;
 
-                  if constexpr (array_t<V>) {
+                  if constexpr (writable_array_t<V>) {
                      auto&& member = get_member(value, glz::tuplet::get<1>(item));
                      const auto count = member.size();
                      const auto size = member[0].size();
