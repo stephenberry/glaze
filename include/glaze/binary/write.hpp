@@ -346,10 +346,10 @@ namespace glz
                constexpr uint8_t tag = tag::extensions | 0b00011'000;
                dump_type(tag, args...);
                
-               using V = typename T::value_type;
+               using X = typename V::value_type;
                constexpr uint8_t complex_array = 1;
-               constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
-               constexpr uint8_t complex_header = complex_array | type | (byte_count<V> << 5);
+               constexpr uint8_t type = std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
+               constexpr uint8_t complex_header = complex_array | type | (byte_count<X> << 5);
                dump_type(complex_header, args...);
                
                dump_compressed_int<Opts>(value.size(), args...);

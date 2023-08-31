@@ -379,10 +379,10 @@ namespace glz
                }
                ++it;
                
-               using V = typename T::value_type;
+               using X = typename V::value_type;
                constexpr uint8_t complex_array = 1;
-               constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
-               constexpr uint8_t complex_header = complex_array | type | (byte_count<V> << 5);
+               constexpr uint8_t type = std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
+               constexpr uint8_t complex_header = complex_array | type | (byte_count<X> << 5);
                const auto complex_tag = uint8_t(*it);
                if (complex_tag != complex_header) {
                   ctx.error = error_code::syntax_error;
@@ -401,13 +401,13 @@ namespace glz
                }
 
                if constexpr (contiguous<T>) {
-                  std::memcpy(value.data(), &*it, 2 * n * sizeof(V));
-                  std::advance(it, 2 * n * sizeof(V));
+                  std::memcpy(value.data(), &*it, n * sizeof(V));
+                  std::advance(it, n * sizeof(V));
                }
                else {
                   for (auto&& x : value) {
-                     std::memcpy(&x, &*it, 2 * sizeof(V));
-                     std::advance(it, 2 * sizeof(V));
+                     std::memcpy(&x, &*it, sizeof(V));
+                     std::advance(it, sizeof(V));
                   }
                }
             }
