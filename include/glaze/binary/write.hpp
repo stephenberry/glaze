@@ -250,7 +250,7 @@ namespace glz
          }
       };
 
-      template <array_t T>
+      template <writable_array_t T>
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>

@@ -825,7 +825,7 @@ namespace glz
 
       // for set types
       template <class T>
-         requires(array_t<T> && !emplace_backable<T> && !resizeable<T> && emplaceable<T>)
+         requires(readable_array_t<T> && !emplace_backable<T> && !resizeable<T> && emplaceable<T>)
       struct from_json<T>
       {
          template <auto Options>
@@ -873,7 +873,7 @@ namespace glz
       };
 
       template <class T>
-         requires(array_t<T> && (emplace_backable<T> || !resizeable<T>) && !emplaceable<T>)
+         requires(readable_array_t<T> && (emplace_backable<T> || !resizeable<T>) && !emplaceable<T>)
       struct from_json<T>
       {
          template <auto Options>
@@ -1031,7 +1031,7 @@ namespace glz
       }
 
       template <class T>
-         requires array_t<T> && (!emplace_backable<T> && resizeable<T>)
+         requires readable_array_t<T> && (!emplace_backable<T> && resizeable<T>)
       struct from_json<T>
       {
          template <auto Options>

@@ -168,7 +168,7 @@ namespace glz
          }
       };
 
-      template <array_t T>
+      template <readable_array_t T>
       struct from_csv<T>
       {
          template <auto Opts, class It>
