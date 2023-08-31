@@ -109,16 +109,17 @@ struct from_json<T>
 If your own parsing function desires partial template specialization, then ambiguity may occur:
 
 ```c++
-template <class T> requires my_concept<T>
+template <class T> requires std::derived_from<T, vec_t>
 struct from_json<T>
 ```
 
-To solve this problem, glaze will check for `glz_custom_read` or `glz_custom_write` member variables and remove the ambiguity and use the custom parser.
+To solve this problem, glaze will check for `custom_read` or `custom_write` values within `glz::meta` and remove the ambiguity and use the custom parser.
 
 ```c++
-struct my_special_read
+template <class T> requires std::derived_from<T, vec_t>
+struct glz::meta<T>
 {
-  static constexpr auto glz_custom_read = true; // Add this to your class
+   static constexpr auto custom_read = true;
 };
 ```
 
