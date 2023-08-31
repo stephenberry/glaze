@@ -97,3 +97,28 @@ namespace glz::detail
 }
 ```
 
+# Handling Ambiguous Partial Specialization
+
+You may want to custom parse a class that matches an underlying glaze partial specialization for a template like below:
+
+```c++
+template <class T> requires readable_array_t<T>
+struct from_json<T>
+```
+
+If your own parsing function desires partial template specialization, then ambiguity may occur:
+
+```c++
+template <class T> requires my_concept<T>
+struct from_json<T>
+```
+
+To solve this problem, glaze will check for `glz_custom_read` or `glz_custom_write` member variables and remove the ambiguity and use the custom parser.
+
+```c++
+struct my_special_read
+{
+  static constexpr auto glz_custom_read = true; // Add this to your class
+};
+```
+
