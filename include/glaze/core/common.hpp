@@ -463,11 +463,11 @@ namespace glz
       template <class T>
       concept nullable_t = !
       meta_value_t<T> && !str_t<T> && requires(T t) {
-                                      bool(t);
-                                      {
-                                         *t
+                                         bool(t);
+                                         {
+                                            *t
+                                         };
                                       };
-                                   };
 
       template <class T>
       concept null_t = nullable_t<T> || always_null_t<T>;
