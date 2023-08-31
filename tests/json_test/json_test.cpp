@@ -4976,6 +4976,15 @@ suite read_as_json_raw = [] {
    };
 };
 
+suite const_read_error = [] {
+   "const_read_error"_test = [] {
+      const std::string hello = "world";
+      std::string s = R"(explode)";
+      constexpr glz::opts opts{.error_on_const_read = true};
+      expect(glz::read<opts>(hello, s) == glz::error_code::attempt_const_read);
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors

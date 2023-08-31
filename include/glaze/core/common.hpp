@@ -975,6 +975,7 @@ struct glz::meta<glz::error_code>
                 "syntax_error", glz::error_code::syntax_error, //
                 "key_not_found", glz::error_code::key_not_found, //
                 "unexpected_enum", glz::error_code::unexpected_enum, //
+                "attempt_const_read", glz::error_code::attempt_const_read, //
                 "attempt_member_func_read", glz::error_code::attempt_member_func_read, //
                 "attempt_read_hidden", glz::error_code::attempt_read_hidden, //
                 "invalid_nullable_read", glz::error_code::invalid_nullable_read, //
