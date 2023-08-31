@@ -25,6 +25,7 @@ namespace glz
       syntax_error,
       key_not_found,
       unexpected_enum,
+      attempt_const_read,
       attempt_member_func_read,
       attempt_read_hidden,
       invalid_nullable_read,
