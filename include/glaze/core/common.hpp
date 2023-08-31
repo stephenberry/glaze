@@ -294,7 +294,7 @@ namespace glz
       concept constructible = requires { meta<std::decay_t<T>>::construct; } || local_construct_t<std::decay_t<T>>;
 
       template <class T>
-      concept complex_t = glaze_t<std::decay_t<T>>;
+      concept meta_value_t = glaze_t<std::decay_t<T>>;
 
       template <class T>
       concept str_t = !
@@ -334,11 +334,11 @@ namespace glz
 
       template <class T>
       concept readable_map_t = !
-      custom_read<T> && !complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> && map_subscriptable<T>;
+      custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> && map_subscriptable<T>;
 
       template <class T>
       concept writable_map_t = !
-      custom_write<T> && !complex_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>>;
+      custom_write<T> && !meta_value_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>>;
 
       template <class Map>
       concept heterogeneous_map = requires {
@@ -349,7 +349,7 @@ namespace glz
                                   };
 
       template <class T>
-      concept array_t = (!complex_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
+      concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
 
       template <class T>
       concept readable_array_t = (!custom_read<T> && array_t<T>);
@@ -454,7 +454,7 @@ namespace glz
                            std::tuple_size<T>::value;
                            glz::tuplet::get<0>(t);
                         } && !
-      complex_t<T> && !range<T>;
+      meta_value_t<T> && !range<T>;
 
       template <class T>
       concept always_null_t =
@@ -462,7 +462,7 @@ namespace glz
 
       template <class T>
       concept nullable_t = !
-      complex_t<T> && !str_t<T> && requires(T t) {
+      meta_value_t<T> && !str_t<T> && requires(T t) {
                                       bool(t);
                                       {
                                          *t
