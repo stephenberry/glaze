@@ -4987,9 +4987,9 @@ suite const_read_error = [] {
 
 struct test_mapping_t
 {
-    int64_t id;
-    double latitude;
-    double longitude;
+   int64_t id;
+   double latitude;
+   double longitude;
 };
 
 struct coordinates_t
@@ -5009,7 +5009,9 @@ template <>
 struct glz::meta<test_mapping_t>
 {
    using T = test_mapping_t;
-   static constexpr auto value = object("id", &T::id, "coordinates", [](auto& self) { return coordinates_t{&self.latitude, &self.longitude}; });
+   static constexpr auto value = object("id", &T::id, "coordinates", [](auto& self) {
+      return coordinates_t{&self.latitude, &self.longitude};
+   });
 };
 
 suite mapping_struct = [] {
@@ -5028,7 +5030,6 @@ suite mapping_struct = [] {
       expect(obj.longitude == 9.87654321);
    };
 };
-
 
 int main()
 {
