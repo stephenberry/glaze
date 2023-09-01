@@ -4985,6 +4985,51 @@ suite const_read_error = [] {
    };
 };
 
+struct test_mapping_t
+{
+    int64_t id;
+    double latitude;
+    double longitude;
+};
+
+struct coordinates_t
+{
+   double* latitude;
+   double* longitude;
+};
+
+template <>
+struct glz::meta<coordinates_t>
+{
+   using T = coordinates_t;
+   static constexpr auto value = object("latitude", &T::latitude, "longitude", &T::longitude);
+};
+
+template <>
+struct glz::meta<test_mapping_t>
+{
+   using T = test_mapping_t;
+   static constexpr auto value = object("id", &T::id, "coordinates", [](auto& self) { return coordinates_t{&self.latitude, &self.longitude}; });
+};
+
+suite mapping_struct = [] {
+   "mapping_struct"_test = [] {
+      test_mapping_t obj{};
+      std::string s = R"({
+  "id": 12,
+  "coordinates": {
+    "latitude": 1.23456789,
+    "longitude": 9.87654321
+  }
+})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.id == 12);
+      expect(obj.latitude == 1.23456789);
+      expect(obj.longitude == 9.87654321);
+   };
+};
+
+
 int main()
 {
    // Explicitly run registered test suites and report errors
