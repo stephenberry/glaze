@@ -197,7 +197,7 @@ namespace glz
          {
             constexpr uint8_t header = tag::extensions | 0b00001'000;
             const auto tag = uint8_t(*it);
-            if (tag != header) {
+            if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -277,7 +277,7 @@ namespace glz
                constexpr uint8_t type = uint8_t(3) << 3;
                constexpr uint8_t header = tag::typed_array | type;
 
-               if (tag != header) {
+               if (tag != header) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -341,7 +341,7 @@ namespace glz
                constexpr uint8_t string_indicator = uint8_t(1) << 5;
                constexpr uint8_t header = tag::typed_array | type | string_indicator;
 
-               if (tag != header) {
+               if (tag != header) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -372,7 +372,7 @@ namespace glz
             }
             else if constexpr (complex_t<V>) {
                constexpr uint8_t header = tag::extensions | 0b00011'000;
-               if (tag != header) {
+               if (tag != header) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -444,11 +444,11 @@ namespace glz
             using Key = typename T::first_type;
 
             constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
-            constexpr uint8_t byte_count = str_t<Key> ? 1 : sizeof(Key);
-            constexpr uint8_t header = tag::object | type | (byte_count << 5);
+            constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
+            constexpr uint8_t header = tag::object | type | (byte_cnt << 5);
 
             const auto tag = uint8_t(*it);
-            if (tag != header) {
+            if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -475,11 +475,11 @@ namespace glz
             using Key = typename T::key_type;
 
             constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
-            constexpr uint8_t byte_count = str_t<Key> ? 1 : sizeof(Key);
-            constexpr uint8_t header = tag::object | type | (byte_count << 5);
+            constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
+            constexpr uint8_t header = tag::object | type | (byte_cnt << 5);
 
             const auto tag = uint8_t(*it);
-            if (tag != header) {
+            if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -559,12 +559,11 @@ namespace glz
          template <auto Opts>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            constexpr uint8_t type = 0;
-            constexpr uint8_t byte_count = 1;
-            constexpr uint8_t header = tag::object | type | (byte_count << 5);
+            constexpr uint8_t type = 0; // string key
+            constexpr uint8_t header = tag::object | type;
 
             const auto tag = uint8_t(*it);
-            if (tag != header) {
+            if (tag != header) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -657,7 +656,7 @@ namespace glz
    {
       T value{};
       const auto pe = read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
-      if (pe) {
+      if (pe) [[unlikely]] {
          return unexpected(pe);
       }
       return value;
@@ -671,7 +670,7 @@ namespace glz
 
       const auto file_error = file_to_buffer(buffer, ctx.current_file);
 
-      if (bool(file_error)) {
+      if (bool(file_error)) [[unlikely]] {
          return parse_error{file_error};
       }
 
