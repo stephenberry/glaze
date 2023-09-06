@@ -331,8 +331,7 @@ namespace glz
             else if constexpr (str_t<V>) {
                constexpr uint8_t type = uint8_t(3) << 3;
                constexpr uint8_t string_indicator = uint8_t(1) << 5;
-               using char_type = std::decay_t<decltype(*std::declval<V>().data())>;
-               constexpr uint8_t tag = tag::typed_array | type | string_indicator | (byte_count<char_type> << 6);
+               constexpr uint8_t tag = tag::typed_array | type | string_indicator;
                dump_type(tag, args...);
                dump_compressed_int<Opts>(value.size(), args...);
 
