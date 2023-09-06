@@ -77,7 +77,7 @@ namespace glz::ex
    }
 
    template <class T>
-   void write_file_json(T&& value, const sv file_name, auto&& buffer)
+   void write_file_json(T&& value, const std::string& file_name, auto&& buffer)
    {
       auto ec = glz::write_file_json(std::forward<T>(value), file_name, buffer);
       if (ec == glz::error_code::file_open_failure) {
