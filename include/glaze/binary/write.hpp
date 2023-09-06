@@ -358,7 +358,7 @@ namespace glz
                }
             }
             else {
-               constexpr uint8_t tag = tag::generic_array | (byte_count<V> << 3);
+               constexpr uint8_t tag = tag::generic_array;
                dump_type(tag, args...);
                dump_compressed_int<Opts>(value.size(), args...);
 
@@ -378,7 +378,7 @@ namespace glz
             using Key = typename T::first_type;
 
             constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
-            constexpr uint8_t byte_cnt = str_t<Key> ? 1 : sizeof(Key);
+            constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
             constexpr uint8_t tag = tag::object | type | (byte_cnt << 5);
             dump_type(tag, args...);
 
@@ -398,7 +398,7 @@ namespace glz
             using Key = typename T::key_type;
 
             constexpr uint8_t type = str_t<Key> ? 0 : (std::is_signed_v<Key> ? 0b000'01'000 : 0b000'10'000);
-            constexpr uint8_t byte_cnt = str_t<Key> ? 1 : sizeof(Key);
+            constexpr uint8_t byte_cnt = str_t<Key> ? 0 : byte_count<Key>;
             constexpr uint8_t tag = tag::object | type | (byte_cnt << 5);
             dump_type(tag, args...);
 
@@ -432,9 +432,8 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            constexpr uint8_t type = 0;
-            constexpr uint8_t byte_cnt = 1;
-            constexpr uint8_t tag = tag::object | type | (byte_cnt << 5);
+            constexpr uint8_t type = 0; // string key
+            constexpr uint8_t tag = tag::object | type;
             dump_type(tag, args...);
 
             using V = std::decay_t<T>;
@@ -521,9 +520,8 @@ namespace glz
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
          static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
 
-         constexpr uint8_t type = 0;
-         constexpr uint8_t byte_cnt = sizeof(decltype(buffer[0]));
-         constexpr uint8_t tag = tag::object | type | (byte_cnt << 5);
+         constexpr uint8_t type = 0; // string
+         constexpr uint8_t tag = tag::object | type;
          detail::dump_type(tag, buffer);
 
          detail::dump_compressed_int<N>(buffer);
