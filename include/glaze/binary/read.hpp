@@ -150,7 +150,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& /* end */) noexcept
          {
             const auto tag = uint8_t(*it);
-            if ((tag & 0b00000'111) != tag::boolean) {
+            if ((tag & 0b0000'1111) != tag::boolean) {
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -219,7 +219,7 @@ namespace glz
          {
             using V = typename std::decay_t<T>::value_type;
 
-            constexpr uint8_t header = tag::string | (byte_count<V> << 3);
+            constexpr uint8_t header = tag::string;
 
             const auto tag = uint8_t(*it);
             if (tag != header) {

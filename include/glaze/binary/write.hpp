@@ -50,7 +50,7 @@ namespace glz
       }
 
       template <auto Opts, class... Args>
-      GLZ_ALWAYS_INLINE void dump_compressed_int(size_t i, Args&&... args) noexcept
+      GLZ_ALWAYS_INLINE void dump_compressed_int(uint64_t i, Args&&... args) noexcept
       {
          if (i < 64) {
             const uint8_t c = uint8_t(i) << 2;
@@ -144,7 +144,7 @@ namespace glz
       struct to_binary<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&&, Args&&...) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
          {}
       };
 
@@ -152,7 +152,7 @@ namespace glz
       struct to_binary<includer<T>>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&&, Args&&...) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
          {}
       };
 
@@ -170,7 +170,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&&, Args&&...) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
          {}
       };
 
@@ -261,8 +261,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
-            using V = typename std::decay_t<T>::value_type;
-            constexpr uint8_t tag = tag::string | (byte_count<V> << 3);
+            constexpr uint8_t tag = tag::string;
             dump_type(tag, args...);
 
             dump_compressed_int<Opts>(value.size(), args...);
