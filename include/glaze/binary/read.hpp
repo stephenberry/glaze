@@ -35,7 +35,7 @@ namespace glz
             }
             else {
                from_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                    std::forward<It0>(it), std::forward<It1>(end));
+                                                                      std::forward<It0>(it), std::forward<It1>(end));
             }
          }
 
@@ -52,8 +52,8 @@ namespace glz
                }
             }
             else {
-               from_binary<std::remove_cvref_t<T>>::template no_header<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                    std::forward<It0>(it), std::forward<It1>(end));
+               from_binary<std::remove_cvref_t<T>>::template no_header<Opts>(
+                  std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
             }
          }
       };
