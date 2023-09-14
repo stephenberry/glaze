@@ -931,11 +931,11 @@ struct glz::meta<full>
 suite skip_test = [] {
    "skip"_test = [] {
       full f{};
-      std::string s2{};
-      glz::write_binary(f, s2);
+      std::string s{};
+      glz::write_binary(f, s);
 
       skipper obj{};
-      expect(!glz::read_binary(obj, s2));
+      expect(!glz::read_binary(obj, s));
       expect(obj.a == 10);
       expect(obj.s == "full");
    };

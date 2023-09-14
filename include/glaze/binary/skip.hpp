@@ -24,7 +24,7 @@ namespace glz::detail
    inline void skip_number_binary(is_context auto&&, auto&& it, auto&&) noexcept
    {
       const auto tag = uint8_t(*it);
-      const uint8_t byte_count = tag >> 5;
+      const uint8_t byte_count = byte_count_lookup[tag >> 5];
       ++it;
 
       std::advance(it, byte_count);
@@ -51,7 +51,7 @@ namespace glz::detail
          }
       }
       else if ((tag & 0b00000'111) == tag::number) {
-         const uint8_t byte_count = tag >> 5;
+         const uint8_t byte_count = byte_count_lookup[tag >> 5];
          for (size_t i = 0; i < n_keys; ++i) {
             const auto n = int_from_compressed(it, end);
             std::advance(it, byte_count * n);
@@ -80,7 +80,7 @@ namespace glz::detail
       case 2: { // unsigned integer
          ++it;
          const auto n = int_from_compressed(it, end);
-         const uint8_t byte_count = tag >> 5;
+         const uint8_t byte_count = byte_count_lookup[tag >> 5];
          std::advance(it, byte_count * n);
          break;
       }
@@ -128,10 +128,6 @@ namespace glz::detail
          ++it;
          break;
       }
-      case tag::boolean: {
-         ++it;
-         break;
-      };
       case tag::number: {
          skip_number_binary(ctx, it, end);
          break;
