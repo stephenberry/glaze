@@ -51,7 +51,7 @@ namespace glz
                                               std::forward<It0>(it), std::forward<It1>(end));
          }
       };
-      
+
       template <>
       struct from_binary<skip>
       {
@@ -97,7 +97,8 @@ namespace glz
                std::advance(it, sizeof(V));
             }
             else {
-               constexpr uint8_t type = std::floating_point<T> ? 0 : (std::is_signed_v<T> ? 0b000'01'000 : 0b000'10'000);
+               constexpr uint8_t type =
+                  std::floating_point<T> ? 0 : (std::is_signed_v<T> ? 0b000'01'000 : 0b000'10'000);
                constexpr uint8_t header = tag::number | type | (byte_count<T> << 5);
 
                const auto tag = uint8_t(*it);
@@ -112,7 +113,6 @@ namespace glz
                std::memcpy(&value, &(*it), sizeof(V));
                std::advance(it, sizeof(V));
             }
-            
          }
       };
 
@@ -139,7 +139,8 @@ namespace glz
                ++it;
 
                using V = typename T::value_type;
-               constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+               constexpr uint8_t type =
+                  std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
                constexpr uint8_t complex_number = 0;
                constexpr uint8_t complex_header = complex_number | type | (byte_count<V> << 5);
 

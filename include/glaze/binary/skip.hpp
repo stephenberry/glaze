@@ -37,14 +37,14 @@ namespace glz::detail
       ++it;
 
       const auto n_keys = int_from_compressed(it, end);
-      
+
       if ((tag & 0b00000'111) == tag::string) {
          for (size_t i = 0; i < n_keys; ++i) {
             const auto string_length = int_from_compressed(it, end);
             std::advance(it, string_length);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            
+
             skip_value_binary<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -57,7 +57,7 @@ namespace glz::detail
             std::advance(it, byte_count * n);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            
+
             skip_value_binary<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -75,8 +75,8 @@ namespace glz::detail
       const auto tag = uint8_t(*it);
       const uint8_t type = (tag & 0b000'11'000) >> 3;
       switch (type) {
-         case 0: // floating point (fallthrough)
-         case 1: // signed integer (fallthrough)
+      case 0: // floating point (fallthrough)
+      case 1: // signed integer (fallthrough)
       case 2: { // unsigned integer
          ++it;
          const auto n = int_from_compressed(it, end);

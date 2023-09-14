@@ -932,8 +932,9 @@ struct glz::meta<full>
 struct nothing
 {
    int a{};
-   
-   struct glaze {
+
+   struct glaze
+   {
       static constexpr auto value = glz::object("a", &nothing::a);
    };
 };
@@ -949,12 +950,12 @@ suite skip_test = [] {
       expect(obj.a == 10);
       expect(obj.s == "full");
    };
-   
+
    "no error on unknown keys"_test = [] {
       full f{};
       std::string s{};
       glz::write_binary(f, s);
-      
+
       nothing obj{};
       expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false}>(obj, s));
    };
