@@ -30,7 +30,7 @@ namespace glz
                }
                else {
                   // do not read anything into the const value
-                  skip_value<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+                  skip_value_binary<Opts>(std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
                }
             }
             else {
@@ -501,7 +501,22 @@ namespace glz
                static thread_local Key key;
                for (size_t i = 0; i < n; ++i) {
                   read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
-                  read<binary>::op<Opts>(value[key], ctx, it, end);
+                  
+                  const auto& member_it = value.find(key);
+                  if (member_it != value.end()) [[likely]] {
+                     read<binary>::op<Opts>(*member_it, ctx, it, end);
+                  }
+                  else [[unlikely]] {
+                     if constexpr (Opts.error_on_unknown_keys) {
+                        ctx.error = error_code::unknown_key;
+                        return;
+                     }
+                     else {
+                        skip_value_binary<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                  }
                }
             }
          }
@@ -595,8 +610,15 @@ namespace glz
                   }
                }
                else [[unlikely]] {
-                  ctx.error = error_code::unknown_key;
-                  return;
+                  if constexpr (Opts.error_on_unknown_keys) {
+                     ctx.error = error_code::unknown_key;
+                     return;
+                  }
+                  else {
+                     skip_value_binary<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
                }
             }
          }

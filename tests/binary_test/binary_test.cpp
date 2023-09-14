@@ -901,6 +901,46 @@ suite complex_test = [] {
    };
 };
 
+struct skipper
+{
+   int a = 4;
+   std::string s = "Aha!";
+};
+
+template <>
+struct glz::meta<skipper>
+{
+   using T = skipper;
+   static constexpr auto value = object("a", &T::a, "pi", skip{}, "s", &T::s);
+};
+
+struct full
+{
+   int a = 10;
+   double pi = 3.14;
+   std::string s = "full";
+};
+
+template <>
+struct glz::meta<full>
+{
+   using T = full;
+   static constexpr auto value = object("a", &T::a, "pi", &T::pi, "s", &T::s);
+};
+
+suite skip_test = [] {
+   "skip"_test = [] {
+      full f{};
+      std::string s2{};
+      glz::write_binary(f, s2);
+
+      skipper obj{};
+      expect(!glz::read_binary(obj, s2));
+      expect(obj.a == 10);
+      expect(obj.s == "full");
+   };
+};
+
 int main()
 {
    using namespace boost::ut;
