@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <array>
 #include <bit>
 #include <concepts>
 #include <cstdint>
@@ -90,4 +91,6 @@ namespace glz::detail
 
    template <class T>
    inline constexpr uint8_t byte_count = uint8_t(std::bit_width(sizeof(T)) - 1);
+   
+   inline constexpr std::array<uint8_t, 8> byte_count_lookup{ 1, 2, 4, 8, 16, 32, 64, 128 };
 }

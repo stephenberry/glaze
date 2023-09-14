@@ -14,6 +14,7 @@
 #include "boost/ut.hpp"
 #include "glaze/binary/read.hpp"
 #include "glaze/binary/write.hpp"
+#include "glaze/core/macros.hpp"
 
 struct my_struct
 {
@@ -898,6 +899,64 @@ suite complex_test = [] {
       expect(vc[0] == std::complex{1.0, 0.5});
       expect(vc[1] == std::complex{2.0, 1.0});
       expect(vc[2] == std::complex{3.0, 1.5});
+   };
+};
+
+struct skipper
+{
+   int a = 4;
+   std::string s = "Aha!";
+};
+
+template <>
+struct glz::meta<skipper>
+{
+   using T = skipper;
+   static constexpr auto value = object("a", &T::a, "pi", skip{}, "s", &T::s);
+};
+
+struct full
+{
+   int a = 10;
+   double pi = 3.14;
+   std::string s = "full";
+};
+
+template <>
+struct glz::meta<full>
+{
+   using T = full;
+   static constexpr auto value = object("a", &T::a, "pi", &T::pi, "s", &T::s);
+};
+
+struct nothing
+{
+   int a{};
+   
+   struct glaze {
+      static constexpr auto value = glz::object("a", &nothing::a);
+   };
+};
+
+suite skip_test = [] {
+   "skip"_test = [] {
+      full f{};
+      std::string s{};
+      glz::write_binary(f, s);
+
+      skipper obj{};
+      expect(!glz::read_binary(obj, s));
+      expect(obj.a == 10);
+      expect(obj.s == "full");
+   };
+   
+   "no error on unknown keys"_test = [] {
+      full f{};
+      std::string s{};
+      glz::write_binary(f, s);
+      
+      nothing obj{};
+      expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false}>(obj, s));
    };
 };
 

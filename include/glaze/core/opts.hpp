@@ -33,6 +33,7 @@ namespace glz
       bool opening_handled = false; // the opening character has been handled
       bool closing_handled = false; // the closing character has been handled
       bool ws_handled = false; // whitespace has already been parsed
+      bool no_header = false; // whether or not a binary header is needed
    };
 
    template <opts Opts>
