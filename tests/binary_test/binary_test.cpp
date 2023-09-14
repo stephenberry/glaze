@@ -14,6 +14,7 @@
 #include "boost/ut.hpp"
 #include "glaze/binary/read.hpp"
 #include "glaze/binary/write.hpp"
+#include "glaze/core/macros.hpp"
 
 struct my_struct
 {
@@ -928,6 +929,15 @@ struct glz::meta<full>
    static constexpr auto value = object("a", &T::a, "pi", &T::pi, "s", &T::s);
 };
 
+struct nothing
+{
+   int a{};
+   
+   struct glaze {
+      static constexpr auto value = glz::object("a", &nothing::a);
+   };
+};
+
 suite skip_test = [] {
    "skip"_test = [] {
       full f{};
@@ -938,6 +948,15 @@ suite skip_test = [] {
       expect(!glz::read_binary(obj, s));
       expect(obj.a == 10);
       expect(obj.s == "full");
+   };
+   
+   "no error on unknown keys"_test = [] {
+      full f{};
+      std::string s{};
+      glz::write_binary(f, s);
+      
+      nothing obj{};
+      expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false}>(obj, s));
    };
 };
 
