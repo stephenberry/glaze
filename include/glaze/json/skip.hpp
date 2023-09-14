@@ -7,9 +7,8 @@
 
 namespace glz::detail
 {
-   // Can't use GLZ_ALWAYS_INLINE here because we have to allow infinite recursion
    template <opts Opts>
-   inline void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_FLATTEN void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (bool(ctx.error)) [[unlikely]] {
          return;
@@ -59,9 +58,8 @@ namespace glz::detail
       }
    }
 
-   // Can't use GLZ_ALWAYS_INLINE here because we have to allow infinite recursion
    template <opts Opts>
-   inline void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_FLATTEN void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (bool(ctx.error)) [[unlikely]] {
          return;
@@ -95,9 +93,8 @@ namespace glz::detail
       }
    }
 
-   // Can't use GLZ_ALWAYS_INLINE here because we have to allow infinite recursion
    template <opts Opts>
-   inline void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_FLATTEN void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if (bool(ctx.error)) [[unlikely]] {
          return;
