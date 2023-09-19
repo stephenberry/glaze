@@ -233,7 +233,7 @@ namespace glz
          {
             using V = typename std::decay_t<T>::value_type;
             static_assert(sizeof(V) == 1);
-            
+
             if constexpr (Opts.no_header) {
                const auto n = int_from_compressed(it, end);
                value.resize(n);
@@ -248,9 +248,9 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               
+
                ++it;
-               
+
                const auto n = int_from_compressed(it, end);
                value.resize(n);
                std::memcpy(value.data(), &(*it), n);

@@ -262,7 +262,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
             constexpr uint8_t tag = tag::string;
-            
+
             dump_type(tag, args...);
             dump_compressed_int<Opts>(value.size(), args...);
             dump(std::as_bytes(std::span{value.data(), value.size()}), args...);
@@ -462,8 +462,7 @@ namespace glz
 
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-               write<binary>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<V>)), ctx,
-                                       args...);
+               write<binary>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<V>)), ctx, args...);
             });
          }
       };
@@ -481,8 +480,7 @@ namespace glz
             dump_compressed_int<N>(args...);
 
             using V = std::decay_t<T>;
-            for_each<std::tuple_size_v<V>>(
-               [&](auto I) { write<binary>::op<Opts>(std::get<I>(value), ctx, args...); });
+            for_each<std::tuple_size_v<V>>([&](auto I) { write<binary>::op<Opts>(std::get<I>(value), ctx, args...); });
          }
       };
    }
