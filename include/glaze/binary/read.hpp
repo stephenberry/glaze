@@ -231,47 +231,30 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            using V = typename std::decay_t<T>::value_type;
+            static_assert(sizeof(V) == 1);
+            
             if constexpr (Opts.no_header) {
-               using V = typename std::decay_t<T>::value_type;
-
                const auto n = int_from_compressed(it, end);
-               if constexpr (sizeof(V) == 1) {
-                  value.resize(n);
-                  std::memcpy(value.data(), &(*it), n);
-                  std::advance(it, n);
-               }
-               else {
-                  const auto n_bytes = sizeof(V) * n;
-                  value.resize(n);
-                  std::memcpy(value.data(), &(*it), n_bytes);
-                  std::advance(it, n_bytes);
-               }
+               value.resize(n);
+               std::memcpy(value.data(), &(*it), n);
+               std::advance(it, n);
             }
             else {
-               using V = typename std::decay_t<T>::value_type;
-
                constexpr uint8_t header = tag::string;
 
                const auto tag = uint8_t(*it);
-               if (tag != header) {
+               if (tag != header) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
                   return;
                }
-
+               
                ++it;
-
+               
                const auto n = int_from_compressed(it, end);
-               if constexpr (sizeof(V) == 1) {
-                  value.resize(n);
-                  std::memcpy(value.data(), &(*it), n);
-                  std::advance(it, n);
-               }
-               else {
-                  const auto n_bytes = sizeof(V) * n;
-                  value.resize(n);
-                  std::memcpy(value.data(), &(*it), n_bytes);
-                  std::advance(it, n_bytes);
-               }
+               value.resize(n);
+               std::memcpy(value.data(), &(*it), n);
+               std::advance(it, n);
             }
          }
       };
@@ -321,7 +304,7 @@ namespace glz
                   std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
                constexpr uint8_t header = tag::typed_array | type | (byte_count<V> << 5);
 
-               if (tag != header) {
+               if (tag != header) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -397,7 +380,7 @@ namespace glz
                   std::floating_point<X> ? 0 : (std::is_signed_v<X> ? 0b000'01'000 : 0b000'10'000);
                constexpr uint8_t complex_header = complex_array | type | (byte_count<X> << 5);
                const auto complex_tag = uint8_t(*it);
-               if (complex_tag != complex_header) {
+               if (complex_tag != complex_header) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -425,7 +408,7 @@ namespace glz
                }
             }
             else {
-               if ((tag & 0b00000'111) != tag::generic_array) {
+               if ((tag & 0b00000'111) != tag::generic_array) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -469,7 +452,7 @@ namespace glz
             ++it;
 
             const auto n = int_from_compressed(it, end);
-            if (n != 1) {
+            if (n != 1) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -601,7 +584,7 @@ namespace glz
                      [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
                      p->second);
 
-                  if (bool(ctx.error)) {
+                  if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
                }
@@ -628,7 +611,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto tag = uint8_t(*it);
-            if (tag != tag::generic_array) {
+            if (tag != tag::generic_array) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -651,7 +634,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto tag = uint8_t(*it);
-            if (tag != tag::generic_array) {
+            if (tag != tag::generic_array) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
