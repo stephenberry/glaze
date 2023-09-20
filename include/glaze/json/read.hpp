@@ -1513,7 +1513,7 @@ namespace glz
                   const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-                  
+
                   // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
                   // whitespace and the colon must run after checking if the key exists
 
@@ -1529,7 +1529,7 @@ namespace glz
                      skip_ws<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     
+
                      if constexpr (Opts.error_on_missing_keys) {
                         // TODO: Kludge/hack. Should work but could easily cuase memory issues with small changes.
                         // At the very least if we are going to do this add a get_index method to the maps and call that
@@ -1557,7 +1557,7 @@ namespace glz
                            return;
                         }
                      }
-                     
+
                      skip_ws<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
@@ -1567,7 +1567,7 @@ namespace glz
                      skip_ws<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     
+
                      skip_value<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;

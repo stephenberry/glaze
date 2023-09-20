@@ -31,19 +31,20 @@ namespace glz
          const auto start = std::begin(buffer) + index;
          const auto line = size_t(std::count(std::begin(buffer), start, static_cast<V>('\n')) + 1);
          const auto rstart = std::rbegin(buffer) + buffer.size() - index - 1;
-         const auto prev_new_line = std::find((std::min)(rstart + 1, std::rend(buffer)), std::rend(buffer), static_cast<V>('\n'));
+         const auto prev_new_line =
+            std::find((std::min)(rstart + 1, std::rend(buffer)), std::rend(buffer), static_cast<V>('\n'));
          const auto column = size_t(std::distance(rstart, prev_new_line));
-         const auto next_new_line = std::find((std::min)(start + 1, std::end(buffer)), std::end(buffer), static_cast<V>('\n'));
-         
+         const auto next_new_line =
+            std::find((std::min)(start + 1, std::end(buffer)), std::end(buffer), static_cast<V>('\n'));
+
          const auto offset = (prev_new_line == std::rend(buffer) ? 0 : index - column + 1);
          auto context_begin = std::begin(buffer) + offset;
          auto context_end = next_new_line;
-         
+
          size_t front_truncation = 0;
          size_t rear_truncation = 0;
-         
-         if (std::distance(context_begin, context_end) > 64)
-         {
+
+         if (std::distance(context_begin, context_end) > 64) {
             // reduce the context length so that we can more easily see errors, especially for non-prettified buffers
             if (column <= 32) {
                rear_truncation = 64;
@@ -60,9 +61,8 @@ namespace glz
          }
 
          if constexpr (std::same_as<V, std::byte>) {
-            std::string context{
-               reinterpret_cast<const char*>(&(*context_begin)),
-               reinterpret_cast<const char*>(&(*context_end))};
+            std::string context{reinterpret_cast<const char*>(&(*context_begin)),
+                                reinterpret_cast<const char*>(&(*context_end))};
             return source_info{line, column, context, index, front_truncation, rear_truncation};
          }
          else {
