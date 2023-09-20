@@ -1513,20 +1513,23 @@ namespace glz
                   const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-
-                  skip_ws<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  match<':'>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  skip_ws<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
+                  
+                  // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
+                  // whitespace and the colon must run after checking if the key exists
 
                   static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
                   const auto& member_it = frozen_map.find(key);
                   if (member_it != frozen_map.end()) [[likely]] {
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     match<':'>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     
                      if constexpr (Opts.error_on_missing_keys) {
                         // TODO: Kludge/hack. Should work but could easily cuase memory issues with small changes.
                         // At the very least if we are going to do this add a get_index method to the maps and call that
@@ -1552,12 +1555,32 @@ namespace glz
                            return;
                         }
                         else {
+                           skip_ws<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           match<':'>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           skip_ws<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           
                            skip_value<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                         }
                      }
                      else {
+                        skip_ws<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        match<':'>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        skip_ws<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        
                         skip_value<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
