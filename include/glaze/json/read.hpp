@@ -1372,7 +1372,7 @@ namespace glz
                            return key;
                         }
                      }
-                     ctx.error = error_code::key_not_found;
+                     ctx.error = error_code::unknown_key;
                      return {};
                   }
                   else {

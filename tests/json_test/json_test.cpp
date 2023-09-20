@@ -5031,6 +5031,24 @@ suite mapping_struct = [] {
    };
 };
 
+struct name_t
+{
+   std::string first{};
+   std::string last{};
+   
+   GLZ_LOCAL_META(name_t, first, last);
+};
+
+suite error_message_test = [] {
+   "error_message"_test = [] {
+      std::vector<name_t> arr{};
+      std::string s = R"([{"first":"George","last":"Martin"},{"first":"Sally","last":"Adams"},{"first":"Caleb","middle":"Patrick","last":"Boardwalk"},{"first":"James","last":"Brown"}])";
+      const auto error = glz::read_json(arr, s);
+      expect(error == glz::error_code::unknown_key);
+      //const auto formmatted = glz::format_error(error, s);
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
