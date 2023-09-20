@@ -1554,37 +1554,21 @@ namespace glz
                            ctx.error = error_code::unknown_key;
                            return;
                         }
-                        else {
-                           skip_ws<Opts>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
-                           match<':'>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
-                           skip_ws<Opts>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
-                           
-                           skip_value<Opts>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
-                        }
                      }
-                     else {
-                        skip_ws<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                        match<':'>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                        skip_ws<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                        
-                        skip_value<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                     }
+                     
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     match<':'>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     
+                     skip_value<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                   }
                }
                else {
