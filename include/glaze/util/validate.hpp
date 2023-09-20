@@ -16,16 +16,17 @@ namespace glz
          size_t line{};
          size_t column{};
          std::string context;
+         size_t index{};
       };
 
-      inline std::optional<source_info> get_source_info(const std::string_view buffer, const std::size_t index)
+      inline std::optional<source_info> get_source_info(const std::string_view buffer, const size_t index)
       {
          if (index >= buffer.size()) {
             return std::nullopt;
          }
 
          using V = std::decay_t<decltype(buffer[0])>;
-         const std::size_t r_index = buffer.size() - index - 1;
+         const size_t r_index = buffer.size() - index - 1;
          const auto start = std::begin(buffer) + index;
          const auto count = std::count(std::begin(buffer), start, static_cast<V>('\n'));
          const auto rstart = std::rbegin(buffer) + r_index;
@@ -37,11 +38,11 @@ namespace glz
             std::string context{
                reinterpret_cast<const char*>(buffer.data()) + (pnl == std::rend(buffer) ? 0 : index - dist + 1),
                reinterpret_cast<const char*>(&(*nnl))};
-            return source_info{static_cast<std::size_t>(count + 1), static_cast<std::size_t>(dist), context};
+            return source_info{size_t(count + 1), size_t(dist), context, index};
          }
          else {
             std::string context{std::begin(buffer) + (pnl == std::rend(buffer) ? 0 : index - dist + 1), nnl};
-            return source_info{static_cast<std::size_t>(count + 1), static_cast<std::size_t>(dist), context};
+            return source_info{size_t(count + 1), size_t(dist), context, index};
          }
       }
 
