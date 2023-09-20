@@ -11,7 +11,7 @@ namespace glz
 {
    namespace detail
    {
-      struct source_info
+      struct source_info final
       {
          size_t line{};
          size_t column{};
@@ -26,23 +26,22 @@ namespace glz
          }
 
          using V = std::decay_t<decltype(buffer[0])>;
-         const size_t r_index = buffer.size() - index - 1;
          const auto start = std::begin(buffer) + index;
-         const auto count = std::count(std::begin(buffer), start, static_cast<V>('\n'));
-         const auto rstart = std::rbegin(buffer) + r_index;
-         const auto pnl = std::find((std::min)(rstart + 1, std::rend(buffer)), std::rend(buffer), static_cast<V>('\n'));
-         const auto dist = std::distance(rstart, pnl);
-         const auto nnl = std::find((std::min)(start + 1, std::end(buffer)), std::end(buffer), static_cast<V>('\n'));
+         const auto line_number = size_t(std::count(std::begin(buffer), start, static_cast<V>('\n')) + 1);
+         const auto rstart = std::rbegin(buffer) + buffer.size() - index - 1;
+         const auto prev_new_line = std::find((std::min)(rstart + 1, std::rend(buffer)), std::rend(buffer), static_cast<V>('\n'));
+         const auto column = size_t(std::distance(rstart, prev_new_line));
+         const auto next_new_line = std::find((std::min)(start + 1, std::end(buffer)), std::end(buffer), static_cast<V>('\n'));
 
          if constexpr (std::same_as<V, std::byte>) {
             std::string context{
-               reinterpret_cast<const char*>(buffer.data()) + (pnl == std::rend(buffer) ? 0 : index - dist + 1),
-               reinterpret_cast<const char*>(&(*nnl))};
-            return source_info{size_t(count + 1), size_t(dist), context, index};
+               reinterpret_cast<const char*>(buffer.data()) + (prev_new_line == std::rend(buffer) ? 0 : index - column + 1),
+               reinterpret_cast<const char*>(&(*next_new_line))};
+            return source_info{line_number, column, context, index};
          }
          else {
-            std::string context{std::begin(buffer) + (pnl == std::rend(buffer) ? 0 : index - dist + 1), nnl};
-            return source_info{size_t(count + 1), size_t(dist), context, index};
+            std::string context{std::begin(buffer) + (prev_new_line == std::rend(buffer) ? 0 : index - column + 1), next_new_line};
+            return source_info{line_number, column, context, index};
          }
       }
 
