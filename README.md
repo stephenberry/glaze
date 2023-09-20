@@ -183,6 +183,10 @@ find_package(glaze REQUIRED)
 target_link_libraries(main PRIVATE glaze::glaze)
 ```
 
+### Arch Linux
+
+- AUR packages: [glaze](https://aur.archlinux.org/packages/glaze) and [glaze-git](https://aur.archlinux.org/packages/glaze-git)
+
 ### See this [Example Repository](https://github.com/stephenberry/glaze_example) for how to use Glaze in a new project
 
 ---
