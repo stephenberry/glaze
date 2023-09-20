@@ -27,21 +27,25 @@ namespace glz
 
          using V = std::decay_t<decltype(buffer[0])>;
          const auto start = std::begin(buffer) + index;
-         const auto line_number = size_t(std::count(std::begin(buffer), start, static_cast<V>('\n')) + 1);
+         const auto line = size_t(std::count(std::begin(buffer), start, static_cast<V>('\n')) + 1);
          const auto rstart = std::rbegin(buffer) + buffer.size() - index - 1;
          const auto prev_new_line = std::find((std::min)(rstart + 1, std::rend(buffer)), std::rend(buffer), static_cast<V>('\n'));
          const auto column = size_t(std::distance(rstart, prev_new_line));
          const auto next_new_line = std::find((std::min)(start + 1, std::end(buffer)), std::end(buffer), static_cast<V>('\n'));
+         
+         const auto offset = (prev_new_line == std::rend(buffer) ? 0 : index - column + 1);
+         const auto context_begin = std::begin(buffer) + offset;
+         const auto context_end = next_new_line;
 
          if constexpr (std::same_as<V, std::byte>) {
             std::string context{
-               reinterpret_cast<const char*>(buffer.data()) + (prev_new_line == std::rend(buffer) ? 0 : index - column + 1),
-               reinterpret_cast<const char*>(&(*next_new_line))};
-            return source_info{line_number, column, context, index};
+               reinterpret_cast<const char*>(&(*context_begin)),
+               reinterpret_cast<const char*>(&(*context_end))};
+            return source_info{line, column, context, index};
          }
          else {
-            std::string context{std::begin(buffer) + (prev_new_line == std::rend(buffer) ? 0 : index - column + 1), next_new_line};
-            return source_info{line_number, column, context, index};
+            std::string context{context_begin, context_end};
+            return source_info{line, column, context, index};
          }
       }
 
