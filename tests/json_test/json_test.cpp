@@ -4963,7 +4963,7 @@ suite whitespace_testing = [] {
       std::string_view buffer{"{\"0\"/\n/"};
       my_struct value{};
       glz::context ctx{};
-      expect(glz::read_json(value, buffer) == glz::error_code::expected_end_comment);
+      expect(glz::read_json(value, buffer) == glz::error_code::unknown_key);
    };
 };
 
@@ -5028,6 +5028,24 @@ suite mapping_struct = [] {
       expect(obj.id == 12);
       expect(obj.latitude == 1.23456789);
       expect(obj.longitude == 9.87654321);
+   };
+};
+
+struct name_t
+{
+   std::string first{};
+   std::string last{};
+   
+   GLZ_LOCAL_META(name_t, first, last);
+};
+
+suite error_message_test = [] {
+   "error_message"_test = [] {
+      std::vector<name_t> arr{};
+      std::string s = R"([{"first":"George","last":"Martin"},{"first":"Sally","last":"Adams"},{"first":"Caleb","middle":"Patrick","last":"Boardwalk"},{"first":"James","last":"Brown"}])";
+      const auto error = glz::read_json(arr, s);
+      expect(error == glz::error_code::unknown_key);
+      //const auto formmatted = glz::format_error(error, s);
    };
 };
 
