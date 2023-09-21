@@ -1729,9 +1729,9 @@ suite write_tests = [] {
       }
       {
          std::string s;
-         long long v{1};
+         long long v{-193582804324766};
          glz::write_json(v, s);
-         expect(s == "1");
+         expect(s == "-193582804324766");
       }
       {
          std::string s;
@@ -1753,9 +1753,9 @@ suite write_tests = [] {
       }
       {
          std::string s;
-         unsigned long long v{1};
+         unsigned long long v{193582804324766};
          glz::write_json(v, s);
-         expect(s == "1");
+         expect(s == "193582804324766");
       }
    };
 
