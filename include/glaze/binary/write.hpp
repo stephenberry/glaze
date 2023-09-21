@@ -76,12 +76,13 @@ namespace glz
       template <class T = void>
       struct to_binary
       {};
-      
+
       template <auto Opts, class T, class Ctx, class B, class IX>
-      concept write_binary_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-         to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                              std::forward<B>(b), std::forward<IX>(ix));
-      };
+      concept write_binary_invocable =
+         requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+            to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                                 std::forward<B>(b), std::forward<IX>(ix));
+         };
 
       template <>
       struct write<binary>
@@ -514,7 +515,7 @@ namespace glz
          static constexpr auto sorted = sort_json_ptrs(Partial);
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
          static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
-         
+
          constexpr uint8_t type = 0; // string
          constexpr uint8_t tag = tag::object | type;
          detail::dump_type(tag, buffer, ix);
@@ -568,7 +569,7 @@ namespace glz
             });
          }
       }
-      
+
       return we;
    }
 
