@@ -5050,37 +5050,38 @@ suite error_message_test = [] {
    };
 };
 
-struct Person {
+struct Person
+{
    std::string name{};
    int age{};
    std::string city{};
    std::string residence{};
-   
-   void getAge(const std::string birthdateStr) {
-       std::tm birthdate = {};
-       std::istringstream ss(birthdateStr);
-       ss >> std::get_time(&birthdate, "%d/%m/%Y");
-       
-       if (ss.fail()) {
-          std::cout << "Failed to parse birthdate: " << birthdateStr << "\n";
-       }
-       
-       const auto birth       = std::chrono::system_clock::from_time_t(std::mktime(&birthdate));
-       const auto age_seconds = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - birth);
-       
-       age = static_cast<int>(age_seconds.count()) / (60 * 60 * 24 * 365);
+
+   void getAge(const std::string birthdateStr)
+   {
+      std::tm birthdate = {};
+      std::istringstream ss(birthdateStr);
+      ss >> std::get_time(&birthdate, "%d/%m/%Y");
+
+      if (ss.fail()) {
+         std::cout << "Failed to parse birthdate: " << birthdateStr << "\n";
+      }
+
+      const auto birth = std::chrono::system_clock::from_time_t(std::mktime(&birthdate));
+      const auto age_seconds =
+         std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - birth);
+
+      age = static_cast<int>(age_seconds.count()) / (60 * 60 * 24 * 365);
    }
 };
 
 template <>
-struct glz::meta<Person> {
-    using T                     = Person;
-    static constexpr auto value =
-        glz::object(
-            "name", &T::name, "full_name", &T::name,
-            "age", &T::age, "years_old", &T::age, "date_of_birth", invoke<&T::getAge>(),
-            "city", &T::city, "residence", &T::residence
-        );
+struct glz::meta<Person>
+{
+   using T = Person;
+   static constexpr auto value =
+      glz::object("name", &T::name, "full_name", &T::name, "age", &T::age, "years_old", &T::age, "date_of_birth",
+                  invoke<&T::getAge>(), "city", &T::city, "residence", &T::residence);
 };
 
 suite function_call = [] {
