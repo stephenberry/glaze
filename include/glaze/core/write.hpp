@@ -26,8 +26,7 @@ namespace glz
       }
    }
 
-   // For writing to a std::string, std::vector<char>, std::deque<char> and
-   // the like
+   // For writing to a std::string, std::vector<char>, std::deque<char> and the like
    template <opts Opts, class T, output_buffer Buffer>
    inline void write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
    {
