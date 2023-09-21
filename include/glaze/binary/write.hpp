@@ -76,29 +76,26 @@ namespace glz
       template <class T = void>
       struct to_binary
       {};
+      
+      template <auto Opts, class T, class Ctx, class B, class IX>
+      concept write_binary_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+         to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                              std::forward<B>(b), std::forward<IX>(ix));
+      };
 
       template <>
       struct write<binary>
       {
-         template <auto Opts, class T, is_context Ctx, class B>
-         GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b) noexcept
-         {
-            to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                 std::forward<B>(b));
-         }
-
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
-            to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                 std::forward<B>(b), std::forward<IX>(ix));
-         }
-
-         template <auto Opts, class T, is_context Ctx, class B>
-         GLZ_ALWAYS_INLINE static void no_header(T&& value, Ctx&& ctx, B&& b) noexcept
-         {
-            to_binary<std::remove_cvref_t<T>>::template no_header<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                        std::forward<B>(b));
+            if constexpr (write_binary_invocable<Opts, T, Ctx, B, IX>) {
+               to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                                    std::forward<B>(b), std::forward<IX>(ix));
+            }
+            else {
+               static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
+            }
          }
 
          template <auto Opts, class T, is_context Ctx, class B, class IX>
@@ -258,8 +255,8 @@ namespace glz
       template <str_t T>
       struct to_binary<T> final
       {
-         template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&&... args) noexcept
          {
             constexpr uint8_t tag = tag::string;
 
@@ -503,12 +500,12 @@ namespace glz
    concept findable = requires(Map& map, const Key& key) { map.find(key); };
 
    template <auto& Partial, opts Opts, class T, output_buffer Buffer>
-   [[nodiscard]] inline write_error write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
+   [[nodiscard]] inline write_error write(T&& value, is_context auto&& ctx, Buffer& buffer, auto& ix) noexcept
    {
       write_error we{};
 
       if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
-         detail::write<binary>::op<Opts>(value, ctx, buffer);
+         detail::write<binary>::op<Opts>(value, ctx, buffer, ix);
       }
       else {
          using V = std::decay_t<T>;
@@ -517,15 +514,15 @@ namespace glz
          static constexpr auto sorted = sort_json_ptrs(Partial);
          static constexpr auto groups = glz::group_json_ptrs<sorted>();
          static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
-
+         
          constexpr uint8_t type = 0; // string
          constexpr uint8_t tag = tag::object | type;
-         detail::dump_type(tag, buffer);
+         detail::dump_type(tag, buffer, ix);
 
-         detail::dump_compressed_int<N>(buffer);
+         detail::dump_compressed_int<N>(buffer, ix);
 
          if constexpr (detail::glaze_object_t<std::decay_t<T>>) {
-            glz::for_each<N>([&](auto I) {
+            for_each<N>([&](auto I) {
                static constexpr auto group = glz::tuplet::get<I>(groups);
 
                static constexpr auto key = std::get<0>(group);
@@ -533,24 +530,24 @@ namespace glz
                static constexpr auto frozen_map = detail::make_map<T>();
                static constexpr auto member_it = frozen_map.find(key);
                static_assert(member_it != frozen_map.end(), "Invalid key passed to partial write");
-               static constexpr auto ix = member_it->second.index();
-               static constexpr decltype(auto) member_ptr = std::get<ix>(member_it->second);
+               static constexpr auto index = member_it->second.index();
+               static constexpr decltype(auto) member_ptr = std::get<index>(member_it->second);
 
-               detail::write<binary>::no_header<Opts>(key, ctx, buffer);
-               std::ignore = write<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), buffer, ctx);
+               detail::write<binary>::no_header<Opts>(key, ctx, buffer, ix);
+               std::ignore = write<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), ctx, buffer, ix);
             });
          }
          else if constexpr (detail::writable_map_t<std::decay_t<T>>) {
-            glz::for_each<N>([&](auto I) {
+            for_each<N>([&](auto I) {
                static constexpr auto group = glz::tuplet::get<I>(groups);
 
                static constexpr auto key_value = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
                if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
-                  detail::write<binary>::no_header<Opts>(key_value, ctx, buffer);
+                  detail::write<binary>::no_header<Opts>(key_value, ctx, buffer, ix);
                   auto it = value.find(key_value);
                   if (it != value.end()) {
-                     std::ignore = write<sub_partial, Opts>(it->second, buffer, ctx);
+                     std::ignore = write<sub_partial, Opts>(it->second, ctx, buffer, ix);
                   }
                   else {
                      we.ec = error_code::invalid_partial_key;
@@ -559,10 +556,10 @@ namespace glz
                else {
                   static thread_local auto key =
                      typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
-                  detail::write<binary>::no_header<Opts>(key, ctx, buffer);
+                  detail::write<binary>::no_header<Opts>(key, ctx, buffer, ix);
                   auto it = value.find(key);
                   if (it != value.end()) {
-                     std::ignore = write<sub_partial, Opts>(it->second, buffer, ctx);
+                     std::ignore = write<sub_partial, Opts>(it->second, ctx, buffer, ix);
                   }
                   else {
                      we.ec = error_code::invalid_partial_key;
@@ -571,15 +568,25 @@ namespace glz
             });
          }
       }
-
+      
       return we;
    }
 
    template <auto& Partial, opts Opts, class T, output_buffer Buffer>
    [[nodiscard]] inline write_error write(T&& value, Buffer& buffer) noexcept
    {
+      if constexpr (detail::resizeable<Buffer>) {
+         if (buffer.empty()) {
+            buffer.resize(128);
+         }
+      }
       context ctx{};
-      return write<Partial, Opts>(std::forward<T>(value), buffer, ctx);
+      size_t ix = 0;
+      const auto error = write<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
+      if constexpr (detail::resizeable<Buffer>) {
+         buffer.resize(ix);
+      }
+      return error;
    }
 
    template <auto& Partial, class T, class Buffer>
