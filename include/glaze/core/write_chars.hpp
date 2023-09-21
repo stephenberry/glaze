@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/dtoa.hpp"
@@ -14,10 +16,10 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE constexpr auto sized_integer_conversion() noexcept
    {
       if constexpr (std::is_signed_v<T>) {
-         if constexpr (sizeof(T) <= 32) {
+         if constexpr (sizeof(T) <= sizeof(int32_t)) {
             return int32_t{};
          }
-         else if constexpr (sizeof(T) <= 64) {
+         else if constexpr (sizeof(T) <= sizeof(int64_t)) {
             return int64_t{};
          }
          else {
@@ -25,10 +27,10 @@ namespace glz::detail
          }
       }
       else {
-         if constexpr (sizeof(T) <= 32) {
+         if constexpr (sizeof(T) <= sizeof(uint32_t)) {
             return uint32_t{};
          }
-         else if constexpr (sizeof(T) <= 64) {
+         else if constexpr (sizeof(T) <= sizeof(uint64_t)) {
             return uint64_t{};
          }
          else {
@@ -36,6 +38,8 @@ namespace glz::detail
          }
       }
    }
+   static_assert(std::is_same_v<decltype(sized_integer_conversion<long long>()), int64_t>);
+   static_assert(std::is_same_v<decltype(sized_integer_conversion<unsigned long long>()), uint64_t>);
 
    struct write_chars
    {
