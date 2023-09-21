@@ -41,7 +41,7 @@ namespace glz
       {};
       
       template <auto Opts, class T, class Ctx, class It0, class It1>
-      concept json_invocable = requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
+      concept read_json_invocable = requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
          from_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                               std::forward<It0>(it), std::forward<It1>(end));
       };
@@ -62,7 +62,7 @@ namespace glz
                }
             }
             else {
-               if constexpr (json_invocable<Opts, T, Ctx, It0, It1>) {
+               if constexpr (read_json_invocable<Opts, T, Ctx, It0, It1>) {
                   using V = std::remove_cvref_t<T>;
                   from_json<V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
                                                                        std::forward<It0>(it), std::forward<It1>(end));

@@ -23,6 +23,12 @@ namespace glz
       template <class T = void>
       struct to_json
       {};
+      
+      template <auto Opts, class T, class Ctx, class B, class IX>
+      concept write_json_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+         to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                            std::forward<B>(b), std::forward<IX>(ix));
+      };
 
       template <>
       struct write<json>
@@ -30,8 +36,13 @@ namespace glz
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
          {
-            to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                               std::forward<B>(b), std::forward<IX>(ix));
+            if constexpr (write_json_invocable<Opts, T, Ctx, B, IX>) {
+               to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                                  std::forward<B>(b), std::forward<IX>(ix));
+            }
+            else {
+               static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
+            }
          }
       };
 
