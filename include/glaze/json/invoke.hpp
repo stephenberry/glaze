@@ -52,6 +52,13 @@ namespace glz
                         return;
                      (value.val.*value.ptr)();
                   }
+                  else if constexpr (std::tuple_size_v<Tuple> == 1 && Opts.invoke_unary) {
+                     std::tuple_element_t<1, Tuple> input{};
+                     read<json>::op<Opts>(input, ctx, it end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     (value.val.*value.ptr)(input);
+                  }
                   else {
                      Tuple inputs{};
                      read<json>::op<Opts>(inputs, ctx, it, end);
@@ -76,6 +83,13 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      value.val();
+                  }
+                  else if constexpr (std::tuple_size_v<Tuple> == 1 && Opts.invoke_unary) {
+                     std::tuple_element_t<1, Tuple> input{};
+                     read<json>::op<Opts>(input, ctx, it end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     value.val(input);
                   }
                   else {
                      Tuple inputs{};
@@ -184,6 +198,13 @@ namespace glz
                         initialized = true;
                      }
                      prev = input;
+                  }
+                  else if constexpr (std::tuple_size_v<Tuple> == 1 && Opts.invoke_unary) {
+                     std::tuple_element_t<1, Tuple> input{};
+                     read<json>::op<Opts>(input, ctx, it end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     (value.val.*value.ptr)(input);
                   }
                   else {
                      auto start = it;
