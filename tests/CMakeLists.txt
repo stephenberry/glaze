@@ -64,9 +64,6 @@ add_test(
   --verbose
 )
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-# Don't run find_package_test with MSVC
-else()
 add_test(
   NAME find_package_test
   COMMAND
@@ -86,7 +83,6 @@ add_test(
   "-DBUILD_TESTING=ON"
   --test-command "${CMAKE_CTEST_COMMAND}" --verbose --output-on-failure # inner ctest command
 )
-endif()
 
 set_tests_properties(glaze-install_test PROPERTIES FIXTURES_SETUP glaze-install-fixture)
 set_tests_properties(find_package_test PROPERTIES FIXTURES_REQUIRED glaze-install-fixture)
