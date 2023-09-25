@@ -23,7 +23,7 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, const char*& c) noexcept
    {
-      if (!is_digit(*c)) {
+      if (!is_digit(*c)) [[unlikely]] {
          return false;
       }
 
