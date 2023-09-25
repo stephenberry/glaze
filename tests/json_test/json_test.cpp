@@ -5109,6 +5109,18 @@ suite function_call = [] {
    };
 };
 
+struct named_always_null : std::monostate {};
+template<>
+struct glz::meta<named_always_null> {
+   static constexpr std::string_view name = "named_always_null";
+};
+suite nullable_type = [] {
+   "named_always_null"_test = [] {
+      expect("null" == glz::write_json(named_always_null{}));
+   };
+};
+
+
 int main()
 {
    // Explicitly run registered test suites and report errors
