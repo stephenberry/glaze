@@ -4691,7 +4691,7 @@ suite invoke_test = [] {
       invoke_struct obj{};
       std::string s = R"(
 {
-   "square":[5],
+   "square":5,
    "add_one":[]
 })";
       expect(!glz::read_json(obj, s));
@@ -4724,7 +4724,7 @@ suite invoke_update_test = [] {
       invoke_update_struct obj{};
       std::string s = R"(
 {
-   "square":[5],
+   "square":5,
    "add_one":[]
 })";
       expect(!glz::read_json(obj, s));
@@ -4733,7 +4733,7 @@ suite invoke_update_test = [] {
       // second read should invoke
       std::string s2 = R"(
 {
-   "square":[2],
+   "square":2,
    "add_one":[ ]
 })";
       expect(!glz::read_json(obj, s2));
@@ -5089,7 +5089,7 @@ suite function_call = [] {
       Person obj{};
       std::string s = R"({
             "full_name": "Brian Smith",
-            "date_of_birth": ["01/01/1990"],
+            "date_of_birth": "01/01/1990",
             "residence": "San Francisco"
         })";
       expect(!glz::read_json(obj, s));
