@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <fstream>
+
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/validate.hpp"
