@@ -94,8 +94,8 @@ namespace glz::detail
          else [[unlikely]] {
             return false;
          }
-         if (is_safe_addition(res, digits[19])) [[likely]] {
-            res += digits[19];
+         if (is_safe_addition(res, digits.back())) [[likely]] {
+            res += digits.back();
          }
          else [[unlikely]] {
             return false;
