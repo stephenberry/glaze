@@ -89,5 +89,9 @@ add_test(
 endif()
 
 set_tests_properties(glaze-install_test PROPERTIES FIXTURES_SETUP glaze-install-fixture)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+# Don't run find_package_test with MSVC
+else()
 set_tests_properties(find_package_test PROPERTIES FIXTURES_REQUIRED glaze-install-fixture)
+endif()
 
