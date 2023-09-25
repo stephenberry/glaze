@@ -174,6 +174,9 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using V = std::decay_t<decltype(value.val)>;
+            
+            static thread_local bool initialized = false;
+            static thread_local std::string prev{};
 
             if constexpr (std::is_member_function_pointer_v<T>) {
                using M = typename std::decay_t<decltype(value)>::mem_fun;
@@ -186,8 +189,7 @@ namespace glz
                      skip_array<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     static thread_local bool initialized = false;
-                     static thread_local std::string prev{};
+                     
                      const sv input = {start, size_t(it - start)};
                      if (initialized) {
                         if (input != prev) {
@@ -204,8 +206,7 @@ namespace glz
                      skip_value<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     static thread_local bool initialized = false;
-                     static thread_local std::string prev{};
+                     
                      const sv input = {start, size_t(it - start)};
                      if (initialized) {
                         if (input != prev) {
@@ -227,8 +228,7 @@ namespace glz
                      skip_array<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     static thread_local bool initialized = false;
-                     static thread_local std::string prev{};
+                     
                      const sv input = {start, size_t(it - start)};
                      if (initialized) {
                         if (input != prev) {
@@ -264,8 +264,7 @@ namespace glz
                      skip_array<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     static thread_local bool initialized = false;
-                     static thread_local std::string prev{};
+                     
                      const sv input = {start, size_t(it - start)};
                      if (initialized) {
                         if (input != prev) {
@@ -282,8 +281,7 @@ namespace glz
                      skip_value<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     static thread_local bool initialized = false;
-                     static thread_local std::string prev{};
+                     
                      const sv input = {start, size_t(it - start)};
                      if (initialized) {
                         if (input != prev) {
@@ -305,8 +303,7 @@ namespace glz
                      skip_array<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     static thread_local bool initialized = false;
-                     static thread_local std::string prev{};
+                     
                      const sv input = {start, size_t(it - start)};
                      if (initialized) {
                         if (input != prev) {
