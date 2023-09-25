@@ -384,17 +384,17 @@ suite basic_types = [] {
       expect(num64 == 32948729483739289);
    };
 
-  "int read invalid"_test = [] {
-    int num{33};
-    expect(glz::read_json(num, ";adsfa") == glz::error_code::parse_number_failure);
-    expect(num == 33);
-    expect(glz::read_json(num, "{}") == glz::error_code::parse_number_failure);
-    expect(num == 33);
-    expect(glz::read_json(num, "[]") == glz::error_code::parse_number_failure);
-    expect(num == 33);
-    expect(glz::read_json(num, ".") == glz::error_code::parse_number_failure);
-    expect(num == 33);
-  };
+   "int read invalid"_test = [] {
+      int num{33};
+      expect(glz::read_json(num, ";adsfa") == glz::error_code::parse_number_failure);
+      expect(num == 33);
+      expect(glz::read_json(num, "{}") == glz::error_code::parse_number_failure);
+      expect(num == 33);
+      expect(glz::read_json(num, "[]") == glz::error_code::parse_number_failure);
+      expect(num == 33);
+      expect(glz::read_json(num, ".") == glz::error_code::parse_number_failure);
+      expect(num == 33);
+   };
 
    "bool write"_test = [] {
       std::string buffer{};
