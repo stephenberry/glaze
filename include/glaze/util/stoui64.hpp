@@ -22,6 +22,10 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, const char*& c) noexcept
    {
+      if (!is_digit(*c)) {
+         return false;
+      }
+
       std::array<uint8_t, 20> digits{};
 
       uint32_t i{};
@@ -35,7 +39,7 @@ namespace glz::detail
          }
       }
 
-      while (is_digit(*c)) {
+      while(is_digit(*c)) { // already checked for first digit
          if (i < 20) [[likely]] {
             digits[i] = (*c - '0');
          }
