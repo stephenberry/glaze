@@ -5097,57 +5097,10 @@ suite function_call = [] {
    };
 };
 
-struct ui_t
-{
-   int x{};
-   int y{};
-   std::string s{};
-   
-   std::function<void()> set3 = [this] {
-      x = 3;
-      y = 3;
-   };
-   
-   std::function<void()> square_x = [this] {
-      x *= x;
-   };
-};
-
-template <>
-struct glz::meta<ui_t>
-{
-   using T = ui_t;
-   static constexpr auto value = object("set3", invoke<&T::set3>(), //
-   "square_x", invoke<&T::square_x>());
-};
-
-namespace glz
-{
-   template <detail::glaze_object_t T>
-   inline void ui(T&)
-   {
-      constexpr auto N = std::tuple_size_v<meta_t<T>>;
-      for_each<N>([&](auto I) {
-         constexpr auto key = glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>));
-         //constexpr auto& value = glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>));
-         
-         std::cout << key << '\n';
-      });
-   }
-}
-
-void ui_test()
-{
-   ui_t state{};
-   
-   glz::ui(state);
-}
-
 int main()
 {
    // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
-   ui_test();
    return result;
 }
