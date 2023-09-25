@@ -187,7 +187,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      static thread_local bool initialized = false;
-                     static thread_local sv prev{};
+                     static thread_local std::string prev{};
                      const sv input = {start, size_t(it - start)};
                      if (initialized) {
                         if (input != prev) {
@@ -205,7 +205,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      static thread_local bool initialized = false;
-                     static thread_local sv prev{};
+                     static thread_local std::string prev{};
                      const sv input = {start, size_t(it - start)};
                      if (initialized) {
                         if (input != prev) {
@@ -228,7 +228,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      static thread_local bool initialized = false;
-                     static thread_local sv prev{};
+                     static thread_local std::string prev{};
                      const sv input = {start, size_t(it - start)};
                      if (initialized) {
                         if (input != prev) {
@@ -265,7 +265,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      static thread_local bool initialized = false;
-                     static thread_local sv prev{};
+                     static thread_local std::string prev{};
                      const sv input = {start, size_t(it - start)};
                      if (initialized) {
                         if (input != prev) {
@@ -283,7 +283,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      static thread_local bool initialized = false;
-                     static thread_local sv prev{};
+                     static thread_local std::string prev{};
                      const sv input = {start, size_t(it - start)};
                      if (initialized) {
                         if (input != prev) {
@@ -306,7 +306,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      static thread_local bool initialized = false;
-                     static thread_local sv prev{};
+                     static thread_local std::string prev{};
                      const sv input = {start, size_t(it - start)};
                      if (initialized) {
                         if (input != prev) {
