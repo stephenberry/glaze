@@ -5121,7 +5121,7 @@ suite nullable_type = [] { "named_always_null"_test = [] { expect("null" == glz:
 struct pointer_wrapper
 {
    std::unique_ptr<int> x = std::make_unique<int>(5);
-   
+
    struct glaze
    {
       using T = pointer_wrapper;
