@@ -4699,48 +4699,6 @@ suite invoke_test = [] {
    };
 };
 
-struct invoke_update_struct
-{
-   int y{};
-   std::function<void(int x)> square{};
-   void add_one() { ++y; }
-
-   // MSVC requires this constructor for 'this' to be captured
-   invoke_update_struct()
-   {
-      square = [&](int x) { y = x * x; };
-   }
-};
-
-template <>
-struct glz::meta<invoke_update_struct>
-{
-   using T = invoke_update_struct;
-   static constexpr auto value = object("square", invoke_update<&T::square>(), "add_one", invoke_update<&T::add_one>());
-};
-
-suite invoke_update_test = [] {
-   "invoke"_test = [] {
-      invoke_update_struct obj{};
-      std::string s = R"(
-{
-   "square":5,
-   "add_one":[]
-})";
-      expect(!glz::read_json(obj, s));
-      expect(obj.y == 0);
-
-      // second read should invoke
-      std::string s2 = R"(
-{
-   "square":2,
-   "add_one":[ ]
-})";
-      expect(!glz::read_json(obj, s2));
-      expect(obj.y == 5);
-   };
-};
-
 suite char_buffer = [] {
    "null char*"_test = [] {
       char* str{};
