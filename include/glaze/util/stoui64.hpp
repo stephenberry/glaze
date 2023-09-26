@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cmath>
+#include <iterator>
 
 #include "glaze/util/inline.hpp"
 
@@ -22,13 +23,24 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, const char*& c) noexcept
    {
-      std::array<uint8_t, 20> digits{};
+      if (!is_digit(*c)) [[unlikely]] {
+         return false;
+      }
 
-      uint32_t i{};
+      std::array<uint8_t, 20> digits{0};
+      auto next_digit = digits.begin();
+      auto consume_digit = [&c, &next_digit, &digits]() {
+         if (next_digit < digits.cend()) [[likely]] {
+            *next_digit = (*c - '0');
+         }
+         ++c;
+         ++next_digit;
+      };
+
       if (*c == '0') {
          // digits[i] = 0; already set to zero
          ++c;
-         ++i;
+         ++next_digit;
 
          if (*c == '0') [[unlikely]] {
             return false;
@@ -36,22 +48,14 @@ namespace glz::detail
       }
 
       while (is_digit(*c)) {
-         if (i < 20) [[likely]] {
-            digits[i] = (*c - '0');
-         }
-         ++c;
-         ++i;
+         consume_digit();
       }
-      int32_t n = i;
+      auto n = std::distance(digits.begin(), next_digit);
 
       if (*c == '.') {
          ++c;
          while (is_digit(*c)) {
-            if (i < 20) [[likely]] {
-               digits[i] = (*c - '0');
-            }
-            ++c;
-            ++i;
+            consume_digit();
          }
       }
 
@@ -80,7 +84,7 @@ namespace glz::detail
       }
 
       if (n == 20) [[unlikely]] {
-         for (uint32_t k = 0; k < 19; ++k) {
+         for (auto k = 0; k < 19; ++k) {
             res = 10 * res + digits[k];
          }
 
@@ -90,15 +94,15 @@ namespace glz::detail
          else [[unlikely]] {
             return false;
          }
-         if (is_safe_addition(res, digits[19])) [[likely]] {
-            res += digits[19];
+         if (is_safe_addition(res, digits.back())) [[likely]] {
+            res += digits.back();
          }
          else [[unlikely]] {
             return false;
          }
       }
       else [[likely]] {
-         for (int32_t k = 0; k < n; ++k) {
+         for (auto k = 0; k < n; ++k) {
             res = 10 * res + digits[k];
          }
       }

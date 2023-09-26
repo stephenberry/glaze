@@ -10,7 +10,6 @@
 #include "glaze/core/write.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/util/dump.hpp"
-#include "glaze/util/error.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/murmur.hpp"
 #include "glaze/util/variant.hpp"

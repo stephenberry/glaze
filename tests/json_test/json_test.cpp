@@ -384,6 +384,18 @@ suite basic_types = [] {
       expect(num64 == 32948729483739289);
    };
 
+   "int read invalid"_test = [] {
+      int num{33};
+      expect(glz::read_json(num, ";adsfa") == glz::error_code::parse_number_failure);
+      expect(num == 33);
+      expect(glz::read_json(num, "{}") == glz::error_code::parse_number_failure);
+      expect(num == 33);
+      expect(glz::read_json(num, "[]") == glz::error_code::parse_number_failure);
+      expect(num == 33);
+      expect(glz::read_json(num, ".") == glz::error_code::parse_number_failure);
+      expect(num == 33);
+   };
+
    "bool write"_test = [] {
       std::string buffer{};
       glz::write_json(true, buffer);
@@ -1435,7 +1447,7 @@ suite read_tests = [] {
          std::string in = R"(null)";
          int res{};
 
-         expect(glz::read_json(res, in) != glz::error_code::parse_number_failure);
+         expect(glz::read_json(res, in) == glz::error_code::parse_number_failure);
       }
    };
 
@@ -5054,6 +5066,15 @@ suite function_call = [] {
       expect(obj.age == 33);
    };
 };
+
+struct named_always_null : std::monostate
+{};
+template <>
+struct glz::meta<named_always_null>
+{
+   static constexpr std::string_view name = "named_always_null";
+};
+suite nullable_type = [] { "named_always_null"_test = [] { expect("null" == glz::write_json(named_always_null{})); }; };
 
 int main()
 {

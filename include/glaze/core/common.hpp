@@ -483,7 +483,7 @@ namespace glz
 
       template <class T>
       concept always_null_t =
-         std::same_as<T, std::nullptr_t> || std::same_as<T, std::monostate> || std::same_as<T, std::nullopt_t>;
+         std::same_as<T, std::nullptr_t> || std::convertible_to<T, std::monostate> || std::same_as<T, std::nullopt_t>;
 
       template <class T>
       concept nullable_t = !
