@@ -5118,6 +5118,26 @@ struct glz::meta<named_always_null>
 };
 suite nullable_type = [] { "named_always_null"_test = [] { expect("null" == glz::write_json(named_always_null{})); }; };
 
+struct pointer_wrapper
+{
+   std::unique_ptr<int> x = std::make_unique<int>(5);
+   
+   struct glaze
+   {
+      using T = pointer_wrapper;
+      static constexpr auto value = glz::object("x", [](auto& self) { return self.x.get(); });
+   };
+};
+
+suite pointer_wrapper_test = [] {
+   "pointer_wrapper"_test = [] {
+      pointer_wrapper obj{};
+      std::string s = R"({"x": 3})";
+      expect(!glz::read_json(obj, s));
+      expect(*obj.x == 3);
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
