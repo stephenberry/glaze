@@ -5124,9 +5124,9 @@ template <>
 struct glz::meta<custom_encoding>
 {
    using T = custom_encoding;
-   static constexpr auto value = object("x", custom<&T::read_x, &T::write_x>(), //
-                                        "y", custom<&T::read_y, &T::y>(), //
-                                        "z", custom<&T::z, &T::write_z>());
+   static constexpr auto value = object("x", custom<&T::read_x, &T::write_x>, //
+                                        "y", custom<&T::read_y, &T::y>, //
+                                        "z", custom<&T::z, &T::write_z>);
 };
 
 suite custom_encoding_test = [] {
