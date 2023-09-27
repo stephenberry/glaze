@@ -5129,13 +5129,22 @@ struct glz::meta<custom_encoding>
 };
 
 suite custom_encoding_test = [] {
-   "custom_encoding"_test = [] {
+   "custom_reading"_test = [] {
       custom_encoding obj{};
       std::string s = R"({"x":"3","y":"world","z":[1,2,3]})";
       expect(!glz::read_json(obj, s));
       expect(obj.x == 3);
       expect(obj.y == "helloworld");
       expect(obj.z == std::array<uint32_t, 3>{1, 2, 3});
+   };
+   
+   "custom_writing"_test = [] {
+      custom_encoding obj{};
+      std::string s = R"({"x":"3","y":"world","z":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      std::string out{};
+      glz::write_json(obj, out);
+      expect(out == R"({"x":3,"y":"helloworld","z":[1,2,3]})") << out;
    };
 };
 

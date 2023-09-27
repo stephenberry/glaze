@@ -138,18 +138,33 @@ namespace glz
          {
             using V = std::decay_t<decltype(value)>;
             using To = typename V::to_t;
-            
-            if constexpr (is_specialization_v<To, std::function>) {
+            if constexpr (std::is_member_function_pointer_v<To>) {
+               using Tuple = typename inputs_as_tuple<To>::type;
+               if constexpr (std::tuple_size_v<Tuple> == 0) {
+                  write<json>::op<Opts>((value.val.*value.to)(), ctx, args...);
+               }
+               else {
+                  static_assert(false_v<T>, "function cannot have inputs");
+               }
+            }
+            else if constexpr (is_specialization_v<To, std::function>) {
                using Ret = typename function_traits<To>::result_type;
 
                if constexpr (std::is_void_v<Ret>) {
                   static_assert(false_v<To>, "conversion to JSON must return a value");
                }
                else {
-                  using Tuple = typename function_traits<V>::arguments;
-                  Tuple inputs{};
-                  write<json>::op<Opts>(inputs, ctx, args...);
+                  using Tuple = typename function_traits<To>::arguments;
+                  if constexpr (std::tuple_size_v<Tuple> == 0) {
+                     write<json>::op<Opts>(value.to(), ctx, args...);
+                  }
+                  else {
+                     static_assert(false_v<T>, "std::function cannot have inputs");
+                  }
                }
+            }
+            else {
+               write<json>::op<Opts>(get_member(value, value.to), ctx, args...);
             }
          }
       };
