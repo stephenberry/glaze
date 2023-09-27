@@ -5099,8 +5099,8 @@ suite pointer_wrapper_test = [] {
 struct custom_encoding
 {
    uint64_t x{};
-   
    std::string y{};
+   std::array<uint32_t, 3> z{};
    
    void read_x(const std::string& s) {
       std::ignore = glz::read_json(x, s);
@@ -5113,6 +5113,10 @@ struct custom_encoding
    void read_y(const std::string& s) {
       y = "hello" + s;
    }
+   
+   auto& write_z() {
+      return z;
+   }
 };
 
 template <>
@@ -5120,16 +5124,18 @@ struct glz::meta<custom_encoding>
 {
    using T = custom_encoding;
    static constexpr auto value = object("x", custom<&T::read_x, &T::write_x>(), //
-                                        "y", custom<&T::read_y, &T::y>());
+                                        "y", custom<&T::read_y, &T::y>(), //
+                                        "z", custom<&T::z, &T::write_z>());
 };
 
 suite custom_encoding_test = [] {
    "custom_encoding"_test = [] {
       custom_encoding obj{};
-      std::string s = R"({"x":"3","y","world"})";
+      std::string s = R"({"x":"3","y":"world","z":[1,2,3]})";
       expect(!glz::read_json(obj, s));
       expect(obj.x == 3);
       expect(obj.y == "helloworld");
+      expect(obj.z == std::array<uint32_t, 3>{1, 2, 3});
    };
 };
 

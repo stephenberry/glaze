@@ -109,12 +109,15 @@ namespace glz
                         return;
                      value.from();
                   }
-                  else {
-                     Tuple inputs{};
-                     read<json>::op<Opts>(inputs, ctx, it, end);
+                  else if constexpr (std::tuple_size_v<Tuple> == 1) {
+                     std::decay_t<std::tuple_element_t<0, Tuple>> input{};
+                     read<json>::op<Opts>(input, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     std::apply(value.from, inputs);
+                     value.from(input);
+                  }
+                  else {
+                     static_assert(false_v<T>, "function cannot have more than one input");
                   }
                }
                else {
@@ -122,7 +125,7 @@ namespace glz
                }
             }
             else {
-               static_assert(false_v<T>, "type must be invocable");
+               read<json>::op<Opts>(get_member(value, value.from), ctx, it, end);
             }
          }
       };
@@ -158,16 +161,16 @@ namespace glz
       using F = decltype(From);
       using T = decltype(To);
       if constexpr (std::is_member_function_pointer_v<F> && std::is_member_function_pointer_v<T>) {
-         return [](auto&& val) { return custom_t<std::decay_t<F>, std::decay_t<T>>{val, From, To}; };
+         return [](auto&& v) { return custom_t<std::decay_t<F>, std::decay_t<T>>{v, From, To}; };
       }
       else if constexpr (!std::is_member_function_pointer_v<F> && std::is_member_function_pointer_v<T>) {
-         return [](auto&& val) { return custom_t<std::decay_t<decltype(val.*From)>, std::decay_t<T>>{val, val.*From, To}; };
+         return [](auto&& v) { return custom_t<std::decay_t<decltype(v.*From)>, std::decay_t<T>>{v, v.*From, To}; };
       }
-      else if constexpr (!std::is_member_function_pointer_v<F> && std::is_member_function_pointer_v<T>) {
-         return [](auto&& val) { return custom_t<std::decay_t<F>, std::decay_t<decltype(val.*To)>>{val, From, val.*To}; };
+      else if constexpr (std::is_member_function_pointer_v<F> && !std::is_member_function_pointer_v<T>) {
+         return [](auto&& v) { return custom_t<std::decay_t<F>, std::decay_t<decltype(v.*To)>>{v, From, v.*To}; };
       }
       else {
-         return [](auto&& val) { return custom_t<std::decay_t<decltype(val.*From)>, std::decay_t<decltype(val.*To)>>{val.*From, val.*To}; };
+         return [](auto&& v) { return custom_t<std::decay_t<decltype(v.*From)>, std::decay_t<decltype(v.*To)>>{v.*From, v.*To}; };
       }
    }
 }
