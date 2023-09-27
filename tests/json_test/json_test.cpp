@@ -5096,6 +5096,35 @@ suite pointer_wrapper_test = [] {
    };
 };
 
+struct custom_encoding
+{
+   uint64_t x{};
+   
+   void read_x(std::string s) {
+      std::ignore = glz::read_json(x, s);
+   }
+   
+   uint64_t write_x() {
+      return x;
+   }
+};
+
+template <>
+struct glz::meta<custom_encoding>
+{
+   using T = custom_encoding;
+   static constexpr auto value = object("x", custom<&T::read_x, &T::write_x>());
+};
+
+suite custom_encoding_test = [] {
+   "custom_encoding"_test = [] {
+      custom_encoding obj{};
+      std::string s = R"({"x": "3"})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.x == 3);
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
