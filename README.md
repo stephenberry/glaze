@@ -5,7 +5,7 @@ Glaze also supports binary messages via [BEVE](https://github.com/stephenberry/b
 
 ## New Custom JSON Read/Write Support!
 
-Glaze version 1.5.0 adds the ability to register member functions to customize reading and writing. See [Custom Read/Write](#custom-read/write) for more information.
+Glaze version 1.5.0 adds the ability to register member functions to customize reading and writing. See [Custom Read/Write](#custom-readwrite) for more information.
 
 ## Highlights
 
