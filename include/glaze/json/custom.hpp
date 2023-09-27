@@ -84,7 +84,7 @@ namespace glz
                      (value.val.*value.from)();
                   }
                   else if constexpr (std::tuple_size_v<Tuple> == 1) {
-                     std::tuple_element_t<0, Tuple> input{};
+                     std::decay_t<std::tuple_element_t<0, Tuple>> input{};
                      read<json>::op<Opts>(input, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
