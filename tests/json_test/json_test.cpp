@@ -5145,7 +5145,7 @@ suite custom_encoding_test = [] {
       expect(!glz::read_json(obj, s));
       std::string out{};
       glz::write_json(obj, out);
-      expect(out == R"({"x":3,"y":"helloworld","z":[5,2,3]})") << out;
+      expect(out == R"({"x":3,"y":"helloworld","z":[5,2,3]})");
    };
 };
 
