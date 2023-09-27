@@ -9,61 +9,61 @@
 
 namespace glz
 {
-   // invoker_t is intended to cause a funtion invocation when read
-   template <class From, class To>
-   struct custom_t;
-
-   template <class From, class To>
-      requires(!std::is_member_function_pointer_v<From> && !std::is_member_function_pointer_v<To>)
-   struct custom_t<From, To> final
-   {
-      using from_t = From;
-      using to_t = To;
-      From& from;
-      To& to;
-   };
-
-   template <class From, class To>
-      requires(std::is_member_function_pointer_v<From> && std::is_member_function_pointer_v<To>)
-   struct custom_t<From, To> final
-   {
-      using from_t = From;
-      using to_t = To;
-      typename parent_of_fn<From>::type& val;
-      From from;
-      To to;
-   };
-   
-   template <class From, class To>
-      requires(!std::is_member_function_pointer_v<From> && std::is_member_function_pointer_v<To>)
-   struct custom_t<From, To> final
-   {
-      using from_t = From;
-      using to_t = To;
-      typename parent_of_fn<To>::type& val;
-      From& from;
-      To to;
-   };
-   
-   template <class From, class To>
-      requires(std::is_member_function_pointer_v<From> && !std::is_member_function_pointer_v<To>)
-   struct custom_t<From, To> final
-   {
-      using from_t = From;
-      using to_t = To;
-      typename parent_of_fn<From>::type& val;
-      From from;
-      To& to;
-   };
-   
-   template <class T>
-   concept is_custom = requires{
-      typename T::from_t;
-      typename T::to_t;
-   };
-
    namespace detail
    {
+      // custom_t allows a user to register member functions (and std::function members) to read and write
+      template <class From, class To>
+      struct custom_t;
+
+      template <class From, class To>
+         requires(!std::is_member_function_pointer_v<From> && !std::is_member_function_pointer_v<To>)
+      struct custom_t<From, To> final
+      {
+         using from_t = From;
+         using to_t = To;
+         From& from;
+         To& to;
+      };
+
+      template <class From, class To>
+         requires(std::is_member_function_pointer_v<From> && std::is_member_function_pointer_v<To>)
+      struct custom_t<From, To> final
+      {
+         using from_t = From;
+         using to_t = To;
+         typename parent_of_fn<From>::type& val;
+         From from;
+         To to;
+      };
+      
+      template <class From, class To>
+         requires(!std::is_member_function_pointer_v<From> && std::is_member_function_pointer_v<To>)
+      struct custom_t<From, To> final
+      {
+         using from_t = From;
+         using to_t = To;
+         typename parent_of_fn<To>::type& val;
+         From& from;
+         To to;
+      };
+      
+      template <class From, class To>
+         requires(std::is_member_function_pointer_v<From> && !std::is_member_function_pointer_v<To>)
+      struct custom_t<From, To> final
+      {
+         using from_t = From;
+         using to_t = To;
+         typename parent_of_fn<From>::type& val;
+         From from;
+         To& to;
+      };
+      
+      template <class T>
+      concept is_custom = requires{
+         typename T::from_t;
+         typename T::to_t;
+      };
+      
       template <is_custom T>
       struct from_json<T>
       {
