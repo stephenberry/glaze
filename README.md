@@ -3,6 +3,10 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from C++ 
 
 Glaze also supports binary messages via [BEVE](https://github.com/stephenberry/beve) and CSV support. And, the library has many more useful features for building APIs.
 
+## New Custom JSON Read/Write Support!
+
+Glaze version 1.5.0 adds the ability to register member functions to customize reading and writing. See [Custom Read/Write](#custom-read/write) for more information.
+
 ## Highlights
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
@@ -245,6 +249,69 @@ struct local_macro_t {
    int z = 55;
    
    GLZ_LOCAL_META(local_macro_t, x, y, z);
+};
+```
+
+## Custom Read/Write
+
+Custom reading and writing can be achieved through the powerful `to_json`/`from_json` specialization approach, which is described here: [custom-serialization.md](https://github.com/stephenberry/glaze/blob/main/docs/custom-serialization.md). However, this only works for user defined types.
+
+For common use cases or cases where a specific member variable should have special reading and writing, you can use `glz::custom` to register read/write member functions or std::functions.
+
+See an example:
+
+```c++
+struct custom_encoding
+{
+   uint64_t x{};
+   std::string y{};
+   std::array<uint32_t, 3> z{};
+   
+   void read_x(const std::string& s) {
+      x = std::stoi(s);
+   }
+   
+   uint64_t write_x() {
+      return x;
+   }
+   
+   void read_y(const std::string& s) {
+      y = "hello" + s;
+   }
+   
+   auto& write_z() {
+      z[0] = 5;
+      return z;
+   }
+};
+
+template <>
+struct glz::meta<custom_encoding>
+{
+   using T = custom_encoding;
+   static constexpr auto value = object("x", custom<&T::read_x, &T::write_x>, //
+                                        "y", custom<&T::read_y, &T::y>, //
+                                        "z", custom<&T::z, &T::write_z>);
+};
+
+suite custom_encoding_test = [] {
+   "custom_reading"_test = [] {
+      custom_encoding obj{};
+      std::string s = R"({"x":"3","y":"world","z":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.x == 3);
+      expect(obj.y == "helloworld");
+      expect(obj.z == std::array<uint32_t, 3>{1, 2, 3});
+   };
+   
+   "custom_writing"_test = [] {
+      custom_encoding obj{};
+      std::string s = R"({"x":"3","y":"world","z":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      std::string out{};
+      glz::write_json(obj, out);
+      expect(out == R"({"x":3,"y":"helloworld","z":[5,2,3]})");
+   };
 };
 ```
 

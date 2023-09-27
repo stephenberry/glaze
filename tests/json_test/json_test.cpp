@@ -5103,7 +5103,7 @@ struct custom_encoding
    std::array<uint32_t, 3> z{};
    
    void read_x(const std::string& s) {
-      std::ignore = glz::read_json(x, s);
+      x = std::stoi(s);
    }
    
    uint64_t write_x() {
