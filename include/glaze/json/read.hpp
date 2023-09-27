@@ -2020,7 +2020,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
@@ -2040,8 +2040,14 @@ namespace glz
             }
             else {
                if (!value) {
-                  if constexpr (is_specialization_v<T, std::optional>)
-                     value = std::make_optional<typename T::value_type>();
+                  if constexpr (is_specialization_v<T, std::optional>) {
+                     if constexpr (requires { value.emplace(); }) {
+                        value.emplace();
+                     }
+                     else {
+                        value = typename T::value_type{};
+                     }
+                  }
                   else if constexpr (is_specialization_v<T, std::unique_ptr>)
                      value = std::make_unique<typename T::element_type>();
                   else if constexpr (is_specialization_v<T, std::shared_ptr>)
