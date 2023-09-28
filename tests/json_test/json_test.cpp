@@ -5027,9 +5027,10 @@ struct Person
    std::string city{};
    std::string residence{};
 
-   void getAge(const std::string birthdateStr)
+   void getAge(const std::string /*birthdateStr*/)
    {
-      std::tm birthdate = {};
+      // Example code is commented out to avoid unit tests breaking as the date changes
+      /*std::tm birthdate = {};
       std::istringstream ss(birthdateStr);
       ss >> std::get_time(&birthdate, "%d/%m/%Y");
 
@@ -5041,7 +5042,8 @@ struct Person
       const auto age_seconds =
          std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now() - birth);
 
-      age = static_cast<int>(age_seconds.count()) / (60 * 60 * 24 * 365);
+      age = static_cast<int>(age_seconds.count()) / (60 * 60 * 24 * 365);*/
+      age = 33;
    }
 };
 
@@ -5143,6 +5145,35 @@ suite custom_encoding_test = [] {
       expect(out == R"({"x":3,"y":"helloworld","z":[5,2,3]})");
    };
 };
+
+struct client_state {
+  uint64_t id{};
+  std::map<std::string, std::vector<std::string>> layouts{};
+};
+
+template <>
+struct glz::meta<client_state> {
+   using T = client_state;
+   static constexpr auto value = object("id", &T::id, "layouts", unquote<&T::layouts>);
+};
+
+suite unquote_test = [] {
+   "unquote"_test = [] {
+      client_state obj{};
+      std::string s = R"({
+  "id": 4848,
+  "layouts": "{\"first layout\": [ \"inner1\", \"inner2\" ] }"
+})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.id == 4848);
+      expect(obj.layouts.at("first layout") == std::vector<std::string>{"inner1", "inner2"});
+      
+      std::string out{};
+      glz::write_json(obj, out);
+      expect(out == R"({"id":4848,"layouts":"{\"first layout\":[\"inner1\",\"inner2\"]}"})");
+   };
+};
+
 
 int main()
 {
