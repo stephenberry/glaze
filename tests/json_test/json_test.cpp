@@ -5101,20 +5101,15 @@ struct custom_encoding
    uint64_t x{};
    std::string y{};
    std::array<uint32_t, 3> z{};
-   
-   void read_x(const std::string& s) {
-      x = std::stoi(s);
-   }
-   
-   uint64_t write_x() {
-      return x;
-   }
-   
-   void read_y(const std::string& s) {
-      y = "hello" + s;
-   }
-   
-   auto& write_z() {
+
+   void read_x(const std::string& s) { x = std::stoi(s); }
+
+   uint64_t write_x() { return x; }
+
+   void read_y(const std::string& s) { y = "hello" + s; }
+
+   auto& write_z()
+   {
       z[0] = 5;
       return z;
    }
@@ -5138,7 +5133,7 @@ suite custom_encoding_test = [] {
       expect(obj.y == "helloworld");
       expect(obj.z == std::array<uint32_t, 3>{1, 2, 3});
    };
-   
+
    "custom_writing"_test = [] {
       custom_encoding obj{};
       std::string s = R"({"x":"3","y":"world","z":[1,2,3]})";

@@ -35,7 +35,7 @@ namespace glz
          From from;
          To to;
       };
-      
+
       template <class From, class To>
          requires(!std::is_member_function_pointer_v<From> && std::is_member_function_pointer_v<To>)
       struct custom_t<From, To> final
@@ -46,7 +46,7 @@ namespace glz
          From& from;
          To to;
       };
-      
+
       template <class From, class To>
          requires(std::is_member_function_pointer_v<From> && !std::is_member_function_pointer_v<To>)
       struct custom_t<From, To> final
@@ -57,13 +57,13 @@ namespace glz
          From from;
          To& to;
       };
-      
+
       template <class T>
-      concept is_custom = requires{
-         typename T::from_t;
-         typename T::to_t;
-      };
-      
+      concept is_custom = requires {
+                             typename T::from_t;
+                             typename T::to_t;
+                          };
+
       template <is_custom T>
       struct from_json<T>
       {
@@ -72,7 +72,7 @@ namespace glz
          {
             using V = std::decay_t<decltype(value)>;
             using From = typename V::from_t;
-            
+
             if constexpr (std::is_member_function_pointer_v<From>) {
                using Ret = typename return_type<From>::type;
                if constexpr (std::is_void_v<Ret>) {
@@ -168,7 +168,7 @@ namespace glz
             }
          }
       };
-      
+
       template <auto From, auto To>
       inline constexpr decltype(auto) custom_impl() noexcept
       {
@@ -184,11 +184,13 @@ namespace glz
             return [](auto&& v) { return custom_t<std::decay_t<F>, std::decay_t<decltype(v.*To)>>{v, From, v.*To}; };
          }
          else {
-            return [](auto&& v) { return custom_t<std::decay_t<decltype(v.*From)>, std::decay_t<decltype(v.*To)>>{v.*From, v.*To}; };
+            return [](auto&& v) {
+               return custom_t<std::decay_t<decltype(v.*From)>, std::decay_t<decltype(v.*To)>>{v.*From, v.*To};
+            };
          }
       }
    }
-   
+
    template <auto From, auto To>
    constexpr auto custom = detail::custom_impl<From, To>();
 }
