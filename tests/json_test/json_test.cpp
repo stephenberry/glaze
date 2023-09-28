@@ -5146,13 +5146,15 @@ suite custom_encoding_test = [] {
    };
 };
 
-struct client_state {
-  uint64_t id{};
-  std::map<std::string, std::vector<std::string>> layouts{};
+struct client_state
+{
+   uint64_t id{};
+   std::map<std::string, std::vector<std::string>> layouts{};
 };
 
 template <>
-struct glz::meta<client_state> {
+struct glz::meta<client_state>
+{
    using T = client_state;
    static constexpr auto value = object("id", &T::id, "layouts", unquote<&T::layouts>);
 };
@@ -5167,13 +5169,12 @@ suite unquote_test = [] {
       expect(!glz::read_json(obj, s));
       expect(obj.id == 4848);
       expect(obj.layouts.at("first layout") == std::vector<std::string>{"inner1", "inner2"});
-      
+
       std::string out{};
       glz::write_json(obj, out);
       expect(out == R"({"id":4848,"layouts":"{\"first layout\":[\"inner1\",\"inner2\"]}"})");
    };
 };
-
 
 int main()
 {

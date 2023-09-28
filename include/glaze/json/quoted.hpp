@@ -13,14 +13,14 @@ namespace glz
    {
       T& val;
    };
-   
+
    // unquote a string input to avoid double parsing into a value
    template <class T>
    struct unquote_t
    {
       T& val;
    };
-   
+
    // read numbers as strings and write these string as numbers
    template <class T>
    struct number_t
@@ -49,7 +49,7 @@ namespace glz
             write<json>::op<opt_true<Opts, &opts::quoted>>(value.val, ctx, args...);
          }
       };
-      
+
       template <class T>
       struct from_json<unquote_t<T>>
       {
@@ -64,7 +64,7 @@ namespace glz
             }
          }
       };
-      
+
       template <class T>
       struct to_json<unquote_t<T>>
       {
@@ -96,7 +96,7 @@ namespace glz
             write<json>::op<opt_true<Opts, &opts::number>>(value.val, ctx, args...);
          }
       };
-      
+
       template <auto MemPtr>
       inline constexpr decltype(auto) unquote_impl() noexcept
       {
@@ -115,7 +115,7 @@ namespace glz
    {
       return [](auto&& val) { return number_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
    }
-   
+
    template <auto MemPtr>
    constexpr auto unquote = detail::unquote_impl<MemPtr>();
 }
