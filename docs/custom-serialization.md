@@ -1,6 +1,8 @@
 # Custom Serialization/Deserialization
 
-Custom serialization/deserialization is achievable by implementing your own `from_json` and `to_json` specializations within the glz::detail namespace.
+See [Custom Read/Write](https://github.com/stephenberry/glaze/tree/main#custom-readwrite) in the main README.md for using member functions for custom handling.
+
+Advanced custom serialization/deserialization is achievable by implementing your own `from_json` and `to_json` specializations within the glz::detail namespace.
 
 > Note that the API within the `detail` namespace is subject to change and is therefore not expected to be as stable.
 
