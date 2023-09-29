@@ -719,7 +719,7 @@ struct opts {
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
       uint32_t layout = rowwise; // CSV row wise output/input
-      bool quoted = false; // treat numbers as quoted or array-like types as having quoted numbers
+      bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool number = false; // read numbers as strings and write these string as numbers
 };
 ```
@@ -787,7 +787,7 @@ struct A {
 
 template <>
 struct glz::meta<A> {
-   static constexpr auto value = object("x", glz::quoted<&A::x>(), "y", glz::quoted<&A::y>());
+   static constexpr auto value = object("x", glz::quoted_num<&A::x>, "y", glz::quoted_num<&A::y>;
 };
 ```
 
