@@ -127,6 +127,20 @@ namespace glz
             to_json<V>::template op<Opts>(value.get(), std::forward<Args>(args)...);
          }
       };
+      
+      template <complex_t T>
+      struct to_json<T>
+      {
+         template <auto Opts, class B>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+         {
+            dump<'['>(b, ix);
+            write<json>::op<Opts>(value.real(), ctx, b, ix);
+            dump<','>(b, ix);
+            write<json>::op<Opts>(value.imag(), ctx, b, ix);
+            dump<']'>(b, ix);
+         }
+      };
 
       template <boolean_like T>
       struct to_json<T>
