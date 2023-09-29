@@ -4498,7 +4498,7 @@ template <>
 struct glz::meta<numbers_as_strings>
 {
    using T = numbers_as_strings;
-   static constexpr auto value = object("x", glz::number<&T::x>(), "y", glz::number<&T::y>());
+   static constexpr auto value = object("x", glz::number<&T::x>, "y", glz::number<&T::y>);
 };
 
 suite numbers_as_strings_suite = [] {

@@ -102,6 +102,12 @@ namespace glz
       {
          return [](auto&& val) { return quoted_num_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
       }
+      
+      template <auto MemPtr>
+      inline constexpr decltype(auto) number_impl() noexcept
+      {
+         return [](auto&& val) { return number_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+      }
 
       template <auto MemPtr>
       inline constexpr decltype(auto) quoted_impl() noexcept
@@ -114,10 +120,7 @@ namespace glz
    constexpr auto quoted_num = detail::quoted_num_impl<MemPtr>();
 
    template <auto MemPtr>
-   inline constexpr decltype(auto) number() noexcept
-   {
-      return [](auto&& val) { return number_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
-   }
+   constexpr auto number = detail::number_impl<MemPtr>();
 
    template <auto MemPtr>
    constexpr auto quoted = detail::quoted_impl<MemPtr>();
