@@ -4328,7 +4328,7 @@ template <>
 struct glz::meta<A>
 {
    static constexpr auto value =
-      object("x", glz::quoted<&A::x>(), "y", glz::quoted<&A::y>(), "z", glz::quoted<&A::z>());
+      object("x", glz::quoted_num<&A::x>, "y", glz::quoted_num<&A::y>, "z", glz::quoted_num<&A::z>);
 };
 
 suite lamda_wrapper = [] {

@@ -9,7 +9,7 @@ namespace glz
 {
    // treat numbers as quoted or array-like types as having quoted numbers
    template <class T>
-   struct quoted_t
+   struct quoted_num_t
    {
       T& val;
    };
@@ -31,7 +31,7 @@ namespace glz
    namespace detail
    {
       template <class T>
-      struct from_json<quoted_t<T>>
+      struct from_json<quoted_num_t<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args) noexcept
@@ -41,7 +41,7 @@ namespace glz
       };
 
       template <class T>
-      struct to_json<quoted_t<T>>
+      struct to_json<quoted_num_t<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -96,6 +96,12 @@ namespace glz
             write<json>::op<opt_true<Opts, &opts::number>>(value.val, ctx, args...);
          }
       };
+      
+      template <auto MemPtr>
+      inline constexpr decltype(auto) quoted_num_impl() noexcept
+      {
+         return [](auto&& val) { return quoted_num_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+      }
 
       template <auto MemPtr>
       inline constexpr decltype(auto) unquote_impl() noexcept
@@ -105,10 +111,7 @@ namespace glz
    }
 
    template <auto MemPtr>
-   inline constexpr decltype(auto) quoted() noexcept
-   {
-      return [](auto&& val) { return quoted_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
-   }
+   constexpr auto quoted_num = detail::quoted_num_impl<MemPtr>();
 
    template <auto MemPtr>
    inline constexpr decltype(auto) number() noexcept
