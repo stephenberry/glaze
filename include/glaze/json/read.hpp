@@ -183,7 +183,7 @@ namespace glz
          template <auto Options, class It>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
-            if constexpr (Options.quoted) {
+            if constexpr (Options.quoted_num) {
                skip_ws<Options>(ctx, it, end);
                match<'"'>(ctx, it, end);
             }
@@ -248,7 +248,7 @@ namespace glz
                it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
             }
 
-            if constexpr (Options.quoted) {
+            if constexpr (Options.quoted_num) {
                match<'"'>(ctx, it, end);
             }
          }
@@ -1651,7 +1651,7 @@ namespace glz
                      static_assert(std::is_arithmetic_v<k_t> || glaze_enum_t<k_t>);
                      k_t key_value{};
                      if constexpr (std::is_arithmetic_v<k_t>) {
-                        read<json>::op<opt_true<Opts, &opts::quoted>>(key_value, ctx, it, end);
+                        read<json>::op<opt_true<Opts, &opts::quoted_num>>(key_value, ctx, it, end);
                      }
                      else {
                         read<json>::op<Opts>(key_value, ctx, it, end);
