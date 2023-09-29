@@ -149,11 +149,11 @@ namespace glz
          template <auto Opts, class B>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            if constexpr (Opts.quoted) {
+            if constexpr (Opts.quoted_num) {
                dump<'"'>(b, ix);
             }
             write_chars::op<Opts>(value, ctx, b, ix);
-            if constexpr (Opts.quoted) {
+            if constexpr (Opts.quoted_num) {
                dump<'"'>(b, ix);
             }
          }
