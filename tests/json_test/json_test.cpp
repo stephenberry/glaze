@@ -5156,7 +5156,7 @@ template <>
 struct glz::meta<client_state>
 {
    using T = client_state;
-   static constexpr auto value = object("id", &T::id, "layouts", unquote<&T::layouts>);
+   static constexpr auto value = object("id", &T::id, "layouts", quoted<&T::layouts>);
 };
 
 suite unquote_test = [] {

@@ -14,9 +14,9 @@ namespace glz
       T& val;
    };
 
-   // unquote a string input to avoid double parsing into a value
+   // treat a value as quoted to avoid double parsing into a value
    template <class T>
-   struct unquote_t
+   struct quoted_t
    {
       T& val;
    };
@@ -51,7 +51,7 @@ namespace glz
       };
 
       template <class T>
-      struct from_json<unquote_t<T>>
+      struct from_json<quoted_t<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -66,7 +66,7 @@ namespace glz
       };
 
       template <class T>
-      struct to_json<unquote_t<T>>
+      struct to_json<quoted_t<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
@@ -104,9 +104,9 @@ namespace glz
       }
 
       template <auto MemPtr>
-      inline constexpr decltype(auto) unquote_impl() noexcept
+      inline constexpr decltype(auto) quoted_impl() noexcept
       {
-         return [](auto&& val) { return unquote_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+         return [](auto&& val) { return quoted_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
       }
    }
 
@@ -120,5 +120,5 @@ namespace glz
    }
 
    template <auto MemPtr>
-   constexpr auto unquote = detail::unquote_impl<MemPtr>();
+   constexpr auto quoted = detail::quoted_impl<MemPtr>();
 }
