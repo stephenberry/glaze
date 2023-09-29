@@ -118,7 +118,7 @@ namespace glz
             dump<']'>(args...);
          }
       };
-      
+
       template <auto MemPtr>
       inline constexpr decltype(auto) invoke_impl() noexcept
       {

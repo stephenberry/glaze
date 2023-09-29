@@ -96,13 +96,13 @@ namespace glz
             write<json>::op<opt_true<Opts, &opts::number>>(value.val, ctx, args...);
          }
       };
-      
+
       template <auto MemPtr>
       inline constexpr decltype(auto) quoted_num_impl() noexcept
       {
          return [](auto&& val) { return quoted_num_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
       }
-      
+
       template <auto MemPtr>
       inline constexpr decltype(auto) number_impl() noexcept
       {
