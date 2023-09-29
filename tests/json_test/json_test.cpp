@@ -1798,12 +1798,26 @@ suite write_tests = [] {
       expect(buf == R"([])");
    };
 
+   "Read empty array structure"_test = [] {
+      EmptyArray e;
+      expect(glz::read_json(e, "[]") == glz::error_code::none);
+      expect(glz::read_json(e, " [   ] ") == glz::error_code::none);
+   };
+
    //* Empty object not allowed
    "Write empty object structure"_test = [] {
       EmptyObject e;
       std::string buf;
       glz::write_json(e, buf);
       expect(buf == R"({})");
+   };
+
+   "Read empty object structure"_test = [] {
+      EmptyObject e;
+      const auto err = glz::read_json(e, "{}");
+      expect(err == glz::error_code::none);
+      expect(glz::read_json(e, " {    } ") == glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(e, "{ \"skipped\": 44 }") == glz::error_code::none);
    };
 
    "Write c-string"_test = [] {
@@ -1822,7 +1836,6 @@ suite write_tests = [] {
 
    "Write constant bool"_test = [] {
       const bool b = true;
-      ;
       std::string buf;
       glz::write_json(b, buf);
       expect(buf == R"(true)");
