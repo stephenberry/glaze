@@ -7,7 +7,7 @@ Glaze also supports binary messages via [BEVE](https://github.com/stephenberry/b
 Wrappers now consistently leave off the `()` for less typing
 
 - `glz::quoted` for reading numbers as strings and writing them as strings has been replaced with `glz::quoted_num`
-- The recent `glz::unquote` has been replaced with the name `glz::quoted`, which reads a string into a value and writes the value with quotes. This is less efficient for numbers than `glz::quoted_num`.
+- The recent `glz::unquote` has been replaced with the name `glz::quoted`, which reads a string into a value and writes the value with quotes. This is less efficient for numbers than `glz::quoted_num`. `glz::quoted_num` also handles nested decoding of numbers unlike `glz::quoted`.
 
 Below shows the format for adding wrappers within glaze metadata.
 ```c++
