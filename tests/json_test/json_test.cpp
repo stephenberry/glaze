@@ -4695,7 +4695,7 @@ template <>
 struct glz::meta<invoke_struct>
 {
    using T = invoke_struct;
-   static constexpr auto value = object("square", invoke<&T::square>(), "add_one", invoke<&T::add_one>());
+   static constexpr auto value = object("square", invoke<&T::square>, "add_one", invoke<&T::add_one>);
 };
 
 suite invoke_test = [] {
@@ -5053,7 +5053,7 @@ struct glz::meta<Person>
    using T = Person;
    static constexpr auto value =
       glz::object("name", &T::name, "full_name", &T::name, "age", &T::age, "years_old", &T::age, "date_of_birth",
-                  invoke<&T::getAge>(), "city", &T::city, "residence", &T::residence);
+                  invoke<&T::getAge>, "city", &T::city, "residence", &T::residence);
 };
 
 suite function_call = [] {
