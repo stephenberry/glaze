@@ -4328,7 +4328,7 @@ template <>
 struct glz::meta<A>
 {
    static constexpr auto value =
-      object("x", glz::quoted<&A::x>(), "y", glz::quoted<&A::y>(), "z", glz::quoted<&A::z>());
+      object("x", glz::quoted_num<&A::x>, "y", glz::quoted_num<&A::y>, "z", glz::quoted_num<&A::z>);
 };
 
 suite lamda_wrapper = [] {
@@ -4498,7 +4498,7 @@ template <>
 struct glz::meta<numbers_as_strings>
 {
    using T = numbers_as_strings;
-   static constexpr auto value = object("x", glz::number<&T::x>(), "y", glz::number<&T::y>());
+   static constexpr auto value = object("x", glz::number<&T::x>, "y", glz::number<&T::y>);
 };
 
 suite numbers_as_strings_suite = [] {
@@ -4695,7 +4695,7 @@ template <>
 struct glz::meta<invoke_struct>
 {
    using T = invoke_struct;
-   static constexpr auto value = object("square", invoke<&T::square>(), "add_one", invoke<&T::add_one>());
+   static constexpr auto value = object("square", invoke<&T::square>, "add_one", invoke<&T::add_one>);
 };
 
 suite invoke_test = [] {
@@ -5053,7 +5053,7 @@ struct glz::meta<Person>
    using T = Person;
    static constexpr auto value =
       glz::object("name", &T::name, "full_name", &T::name, "age", &T::age, "years_old", &T::age, "date_of_birth",
-                  invoke<&T::getAge>(), "city", &T::city, "residence", &T::residence);
+                  invoke<&T::getAge>, "city", &T::city, "residence", &T::residence);
 };
 
 suite function_call = [] {
@@ -5156,7 +5156,7 @@ template <>
 struct glz::meta<client_state>
 {
    using T = client_state;
-   static constexpr auto value = object("id", &T::id, "layouts", unquote<&T::layouts>);
+   static constexpr auto value = object("id", &T::id, "layouts", quoted<&T::layouts>);
 };
 
 suite unquote_test = [] {

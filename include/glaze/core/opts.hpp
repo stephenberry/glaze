@@ -26,7 +26,7 @@ namespace glz
       bool error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
       uint32_t layout = rowwise; // CSV row wise output/input
-      bool quoted = false; // treat numbers as quoted or array-like types as having quoted numbers
+      bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool number = false; // read numbers as strings and write these string as numbers
 
       // INTERNAL USE

@@ -118,17 +118,20 @@ namespace glz
             dump<']'>(args...);
          }
       };
+
+      template <auto MemPtr>
+      inline constexpr decltype(auto) invoke_impl() noexcept
+      {
+         using V = decltype(MemPtr);
+         if constexpr (std::is_member_function_pointer_v<V>) {
+            return [](auto&& val) { return invoke_t<std::decay_t<V>>{val, MemPtr}; };
+         }
+         else {
+            return [](auto&& val) { return invoke_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+         }
+      }
    }
 
    template <auto MemPtr>
-   inline constexpr decltype(auto) invoke() noexcept
-   {
-      using V = decltype(MemPtr);
-      if constexpr (std::is_member_function_pointer_v<V>) {
-         return [](auto&& val) { return invoke_t<std::decay_t<V>>{val, MemPtr}; };
-      }
-      else {
-         return [](auto&& val) { return invoke_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
-      }
-   }
+   constexpr auto invoke = detail::invoke_impl<MemPtr>();
 }
