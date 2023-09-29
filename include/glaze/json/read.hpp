@@ -127,7 +127,7 @@ namespace glz
             ctx.error = error_code::attempt_read_hidden;
          }
       };
-      
+
       template <complex_t T>
       struct from_json<T>
       {
@@ -142,19 +142,19 @@ namespace glz
             match<"[">(ctx, args...);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            
+
             auto* ptr = reinterpret_cast<typename T::value_type*>(&v);
             static_assert(sizeof(T) == sizeof(typename T::value_type) * 2);
             read<json>::op<Opts>(ptr[0], ctx, args...);
-            
+
             skip_ws<Opts>(ctx, args...);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            
+
             match<",">(ctx, args...);
-            
+
             read<json>::op<Opts>(ptr[1], ctx, args...);
-            
+
             skip_ws<Opts>(ctx, args...);
             if (bool(ctx.error)) [[unlikely]]
                return;

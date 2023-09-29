@@ -3,6 +3,7 @@
 
 #include <any>
 #include <chrono>
+#include <complex>
 #include <deque>
 #include <forward_list>
 #include <initializer_list>
@@ -13,7 +14,6 @@
 #include <ranges>
 #include <unordered_map>
 #include <variant>
-#include <complex>
 
 #include "boost/ut.hpp"
 #include "glaze/api/impl.hpp"
@@ -5184,7 +5184,7 @@ suite complex_test = [] {
       expect(!glz::read_json(cx, s));
       expect(cx.real() == 1);
       expect(cx.imag() == 2);
-      
+
       s.clear();
       glz::write_json(cx, s);
       expect(s == R"([1,2])");

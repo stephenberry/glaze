@@ -127,7 +127,7 @@ namespace glz
             to_json<V>::template op<Opts>(value.get(), std::forward<Args>(args)...);
          }
       };
-      
+
       template <complex_t T>
       struct to_json<T>
       {
