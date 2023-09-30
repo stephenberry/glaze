@@ -1328,10 +1328,9 @@ namespace glz
             }
          });
 
-//         if constexpr (N > 0) { // avoid overflow
-//            stats.length_range = stats.max_length - stats.min_length;
-//         }
-         stats.length_range = stats.max_length - stats.min_length;
+         if constexpr (N > 0) { // avoid overflow
+            stats.length_range = stats.max_length - stats.min_length;
+         }
 
          return stats;
       }
@@ -1426,7 +1425,7 @@ namespace glz
                return key;
             }
          }
-         else {
+         else if constexpr (std::tuple_size_v<meta_t<T>> > 0) {
             static constexpr auto stats = key_stats<T, tag>();
             if constexpr (stats.length_range < 16 && Opts.error_on_unknown_keys) {
                if ((it + stats.max_length) < end) [[likely]] {
@@ -1453,14 +1452,10 @@ namespace glz
                      return parse_key_cx<stats.min_length, stats.length_range>(ctx, it);
                   }
                }
-               else [[unlikely]] {
-                  return parse_unescaped_key(ctx, it, end);
-               }
-            }
-            else {
-               return parse_unescaped_key(ctx, it, end);
             }
          }
+
+         return parse_unescaped_key(ctx, it, end);
       }
 
       template <pair_t T>
@@ -1473,7 +1468,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            static constexpr auto Opts = opening_handled_off<ws_handled<Options>()>();
+            static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
             // Only used if error_on_missing_keys = true
             [[maybe_unused]] bit_array<1> fields{};
@@ -1527,10 +1522,11 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            static constexpr auto Opts = opening_handled_off<ws_handled<Options>()>();
+            static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
+            constexpr auto num_members = std::tuple_size_v<meta_t<T>>;
             // Only used if error_on_missing_keys = true
-            [[maybe_unused]] bit_array<std::tuple_size_v<meta_t<T>>> fields{};
+            [[maybe_unused]] bit_array<num_members> fields{};
 
             bool first = true;
             while (true) {
@@ -1555,13 +1551,13 @@ namespace glz
                      return;
                }
 
-               if constexpr (glaze_object_t<T> && std::tuple_size_v<meta_t<T>> == 0) {
+               if constexpr (glaze_object_t<T> && num_members == 0) {
                   // parsing to an empty object, but at this point the JSON presents keys
-                  if constexpr (Opts.error_on_unknown_keys) {
-                     const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
+                  const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
 
+                  if constexpr (Opts.error_on_unknown_keys) {
                      if constexpr (tag.sv().empty()) {
                         std::advance(it, -key.size());
                         ctx.error = error_code::unknown_key;
@@ -1572,18 +1568,14 @@ namespace glz
                         ctx.error = error_code::unknown_key;
                         return;
                      }
-
-                     parse_object_entry_sep<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     skip_value<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
                   }
-                  else {
-                     skip_object<Opts>(ctx, it, end);
-                  }
+                  parse_object_entry_sep<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  skip_value<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
                else if constexpr (glaze_object_t<T>) {
                   const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
@@ -1629,6 +1621,10 @@ namespace glz
                         else {
                            // We duplicate this code to avoid generating unreachable code
                            parse_object_entry_sep<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+
+                           skip_value<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                         }
@@ -1752,7 +1748,7 @@ namespace glz
       template <is_variant T>
       struct from_json<T>
       {
-         // Note that items in the variant are required to be default constructible for us to switch types
+         // Note that items in the variant are required to be default constructable for us to switch types
          template <auto Options>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {

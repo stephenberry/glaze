@@ -51,7 +51,7 @@ namespace glz
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
       auto b = reinterpret_cast<const char*>(buffer.data());
-      auto e = reinterpret_cast<const char*>(buffer.data()); // to be incrementd
+      auto e = reinterpret_cast<const char*>(buffer.data()); // to be incremented
 
       auto start = b;
 
