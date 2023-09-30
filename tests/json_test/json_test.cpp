@@ -1802,6 +1802,7 @@ suite write_tests = [] {
       EmptyArray e;
       expect(glz::read_json(e, "[]") == glz::error_code::none);
       expect(glz::read_json(e, " [   ] ") == glz::error_code::none);
+      expect(glz::read_json(e, "[1,2,3]") == glz::error_code::syntax_error);
    };
 
    //* Empty object not allowed
@@ -1814,10 +1815,11 @@ suite write_tests = [] {
 
    "Read empty object structure"_test = [] {
       EmptyObject e;
+      static_assert(glz::detail::glaze_object_t<EmptyObject>);
       expect(glz::read_json(e, "{}") == glz::error_code::none);
       expect(glz::read_json(e, " {    } ") == glz::error_code::none);
+      expect(glz::read_json(e, "{ \"reject\": 44 }") == glz::error_code::unknown_key);
       expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(e, "{ \"skipped\": 44 }") == glz::error_code::none);
-      //expect(glz::read_json(e, "{ \"reject\": 44 }") == glz::error_code::unknown_key);
    };
 
    "Write c-string"_test = [] {
