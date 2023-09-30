@@ -21,19 +21,18 @@ namespace glz
    {
       template <class T>
       concept matrix_t = requires(T matrix) {
-                            matrix.resize(2, 4);
-                            matrix.data();
-                            {
-                               matrix.rows()
-                               } -> std::convertible_to<size_t>;
-                            {
-                               matrix.cols()
-                               } -> std::convertible_to<size_t>;
-                            {
-                               matrix.size()
-                               } -> std::convertible_to<size_t>;
-                         } && !
-      range<T>;
+         matrix.resize(2, 4);
+         matrix.data();
+         {
+            matrix.rows()
+         } -> std::convertible_to<size_t>;
+         {
+            matrix.cols()
+         } -> std::convertible_to<size_t>;
+         {
+            matrix.size()
+         } -> std::convertible_to<size_t>;
+      } && !range<T>;
 
       template <matrix_t T>
          requires(T::RowsAtCompileTime >= 0 && T::ColsAtCompileTime >= 0)
