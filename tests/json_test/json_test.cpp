@@ -1814,10 +1814,10 @@ suite write_tests = [] {
 
    "Read empty object structure"_test = [] {
       EmptyObject e;
-      const auto err = glz::read_json(e, "{}");
-      expect(err == glz::error_code::none);
+      expect(glz::read_json(e, "{}") == glz::error_code::none);
       expect(glz::read_json(e, " {    } ") == glz::error_code::none);
       expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(e, "{ \"skipped\": 44 }") == glz::error_code::none);
+      //expect(glz::read_json(e, "{ \"reject\": 44 }") == glz::error_code::unknown_key);
    };
 
    "Write c-string"_test = [] {

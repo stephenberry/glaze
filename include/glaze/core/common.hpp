@@ -636,7 +636,7 @@ namespace glz
          };
 
          if constexpr (n == 0) {
-            static_assert(false_v<T>, "empty object in glz::meta");
+            static_assert(glz::false_v<>, "Empty object map is illogical. Handle empty upstream.");
          }
          else if constexpr (n == 1) {
             return micro_map1<value_t, meta_sv<T, I>::value...>{
