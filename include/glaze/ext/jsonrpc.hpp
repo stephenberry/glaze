@@ -158,13 +158,13 @@ namespace glz::rpc
    {
       template <class T>
       concept method_type = requires(T) {
-         T::name_v;
-         {
-            std::same_as<decltype(T::name_v), std::string_view>
-         };
-         typename T::params_t;
-         typename T::result_t;
-      };
+                               T::name_v;
+                               {
+                                  std::same_as<decltype(T::name_v), std::string_view>
+                               };
+                               typename T::params_t;
+                               typename T::result_t;
+                            };
 
       template <class call_return_t>
       concept call_return_type =
@@ -284,7 +284,8 @@ namespace glz::rpc
       template <concepts::call_return_type return_t = std::string>
       return_t call(std::string_view json_request)
       {
-         constexpr auto return_helper = []<typename input_type>(input_type&& response) -> auto {
+         constexpr auto return_helper = []<typename input_type>(input_type && response) -> auto
+         {
             if constexpr (std::same_as<return_t, std::string>) {
                return glz::write_json(std::forward<input_type>(response));
             }

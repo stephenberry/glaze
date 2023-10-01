@@ -21,16 +21,16 @@ namespace glz
    {
       template <class F, class T>
          requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
-                  is_std_tuple<std::decay_t<T>>
-      bool seek_impl(F&& func, T&& value, sv json_ptr);
+                  is_std_tuple<std::decay_t<T>> bool
+      seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
-         requires nullable_t<std::decay_t<T>>
-      bool seek_impl(F&& func, T&& value, sv json_ptr);
+         requires nullable_t<std::decay_t<T>> bool
+      seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
-         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T>
-      bool seek_impl(F&& func, T&& value, sv json_ptr);
+         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T> bool
+      seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
       bool seek_impl(F&& func, T&& value, sv json_ptr)
@@ -44,8 +44,8 @@ namespace glz
 
       // TODO: compile time search for `~` and optimize if escape does not exist
       template <class F, class T>
-         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T>
-      bool seek_impl(F&& func, T&& value, sv json_ptr)
+         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T> bool
+      seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
             func(value);
@@ -126,8 +126,8 @@ namespace glz
 
       template <class F, class T>
          requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
-                  is_std_tuple<std::decay_t<T>>
-      bool seek_impl(F&& func, T&& value, sv json_ptr)
+                  is_std_tuple<std::decay_t<T>> bool
+      seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
             func(value);
@@ -162,8 +162,8 @@ namespace glz
       }
 
       template <class F, class T>
-         requires nullable_t<std::decay_t<T>>
-      bool seek_impl(F&& func, T&& value, sv json_ptr)
+         requires nullable_t<std::decay_t<T>> bool
+      seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
             func(value);

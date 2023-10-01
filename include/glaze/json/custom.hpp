@@ -60,9 +60,9 @@ namespace glz
 
       template <class T>
       concept is_custom = requires {
-         typename T::from_t;
-         typename T::to_t;
-      };
+                             typename T::from_t;
+                             typename T::to_t;
+                          };
 
       template <is_custom T>
       struct from_json<T>
