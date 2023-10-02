@@ -31,7 +31,7 @@
    struct glz::meta<C>                                                        \
    {                                                                          \
       using T = C;                                                            \
-static constexpr std::string_view name = #C;                                  \
+      static constexpr std::string_view name = #C;                            \
       static constexpr auto value = object(GLZ_FOR_EACH(GLZ_X, __VA_ARGS__)); \
    }
 
