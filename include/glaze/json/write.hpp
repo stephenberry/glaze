@@ -416,7 +416,9 @@ namespace glz
                return !bool(value);
             }
          }
-         return false;
+         else {
+            return false;
+         }
       }
 
       template <pair_t T>
@@ -948,11 +950,11 @@ namespace glz
                      else {
                         if constexpr (Opts.prettify) {
                            static constexpr auto quoted_key = join_v<chars<"\"">, key, chars<"\": ">>;
-                           dump<quoted>(b, ix);
+                           dump<quoted_key>(b, ix);
                         }
                         else {
                            static constexpr auto quoted_key = join_v<chars<"\"">, key, chars<"\":">>;
-                           dump<quoted>(b, ix);
+                           dump<quoted_key>(b, ix);
                         }
                      }
                   }
