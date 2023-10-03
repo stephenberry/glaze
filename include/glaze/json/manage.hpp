@@ -122,6 +122,6 @@ namespace glz
       }
    }
 
-   template <auto From, auto To>
-   constexpr auto manage = detail::manage_impl<From, To>();
+   template <auto Member, auto Func>
+   constexpr auto manage = detail::manage_impl<Member, Func>();
 }
