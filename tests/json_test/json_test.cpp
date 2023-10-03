@@ -5210,20 +5210,21 @@ struct manage_x
 {
    std::vector<int> x{};
    std::vector<int> y{};
-   
-   bool handle_x(const glz::manage_state state) {
+
+   bool handle_x(const glz::manage_state state)
+   {
       switch (state) {
-         case glz::manage_state::read: {
-            y = x;
-            break;
-         }
-         case glz::manage_state::write: {
-            x = y;
-            break;
-         }
-         default: {
-            return false;
-         }
+      case glz::manage_state::read: {
+         y = x;
+         break;
+      }
+      case glz::manage_state::write: {
+         x = y;
+         break;
+      }
+      default: {
+         return false;
+      }
       }
       return true;
    }

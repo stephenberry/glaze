@@ -9,13 +9,8 @@
 
 namespace glz
 {
-   enum class manage_state : uint32_t
-   {
-      read,
-      write,
-      error
-   };
-   
+   enum class manage_state : uint32_t { read, write, error };
+
    namespace detail
    {
       // manage_t invokes a single function call before reading or after writing from a value
@@ -91,7 +86,7 @@ namespace glz
          {
             using V = std::decay_t<decltype(value)>;
             using Func = typename V::func_t;
-            
+
             if constexpr (std::is_member_function_pointer_v<Func>) {
                if (!(value.val.*value.func)(manage_state::write)) {
                   ctx.error = error_code::syntax_error;
@@ -116,17 +111,22 @@ namespace glz
             }
          }
       };
-      
+
       template <auto Member, auto Func>
       inline constexpr decltype(auto) manage_impl() noexcept
       {
          using M = decltype(Member);
          using F = decltype(Func);
          if constexpr (std::is_member_function_pointer_v<F>) {
-            return [](auto&& v) { return manage_t<std::decay_t<decltype(v.*Member)>, std::decay_t<F>>{v, v.*Member, Func}; };
+            return [](auto&& v) {
+               return manage_t<std::decay_t<decltype(v.*Member)>, std::decay_t<F>>{v, v.*Member, Func};
+            };
          }
          else if constexpr (!std::is_member_function_pointer_v<F>) {
-            return [](auto&& v) { return manage_t<std::decay_t<decltype(v.*Member)>, std::decay_t<decltype(v.*Func)>>{v, v.*Member, v.*Func}; };
+            return [](auto&& v) {
+               return manage_t<std::decay_t<decltype(v.*Member)>, std::decay_t<decltype(v.*Func)>>{v, v.*Member,
+                                                                                                   v.*Func};
+            };
          }
          else {
             static_assert(false_v<std::pair<M, F>>, "invalid types");
