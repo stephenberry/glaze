@@ -125,7 +125,7 @@ namespace glz
                }
             }
             else {
-               read<json>::op<Opts>(get_member(value, value.from), ctx, it, end);
+               read<json>::op<Opts>(value.from, ctx, it, end);
             }
          }
       };
@@ -164,7 +164,7 @@ namespace glz
                }
             }
             else {
-               write<json>::op<Opts>(get_member(value, value.to), ctx, args...);
+               write<json>::op<Opts>(value.to, ctx, args...);
             }
          }
       };

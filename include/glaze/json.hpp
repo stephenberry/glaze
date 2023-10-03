@@ -8,6 +8,7 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/ndjson.hpp"
 #include "glaze/json/prettify.hpp"
+#include "glaze/json/manage.hpp"
 #include "glaze/json/ptr.hpp"
 #include "glaze/json/quoted.hpp"
 #include "glaze/json/read.hpp"
