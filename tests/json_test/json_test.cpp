@@ -5211,7 +5211,7 @@ struct manage_x
    std::vector<int> x{};
    std::vector<int> y{};
    
-   void handle_x(const glz::manage_state state) {
+   bool handle_x(const glz::manage_state state) {
       switch (state) {
          case glz::manage_state::read: {
             y = x;
@@ -5222,9 +5222,10 @@ struct manage_x
             break;
          }
          default: {
-            break;
+            return false;
          }
       }
+      return true;
    }
 };
 

@@ -60,19 +60,25 @@ namespace glz
 
             if constexpr (std::is_member_function_pointer_v<Func>) {
                read<json>::op<Opts>(value.member, ctx, it, end);
-               (value.val.*value.func)(manage_state::read);
+               if (!(value.val.*value.func)(manage_state::read)) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
             }
             else if constexpr (is_specialization_v<Func, std::function>) {
-               if constexpr (std::is_invocable_r_v<void, Func, manage_state>) {
+               if constexpr (std::is_invocable_r_v<bool, Func, manage_state>) {
                   read<json>::op<Opts>(value.member, ctx, it, end);
-                  value.func(manage_state::read);
+                  if (!value.func(manage_state::read)) {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
                }
                else {
-                  static_assert(false_v<T>, "function must have one argument of glz::manage_state with a void return");
+                  static_assert(false_v<T>, "function must have one argument of glz::manage_state with a bool return");
                }
             }
             else {
-               static_assert(false_v<T>, "function must have one argument of glz::manage_state with a void return");
+               static_assert(false_v<T>, "function must have one argument of glz::manage_state with a bool return");
             }
          }
       };
@@ -87,20 +93,26 @@ namespace glz
             using Func = typename V::func_t;
             
             if constexpr (std::is_member_function_pointer_v<Func>) {
-               (value.val.*value.func)(manage_state::write);
+               if (!(value.val.*value.func)(manage_state::write)) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                write<json>::op<Opts>(value.member, ctx, args...);
             }
             else if constexpr (is_specialization_v<Func, std::function>) {
-               if constexpr (std::is_invocable_r_v<void, Func, manage_state>) {
-                  value.func(manage_state::write);
+               if constexpr (std::is_invocable_r_v<bool, Func, manage_state>) {
+                  if (!value.func(manage_state::write)) {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
                   write<json>::op<Opts>(value.member, ctx, args...);
                }
                else {
-                  static_assert(false_v<T>, "function must have one argument of glz::manage_state with a void return");
+                  static_assert(false_v<T>, "function must have one argument of glz::manage_state with a bool return");
                }
             }
             else {
-               static_assert(false_v<T>, "function must have one argument of glz::manage_state with a void return");
+               static_assert(false_v<T>, "function must have one argument of glz::manage_state with a bool return");
             }
          }
       };
