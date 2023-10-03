@@ -1570,13 +1570,15 @@ namespace glz
                         return;
                      }
                   }
-                  parse_object_entry_sep<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
+                  else {
+                     parse_object_entry_sep<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
 
-                  skip_value<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
+                     skip_value<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
                }
                else if constexpr (glaze_object_t<T>) {
                   const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);

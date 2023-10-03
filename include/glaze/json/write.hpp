@@ -416,7 +416,9 @@ namespace glz
                return !bool(value);
             }
          }
-         return false;
+         else {
+            return false;
+         }
       }
 
       template <pair_t T>
@@ -947,19 +949,19 @@ namespace glz
                      }
                      else {
                         if constexpr (Opts.prettify) {
-                           static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\": ">>;
-                           dump<quoted>(b, ix);
+                           static constexpr auto quoted_key = join_v<chars<"\"">, key, chars<"\": ">>;
+                           dump<quoted_key>(b, ix);
                         }
                         else {
-                           static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\":">>;
-                           dump<quoted>(b, ix);
+                           static constexpr auto quoted_key = join_v<chars<"\"">, key, chars<"\":">>;
+                           dump<quoted_key>(b, ix);
                         }
                      }
                   }
                   else {
-                     static constexpr auto quoted =
+                     static constexpr auto quoted_key =
                         concat_arrays(concat_arrays("\"", glz::tuplet::get<0>(item)), "\":", Opts.prettify ? " " : "");
-                     write<json>::op<Opts>(quoted, ctx, b, ix);
+                     write<json>::op<Opts>(quoted_key, ctx, b, ix);
                   }
 
                   write<json>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, b, ix);

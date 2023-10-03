@@ -32,9 +32,9 @@ namespace glz::detail
       auto consume_digit = [&c, &next_digit, &digits]() {
          if (next_digit < digits.cend()) [[likely]] {
             *next_digit = (*c - '0');
+            ++next_digit;
          }
          ++c;
-         ++next_digit;
       };
 
       if (*c == '0') {
