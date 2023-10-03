@@ -847,7 +847,7 @@ namespace glz
          return make_variant_id_map_impl<T>(indices, ids_v<T>);
       }
 
-      inline decltype(auto) get_member(auto&& value, auto& member_ptr)
+      inline decltype(auto) get_member(auto&& value, auto&& member_ptr)
       {
          using V = std::decay_t<decltype(member_ptr)>;
          if constexpr (std::is_member_object_pointer_v<V>) {

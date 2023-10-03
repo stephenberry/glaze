@@ -5206,6 +5206,54 @@ suite complex_test = [] {
    };
 };
 
+struct manage_x
+{
+   std::vector<int> x{};
+   std::vector<int> y{};
+   
+   bool handle_x(const glz::manage_state state) {
+      switch (state) {
+         case glz::manage_state::read: {
+            y = x;
+            break;
+         }
+         case glz::manage_state::write: {
+            x = y;
+            break;
+         }
+         default: {
+            return false;
+         }
+      }
+      return true;
+   }
+};
+
+template <>
+struct glz::meta<manage_x>
+{
+   using T = manage_x;
+   static constexpr auto value = object("x", manage<&T::x, &T::handle_x>);
+};
+
+suite manage_test = [] {
+   "manage"_test = [] {
+      manage_x obj{};
+      std::string s = R"({"x":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.y[0] == 1);
+      expect(obj.y[1] == 2);
+      expect(obj.y[2] == 3);
+      obj.x.clear();
+      s.clear();
+      glz::write_json(obj, s);
+      expect(s == R"({"x":[1,2,3]})");
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
