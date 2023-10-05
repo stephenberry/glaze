@@ -17,20 +17,7 @@ struct my_struct
 };
 
 static_assert(!glz::detail::glaze_t<my_struct> && std::is_aggregate_v<std::remove_cvref_t<my_struct>>);
-static_assert(std::tuple_size_v<decltype(glz::detail::to_tuple(my_struct{}))> == 4);
-
-/*template <>
-struct glz::meta<my_struct>
-{
-   static constexpr std::string_view name = "my_struct";
-   using T = my_struct;
-   static constexpr auto value = object(
-      "i", [](auto&& v) { return v.i; }, //
-      "d", &T::d, //
-      "hello", &T::hello, //
-      "arr", &T::arr //
-   );
-};*/
+//static_assert(std::tuple_size_v<decltype(glz::detail::to_tuple(my_struct{}))> == 4);
 
 suite reflection = [] {
    "reflect_write"_test = [] {

@@ -50,8 +50,8 @@ namespace glz
       }
 
       template <class T>
-      constexpr auto to_tuple(T&& t) {
-         static constexpr auto N = count_members<T>();
+      constexpr decltype(auto) to_tuple(T& t) {
+         static constexpr auto N = count_members<std::decay_t<T>>();
          if constexpr (N == 0) {
             return std::tuple{};
          } else if constexpr (N == 1) {
@@ -69,15 +69,15 @@ namespace glz
          }
       }
 
-      template <class T> requires (!glaze_t<T> && std::is_aggregate_v<std::remove_cvref_t<T>>)
+      template <class T> requires (!glaze_t<T> && !array_t<T> && std::is_aggregate_v<std::remove_cvref_t<T>>)
       struct to_json<T>
       {
          template <auto Options>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             auto members = member_names<T>();
-            const auto t = to_tuple(value);
-            using V = std::decay_t<decltype(t)>;
+            auto t = to_tuple(value);
+            using V = decltype(t);
             static constexpr auto N = std::tuple_size_v<V>;
             static_assert(count_members<T>() == N);
 
@@ -89,8 +89,6 @@ namespace glz
                   dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
                }
             }
-
-            std::cout << "Size: " << N << "\n";
 
             bool first = true;
             for_each<N>([&](auto I) {
@@ -119,7 +117,7 @@ namespace glz
                      write_entry_separator<Opts>(ctx, b, ix);
                   }
 
-                  static constexpr auto key = members[I];
+                  const auto key = members[I];
 
                   write<json>::op<Opts>(key, ctx, b, ix);
                   dump<':'>(b, ix);
