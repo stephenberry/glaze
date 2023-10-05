@@ -3,14 +3,11 @@ FROM ubuntu:latest
 
 # Install required packages
 RUN apt-get update && \
-    apt-get install -y wget && \
+    apt-get install -y wget cmake make git && \
     rm -rf /var/lib/apt/lists/*
 
-# Download and install Clang 17
-RUN wget https://apt.llvm.org/llvm.sh && \
-    chmod +x llvm.sh && \
-    ./llvm.sh 17 && \
-    rm llvm.sh
+# Download and install Clang 17 using the installation script
+RUN wget -O - https://apt.llvm.org/llvm.sh | bash -s -- 17
 
 # Verify the installation
 RUN clang --version
