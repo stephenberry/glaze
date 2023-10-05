@@ -261,7 +261,7 @@ namespace glz
                      return;
                   }
 
-                  if (V(i) > (std::numeric_limits<V>::max)()) [[unlikely]] {
+                  if (i > (std::numeric_limits<V>::max)()) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
