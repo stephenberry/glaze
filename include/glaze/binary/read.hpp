@@ -110,10 +110,9 @@ namespace glz
                std::advance(it, sizeof(V));
             }
             else {
-               // type_ underscore to avoid MSVC 'declaration of 'type' hides global declaration' warnings
-               constexpr uint8_t type_ =
+               constexpr uint8_t type =
                   std::floating_point<T> ? 0 : (std::is_signed_v<T> ? 0b000'01'000 : 0b000'10'000);
-               constexpr uint8_t header = tag::number | type_ | (byte_count<T> << 5);
+               constexpr uint8_t header = tag::number | type | (byte_count<T> << 5);
 
                const auto tag = uint8_t(*it);
                if (tag != header) {
@@ -569,9 +568,8 @@ namespace glz
          template <auto Opts>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            // type_ underscore to avoid MSVC 'declaration of 'type' hides global declaration' warnings
-            constexpr uint8_t type_ = 0; // string key
-            constexpr uint8_t header = tag::object | type_;
+            constexpr uint8_t type = 0; // string key
+            constexpr uint8_t header = tag::object | type;
 
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
