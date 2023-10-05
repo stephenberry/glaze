@@ -31,7 +31,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 #    endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_common INTERFACE /GR- /bigobj) #/fsanitize=address
-    target_compile_options(glz_test_common INTERFACE /W4)
+    target_compile_options(glz_test_common INTERFACE /W4 /wd4459)
 endif()
 
 add_library(glz_test_exceptions INTERFACE)
@@ -42,7 +42,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(glz_test_exceptions INTERFACE -Wall -Wextra -pedantic $<$<CONFIG:Debug>:-Werror>)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_exceptions INTERFACE /GR- /bigobj) #/fsanitize=address
-    target_compile_options(glz_test_exceptions INTERFACE /W4)
+    target_compile_options(glz_test_exceptions INTERFACE /W4 /wd4459)
 endif()
 
 add_subdirectory(api_test)
