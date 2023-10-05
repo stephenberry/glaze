@@ -3,7 +3,10 @@ FROM ubuntu:latest
 
 # Install wget, cmake, make, and git
 RUN apt-get update && apt-get install -y \
+    lsb-release \
     wget \
+    software-properties-common \
+    gnupg \
     cmake \
     make \
     git \
