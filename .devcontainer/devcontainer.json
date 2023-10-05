@@ -38,8 +38,7 @@
             "twxs.cmake",
             "cschlosser.doxdocgen",
             "editorconfig.editorconfig",
-            "streetsidesoftware.code-spell-checker",
-            "GitHub.copilot"
+            "streetsidesoftware.code-spell-checker"
          ]
       }
    }
