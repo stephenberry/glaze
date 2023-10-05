@@ -1612,12 +1612,12 @@ namespace glz
                   else [[unlikely]] {
                      if constexpr (Opts.error_on_unknown_keys) {
                         if constexpr (tag.sv().empty()) {
-                           std::advance(it, -key.size());
+                           std::advance(it, -int64_t(key.size()));
                            ctx.error = error_code::unknown_key;
                            return;
                         }
                         else if (key != tag.sv()) {
-                           std::advance(it, -key.size());
+                           std::advance(it, -int64_t(key.size()));
                            ctx.error = error_code::unknown_key;
                            return;
                         }
