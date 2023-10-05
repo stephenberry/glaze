@@ -34,6 +34,21 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_common INTERFACE /W4 /wd4459)
 endif()
 
+add_library(glz_test23_common INTERFACE)
+target_compile_features(glz_test23_common INTERFACE cxx_std_23)
+target_link_libraries(glz_test23_common INTERFACE Boost::ut glaze::glaze)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(glz_test23_common INTERFACE -fno-exceptions -fno-rtti)
+    target_compile_options(glz_test23_common INTERFACE -Wall -Wextra -pedantic $<$<CONFIG:Debug>:-Werror>)
+#    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+#      target_compile_options(glz_test23_common INTERFACE -fsanitize=address)
+#      target_link_options(glz_test23_common INTERFACE -fsanitize=address)
+#    endif()
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(glz_test23_common INTERFACE /GR- /bigobj) #/fsanitize=address
+    target_compile_options(glz_test23_common INTERFACE /W4 /wd4459)
+endif()
+
 add_library(glz_test_exceptions INTERFACE)
 target_compile_features(glz_test_exceptions INTERFACE cxx_std_20)
 target_link_libraries(glz_test_exceptions INTERFACE Boost::ut glaze::glaze)
@@ -53,6 +68,7 @@ add_subdirectory(exceptions_test)
 add_subdirectory(json_test)
 add_subdirectory(jsonrpc_test)
 add_subdirectory(lib_test)
+add_subdirectory(reflection_test)
 
 add_test(
   NAME glaze-install_test
