@@ -1,12 +1,46 @@
+# Old tools
+#RUN apk update \
+#     && apk add --no-cache g++ gdb clang clang-extra-tools cmake make git
+
+# Alpine is a Linux distribution built around musl libc and BusyBox.
+# The image is 5 MB in size and has access to a package repository 
+# that is much more complete than other BusyBox based images. 
+#
+# https://alpinelinux.org/
+#
 FROM alpine:latest
 
-RUN apk update && \
-    apk add --no-cache g++ gdb cmake make git && \
-    apk add --no-cache --virtual .build-deps wget ca-certificates && \
-    wget -O /etc/apk/keys/sgerrand.rsa.pub https://alpine-pkgs.sgerrand.com/sgerrand.rsa.pub && \
-    wget https://github.com/sgerrand/alpine-pkg-llvm/releases/download/17.0.1-r0/llvm17-17.0.1-r0.apk && \
-    apk add --no-cache llvm17-17.0.1-r0.apk && \
-    apk del .build-deps
+LABEL Description = "A Clang 14 Build Service on Alpine Linux Latest."
 
+ENV PROJECT_DIR /project
+
+WORKDIR ${PROJECT_DIR}
+
+# Install dev tools to build the C++ project.
+#
 RUN apk update \
-     && apk add --no-cache g++ gdb clang clang-extra-tools cmake make git
+  && apk upgrade \
+  && apk add --no-cache \
+  bash \
+    alpine-sdk \
+    ccache \
+    clang \
+    clang-dev \
+    cmake \
+    dpkg
+    # nano
+  
+# Finalize Setup
+#
+RUN ln -sf /usr/bin/clang /usr/bin/cc \
+  && ln -sf /usr/bin/clang++ /usr/bin/c++ \
+  && update-alternatives --install /usr/bin/cc cc /usr/bin/clang 14\
+  && update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++ 14\
+  && update-alternatives --auto cc \
+  && update-alternatives --auto c++ \
+  && update-alternatives --display cc \
+  && update-alternatives --display c++ \
+  && ls -l /usr/bin/cc /usr/bin/c++ \
+  && cc --version \
+  && c++ --version \
+  && clang --version 
