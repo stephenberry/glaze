@@ -16,7 +16,10 @@ struct my_struct
    std::array<uint64_t, 3> arr = {1, 2, 3};
 };
 
-template <>
+static_assert(!glz::detail::glaze_t<my_struct> && std::is_aggregate_v<std::remove_cvref_t<my_struct>>);
+static_assert(std::tuple_size_v<decltype(glz::detail::to_tuple(my_struct{}))> == 4);
+
+/*template <>
 struct glz::meta<my_struct>
 {
    static constexpr std::string_view name = "my_struct";
@@ -27,7 +30,7 @@ struct glz::meta<my_struct>
       "hello", &T::hello, //
       "arr", &T::arr //
    );
-};
+};*/
 
 suite reflection = [] {
    "reflect_write"_test = [] {
