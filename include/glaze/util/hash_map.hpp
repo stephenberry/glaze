@@ -35,7 +35,7 @@ namespace glz::detail
       uint64_t res{};
       if (std::is_constant_evaluated()) {
          for (size_t i = 0; i < N; ++i) {
-            res |= uint64_t(bytes[i]) << (i << 3);
+            res |= (uint64_t(bytes[i]) << (i << 3));
          }
       }
       else {
@@ -84,7 +84,7 @@ namespace glz::detail
       if (std::is_constant_evaluated()) {
          uint64_t res{};
          for (size_t i = 0; i < N; ++i) {
-            res |= uint64_t(bytes[i]) << (i << 3);
+            res |= (uint64_t(bytes[i]) << (i << 3));
          }
          return res;
       }
@@ -92,7 +92,7 @@ namespace glz::detail
          uint64_t res{};
          std::memcpy(&res, bytes, N);
          constexpr auto num_bytes = sizeof(uint64_t);
-         constexpr auto shift = uint64_t(num_bytes - N) << 3;
+         constexpr auto shift = (uint64_t(num_bytes - N) << 3);
          if constexpr (shift == 0) {
             return res;
          }
@@ -106,7 +106,7 @@ namespace glz::detail
    struct naive_prng
    {
       uint64_t x = 7185499250578500046;
-      constexpr uint64_t operator()()
+      constexpr uint64_t operator()() noexcept
       {
          x ^= x >> 12;
          x ^= x << 25;
@@ -121,13 +121,13 @@ namespace glz::detail
    // This is one such terible hashing alg
    struct naive_hash
    {
-      static constexpr uint64_t bitmix(uint64_t h)
+      static constexpr uint64_t bitmix(uint64_t h) noexcept
       {
-         h ^= h >> 33;
+         h ^= (h >> 33);
          h *= 0xff51afd7ed558ccdL;
-         h ^= h >> 33;
+         h ^= (h >> 33);
          h *= 0xc4ceb9fe1a85ec53L;
-         h ^= h >> 33;
+         h ^= (h >> 33);
          return h;
       };
 
@@ -138,7 +138,7 @@ namespace glz::detail
       //   return x;
       // };
 
-      constexpr uint64_t operator()(std::integral auto value, const uint64_t seed)
+      constexpr uint64_t operator()(std::integral auto value, const uint64_t seed) noexcept
       {
          return bitmix(uint64_t(value) ^ seed);
       }
