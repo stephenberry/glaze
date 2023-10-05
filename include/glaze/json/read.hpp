@@ -242,7 +242,7 @@ namespace glz
                      return;
                   }
 
-                  if (i > std::numeric_limits<V>::max()) [[unlikely]] {
+                  if (i > (std::numeric_limits<V>::max)()) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
@@ -261,11 +261,11 @@ namespace glz
                      return;
                   }
 
-                  if (i > std::numeric_limits<V>::max()) [[unlikely]] {
+                  if (V(i) > (std::numeric_limits<V>::max)()) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  value = sign * static_cast<V>(i);
+                  value = V(sign * V(i));
                }
             }
             else {
