@@ -110,9 +110,10 @@ namespace glz
                std::advance(it, sizeof(V));
             }
             else {
-               constexpr uint8_t type =
+               // underscore to avoid MSVC 'declaration of 'type' hides global declaration' warnings
+               constexpr uint8_t type_ =
                   std::floating_point<T> ? 0 : (std::is_signed_v<T> ? 0b000'01'000 : 0b000'10'000);
-               constexpr uint8_t header = tag::number | type | (byte_count<T> << 5);
+               constexpr uint8_t header = tag::number | type_ | (byte_count<T> << 5);
 
                const auto tag = uint8_t(*it);
                if (tag != header) {
