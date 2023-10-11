@@ -484,7 +484,7 @@ namespace glz
                   }
                   else {
                      switch (*it) {
-                     [[likely]] case '"': {
+                     [[likely]] case '"' : {
                         value.append(start, static_cast<size_t>(it - start));
                         ++it;
                         return;
@@ -493,15 +493,15 @@ namespace glz
                      [[unlikely]] case '\f':
                      [[unlikely]] case '\n':
                      [[unlikely]] case '\r':
-                     [[unlikely]] case '\t': {
+                     [[unlikely]] case '\t' : {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     [[unlikely]] case '\0': {
+                     [[unlikely]] case '\0' : {
                         ctx.error = error_code::unexpected_end;
                         return;
                      }
-                     [[unlikely]] case '\\': {
+                     [[unlikely]] case '\\' : {
                         value.append(start, static_cast<size_t>(it - start));
                         ++it;
                         handle_escaped();
@@ -510,8 +510,7 @@ namespace glz
                         start = it;
                         break;
                      }
-                     [[likely]] default:
-                        ++it;
+                        [[likely]] default : ++it;
                      }
                   }
                }
