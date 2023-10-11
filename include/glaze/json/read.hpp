@@ -232,11 +232,11 @@ namespace glz
             if constexpr (int_t<V>) {
                if constexpr (std::is_unsigned_v<V>) {
                   uint64_t i{};
-                  if (*it == '-') {
+                  if (*it == '-') [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  auto e = stoui64(i, it);
+                  auto e = stoui64<V>(i, it);
                   if (!e) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
@@ -255,7 +255,7 @@ namespace glz
                      sign = -1;
                      ++it;
                   }
-                  auto e = stoui64(i, it);
+                  auto e = stoui64<V>(i, it);
                   if (!e) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
@@ -468,12 +468,12 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
-                     if (*it == '"') {
+                     if (*it == '"') [[likely]] {
                         value.append(start, static_cast<size_t>(it - start));
                         ++it;
                         return;
                      }
-                     else {
+                     else [[unlikely]] {
                         value.append(start, static_cast<size_t>(it - start));
                         ++it;
                         handle_escaped();
@@ -484,24 +484,24 @@ namespace glz
                   }
                   else {
                      switch (*it) {
-                     case '"': {
+                     [[likely]] case '"': {
                         value.append(start, static_cast<size_t>(it - start));
                         ++it;
                         return;
                      }
-                     case '\b':
-                     case '\f':
-                     case '\n':
-                     case '\r':
-                     case '\t': {
+                     [[unlikely]] case '\b':
+                     [[unlikely]] case '\f':
+                     [[unlikely]] case '\n':
+                     [[unlikely]] case '\r':
+                     [[unlikely]] case '\t': {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     case '\0': {
+                     [[unlikely]] case '\0': {
                         ctx.error = error_code::unexpected_end;
                         return;
                      }
-                     case '\\': {
+                     [[unlikely]] case '\\': {
                         value.append(start, static_cast<size_t>(it - start));
                         ++it;
                         handle_escaped();
@@ -510,7 +510,7 @@ namespace glz
                         start = it;
                         break;
                      }
-                     default:
+                     [[likely]] default:
                         ++it;
                      }
                   }
