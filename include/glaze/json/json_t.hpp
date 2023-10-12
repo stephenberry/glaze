@@ -11,6 +11,8 @@
 #include <variant>
 #include <vector>
 
+#include <glaze/util/expected.hpp>
+
 namespace glz
 {
    // Generic json type.
