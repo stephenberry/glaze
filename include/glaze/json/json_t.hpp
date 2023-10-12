@@ -11,6 +11,7 @@
 #include <variant>
 #include <vector>
 
+#include <glaze/core/meta.hpp>
 #include <glaze/util/expected.hpp>
 
 namespace glz
