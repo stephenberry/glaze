@@ -94,6 +94,7 @@ namespace glz
          std::optional<std::map<std::string_view, schematic, std::less<>>> defs{};
          std::optional<std::vector<std::string_view>> enumeration{}; // enum
          std::optional<std::vector<schematic>> oneOf{};
+         std::optional<std::span<const std::string_view>> required{};
       };
    }
 }
@@ -111,7 +112,8 @@ struct glz::meta<glz::detail::schematic>
                                              "$defs", &T::defs, //
                                              "enum", &T::enumeration, //
                                              "oneOf", &T::oneOf, //
-                                             "const", &T::constant);
+                                             "const", &T::constant, //
+                                             "required", &T::required);
 };
 
 namespace glz
@@ -309,6 +311,11 @@ namespace glz
             s.type = {"object"};
 
             using V = std::decay_t<T>;
+
+            if constexpr (requires { meta<V>::required; }) {
+               s.required = meta<V>::required;
+            }
+
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
             s.properties = std::map<std::string_view, schema, std::less<>>();
             for_each<N>([&](auto I) {
