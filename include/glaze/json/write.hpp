@@ -922,6 +922,9 @@ namespace glz
                         if constexpr (std::is_member_pointer_v<mptr_t>) {
                            return !bool(value.*glz::tuplet::get<1>(item));
                         }
+                        else if constexpr (raw_nullable<val_t>) {
+                           return !bool(glz::tuplet::get<1>(item)(value).val);
+                        }
                         else {
                            return !bool(glz::tuplet::get<1>(item)(value));
                         }

@@ -30,13 +30,6 @@ namespace glz
       T& val;
    };
 
-   // write out a string like type without quoting it
-   template <class T>
-   struct raw_t
-   {
-      T& val;
-   };
-
    namespace detail
    {
       template <class T>
