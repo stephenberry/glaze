@@ -4,6 +4,7 @@
 
 #include "glaze/api/impl.hpp"
 #include "glaze/json/write.hpp"
+#include "glaze/json/quoted.hpp"
 
 namespace glz
 {
@@ -56,7 +57,7 @@ namespace glz
                                                    "description", &T::description, //
                                                    "default", &T::default_value, //
                                                    "deprecated", &T::deprecated, //
-                                                   "examples", &T::examples, //
+                                                   "examples", raw<&T::examples>, //
                                                    "readOnly", &T::read_only, //
                                                    "writeOnly", &T::write_only, //
                                                    "const", &T::constant, //
@@ -95,6 +96,7 @@ namespace glz
          std::optional<std::vector<std::string_view>> enumeration{}; // enum
          std::optional<std::vector<schematic>> oneOf{};
          std::optional<std::span<const std::string_view>> required{};
+         std::optional<std::span<const std::string_view>> examples{};
       };
    }
 }
@@ -113,7 +115,8 @@ struct glz::meta<glz::detail::schematic>
                                              "enum", &T::enumeration, //
                                              "oneOf", &T::oneOf, //
                                              "const", &T::constant, //
-                                             "required", &T::required);
+                                             "required", &T::required, //
+                                             "examples", raw<&T::examples>);
 };
 
 namespace glz
@@ -314,6 +317,10 @@ namespace glz
 
             if constexpr (requires { meta<V>::required; }) {
                s.required = meta<V>::required;
+            }
+
+            if constexpr (requires { meta<V>::examples; }) {
+               s.examples = meta<V>::examples;
             }
 
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;

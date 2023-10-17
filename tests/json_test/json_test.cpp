@@ -199,6 +199,7 @@ struct glz::meta<Thing>
    using T = Thing;
    static constexpr std::string_view name = "Thing";
    static constexpr std::array<std::string_view, 2> required = { "thing", "i" };
+   static constexpr std::array<std::string_view, 1> examples = { R"({"thing":{},"i":42})" };
    static constexpr auto value = object(
       "thing", &T::thing, //
       "thing2array", &T::thing2array, //

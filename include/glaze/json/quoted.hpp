@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include "glaze/json.hpp"
 
 namespace glz
@@ -24,6 +26,13 @@ namespace glz
    // read numbers as strings and write these string as numbers
    template <class T>
    struct number_t
+   {
+      T& val;
+   };
+
+   // write out a string like type without quoting it
+   template <class T>
+   struct raw_t
    {
       T& val;
    };
@@ -97,22 +106,38 @@ namespace glz
          }
       };
 
+      template <class T>
+      struct to_json<raw_t<T>>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args) noexcept
+         {
+            write<json>::op<opt_true<Opts, &opts::raw>>(value.val, args...);
+         }
+      };
+
       template <auto MemPtr>
       inline constexpr decltype(auto) quoted_num_impl() noexcept
       {
-         return [](auto&& val) { return quoted_num_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+         return [](auto&& val) { return quoted_num_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
       }
 
       template <auto MemPtr>
       inline constexpr decltype(auto) number_impl() noexcept
       {
-         return [](auto&& val) { return number_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+         return [](auto&& val) { return number_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
       }
 
       template <auto MemPtr>
       inline constexpr decltype(auto) quoted_impl() noexcept
       {
-         return [](auto&& val) { return quoted_t<std::decay_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+         return [](auto&& val) { return quoted_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+      }
+
+      template <auto MemPtr>
+      inline constexpr decltype(auto) raw_impl() noexcept
+      {
+         return [](auto&& val) { return raw_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
       }
    }
 
@@ -124,4 +149,7 @@ namespace glz
 
    template <auto MemPtr>
    constexpr auto quoted = detail::quoted_impl<MemPtr>();
+
+   template <auto MemPtr>
+   constexpr auto raw = detail::raw_impl<MemPtr>();
 }
