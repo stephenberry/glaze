@@ -503,7 +503,7 @@ namespace glz
                                       };
       
       template <class T>
-      concept raw_nullable = is_specialization_v<T, raw_t> && requires(T t) {
+      concept raw_nullable = is_specialization_v<T, raw_t> && requires {
          nullable_t<typename T::value_type>;
       };
 
