@@ -1,45 +1,57 @@
 {
-  "version": 3,
-  "cmakeMinimumRequired": {
-    "major": 3,
-    "minor": 23,
-    "patch": 0
-  },
-  "configurePresets": [
-    {
-      "name": "dev",
-      "displayName": "Developer Mode",
-      "description": "Builds Glaze w/ tests and downloaded test dependencies",
-      "binaryDir": "${sourceDir}/build",
-      "generator": "Ninja",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "glaze_DEVELOPER_MODE": true,
-        "BUILD_TESTING": true
-      }
+    "version": 3,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 23,
+        "patch": 0
     },
-    {
-      "name": "release",
-      "displayName": "Release",
-      "description": "Optimized library build of exclusively library",
-      "binaryDir": "${sourceDir}/build-release",
-      "generator": "Ninja",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release",
-        "glaze_DEVELOPER_MODE": false,
-        "BUILD_TESTING": false
-      }
-    }
-  ],
-  "testPresets": [
-    {
-      "name": "all",
-      "displayName": "Automated Tests",
-      "configurePreset": "dev",
-      "output": {
-        "verbosity": "verbose",
-        "outputOnFailure": true
-      }
-    }
-  ]
+    "configurePresets": [
+        {
+            "name": "dev",
+            "displayName": "Developer Mode",
+            "description": "Builds Glaze w/ tests and downloaded test dependencies",
+            "binaryDir": "${sourceDir}/build",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "glaze_DEVELOPER_MODE": true,
+                "BUILD_TESTING": true
+            }
+        },
+        {
+            "name": "release",
+            "displayName": "Release",
+            "description": "Optimized library build of exclusively library",
+            "binaryDir": "${sourceDir}/build-release",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "glaze_DEVELOPER_MODE": false,
+                "BUILD_TESTING": false
+            }
+        },
+        {
+            "name": "clang_latest",
+            "displayName": "Clang 17.0.3 x86_64-pc-linux-gnu",
+            "description": "Using compilers: C = /usr/bin/clang-17, CXX = /usr/bin/clang++-17",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "/usr/bin/clang-17",
+                "CMAKE_CXX_COMPILER": "/usr/bin/clang++-17",
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "all",
+            "displayName": "Automated Tests",
+            "configurePreset": "dev",
+            "output": {
+                "verbosity": "verbose",
+                "outputOnFailure": true
+            }
+        }
+    ]
 }

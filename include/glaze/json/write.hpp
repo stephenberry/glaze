@@ -25,11 +25,10 @@ namespace glz
       {};
 
       template <auto Opts, class T, class Ctx, class B, class IX>
-      concept write_json_invocable =
-         requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-            to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                               std::forward<B>(b), std::forward<IX>(ix));
-         };
+      concept write_json_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+         to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                            std::forward<B>(b), std::forward<IX>(ix));
+      };
 
       template <>
       struct write<json>
@@ -186,38 +185,45 @@ namespace glz
             }
             else {
                if constexpr (char_t<T>) {
-                  dump<'"'>(b, ix);
-                  switch (value) {
-                  case '"':
-                     dump<"\\\"">(b, ix);
-                     break;
-                  case '\\':
-                     dump<"\\\\">(b, ix);
-                     break;
-                  case '\b':
-                     dump<"\\b">(b, ix);
-                     break;
-                  case '\f':
-                     dump<"\\f">(b, ix);
-                     break;
-                  case '\n':
-                     dump<"\\n">(b, ix);
-                     break;
-                  case '\r':
-                     dump<"\\r">(b, ix);
-                     break;
-                  case '\t':
-                     dump<"\\t">(b, ix);
-                     break;
-                  case '\0':
-                     // escape character treated as empty string
-                     break;
-                  default:
-                     // Hiding warning for build, this is an error with wider char types
-                     dump(static_cast<char>(value), b,
-                          ix); // TODO: This warning is an error We need to be able to dump wider char types
+                  if constexpr (Opts.raw) {
+                     dump(value, b, ix);
                   }
-                  dump<'"'>(b, ix);
+                  else {
+                     dump<'"'>(b, ix);
+
+                     switch (value) {
+                     case '"':
+                        dump<"\\\"">(b, ix);
+                        break;
+                     case '\\':
+                        dump<"\\\\">(b, ix);
+                        break;
+                     case '\b':
+                        dump<"\\b">(b, ix);
+                        break;
+                     case '\f':
+                        dump<"\\f">(b, ix);
+                        break;
+                     case '\n':
+                        dump<"\\n">(b, ix);
+                        break;
+                     case '\r':
+                        dump<"\\r">(b, ix);
+                        break;
+                     case '\t':
+                        dump<"\\t">(b, ix);
+                        break;
+                     case '\0':
+                        // escape character treated as empty string
+                        break;
+                     default:
+                        // Hiding warning for build, this is an error with wider char types
+                        dump(static_cast<char>(value), b,
+                             ix); // TODO: This warning is an error We need to be able to dump wider char types
+                     }
+
+                     dump<'"'>(b, ix);
+                  }
                }
                else {
                   const sv str = [&]() -> sv {
@@ -241,45 +247,50 @@ namespace glz
                   }
                   // now we don't have to check writing
 
-                  dump_unchecked<'"'>(b, ix);
-
-                  for (auto&& c : str) {
-                     switch (c) {
-                     case '"':
-                        std::memcpy(data_ptr(b) + ix, R"(\")", 2);
-                        ix += 2;
-                        break;
-                     case '\\':
-                        std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
-                        ix += 2;
-                        break;
-                     case '\b':
-                        std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
-                        ix += 2;
-                        break;
-                     case '\f':
-                        std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
-                        ix += 2;
-                        break;
-                     case '\n':
-                        std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
-                        ix += 2;
-                        break;
-                     case '\r':
-                        std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
-                        ix += 2;
-                        break;
-                     case '\t':
-                        std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
-                        ix += 2;
-                        break;
-                     [[likely]] default:
-                        std::memcpy(data_ptr(b) + ix, &c, 1);
-                        ++ix;
-                     }
+                  if constexpr (Opts.raw) {
+                     dump(str, b, ix);
                   }
+                  else {
+                     dump_unchecked<'"'>(b, ix);
 
-                  dump_unchecked<'"'>(b, ix);
+                     for (auto&& c : str) {
+                        switch (c) {
+                        case '"':
+                           std::memcpy(data_ptr(b) + ix, R"(\")", 2);
+                           ix += 2;
+                           break;
+                        case '\\':
+                           std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
+                           ix += 2;
+                           break;
+                        case '\b':
+                           std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
+                           ix += 2;
+                           break;
+                        case '\f':
+                           std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
+                           ix += 2;
+                           break;
+                        case '\n':
+                           std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
+                           ix += 2;
+                           break;
+                        case '\r':
+                           std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
+                           ix += 2;
+                           break;
+                        case '\t':
+                           std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
+                           ix += 2;
+                           break;
+                        [[likely]] default:
+                           std::memcpy(data_ptr(b) + ix, &c, 1);
+                           ++ix;
+                        }
+                     }
+
+                     dump_unchecked<'"'>(b, ix);
+                  }
                }
             }
          }
@@ -910,6 +921,9 @@ namespace glz
                      auto is_null = [&]() {
                         if constexpr (std::is_member_pointer_v<mptr_t>) {
                            return !bool(value.*glz::tuplet::get<1>(item));
+                        }
+                        else if constexpr (raw_nullable<val_t>) {
+                           return !bool(glz::tuplet::get<1>(item)(value).val);
                         }
                         else {
                            return !bool(glz::tuplet::get<1>(item)(value));
