@@ -37,7 +37,7 @@ namespace glz
       using value_type = T;
       T& val;
    };
-   
+
    // Allows developers to add `static constexpr auto custom_read = true;` to their glz::meta to prevent ambiguous
    // partial specialization for custom parsers
    template <class T>
@@ -501,11 +501,9 @@ namespace glz
                                             *t
                                          };
                                       };
-      
+
       template <class T>
-      concept raw_nullable = is_specialization_v<T, raw_t> && requires {
-         requires nullable_t<typename T::value_type>;
-      };
+      concept raw_nullable = is_specialization_v<T, raw_t> && requires { requires nullable_t<typename T::value_type>; };
 
       template <class T>
       concept null_t = nullable_t<T> || always_null_t<T> || raw_nullable<T>;

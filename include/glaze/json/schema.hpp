@@ -3,8 +3,8 @@
 #pragma once
 
 #include "glaze/api/impl.hpp"
-#include "glaze/json/write.hpp"
 #include "glaze/json/quoted.hpp"
+#include "glaze/json/write.hpp"
 
 namespace glz
 {
@@ -36,7 +36,7 @@ namespace glz
       // object only keywords
       std::optional<std::uint64_t> min_properties{};
       std::optional<std::uint64_t> max_properties{};
-//      std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
+      //      std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
       std::optional<std::span<const std::string_view>> required{};
       // array only keywords
       std::optional<std::uint64_t> min_items{};
@@ -71,7 +71,7 @@ namespace glz
                                                    "multipleOf", &T::multiple_of, //
                                                    "minProperties", &T::min_properties, //
                                                    "maxProperties", &T::max_properties, //
-//               "dependentRequired", &T::dependent_required, //
+                                                   //               "dependentRequired", &T::dependent_required, //
                                                    "required", &T::required, //
                                                    "minItems", &T::min_items, //
                                                    "maxItems", &T::max_items, //
