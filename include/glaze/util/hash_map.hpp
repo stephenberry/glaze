@@ -360,7 +360,7 @@ namespace glz::detail
          if (N == 0) {
             return;
          }
-         
+
          std::array<std::array<storage_type, max_bucket_size>, N> full_buckets{};
          std::array<size_t, N> bucket_sizes{};
          detail::naive_prng gen{};

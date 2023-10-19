@@ -5258,8 +5258,14 @@ suite manage_test = [] {
    };
 };
 
-struct varx { GLZ_LOCAL_META(varx); };
-struct vary { GLZ_LOCAL_META(vary); };
+struct varx
+{
+   GLZ_LOCAL_META(varx);
+};
+struct vary
+{
+   GLZ_LOCAL_META(vary);
+};
 
 using vari = std::variant<varx, vary>;
 
@@ -5275,9 +5281,9 @@ suite empty_variant_objects = [] {
       std::string s;
       glz::write_json(v, s);
       expect(s == R"({"type":"varx"})");
-      
+
       v = vary{};
-      
+
       expect(!glz::read_json(v, s));
       expect(std::holds_alternative<varx>(v));
    };

@@ -563,10 +563,10 @@ namespace glz
             std::visit(
                [&](auto&& val) {
                   using V = std::decay_t<decltype(val)>;
-                  
+
                   if constexpr (Opts.write_type_info && !tag_v<T>.empty() && glaze_object_t<V>) {
                      constexpr auto num_members = std::tuple_size_v<meta_t<V>>;
-                     
+
                      // must first write out type
                      if constexpr (Opts.prettify) {
                         dump<"{\n">(args...);

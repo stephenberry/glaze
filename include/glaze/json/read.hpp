@@ -1795,7 +1795,7 @@ namespace glz
                         std::string_view key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        
+
                         if constexpr (deduction_map.size()) {
                            auto deduction_it = deduction_map.find(key);
                            if (deduction_it != deduction_map.end()) [[likely]] {
@@ -1833,8 +1833,8 @@ namespace glz
                                              using V = std::decay_t<decltype(v)>;
                                              constexpr bool is_object = glaze_object_t<V>;
                                              if constexpr (is_object) {
-                                                from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it,
-                                                                                                                end);
+                                                from_json<V>::template op<opening_handled<Opts>(), tag_literal>(
+                                                   v, ctx, it, end);
                                              }
                                           },
                                           value);
