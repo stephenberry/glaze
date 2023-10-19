@@ -4,7 +4,7 @@ Glaze has full support `std::variant` when writing, and read support when either
 
 ## Basic Types
 
-Types can be auto-deduced if the variant contains at most one type matching each of the fundamental JSON types of [string, number, object, array boolean] or multiple object types. std::variant<double, std::string> could be auto deduced but std::variant<double, float> cannot be.
+Types can be auto-deduced if the variant contains at most one type matching each of the fundamental JSON types of [string, number, object, array boolean] or multiple object types. `std::variant<double, std::string>` could be auto deduced but `std::variant<double, float>` cannot be.
 
 Write example:
 ```c++
@@ -20,10 +20,10 @@ glz::read_json(x, "33");
 expect(std::get<int32_t>(x) == 33);
 ```
 
-## Objects Types
+## Object Types
 
 ### Auto Deduction of Object Types
-As of glaze 1.0 objects can be auto deduced based on the presence of unique key combinations.
+Objects can be auto deduced based on the presence of unique key combinations.
 ```c++
 struct xy_t
 {
@@ -89,7 +89,8 @@ suite metaobject_variant_auto_deduction = [] {
 };
 ```
 ### Deduction of Tagged Object Types
-Auto deduction works if the type can be determined by the combination of keys present. If you need to deduce the type based on the value associated with a key you can use the new tagged union support that now allows for custom tags.
+If you don't want auto deduction, or if you need to deduce the type based on the value associated with a key, Glaze supports custom tags.
+
 ```c++
 struct put_action
 {
@@ -121,7 +122,7 @@ template <>
 struct glz::meta<tagged_variant>
 {
    static constexpr std::string_view tag = "action";
-   static constexpr auto ids = std::array{"PUT", "DELETE"}; //Defaults to glz::name_v of the type is ids is not supplied
+   static constexpr auto ids = std::array{"PUT", "DELETE"}; //Defaults to glz::name_v of the type if ids is not supplied
 };
 
 suite tagged_variant_tests = [] {
