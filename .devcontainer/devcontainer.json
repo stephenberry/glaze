@@ -1,11 +1,24 @@
 {
-   "name": "Alpine++",
+   "name": "C++",
    "build": {
-      "dockerfile": "Dockerfile"
+      "dockerfile": "Dockerfile",
+      // Update 'VARIANT' to pick an Ubuntu OS version. Options: [bionic, focal, jammy]. Default: jammy
+      // Update 'LLVM_VER' to pick clang version. Options: [10, 11, 12, 13, 14, 15, 16, 17]. Default: 17
+      // Update 'GCC_VER' to pick a gcc and g++ version. Options: [7, 8, 9, 10, 11, 12, 13]. Default: 13
+      // Update 'USE_GCC' to set clang as the default C and C++ compiler. Options: [1, null]. Default null
+      "args": {
+         "VARIANT": "jammy",
+         "LLVM_VER": "17",
+         "GCC_VER": "13"
+      }
    },
    "features": {
-      "ghcr.io/devcontainers/features/common-utils:2":{}
-  },
+      "ghcr.io/devcontainers/features/common-utils:2": {
+         "username": "user",
+         "configureZshAsDefaultShell": true
+      },
+      "ghcr.io/devcontainers/features/git:1": {}
+   },
    // Needed when using a ptrace-based debugger like C++, Go, and Rust
    "capAdd": [
       "SYS_PTRACE"
@@ -13,6 +26,10 @@
    "securityOpt": [
       "seccomp=unconfined"
    ],
+   // Comment out connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
+   "remoteUser": "user",
+   // Use 'postCreateCommand' to run commands after the container is created.
+   "postCreateCommand": "id && git --version && gcc --version && clang --version && cmake --version",
    // Configure tool-specific properties.
    "customizations": {
       // Configure properties specific to VS Code.
@@ -23,11 +40,17 @@
             "C_Cpp.intelliSenseEngine": "disabled",
             "C_Cpp.autocomplete": "disabled",
             "C_Cpp.errorSquiggles": "disabled",
+            "C_Cpp.formatting": "clangFormat",
             // Make sure we are writing a compile_commands.json to the root for tools to use
             "cmake.exportCompileCommandsFile": true,
             "cmake.copyCompileCommands": "${workspaceRoot}/compile_commands.json",
+            "cmake.configureOnOpen": true,
             // cSpell Can clutter up the problems with false positives
-            "cSpell.diagnosticLevel": "Hint"
+            "cSpell.diagnosticLevel": "Hint",
+            // Format only the modified code to not clutter the merge requests
+            "editor.formatOnSave": true,
+            "editor.formatOnSaveMode": "modifications",
+            "terminal.integrated.shell.linux": "/bin/bash"
          },
          // Add the IDs of extensions you want installed when the container is created.
          // Note that some extensions may not work in Alpine Linux. See https://aka.ms/vscode-remote/linux.
@@ -38,7 +61,8 @@
             "twxs.cmake",
             "cschlosser.doxdocgen",
             "editorconfig.editorconfig",
-            "streetsidesoftware.code-spell-checker"
+            "streetsidesoftware.code-spell-checker",
+            "mutantdino.resourcemonitor"
          ]
       }
    }
