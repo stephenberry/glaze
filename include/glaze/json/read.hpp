@@ -1795,51 +1795,58 @@ namespace glz
                         std::string_view key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        auto deduction_it = deduction_map.find(key);
-                        if (deduction_it != deduction_map.end()) [[likely]] {
-                           possible_types &= deduction_it->second;
-                        }
-                        else [[unlikely]] {
-                           if constexpr (!tag_v<T>.empty()) {
-                              if (key == tag_v<T>) {
-                                 skip_ws<Opts>(ctx, it, end);
-                                 if (bool(ctx.error)) [[unlikely]]
-                                    return;
-                                 match<':'>(ctx, it, end);
-                                 if (bool(ctx.error)) [[unlikely]]
-                                    return;
+                        
+                        if constexpr (deduction_map.size()) {
+                           auto deduction_it = deduction_map.find(key);
+                           if (deduction_it != deduction_map.end()) [[likely]] {
+                              possible_types &= deduction_it->second;
+                           }
+                           else [[unlikely]] {
+                              if constexpr (!tag_v<T>.empty()) {
+                                 if (key == tag_v<T>) {
+                                    skip_ws<Opts>(ctx, it, end);
+                                    if (bool(ctx.error)) [[unlikely]]
+                                       return;
+                                    match<':'>(ctx, it, end);
+                                    if (bool(ctx.error)) [[unlikely]]
+                                       return;
 
-                                 std::string& type_id = string_buffer();
-                                 read<json>::op<Opts>(type_id, ctx, it, end);
-                                 if (bool(ctx.error)) [[unlikely]]
-                                    return;
-                                 skip_ws<Opts>(ctx, it, end);
-                                 if (bool(ctx.error)) [[unlikely]]
-                                    return;
-                                 match<','>(ctx, it, end);
-                                 if (bool(ctx.error)) [[unlikely]]
-                                    return;
+                                    std::string& type_id = string_buffer();
+                                    read<json>::op<Opts>(type_id, ctx, it, end);
+                                    if (bool(ctx.error)) [[unlikely]]
+                                       return;
+                                    skip_ws<Opts>(ctx, it, end);
+                                    if (bool(ctx.error)) [[unlikely]]
+                                       return;
+                                    match<','>(ctx, it, end);
+                                    if (bool(ctx.error)) [[unlikely]]
+                                       return;
 
-                                 static constexpr auto id_map = make_variant_id_map<T>();
-                                 auto id_it = id_map.find(std::string_view{type_id});
-                                 if (id_it != id_map.end()) [[likely]] {
-                                    it = start;
-                                    const auto type_index = id_it->second;
-                                    if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
-                                    std::visit(
-                                       [&](auto&& v) {
-                                          using V = std::decay_t<decltype(v)>;
-                                          constexpr bool is_object = glaze_object_t<V>;
-                                          if constexpr (is_object) {
-                                             from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it,
-                                                                                                             end);
-                                          }
-                                       },
-                                       value);
-                                    return;
+                                    static constexpr auto id_map = make_variant_id_map<T>();
+                                    auto id_it = id_map.find(std::string_view{type_id});
+                                    if (id_it != id_map.end()) [[likely]] {
+                                       it = start;
+                                       const auto type_index = id_it->second;
+                                       if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                                       std::visit(
+                                          [&](auto&& v) {
+                                             using V = std::decay_t<decltype(v)>;
+                                             constexpr bool is_object = glaze_object_t<V>;
+                                             if constexpr (is_object) {
+                                                from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it,
+                                                                                                                end);
+                                             }
+                                          },
+                                          value);
+                                       return;
+                                    }
+                                    else {
+                                       ctx.error = error_code::no_matching_variant_type;
+                                       return;
+                                    }
                                  }
-                                 else {
-                                    ctx.error = error_code::no_matching_variant_type;
+                                 else if constexpr (Opts.error_on_unknown_keys) {
+                                    ctx.error = error_code::unknown_key;
                                     return;
                                  }
                               }
@@ -1848,10 +1855,46 @@ namespace glz
                                  return;
                               }
                            }
+                        }
+                        else if constexpr (!tag_v<T>.empty()) {
+                           // empty object case for variant
+                           if (key == tag_v<T>) {
+                              skip_ws<Opts>(ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+                              match<':'>(ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+
+                              std::string& type_id = string_buffer();
+                              read<json>::op<Opts>(type_id, ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+                              skip_ws<Opts>(ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+
+                              static constexpr auto id_map = make_variant_id_map<T>();
+                              auto id_it = id_map.find(std::string_view{type_id});
+                              if (id_it != id_map.end()) [[likely]] {
+                                 it = start;
+                                 const auto type_index = id_it->second;
+                                 if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                                 return;
+                              }
+                              else {
+                                 ctx.error = error_code::no_matching_variant_type;
+                                 return;
+                              }
+                           }
                            else if constexpr (Opts.error_on_unknown_keys) {
                               ctx.error = error_code::unknown_key;
                               return;
                            }
+                        }
+                        else if constexpr (Opts.error_on_unknown_keys) {
+                           ctx.error = error_code::unknown_key;
+                           return;
                         }
 
                         auto matching_types = possible_types.popcount();

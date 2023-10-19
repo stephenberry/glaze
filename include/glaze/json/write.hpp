@@ -563,8 +563,10 @@ namespace glz
             std::visit(
                [&](auto&& val) {
                   using V = std::decay_t<decltype(val)>;
-
+                  
                   if constexpr (Opts.write_type_info && !tag_v<T>.empty() && glaze_object_t<V>) {
+                     constexpr auto num_members = std::tuple_size_v<meta_t<V>>;
+                     
                      // must first write out type
                      if constexpr (Opts.prettify) {
                         dump<"{\n">(args...);
@@ -574,7 +576,12 @@ namespace glz
                         dump(tag_v<T>, args...);
                         dump<"\": \"">(args...);
                         dump(ids_v<T>[value.index()], args...);
-                        dump<"\",\n">(args...);
+                        if constexpr (num_members == 0) {
+                           dump<"\"\n">(args...);
+                        }
+                        else {
+                           dump<"\",\n">(args...);
+                        }
                         dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                      }
                      else {
@@ -582,7 +589,12 @@ namespace glz
                         dump(tag_v<T>, args...);
                         dump<"\":\"">(args...);
                         dump(ids_v<T>[value.index()], args...);
-                        dump<R"(",)">(args...);
+                        if constexpr (num_members == 0) {
+                           dump<R"(")">(args...);
+                        }
+                        else {
+                           dump<R"(",)">(args...);
+                        }
                      }
                      write<json>::op<opening_handled<Opts>()>(val, ctx, args...);
                   }
