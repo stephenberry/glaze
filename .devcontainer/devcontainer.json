@@ -56,16 +56,17 @@
          // Add the IDs of extensions you want installed when the container is created.
          // Note that some extensions may not work in Alpine Linux. See https://aka.ms/vscode-remote/linux.
          "extensions": [
-            "ms-vscode.cpptools",
-            "ms-vscode.cmake-tools",
-            "ms-vscode.cpptools-themes",
-            "llvm-vs-code-extensions.vscode-clangd",
-            "twxs.cmake",
-            "cschlosser.doxdocgen",
-            "editorconfig.editorconfig",
-            "streetsidesoftware.code-spell-checker",
-            "mutantdino.resourcemonitor"
-         ]
+         "ms-vscode.cpptools",
+         "ms-vscode.cpptools-themes",
+         "ms-vscode.cmake-tools",
+         "twxs.cmake",
+         "llvm-vs-code-extensions.vscode-clangd",
+         "eamodio.gitlens",
+         "mhutchie.git-graph",
+         "cschlosser.doxdocgen",
+         "streetsidesoftware.code-spell-checker",
+         "mutantdino.resourcemonitor"
+      ]
       }
    }
 }
