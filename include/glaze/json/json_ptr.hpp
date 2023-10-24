@@ -21,16 +21,16 @@ namespace glz
    {
       template <class F, class T>
          requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
-                  is_std_tuple<std::decay_t<T>> bool
-      seek_impl(F&& func, T&& value, sv json_ptr);
+                  is_std_tuple<std::decay_t<T>>
+      bool seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
-         requires nullable_t<std::decay_t<T>> bool
-      seek_impl(F&& func, T&& value, sv json_ptr);
+         requires nullable_t<std::decay_t<T>>
+      bool seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
-         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T> bool
-      seek_impl(F&& func, T&& value, sv json_ptr);
+         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T>
+      bool seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
       bool seek_impl(F&& func, T&& value, sv json_ptr)
@@ -44,8 +44,8 @@ namespace glz
 
       // TODO: compile time search for `~` and optimize if escape does not exist
       template <class F, class T>
-         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T> bool
-      seek_impl(F&& func, T&& value, sv json_ptr)
+         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T>
+      bool seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
             func(value);
@@ -126,8 +126,8 @@ namespace glz
 
       template <class F, class T>
          requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
-                  is_std_tuple<std::decay_t<T>> bool
-      seek_impl(F&& func, T&& value, sv json_ptr)
+                  is_std_tuple<std::decay_t<T>>
+      bool seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
             func(value);
@@ -162,8 +162,8 @@ namespace glz
       }
 
       template <class F, class T>
-         requires nullable_t<std::decay_t<T>> bool
-      seek_impl(F&& func, T&& value, sv json_ptr)
+         requires nullable_t<std::decay_t<T>>
+      bool seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
             func(value);
@@ -569,22 +569,23 @@ namespace glz
 
       // using span_t = std::span<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>;
       using span_t = std::span<const char>; // TODO: should be more generic, but currently broken with mingw
+      using result_t = expected<span_t, parse_error>;
 
       auto start = it;
 
       if (bool(ctx.error)) [[unlikely]] {
-         return expected<span_t, parse_error>{unexpected(parse_error{ctx.error, 0})};
+         return result_t{unexpected(parse_error{ctx.error, 0})};
       }
 
       if constexpr (N == 0) {
-         return std::span{it, end};
+         return result_t{span_t{it, end}};
       }
       else {
          using namespace glz::detail;
 
          skip_ws<Opts>(ctx, it, end);
 
-         expected<span_t, parse_error> ret;
+         result_t ret;
 
          for_each<N>([&](auto I) {
             static constexpr auto key = std::get<I>(tokens);
