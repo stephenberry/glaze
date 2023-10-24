@@ -22,15 +22,15 @@
 
 // Glaze specific macros
 
-#define GLZ_X(a) #a, &T::a
-#define GLZ_QUOTED_X(a) #a, glz::quoted < &T::a>
-#define GLZ_QUOTED_NUM_X(a) #a, glz::quoted_num < &T::a>
+#define GLZ_X(a) #a, &GLZ_T::a
+#define GLZ_QUOTED_X(a) #a, glz::quoted < &GLZ_T::a>
+#define GLZ_QUOTED_NUM_X(a) #a, glz::quoted_num < &GLZ_T::a>
 
 #define GLZ_META(C, ...)                                                      \
    template <>                                                                \
    struct glz::meta<C>                                                        \
    {                                                                          \
-      using T = C;                                                            \
+      using GLZ_T = C;                                                        \
       [[maybe_unused]] static constexpr std::string_view name = #C;           \
       static constexpr auto value = object(GLZ_FOR_EACH(GLZ_X, __VA_ARGS__)); \
    }
@@ -38,7 +38,7 @@
 #define GLZ_LOCAL_META(C, ...)                                                     \
    struct glaze                                                                    \
    {                                                                               \
-      using T = C;                                                                 \
+      using GLZ_T = C;                                                             \
       [[maybe_unused]] static constexpr std::string_view name = #C;                \
       static constexpr auto value = glz::object(GLZ_FOR_EACH(GLZ_X, __VA_ARGS__)); \
    }
