@@ -31,7 +31,7 @@
    struct glz::meta<C>                                                        \
    {                                                                          \
       using T = C;                                                            \
-      static constexpr std::string_view name = #C;                            \
+      [[maybe_unused]] static constexpr std::string_view name = #C;                            \
       static constexpr auto value = object(GLZ_FOR_EACH(GLZ_X, __VA_ARGS__)); \
    }
 
@@ -39,6 +39,6 @@
    struct glaze                                                                    \
    {                                                                               \
       using T = C;                                                                 \
-      static constexpr std::string_view name = #C;                                 \
+      [[maybe_unused]] static constexpr std::string_view name = #C;                                 \
       static constexpr auto value = glz::object(GLZ_FOR_EACH(GLZ_X, __VA_ARGS__)); \
    }
