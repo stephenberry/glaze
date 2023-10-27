@@ -40,9 +40,9 @@ namespace glz
 
       template <class T>
       concept is_manage = requires {
-         typename T::member_t;
-         typename T::func_t;
-      };
+                             typename T::member_t;
+                             typename T::func_t;
+                          };
 
       template <is_manage T>
       struct from_json<T>

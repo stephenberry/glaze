@@ -23,8 +23,8 @@
 // Glaze specific macros
 
 #define GLZ_X(a) #a, &GLZ_T::a
-#define GLZ_QUOTED_X(a) #a, glz::quoted<&GLZ_T::a>
-#define GLZ_QUOTED_NUM_X(a) #a, glz::quoted_num<&GLZ_T::a>
+#define GLZ_QUOTED_X(a) #a, glz::quoted < &GLZ_T::a>
+#define GLZ_QUOTED_NUM_X(a) #a, glz::quoted_num < &GLZ_T::a>
 
 #define GLZ_META(C, ...)                                                      \
    template <>                                                                \
