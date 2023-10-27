@@ -46,8 +46,7 @@ namespace glz
       concept same_as = std::is_same_v<T, U> && std::is_same_v<U, T>;
 
       template <class T, class U>
-      concept other_than = !
-      std::is_same_v<std::decay_t<T>, U>;
+      concept other_than = !std::is_same_v<std::decay_t<T>, U>;
 
       template <class Tup>
       using base_list_t = typename std::decay_t<Tup>::base_list;
@@ -68,16 +67,16 @@ namespace glz
 
       template <class T>
       concept ordered = requires(const T& t) {
-                           {
-                              t <=> t
-                           };
-                        };
+         {
+            t <=> t
+         };
+      };
       template <class T>
       concept equality_comparable = requires(const T& t) {
-                                       {
-                                          t == t
-                                          } -> same_as<bool>;
-                                    };
+         {
+            t == t
+         } -> same_as<bool>;
+      };
    } // namespace tuplet
 
    // tuplet::type_list implementation
