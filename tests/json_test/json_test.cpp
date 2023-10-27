@@ -5289,6 +5289,80 @@ suite empty_variant_objects = [] {
    };
 };
 
+ suite invoke_update_test = [] {
+    "invoke"_test = [] {
+       int x = 5;
+       
+       std::map<std::string, glz::invoke_update<void()>> funcs;
+       funcs["square"] = [&] { x *= x; };
+       funcs["add_one"] = [&] { x += 1; };
+       
+       std::string s = R"(
+ {
+    "square":[],
+    "add_one":[]
+ })";
+       expect(!glz::read_json(funcs, s));
+       expect(x == 5);
+
+       std::string s2 = R"(
+ {
+    "square":[],
+    "add_one":[ ]
+ })";
+       expect(!glz::read_json(funcs, s2));
+       expect(x == 6);
+       
+       std::string s3 = R"(
+ {
+    "square":[ ],
+    "add_one":[ ]
+ })";
+       expect(!glz::read_json(funcs, s3));
+       expect(x == 36);
+    };
+ };
+
+struct updater
+{
+   int x = 5;
+   glz::invoke_update<void()> square = [&] { x *= x; };
+   glz::invoke_update<void()> add_one = [&] { x += 1; };
+   
+   GLZ_LOCAL_META(updater, x, square, add_one);
+};
+
+ suite invoke_updater_test = [] {
+    "invoke_updater"_test = [] {
+       updater obj{};
+       auto& x = obj.x;
+       
+       std::string s = R"(
+ {
+    "square":[],
+    "add_one":[]
+ })";
+       expect(!glz::read_json(obj, s));
+       expect(x == 5) << x;
+
+       std::string s2 = R"(
+ {
+    "square":[],
+    "add_one":[ ]
+ })";
+       expect(!glz::read_json(obj, s2));
+       expect(x == 6) << x;
+       
+       std::string s3 = R"(
+ {
+    "square":[ ],
+    "add_one":[ ]
+ })";
+       expect(!glz::read_json(obj, s3));
+       expect(x == 36) << x;
+    };
+ };
+
 int main()
 {
    // Explicitly run registered test suites and report errors
