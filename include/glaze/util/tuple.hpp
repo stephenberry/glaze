@@ -49,9 +49,9 @@ namespace glz
 
    template <class Type>
    concept is_schema_class = requires {
-                                requires std::is_class_v<Type>;
-                                requires Type::schema_attributes;
-                             };
+      requires std::is_class_v<Type>;
+      requires Type::schema_attributes;
+   };
 
    template <class Tuple>
    constexpr auto filter()
