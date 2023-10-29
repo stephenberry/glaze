@@ -4377,16 +4377,15 @@ suite lamda_wrapper = [] {
    };
 };
 
-
-struct map_quoted_num {
+struct map_quoted_num
+{
    std::map<uint32_t, uint64_t> x;
 };
 
 template <>
 struct glz::meta<map_quoted_num>
 {
-   static constexpr auto value =
-      object("x", glz::quoted_num<&map_quoted_num::x>);
+   static constexpr auto value = object("x", glz::quoted_num<&map_quoted_num::x>);
 };
 
 suite quote_map = [] {
@@ -4397,11 +4396,11 @@ suite quote_map = [] {
       expect(buffer == R"({"x":{"1":"2"}})");
 
       a = {};
-      buffer =  R"({"x":{"3":"4"}})";
+      buffer = R"({"x":{"3":"4"}})";
       expect(glz::read_json(a, buffer) == glz::error_code::none);
-      expect(a.x == std::map<uint32_t, uint64_t>{{3,4}});
+      expect(a.x == std::map<uint32_t, uint64_t>{{3, 4}});
    };
- };
+};
 
 suite char_array = [] {
    "char array write"_test = [] {
