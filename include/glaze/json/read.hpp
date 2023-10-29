@@ -183,6 +183,11 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(bool_t auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
+            if constexpr (Opts.quoted_num) {
+               skip_ws<Opts>(ctx, it, end);
+               match<'"'>(ctx, it, end);
+            }
+
             if constexpr (!Opts.ws_handled) {
                skip_ws<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
@@ -194,19 +199,23 @@ namespace glz
                ++it;
                value = true;
                match<"rue">(ctx, it, end);
-               return;
+               break;
             }
             case 'f': {
                ++it;
                value = false;
                match<"alse">(ctx, it, end);
-               return;
+               break;
             }
                [[unlikely]] default:
                {
                   ctx.error = error_code::expected_true_or_false;
                   return;
                }
+            }
+
+            if constexpr (Opts.quoted_num) {
+               match<'"'>(ctx, it, end);
             }
          }
       };
