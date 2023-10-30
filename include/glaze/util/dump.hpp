@@ -12,6 +12,7 @@ namespace glz::detail
 {
    GLZ_ALWAYS_INLINE void dump(const char c, vector_like auto& b, auto&& ix) noexcept
    {
+      assert(ix <= b.size());
       if (ix == b.size()) [[unlikely]] {
          b.resize(b.size() == 0 ? 128 : b.size() * 2);
       }
@@ -29,6 +30,7 @@ namespace glz::detail
    template <char c>
    GLZ_ALWAYS_INLINE void dump(vector_like auto& b, auto&& ix) noexcept
    {
+      assert(ix <= b.size());
       if (ix == b.size()) [[unlikely]] {
          b.resize(b.size() == 0 ? 128 : b.size() * 2);
       }
@@ -197,6 +199,7 @@ namespace glz::detail
    template <std::byte c, class B>
    GLZ_ALWAYS_INLINE void dump(B&& b, auto&& ix) noexcept
    {
+      assert(ix <= b.size());
       if (ix == b.size()) [[unlikely]] {
          b.resize(b.size() == 0 ? 128 : b.size() * 2);
       }
@@ -233,6 +236,7 @@ namespace glz::detail
    template <class B>
    GLZ_ALWAYS_INLINE void dump(std::byte c, auto&& b, auto&& ix) noexcept
    {
+      assert(ix <= b.size());
       if (ix == b.size()) [[unlikely]] {
          b.resize(b.size() == 0 ? 128 : b.size() * 2);
       }
