@@ -69,8 +69,6 @@ Binary message size: 564 bytes
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc_2022.yml/badge.svg) 
 
-> MSVC 2019 is no longer supported as of v1.3.0
-
 ## Example
 
 ```c++
