@@ -5,7 +5,10 @@
 
 #include <type_traits>
 
-#include "glaze/json.hpp"
+#include "glaze/core/format.hpp"
+#include "glaze/core/opts.hpp"
+#include "glaze/json/read.hpp"
+#include "glaze/json/write.hpp"
 
 namespace glz
 {
