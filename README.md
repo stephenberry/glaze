@@ -3,25 +3,6 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from C++ 
 
 Glaze also supports binary messages via [BEVE](https://github.com/stephenberry/beve) and CSV support. And, the library has many more useful features for building APIs.
 
-## Breaking Wrapper Changes! (v1.5.1)
-Wrappers now consistently leave off the `()` for less typing
-
-- `glz::quoted` for reading numbers as strings and writing them as strings has been replaced with `glz::quoted_num`
-- The recent `glz::unquote` has been replaced with the name `glz::quoted`, which reads a string into a value and writes the value with quotes. This is less efficient for numbers than `glz::quoted_num`. `glz::quoted_num` also handles nested decoding of numbers unlike `glz::quoted`.
-
-Below shows the format for adding wrappers within glaze metadata.
-```c++
-glz::quoted_num<&T::x> // reads a number as a string and writes it as a string
-glz::quoted<&T::x> // reads a value as a string and unescapes, to avoid the user having to parse twice
-glz::number<&T::x> // reads a string as a number and writes the string as a number
-glz::invoke<&T::func> // invokes a std::function or member function with n-arguments as an array input
-glz::custom<&T::read, &T::write> // calls custom read and write std::functions or member functions
-```
-
-## New Custom JSON Read/Write Support!
-
-Glaze version 1.5.0 adds the ability to register member functions to customize reading and writing. See [Custom Read/Write](#custom-readwrite) for more information.
-
 ## Highlights
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
@@ -31,6 +12,8 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - Direct to memory serialization/deserialization
 - Compile time maps with constant time lookups and perfect hashing
 - Nearly zero intermediate allocations
+- Powerful wrappers to modify read/write behavior ([Wrappers](./docs/wrappers.md))
+- Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
 - Direct memory access through JSON pointer syntax
 - [Tagged binary spec](./docs/binary.md) through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
@@ -39,7 +22,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - [JSON-RPC 2.0 support](./docs/json-rpc.md)
 - [JSON Schema generation](./docs/json-schema.md)
 - [CSV Reading/Writing](./docs/csv.md)
-- Much more!
+- [Much more!](#more-features)
 
 ## Performance
 
@@ -826,6 +809,8 @@ glz::read_ndjson(x, s);
 ### [JSON Schema](./docs/json-schema.md)
 
 ### [JSON Include System](./docs/json-include.md)
+
+### [Wrappers](./docs/wrappers.md)
 
 # Extensions
 
