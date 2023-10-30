@@ -5339,6 +5339,92 @@ suite empty_variant_objects = [] {
    };
 };
 
+template <typename PARAMS>
+struct request_t {
+    int id = -1;
+    std::optional<bool> proxy;
+    std::string method;
+    PARAMS params;
+
+    // meta
+    struct glaze {
+        using T = request_t<PARAMS>;
+        static constexpr auto value = glz::object(
+            "id", &T::id, "proxy", &T::proxy, "method", &T::method, "params", &T::params);
+    };
+};
+
+struct QuoteData {
+    // session
+    uint64_t time;
+    std::string action; // send, recv
+    std::string quote;  // order, kill
+    std::string account;
+    uint32_t uid;
+    uint32_t session_id;
+    uint32_t request_id;
+    // order
+    int state = 0;
+    std::string order_id = "";
+    std::string exchange = "";
+    std::string type = "";
+    std::string tif = "";
+    std::string offset = "";
+    std::string side = "";
+    std::string symbol = "";
+    double price = 0;
+    double quantity = 0;
+    double traded = 0;
+};
+
+typedef request_t<QuoteData> SaveQuote;
+
+GLZ_META(
+    QuoteData,
+    time,
+    action,
+    quote,
+    account,
+    uid,
+    session_id,
+    request_id,
+    state,
+    order_id,
+    exchange,
+    type,
+    tif,
+    offset,
+    side,
+    symbol,
+    price,
+    quantity,
+    traded);
+
+suite trade_quote_test = [] {
+   "trade_quote"_test = [] {
+      
+      SaveQuote q{};
+      q.id = 706;
+    q.method = "save_quote";
+    q.params.time = 1698627291351456360;
+    q.params.action = "send";
+    q.params.quote = "kill";
+    q.params.account = "603302";
+    q.params.uid = 11;
+    q.params.session_id = 1;
+    q.params.request_id = 41;
+    q.params.state = 0;
+    q.params.order_id = "2023103000180021";
+    q.params.exchange = "CZCE";
+    q.params.symbol = "SPD RM401&RM403";
+
+    std::string buffer;
+      glz::write<glz::opts{}>(q, buffer);
+      
+      expect(buffer == R"({"id":706,"method":"save_quote","params":{"time":1698627291351456360,"action":"send","quote":"kill","account":"603302","uid":11,"session_id":1,"request_id":41,"state":0,"order_id":"2023103000180021","exchange":"CZCE","type":"","tif":"","offset":"","side":"","symbol":"SPD RM401&RM403","price":0,"quantity":0,"traded":0}})") << buffer;
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
