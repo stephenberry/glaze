@@ -4402,6 +4402,31 @@ suite quote_map = [] {
    };
 };
 
+struct bool_map
+{
+   std::map<bool, std::string> x;
+};
+
+template <>
+struct glz::meta<bool_map>
+{
+   static constexpr auto value = object("x", &bool_map::x);
+};
+
+suite map_with_bool_key = [] {
+   "bool_map"_test = [] {
+      bool_map a{{{true, "true"}}};
+      std::string buffer{};
+      glz::write_json(a, buffer);
+      expect(buffer == R"({"x":{"true":"true"}})");
+
+      a = {};
+      buffer = R"({"x":{"false":"false"}})";
+      expect(glz::read_json(a, buffer) == glz::error_code::none);
+      expect(a.x == std::map<bool, std::string>{{false, "false"}});
+   };
+};
+
 suite char_array = [] {
    "char array write"_test = [] {
       char arr[12] = "Hello World";
