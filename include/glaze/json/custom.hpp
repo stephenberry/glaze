@@ -172,16 +172,16 @@ namespace glz
       template <auto From, auto To>
       inline constexpr decltype(auto) custom_impl() noexcept
       {
-         using F = decltype(From);
-         using T = decltype(To);
+         using F = std::decay_t<decltype(From)>;
+         using T = std::decay_t<decltype(To)>;
          if constexpr (std::is_member_function_pointer_v<F> && std::is_member_function_pointer_v<T>) {
-            return [](auto&& v) { return custom_t<std::decay_t<F>, std::decay_t<T>>{v, From, To}; };
+            return [](auto&& v) { return custom_t<F, T>{v, From, To}; };
          }
-         else if constexpr (!std::is_member_function_pointer_v<F> && std::is_member_function_pointer_v<T>) {
-            return [](auto&& v) { return custom_t<std::decay_t<decltype(v.*From)>, std::decay_t<T>>{v, v.*From, To}; };
+         else if constexpr (std::is_member_object_pointer_v<F> && std::is_member_function_pointer_v<T>) {
+            return [](auto&& v) { return custom_t<std::decay_t<decltype(v.*From)>, T>{v, v.*From, To}; };
          }
-         else if constexpr (std::is_member_function_pointer_v<F> && !std::is_member_function_pointer_v<T>) {
-            return [](auto&& v) { return custom_t<std::decay_t<F>, std::decay_t<decltype(v.*To)>>{v, From, v.*To}; };
+         else if constexpr (std::is_member_function_pointer_v<F> && std::is_member_object_pointer_v<T>) {
+            return [](auto&& v) { return custom_t<F, std::decay_t<decltype(v.*To)>>{v, From, v.*To}; };
          }
          else {
             return [](auto&& v) {
