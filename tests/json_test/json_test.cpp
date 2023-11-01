@@ -4377,6 +4377,56 @@ suite lamda_wrapper = [] {
    };
 };
 
+struct map_quoted_num
+{
+   std::map<uint32_t, uint64_t> x;
+};
+
+template <>
+struct glz::meta<map_quoted_num>
+{
+   static constexpr auto value = object("x", glz::quoted_num<&map_quoted_num::x>);
+};
+
+suite quote_map = [] {
+   "map_quoted_num"_test = [] {
+      map_quoted_num a{{{1, 2}}};
+      std::string buffer{};
+      glz::write_json(a, buffer);
+      expect(buffer == R"({"x":{"1":"2"}})");
+
+      a = {};
+      buffer = R"({"x":{"3":"4"}})";
+      expect(glz::read_json(a, buffer) == glz::error_code::none);
+      expect(a.x == std::map<uint32_t, uint64_t>{{3, 4}});
+   };
+};
+
+struct bool_map
+{
+   std::map<bool, std::string> x;
+};
+
+template <>
+struct glz::meta<bool_map>
+{
+   static constexpr auto value = object("x", &bool_map::x);
+};
+
+suite map_with_bool_key = [] {
+   "bool_map"_test = [] {
+      bool_map a{{{true, "true"}}};
+      std::string buffer{};
+      glz::write_json(a, buffer);
+      expect(buffer == R"({"x":{"true":"true"}})");
+
+      a = {};
+      buffer = R"({"x":{"false":"false"}})";
+      expect(glz::read_json(a, buffer) == glz::error_code::none);
+      expect(a.x == std::map<bool, std::string>{{false, "false"}});
+   };
+};
+
 suite char_array = [] {
    "char array write"_test = [] {
       char arr[12] = "Hello World";
@@ -5165,6 +5215,37 @@ suite custom_encoding_test = [] {
    };
 };
 
+struct custom_load_t
+{
+   std::vector<int> x{};
+   std::vector<int> y{};
+
+   struct glaze
+   {
+      using T = custom_load_t;
+      static constexpr auto read_x = [](auto& s) -> auto& { return s.x; };
+      static constexpr auto write_x = [](auto& s) -> auto& { return s.y; };
+      static constexpr auto value = glz::object("x", glz::custom<read_x, write_x>);
+   };
+};
+
+suite custom_load_test = [] {
+   "custom_load"_test = [] {
+      custom_load_t obj{};
+      std::string s = R"({"x":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+      s.clear();
+      glz::write_json(obj, s);
+      expect(s == R"({"x":[]})");
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+   };
+};
+
 struct client_state
 {
    uint64_t id{};
@@ -5214,21 +5295,15 @@ struct manage_x
    std::vector<int> x{};
    std::vector<int> y{};
 
-   bool handle_x(const glz::manage_state state)
+   bool read_x()
    {
-      switch (state) {
-      case glz::manage_state::read: {
-         y = x;
-         break;
-      }
-      case glz::manage_state::write: {
-         x = y;
-         break;
-      }
-      default: {
-         return false;
-      }
-      }
+      y = x;
+      return true;
+   }
+
+   bool write_x()
+   {
+      x = y;
       return true;
    }
 };
@@ -5237,12 +5312,49 @@ template <>
 struct glz::meta<manage_x>
 {
    using T = manage_x;
-   static constexpr auto value = object("x", manage<&T::x, &T::handle_x>);
+   static constexpr auto value = object("x", manage<&T::x, &T::read_x, &T::write_x>);
+};
+
+struct manage_x_lambda
+{
+   std::vector<int> x{};
+   std::vector<int> y{};
+};
+
+template <>
+struct glz::meta<manage_x_lambda>
+{
+   using T = manage_x_lambda;
+   static constexpr auto read_x = [](auto& s) {
+      s.y = s.x;
+      return true;
+   };
+   static constexpr auto write_x = [](auto& s) {
+      s.x = s.y;
+      return true;
+   };
+   [[maybe_unused]] static constexpr auto value = object("x", manage<&T::x, read_x, write_x>);
 };
 
 suite manage_test = [] {
    "manage"_test = [] {
       manage_x obj{};
+      std::string s = R"({"x":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.y[0] == 1);
+      expect(obj.y[1] == 2);
+      expect(obj.y[2] == 3);
+      obj.x.clear();
+      s.clear();
+      glz::write_json(obj, s);
+      expect(s == R"({"x":[1,2,3]})");
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+   };
+
+   "manage_lambdas"_test = [] {
+      manage_x_lambda obj{};
       std::string s = R"({"x":[1,2,3]})";
       expect(!glz::read_json(obj, s));
       expect(obj.y[0] == 1);
@@ -5286,6 +5398,79 @@ suite empty_variant_objects = [] {
 
       expect(!glz::read_json(v, s));
       expect(std::holds_alternative<varx>(v));
+   };
+};
+
+template <typename PARAMS>
+struct request_t
+{
+   int id = -1;
+   std::optional<bool> proxy;
+   std::string method;
+   PARAMS params;
+
+   // meta
+   struct glaze
+   {
+      using T = request_t<PARAMS>;
+      static constexpr auto value =
+         glz::object("id", &T::id, "proxy", &T::proxy, "method", &T::method, "params", &T::params);
+   };
+};
+
+struct QuoteData
+{
+   // session
+   uint64_t time;
+   std::string action; // send, recv
+   std::string quote; // order, kill
+   std::string account;
+   uint32_t uid;
+   uint32_t session_id;
+   uint32_t request_id;
+   // order
+   int state = 0;
+   std::string order_id = "";
+   std::string exchange = "";
+   std::string type = "";
+   std::string tif = "";
+   std::string offset = "";
+   std::string side = "";
+   std::string symbol = "";
+   double price = 0;
+   double quantity = 0;
+   double traded = 0;
+};
+
+typedef request_t<QuoteData> SaveQuote;
+
+GLZ_META(QuoteData, time, action, quote, account, uid, session_id, request_id, state, order_id, exchange, type, tif,
+         offset, side, symbol, price, quantity, traded);
+
+suite trade_quote_test = [] {
+   "trade_quote"_test = [] {
+      SaveQuote q{};
+      q.id = 706;
+      q.method = "save_quote";
+      q.params.time = 1698627291351456360;
+      q.params.action = "send";
+      q.params.quote = "kill";
+      q.params.account = "603302";
+      q.params.uid = 11;
+      q.params.session_id = 1;
+      q.params.request_id = 41;
+      q.params.state = 0;
+      q.params.order_id = "2023103000180021";
+      q.params.exchange = "CZCE";
+      q.params.symbol = "SPD RM401&RM403";
+
+      std::string buffer;
+      glz::write<glz::opts{}>(q, buffer);
+
+      expect(
+         buffer ==
+         R"({"id":706,"method":"save_quote","params":{"time":1698627291351456360,"action":"send","quote":"kill","account":"603302","uid":11,"session_id":1,"request_id":41,"state":0,"order_id":"2023103000180021","exchange":"CZCE","type":"","tif":"","offset":"","side":"","symbol":"SPD RM401&RM403","price":0,"quantity":0,"traded":0}})")
+         << buffer;
    };
 };
 

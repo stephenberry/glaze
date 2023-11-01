@@ -237,11 +237,11 @@ namespace glz
                   }();
                   const auto n = str.size();
 
-                  // we use 4 * n to handle potential escape characters and quoted bounds
-                  // Example: if n were of length 1 and needed to be escaped, then it would require 4 characters
-                  // for the original, the escape, and the quote
+                  // In the case n == 0 we need two characters for quotes.
+                  // For each individual character we need room for two characters to handle escapes.
+                  // So, we need 2 + 2 * n characters to handle all cases.
                   if constexpr (detail::resizeable<B>) {
-                     const auto k = ix + 4 * n;
+                     const auto k = ix + 2 + 2 * n;
                      if (k >= b.size()) [[unlikely]] {
                         b.resize((std::max)(b.size() * 2, k));
                      }
@@ -402,7 +402,7 @@ namespace glz
       template <opts Opts, typename Key, typename Value, is_context Ctx>
       void write_pair_content(const Key& key, const Value& value, Ctx& ctx, auto&&... args) noexcept
       {
-         if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key>) {
+         if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
             write<json>::op<Opts>(key, ctx, args...);
             dump<':'>(args...);
          }
