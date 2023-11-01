@@ -59,8 +59,8 @@ namespace glz
          template <auto Opts, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end)
          {
-            using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
-            from_binary<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
+            using V = decltype(get_member<io_state::read>(std::declval<T>(), meta_wrapper_v<T>));
+            from_binary<V>::template op<Opts>(get_member<io_state::read>(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
                                               std::forward<It0>(it), std::forward<It1>(end));
          }
       };
@@ -92,7 +92,7 @@ namespace glz
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<T>);
 
-               get_member(value, glz::tuplet::get<1>(item)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
+               get_member<io_state::read>(value, glz::tuplet::get<1>(item)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
             });
          }
       };
@@ -594,7 +594,7 @@ namespace glz
 
                if (p != storage.end()) [[likely]] {
                   std::visit(
-                     [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
+                     [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member<io_state::read>(value, member_ptr), ctx, it, end); },
                      p->second);
 
                   if (bool(ctx.error)) [[unlikely]] {
@@ -634,7 +634,7 @@ namespace glz
 
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-               read<binary>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<V>)), ctx, it, end);
+               read<binary>::op<Opts>(get_member<io_state::read>(value, glz::tuplet::get<I>(meta_v<V>)), ctx, it, end);
             });
          }
       };

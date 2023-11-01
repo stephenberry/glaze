@@ -81,8 +81,8 @@ namespace glz
          template <auto Opts, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
-            using V = std::decay_t<decltype(get_member(std::declval<T>(), meta_wrapper_v<T>))>;
-            from_json<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
+            using V = std::decay_t<decltype(get_member<io_state::read>(std::declval<T>(), meta_wrapper_v<T>))>;
+            from_json<V>::template op<Opts>(get_member<io_state::read>(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
                                             std::forward<It0>(it), std::forward<It1>(end));
          }
       };
@@ -1171,7 +1171,7 @@ namespace glz
                      return;
                }
                else if constexpr (glaze_array_t<T>) {
-                  read<json>::op<ws_handled<Opts>()>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx, it, end);
+                  read<json>::op<ws_handled<Opts>()>(get_member<io_state::read>(value, glz::tuplet::get<I>(meta_v<T>)), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
@@ -1216,7 +1216,7 @@ namespace glz
 
                auto itr = flag_map.find(s);
                if (itr != flag_map.end()) {
-                  std::visit([&](auto&& x) { get_member(value, x) = true; }, itr->second);
+                  std::visit([&](auto&& x) { get_member<io_state::read>(value, x) = true; }, itr->second);
                }
                else {
                   ctx.error = error_code::invalid_flag_input;
@@ -1611,7 +1611,7 @@ namespace glz
                      }
                      std::visit(
                         [&](auto&& member_ptr) {
-                           read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
+                           read<json>::op<ws_handled<Opts>()>(get_member<io_state::read>(value, member_ptr), ctx, it, end);
                         },
                         member_it->second);
                      if (bool(ctx.error)) [[unlikely]]

@@ -144,7 +144,7 @@ namespace glz
                   read<json>::op<Opts>(std::get<I>(value), ctx, it, end);
                }
                else if constexpr (glaze_array_t<T>) {
-                  read<json>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx, it, end);
+                  read<json>::op<Opts>(get_member<io_state::read>(value, glz::tuplet::get<I>(meta_v<T>)), ctx, it, end);
                }
                else {
                   read<json>::op<Opts>(glz::tuplet::get<I>(value), ctx, it, end);
@@ -215,7 +215,7 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx,
+                  write<json>::op<Opts>(get_member<io_state::write>(value, glz::tuplet::get<I>(meta_v<T>)), ctx,
                                         std::forward<Args>(args)...);
                }
                else {

@@ -36,8 +36,8 @@ namespace glz
          template <auto Opts, is_context Ctx, class It0, class It1>
          static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
-            using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
-            from_csv<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
+            using V = decltype(get_member<io_state::read>(std::declval<T>(), meta_wrapper_v<T>));
+            from_csv<V>::template op<Opts>(get_member<io_state::read>(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
                                            std::forward<It0>(it), std::forward<It1>(end));
          }
       };
@@ -398,7 +398,7 @@ namespace glz
                   if (member_it != frozen_map.end()) [[likely]] {
                      std::visit(
                         [&](auto&& member_ptr) {
-                           auto&& member = get_member(value, member_ptr);
+                           auto&& member = get_member<io_state::read>(value, member_ptr);
                            using M = std::decay_t<decltype(member)>;
                            if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
                               size_t col = 0;
@@ -479,7 +479,7 @@ namespace glz
                      if (member_it != frozen_map.end()) [[likely]] {
                         std::visit(
                            [&](auto&& member_ptr) {
-                              auto&& member = get_member(value, member_ptr);
+                              auto&& member = get_member<io_state::read>(value, member_ptr);
                               using M = std::decay_t<decltype(member)>;
                               if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
                                  const auto index = keys[i].second;

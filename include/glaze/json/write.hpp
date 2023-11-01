@@ -53,8 +53,8 @@ namespace glz
          template <auto Opts, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, B&& b, IX&& ix)
          {
-            using V = std::decay_t<decltype(get_member(std::declval<T>(), meta_wrapper_v<T>))>;
-            to_json<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
+            using V = std::decay_t<decltype(get_member<io_state::write>(std::declval<T>(), meta_wrapper_v<T>))>;
+            to_json<V>::template op<Opts>(get_member<io_state::write>(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
                                           std::forward<B>(b), std::forward<IX>(ix));
          }
       };
@@ -72,7 +72,7 @@ namespace glz
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<T>);
 
-               if (get_member(value, glz::tuplet::get<1>(item))) {
+               if (get_member<io_state::write>(value, glz::tuplet::get<1>(item))) {
                   dump<'"'>(b, ix);
                   dump(glz::tuplet::get<0>(item), b, ix);
                   dump<'"'>(b, ix);
@@ -654,7 +654,7 @@ namespace glz
             }
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value.value, glz::tuplet::get<I>(meta_v<T>)), ctx, args...);
+                  write<json>::op<Opts>(get_member<io_state::write>(value.value, glz::tuplet::get<I>(meta_v<T>)), ctx, args...);
                }
                else {
                   write<json>::op<Opts>(glz::tuplet::get<I>(value.value), ctx, args...);
@@ -698,7 +698,7 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx, args...);
+                  write<json>::op<Opts>(get_member<io_state::write>(value, glz::tuplet::get<I>(meta_v<T>)), ctx, args...);
                }
                else {
                   write<json>::op<Opts>(glz::tuplet::get<I>(value), ctx, args...);
@@ -991,7 +991,7 @@ namespace glz
                      write<json>::op<Opts>(quoted_key, ctx, b, ix);
                   }
 
-                  write<json>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, b, ix);
+                  write<json>::op<Opts>(get_member<io_state::write>(value, glz::tuplet::get<1>(item)), ctx, b, ix);
 
                   static constexpr auto S = std::tuple_size_v<decltype(item)>;
                   if constexpr (Opts.comments && S > 2) {

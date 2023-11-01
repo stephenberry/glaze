@@ -112,8 +112,8 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, Args&&... args) noexcept
          {
-            using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
-            to_binary<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Args>(args)...);
+            using V = decltype(get_member<io_state::write>(std::declval<T>(), meta_wrapper_v<T>));
+            to_binary<V>::template op<Opts>(get_member<io_state::write>(value, meta_wrapper_v<T>), std::forward<Args>(args)...);
          }
       };
 
@@ -130,7 +130,7 @@ namespace glz
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<T>);
 
-               data[I / 8] |= static_cast<uint8_t>(get_member(value, glz::tuplet::get<1>(item))) << (7 - (I % 8));
+               data[I / 8] |= static_cast<uint8_t>(get_member<io_state::write>(value, glz::tuplet::get<1>(item))) << (7 - (I % 8));
             });
 
             dump(data, b, ix);
@@ -440,7 +440,7 @@ namespace glz
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                write<binary>::no_header<Opts>(glz::tuplet::get<0>(item), ctx, args...);
-               write<binary>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, args...);
+               write<binary>::op<Opts>(get_member<io_state::write>(value, glz::tuplet::get<1>(item)), ctx, args...);
             });
          }
       };
@@ -459,7 +459,7 @@ namespace glz
 
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-               write<binary>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<V>)), ctx, args...);
+               write<binary>::op<Opts>(get_member<io_state::write>(value, glz::tuplet::get<I>(meta_v<V>)), ctx, args...);
             });
          }
       };
@@ -534,7 +534,7 @@ namespace glz
                static constexpr decltype(auto) member_ptr = std::get<index>(member_it->second);
 
                detail::write<binary>::no_header<Opts>(key, ctx, buffer, ix);
-               std::ignore = write<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), ctx, buffer, ix);
+               std::ignore = write<sub_partial, Opts>(glz::detail::get_member<io_state::write>(value, member_ptr), ctx, buffer, ix);
             });
          }
          else if constexpr (detail::writable_map_t<std::decay_t<T>>) {

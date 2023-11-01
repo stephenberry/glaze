@@ -34,8 +34,8 @@ namespace glz
          template <auto Opts, is_context Ctx, class B, class IX>
          static void op(auto&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
-            using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
-            to_csv<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
+            using V = decltype(get_member<io_state::write>(std::declval<T>(), meta_wrapper_v<T>));
+            to_csv<V>::template op<Opts>(get_member<io_state::write>(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
                                          std::forward<B>(b), std::forward<IX>(ix));
          }
       };
@@ -187,11 +187,11 @@ namespace glz
                   static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                   static constexpr sv key = glz::tuplet::get<0>(item);
 
-                  using item_type = std::decay_t<decltype(get_member(value, glz::tuplet::get<1>(item)))>;
+                  using item_type = std::decay_t<decltype(get_member<io_state::write>(value, glz::tuplet::get<1>(item)))>;
                   using V = typename item_type::value_type;
 
                   if constexpr (writable_array_t<V>) {
-                     auto&& member = get_member(value, glz::tuplet::get<1>(item));
+                     auto&& member = get_member<io_state::write>(value, glz::tuplet::get<1>(item));
                      const auto count = member.size();
                      const auto size = member[0].size();
                      for (size_t i = 0; i < size; ++i) {
@@ -216,7 +216,7 @@ namespace glz
                   else {
                      dump<key>(b, ix);
                      dump<','>(b, ix);
-                     write<csv>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, b, ix);
+                     write<csv>::op<Opts>(get_member<io_state::write>(value, glz::tuplet::get<1>(item)), ctx, b, ix);
                      dump<'\n'>(b, ix);
                   }
                });
@@ -227,10 +227,10 @@ namespace glz
                   static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
                   static constexpr sv key = glz::tuplet::get<0>(item);
 
-                  using X = std::decay_t<decltype(get_member(value, glz::tuplet::get<1>(item)))>;
+                  using X = std::decay_t<decltype(get_member<io_state::write>(value, glz::tuplet::get<1>(item)))>;
 
                   if constexpr (fixed_array_value_t<X>) {
-                     const auto size = get_member(value, glz::tuplet::get<1>(item))[0].size();
+                     const auto size = get_member<io_state::write>(value, glz::tuplet::get<1>(item))[0].size();
                      for (size_t i = 0; i < size; ++i) {
                         dump<key>(b, ix);
                         dump<'['>(b, ix);
@@ -259,10 +259,10 @@ namespace glz
                   for_each<N>([&](auto I) {
                      static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
 
-                     using X = std::decay_t<decltype(get_member(value, glz::tuplet::get<1>(item)))>;
+                     using X = std::decay_t<decltype(get_member<io_state::write>(value, glz::tuplet::get<1>(item)))>;
 
                      if constexpr (fixed_array_value_t<X>) {
-                        auto&& member = get_member(value, glz::tuplet::get<1>(item));
+                        auto&& member = get_member<io_state::write>(value, glz::tuplet::get<1>(item));
                         if (row >= member.size()) {
                            end = true;
                            return;
@@ -277,7 +277,7 @@ namespace glz
                         }
                      }
                      else {
-                        auto&& member = get_member(value, glz::tuplet::get<1>(item));
+                        auto&& member = get_member<io_state::write>(value, glz::tuplet::get<1>(item));
                         if (row >= member.size()) {
                            end = true;
                            return;

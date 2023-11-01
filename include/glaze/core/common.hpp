@@ -45,6 +45,16 @@ namespace glz
 
    template <class T>
    concept custom_write = requires { meta<T>::custom_write == true; };
+   
+   enum class io_state : uint32_t { read, write, read_write, error };
+   
+   // Stores read and write lambdas for custom handling
+   template <class Read, class Write>
+   struct lambda_custom
+   {
+      Read read;
+      Write write;
+   };
 
    template <class... T>
    struct obj final
@@ -857,7 +867,8 @@ namespace glz
 
          return make_variant_id_map_impl<T>(indices, ids_v<T>);
       }
-
+      
+      template <io_state State>
       inline decltype(auto) get_member(auto&& value, auto&& member_ptr)
       {
          using V = std::decay_t<decltype(member_ptr)>;
@@ -873,6 +884,20 @@ namespace glz
          else if constexpr (std::is_pointer_v<V>) {
             return *member_ptr;
          }
+         else if constexpr (is_specialization_v<V, lambda_custom>) {
+            if constexpr (State == io_state::read) {
+               return member_ptr.read(value);
+            }
+            else if constexpr (State == io_state::write) {
+               return member_ptr.write(value);
+            }
+            else if constexpr (State == io_state::read_write) {
+               static_assert(false_v<decltype(State)>, "Using lambda_custom on an io_state::read_write");
+            }
+            else {
+               static_assert(false_v<decltype(State)>, "io_state::error");
+            }
+         }
          else {
             return member_ptr;
          }
@@ -885,14 +910,14 @@ namespace glz
          Wrapped wrapped;
          constexpr decltype(auto) operator()(auto&& value) const
          {
-            return Wrapper<std::decay_t<decltype(get_member(value, wrapped))>>{get_member(value, wrapped)};
+            return Wrapper<std::decay_t<decltype(get_member<io_state::read_write>(value, wrapped))>>{get_member<io_state::read_write>(value, wrapped)};
          }
 
-         constexpr decltype(auto) unwrap(auto&& value) const { return get_member(value, wrapped); }
+         constexpr decltype(auto) unwrap(auto&& value) const { return get_member<io_state::read_write>(value, wrapped); }
       };
 
       template <class T, class mptr_t>
-      using member_t = decltype(get_member(std::declval<T>(), std::declval<std::decay_t<mptr_t>&>()));
+      using member_t = decltype(get_member<io_state::read_write>(std::declval<T>(), std::declval<std::decay_t<mptr_t>&>()));
 
       template <class T, class = std::make_index_sequence<std::tuple_size<meta_t<T>>::value>>
       struct members_from_meta;

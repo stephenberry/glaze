@@ -5259,6 +5259,37 @@ suite complex_test = [] {
    };
 };
 
+/*struct custom_io_t
+{
+   std::vector<int> x{};
+   std::vector<int> y{};
+   
+   struct glaze {
+      using T = custom_io_t;
+      static constexpr auto read_x = [](auto& s) -> auto& { s.y = s.x; return s.x; };
+      static constexpr auto write_x = [](auto& s) -> auto& { s.x = s.y; return s.x; };
+      static constexpr auto value = glz::object("x", glz::custom<read_x, write_x>);
+   };
+};
+
+suite custom_io_test = [] {
+   "custom_io"_test = [] {
+      custom_io_t obj{};
+      std::string s = R"({"x":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.y[0] == 1);
+      expect(obj.y[1] == 2);
+      expect(obj.y[2] == 3);
+      obj.x.clear();
+      s.clear();
+      glz::write_json(obj, s);
+      expect(s == R"({"x":[1,2,3]})");
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+   };
+};*/
+
 struct manage_x
 {
    std::vector<int> x{};
