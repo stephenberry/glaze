@@ -5215,6 +5215,36 @@ suite custom_encoding_test = [] {
    };
 };
 
+struct custom_load_t
+{
+   std::vector<int> x{};
+   std::vector<int> y{};
+   
+   struct glaze {
+      using T = custom_load_t;
+      static constexpr auto read_x = [](auto& s) -> auto& { return s.x; };
+      static constexpr auto write_x = [](auto& s) -> auto& { return s.y; };
+      static constexpr auto value = glz::object("x", glz::custom<read_x, write_x>);
+   };
+};
+
+suite custom_load_test = [] {
+   "custom_load"_test = [] {
+      custom_load_t obj{};
+      std::string s = R"({"x":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+      s.clear();
+      glz::write_json(obj, s);
+      expect(s == R"({"x":[]})");
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+   };
+};
+
 struct client_state
 {
    uint64_t id{};
@@ -5264,21 +5294,15 @@ struct manage_x
    std::vector<int> x{};
    std::vector<int> y{};
 
-   bool handle_x(const glz::manage_state state)
+   bool read_x()
    {
-      switch (state) {
-      case glz::manage_state::read: {
-         y = x;
-         break;
-      }
-      case glz::manage_state::write: {
-         x = y;
-         break;
-      }
-      default: {
-         return false;
-      }
-      }
+      y = x;
+      return true;
+   }
+   
+   bool write_x()
+   {
+      x = y;
       return true;
    }
 };
@@ -5287,12 +5311,44 @@ template <>
 struct glz::meta<manage_x>
 {
    using T = manage_x;
-   static constexpr auto value = object("x", manage<&T::x, &T::handle_x>);
+   static constexpr auto value = object("x", manage<&T::x, &T::read_x, &T::write_x>);
+};
+
+
+struct manage_x_lambda
+{
+   std::vector<int> x{};
+   std::vector<int> y{};
+};
+
+template <>
+struct glz::meta<manage_x_lambda>
+{
+   using T = manage_x_lambda;
+   static constexpr auto read_x = [](auto& s) { s.y = s.x; return true; };
+   static constexpr auto write_x = [](auto& s) { s.x = s.y; return true; };
+   [[maybe_unused]]static constexpr auto value = object("x", manage<&T::x, read_x, write_x>);
 };
 
 suite manage_test = [] {
    "manage"_test = [] {
       manage_x obj{};
+      std::string s = R"({"x":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.y[0] == 1);
+      expect(obj.y[1] == 2);
+      expect(obj.y[2] == 3);
+      obj.x.clear();
+      s.clear();
+      glz::write_json(obj, s);
+      expect(s == R"({"x":[1,2,3]})");
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+   };
+   
+   "manage_lambdas"_test = [] {
+      manage_x_lambda obj{};
       std::string s = R"({"x":[1,2,3]})";
       expect(!glz::read_json(obj, s));
       expect(obj.y[0] == 1);
