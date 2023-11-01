@@ -5294,21 +5294,15 @@ struct manage_x
    std::vector<int> x{};
    std::vector<int> y{};
 
-   bool handle_x(const glz::manage_state state)
+   bool read_x()
    {
-      switch (state) {
-      case glz::manage_state::read: {
-         y = x;
-         break;
-      }
-      case glz::manage_state::write: {
-         x = y;
-         break;
-      }
-      default: {
-         return false;
-      }
-      }
+      y = x;
+      return true;
+   }
+   
+   bool write_x()
+   {
+      x = y;
       return true;
    }
 };
@@ -5317,7 +5311,7 @@ template <>
 struct glz::meta<manage_x>
 {
    using T = manage_x;
-   static constexpr auto value = object("x", manage<&T::x, &T::handle_x>);
+   static constexpr auto value = object("x", manage<&T::x, &T::read_x, &T::write_x>);
 };
 
 suite manage_test = [] {

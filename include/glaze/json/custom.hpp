@@ -25,13 +25,7 @@ namespace glz
       template <class T, class From, class To>
       custom_t(T&, From, To) -> custom_t<T, From, To>;
 
-      template <class T>
-      concept is_custom = requires {
-                             typename T::from_t;
-                             typename T::to_t;
-                          };
-
-      template <is_custom T>
+      template <class T> requires (is_specialization_v<T, custom_t>)
       struct from_json<T>
       {
          template <auto Opts>
@@ -109,7 +103,7 @@ namespace glz
          }
       };
 
-      template <is_custom T>
+      template <class T> requires (is_specialization_v<T, custom_t>)
       struct to_json<T>
       {
          template <auto Opts>
