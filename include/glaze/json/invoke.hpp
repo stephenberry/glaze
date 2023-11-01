@@ -138,7 +138,8 @@ namespace glz
 
 namespace glz
 {
-   template <class Signature> requires (std::is_void_v<typename function_traits<std::function<Signature>>::result_type>)
+   template <class Signature>
+      requires(std::is_void_v<typename function_traits<std::function<Signature>>::result_type>)
    struct invoke_update
    {
       invoke_update() = default;
@@ -146,24 +147,25 @@ namespace glz
       invoke_update(invoke_update&&) = default;
       invoke_update& operator=(const invoke_update&) = default;
       invoke_update& operator=(invoke_update&&) = default;
-      
+
       template <class F>
-      invoke_update(F&& f) : func(std::forward<F>(f)) {}
-      
+      invoke_update(F&& f) : func(std::forward<F>(f))
+      {}
+
       std::function<Signature> func{};
       std::string prev{};
       bool initialized = false;
       static constexpr auto glaze = true;
    };
-   
+
    template <class T>
    concept is_invoke_update = requires {
-      T::func;
-      T::prev;
-      T::initialized;
-      T::glaze;
-                             };
-   
+                                 T::func;
+                                 T::prev;
+                                 T::initialized;
+                                 T::glaze;
+                              };
+
    namespace detail
    {
       template <is_invoke_update T>
@@ -173,7 +175,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using V = std::decay_t<decltype(value.func)>;
-            
+
             using Tuple = typename function_traits<V>::arguments;
             if constexpr (std::tuple_size_v<Tuple> == 0) {
                auto start = it;
@@ -214,7 +216,7 @@ namespace glz
             }
          }
       };
-      
+
       template <is_invoke_update T>
       struct to_json<T>
       {
