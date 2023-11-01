@@ -357,7 +357,7 @@ namespace glz::detail
 
       constexpr void find_perfect_hash() noexcept
       {
-         if (N == 0) {
+         if constexpr (N == 0) {
             return;
          }
 
