@@ -38,6 +38,7 @@ glz::quoted<&T::x> // reads a value as a string and unescapes, to avoid the user
 glz::number<&T::x> // reads a string as a number and writes the string as a number
 glz::invoke<&T::func> // invokes a std::function or member function with n-arguments as an array input
 glz::custom<&T::read, &T::write> // calls custom read and write std::functions or member functions
+glz::manage<&T::x, &T::read_x, &T::write_x> // calls read_x() before reading x and calls write_x() before writing x
 glz::raw<&T::x> // write out string like types without quotes
 ```
 
