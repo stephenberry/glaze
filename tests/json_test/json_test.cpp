@@ -5511,8 +5511,14 @@ suite trade_quote_test = [] {
 struct updater
 {
    int x = 5;
-   glz::invoke_update<void()> square = [&] { x *= x; };
-   glz::invoke_update<void()> add_one = [&] { x += 1; };
+   glz::invoke_update<void()> square;
+   glz::invoke_update<void()> add_one;
+   
+   // constructor required by MSVC
+   updater() {
+      square = [&] { x *= x; };
+      add_one = [&] { x += 1; };
+   }
    
    GLZ_LOCAL_META(updater, x, square, add_one);
 };
