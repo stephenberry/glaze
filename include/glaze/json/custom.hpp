@@ -104,7 +104,7 @@ namespace glz
                }
             }
             else {
-               static_assert(false_v<T>, "invalid type for custom");
+               read<json>::op<Opts>(get_member(value.val, value.from), ctx, it, end);
             }
          }
       };
@@ -156,7 +156,7 @@ namespace glz
                }
             }
             else {
-               static_assert(false_v<T>, "invalid type for custom");
+               write<json>::op<Opts>(get_member(value.val, value.to), ctx, args...);
             }
          }
       };

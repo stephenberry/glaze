@@ -5215,6 +5215,36 @@ suite custom_encoding_test = [] {
    };
 };
 
+struct custom_load_t
+{
+   std::vector<int> x{};
+   std::vector<int> y{};
+   
+   struct glaze {
+      using T = custom_load_t;
+      static constexpr auto read_x = [](auto& s) -> auto& { return s.x; };
+      static constexpr auto write_x = [](auto& s) -> auto& { return s.y; };
+      static constexpr auto value = glz::object("x", glz::custom<read_x, write_x>);
+   };
+};
+
+suite custom_load_test = [] {
+   "custom_load"_test = [] {
+      custom_load_t obj{};
+      std::string s = R"({"x":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+      s.clear();
+      glz::write_json(obj, s);
+      expect(s == R"({"x":[]})");
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+   };
+};
+
 struct client_state
 {
    uint64_t id{};
