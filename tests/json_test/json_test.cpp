@@ -5314,9 +5314,41 @@ struct glz::meta<manage_x>
    static constexpr auto value = object("x", manage<&T::x, &T::read_x, &T::write_x>);
 };
 
+
+struct manage_x_lambda
+{
+   std::vector<int> x{};
+   std::vector<int> y{};
+};
+
+template <>
+struct glz::meta<manage_x_lambda>
+{
+   using T = manage_x_lambda;
+   static constexpr auto read_x = [](auto& s) { s.y = s.x; return true; };
+   static constexpr auto write_x = [](auto& s) { s.x = s.y; return true; };
+   [[maybe_unused]]static constexpr auto value = object("x", manage<&T::x, read_x, write_x>);
+};
+
 suite manage_test = [] {
    "manage"_test = [] {
       manage_x obj{};
+      std::string s = R"({"x":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.y[0] == 1);
+      expect(obj.y[1] == 2);
+      expect(obj.y[2] == 3);
+      obj.x.clear();
+      s.clear();
+      glz::write_json(obj, s);
+      expect(s == R"({"x":[1,2,3]})");
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+   };
+   
+   "manage_lambdas"_test = [] {
+      manage_x_lambda obj{};
       std::string s = R"({"x":[1,2,3]})";
       expect(!glz::read_json(obj, s));
       expect(obj.y[0] == 1);

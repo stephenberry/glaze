@@ -62,7 +62,7 @@ namespace glz
                }
             }
             else {
-               if (!get_member(value.val, value.from)()) {
+               if (!value.from(value.val)) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -104,7 +104,7 @@ namespace glz
                }
             }
             else {
-               if (!get_member(value.val, value.to)()) {
+               if (!value.to(value.val)) {
                   ctx.error = error_code::syntax_error;
                   return;
                }
