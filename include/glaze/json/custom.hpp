@@ -11,7 +11,8 @@ namespace glz
 {
    namespace detail
    {
-      // custom_t allows a user to register member functions (and std::function members) to implement custom reading and writing
+      // custom_t allows a user to register member functions (and std::function members) to implement custom reading and
+      // writing
       template <class T, class From, class To>
       struct custom_t final
       {
@@ -21,11 +22,12 @@ namespace glz
          From from;
          To to;
       };
-      
+
       template <class T, class From, class To>
       custom_t(T&, From, To) -> custom_t<T, From, To>;
 
-      template <class T> requires (is_specialization_v<T, custom_t>)
+      template <class T>
+         requires(is_specialization_v<T, custom_t>)
       struct from_json<T>
       {
          template <auto Opts>
@@ -33,7 +35,7 @@ namespace glz
          {
             using V = std::decay_t<decltype(value)>;
             using From = typename V::from_t;
-            
+
             if constexpr (std::is_member_pointer_v<From>) {
                if constexpr (std::is_member_function_pointer_v<From>) {
                   using Ret = typename return_type<From>::type;
@@ -103,7 +105,8 @@ namespace glz
          }
       };
 
-      template <class T> requires (is_specialization_v<T, custom_t>)
+      template <class T>
+         requires(is_specialization_v<T, custom_t>)
       struct to_json<T>
       {
          template <auto Opts>
@@ -111,7 +114,7 @@ namespace glz
          {
             using V = std::decay_t<decltype(value)>;
             using To = typename V::to_t;
-            
+
             if constexpr (std::is_member_pointer_v<To>) {
                if constexpr (std::is_member_function_pointer_v<To>) {
                   using Tuple = typename inputs_as_tuple<To>::type;

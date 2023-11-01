@@ -5219,8 +5219,9 @@ struct custom_load_t
 {
    std::vector<int> x{};
    std::vector<int> y{};
-   
-   struct glaze {
+
+   struct glaze
+   {
       using T = custom_load_t;
       static constexpr auto read_x = [](auto& s) -> auto& { return s.x; };
       static constexpr auto write_x = [](auto& s) -> auto& { return s.y; };
@@ -5299,7 +5300,7 @@ struct manage_x
       y = x;
       return true;
    }
-   
+
    bool write_x()
    {
       x = y;
@@ -5314,7 +5315,6 @@ struct glz::meta<manage_x>
    static constexpr auto value = object("x", manage<&T::x, &T::read_x, &T::write_x>);
 };
 
-
 struct manage_x_lambda
 {
    std::vector<int> x{};
@@ -5325,9 +5325,15 @@ template <>
 struct glz::meta<manage_x_lambda>
 {
    using T = manage_x_lambda;
-   static constexpr auto read_x = [](auto& s) { s.y = s.x; return true; };
-   static constexpr auto write_x = [](auto& s) { s.x = s.y; return true; };
-   [[maybe_unused]]static constexpr auto value = object("x", manage<&T::x, read_x, write_x>);
+   static constexpr auto read_x = [](auto& s) {
+      s.y = s.x;
+      return true;
+   };
+   static constexpr auto write_x = [](auto& s) {
+      s.x = s.y;
+      return true;
+   };
+   [[maybe_unused]] static constexpr auto value = object("x", manage<&T::x, read_x, write_x>);
 };
 
 suite manage_test = [] {
@@ -5346,7 +5352,7 @@ suite manage_test = [] {
       expect(obj.x[1] == 2);
       expect(obj.x[2] == 3);
    };
-   
+
    "manage_lambdas"_test = [] {
       manage_x_lambda obj{};
       std::string s = R"({"x":[1,2,3]})";
