@@ -253,7 +253,7 @@ struct local_macro_t {
 
 Custom reading and writing can be achieved through the powerful `to_json`/`from_json` specialization approach, which is described here: [custom-serialization.md](https://github.com/stephenberry/glaze/blob/main/docs/custom-serialization.md). However, this only works for user defined types.
 
-For common use cases or cases where a specific member variable should have special reading and writing, you can use `glz::custom` to register read/write member functions or std::functions.
+For common use cases or cases where a specific member variable should have special reading and writing, you can use `glz::custom` to register read/write member functions, std::functions, or lambda functions.
 
 See an example:
 
