@@ -113,7 +113,7 @@ namespace glz
       }
 
       bool computing() const noexcept { return (working != 0); }
-      
+
       uint32_t number_working() const noexcept { return working; }
 
       void wait()
