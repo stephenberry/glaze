@@ -151,6 +151,20 @@ suite read_file_test = [] {
    };
 };
 
+suite thread_pool = [] {
+   "thread pool throw"_test = [] {
+      glz::pool pool{1};
+      
+      std::atomic<int> x = 0;
+      
+      expect(throws([&] {
+         auto future = pool.emplace_back([&] { ++x; throw std::runtime_error("aha!"); });
+         pool.wait();
+         future.get();
+      }));
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
