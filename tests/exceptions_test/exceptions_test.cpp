@@ -158,8 +158,9 @@ suite thread_pool = [] {
       std::atomic<int> x = 0;
       
       expect(throws([&] {
-         pool.emplace_back([&] { ++x; throw std::runtime_error("aha!"); });
+         auto future = pool.emplace_back([&] { ++x; throw std::runtime_error("aha!"); });
          pool.wait();
+         future.get();
       }));
    };
 };
