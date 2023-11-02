@@ -31,7 +31,7 @@ namespace glz::ex
    [[nodiscard]] T read_json(Buffer&& buffer)
    {
       const auto ex = glz::read_json<T>(std::forward<Buffer>(buffer));
-      if (ex) {
+      if (!ex) {
          throw std::runtime_error("read_json error: " + glz::format_error(ex.error(), buffer));
       }
       return ex.value();
