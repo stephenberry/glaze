@@ -14,7 +14,7 @@
 
 namespace glz
 {
-   // A simple threadpool
+   // A thread pool
    struct pool final
    {
       pool() : pool(concurrency()) {}
@@ -113,6 +113,8 @@ namespace glz
       }
 
       bool computing() const noexcept { return (working != 0); }
+      
+      uint32_t number_working() const noexcept { return working; }
 
       void wait()
       {
