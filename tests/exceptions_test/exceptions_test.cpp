@@ -84,11 +84,22 @@ suite basic_types = [] {
       glz::ex::read_json(val, "true");
       expect(val == true);
    };
+   
+   "bool read valid"_test = [] {
+      bool val = glz::ex::read_json<bool>("true");
+      expect(val == true);
+   };
 
    "bool read invalid"_test = [] {
       expect(throws([] {
          bool val{};
          glz::ex::read_json(val, "tru");
+      }));
+   };
+   
+   "bool read invalid"_test = [] {
+      expect(throws([] {
+         [[maybe_unused]] bool val = glz::ex::read_json<bool>("tru");
       }));
    };
 };
