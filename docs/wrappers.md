@@ -40,5 +40,6 @@ glz::invoke<&T::func> // invokes a std::function or member function with n-argum
 glz::custom<&T::read, &T::write> // calls custom read and write std::functions or member functions
 glz::manage<&T::x, &T::read_x, &T::write_x> // calls read_x() before reading x and calls write_x() before writing x
 glz::raw<&T::x> // write out string like types without quotes
+glz::raw_string<&T::string> // do not decode/encode escaped characters for strings (improves read/write performance)
 ```
 
