@@ -255,7 +255,7 @@ namespace glz
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  value = static_cast<V>(i);
+                  value = V(i);
                }
                else {
                   uint64_t i{};
@@ -269,12 +269,22 @@ namespace glz
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-
-                  if (i > (std::numeric_limits<V>::max)()) [[unlikely]] {
-                     ctx.error = error_code::parse_number_failure;
-                     return;
+                  
+                  if (sign == -1) {
+                     static constexpr auto min_abs = uint64_t((std::numeric_limits<V>::max)()) + 1;
+                     if (i > min_abs) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     value = V(sign * i);
                   }
-                  value = V(sign * V(i));
+                  else {
+                     if (i > (std::numeric_limits<V>::max)()) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     value = V(i);
+                  }
                }
             }
             else {
