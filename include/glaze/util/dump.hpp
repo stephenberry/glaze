@@ -71,7 +71,7 @@ namespace glz::detail
       b[ix] = c;
       ++ix;
    }
-   
+
    GLZ_ALWAYS_INLINE void dump_unchecked(const sv str, vector_like auto& b, auto& ix) noexcept
    {
       const auto n = str.size();

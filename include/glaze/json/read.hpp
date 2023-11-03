@@ -433,8 +433,8 @@ namespace glz
                   skip_till_quote(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-                  
-                  value = sv{ start, size_t(it - start) };
+
+                  value = sv{start, size_t(it - start)};
                   ++it;
                }
                else {
