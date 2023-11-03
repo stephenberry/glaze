@@ -49,7 +49,6 @@ namespace glz::ex
       }
    }
 
-
    template <class T, class Buffer>
    void read_ndjson(T& value, Buffer&& buffer)
    {
@@ -119,7 +118,6 @@ namespace glz::ex
          throw std::runtime_error("write_file_json error");
       }
    }
-
 
    template <class T, class Buffer>
    void write_ndjson(T&& value, Buffer&& buffer)
