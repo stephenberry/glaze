@@ -537,7 +537,8 @@ namespace glz
          }
       };
 
-      template <class T> requires (str_view_t<T> || char_array_t<T>)
+      template <class T>
+         requires(str_view_t<T> || char_array_t<T>)
       struct from_json<T>
       {
          template <auto Opts, class It, class End>
@@ -592,7 +593,7 @@ namespace glz
                   value[n] = '\0';
                }
             };
-            
+
             while (it < end) {
                if constexpr (!Opts.force_conformance) {
                   skip_till_escape_or_quote(ctx, it, end);
