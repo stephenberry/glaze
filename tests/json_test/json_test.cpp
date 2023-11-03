@@ -5579,6 +5579,17 @@ struct raw_stuff_wrapper
    };
 };
 
+struct raw_stuff_escaped
+{
+   raw_stuff data{};
+
+   struct glaze
+   {
+      using T = raw_stuff_escaped;
+      static constexpr auto value{glz::escaped<&T::data>};
+   };
+};
+
 suite raw_string_test = [] {
    "raw_string"_test = [] {
       raw_stuff obj{};
@@ -5606,6 +5617,20 @@ suite raw_string_test = [] {
       buffer.clear();
       glz::write_json(obj, buffer);
       expect(buffer == R"({"a":"Hello\nWorld","b":"Hello World","c":"\tHello\bWorld"})");
+   };
+
+   "raw_string_escaped"_test = [] {
+      raw_stuff_escaped obj{};
+      std::string buffer = R"({"a":"Hello\nWorld"})";
+
+      expect(!glz::read_json(obj, buffer));
+      expect(obj.data.a ==
+             R"(Hello
+World)");
+
+      buffer.clear();
+      glz::write_json(obj, buffer);
+      expect(buffer == R"({"a":"Hello\nWorld","b":"","c":""})");
    };
 };
 
