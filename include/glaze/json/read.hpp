@@ -537,7 +537,7 @@ namespace glz
          }
       };
 
-      template <char_array_t T>
+      template <class T> requires (str_view_t<T> || char_array_t<T>)
       struct from_json<T>
       {
          template <auto Opts, class It, class End>
@@ -577,21 +577,22 @@ namespace glz
             };
 
             auto start = it;
+            [[maybe_unused]] auto write_to_char_buffer = [&] {
+               if constexpr (char_array_t<T>) {
+                  const size_t n = it - start - 1;
+                  sv str{start, n};
 
-            auto write_to_char_buffer = [&] {
-               const size_t n = it - start - 1;
-               sv str{start, n};
-
-               if ((sizeof(value) - 1) < n) {
-                  ctx.error = error_code::unexpected_end;
-                  return;
+                  if ((sizeof(value) - 1) < n) {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
+                  for (size_t i = 0; i < n; ++i) {
+                     value[i] = str[i];
+                  }
+                  value[n] = '\0';
                }
-               for (size_t i = 0; i < n; ++i) {
-                  value[i] = str[i];
-               }
-               value[n] = '\0';
             };
-
+            
             while (it < end) {
                if constexpr (!Opts.force_conformance) {
                   skip_till_escape_or_quote(ctx, it, end);
@@ -600,7 +601,12 @@ namespace glz
 
                   if (*it == '"') {
                      ++it;
-                     write_to_char_buffer();
+                     if constexpr (str_view_t<T>) {
+                        value = std::string_view{start, size_t(it - start - 1)};
+                     }
+                     else if constexpr (char_array_t<T>) {
+                        write_to_char_buffer();
+                     }
                      return;
                   }
                   else {
@@ -633,104 +639,14 @@ namespace glz
                      handle_escaped();
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     write_to_char_buffer();
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                     break;
-                  }
-                  default:
-                     ++it;
-                  }
-               }
-            }
-            return;
-         }
-      };
-
-      template <str_view_t T>
-      struct from_json<T>
-      {
-         template <auto Opts, class It, class End>
-         GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
-         {
-            if constexpr (!Opts.opening_handled) {
-               if constexpr (!Opts.ws_handled) {
-                  skip_ws<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-               }
-
-               match<'"'>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-            }
-
-            // overwrite portion
-            auto handle_escaped = [&]() {
-               switch (*it) {
-               case '"':
-               case '\\':
-               case '/':
-               case 'b':
-               case 'f':
-               case 'n':
-               case 'r':
-               case 't':
-               case 'u': {
-                  ++it;
-                  break;
-               }
-               default: {
-                  ctx.error = error_code::invalid_escape;
-                  return;
-               }
-               }
-            };
-
-            // growth portion
-            auto start = it;
-            while (it < end) {
-               if constexpr (!Opts.force_conformance) {
-                  skip_till_escape_or_quote(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-
-                  if (*it == '"') {
-                     ++it;
-                     value = std::string_view{start, size_t(it - start - 1)};
-                     return;
-                  }
-                  else {
-                     ++it;
-                     handle_escaped();
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
-               }
-               else {
-                  switch (*it) {
-                  case '"': {
-                     ++it;
-                     return;
-                  }
-                  case '\b':
-                  case '\f':
-                  case '\n':
-                  case '\r':
-                  case '\t': {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
-                  case '\0': {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
-                  case '\\': {
-                     ++it;
-                     handle_escaped();
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                     value = sv{start, size_t(it - start - 1)};
+                     if constexpr (str_view_t<T>) {
+                        value = std::string_view{start, size_t(it - start - 1)};
+                     }
+                     else if constexpr (char_array_t<T>) {
+                        write_to_char_buffer();
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
                      break;
                   }
                   default:
