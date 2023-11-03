@@ -427,16 +427,15 @@ namespace glz
                }
 
                // overwrite portion
-               
-               if constexpr (Opts.raw_string)
-               {
+
+               if constexpr (Opts.raw_string) {
                   // growth portion
                   value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
                   auto start = it;
                   skip_till_quote(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-                  
+
                   value.append(start, static_cast<size_t>(it - start));
                   ++it;
                }

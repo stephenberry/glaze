@@ -236,7 +236,7 @@ namespace glz
                      }
                   }();
                   const auto n = str.size();
-                  
+
                   if constexpr (Opts.raw_string) {
                      // We need at space for quotes and the string length: 2 + n.
                      if constexpr (detail::resizeable<B>) {
@@ -246,7 +246,7 @@ namespace glz
                         }
                      }
                      // now we don't have to check writing
-                     
+
                      dump_unchecked<'"'>(b, ix);
                      dump(str, b, ix);
                      dump_unchecked<'"'>(b, ix);
