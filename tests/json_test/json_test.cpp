@@ -4995,7 +4995,7 @@ suite number_reading = [] {
       expect(!glz::read_json(d, buffer));
       expect(d == 0.0);
    };
-   
+
    "minimum int64_t"_test = [] {
       std::string_view buffer{"-9223372036854775808"};
       int64_t i{};

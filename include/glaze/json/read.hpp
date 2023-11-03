@@ -269,7 +269,7 @@ namespace glz
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  
+
                   if (sign == -1) {
                      static constexpr auto min_abs = uint64_t((std::numeric_limits<V>::max)()) + 1;
                      if (i > min_abs) [[unlikely]] {
