@@ -248,7 +248,7 @@ namespace glz
                      // now we don't have to check writing
 
                      dump_unchecked<'"'>(b, ix);
-                     dump(str, b, ix);
+                     dump_unchecked(str, b, ix);
                      dump_unchecked<'"'>(b, ix);
                   }
                   else {
