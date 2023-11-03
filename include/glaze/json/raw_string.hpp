@@ -18,7 +18,7 @@ namespace glz
    {
       T& val;
    };
-   
+
    template <class T>
    struct escaped_t
    {
@@ -46,7 +46,7 @@ namespace glz
             write<json>::op<opt_true<Opts, &opts::raw_string>>(value.val, ctx, args...);
          }
       };
-      
+
       template <class T>
       struct from_json<escaped_t<T>>
       {
@@ -72,7 +72,7 @@ namespace glz
       {
          return [](auto&& val) { return raw_string_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
       }
-      
+
       template <auto MemPtr>
       GLZ_ALWAYS_INLINE constexpr decltype(auto) escaped_impl() noexcept
       {
@@ -82,7 +82,7 @@ namespace glz
 
    template <auto MemPtr>
    constexpr auto raw_string = detail::raw_string_impl<MemPtr>();
-   
+
    template <auto MemPtr>
    constexpr auto escaped = detail::escaped_impl<MemPtr>();
 }

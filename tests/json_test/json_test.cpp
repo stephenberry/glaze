@@ -5618,14 +5618,14 @@ suite raw_string_test = [] {
       glz::write_json(obj, buffer);
       expect(buffer == R"({"a":"Hello\nWorld","b":"Hello World","c":"\tHello\bWorld"})");
    };
-   
+
    "raw_string_escaped"_test = [] {
       raw_stuff_escaped obj{};
       std::string buffer = R"({"a":"Hello\nWorld"})";
 
       expect(!glz::read_json(obj, buffer));
       expect(obj.data.a ==
-R"(Hello
+             R"(Hello
 World)");
 
       buffer.clear();
