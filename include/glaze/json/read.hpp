@@ -427,99 +427,113 @@ namespace glz
                }
 
                // overwrite portion
-
-               auto handle_escaped = [&]() {
-                  switch (*it) {
-                  case '"':
-                  case '\\':
-                  case '/':
-                     value.push_back(*it);
-                     ++it;
-                     break;
-                  case 'b':
-                     value.push_back('\b');
-                     ++it;
-                     break;
-                  case 'f':
-                     value.push_back('\f');
-                     ++it;
-                     break;
-                  case 'n':
-                     value.push_back('\n');
-                     ++it;
-                     break;
-                  case 'r':
-                     value.push_back('\r');
-                     ++it;
-                     break;
-                  case 't':
-                     value.push_back('\t');
-                     ++it;
-                     break;
-                  case 'u': {
-                     ++it;
-                     read_escaped_unicode<char>(value, ctx, it, end);
+               
+               if constexpr (Opts.raw_string)
+               {
+                  // growth portion
+                  value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
+                  auto start = it;
+                  skip_till_quote(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
                      return;
-                  }
-                  default: {
-                     ctx.error = error_code::invalid_escape;
-                     return;
-                  }
-                  }
-               };
-
-               // growth portion
-               value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
-               auto start = it;
-               while (it < end) {
-                  if constexpr (!Opts.force_conformance) {
-                     skip_till_escape_or_quote(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     if (*it == '"') [[likely]] {
-                        value.append(start, static_cast<size_t>(it - start));
-                        ++it;
-                        return;
-                     }
-                     else [[unlikely]] {
-                        value.append(start, static_cast<size_t>(it - start));
-                        ++it;
-                        handle_escaped();
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                        start = it;
-                     }
-                  }
-                  else {
+                  
+                  value.append(start, static_cast<size_t>(it - start));
+                  ++it;
+               }
+               else {
+                  auto handle_escaped = [&]() {
                      switch (*it) {
-                     [[likely]] case '"' : {
-                        value.append(start, static_cast<size_t>(it - start));
+                     case '"':
+                     case '\\':
+                     case '/':
+                        value.push_back(*it);
                         ++it;
-                        return;
-                     }
-                     [[unlikely]] case '\b':
-                     [[unlikely]] case '\f':
-                     [[unlikely]] case '\n':
-                     [[unlikely]] case '\r':
-                     [[unlikely]] case '\t' : {
-                        ctx.error = error_code::syntax_error;
-                        return;
-                     }
-                     [[unlikely]] case '\0' : {
-                        ctx.error = error_code::unexpected_end;
-                        return;
-                     }
-                     [[unlikely]] case '\\' : {
-                        value.append(start, static_cast<size_t>(it - start));
+                        break;
+                     case 'b':
+                        value.push_back('\b');
                         ++it;
-                        handle_escaped();
+                        break;
+                     case 'f':
+                        value.push_back('\f');
+                        ++it;
+                        break;
+                     case 'n':
+                        value.push_back('\n');
+                        ++it;
+                        break;
+                     case 'r':
+                        value.push_back('\r');
+                        ++it;
+                        break;
+                     case 't':
+                        value.push_back('\t');
+                        ++it;
+                        break;
+                     case 'u': {
+                        ++it;
+                        read_escaped_unicode<char>(value, ctx, it, end);
+                        return;
+                     }
+                     default: {
+                        ctx.error = error_code::invalid_escape;
+                        return;
+                     }
+                     }
+                  };
+
+                  // growth portion
+                  value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
+                  auto start = it;
+                  while (it < end) {
+                     if constexpr (!Opts.force_conformance) {
+                        skip_till_escape_or_quote(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        start = it;
-                        break;
+
+                        if (*it == '"') [[likely]] {
+                           value.append(start, static_cast<size_t>(it - start));
+                           ++it;
+                           return;
+                        }
+                        else [[unlikely]] {
+                           value.append(start, static_cast<size_t>(it - start));
+                           ++it;
+                           handle_escaped();
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           start = it;
+                        }
                      }
-                        [[likely]] default : ++it;
+                     else {
+                        switch (*it) {
+                        [[likely]] case '"' : {
+                           value.append(start, static_cast<size_t>(it - start));
+                           ++it;
+                           return;
+                        }
+                        [[unlikely]] case '\b':
+                        [[unlikely]] case '\f':
+                        [[unlikely]] case '\n':
+                        [[unlikely]] case '\r':
+                        [[unlikely]] case '\t' : {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                        [[unlikely]] case '\0' : {
+                           ctx.error = error_code::unexpected_end;
+                           return;
+                        }
+                        [[unlikely]] case '\\' : {
+                           value.append(start, static_cast<size_t>(it - start));
+                           ++it;
+                           handle_escaped();
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           start = it;
+                           break;
+                        }
+                           [[likely]] default : ++it;
+                        }
                      }
                   }
                }

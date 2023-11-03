@@ -5555,6 +5555,58 @@ suite invoke_updater_test = [] {
    };
 };
 
+struct raw_stuff
+{
+   std::string a{};
+   std::string b{};
+   std::string c{};
+   
+   struct glaze {
+      using T = raw_stuff;
+      static constexpr auto value = glz::object("a", &T::a, "b", &T::b, "c", &T::c);
+   };
+};
+
+struct raw_stuff_wrapper
+{
+   raw_stuff data{};
+   
+   struct glaze {
+      using T = raw_stuff_wrapper;
+      static constexpr auto value{glz::raw_string<&T::data>};
+   };
+};
+
+suite raw_string_test = [] {
+   "raw_string"_test = [] {
+      raw_stuff obj{};
+      std::string buffer = R"({"a":"Hello\nWorld","b":"Hello World","c":"\tHello\bWorld"})";
+      
+      expect(!glz::read<glz::opts{.raw_string = true}>(obj, buffer));
+      expect(obj.a == R"(Hello\nWorld)");
+      expect(obj.b == R"(Hello World)");
+      expect(obj.c == R"(\tHello\bWorld)");
+      
+      buffer.clear();
+      glz::write<glz::opts{.raw_string = true}>(obj, buffer);
+      expect(buffer == R"({"a":"Hello\nWorld","b":"Hello World","c":"\tHello\bWorld"})");
+   };
+   
+   "raw_string_wrapper"_test = [] {
+      raw_stuff_wrapper obj{};
+      std::string buffer = R"({"a":"Hello\nWorld","b":"Hello World","c":"\tHello\bWorld"})";
+      
+      expect(!glz::read_json(obj, buffer));
+      expect(obj.data.a == R"(Hello\nWorld)");
+      expect(obj.data.b == R"(Hello World)");
+      expect(obj.data.c == R"(\tHello\bWorld)");
+      
+      buffer.clear();
+      glz::write_json(obj, buffer);
+      expect(buffer == R"({"a":"Hello\nWorld","b":"Hello World","c":"\tHello\bWorld"})");
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors

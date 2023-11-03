@@ -236,61 +236,77 @@ namespace glz
                      }
                   }();
                   const auto n = str.size();
-
-                  // In the case n == 0 we need two characters for quotes.
-                  // For each individual character we need room for two characters to handle escapes.
-                  // So, we need 2 + 2 * n characters to handle all cases.
-                  if constexpr (detail::resizeable<B>) {
-                     const auto k = ix + 2 + 2 * n;
-                     if (k >= b.size()) [[unlikely]] {
-                        b.resize((std::max)(b.size() * 2, k));
-                     }
-                  }
-                  // now we don't have to check writing
-
-                  if constexpr (Opts.raw) {
-                     dump(str, b, ix);
-                  }
-                  else {
-                     dump_unchecked<'"'>(b, ix);
-
-                     for (auto&& c : str) {
-                        switch (c) {
-                        case '"':
-                           std::memcpy(data_ptr(b) + ix, R"(\")", 2);
-                           ix += 2;
-                           break;
-                        case '\\':
-                           std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
-                           ix += 2;
-                           break;
-                        case '\b':
-                           std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
-                           ix += 2;
-                           break;
-                        case '\f':
-                           std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
-                           ix += 2;
-                           break;
-                        case '\n':
-                           std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
-                           ix += 2;
-                           break;
-                        case '\r':
-                           std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
-                           ix += 2;
-                           break;
-                        case '\t':
-                           std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
-                           ix += 2;
-                           break;
-                        [[likely]] default:
-                           std::memcpy(data_ptr(b) + ix, &c, 1);
-                           ++ix;
+                  
+                  if constexpr (Opts.raw_string) {
+                     // We need at space for quotes and the string length: 2 + n.
+                     if constexpr (detail::resizeable<B>) {
+                        const auto k = ix + 2 + n;
+                        if (k >= b.size()) [[unlikely]] {
+                           b.resize((std::max)(b.size() * 2, k));
                         }
                      }
-
+                     // now we don't have to check writing
+                     
                      dump_unchecked<'"'>(b, ix);
+                     dump(str, b, ix);
+                     dump_unchecked<'"'>(b, ix);
+                  }
+                  else {
+                     // In the case n == 0 we need two characters for quotes.
+                     // For each individual character we need room for two characters to handle escapes.
+                     // So, we need 2 + 2 * n characters to handle all cases.
+                     if constexpr (detail::resizeable<B>) {
+                        const auto k = ix + 2 + 2 * n;
+                        if (k >= b.size()) [[unlikely]] {
+                           b.resize((std::max)(b.size() * 2, k));
+                        }
+                     }
+                     // now we don't have to check writing
+
+                     if constexpr (Opts.raw) {
+                        dump(str, b, ix);
+                     }
+                     else {
+                        dump_unchecked<'"'>(b, ix);
+
+                        for (auto&& c : str) {
+                           switch (c) {
+                           case '"':
+                              std::memcpy(data_ptr(b) + ix, R"(\")", 2);
+                              ix += 2;
+                              break;
+                           case '\\':
+                              std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
+                              ix += 2;
+                              break;
+                           case '\b':
+                              std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
+                              ix += 2;
+                              break;
+                           case '\f':
+                              std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
+                              ix += 2;
+                              break;
+                           case '\n':
+                              std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
+                              ix += 2;
+                              break;
+                           case '\r':
+                              std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
+                              ix += 2;
+                              break;
+                           case '\t':
+                              std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
+                              ix += 2;
+                              break;
+                           [[likely]] default:
+                              std::memcpy(data_ptr(b) + ix, &c, 1);
+                              ++ix;
+                           }
+                        }
+
+                        dump_unchecked<'"'>(b, ix);
+                     }
                   }
                }
             }
