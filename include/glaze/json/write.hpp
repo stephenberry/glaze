@@ -25,11 +25,10 @@ namespace glz
       {};
 
       template <auto Opts, class T, class Ctx, class B, class IX>
-      concept write_json_invocable =
-         requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-            to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                               std::forward<B>(b), std::forward<IX>(ix));
-         };
+      concept write_json_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+         to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                            std::forward<B>(b), std::forward<IX>(ix));
+      };
 
       template <>
       struct write<json>
@@ -388,9 +387,10 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(const auto& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<'['>(args...);
+
             if (!empty_range(value)) {
                if constexpr (Opts.prettify) {
                   ctx.indentation_level += Opts.indentation_width;
@@ -398,10 +398,10 @@ namespace glz
                   dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                }
 
-               auto it = std::cbegin(value);
+               auto it = std::begin(value);
                write<json>::op<Opts>(*it, ctx, args...);
                ++it;
-               for (; it != std::cend(value); ++it) {
+               for (; it != std::end(value); ++it) {
                   write_entry_separator<Opts>(ctx, args...);
                   write<json>::op<Opts>(*it, ctx, args...);
                }
@@ -411,6 +411,7 @@ namespace glz
                   dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                }
             }
+
             dump<']'>(args...);
          }
       };
@@ -506,9 +507,9 @@ namespace glz
                   return false;
                };
 
-               auto it = std::cbegin(value);
+               auto it = std::begin(value);
                [[maybe_unused]] bool previous_skipped = write_first_entry(it);
-               for (++it; it != std::cend(value); ++it) {
+               for (++it; it != std::end(value); ++it) {
                   const auto& [key, entry_val] = *it;
                   if (skip_member<Opts>(entry_val)) {
                      previous_skipped = true;
@@ -517,7 +518,8 @@ namespace glz
 
                   // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
                   // conditional for every entry. Avoid this branch when not skipping null members.
-                  // Alternatively, write separator after each entry, except on last entry but then branch is permanent
+                  // Alternatively, write separator after each entry, except on last entry but then branch is
+                  // permanent
                   if constexpr (Opts.skip_null_members) {
                      if (!previous_skipped) {
                         write_entry_separator<Opts>(ctx, args...);
