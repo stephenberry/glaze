@@ -79,6 +79,15 @@ namespace glz::detail
       ix += n;
    }
 
+   template <typename T>
+      requires range_value_t<>
+   GLZ_ALWAYS_INLINE void dump_unchecked(const sv str, vector_like auto& b, auto& ix) noexcept
+   {
+      const auto n = str.size();
+      std::memcpy(b.data() + ix, str.data(), n);
+      ix += n;
+   }
+
    template <char c>
    GLZ_ALWAYS_INLINE void dump(char*& b) noexcept
    {

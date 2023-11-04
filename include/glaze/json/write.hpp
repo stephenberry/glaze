@@ -25,10 +25,11 @@ namespace glz
       {};
 
       template <auto Opts, class T, class Ctx, class B, class IX>
-      concept write_json_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-         to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                            std::forward<B>(b), std::forward<IX>(ix));
-      };
+      concept write_json_invocable =
+         requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+            to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                               std::forward<B>(b), std::forward<IX>(ix));
+         };
 
       template <>
       struct write<json>
@@ -310,6 +311,21 @@ namespace glz
                }
             }
          }
+      };
+
+      template <range T>
+         requires char_t<range_value_t<C>>
+      struct as_string
+      {
+         T& data;
+      };
+
+      template <typename T>
+      struct to_json<as_string<T>>
+      {
+         template <auto Opts, class B>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
+         {}
       };
 
       template <glaze_enum_t T>
