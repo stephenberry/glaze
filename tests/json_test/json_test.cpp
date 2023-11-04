@@ -1903,6 +1903,14 @@ suite write_tests = [] {
    "Write array-like input range"_test = [] {
 #ifdef __cpp_lib_ranges
       "sized range"_test = [] { expect(glz::write_json(std::views::iota(0, 3)) == glz::sv{R"([0,1,2])"}); };
+
+      "range"_test = [] {
+         auto range = std::views::iota(0, 5) //
+                      | std::views::filter([](const auto i) { return i % 2 == 0; }) //
+                      | std::views::transform([](const auto i) { return std::to_string(i); });
+
+         expect(glz::write_json(range) == glz::sv{R"(["0","2","4"])"});
+      };
 #endif
 
       "initializer list"_test = [] {
