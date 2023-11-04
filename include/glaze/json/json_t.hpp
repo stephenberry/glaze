@@ -39,7 +39,7 @@ namespace glz
       template <class T>
       T* get_if() noexcept
       {
-         return std::get_if<T>(data);
+         return std::get_if<T>(&data);
       }
 
       template <class T>
