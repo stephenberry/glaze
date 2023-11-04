@@ -313,21 +313,6 @@ namespace glz
          }
       };
 
-      template <range T>
-         requires char_t<range_value_t<C>>
-      struct as_string
-      {
-         T& data;
-      };
-
-      template <typename T>
-      struct to_json<as_string<T>>
-      {
-         template <auto Opts, class B>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
-         {}
-      };
-
       template <glaze_enum_t T>
       struct to_json<T>
       {
