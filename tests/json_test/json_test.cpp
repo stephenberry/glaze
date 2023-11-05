@@ -1903,6 +1903,21 @@ suite write_tests = [] {
    "Write array-like input range"_test = [] {
 #ifdef __cpp_lib_ranges
       "sized range"_test = [] { expect(glz::write_json(std::views::iota(0, 3)) == glz::sv{R"([0,1,2])"}); };
+
+      "unsized range"_test = [] {
+         auto unsized_range = std::views::iota(0, 5) //
+                              | std::views::filter([](const auto i) { return i % 2 == 0; });
+         static_assert(!std::ranges::sized_range<decltype(unsized_range)>);
+         expect(glz::write_json(unsized_range) == glz::sv{"[0,2,4]"});
+      };
+
+      "uncommon range"_test = [] {
+         auto uncommon_range = std::views::iota(0) //
+                               | std::views::take(5) //
+                               | std::views::filter([](const auto i) { return i % 2 == 0; });
+         static_assert(!std::ranges::common_range<decltype(uncommon_range)>);
+         expect(glz::write_json(uncommon_range) == glz::sv{"[0,2,4]"});
+      };
 #endif
 
       "initializer list"_test = [] {
@@ -1947,6 +1962,19 @@ suite write_tests = [] {
          auto str_view = std::views::iota(-2, 3) |
                          std::views::transform([](const auto i) { return std::pair(i, std::to_string(i * i)); });
          expect(glz::write_json(str_view) == glz::sv{R"({"-2":"4","-1":"1","0":"0","1":"1","2":"4"})"});
+      };
+
+      "unsized range of pairs"_test = [] {
+         auto base_rng = std::views::iota(-2, 3) | std::views::filter([](const auto i) { return i < 0; });
+
+         auto num_view = base_rng | std::views::transform([](const auto i) { return std::pair(i, i * i); });
+         static_assert(!std::ranges::sized_range<decltype(num_view)>);
+         expect(glz::write_json(num_view) == glz::sv{R"({"-2":4,"-1":1})"});
+
+         auto str_view =
+            base_rng | std::views::transform([](const auto i) { return std::pair(i, std::to_string(i * i)); });
+         static_assert(!std::ranges::sized_range<decltype(str_view)>);
+         expect(glz::write_json(str_view) == glz::sv{R"({"-2":"4","-1":"1"})"});
       };
 
       "initializer list w/ ranges"_test = [] {

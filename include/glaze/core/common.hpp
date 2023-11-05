@@ -155,8 +155,11 @@ namespace glz
    using range_value_t = std::iter_value_t<iterator_t<R>>;
 
    template <range R>
-   [[nodiscard]] bool empty_range(const R& rng)
+   [[nodiscard]] constexpr bool empty_range(R&& rng)
    {
+#ifdef __cpp_lib_ranges
+      return std::ranges::empty(rng);
+#else
       // in lieu of std::ranges::empty
       if constexpr (requires() {
                        {
@@ -170,11 +173,12 @@ namespace glz
                                rng.size()
                                } -> std::same_as<std::size_t>;
                          }) {
-         return rng.size() == 0;
+         return rng.size() == std::size_t{0};
       }
       else {
          return std::cbegin(rng) == std::cend(rng);
       }
+#endif
    }
 
    template <class T>
