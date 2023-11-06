@@ -5669,7 +5669,8 @@ World)");
    };
 };
 
-struct Update {
+struct Update
+{
    int64_t time;
    GLZ_LOCAL_META(Update, time);
 };
