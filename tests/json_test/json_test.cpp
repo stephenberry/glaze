@@ -5676,7 +5676,7 @@ struct Update {
 
 suite ndjson_error_test = [] {
    "ndjson_error"_test = [] {
-      auto x = glz::read_ndjson<std::vector<Update>>("{\"t\":73}\n{\"t\":37}"); // Runs indefinitly (until encountering a bad alloc)
+      auto x = glz::read_ndjson<std::vector<Update>>("{\"t\":73}\n{\"t\":37}");
       expect(x.error() == glz::error_code::syntax_error);
    };
 };
