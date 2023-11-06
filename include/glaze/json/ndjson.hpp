@@ -87,6 +87,9 @@ namespace glz
             if constexpr (emplace_backable<T>) {
                while (it < end) {
                   read<json>::op<Opts>(value.emplace_back(), ctx, it, end);
+                  if (bool(ctx.error)) {
+                     return;
+                  }
 
                   read_new_lines();
                }

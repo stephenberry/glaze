@@ -5669,6 +5669,18 @@ World)");
    };
 };
 
+struct Update {
+   int64_t time;
+   GLZ_LOCAL_META(Update, time);
+};
+
+suite ndjson_error_test = [] {
+   "ndjson_error"_test = [] {
+      auto x = glz::read_ndjson<std::vector<Update>>("{\"t\":73}\n{\"t\":37}");
+      expect(x.error() == glz::error_code::syntax_error);
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
