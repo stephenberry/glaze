@@ -46,4 +46,4 @@ if [ "$format_files" = "false" ]; then
 fi
 
 # Format each file.
-clang-format --verbose -i --style=file "${FILE_LIST_ARRAY[@]}"
+/opt/clang-format-static/clang-format-15 --verbose -i --style=file "${FILE_LIST_ARRAY[@]}"
