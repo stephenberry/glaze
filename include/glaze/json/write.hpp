@@ -422,15 +422,15 @@ namespace glz
       {
          if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
             write<json>::op<Opts>(key, ctx, args...);
-            dump<':'>(args...);
          }
          else {
-            dump<'"'>(args...);
-            write<json>::op<Opts>(key, ctx, args...);
-            dump<R"(":)">(args...);
+            write<json>::op<opt_false<Opts, &opts::raw_string>>(glz::quoted_t{key}, ctx, args...);
          }
          if constexpr (Opts.prettify) {
-            dump<' '>(args...);
+            dump<": ">(args...);
+         }
+         else {
+            dump<':'>(args...);
          }
 
          write<json>::op<opening_and_closing_handled_off<Opts>()>(value, ctx, args...);
