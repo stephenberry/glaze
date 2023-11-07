@@ -47,11 +47,10 @@ namespace glz
       {};
 
       template <auto Opts, class T, class Ctx, class It0, class It1>
-      concept read_json_invocable =
-         requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
-            from_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                 std::forward<It0>(it), std::forward<It1>(end));
-         };
+      concept read_json_invocable = requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
+         from_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                              std::forward<It0>(it), std::forward<It1>(end));
+      };
 
       template <>
       struct read<json>
@@ -1634,7 +1633,7 @@ namespace glz
                         read<json>::op<opt_true<Opts, &opts::quoted_num>>(key_value, ctx, it, end);
                      }
                      else {
-                        read<json>::op<opt_false<Opts, &opts::raw_string>>(quoted_t{key_value}, ctx, it, end);
+                        read<json>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<k_t>{key_value}, ctx, it, end);
                      }
                      if (bool(ctx.error)) [[unlikely]]
                         return;
