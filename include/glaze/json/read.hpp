@@ -11,6 +11,7 @@
 #include <locale>
 #include <ranges>
 #include <sstream>
+#include <type_traits>
 
 #include "glaze/core/common.hpp"
 #include "glaze/core/format.hpp"
@@ -25,6 +26,11 @@
 
 namespace glz
 {
+
+   // forward declare from json/quoted.hpp to avoid circular include
+   template <class T>
+   struct quoted_t;
+
    namespace detail
    {
       // Unless we can mutate the input buffer we need somewhere to store escaped strings for key lookup and such
@@ -41,11 +47,10 @@ namespace glz
       {};
 
       template <auto Opts, class T, class Ctx, class It0, class It1>
-      concept read_json_invocable =
-         requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
-            from_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                 std::forward<It0>(it), std::forward<It1>(end));
-         };
+      concept read_json_invocable = requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
+         from_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                              std::forward<It0>(it), std::forward<It1>(end));
+      };
 
       template <>
       struct read<json>
@@ -1619,13 +1624,16 @@ namespace glz
                         return;
                   }
                   else {
-                     static_assert(std::is_arithmetic_v<k_t> || glaze_enum_t<k_t>);
                      k_t key_value{};
-                     if constexpr (std::is_arithmetic_v<k_t>) {
+                     if constexpr (glaze_enum_t<k_t>) {
+                        read<json>::op<Opts>(key_value, ctx, it, end);
+                     }
+                     else if constexpr (std::is_arithmetic_v<k_t>) {
+                        // prefer over quoted_t below to avoid double parsing of quoted_t
                         read<json>::op<opt_true<Opts, &opts::quoted_num>>(key_value, ctx, it, end);
                      }
                      else {
-                        read<json>::op<Opts>(key_value, ctx, it, end);
+                        read<json>::op<Opts>(::glz::quoted_t{key_value}, ctx, it, end);
                      }
                      if (bool(ctx.error)) [[unlikely]]
                         return;
