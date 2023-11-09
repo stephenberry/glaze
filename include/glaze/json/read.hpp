@@ -78,7 +78,60 @@ namespace glz
                }
             }
          }
+
+         template <auto Opts, class T, is_context Ctx, class It0, class It1>
+         GLZ_ALWAYS_INLINE static void handle_unknown(const glz::sv& key, T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
+         {            
+            using ValueType = std::decay_t<decltype(value)>;
+            if constexpr (detail::has_unknown_reader<ValueType>) {
+               constexpr auto& reader = meta_unknown_read_v<ValueType>;
+               using ReaderType = meta_unknown_read_t<ValueType>;
+               if constexpr (std::is_member_object_pointer_v<ReaderType>)
+               {
+                  using MemberType = typename member_value<ReaderType>::type;
+                  if constexpr (detail::map_subscriptable<MemberType>)
+                  {
+                     read<json>::op<Opts>((value.*reader)[key], ctx, it, end);
+                  }
+                  else
+                  {
+                     static_assert(false_v<T>, "target must have subscript operator");
+                  }
+               }
+               else if constexpr (std::is_member_function_pointer_v<ReaderType>)
+               {
+                  using ReturnType = typename return_type<ReaderType>::type;
+                  if constexpr (std::is_void_v<ReturnType>) {
+                     using TupleType = typename inputs_as_tuple<ReaderType>::type;
+                     if constexpr (std::tuple_size_v<TupleType> == 2) {
+                        std::decay_t<std::tuple_element_t<1, TupleType>> input{};
+                        read<json>::op<Opts>(input, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        (value.*reader)(key, input);
+                     }
+                     else 
+                     {
+                        static_assert(false_v<T>, "method must have 2 args");
+                     }
+                  }
+                  else 
+                  {
+                     static_assert(false_v<T>, "method must have void return");
+                  }
+               }
+               else
+               {
+                  static_assert(false_v<T>, "unknown_read type not handled");
+               }
+            }
+            else
+            {
+               skip_value<Opts>(ctx, it, end);
+            }
+         }
       };
+
 
       template <glaze_value_t T>
       struct from_json<T>
@@ -1572,7 +1625,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
-                     skip_value<Opts>(ctx, it, end);
+                     read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
@@ -1624,7 +1677,7 @@ namespace glz
                            if (bool(ctx.error)) [[unlikely]]
                               return;
 
-                           skip_value<Opts>(ctx, it, end);
+                           read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                         }
@@ -1635,7 +1688,7 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        skip_value<Opts>(ctx, it, end);
+                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }
