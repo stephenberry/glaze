@@ -65,7 +65,7 @@ namespace glz::detail
 #elif defined(_M_X64) || defined(_M_ARM64)
 #define mulhi64 __umulh
 #else
-   uint64_t mulhi64(uint64_t a, uint64_t b) noexcept
+   inline uint64_t mulhi64(uint64_t a, uint64_t b) noexcept
    {
       uint64_t a_lo = (uint32_t)a;
       uint64_t a_hi = a >> 32;
