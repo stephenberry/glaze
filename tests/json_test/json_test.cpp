@@ -12,6 +12,7 @@
 #include <map>
 #include <random>
 #include <ranges>
+#include <tuple>
 #include <unordered_map>
 #include <variant>
 
@@ -21,6 +22,7 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/prettify.hpp"
 #include "glaze/json/ptr.hpp"
+#include "glaze/json/quoted.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/record/recorder.hpp"
@@ -1948,6 +1950,7 @@ suite write_tests = [] {
          Write_pair_test_case{0.78, std::array{1, 2, 3}, R"({"0.78":[1,2,3]})"},
          Write_pair_test_case{"k", glz::obj{"in1", 1, "in2", "v"}, R"({"k":{"in1":1,"in2":"v"}})"},
          Write_pair_test_case{std::array{1, 2}, 99, R"({"[1,2]":99})"},
+         Write_pair_test_case{std::array{"one", "two"}, 99, R"({"[\"one\",\"two\"]":99})"},
          Write_pair_test_case{"knot", std::nullopt, "{}"}, // nullopt_t, not std::optional
          Write_pair_test_case{"kmaybe", std::optional<int>{}, "{}"},
       };
@@ -4453,6 +4456,73 @@ suite map_with_bool_key = [] {
       expect(glz::read_json(a, buffer) == glz::error_code::none);
       expect(a.x == std::map<bool, std::string>{{false, "false"}});
    };
+};
+
+struct array_map
+{
+   std::map<std::array<int, 3>, std::string> x;
+};
+
+template <>
+struct glz::meta<array_map>
+{
+   static constexpr auto value = object("x", &array_map::x);
+};
+
+struct custom_key_map
+{
+   struct key_type
+   {
+      int field1{};
+      std::string field2{};
+
+      [[nodiscard]] std::strong_ordering operator<=>(const key_type&) const noexcept = default;
+
+      struct glaze
+      {
+         static constexpr auto value = glz::object("field1", &key_type::field1, "field2", &key_type::field2);
+      };
+   };
+
+   std::map<key_type, std::string> x;
+};
+
+template <>
+struct glz::meta<custom_key_map>
+{
+   static constexpr auto value = object("x", &custom_key_map::x);
+};
+
+template <typename Map>
+struct Arbitrary_key_test_case
+{
+   std::string_view name{};
+   Map input{};
+   std::string_view serialized{};
+};
+
+suite arbitrary_key_maps = [] {
+   using namespace boost::ut;
+   using namespace boost::ut::operators;
+   "arbitrary_key_maps"_test =
+      [](const auto& test_case) {
+         const auto& [name, input, serialized] = test_case;
+         std::string buffer{};
+         glz::write_json(input, buffer);
+         expect(buffer == serialized);
+
+         std::decay_t<decltype(input)> parsed{};
+         expect(glz::read_json(parsed, serialized) == glz::error_code::none);
+         expect(parsed.x == input.x);
+      } |
+      std::tuple{Arbitrary_key_test_case<array_map>{.name = "array_map",
+                                                    .input = {.x = {{{1, 2, 3}, "hello"}, {{4, 5, 6}, "goodbye"}}},
+                                                    .serialized = R"({"x":{"[1,2,3]":"hello","[4,5,6]":"goodbye"}})"},
+                 Arbitrary_key_test_case<custom_key_map>{
+                    .name = "custom_key_map",
+                    .input = {.x = {{{-1, "k.2"}, "value"}}},
+                    .serialized = R"({"x":{"{\"field1\":-1,\"field2\":\"k.2\"}":"value"}})",
+                 }};
 };
 
 suite char_array = [] {
