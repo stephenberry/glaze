@@ -351,14 +351,21 @@ namespace glz
       template <class T>
       concept str_view_t = std::same_as<std::decay_t<T>, std::string_view>;
 
+      // Member access to pair.first/pair.second will always be at least an l-value reference to first/second_type,
+      // which is why a reference is added in the expected result type.
+      // However, pairs may hold references, too, meaning the members could already be a first/second_type& or
+      // first/second_type&&. So, instead of checking the exact member type, we expect that it can
+      // bind to a const&, which may bind to any combination of type qualifications.
+      // Additionally, r-value references to pairs should satisfy pair_t, so any references are removed to get access
+      // to the member types first/second_type. This does not modify the first/second_type.
       template <class T>
       concept pair_t = requires(T pair) {
          {
             pair.first
-         } -> std::same_as<typename T::first_type&>;
+         } -> std::convertible_to<const typename std::remove_reference_t<T>::first_type&>;
          {
             pair.second
-         } -> std::same_as<typename T::second_type&>;
+         } -> std::convertible_to<const typename std::remove_reference_t<T>::second_type&>;
       };
 
       template <class T>
@@ -508,7 +515,7 @@ namespace glz
       template <class T>
       concept tuple_t = requires(T t) {
          std::tuple_size<T>::value;
-         glz::get<0>(t);
+         get<0>(t);
       } && !meta_value_t<T> && !range<T>;
 
       template <class T>
