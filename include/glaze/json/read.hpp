@@ -1688,8 +1688,8 @@ namespace glz
       {
          // TODO this way of filtering types is compile time intensive.
          using bool_types = decltype(std::tuple_cat(std::conditional_t<bool_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
-         using number_types =
-            decltype(std::tuple_cat(std::conditional_t<num_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+         using number_types = decltype(std::tuple_cat(
+            std::conditional_t<num_t<remove_meta_wrapper_t<Ts>>, std::tuple<Ts>, std::tuple<>>{}...));
          using string_types = decltype(std::tuple_cat(std::conditional_t < str_t<Ts> || glaze_enum_t<Ts>,
                                                       std::tuple<Ts>, std::tuple < >> {}...));
          using object_types =
@@ -1699,6 +1699,19 @@ namespace glz
                                                      std::tuple<Ts>, std::tuple < >> {}...));
          using nullable_types =
             decltype(std::tuple_cat(std::conditional_t<null_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+      };
+
+      // post process output of variant_types
+      template <typename>
+      struct tuple_types;
+
+      template <typename... Ts>
+      struct tuple_types<std::tuple<Ts...>>
+      {
+         using glaze_const_types =
+            decltype(std::tuple_cat(std::conditional_t<glaze_const_value_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+         using glaze_non_const_types =
+            decltype(std::tuple_cat(std::conditional_t<!glaze_const_value_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
       };
 
       template <is_variant T>
@@ -1934,9 +1947,35 @@ namespace glz
                      ctx.error = error_code::no_matching_variant_type;
                   }
                   else {
-                     using V = std::tuple_element_t<0, number_types>;
-                     if (!std::holds_alternative<V>(value)) value = V{};
-                     read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     using const_glaze_types = typename tuple_types<number_types>::glaze_const_types;
+                     bool found_match{};
+                     for_each<std::tuple_size_v<const_glaze_types>>([&]([[maybe_unused]] auto I) mutable  {
+                        if (found_match) {
+                           return;
+                        }
+                        using V = std::tuple_element_t<I, const_glaze_types>;
+                        // run time substitute to compare to const value
+                        std::remove_const_t<std::remove_pointer_t<std::remove_const_t<meta_wrapper_t<V>>>> substitute{};
+                        auto copy_it{it};
+                        read<json>::op<ws_handled<Opts>()>(substitute, ctx, it, end);
+                        static constexpr auto const_value{*meta_wrapper_v<V>};
+                        if (substitute == const_value) {
+                           found_match = true;
+                           if (!std::holds_alternative<V>(value)) value = V{};
+                        }
+                        else {
+                           it = copy_it;
+                        }
+                     });
+                     using other_types = typename tuple_types<number_types>::glaze_non_const_types;
+                     if constexpr (std::tuple_size_v<other_types> > 0) {
+                        using V = std::tuple_element_t<0, other_types>;
+                        if (!std::holds_alternative<V>(value)) value = V{};
+                        read<json>::op<ws_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     }
+                     else if (!found_match) {
+                        ctx.error = error_code::no_matching_variant_type;
+                     }
                   }
                }
                }
@@ -2058,6 +2097,36 @@ namespace glz
             }
          }
       };
+
+      // template <glaze_const_value_t T>
+      // struct from_json<T>
+      // {
+      //    // First attempt, This fails because you will read and increment `it` for each none_match so second attempt is
+      //    // indexing bogus memory etc. Would be nice if this could be here
+      //    template <auto Options>
+      //    GLZ_FLATTEN static void op([[maybe_unused]] auto&& value, [[maybe_unused]] is_context auto&& ctx,
+      //                               [[maybe_unused]] auto&& it, [[maybe_unused]] auto&& end) noexcept
+      //    {
+      //       auto copy_it{it};
+      //       std::remove_const_t<std::remove_pointer_t<std::remove_const_t<meta_wrapper_t<T>>>> substitute{};
+      //       read<json>::op<Options>(substitute, ctx, it, end);
+      //
+      //       // from_json<decltype(substitute)>::template op<Options>(substitute, ctx, it, end);
+      //       static constexpr auto const_value{*meta_wrapper_v<T>};
+      //       if (substitute == const_value) {
+      //          if (ctx.error == error_code::no_matching_variant_type) {
+      //             // clear error because we found a match
+      //             ctx.error = error_code::none;
+      //          }
+      //       }
+      //       else {
+      //          // reset it to its previous form because we did not read an actual value
+      //          it = copy_it;
+      //          ctx.error = error_code::no_matching_variant_type;
+      //       }
+      //    }
+      // };
+
    } // namespace detail
 
    template <class Buffer>

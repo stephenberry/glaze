@@ -4788,6 +4788,46 @@ struct glz::meta<cx_values>
    static constexpr auto value{glz::object("info", &T::info, "index", &T::index, "value", &T::value)};
 };
 
+struct direct_cx_value_conversion
+{
+   static constexpr std::uint64_t the_answer{42};
+   struct glaze
+   {
+      static constexpr auto value{&direct_cx_value_conversion::the_answer};
+   };
+};
+static_assert(glz::detail::glaze_const_value_t<direct_cx_value_conversion>);
+
+struct direct_cx_value_conversion_different_value
+{
+   static constexpr std::uint64_t the_answer{1337};
+   struct glaze
+   {
+      static constexpr auto value{&direct_cx_value_conversion_different_value::the_answer};
+   };
+};
+static_assert(glz::detail::glaze_const_value_t<direct_cx_value_conversion_different_value>);
+
+struct second_direct_cx_value_conversion
+{
+   static constexpr std::string_view other{"other"};
+   struct glaze
+   {
+      static constexpr auto value{&second_direct_cx_value_conversion::other};
+   };
+};
+static_assert(glz::detail::glaze_const_value_t<second_direct_cx_value_conversion>);
+
+struct non_cx_direct_value_conversion
+{
+   std::string some_other{"other"};
+   struct glaze
+   {
+      static constexpr auto value{&non_cx_direct_value_conversion::some_other};
+   };
+};
+static_assert(!glz::detail::glaze_const_value_t<non_cx_direct_value_conversion>);
+
 suite constexpr_values_test = [] {
    "constexpr_values_write"_test = [] {
       cx_values obj{};
@@ -4804,6 +4844,46 @@ suite constexpr_values_test = [] {
       expect(obj.index == 42);
       expect(obj.value == "special");
    };
+
+   using direct_conversion_variant = std::variant<std::monostate, direct_cx_value_conversion_different_value, direct_cx_value_conversion>;
+   "direct_conversion_variant cx int"_test = [] {
+      direct_conversion_variant var{direct_cx_value_conversion{}};
+      std::string s{};
+      glz::write_json(var, s);
+      expect(s == R"(42)");
+      auto parse_err{glz::read_json(var, s)};
+      expect(parse_err == glz::error_code::none) << glz::format_error(parse_err, s);
+      expect(std::holds_alternative<direct_cx_value_conversion>(var));
+   };
+
+   "parse error direct_conversion_variant cx int"_test = [] {
+      direct_conversion_variant var{direct_cx_value_conversion{}};
+      std::string s{};
+      glz::write_json(var, s);
+      expect(s == R"(42)");
+      auto parse_err{glz::read_json(var, R"(33)")};
+      expect(parse_err == glz::error_code::no_matching_variant_type);
+   };
+
+   "constexpr blend with non constexpr variant"_test = [] {
+      std::variant<std::monostate, direct_cx_value_conversion_different_value, direct_cx_value_conversion, std::uint64_t> var{std::uint64_t{111}};
+      std::string s{};
+      glz::write_json(var, s);
+      expect(s == R"(111)");
+      auto parse_err{glz::read_json(var, s)};
+      expect(parse_err == glz::error_code::none) << glz::format_error(parse_err, s);
+      expect(std::holds_alternative<std::uint64_t>(var));
+   };
+//   "constexpr_values_optional"_test = [] {
+//      std::optional<direct_cx_value_conversion> var{direct_cx_value_conversion{}};
+//      std::string s{};
+//      glz::write_json(var, s);
+//      expect(s == R"(42)");
+//      auto parse_err{glz::read_json(var, s)};
+//      expect(parse_err == glz::error_code::none) << glz::format_error(parse_err, s);
+//      expect(var.has_value());
+//   };
+
 };
 
 enum class my_enum_type { value_0, value_1 };
