@@ -549,13 +549,14 @@ struct includer_struct
 {
    std::string str = "Hello";
    int i = 55;
+   bool j{false};
 };
 
 template <>
 struct glz::meta<includer_struct>
 {
    using T = includer_struct;
-   static constexpr auto value = object("#include", glz::file_include{}, "str", &T::str, "i", &T::i);
+   static constexpr auto value = object("#include", glz::file_include{}, "str", &T::str, "i", &T::i, "j", &T::j);
 };
 
 void file_include_test()
@@ -566,11 +567,13 @@ void file_include_test()
 
    obj.str = "";
    obj.i = 0;
+   obj.j = true;
 
    expect(glz::read_file_binary(obj, "../alabastar.beve", std::string{}) == glz::error_code::none);
 
    expect(obj.str == "Hello") << obj.str;
    expect(obj.i == 55) << obj.i;
+   expect(obj.j == false) << obj.j;
 }
 
 void container_types()
