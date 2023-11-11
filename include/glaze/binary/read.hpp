@@ -182,7 +182,7 @@ namespace glz
                return;
             }
 
-            value = tag >> 3;
+            value = tag >> 4;
             ++it;
          }
       };
