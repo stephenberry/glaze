@@ -40,9 +40,3 @@ endif()
 if (glaze_DEVELOPER_MODE)
   include(cmake/dev-mode.cmake)
 endif()
-
-add_executable(prefer-ut src/prefer.test.cpp)
-target_link_libraries(prefer-ut PRIVATE glaze_glaze Boost::ut)
-add_test(
-  NAME prefer-ut
-  COMMAND prefer-ut)
