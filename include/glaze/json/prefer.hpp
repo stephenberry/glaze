@@ -79,10 +79,10 @@ namespace glz
          }
 #else
             requires requires(const T t) {
-               {
-                  t.size()
-               } -> std::unsigned_integral;
-            }
+                        {
+                           t.size()
+                           } -> std::unsigned_integral;
+                     }
          {
             return map.get().size();
          }
