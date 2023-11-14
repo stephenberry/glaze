@@ -5305,7 +5305,7 @@ struct glz::meta<custom_encoding>
                                         "z", custom<&T::z, &T::write_z>, //
                                         "w",
                                         custom<
-#if defined(__GNUC__)
+#if defined(__GNUC__) && (!defined __clang__)
                                            &T::read_w
 #else
                                            &T::w
