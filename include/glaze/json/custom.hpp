@@ -49,12 +49,15 @@ namespace glz
                      }
                      else if constexpr (std::tuple_size_v<Tuple> == 1) {
                         using Input = std::decay_t<std::tuple_element_t<0, Tuple>>;
+#if defined(__GNUC__)
                         if constexpr (std::is_base_of_v<std::_Function_base, Input>) {
                            (value.val.*(value.from))([&](auto& input) { read<json>::op<Opts>(input, ctx, it, end); });
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                         }
-                        else {
+                        else
+#endif
+                        {
                            Input input{};
                            read<json>::op<Opts>(input, ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]

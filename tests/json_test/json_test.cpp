@@ -5303,7 +5303,15 @@ struct glz::meta<custom_encoding>
    static constexpr auto value = object("x", custom<&T::read_x, &T::write_x>, //
                                         "y", custom<&T::read_y, &T::y>, //
                                         "z", custom<&T::z, &T::write_z>, //
-                                        "w", custom<&T::read_w, &T::w> //
+                                        "w",
+                                        custom<
+#if defined(__GNUC__)
+                                           &T::read_w
+#else
+                                           &T::w
+#endif
+                                           ,
+                                           &T::w> //
    );
 };
 
