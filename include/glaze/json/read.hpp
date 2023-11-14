@@ -47,11 +47,10 @@ namespace glz
       {};
 
       template <auto Opts, class T, class Ctx, class It0, class It1>
-      concept read_json_invocable =
-         requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
-            from_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                 std::forward<It0>(it), std::forward<It1>(end));
-         };
+      concept read_json_invocable = requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
+         from_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                              std::forward<It0>(it), std::forward<It1>(end));
+      };
 
       template <>
       struct read<json>
@@ -213,11 +212,10 @@ namespace glz
                match<"alse">(ctx, it, end);
                break;
             }
-               [[unlikely]] default:
-               {
-                  ctx.error = error_code::expected_true_or_false;
-                  return;
-               }
+            [[unlikely]] default: {
+               ctx.error = error_code::expected_true_or_false;
+               return;
+            }
             }
 
             if constexpr (Opts.quoted_num) {
@@ -518,7 +516,7 @@ namespace glz
                      }
                      else {
                         switch (*it) {
-                        [[likely]] case '"' : {
+                        [[likely]] case '"': {
                            value.append(start, static_cast<size_t>(it - start));
                            ++it;
                            return;
@@ -527,15 +525,15 @@ namespace glz
                         [[unlikely]] case '\f':
                         [[unlikely]] case '\n':
                         [[unlikely]] case '\r':
-                        [[unlikely]] case '\t' : {
+                        [[unlikely]] case '\t': {
                            ctx.error = error_code::syntax_error;
                            return;
                         }
-                        [[unlikely]] case '\0' : {
+                        [[unlikely]] case '\0': {
                            ctx.error = error_code::unexpected_end;
                            return;
                         }
-                        [[unlikely]] case '\\' : {
+                        [[unlikely]] case '\\': {
                            value.append(start, static_cast<size_t>(it - start));
                            ++it;
                            handle_escaped();
@@ -544,7 +542,8 @@ namespace glz
                            start = it;
                            break;
                         }
-                           [[likely]] default : ++it;
+                        [[likely]] default:
+                           ++it;
                         }
                      }
                   }
@@ -671,7 +670,6 @@ namespace glz
                   }
                }
             }
-            return;
          }
       };
 
@@ -1759,26 +1757,23 @@ namespace glz
                            else [[unlikely]] {
                               if constexpr (!tag_v<T>.empty()) {
                                  if (key == tag_v<T>) {
-                                    skip_ws<Opts>(ctx, it, end);
+                                    parse_object_entry_sep<Opts>(ctx, it, end);
                                     if (bool(ctx.error)) [[unlikely]]
                                        return;
-                                    match<':'>(ctx, it, end);
-                                    if (bool(ctx.error)) [[unlikely]]
-                                       return;
-
-                                    std::string& type_id = string_buffer();
-                                    read<json>::op<Opts>(type_id, ctx, it, end);
+                                    std::string_view type_id{};
+                                    read<json>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
                                     if (bool(ctx.error)) [[unlikely]]
                                        return;
                                     skip_ws<Opts>(ctx, it, end);
                                     if (bool(ctx.error)) [[unlikely]]
                                        return;
-                                    match<','>(ctx, it, end);
-                                    if (bool(ctx.error)) [[unlikely]]
+                                    if(!(*it == ',' || *it == '}')) {
+                                       ctx.error = error_code::syntax_error;
                                        return;
+                                    }
 
                                     static constexpr auto id_map = make_variant_id_map<T>();
-                                    auto id_it = id_map.find(std::string_view{type_id});
+                                    auto id_it = id_map.find(type_id);
                                     if (id_it != id_map.end()) [[likely]] {
                                        it = start;
                                        const auto type_index = id_it->second;
@@ -1814,15 +1809,12 @@ namespace glz
                         else if constexpr (!tag_v<T>.empty()) {
                            // empty object case for variant
                            if (key == tag_v<T>) {
-                              skip_ws<Opts>(ctx, it, end);
-                              if (bool(ctx.error)) [[unlikely]]
-                                 return;
-                              match<':'>(ctx, it, end);
+                              parse_object_entry_sep<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
 
-                              std::string& type_id = string_buffer();
-                              read<json>::op<Opts>(type_id, ctx, it, end);
+                              std::string_view type_id{};
+                              read<json>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
                               skip_ws<Opts>(ctx, it, end);
@@ -1830,7 +1822,7 @@ namespace glz
                                  return;
 
                               static constexpr auto id_map = make_variant_id_map<T>();
-                              auto id_it = id_map.find(std::string_view{type_id});
+                              auto id_it = id_map.find(type_id);
                               if (id_it != id_map.end()) [[likely]] {
                                  it = start;
                                  const auto type_index = id_it->second;
