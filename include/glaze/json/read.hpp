@@ -47,10 +47,11 @@ namespace glz
       {};
 
       template <auto Opts, class T, class Ctx, class It0, class It1>
-      concept read_json_invocable = requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
-         from_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                              std::forward<It0>(it), std::forward<It1>(end));
-      };
+      concept read_json_invocable =
+         requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
+            from_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                                 std::forward<It0>(it), std::forward<It1>(end));
+         };
 
       template <>
       struct read<json>
@@ -212,10 +213,11 @@ namespace glz
                match<"alse">(ctx, it, end);
                break;
             }
-            [[unlikely]] default: {
-               ctx.error = error_code::expected_true_or_false;
-               return;
-            }
+               [[unlikely]] default:
+               {
+                  ctx.error = error_code::expected_true_or_false;
+                  return;
+               }
             }
 
             if constexpr (Opts.quoted_num) {
@@ -516,7 +518,7 @@ namespace glz
                      }
                      else {
                         switch (*it) {
-                        [[likely]] case '"': {
+                        [[likely]] case '"' : {
                            value.append(start, static_cast<size_t>(it - start));
                            ++it;
                            return;
@@ -525,15 +527,15 @@ namespace glz
                         [[unlikely]] case '\f':
                         [[unlikely]] case '\n':
                         [[unlikely]] case '\r':
-                        [[unlikely]] case '\t': {
+                        [[unlikely]] case '\t' : {
                            ctx.error = error_code::syntax_error;
                            return;
                         }
-                        [[unlikely]] case '\0': {
+                        [[unlikely]] case '\0' : {
                            ctx.error = error_code::unexpected_end;
                            return;
                         }
-                        [[unlikely]] case '\\': {
+                        [[unlikely]] case '\\' : {
                            value.append(start, static_cast<size_t>(it - start));
                            ++it;
                            handle_escaped();
@@ -542,8 +544,7 @@ namespace glz
                            start = it;
                            break;
                         }
-                        [[likely]] default:
-                           ++it;
+                           [[likely]] default : ++it;
                         }
                      }
                   }
@@ -1767,7 +1768,7 @@ namespace glz
                                     skip_ws<Opts>(ctx, it, end);
                                     if (bool(ctx.error)) [[unlikely]]
                                        return;
-                                    if(!(*it == ',' || *it == '}')) {
+                                    if (!(*it == ',' || *it == '}')) {
                                        ctx.error = error_code::syntax_error;
                                        return;
                                     }
