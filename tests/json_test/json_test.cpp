@@ -5278,9 +5278,8 @@ struct custom_encoding
    std::string y{};
    std::array<uint32_t, 3> z{};
 
-   //   std::span<uint32_t> w{buf.data(), 16};
-   //   std::array<uint32_t, 32> buf{};
-   int32_t w{};
+   std::span<int32_t> w{buf.data(), 3};
+   std::array<int32_t, 3> buf{};
 
    void read_x(const std::string& s) { x = std::stoi(s); }
 
@@ -5294,42 +5293,40 @@ struct custom_encoding
       return z;
    }
 
-   void read_w(std::function<void(int32_t&)> w_builder)
-   {
-      w_builder(w);
-      static_assert(std::invocable<decltype(w_builder), int32_t&>);
-   }
+   void read_w(const std::function<void(std::span<int32_t>&)>& w_builder) { w_builder(w); }
 };
 
 template <>
 struct glz::meta<custom_encoding>
 {
    using T = custom_encoding;
-   static constexpr auto value = object(
-       "x", custom<&T::read_x, &T::write_x>, //
-                                         "y", custom<&T::read_y, &T::y>, //
-                                        "z", custom<&T::z, &T::write_z>,
-      "w", custom<&T::read_w, &T::w>
+   static constexpr auto value = object("x", custom<&T::read_x, &T::write_x>, //
+                                        "y", custom<&T::read_y, &T::y>, //
+                                        "z", custom<&T::z, &T::write_z>, //
+                                        "w", custom<&T::read_w, &T::w> //
    );
 };
 
 suite custom_encoding_test = [] {
    "custom_reading"_test = [] {
       custom_encoding obj{};
-      std::string s = R"({"x":"3","y":"world","z":[1,2,3], "w":12 })";
+      std::string s = R"({"x":"3","y":"world","z":[1,2,3],"w":[-1,-2,-3]})";
       expect(!glz::read_json(obj, s));
       expect(obj.x == 3);
       expect(obj.y == "helloworld");
       expect(obj.z == std::array<uint32_t, 3>{1, 2, 3});
+      expect(obj.w[0] == -1);
+      expect(obj.w[1] == -2);
+      expect(obj.w[2] == -3);
    };
 
    "custom_writing"_test = [] {
       custom_encoding obj{};
-      std::string s = R"({"x":"3","y":"world","z":[1,2,3]})";
+      std::string s = R"({"x":"3","y":"world","z":[1,2,3],"w":[-1,-2,-3]})";
       expect(!glz::read_json(obj, s));
       std::string out{};
       glz::write_json(obj, out);
-      expect(out == R"({"x":3,"y":"helloworld","z":[5,2,3]})");
+      expect(out == R"({"x":3,"y":"helloworld","z":[5,2,3],"w":[-1,-2,-3]})");
    };
 };
 
