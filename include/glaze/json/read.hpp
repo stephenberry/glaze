@@ -671,7 +671,6 @@ namespace glz
                   }
                }
             }
-            return;
          }
       };
 
@@ -1759,26 +1758,23 @@ namespace glz
                            else [[unlikely]] {
                               if constexpr (!tag_v<T>.empty()) {
                                  if (key == tag_v<T>) {
-                                    skip_ws<Opts>(ctx, it, end);
+                                    parse_object_entry_sep<Opts>(ctx, it, end);
                                     if (bool(ctx.error)) [[unlikely]]
                                        return;
-                                    match<':'>(ctx, it, end);
-                                    if (bool(ctx.error)) [[unlikely]]
-                                       return;
-
-                                    std::string& type_id = string_buffer();
-                                    read<json>::op<Opts>(type_id, ctx, it, end);
+                                    std::string_view type_id{};
+                                    read<json>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
                                     if (bool(ctx.error)) [[unlikely]]
                                        return;
                                     skip_ws<Opts>(ctx, it, end);
                                     if (bool(ctx.error)) [[unlikely]]
                                        return;
-                                    match<','>(ctx, it, end);
-                                    if (bool(ctx.error)) [[unlikely]]
+                                    if (!(*it == ',' || *it == '}')) {
+                                       ctx.error = error_code::syntax_error;
                                        return;
+                                    }
 
                                     static constexpr auto id_map = make_variant_id_map<T>();
-                                    auto id_it = id_map.find(std::string_view{type_id});
+                                    auto id_it = id_map.find(type_id);
                                     if (id_it != id_map.end()) [[likely]] {
                                        it = start;
                                        const auto type_index = id_it->second;
@@ -1814,15 +1810,12 @@ namespace glz
                         else if constexpr (!tag_v<T>.empty()) {
                            // empty object case for variant
                            if (key == tag_v<T>) {
-                              skip_ws<Opts>(ctx, it, end);
-                              if (bool(ctx.error)) [[unlikely]]
-                                 return;
-                              match<':'>(ctx, it, end);
+                              parse_object_entry_sep<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
 
-                              std::string& type_id = string_buffer();
-                              read<json>::op<Opts>(type_id, ctx, it, end);
+                              std::string_view type_id{};
+                              read<json>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
                               skip_ws<Opts>(ctx, it, end);
@@ -1830,7 +1823,7 @@ namespace glz
                                  return;
 
                               static constexpr auto id_map = make_variant_id_map<T>();
-                              auto id_it = id_map.find(std::string_view{type_id});
+                              auto id_it = id_map.find(type_id);
                               if (id_it != id_map.end()) [[likely]] {
                                  it = start;
                                  const auto type_index = id_it->second;

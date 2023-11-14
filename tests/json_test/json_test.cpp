@@ -2426,8 +2426,16 @@ suite tagged_variant_tests = [] {
       expect(glz::read_json(var, R"({"action":"DELETE","data":"the_internet"})") == glz::error_code::none);
       expect(std::get<delete_action>(var).data == "the_internet");
 
+      // tag at end
+      expect(glz::read_json(var, R"({"data":"the_internet","action":"DELETE"})") == glz::error_code::none);
+      expect(std::get<delete_action>(var).data == "the_internet");
+
       tagged_variant2 var2{};
       expect(glz::read_json(var2, R"({"type":"put_action","data":{"x":100,"y":200}})") == glz::error_code::none);
+      expect(std::get<put_action>(var2).data["y"] == 200);
+
+      // tag at end
+      expect(glz::read_json(var2, R"({"data":{"x":100,"y":200},"type":"put_action"})") == glz::error_code::none);
       expect(std::get<put_action>(var2).data["y"] == 200);
    };
 
