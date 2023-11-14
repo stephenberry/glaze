@@ -5278,6 +5278,10 @@ struct custom_encoding
    std::string y{};
    std::array<uint32_t, 3> z{};
 
+   //   std::span<uint32_t> w{buf.data(), 16};
+   //   std::array<uint32_t, 32> buf{};
+   int32_t w{};
+
    void read_x(const std::string& s) { x = std::stoi(s); }
 
    uint64_t write_x() { return x; }
@@ -5289,21 +5293,30 @@ struct custom_encoding
       z[0] = 5;
       return z;
    }
+
+   void read_w(std::function<void(int32_t&)> w_builder)
+   {
+      w_builder(w);
+      static_assert(std::invocable<decltype(w_builder), int32_t&>);
+   }
 };
 
 template <>
 struct glz::meta<custom_encoding>
 {
    using T = custom_encoding;
-   static constexpr auto value = object("x", custom<&T::read_x, &T::write_x>, //
-                                        "y", custom<&T::read_y, &T::y>, //
-                                        "z", custom<&T::z, &T::write_z>);
+   static constexpr auto value = object(
+       "x", custom<&T::read_x, &T::write_x>, //
+                                         "y", custom<&T::read_y, &T::y>, //
+                                        "z", custom<&T::z, &T::write_z>,
+      "w", custom<&T::read_w, &T::w>
+   );
 };
 
 suite custom_encoding_test = [] {
    "custom_reading"_test = [] {
       custom_encoding obj{};
-      std::string s = R"({"x":"3","y":"world","z":[1,2,3]})";
+      std::string s = R"({"x":"3","y":"world","z":[1,2,3], "w":12 })";
       expect(!glz::read_json(obj, s));
       expect(obj.x == 3);
       expect(obj.y == "helloworld");

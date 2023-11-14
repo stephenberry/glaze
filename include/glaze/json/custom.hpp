@@ -48,11 +48,22 @@ namespace glz
                         (value.val.*(value.from))();
                      }
                      else if constexpr (std::tuple_size_v<Tuple> == 1) {
-                        std::decay_t<std::tuple_element_t<0, Tuple>> input{};
-                        read<json>::op<Opts>(input, ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                        (value.val.*(value.from))(input);
+                        using Input = std::decay_t<std::tuple_element_t<0, Tuple>>;
+                        const auto dummy_emplacer = [](auto& i) {};
+                        if (std::invocable<std::remove_cvref_t<decltype(value.val.*(value.from))>,
+                                           decltype(dummy_emplacer)>) {
+                           const auto emplacer = [&](auto& input) { read<json>::op<Opts>(input, ctx, it, end); };
+                           (value.val.*(value.from))(emplacer);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                        }
+                        else {
+                           Input input{};
+                           read<json>::op<Opts>(input, ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           (value.val.*(value.from))(input);
+                        }
                      }
                      else {
                         static_assert(false_v<T>, "function cannot have more than one input");
