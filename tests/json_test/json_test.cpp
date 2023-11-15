@@ -5101,12 +5101,25 @@ suite number_reading = [] {
       expect(!glz::read_json(d, buffer));
       expect(d == 0.0);
    };
+   
+   "minimum int32_t"_test = [] {
+      std::string buffer{"-2147483648"};
+      int32_t i{};
+      expect(!glz::read_json(i, buffer));
+      expect(i == (std::numeric_limits<int32_t>::min)());
+      
+      glz::write_json(i, buffer);
+      expect(buffer == "-2147483648");
+   };
 
    "minimum int64_t"_test = [] {
-      std::string_view buffer{"-9223372036854775808"};
+      std::string buffer{"-9223372036854775808"};
       int64_t i{};
       expect(!glz::read_json(i, buffer));
       expect(i == (std::numeric_limits<int64_t>::min)());
+      
+      glz::write_json(i, buffer);
+      expect(buffer == "-9223372036854775808");
    };
 };
 

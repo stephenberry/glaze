@@ -139,12 +139,11 @@ namespace glz
 
    template <class T>
       requires std::same_as<T, int32_t>
-   inline auto* to_chars(auto* buf, T val) noexcept
+   inline auto* to_chars(auto* buf, T x) noexcept
    {
-      uint32_t neg = uint32_t(-val);
-      std::size_t sign = val < 0;
       *buf = '-';
-      return to_chars(buf + sign, sign ? uint32_t(neg) : uint32_t(val));
+      // shifts are necessary to have the numeric_limits<int32_t>::min case
+      return to_chars(buf + (x < 0), uint32_t(x ^ (x >> 31)) - (x >> 31));
    }
 
    GLZ_ALWAYS_INLINE auto* to_chars_u64_len_8(auto* buf, uint32_t val) noexcept
@@ -290,11 +289,10 @@ namespace glz
 
    template <class T>
       requires std::same_as<T, int64_t>
-   inline auto* to_chars(auto* buf, T val) noexcept
+   inline auto* to_chars(auto* buf, T x) noexcept
    {
-      uint64_t neg = uint64_t(-val);
-      std::size_t sign = val < 0;
       *buf = '-';
-      return to_chars(buf + sign, sign ? uint64_t(neg) : uint64_t(val));
+      // shifts are necessary to have the numeric_limits<int64_t>::min case
+      return to_chars(buf + (x < 0), uint64_t(x ^ (x >> 63)) - (x >> 63));
    }
 }
