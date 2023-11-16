@@ -48,13 +48,6 @@ namespace glz
       '0', '8', '1', '8', '2', '8', '3', '8', '4', '8', '5', '8', '6', '8', '7', '8', '8', '8', '9', '9', '0', '9', '1',
       '9', '2', '9', '3', '9', '4', '9', '5', '9', '6', '9', '7', '9', '8', '9', '9'};
 
-   /* This struct can help compiler generate 2-byte load/store */
-   /* instructions on platforms that support unaligned access. */
-   struct pair final
-   {
-      char c1, c2;
-   };
-
    template <class T>
       requires std::same_as<T, uint32_t>
    inline auto* to_chars(auto* buf, T val) noexcept
