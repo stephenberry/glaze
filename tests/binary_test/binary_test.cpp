@@ -10,8 +10,8 @@
 #include <deque>
 #include <list>
 #include <map>
-#include <unordered_set>
 #include <set>
+#include <unordered_set>
 
 #include "boost/ut.hpp"
 #include "glaze/binary/read.hpp"
@@ -968,55 +968,55 @@ suite skip_test = [] {
 
 suite set_tests = [] {
    "unordered_set<string>"_test = [] {
-      std::unordered_set<std::string> set{ "one", "two", "three" };
-      
+      std::unordered_set<std::string> set{"one", "two", "three"};
+
       std::string s{};
       glz::write_binary(set, s);
-      
+
       set.clear();
-      
+
       expect(!glz::read_binary(set, s));
       expect(set.contains("one"));
       expect(set.contains("two"));
       expect(set.contains("three"));
    };
-   
+
    "unordered_set<uint32_t>"_test = [] {
-      std::unordered_set<uint32_t> set{ 0, 1, 2 };
-      
+      std::unordered_set<uint32_t> set{0, 1, 2};
+
       std::string s{};
       glz::write_binary(set, s);
-      
+
       set.clear();
-      
+
       expect(!glz::read_binary(set, s));
       expect(set.contains(0));
       expect(set.contains(1));
       expect(set.contains(2));
    };
-   
+
    "set<string>"_test = [] {
-      std::set<std::string> set{ "one", "two", "three" };
-      
+      std::set<std::string> set{"one", "two", "three"};
+
       std::string s{};
       glz::write_binary(set, s);
-      
+
       set.clear();
-      
+
       expect(!glz::read_binary(set, s));
       expect(set.contains("one"));
       expect(set.contains("two"));
       expect(set.contains("three"));
    };
-   
+
    "set<uint32_t>"_test = [] {
-      std::set<uint32_t> set{ 0, 1, 2 };
-      
+      std::set<uint32_t> set{0, 1, 2};
+
       std::string s{};
       glz::write_binary(set, s);
-      
+
       set.clear();
-      
+
       expect(!glz::read_binary(set, s));
       expect(set.contains(0));
       expect(set.contains(1));

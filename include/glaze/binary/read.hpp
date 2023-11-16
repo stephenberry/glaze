@@ -271,7 +271,7 @@ namespace glz
             }
          }
       };
-      
+
       // for set types
       template <class T>
          requires(readable_array_t<T> && !emplace_backable<T> && !resizeable<T> && emplaceable<T>)
@@ -281,9 +281,9 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             using V = range_value_t<std::decay_t<T>>;
-            
+
             const auto tag = uint8_t(*it);
-            
+
             if constexpr (boolean_like<V>) {
                constexpr uint8_t type = uint8_t(3) << 3;
                constexpr uint8_t header = tag::typed_array | type;
@@ -296,7 +296,7 @@ namespace glz
                ++it;
 
                const auto n = int_from_compressed(it, end);
-               
+
                value.clear();
 
                const auto num_bytes = (value.size() + 7) / 8;
@@ -322,9 +322,9 @@ namespace glz
                ++it;
 
                const auto n = int_from_compressed(it, end);
-               
+
                value.clear();
-               
+
                for (size_t i = 0; i < n; ++i) {
                   V x;
                   std::memcpy(&x, &*it, sizeof(V));
@@ -345,9 +345,9 @@ namespace glz
                ++it;
 
                const auto n = int_from_compressed(it, end);
-               
+
                value.clear();
-               
+
                for (size_t i = 0; i < n; ++i) {
                   const auto length = int_from_compressed(it, end);
                   V str;
@@ -369,9 +369,9 @@ namespace glz
                ++it;
 
                const auto n = int_from_compressed(it, end);
-               
+
                value.clear();
-               
+
                for (size_t i = 0; i < n; ++i) {
                   V v;
                   read<binary>::op<Opts>(v, ctx, it, end);
