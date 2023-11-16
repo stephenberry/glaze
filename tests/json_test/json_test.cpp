@@ -5782,6 +5782,10 @@ suite bitset = [] {
       glz::write_json(b, s);
       
       expect(s == R"("10101010")") << s;
+      
+      b.reset();
+      expect(!glz::read_json(b, s));
+      expect(b == 0b10101010);
    };
 };
 

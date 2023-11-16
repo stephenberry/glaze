@@ -102,6 +102,44 @@ namespace glz
             ctx.error = error_code::attempt_member_func_read;
          }
       };
+      
+      template <is_bitset T>
+      struct from_json<T>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            match<'"'>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            
+            const auto n = value.size();
+            for (size_t i = 1; it < end; ++i, ++it) {
+               if (*it == '"') {
+                  ++it;
+                  return;
+               }
+               
+               if (i > n) {
+                  ctx.error = error_code::exceeded_static_array_size;
+                  return;
+               }
+               
+               if (*it == '0') {
+                  value[n - i] = 0;
+               }
+               else if (*it == '1') {
+                  value[n - i] = 1;
+               }
+               else [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
+            
+            ctx.error = error_code::expected_quote;
+         }
+      };
 
       template <>
       struct from_json<skip>
