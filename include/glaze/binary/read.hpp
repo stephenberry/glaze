@@ -285,7 +285,29 @@ namespace glz
             const auto tag = uint8_t(*it);
             
             if constexpr (boolean_like<V>) {
-               static_assert(false_v<T>, "TODO");
+               constexpr uint8_t type = uint8_t(3) << 3;
+               constexpr uint8_t header = tag::typed_array | type;
+
+               if (tag != header) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               ++it;
+
+               const auto n = int_from_compressed(it, end);
+               
+               value.clear();
+
+               const auto num_bytes = (value.size() + 7) / 8;
+               for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
+                  uint8_t byte;
+                  std::memcpy(&byte, &*it, 1);
+                  for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
+                     bool x = byte >> bit_i & uint8_t(1);
+                     value.emplace(x);
+                  }
+               }
             }
             else if constexpr (num_t<V>) {
                constexpr uint8_t type =
@@ -340,7 +362,21 @@ namespace glz
             }
             else {
                // generic array
-               static_assert(false_v<T>, "TODO");
+               if ((tag & 0b00000'111) != tag::generic_array) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               ++it;
+
+               const auto n = int_from_compressed(it, end);
+               
+               value.clear();
+               
+               for (size_t i = 0; i < n; ++i) {
+                  V v;
+                  read<binary>::op<Opts>(v, ctx, it, end);
+                  value.emplace(std::move(v));
+               }
             }
          }
       };

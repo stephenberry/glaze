@@ -298,7 +298,7 @@ namespace glz
                   }
                   dump(bytes, args...);
                }
-               else {
+               else if constexpr (accessible<T>) {
                   const auto num_bytes = (value.size() + 7) / 8;
                   for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
                      uint8_t byte{};
@@ -307,6 +307,9 @@ namespace glz
                      }
                      dump_type(byte, args...);
                   }
+               }
+               else {
+                  static_assert(false_v<T>);
                }
             }
             else if constexpr (num_t<V>) {
