@@ -1024,6 +1024,19 @@ suite set_tests = [] {
    };
 };
 
+/*suite bitset = [] {
+   "bitset"_test = [] {
+      std::bitset<8> b = 0b10101010;
+      
+      std::string s{};
+      glz::write_binary(b, s);
+      
+      b.reset();
+      expect(!glz::read_binary(b, s));
+      expect(b == 0b10101010);
+   };
+};*/
+
 int main()
 {
    using namespace boost::ut;

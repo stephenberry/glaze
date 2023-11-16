@@ -5775,7 +5775,7 @@ suite ndjson_error_test = [] {
 };
 
 suite bitset = [] {
-   "bitset"_test = [] {
+   "bitset8"_test = [] {
       std::bitset<8> b = 0b10101010;
       
       std::string s{};
@@ -5786,6 +5786,19 @@ suite bitset = [] {
       b.reset();
       expect(!glz::read_json(b, s));
       expect(b == 0b10101010);
+   };
+   
+   "bitset16"_test = [] {
+      std::bitset<16> b = 0b10010010'00000010;
+      
+      std::string s{};
+      glz::write_json(b, s);
+      
+      expect(s == R"("1001001000000010")") << s;
+      
+      b.reset();
+      expect(!glz::read_json(b, s));
+      expect(b == 0b10010010'00000010);
    };
 };
 
