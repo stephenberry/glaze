@@ -159,9 +159,8 @@ namespace glz
    GLZ_ALWAYS_INLINE auto* to_chars_u64_len_4(auto* buf, uint32_t val) noexcept
    {
       /* 4 digits: aabb */
-      uint32_t aa, bb;
-      aa = (val * 5243) >> 19; /* (val / 100) */
-      bb = val - aa * 100; /* (val % 100) */
+      const uint32_t aa = (val * 5243) >> 19; /* (val / 100) */
+      const uint32_t bb = val - aa * 100; /* (val % 100) */
       std::memcpy(buf, char_table + aa * 2, 2);
       std::memcpy(buf + 2, char_table + bb * 2, 2);
       return buf + 4;
