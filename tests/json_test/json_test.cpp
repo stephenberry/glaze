@@ -2,6 +2,7 @@
 // For the license information refer to glaze.hpp
 
 #include <any>
+#include <bitset>
 #include <chrono>
 #include <complex>
 #include <deque>
@@ -5770,6 +5771,17 @@ suite ndjson_error_test = [] {
    "ndjson_error"_test = [] {
       auto x = glz::read_ndjson<std::vector<Update>>("{\"t\":73}\n{\"t\":37}");
       expect(x.error() == glz::error_code::syntax_error);
+   };
+};
+
+suite bitset = [] {
+   "bitset"_test = [] {
+      std::bitset<8> b = 0b10101010;
+      
+      std::string s{};
+      glz::write_json(b, s);
+      
+      expect(s == R"("10101010")") << s;
    };
 };
 

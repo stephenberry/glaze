@@ -58,6 +58,20 @@ namespace glz
                                           std::forward<B>(b), std::forward<IX>(ix));
          }
       };
+      
+      template <is_bitset T>
+      struct to_json<T>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&, auto&& b, auto&& ix)
+         {
+            dump<'"'>(b, ix);
+            for (size_t i = value.size(); i > 0; --i) {
+               value[i - 1] ? dump<'1'>(b, ix) : dump<'0'>(b, ix);
+            }
+            dump<'"'>(b, ix);
+         }
+      };
 
       template <glaze_flags_t T>
       struct to_json<T>
