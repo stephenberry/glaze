@@ -1024,7 +1024,7 @@ suite set_tests = [] {
    };
 };
 
-/*suite bitset = [] {
+suite bitset = [] {
    "bitset"_test = [] {
       std::bitset<8> b = 0b10101010;
       
@@ -1035,7 +1035,7 @@ suite set_tests = [] {
       expect(!glz::read_binary(b, s));
       expect(b == 0b10101010);
    };
-};*/
+};
 
 int main()
 {

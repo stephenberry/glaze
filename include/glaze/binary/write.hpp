@@ -117,7 +117,7 @@ namespace glz
          }
       };
       
-      /*template <is_bitset T>
+      template <is_bitset T>
       struct to_binary<T>
       {
          template <auto Opts, class... Args>
@@ -128,16 +128,20 @@ namespace glz
             dump_type(tag, args...);
             dump_compressed_int<Opts>(value.size(), args...);
             
-            constexpr auto num_bytes = (value.size() + 7) / 8;
-            std::array<uint8_t, num_bytes> bytes{};
+            //constexpr auto num_bytes = (value.size() + 7) / 8;
+            const auto num_bytes = (value.size() + 7) / 8;
+            // .size() should be constexpr, but clang doesn't support this
+            std::vector<uint8_t> bytes{};
+            //std::array<uint8_t, num_bytes> bytes{};
             for (size_t byte_i{}, i{}; byte_i < num_bytes - 1; ++byte_i) {
                for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
                   bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
                }
             }
-            dump(bytes, args...);
+            //dump(bytes, args...);
+            dump(std::as_bytes(std::span{bytes}), args...);
          }
-      };*/
+      };
 
       template <glaze_flags_t T>
       struct to_binary<T>
