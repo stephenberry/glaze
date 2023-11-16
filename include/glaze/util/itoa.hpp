@@ -48,13 +48,6 @@ namespace glz
       '0', '8', '1', '8', '2', '8', '3', '8', '4', '8', '5', '8', '6', '8', '7', '8', '8', '8', '9', '9', '0', '9', '1',
       '9', '2', '9', '3', '9', '4', '9', '5', '9', '6', '9', '7', '9', '8', '9', '9'};
 
-   /* This struct can help compiler generate 2-byte load/store */
-   /* instructions on platforms that support unaligned access. */
-   struct pair final
-   {
-      char c1, c2;
-   };
-
    template <class T>
       requires std::same_as<T, uint32_t>
    inline auto* to_chars(auto* buf, T val) noexcept
@@ -166,9 +159,8 @@ namespace glz
    GLZ_ALWAYS_INLINE auto* to_chars_u64_len_4(auto* buf, uint32_t val) noexcept
    {
       /* 4 digits: aabb */
-      uint32_t aa, bb;
-      aa = (val * 5243) >> 19; /* (val / 100) */
-      bb = val - aa * 100; /* (val % 100) */
+      const uint32_t aa = (val * 5243) >> 19; /* (val / 100) */
+      const uint32_t bb = val - aa * 100; /* (val % 100) */
       std::memcpy(buf, char_table + aa * 2, 2);
       std::memcpy(buf + 2, char_table + bb * 2, 2);
       return buf + 4;
@@ -225,14 +217,12 @@ namespace glz
 
    inline auto* to_chars_u64_len_5_8(auto* buf, uint32_t val) noexcept
    {
-      uint32_t aa, bb, cc, dd, aabb, bbcc, ccdd, lz;
-
       if (val < 1000000) { /* 5-6 digits: aabbcc */
-         aa = uint32_t((uint64_t(val) * 429497) >> 32); /* (val / 10000) */
-         bbcc = val - aa * 10000; /* (val % 10000) */
-         bb = (bbcc * 5243) >> 19; /* (bbcc / 100) */
-         cc = bbcc - bb * 100; /* (bbcc % 100) */
-         lz = aa < 10;
+         const uint32_t aa = uint32_t((uint64_t(val) * 429497) >> 32); /* (val / 10000) */
+         const uint32_t bbcc = val - aa * 10000; /* (val % 10000) */
+         const uint32_t bb = (bbcc * 5243) >> 19; /* (bbcc / 100) */
+         const uint32_t cc = bbcc - bb * 100; /* (bbcc % 100) */
+         const uint32_t lz = aa < 10;
          std::memcpy(buf, char_table + aa * 2 + lz, 2);
          buf -= lz;
          std::memcpy(buf + 2, char_table + bb * 2, 2);
@@ -241,13 +231,13 @@ namespace glz
       }
       else { /* 7-8 digits: aabbccdd */
          /* (val / 10000) */
-         aabb = uint32_t((uint64_t(val) * 109951163) >> 40);
-         ccdd = val - aabb * 10000; /* (val % 10000) */
-         aa = (aabb * 5243) >> 19; /* (aabb / 100) */
-         cc = (ccdd * 5243) >> 19; /* (ccdd / 100) */
-         bb = aabb - aa * 100; /* (aabb % 100) */
-         dd = ccdd - cc * 100; /* (ccdd % 100) */
-         lz = aa < 10;
+         const uint32_t aabb = uint32_t((uint64_t(val) * 109951163) >> 40);
+         const uint32_t ccdd = val - aabb * 10000; /* (val % 10000) */
+         const uint32_t aa = (aabb * 5243) >> 19; /* (aabb / 100) */
+         const uint32_t cc = (ccdd * 5243) >> 19; /* (ccdd / 100) */
+         const uint32_t bb = aabb - aa * 100; /* (aabb % 100) */
+         const uint32_t dd = ccdd - cc * 100; /* (ccdd % 100) */
+         const uint32_t lz = aa < 10;
          std::memcpy(buf, char_table + aa * 2 + lz, 2);
          buf -= lz;
          std::memcpy(buf + 2, char_table + bb * 2, 2);
@@ -261,26 +251,23 @@ namespace glz
       requires std::same_as<T, uint64_t>
    inline auto* to_chars(auto* buf, T val) noexcept
    {
-      uint64_t tmp, hgh;
-      uint32_t mid, low;
-
       if (val < 100000000) { /* 1-8 digits */
          buf = to_chars_u64_len_1_8(buf, uint32_t(val));
          return buf;
       }
       else if (val < 100000000ull * 100000000ull) { /* 9-16 digits */
-         hgh = val / 100000000;
-         low = uint32_t(val - hgh * 100000000); /* (val % 100000000) */
+         const uint64_t hgh = val / 100000000;
+         const auto low = uint32_t(val - hgh * 100000000); /* (val % 100000000) */
          buf = to_chars_u64_len_1_8(buf, uint32_t(hgh));
          buf = to_chars_u64_len_8(buf, low);
          return buf;
       }
       else { /* 17-20 digits */
-         tmp = val / 100000000;
-         low = uint32_t(val - tmp * 100000000); /* (val % 100000000) */
-         hgh = uint32_t(tmp / 10000);
-         mid = uint32_t(tmp - hgh * 10000); /* (tmp % 10000) */
-         buf = to_chars_u64_len_5_8(buf, uint32_t(hgh));
+         const uint64_t tmp = val / 100000000;
+         const auto low = uint32_t(val - tmp * 100000000); /* (val % 100000000) */
+         const auto hgh = uint32_t(tmp / 10000);
+         const auto mid = uint32_t(tmp - hgh * 10000); /* (tmp % 10000) */
+         buf = to_chars_u64_len_5_8(buf, hgh);
          buf = to_chars_u64_len_4(buf, mid);
          buf = to_chars_u64_len_8(buf, low);
          return buf;
