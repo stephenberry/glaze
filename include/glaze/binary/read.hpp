@@ -89,7 +89,7 @@ namespace glz
             for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
                uint8_t byte;
                std::memcpy(&byte, &*it, 1);
-               for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
+               for (size_t bit_i = 0; bit_i < 8 && i < n; ++bit_i, ++i) {
                   value[i] = byte >> bit_i & uint8_t(1);
                }
             }
