@@ -1690,7 +1690,7 @@ namespace glz
          using bool_types = decltype(std::tuple_cat(std::conditional_t<bool_t<remove_meta_wrapper_t<Ts>>, std::tuple<Ts>, std::tuple<>>{}...));
          using number_types = decltype(std::tuple_cat(
             std::conditional_t<num_t<remove_meta_wrapper_t<Ts>>, std::tuple<Ts>, std::tuple<>>{}...));
-         using string_types = decltype(std::tuple_cat(std::conditional_t < str_t<remove_meta_wrapper_t<Ts>> || glaze_enum_t<Ts>,
+         using string_types = decltype(std::tuple_cat(std::conditional_t < str_t<remove_meta_wrapper_t<Ts>> || glaze_enum_t<remove_meta_wrapper_t<Ts>>,
                                                       std::tuple<Ts>, std::tuple < >> {}...));
          using object_types =
             decltype(std::tuple_cat(std::conditional_t < readable_map_t<Ts> || writable_map_t<Ts> || glaze_object_t<Ts>,

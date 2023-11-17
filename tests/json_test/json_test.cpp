@@ -4918,7 +4918,7 @@ suite constexpr_values_test = [] {
 
    "parse error direct_conversion_variant cx int"_test = [] {
       const_only_variant var{direct_cx_value_conversion{}};
-      auto parse_err{glz::read_json(var, R"(33)")};
+      auto const parse_err {glz::read_json(var, R"(33)")};
       expect(parse_err == glz::error_code::no_matching_variant_type);
    };
 
