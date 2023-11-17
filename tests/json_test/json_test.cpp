@@ -4790,33 +4790,63 @@ struct glz::meta<cx_values>
 
 struct direct_cx_value_conversion
 {
-   static constexpr std::uint64_t the_answer{42};
+   static constexpr std::uint64_t const_v{42};
    struct glaze
    {
-      static constexpr auto value{&direct_cx_value_conversion::the_answer};
+      static constexpr auto value{&direct_cx_value_conversion::const_v};
    };
 };
 static_assert(glz::detail::glaze_const_value_t<direct_cx_value_conversion>);
 
 struct direct_cx_value_conversion_different_value
 {
-   static constexpr std::uint64_t the_answer{1337};
+   static constexpr std::uint64_t const_v{1337};
    struct glaze
    {
-      static constexpr auto value{&direct_cx_value_conversion_different_value::the_answer};
+      static constexpr auto value{&direct_cx_value_conversion_different_value::const_v};
    };
 };
 static_assert(glz::detail::glaze_const_value_t<direct_cx_value_conversion_different_value>);
 
 struct string_direct_cx_value_conversion
 {
-   static constexpr std::string_view other{"other"};
+   static constexpr std::string_view const_v{"other"};
    struct glaze
    {
-      static constexpr auto value{&string_direct_cx_value_conversion::other};
+      static constexpr auto value{&string_direct_cx_value_conversion::const_v};
    };
 };
 static_assert(glz::detail::glaze_const_value_t<string_direct_cx_value_conversion>);
+
+struct string_two_direct_cx_value_conversion
+{
+   static constexpr std::string_view const_v{"two"};
+   struct glaze
+   {
+      static constexpr auto value{&string_two_direct_cx_value_conversion::const_v};
+   };
+};
+static_assert(glz::detail::glaze_const_value_t<string_two_direct_cx_value_conversion>);
+
+struct array_direct_cx_value_conversion
+{
+   static constexpr std::array<std::string_view, 2> const_v{"one", "two"};
+   struct glaze
+   {
+      static constexpr auto value{&array_direct_cx_value_conversion::const_v};
+   };
+};
+static_assert(glz::detail::glaze_const_value_t<array_direct_cx_value_conversion>);
+
+struct array_two_direct_cx_value_conversion
+{
+   static constexpr std::array<std::string_view, 2> const_v{"two", "one"};
+   struct glaze
+   {
+      static constexpr auto value{&array_two_direct_cx_value_conversion::const_v};
+   };
+};
+static_assert(glz::detail::glaze_const_value_t<array_two_direct_cx_value_conversion>);
 
 struct non_cx_direct_value_conversion
 {
@@ -4828,6 +4858,31 @@ struct non_cx_direct_value_conversion
 };
 static_assert(!glz::detail::glaze_const_value_t<non_cx_direct_value_conversion>);
 
+struct const_red
+{
+   static constexpr auto const_v{ Color::Red };
+   struct glaze
+   {
+      static constexpr auto value {&const_red::const_v};
+   };
+};
+
+struct const_green
+{
+   static constexpr auto const_v{ Color::Green };
+   struct glaze
+   {
+      static constexpr auto value {&const_green::const_v};
+   };
+};
+
+template <typename T>
+struct variant_to_tuple;
+template <typename... Ts>
+struct variant_to_tuple<std::variant<Ts...>>
+{
+   using type = std::tuple<Ts...>;
+};
 suite constexpr_values_test = [] {
    "constexpr_values_write"_test = [] {
       cx_values obj{};
@@ -4845,28 +4900,32 @@ suite constexpr_values_test = [] {
       expect(obj.value == "special");
    };
 
-   using direct_conversion_variant = std::variant<std::monostate, direct_cx_value_conversion_different_value, direct_cx_value_conversion>;
-   "direct_conversion_variant cx int"_test = [] {
-      direct_conversion_variant var{direct_cx_value_conversion{}};
+   using const_only_variant =
+   std::variant<direct_cx_value_conversion_different_value, direct_cx_value_conversion,
+                string_direct_cx_value_conversion, string_two_direct_cx_value_conversion,
+                array_direct_cx_value_conversion, array_two_direct_cx_value_conversion, const_red, const_green>;
+   "constexpr blend with non constexpr variant string"_test = []<typename const_t> {
+      const_only_variant var{const_t{}};
       std::string s{};
       glz::write_json(var, s);
-      expect(s == R"(42)");
+      std::string expected{};
+      glz::write_json(const_t::const_v, expected);
+      expect(s == expected) << s;
       auto parse_err{glz::read_json(var, s)};
       expect(parse_err == glz::error_code::none) << glz::format_error(parse_err, s);
-      expect(std::holds_alternative<direct_cx_value_conversion>(var));
-   };
+      expect(std::holds_alternative<const_t>(var));
+   } | variant_to_tuple<const_only_variant>::type{};
 
    "parse error direct_conversion_variant cx int"_test = [] {
-      direct_conversion_variant var{direct_cx_value_conversion{}};
-      std::string s{};
-      glz::write_json(var, s);
-      expect(s == R"(42)");
+      const_only_variant var{direct_cx_value_conversion{}};
       auto parse_err{glz::read_json(var, R"(33)")};
       expect(parse_err == glz::error_code::no_matching_variant_type);
    };
 
    "constexpr blend with non constexpr variant"_test = [] {
-      std::variant<std::monostate, direct_cx_value_conversion_different_value, direct_cx_value_conversion, std::uint64_t> var{std::uint64_t{111}};
+      std::variant<std::monostate, direct_cx_value_conversion_different_value, direct_cx_value_conversion,
+                   std::uint64_t>
+         var{std::uint64_t{111}};
       std::string s{};
       glz::write_json(var, s);
       expect(s == R"(111)");
@@ -4874,17 +4933,6 @@ suite constexpr_values_test = [] {
       expect(parse_err == glz::error_code::none) << glz::format_error(parse_err, s);
       expect(std::holds_alternative<std::uint64_t>(var));
    };
-
-   "constexpr blend with non constexpr variant string"_test = [] {
-      std::variant<std::monostate, string_direct_cx_value_conversion, std::string> var{string_direct_cx_value_conversion{}};
-      std::string s{};
-      glz::write_json(var, s);
-      expect(s == R"("other")") << s;
-      auto parse_err{glz::read_json(var, s)};
-      expect(parse_err == glz::error_code::none) << glz::format_error(parse_err, s);
-      expect(std::holds_alternative<string_direct_cx_value_conversion>(var));
-   };
-
 };
 
 enum class my_enum_type { value_0, value_1 };
