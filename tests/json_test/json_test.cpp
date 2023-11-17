@@ -4904,7 +4904,7 @@ suite constexpr_values_test = [] {
    std::variant<direct_cx_value_conversion_different_value, direct_cx_value_conversion,
                 string_direct_cx_value_conversion, string_two_direct_cx_value_conversion,
                 array_direct_cx_value_conversion, array_two_direct_cx_value_conversion, const_red, const_green>;
-   "constexpr blend with non constexpr variant string"_test = []<typename const_t> {
+   "constexpr blend with non constexpr variant string"_test = []<typename const_t>() {
       const_only_variant var{const_t{}};
       std::string s{};
       glz::write_json(var, s);
