@@ -58,7 +58,7 @@ namespace glz
                                           std::forward<B>(b), std::forward<IX>(ix));
          }
       };
-      
+
       template <is_bitset T>
       struct to_json<T>
       {

@@ -102,7 +102,7 @@ namespace glz
             ctx.error = error_code::attempt_member_func_read;
          }
       };
-      
+
       template <is_bitset T>
       struct from_json<T>
       {
@@ -112,19 +112,19 @@ namespace glz
             match<'"'>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            
+
             const auto n = value.size();
             for (size_t i = 1; it < end; ++i, ++it) {
                if (*it == '"') {
                   ++it;
                   return;
                }
-               
+
                if (i > n) {
                   ctx.error = error_code::exceeded_static_array_size;
                   return;
                }
-               
+
                if (*it == '0') {
                   value[n - i] = 0;
                }
@@ -136,7 +136,7 @@ namespace glz
                   return;
                }
             }
-            
+
             ctx.error = error_code::expected_quote;
          }
       };

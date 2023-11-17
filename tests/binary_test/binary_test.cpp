@@ -1027,21 +1027,21 @@ suite set_tests = [] {
 suite bitset = [] {
    "bitset"_test = [] {
       std::bitset<8> b = 0b10101010;
-      
+
       std::string s{};
       glz::write_binary(b, s);
-      
+
       b.reset();
       expect(!glz::read_binary(b, s));
       expect(b == 0b10101010);
    };
-   
+
    "bitset16"_test = [] {
       std::bitset<16> b = 0b10010010'00000010;
-      
+
       std::string s{};
       glz::write_binary(b, s);
-      
+
       b.reset();
       expect(!glz::read_binary(b, s));
       expect(b == 0b10010010'00000010);

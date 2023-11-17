@@ -64,7 +64,7 @@ namespace glz
                                               std::forward<It0>(it), std::forward<It1>(end));
          }
       };
-      
+
       template <is_bitset T>
       struct from_binary<T>
       {
@@ -72,7 +72,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto tag = uint8_t(*it);
-            
+
             constexpr uint8_t type = uint8_t(3) << 3;
             constexpr uint8_t header = tag::typed_array | type;
 

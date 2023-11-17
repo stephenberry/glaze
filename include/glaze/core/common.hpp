@@ -471,14 +471,18 @@ namespace glz
                                        std::bool_constant<(std::decay_t<T>{}.size(), true)>()
                                        } -> std::same_as<std::true_type>;
                                  } && std::decay_t<T>{}.size() > 0);
-      
+
       template <typename T>
       concept is_bitset = requires(T bitset) {
-         bitset.flip();
-         bitset.set(0);
-         { bitset.to_string() } -> std::same_as<std::string>;
-         { bitset.count() } -> std::same_as<std::size_t>;
-      };
+                             bitset.flip();
+                             bitset.set(0);
+                             {
+                                bitset.to_string()
+                                } -> std::same_as<std::string>;
+                             {
+                                bitset.count()
+                                } -> std::same_as<std::size_t>;
+                          };
 
       template <class T>
       constexpr size_t get_size() noexcept
