@@ -64,6 +64,37 @@ namespace glz
                                               std::forward<It0>(it), std::forward<It1>(end));
          }
       };
+      
+      template <is_bitset T>
+      struct from_binary<T>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            const auto tag = uint8_t(*it);
+            
+            constexpr uint8_t type = uint8_t(3) << 3;
+            constexpr uint8_t header = tag::typed_array | type;
+
+            if (tag != header) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            ++it;
+
+            const auto n = int_from_compressed(it, end);
+
+            const auto num_bytes = (value.size() + 7) / 8;
+            for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
+               uint8_t byte;
+               std::memcpy(&byte, &*it, 1);
+               for (size_t bit_i = 0; bit_i < 8 && i < n; ++bit_i, ++i) {
+                  value[i] = byte >> bit_i & uint8_t(1);
+               }
+            }
+         }
+      };
 
       template <>
       struct from_binary<skip>

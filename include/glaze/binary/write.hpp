@@ -116,6 +116,32 @@ namespace glz
             to_binary<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Args>(args)...);
          }
       };
+      
+      template <is_bitset T>
+      struct to_binary<T>
+      {
+         template <auto Opts, class... Args>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&&... args) noexcept
+         {
+            constexpr uint8_t type = uint8_t(3) << 3;
+            constexpr uint8_t tag = tag::typed_array | type;
+            dump_type(tag, args...);
+            dump_compressed_int<Opts>(value.size(), args...);
+            
+            //constexpr auto num_bytes = (value.size() + 7) / 8;
+            const auto num_bytes = (value.size() + 7) / 8;
+            // .size() should be constexpr, but clang doesn't support this
+            std::vector<uint8_t> bytes(num_bytes);
+            //std::array<uint8_t, num_bytes> bytes{};
+            for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
+               for (size_t bit_i = 0; bit_i < 8 && i < value.size(); ++bit_i, ++i) {
+                  bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
+               }
+            }
+            //dump(bytes, args...);
+            dump(std::as_bytes(std::span{bytes}), args...);
+         }
+      };
 
       template <glaze_flags_t T>
       struct to_binary<T>
@@ -291,7 +317,7 @@ namespace glz
                if constexpr (has_static_size<T>) {
                   constexpr auto num_bytes = (value.size() + 7) / 8;
                   std::array<uint8_t, num_bytes> bytes{};
-                  for (size_t byte_i{}, i{}; byte_i < num_bytes - 1; ++byte_i) {
+                  for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
                      for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
                         bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
                      }
