@@ -397,7 +397,7 @@ namespace glz::detail
    };
 
    template <std::floating_point T, bool force_conformance = false>
-   inline bool parse_float(T& val, auto*& cur) noexcept
+   inline bool parse_float(T& val, const uint8_t*& cur) noexcept
    {
       const uint8_t* sig_cut = nullptr; /* significant part cutting position for long number */
       [[maybe_unused]] const uint8_t* sig_end = nullptr; /* significant part ending position */
@@ -742,5 +742,17 @@ namespace glz::detail
       num += raw_t(round);
       std::memcpy(&val, &num, sizeof(T));
       return true;
+   }
+
+   template <std::floating_point T, bool force_conformance = false>
+   inline bool parse_float(T& val, auto& itr) noexcept
+   {
+      const uint8_t* cur = reinterpret_cast<const uint8_t*>(&*itr);
+      const uint8_t* beg = cur;
+      if (parse_float(val, cur)) {
+         itr += (cur - beg);
+         return true;
+      }
+      return false;
    }
 }

@@ -35,7 +35,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto n = static_cast<size_t>(std::distance(it, end));
-      if ((n < str.size) || (std::memcmp(it, str.value, str.size) != 0)) [[unlikely]] {
+      if ((n < str.size) || (std::memcmp(&*it, str.value, str.size) != 0)) [[unlikely]] {
          ctx.error = error_code::syntax_error;
       }
       else {
