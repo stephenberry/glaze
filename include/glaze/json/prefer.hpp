@@ -13,10 +13,37 @@
 #include <utility>
 
 #include "glaze/core/common.hpp"
+#include "glaze/core/opts.hpp"
+#include "glaze/json/read.hpp"
+#include "glaze/json/write.hpp"
 #include "glaze/util/type_traits.hpp"
 
 namespace glz
 {
+
+   namespace detail
+   {
+      template <typename Pair>
+      struct base_prefer_array_adapter_tuple
+      {
+         // Ideally, the base tuple always refers to the adapted pair's members with l-value references; never owning.
+         // Essentially, need a version of std::tie() that can bind r-value references using const l-value references
+         using first_t = typename Pair::first_type;
+         using second_t = typename Pair::second_type;
+         static constexpr bool first_const = std::is_const_v<Pair> ||
+                                             std::is_const_v<std::remove_reference_t<first_t>> ||
+                                             std::is_rvalue_reference_v<first_t>;
+         static constexpr bool second_const = std::is_const_v<Pair> ||
+                                              std::is_const_v<std::remove_reference_t<second_t>> ||
+                                              std::is_rvalue_reference_v<second_t>;
+         using first_unref_t = std::remove_cvref_t<first_t>;
+         using second_unref_t = std::remove_cvref_t<second_t>;
+         using type_0 = std::conditional_t<first_const, const first_unref_t&, first_unref_t&>;
+         using type_1 = std::conditional_t<second_const, const second_unref_t&, second_unref_t&>;
+         using base_tuple = std::tuple<type_0, type_1>;
+      };
+   }
+
    template <typename T>
    class prefer_array_adapter
    {
@@ -27,24 +54,43 @@ namespace glz
    prefer_array_adapter(T) -> prefer_array_adapter<T>;
 
    template <detail::pair_t T>
-   class prefer_array_adapter<T> : public std::tuple<const typename T::first_type&, const typename T::second_type&>
+   class prefer_array_adapter<T> : public detail::base_prefer_array_adapter_tuple<T>::base_tuple
    {
+      static_assert(!std::is_reference_v<T>, "You mistakenly explicitly specified a pair reference instead of a pair");
+
      public:
-      using tuple_type = std::tuple<const typename T::first_type&, const typename T::second_type&>;
+      using tuple_type = typename detail::base_prefer_array_adapter_tuple<T>::base_tuple;
 
-      prefer_array_adapter() = delete;
+      [[nodiscard]] const tuple_type& base_tuple() const& noexcept { return static_cast<const tuple_type&>(*this); }
+      [[nodiscard]] tuple_type& base_tuple() & noexcept { return static_cast<tuple_type&>(*this); }
+      [[nodiscard]] tuple_type&& base_tuple() && noexcept { return static_cast<tuple_type&&>(std::move(*this)); }
 
-      constexpr explicit prefer_array_adapter(const T& pair)
-         : tuple_type{std::forward_as_tuple(pair.first, pair.second)}
-      {}
+      constexpr explicit prefer_array_adapter(T& pair) : tuple_type(pair.first, pair.second) {}
+      constexpr explicit prefer_array_adapter(T&& pair) : tuple_type(pair.first, pair.second) {}
 
-      constexpr explicit prefer_array_adapter(T&& pair) : tuple_type{std::forward_as_tuple(pair.first, pair.second)} {}
+      prefer_array_adapter(const prefer_array_adapter&) = default;
+      prefer_array_adapter(prefer_array_adapter&&) = delete;
+      prefer_array_adapter& operator=(const prefer_array_adapter&) = default;
+      prefer_array_adapter& operator=(prefer_array_adapter&&) noexcept = delete;
+      ~prefer_array_adapter() noexcept = default;
 
-      [[nodiscard]] bool operator==(const prefer_array_adapter& other) const noexcept = default;
-
-      [[nodiscard]] friend bool operator==(const prefer_array_adapter& adapter, const T& pair) noexcept
+      constexpr prefer_array_adapter& operator=(T& pair)
       {
-         return adapter == prefer_array_adapter{pair};
+         std::get<0>(*this) = pair.first;
+         std::get<1>(*this) = pair.second;
+         return *this;
+      }
+
+      constexpr prefer_array_adapter& operator=(T&& pair) noexcept
+      {
+         *this = prefer_array_adapter{std::move(pair)};
+         return *this;
+      }
+
+      [[nodiscard]] constexpr bool operator==(const prefer_array_adapter& other) const noexcept = default;
+      [[nodiscard]] constexpr friend bool operator==(const prefer_array_adapter& adapter, const T& pair) noexcept
+      {
+         return std::get<0>(adapter) == pair.first && std::get<1>(adapter) == pair.second;
       }
    };
 
@@ -59,6 +105,7 @@ namespace glz
    using size_type = std::size_t;                               \
    using difference_type = std::ptrdiff_t;
 
+      // Common facilities required by prefer_array_adapters for ranges
       template <typename T>
       struct range_common_prefer_array_adapter
       {
@@ -79,10 +126,10 @@ namespace glz
          }
 #else
             requires requires(const T t) {
-                        {
-                           t.size()
-                           } -> std::unsigned_integral;
-                     }
+               {
+                  t.size()
+               } -> std::unsigned_integral;
+            }
          {
             return map.get().size();
          }
@@ -158,6 +205,7 @@ namespace glz
 
       using common::map;
 
+      explicit prefer_array_adapter(const T& map) : detail::range_common_prefer_array_adapter<const T>{map} {}
       explicit prefer_array_adapter(T& map) : detail::range_common_prefer_array_adapter<T>{map} {}
 
       [[nodiscard]] constexpr iterator begin() const noexcept { return {map.get().begin()}; }
@@ -192,5 +240,100 @@ namespace glz
       [[nodiscard]] constexpr const_iterator cend() const noexcept { return {map.get().end()}; }
    };
 
-   //   static_assert(readable_arrray_t<>)
+   template <typename T>
+   struct prefer_arrays_t
+   {
+      T& val;
+   };
+
+   template <typename T>
+   struct no_prefer_arrays_t
+   {
+      T& val;
+   };
+   namespace detail
+   {
+      template <class T>
+         requires requires() { typename T::tuple_type; }
+      struct to_json<prefer_array_adapter<T>>
+      {
+         template <opts Opts>
+         static void op(const prefer_array_adapter<T>& value, auto&&... args) noexcept
+         {
+            // prefer_array_adaptor<pair_t> is not a range, it presents a tuple interface.
+            write<json>::op<Opts>(value.val.base_tuple(), args...);
+         }
+      };
+
+      template <class T>
+         requires requires() { typename T::tuple_type; }
+      struct from_json<prefer_array_adapter<T>>
+      {
+         template <opts Opts>
+         static void op(prefer_array_adapter<T>& value, is_context auto&& ctx, auto&&... args) noexcept
+         {
+            // prefer_array_adaptor<pair_t> is not a range, it presents a tuple interface
+            read<json>::op<Opts>(value.val.base_tuple(), args...);
+         }
+      };
+
+      template <class T>
+      struct to_json<prefer_arrays_t<T>>
+      {
+         template <opts Opts>
+         static void op(auto&& value, auto&&... args) noexcept
+         {
+            write<json>::op<opt_true<Opts, &opts::prefer_arrays>>(value.val, args...);
+         }
+      };
+
+      template <class T>
+      struct from_json<prefer_arrays_t<T>>
+      {
+         template <opts Opts>
+         static void op(auto&& value, auto&&... args) noexcept
+         {
+            read<json>::op<opt_true<Opts, &opts::prefer_arrays>>(value.val, args...);
+         }
+      };
+
+      template <class T>
+      struct to_json<no_prefer_arrays_t<T>>
+      {
+         template <opts Opts>
+         static void op(auto&& value, auto&&... args) noexcept
+         {
+            write<json>::op<opt_false<Opts, &opts::prefer_arrays>>(value.val, args...);
+         }
+      };
+
+      template <class T>
+      struct from_json<no_prefer_arrays_t<T>>
+      {
+         template <opts Opts>
+         static void op(auto&& value, auto&&... args) noexcept
+         {
+            read<json>::op<opt_false<Opts, &opts::prefer_arrays>>(value.val, args...);
+         }
+      };
+
+      template <auto MemPtr>
+      constexpr decltype(auto) prefer_arrays_impl() noexcept
+      {
+         return [](auto&& val) { return prefer_arrays_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+      }
+
+      template <auto MemPtr>
+      constexpr decltype(auto) no_prefer_arrays_impl() noexcept
+      {
+         return
+            [](auto&& val) { return no_prefer_arrays_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+      }
+   }
+
+   template <auto MemPtr>
+   constexpr auto prefer_arrays = detail::prefer_arrays_impl<MemPtr>();
+
+   template <auto MemPtr>
+   constexpr auto no_prefer_arrays = detail::no_prefer_arrays_impl<MemPtr>();
 }

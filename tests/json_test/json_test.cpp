@@ -24,6 +24,7 @@
 #include "glaze/api/impl.hpp"
 #include "glaze/core/macros.hpp"
 #include "glaze/json/json_ptr.hpp"
+#include "glaze/json/prefer.hpp"
 #include "glaze/json/prettify.hpp"
 #include "glaze/json/ptr.hpp"
 #include "glaze/json/quoted.hpp"
@@ -1093,6 +1094,28 @@ struct Read_pair_test_case
 template <typename Pair_key, typename Pair_value>
 Read_pair_test_case(Pair_key, Pair_value, std::string_view) -> Read_pair_test_case<Pair_key, Pair_value>;
 
+template <typename Map>
+struct Read_map_test_case
+{
+   Map expected_map{};
+   Map initial_map{};
+   std::string_view input_json{R"(   { "as" : 1, "so" : 2, "make" : 3 } )"};
+   std::string_view input_array_json{R"( [ [ "as", 1] , [so" ,2 ],[ "make",3] ])"};
+
+   Read_map_test_case(Map&& expected) : expected_map{std::move(expected)} {}
+   Read_map_test_case(Map&& expected, Map&& initial)
+      : expected_map{std::move(expected)}, initial_map{std::move(initial)}
+   {}
+   Read_map_test_case(Map&& expected, Map&& initial, const std::string_view input_json)
+      : Map{std::move(expected), std::move(initial)}, input_json{input_json}
+   {}
+
+   Read_map_test_case(Map&& expected, Map&& initial, const std::string_view input_json,
+                      const std::string_view input_array_json)
+      : Map{std::move(expected), std::move(initial), input_json}, input_array_json{input_array_json}
+   {}
+};
+
 suite read_tests = [] {
    using namespace boost::ut;
 
@@ -1383,42 +1406,57 @@ suite read_tests = [] {
          Read_pair_test_case{std::array{1, 2, 3}, std::array{4, 5, 6}, R"({"[1,2,3]":[4,5,6]})"},
       };
 
-   "Read map"_test = [] {
-      {
-         std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
-         std::map<std::string, int> v, vr{{"as", 1}, {"so", 2}, {"make", 3}};
-         expect(glz::read_json(v, in) == glz::error_code::none);
-         const bool equal = (v == vr);
-         expect(equal);
-      }
-      {
-         std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
-         std::map<std::string, int> v{{"as", -1}, {"make", 10000}}, vr{{"as", 1}, {"so", 2}, {"make", 3}};
-         expect(glz::read_json(v, in) == glz::error_code::none);
-         const bool equal = (v == vr);
-         expect(equal);
-      }
-      {
-         std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
-         std::map<std::string_view, int> v, vr{{"as", 1}, {"so", 2}, {"make", 3}};
-         expect(glz::read_json(v, in) == glz::error_code::none);
-         const bool equal = (v == vr);
-         expect(equal);
-      }
-      {
-         std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
-         std::map<std::string_view, int> v{{"as", -1}, {"make", 10000}}, vr{{"as", 1}, {"so", 2}, {"make", 3}};
-         expect(glz::read_json(v, in) == glz::error_code::none);
-         const bool equal = (v == vr);
-         expect(equal);
-      }
-   };
+   "Read pair from array"_test =
+      [](const auto& test_case) {
+         const std::pair expected{test_case.expected_key, test_case.expected_value};
+         std::remove_cv_t<decltype(expected)> parsed{};
+
+         auto err = glz::read_json(glz::prefer_array_adapter{parsed}, test_case.input_json);
+         expect(err == glz::error_code::none) << glz::format_error(err, test_case.input_json);
+         expect(parsed == expected) << glz::write_json(parsed);
+
+         err = glz::read_json(glz::prefer_arrays_t{parsed}, test_case.input_json);
+         expect(err == glz::error_code::none) << glz::format_error(err, test_case.input_json);
+         expect(parsed == expected) << glz::write_json(parsed);
+      } |
+      std::tuple{
+         Read_pair_test_case{1, 2, R"([1,2])"},
+         Read_pair_test_case{std::string{"key"}, 2, R"(["key",2])"},
+         Read_pair_test_case{std::string{"key"}, std::string{"value"}, R"(["key","value"])"},
+         Read_pair_test_case{std::array{1, 2, 3}, std::array{4, 5, 6}, R"([[1,2,3],[4,5,6]])"},
+      };
+
+   "Read map"_test =
+      [](const auto& test_case) {
+         const auto& [expected, initial, input_json, input_array_json] = test_case;
+         auto parsed = initial;
+         expect(glz::read_json(parsed, input_json) == glz::error_code::none);
+         expect(parsed == expected);
+
+         parsed = initial;
+         expect(glz::read_json(glz::prefer_array_adapter{parsed}, input_array_json) == glz::error_code::none);
+         expect(parsed == expected);
+
+         parsed = initial;
+         expect(glz::read_json(glz::prefer_arrays_t{parsed}, input_array_json) == glz::error_code::none);
+         expect(parsed == expected);
+      } |
+      std::tuple{Read_map_test_case{std::map<std::string, int>{{"as", 1}, {"so", 2}, {"make", 3}}},
+                 Read_map_test_case{std::map<std::string, int>{{"as", 1}, {"so", 2}, {"make", 3}},
+                                    std::map<std::string, int>{{"as", -1}, {"make", 10000}}},
+                 Read_map_test_case{std::map<std::string_view, int>{{"as", 1}, {"so", 2}, {"make", 3}},
+                                    std::map<std::string_view, int>{{"as", -1}, {"make", 10000}}},
+                 Read_map_test_case{std::map<std::string_view, int>{}, std::map<std::string_view, int>{}, "{}", "[]"}};
 
    "Read partial map"_test = [] {
-      std::string in = R"(   { "as" : 1, "so" : null, "make" : 3 } )";
-      std::map<std::string, int> v, vr{{"as", 1}, {"so", 0}, {"make", 3}};
+      const std::map<std::string, int> expected{{"as", 1}, {"so", 0}, {"make", 3}};
+      std::map<std::string, int> parsed{};
 
-      expect(glz::read_json(v, in) != glz::error_code::none);
+      constexpr std::string_view in = R"(   { "as" : 1, "so" : null, "make" : 3 } )";
+      expect(glz::read_json(parsed, in) != glz::error_code::none);
+
+      constexpr std::string_view in_array = R"( [[ "as", 1], ["so" , null],["make",3] ] )";
+      expect(glz::read_json(parsed, in_array) != glz::error_code::none);
    };
 
    "Read boolean"_test = [] {
@@ -1933,14 +1971,30 @@ suite write_tests = [] {
    };
 
    "Write map"_test = [] {
+      // normal maps
       std::string s;
-      std::map<std::string, double> m{{"a", 2.2}, {"b", 11.111}, {"c", 211.2}};
+      const std::map<std::string, double> m{{"a", 2.2}, {"b", 11.111}, {"c", 211.2}};
       glz::write_json(m, s);
       expect(s == R"({"a":2.2,"b":11.111,"c":211.2})");
 
-      std::map<std::string, std::optional<double>> nullable{{"a", std::nullopt}, {"b", std::nullopt}, {"c", 211.2}};
+      const std::map<std::string, std::optional<double>> nullable{
+         {"a", std::nullopt}, {"b", std::nullopt}, {"c", 211.2}};
       glz::write_json(nullable, s);
       expect(s == glz::sv{R"({"c":211.2})"});
+
+      // map as array using single adapter
+      glz::write_json(glz::prefer_array_adapter{m}, s);
+      expect(s == R"([["a",2.2],["b",11.111],["c",211.2]])");
+
+      glz::write_json(glz::prefer_array_adapter{nullable}, s);
+      expect(s == glz::sv{R"([["c",211.2]])"});
+
+      // map as array using glz::opts flag
+      glz::write_json(glz::prefer_arrays_t{m}, s);
+      expect(s == R"([["a",2.2],["b",11.111],["c",211.2]])");
+
+      glz::write_json(glz::prefer_arrays_t{nullable}, s);
+      expect(s == glz::sv{R"([["c",211.2]])"});
    };
 
    "Write pair"_test =
@@ -1959,6 +2013,41 @@ suite write_tests = [] {
          Write_pair_test_case{"kmaybe", std::optional<int>{}, "{}"},
       };
 
+   "Write pair as array (adapter)"_test =
+      [](const auto& test_case) {
+         const std::pair value{test_case.key, test_case.value};
+         const glz::prefer_array_adapter as_array{value};
+         expect(glz::write_json(value) == test_case.expected_json);
+      } |
+      std::tuple{
+         Write_pair_test_case{"key", "value", R"(["key","value"])"},
+         Write_pair_test_case{0, "value", R"([0,"value"])"},
+         Write_pair_test_case{0.78, std::array{1, 2, 3}, R"([0.78,[1,2,3]])"},
+         Write_pair_test_case{"k", glz::obj{"in1", 1, "in2", "v"},
+                              R"(["k",{"in1":1,"in2":"v"}])"}, // only top-level array
+         Write_pair_test_case{std::array{1, 2}, 99, R"([[1,2],99])"},
+         Write_pair_test_case{std::array{"one", "two"}, 99, R"([["one","two"],99])"},
+         Write_pair_test_case{"knot", std::nullopt, "[]"}, // nullopt_t, not std::optional
+         Write_pair_test_case{"kmaybe", std::optional<int>{}, "[]"},
+      };
+
+   "Write pair as array (recursive)"_test =
+      [](const auto& test_case) {
+         const std::pair value{test_case.key, test_case.value};
+         expect(glz::write_json(glz::prefer_arrays_t{value}) == test_case.expected_json);
+      } |
+      std::tuple{
+         Write_pair_test_case{"key", "value", R"(["key","value"])"},
+         Write_pair_test_case{0, "value", R"([0,"value"])"},
+         Write_pair_test_case{0.78, std::array{1, 2, 3}, R"([0.78,[1,2,3]])"},
+         Write_pair_test_case{"k", glz::obj{"in1", 1, "in2", "v"},
+                              R"(["k",[["in1",1],["in2","v"]]])"}, // all levels as array
+         Write_pair_test_case{std::array{1, 2}, 99, R"([[1,2],99])"},
+         Write_pair_test_case{std::array{"one", "two"}, 99, R"([["one","two"],99])"},
+         Write_pair_test_case{"knot", std::nullopt, "[]"}, // nullopt_t, not std::optional
+         Write_pair_test_case{"kmaybe", std::optional<int>{}, "[]"},
+      };
+
 #ifdef __cpp_lib_ranges
    "Write map-like input range"_test = [] {
       "input range of pairs"_test = [] {
@@ -1966,9 +2055,17 @@ suite write_tests = [] {
             std::views::iota(-2, 3) | std::views::transform([](const auto i) { return std::pair(i, i * i); });
          expect(glz::write_json(num_view) == glz::sv{R"({"-2":4,"-1":1,"0":0,"1":1,"2":4})"});
 
+         constexpr std::string_view num_view_array_json{R"([[-2,4],[-1,1],[0,0],[1,1],[2,4]])"};
+         expect(glz::write_json(glz::prefer_array_adapter{num_view}) == num_view_array_json);
+         expect(glz::write_json(glz::prefer_arrays_t{num_view}) == num_view_array_json);
+
          auto str_view = std::views::iota(-2, 3) |
                          std::views::transform([](const auto i) { return std::pair(i, std::to_string(i * i)); });
          expect(glz::write_json(str_view) == glz::sv{R"({"-2":"4","-1":"1","0":"0","1":"1","2":"4"})"});
+
+         constexpr std::string_view str_view_array_json{R"([[-2,"4"],[-1,"1"],[0,"0"],[1,"1"],[2,"4"]])"};
+         expect(glz::write_json(glz::prefer_array_adapter{str_view}) == str_view_array_json);
+         expect(glz::write_json(glz::prefer_arrays_t{str_view}) == str_view_array_json);
       };
 
       "unsized range of pairs"_test = [] {
@@ -1978,10 +2075,18 @@ suite write_tests = [] {
          static_assert(!std::ranges::sized_range<decltype(num_view)>);
          expect(glz::write_json(num_view) == glz::sv{R"({"-2":4,"-1":1})"});
 
+         constexpr std::string_view num_view_array_json{R"([[-2,4],[-1,1]])"};
+         expect(glz::write_json(glz::prefer_array_adapter{num_view}) == num_view_array_json);
+         expect(glz::write_json(glz::prefer_arrays_t{num_view}) == num_view_array_json);
+
          auto str_view =
             base_rng | std::views::transform([](const auto i) { return std::pair(i, std::to_string(i * i)); });
          static_assert(!std::ranges::sized_range<decltype(str_view)>);
          expect(glz::write_json(str_view) == glz::sv{R"({"-2":"4","-1":"1"})"});
+
+         constexpr std::string_view str_view_array_json{R"([[-2,"4"],[-1,"1"]])"};
+         expect(glz::write_json(glz::prefer_array_adapter{str_view}) == str_view_array_json);
+         expect(glz::write_json(glz::prefer_arrays_t{str_view}) == str_view_array_json);
       };
 
       "initializer list w/ ranges"_test = [] {
@@ -1989,21 +2094,30 @@ suite write_tests = [] {
          auto user_ports = {std::pair("tcp", std::views::iota(80, 83) | std::views::transform(remap_user_port)),
                             std::pair("udp", std::views::iota(21, 25) | std::views::transform(remap_user_port))};
          expect(glz::write_json(user_ports) == glz::sv{R"({"tcp":[1104,1105,1106],"udp":[1045,1046,1047,1048]})"});
+
+         constexpr std::string_view as_array_json{R"([["tcp",[1104,1105,1106]],["udp",[1045,1046,1047,1048]]])"};
+         expect(glz::write_json(glz::prefer_array_adapter{user_ports}) == as_array_json);
+         expect(glz::write_json(glz::prefer_arrays_t{user_ports}) == as_array_json);
       };
 
       "single pair view"_test = [] {
          const auto single_pair = std::ranges::single_view{std::pair{false, true}};
          expect(glz::write_json(single_pair) == glz::sv{R"({"false":true})"});
+
+         constexpr std::string_view as_array_json{R"([["false",true]])"};
+         expect(glz::write_json(glz::prefer_array_adapter{single_pair}) == as_array_json);
+         expect(glz::write_json(glz::prefer_arrays_t{single_pair}) == as_array_json);
       };
    };
 #endif
 
    "Write integer map"_test = [] {
-      std::map<int, double> m{{3, 2.2}, {5, 211.2}, {7, 11.111}};
-      std::string s;
-      glz::write_json(m, s);
+      const std::map<int, double> m{{3, 2.2}, {5, 211.2}, {7, 11.111}};
+      expect(glz::write_json(m) == glz::sv{R"({"3":2.2,"5":211.2,"7":11.111})"});
 
-      expect(s == R"({"3":2.2,"5":211.2,"7":11.111})");
+      constexpr std::string_view as_array_json{R"([[3,2.2],[5,211.2],[7,11.111]])"};
+      expect(glz::write_json(glz::prefer_array_adapter{m}) == as_array_json);
+      expect(glz::write_json(glz::prefer_arrays_t{m}) == as_array_json);
    };
 
    "Write object"_test = [] {
@@ -2040,10 +2154,7 @@ suite write_tests = [] {
    "Hello World"_test = [] {
       std::unordered_map<std::string, std::string> m;
       m["Hello"] = "World";
-      std::string buf;
-      glz::write_json(m, buf);
-
-      expect(buf == R"({"Hello":"World"})");
+      expect(glz::write_json(m) == R"({"Hello":"World"})");
    };
 
    "Number"_test = [] {

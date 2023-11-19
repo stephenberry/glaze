@@ -30,6 +30,7 @@ namespace glz
       bool number = false; // read numbers as strings and write these string as numbers
       bool raw = false; // write out string like values without quotes
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
+      bool prefer_arrays = false; // read/write ranges of pairs as arrays of arrays instead of JSON objects
 
       // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled
