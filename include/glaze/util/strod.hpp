@@ -396,7 +396,7 @@ namespace glz::detail
       }
    };
 
-   template <std::floating_point T, bool force_conformance = false>
+   template <std::floating_point T, bool force_conformance = false> requires (sizeof(T) <= 8)
    inline bool parse_float(T& val, const uint8_t*& cur) noexcept
    {
       const uint8_t* sig_cut = nullptr; /* significant part cutting position for long number */
@@ -744,7 +744,7 @@ namespace glz::detail
       return true;
    }
 
-   template <std::floating_point T, bool force_conformance = false>
+   template <std::floating_point T, bool force_conformance = false> requires (sizeof(T) <= 8)
    inline bool parse_float(T& val, auto& itr) noexcept
    {
       const uint8_t* cur = reinterpret_cast<const uint8_t*>(&*itr);

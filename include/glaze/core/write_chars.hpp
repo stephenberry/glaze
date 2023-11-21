@@ -3,8 +3,10 @@
 
 #pragma once
 
+#include <charconv>
 #include <type_traits>
 
+#include "common.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/dtoa.hpp"
@@ -52,7 +54,7 @@ namespace glz::detail
           }*/
 
          // https://stackoverflow.com/questions/1701055/what-is-the-maximum-length-in-chars-needed-to-represent-any-double-value
-         // maximum length for a double should be 24 chars, we use 64 to be sufficient
+         // maximum length for a double should be 24 chars, we use 64 to be sufficient for float128_t
          if constexpr (detail::resizeable<B>) {
             if (ix + 64 > b.size()) [[unlikely]] {
                b.resize((std::max)(b.size() * 2, ix + 64));
@@ -65,6 +67,14 @@ namespace glz::detail
             auto start = data_ptr(b) + ix;
             auto end = glz::to_chars(start, value);
             ix += std::distance(start, end);
+         }
+         else if constexpr (is_float128<V>) {
+            auto start = data_ptr(b) + ix;
+            auto [ptr, ec] = std::to_chars(start, data_ptr(b) + b.size(), value, std::chars_format::scientific);
+            if (ec != std::errc()) {
+               // TODO: Do we need to handle this error state?
+            }
+            ix += std::distance(start, ptr);
          }
          else if constexpr (std::integral<V>) {
             using X = std::decay_t<decltype(sized_integer_conversion<V>())>;

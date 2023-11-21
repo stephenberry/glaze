@@ -332,10 +332,20 @@ namespace glz
                }
             }
             else {
-               auto s = parse_float<V, Options.force_conformance>(value, it);
-               if (!s) [[unlikely]] {
-                  ctx.error = error_code::parse_number_failure;
-                  return;
+               if constexpr (is_float128<V>) {
+                  auto [ptr, ec] = std::from_chars(it, end, value);
+                  if (ec != std::errc()) {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
+                  it += std::distance(it, ptr);
+               }
+               else {
+                  auto s = parse_float<V, Options.force_conformance>(value, it);
+                  if (!s) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }
                }
             }
 
