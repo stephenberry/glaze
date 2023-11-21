@@ -23,13 +23,13 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Install Clang 17
+    - name: Install Clang 16
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang-17
+        sudo apt-get install -y clang-16
 
-    - name: Configure CMake with Clang 17
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_C_COMPILER=clang-17 -DCMAKE_CXX_COMPILER=clang++-17
+    - name: Configure CMake with Clang 16
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_C_COMPILER=clang-16 -DCMAKE_CXX_COMPILER=clang++-16
 
     - name: Build
       run: cmake --build build --config ${{env.BUILD_TYPE}} -j 2
