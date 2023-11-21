@@ -234,7 +234,7 @@ namespace glz
             // Only used if error_on_missing_keys = true
             [[maybe_unused]] bit_array<num_members> fields{};
 
-            auto frozen_map = make_reflection_map<T, Opts.use_hash_comparison>();
+            static constinit auto frozen_map = make_reflection_map<T, Opts.use_hash_comparison>();
             // we have to populate the pointers in the reflection map from the structured binding
             auto t = to_tuple(value);
             for_each<num_members>([&](auto I) {
