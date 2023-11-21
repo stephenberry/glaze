@@ -44,7 +44,7 @@ namespace glz
       constexpr auto member_names() {
          static constexpr auto N = count_members<T>();
          static_vector<std::string_view, N> v{};
-         T t{};
+         T t;
          __builtin_dump_struct(&t, to_names, v);
          return v;
       }
