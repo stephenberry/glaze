@@ -21,13 +21,17 @@ namespace glz
       template <class T, std::size_t N>
       struct static_vector
       {
-         constexpr auto push_back(const T& elem) { elems[size++] = elem; }
+         constexpr auto push_back(const T& elem) {
+            if (index < N) {
+               elems[index++] = elem;
+            }
+         }
          constexpr auto& operator[](auto i) const { return elems[i]; }
 
-         T elems[N + 1]{};
-         std::size_t size{};
+         T elems[N]{};
+         size_t index{};
       };
-
+      
       constexpr auto to_names(auto& out, auto, auto... args)
       {
          if constexpr (sizeof...(args) > 1) {
@@ -35,10 +39,17 @@ namespace glz
          }
       }
 
-      struct any_t
+      struct any_t final
       {
          template <class T>
-         constexpr operator T();
+         constexpr operator T() {
+            if constexpr (std::is_default_constructible_v<T>) {
+               return T{};
+            }
+            else {
+               static_assert(false_v<T>, "Your type must be default constructible");
+            }
+         }
       };
 
       template <class T, class... Args>
