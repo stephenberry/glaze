@@ -4864,19 +4864,19 @@ static_assert(!glz::detail::glaze_const_value_t<non_cx_direct_value_conversion>)
 
 struct const_red
 {
-   static constexpr auto const_v{ Color::Red };
+   static constexpr auto const_v{Color::Red};
    struct glaze
    {
-      static constexpr auto value {&const_red::const_v};
+      static constexpr auto value{&const_red::const_v};
    };
 };
 
 struct const_green
 {
-   static constexpr auto const_v{ Color::Green };
+   static constexpr auto const_v{Color::Green};
    struct glaze
    {
-      static constexpr auto value {&const_green::const_v};
+      static constexpr auto value{&const_green::const_v};
    };
 };
 
@@ -4905,9 +4905,9 @@ suite constexpr_values_test = [] {
    };
 
    using const_only_variant =
-   std::variant<direct_cx_value_conversion_different_value, direct_cx_value_conversion,
-                string_direct_cx_value_conversion, string_two_direct_cx_value_conversion,
-                array_direct_cx_value_conversion, array_two_direct_cx_value_conversion, const_red, const_green>;
+      std::variant<direct_cx_value_conversion_different_value, direct_cx_value_conversion,
+                   string_direct_cx_value_conversion, string_two_direct_cx_value_conversion,
+                   array_direct_cx_value_conversion, array_two_direct_cx_value_conversion, const_red, const_green>;
    "constexpr blend with non constexpr variant string"_test = []<typename const_t>() {
       const_only_variant var{const_t{}};
       std::string s{};
@@ -4922,7 +4922,7 @@ suite constexpr_values_test = [] {
 
    "parse error direct_conversion_variant cx int"_test = [] {
       const_only_variant var{direct_cx_value_conversion{}};
-      auto const parse_err {glz::read_json(var, R"(33)")};
+      auto const parse_err{glz::read_json(var, R"(33)")};
       expect(parse_err == glz::error_code::no_matching_variant_type);
    };
 

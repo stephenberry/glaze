@@ -554,7 +554,8 @@ namespace glz
          glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || glaze_flags_t<T>);
 
       template <class T>
-      concept glaze_const_value_t = glaze_value_t<T> && std::is_pointer_v<glz::meta_wrapper_t<T>> && std::is_const_v<std::remove_pointer_t<glz::meta_wrapper_t<T>>>;
+      concept glaze_const_value_t = glaze_value_t<T> && std::is_pointer_v<glz::meta_wrapper_t<T>> &&
+                                    std::is_const_v<std::remove_pointer_t<glz::meta_wrapper_t<T>>>;
 
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to) {
