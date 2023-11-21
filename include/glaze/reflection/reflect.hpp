@@ -69,19 +69,19 @@ namespace glz
          }
          else if constexpr (N == 1) {
             auto&& [p] = t;
-            return tuplet::tuple{p};
+            return std::tie(p);
          }
          else if constexpr (N == 2) {
             auto&& [p0, p1] = t;
-            return tuplet::tuple{p0, p1};
+            return std::tie(p0, p1);
          }
          else if constexpr (N == 3) {
             auto&& [p0, p1, p2] = t;
-            return tuplet::tuple{p0, p1, p2};
+            return std::tie(p0, p1, p2);
          }
          else if constexpr (N == 4) {
             auto&& [p0, p1, p2, p3] = t;
-            return tuplet::tuple{p0, p1, p2, p3};
+            return std::tie(p0, p1, p2, p3);
          }
          else if constexpr (N == 5) {
             auto&& [p0, p1, p2, p3, p4] = t;
@@ -133,7 +133,7 @@ namespace glz
             bool first = true;
             for_each<N>([&](auto I) {
                static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-               decltype(auto) item = tuplet::get<I>(t);
+               decltype(auto) item = std::get<I>(t);
                using val_t = std::decay_t<decltype(item)>;
 
                if (skip_member<Opts>(item)) {
@@ -238,7 +238,8 @@ namespace glz
             // we have to populate the pointers in the reflection map from the structured binding
             auto t = to_tuple(value);
             for_each<num_members>([&](auto I) {
-               std::get<std::add_pointer_t<std::decay_t<decltype(tuplet::get<I>(t))>>>(std::get<I>(frozen_map.items).second) = &tuplet::get<I>(t);
+               std::get<std::add_pointer_t<std::decay_t<decltype(std::get<I>(t))>>>(
+                  std::get<I>(frozen_map.items).second) = &std::get<I>(t);
             });
 
             bool first = true;
