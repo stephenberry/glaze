@@ -53,7 +53,7 @@ namespace glz
       template <class T>
       constexpr auto member_names()
       {
-         static constexpr auto N = count_members<T>();
+         constexpr auto N = count_members<T>();
          static_vector<std::string_view, N> v{};
          T t;
          __builtin_dump_struct(&t, to_names, v);
@@ -195,8 +195,8 @@ namespace glz
       constexpr auto make_reflection_map_impl(std::index_sequence<I...>)
       {
          using V = decltype(to_tuple(std::declval<T>()));
-         static constexpr auto n = std::tuple_size_v<V>;
-         static constexpr auto members = member_names<T>();
+         constexpr auto n = std::tuple_size_v<V>;
+         constexpr auto members = member_names<T>();
          static_assert(count_members<T>() == n);
 
          using value_t = reflection_value_tuple_variant_t<V>;
@@ -220,9 +220,8 @@ namespace glz
          requires(!glaze_t<T> && !array_t<T> && std::is_aggregate_v<std::remove_cvref_t<T>>)
       {
          using V = decltype(to_tuple(std::declval<T>()));
-         static constexpr auto N = std::tuple_size_v<V>;
-
-         constexpr auto indices = std::make_index_sequence<N>{};
+         
+         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<V>>{};
          return make_reflection_map_impl<std::decay_t<T>, use_hash_comparison>(indices);
       }
 
