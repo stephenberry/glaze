@@ -85,27 +85,35 @@ namespace glz
          }
          else if constexpr (N == 5) {
             auto&& [p0, p1, p2, p3, p4] = t;
-            return tuplet::tuple{p0, p1, p2, p3, p4};
+            return std::tie(p0, p1, p2, p3, p4);
          }
          else if constexpr (N == 6) {
             auto&& [p0, p1, p2, p3, p4, p5] = t;
-            return tuplet::tuple{p0, p1, p2, p3, p4, p5};
+            return std::tie(p0, p1, p2, p3, p4, p5);
          }
          else if constexpr (N == 7) {
             auto&& [p0, p1, p2, p3, p4, p5, p6] = t;
-            return tuplet::tuple{p0, p1, p2, p3, p4, p5, p6};
+            return std::tie(p0, p1, p2, p3, p4, p5, p6);
          }
          else if constexpr (N == 8) {
             auto&& [p0, p1, p2, p3, p4, p5, p6, p7] = t;
-            return tuplet::tuple{p0, p1, p2, p3, p4, p5, p6, p7};
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7);
          }
          else if constexpr (N == 9) {
             auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8] = t;
-            return tuplet::tuple{p0, p1, p2, p3, p4, p5, p6, p7, p8};
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8);
          }
          else if constexpr (N == 10) {
             auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9] = t;
-            return tuplet::tuple{p0, p1, p2, p3, p4, p5, p6, p7, p8, p9};
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9);
+         }
+         else if constexpr (N == 11) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10);
+         }
+         else if constexpr (N == 12) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11);
          }
       }
 

@@ -16,8 +16,7 @@ struct my_struct
    std::array<uint64_t, 3> arr{};
 };
 
-static_assert(!glz::detail::glaze_t<my_struct> && std::is_aggregate_v<std::remove_cvref_t<my_struct>>);
-//static_assert(std::tuple_size_v<decltype(glz::detail::to_tuple(my_struct{}))> == 4);
+static_assert(glz::detail::reflectable<my_struct>);
 
 suite reflection = [] {
    "reflect_write"_test = [] {
