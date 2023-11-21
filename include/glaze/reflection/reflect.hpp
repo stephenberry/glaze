@@ -5,14 +5,19 @@
 
 #include <string_view>
 #include <tuple>
+#include <type_traits>
+#include <utility>
 
+#include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 
 namespace glz
 {
-   namespace detail {
+   namespace detail
+   {
       template <class T, std::size_t N>
-      struct static_vector {
+      struct static_vector
+      {
          constexpr auto push_back(const T& elem) { elems[size++] = elem; }
          constexpr auto& operator[](auto i) const { return elems[i]; }
 
@@ -20,28 +25,34 @@ namespace glz
          std::size_t size{};
       };
 
-      constexpr auto to_names(auto& out, auto, auto... args) {
+      constexpr auto to_names(auto& out, auto, auto... args)
+      {
          if constexpr (sizeof...(args) > 1) {
             out.push_back(std::get<2>(std::tuple{args...}));
          }
       }
 
-      struct any_t {
+      struct any_t
+      {
          template <class T>
          constexpr operator T();
       };
 
-      template <class T, class... Args> requires (std::is_aggregate_v<std::remove_cvref_t<T>>)
-      consteval auto count_members() {
+      template <class T, class... Args>
+         requires(std::is_aggregate_v<std::remove_cvref_t<T>>)
+      consteval auto count_members()
+      {
          if constexpr (requires { T{{Args{}}..., {any_t{}}}; } == false) {
             return sizeof...(Args);
-         } else {
+         }
+         else {
             return count_members<T, Args..., any_t>();
          }
       }
 
       template <class T>
-      constexpr auto member_names() {
+      constexpr auto member_names()
+      {
          static constexpr auto N = count_members<T>();
          static_vector<std::string_view, N> v{};
          T t;
@@ -50,20 +61,25 @@ namespace glz
       }
 
       template <class T>
-      constexpr decltype(auto) to_tuple(T& t) {
+      constexpr decltype(auto) to_tuple(T&& t)
+      {
          static constexpr auto N = count_members<std::decay_t<T>>();
          if constexpr (N == 0) {
             return tuplet::tuple{};
-         } else if constexpr (N == 1) {
+         }
+         else if constexpr (N == 1) {
             auto&& [p] = t;
             return tuplet::tuple{p};
-         } else if constexpr (N == 2) {
+         }
+         else if constexpr (N == 2) {
             auto&& [p0, p1] = t;
             return tuplet::tuple{p0, p1};
-         } else if constexpr (N == 3) {
+         }
+         else if constexpr (N == 3) {
             auto&& [p0, p1, p2] = t;
             return tuplet::tuple{p0, p1, p2};
-         } else if constexpr (N == 4) {
+         }
+         else if constexpr (N == 4) {
             auto&& [p0, p1, p2, p3] = t;
             return tuplet::tuple{p0, p1, p2, p3};
          }
@@ -93,13 +109,13 @@ namespace glz
          }
       }
 
-      template <class T> requires (!glaze_t<T> && !array_t<T> && std::is_aggregate_v<std::remove_cvref_t<T>>)
+      template <reflectable T>
       struct to_json<T>
       {
          template <auto Options>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
-            constexpr auto members = member_names<T>();
+            static constexpr auto members = member_names<T>();
             auto t = to_tuple(value);
             using V = decltype(t);
             static constexpr auto N = std::tuple_size_v<V>;
@@ -160,6 +176,182 @@ namespace glz
                   dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
                }
                dump<'}'>(b, ix);
+            }
+         }
+      };
+
+      template <class Tuple>
+      using reflection_value_tuple_variant_t = typename tuple_ptr_variant<Tuple>::type;
+
+      template <class T, bool use_hash_comparison, size_t... I>
+      constexpr auto make_reflection_map_impl(std::index_sequence<I...>)
+      {
+         using V = decltype(to_tuple(std::declval<T>()));
+         static constexpr auto n = std::tuple_size_v<V>;
+         static constexpr auto members = member_names<T>();
+         static_assert(count_members<T>() == n);
+
+         using value_t = reflection_value_tuple_variant_t<V>;
+
+         auto naive_or_normal_hash = [&] {
+            if constexpr (n <= 20) {
+               return glz::detail::naive_map<value_t, n, use_hash_comparison>(
+                  {std::pair<sv, value_t>{sv(members[I]), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
+            }
+            else {
+               return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
+                  {std::pair<sv, value_t>{sv(members[I]), nullptr}...});
+            }
+         };
+
+         return naive_or_normal_hash();
+      }
+
+      template <class T, bool use_hash_comparison = false>
+      constexpr auto make_reflection_map()
+         requires(!glaze_t<T> && !array_t<T> && std::is_aggregate_v<std::remove_cvref_t<T>>)
+      {
+         using V = decltype(to_tuple(std::declval<T>()));
+         static constexpr auto N = std::tuple_size_v<V>;
+
+         constexpr auto indices = std::make_index_sequence<N>{};
+         return make_reflection_map_impl<std::decay_t<T>, use_hash_comparison>(indices);
+      }
+
+      template <reflectable T>
+      struct from_json<T>
+      {
+         template <auto Options, string_literal tag = "">
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         {
+            parse_object_opening<Options>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+
+            static constexpr auto num_members = std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
+            // Only used if error_on_missing_keys = true
+            [[maybe_unused]] bit_array<num_members> fields{};
+
+            bool first = true;
+            while (true) {
+               if (*it == '}') [[unlikely]] {
+                  ++it;
+                  if constexpr (Opts.error_on_missing_keys) {
+                     constexpr auto req_fields = required_fields<T, Opts>();
+                     if ((req_fields & fields) != req_fields) {
+                        ctx.error = error_code::missing_key;
+                     }
+                  }
+                  return;
+               }
+               else if (first) [[unlikely]]
+                  first = false;
+               else [[likely]] {
+                  match<','>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  skip_ws<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+               }
+
+               if constexpr (num_members == 0) {
+                  // parsing to an empty object, but at this point the JSON presents keys
+                  const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  if constexpr (Opts.error_on_unknown_keys) {
+                     if constexpr (tag.sv().empty()) {
+                        std::advance(it, -int64_t(key.size()));
+                        ctx.error = error_code::unknown_key;
+                        return;
+                     }
+                     else if (key != tag.sv()) {
+                        std::advance(it, -int64_t(key.size()));
+                        ctx.error = error_code::unknown_key;
+                        return;
+                     }
+                  }
+                  else {
+                     parse_object_entry_sep<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+
+                     skip_value<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
+               }
+               else {
+                  const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
+                  // whitespace and the colon must run after checking if the key exists
+
+                  static constexpr auto frozen_map = make_reflection_map<T, Opts.use_hash_comparison>();
+                  if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
+                     parse_object_entry_sep<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+
+                     if constexpr (Opts.error_on_missing_keys) {
+                        // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
+                        // At the very least if we are going to do this add a get_index method to the maps and call
+                        // that
+                        auto index = member_it - frozen_map.begin();
+                        fields[index] = true;
+                     }
+                     std::visit(
+                        [&](auto&& member_ptr) {
+                           read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
+                        },
+                        member_it->second);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
+                  else [[unlikely]] {
+                     if constexpr (Opts.error_on_unknown_keys) {
+                        if constexpr (tag.sv().empty()) {
+                           std::advance(it, -int64_t(key.size()));
+                           ctx.error = error_code::unknown_key;
+                           return;
+                        }
+                        else if (key != tag.sv()) {
+                           std::advance(it, -int64_t(key.size()));
+                           ctx.error = error_code::unknown_key;
+                           return;
+                        }
+                        else {
+                           // We duplicate this code to avoid generating unreachable code
+                           parse_object_entry_sep<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+
+                           skip_value<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                        }
+                     }
+                     else {
+                        // We duplicate this code to avoid generating unreachable code
+                        parse_object_entry_sep<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+
+                        skip_value<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                  }
+               }
+               skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
          }
       };

@@ -25,6 +25,20 @@ suite reflection = [] {
       my_struct obj{};
       glz::write_json(obj, buffer);
       expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})") << buffer;
+
+      obj.i = {};
+      obj.d = {};
+      obj.hello = {};
+      obj.arr = {};
+      const auto ec = glz::read_json(obj, buffer);
+      if (ec) {
+         std::cout << glz::format_error(ec, buffer) << '\n';
+      }
+      expect(!ec);
+      expect(obj.i == 287);
+      expect(obj.d == 3.14);
+      expect(obj.hello == "Hello World");
+      expect(obj.arr == std::array<uint64_t, 3>{1, 2, 3});
    };
 };
 

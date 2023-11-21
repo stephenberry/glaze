@@ -554,6 +554,9 @@ namespace glz
       concept glaze_value_t =
          glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || glaze_flags_t<T>);
 
+      template <class T>
+      concept reflectable = !glaze_t<T> && !array_t<T> && std::is_aggregate_v<std::remove_cvref_t<T>>;
+
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to) {
 #if __GNUC__

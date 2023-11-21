@@ -1273,6 +1273,12 @@ namespace glz
          return may_escape;
       }
 
+      template <reflectable T>
+      inline constexpr bool keys_may_contain_escape()
+      {
+         return true;
+      }
+
       template <is_variant T>
       GLZ_ALWAYS_INLINE constexpr bool keys_may_contain_escape()
       {
