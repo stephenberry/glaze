@@ -63,7 +63,7 @@ namespace glz
       template <class T>
       constexpr decltype(auto) to_tuple(T&& t)
       {
-         static constexpr auto N = count_members<std::decay_t<T>>();
+         constexpr auto N = count_members<std::decay_t<T>>();
          if constexpr (N == 0) {
             return tuplet::tuple{};
          }
