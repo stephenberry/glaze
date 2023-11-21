@@ -10,10 +10,10 @@ using namespace boost::ut;
 
 struct my_struct
 {
-   int i = 287;
-   double d = 3.14;
-   std::string hello = "Hello World";
-   std::array<uint64_t, 3> arr = {1, 2, 3};
+   int i{};
+   double d{};
+   std::string hello{};
+   std::array<uint64_t, 3> arr{};
 };
 
 static_assert(!glz::detail::glaze_t<my_struct> && std::is_aggregate_v<std::remove_cvref_t<my_struct>>);
@@ -21,24 +21,19 @@ static_assert(!glz::detail::glaze_t<my_struct> && std::is_aggregate_v<std::remov
 
 suite reflection = [] {
    "reflect_write"_test = [] {
-      std::string buffer{};
+      std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
       my_struct obj{};
-      glz::write_json(obj, buffer);
-      expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})") << buffer;
+      expect(!glz::read_json(obj, buffer));
 
-      obj.i = {};
-      obj.d = {};
-      obj.hello = {};
-      obj.arr = {};
-      const auto ec = glz::read_json(obj, buffer);
-      if (ec) {
-         std::cout << glz::format_error(ec, buffer) << '\n';
-      }
-      expect(!ec);
       expect(obj.i == 287);
       expect(obj.d == 3.14);
       expect(obj.hello == "Hello World");
       expect(obj.arr == std::array<uint64_t, 3>{1, 2, 3});
+
+      buffer.clear();
+      glz::write_json(obj, buffer);
+
+      expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
    };
 };
 
