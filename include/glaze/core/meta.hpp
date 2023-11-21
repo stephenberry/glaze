@@ -111,6 +111,19 @@ namespace glz
    using meta_wrapper_t = std::decay_t<decltype(meta_wrapper_v<std::decay_t<T>>)>;
 
    template <class T>
+   struct remove_meta_wrapper
+   {
+      using type = T;
+   };
+   template <detail::glaze_t T>
+   struct remove_meta_wrapper<T>
+   {
+      using type = std::remove_pointer_t<std::remove_const_t<meta_wrapper_t<T>>>;
+   };
+   template <class T>
+   using remove_meta_wrapper_t = typename remove_meta_wrapper<T>::type;
+
+   template <class T>
    concept named = requires { meta<T>::name; } || requires { T::glaze::name; };
 
    template <class T, bool fail_on_unknown = false>

@@ -485,11 +485,10 @@ namespace glz
                           };
 
       template <class T>
-      concept is_float128 =
-         requires(T x) {
-            requires sizeof(x) == 16;
-            requires std::floating_point<T>;
-         };
+      concept is_float128 = requires(T x) {
+                               requires sizeof(x) == 16;
+                               requires std::floating_point<T>;
+                            };
 
       template <class T>
       constexpr size_t get_size() noexcept
@@ -556,6 +555,10 @@ namespace glz
 
       template <class T>
       concept reflectable = !glaze_t<T> && !array_t<T> && std::is_aggregate_v<std::remove_cvref_t<T>>;
+     
+      template <class T>
+      concept glaze_const_value_t = glaze_value_t<T> && std::is_pointer_v<glz::meta_wrapper_t<T>> &&
+                                    std::is_const_v<std::remove_pointer_t<glz::meta_wrapper_t<T>>>;
 
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to) {
