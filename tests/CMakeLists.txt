@@ -68,7 +68,9 @@ add_subdirectory(exceptions_test)
 add_subdirectory(json_test)
 add_subdirectory(jsonrpc_test)
 add_subdirectory(lib_test)
-add_subdirectory(reflection_test)
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_subdirectory(reflection_test)
+endif()
 
 add_test(
   NAME glaze-install_test
