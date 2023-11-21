@@ -3,6 +3,9 @@
 
 #pragma once
 
+#if defined(__has_builtin)
+#if __has_builtin(__builtin_dump_struct)
+
 #include <string_view>
 #include <tuple>
 #include <type_traits>
@@ -370,3 +373,6 @@ namespace glz
       };
    }
 }
+
+#endif
+#endif
