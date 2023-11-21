@@ -67,6 +67,30 @@ namespace glz
             auto&& [p0, p1, p2, p3] = t;
             return tuplet::tuple{p0, p1, p2, p3};
          }
+         else if constexpr (N == 5) {
+            auto&& [p0, p1, p2, p3, p4] = t;
+            return tuplet::tuple{p0, p1, p2, p3, p4};
+         }
+         else if constexpr (N == 6) {
+            auto&& [p0, p1, p2, p3, p4, p5] = t;
+            return tuplet::tuple{p0, p1, p2, p3, p4, p5};
+         }
+         else if constexpr (N == 7) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6] = t;
+            return tuplet::tuple{p0, p1, p2, p3, p4, p5, p6};
+         }
+         else if constexpr (N == 8) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7] = t;
+            return tuplet::tuple{p0, p1, p2, p3, p4, p5, p6, p7};
+         }
+         else if constexpr (N == 9) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8] = t;
+            return tuplet::tuple{p0, p1, p2, p3, p4, p5, p6, p7, p8};
+         }
+         else if constexpr (N == 10) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9] = t;
+            return tuplet::tuple{p0, p1, p2, p3, p4, p5, p6, p7, p8, p9};
+         }
       }
 
       template <class T> requires (!glaze_t<T> && !array_t<T> && std::is_aggregate_v<std::remove_cvref_t<T>>)
