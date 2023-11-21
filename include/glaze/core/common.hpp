@@ -485,11 +485,10 @@ namespace glz
                           };
 
       template <class T>
-      concept is_float128 =
-         requires(T x) {
-            requires sizeof(x) == 16;
-            requires std::floating_point<T>;
-         };
+      concept is_float128 = requires(T x) {
+                               requires sizeof(x) == 16;
+                               requires std::floating_point<T>;
+                            };
 
       template <class T>
       constexpr size_t get_size() noexcept
