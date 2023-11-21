@@ -13,6 +13,9 @@
 #include <map>
 #include <random>
 #include <ranges>
+#if defined(__STDCPP_FLOAT128_T__)
+#include <stdfloat>
+#endif
 #include <tuple>
 #include <unordered_map>
 #include <variant>
@@ -5801,6 +5804,21 @@ suite bitset = [] {
       expect(b == 0b10010010'00000010);
    };
 };
+
+#if defined(__STDCPP_FLOAT128_T__)
+suite float128_test = [] {
+   "float128"_test = [] {
+      std::float128_t x = 3.14;
+
+      std::string s{};
+      glz::write_json(x, s);
+
+      x = 0.0;
+      expect(!glz::read_json(x, s));
+      expect(x == 3.14);
+   };
+};
+#endif
 
 int main()
 {
