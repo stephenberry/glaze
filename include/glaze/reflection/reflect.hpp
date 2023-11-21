@@ -6,11 +6,6 @@
 #if defined(__has_builtin)
 #if __has_builtin(__builtin_dump_struct)
 
-#include <string_view>
-#include <tuple>
-#include <type_traits>
-#include <utility>
-
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/reflection/to_tuple.hpp"
