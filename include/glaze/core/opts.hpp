@@ -28,6 +28,8 @@ namespace glz
       uint32_t layout = rowwise; // CSV row wise output/input
       bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool number = false; // read numbers as strings and write these string as numbers
+      bool raw = false; // write out string like values without quotes
+      bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
 
       // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled

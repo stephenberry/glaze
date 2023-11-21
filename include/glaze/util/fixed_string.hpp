@@ -36,5 +36,5 @@ namespace glz
    };
 
    template <class char_type, unsigned N>
-   basic_fixed_string(char_type const (&str)[N]) -> basic_fixed_string<char_type, N - 1>;
+   basic_fixed_string(const char_type (&str)[N]) -> basic_fixed_string<char_type, N - 1>;
 }

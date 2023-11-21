@@ -2,6 +2,7 @@
 // For the license information refer to glaze.hpp
 
 #include <any>
+#include <bitset>
 #include <chrono>
 #include <complex>
 #include <deque>
@@ -12,6 +13,10 @@
 #include <map>
 #include <random>
 #include <ranges>
+#if defined(__STDCPP_FLOAT128_T__)
+#include <stdfloat>
+#endif
+#include <tuple>
 #include <unordered_map>
 #include <variant>
 
@@ -21,6 +26,7 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/prettify.hpp"
 #include "glaze/json/ptr.hpp"
+#include "glaze/json/quoted.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/record/recorder.hpp"
@@ -198,6 +204,8 @@ struct glz::meta<Thing>
 {
    using T = Thing;
    static constexpr std::string_view name = "Thing";
+   static constexpr std::array<std::string_view, 2> required = {"thing", "i"};
+   static constexpr std::array<std::string_view, 1> examples = {R"({"thing":{},"i":42})"};
    static constexpr auto value = object(
       "thing", &T::thing, //
       "thing2array", &T::thing2array, //
@@ -1901,6 +1909,21 @@ suite write_tests = [] {
    "Write array-like input range"_test = [] {
 #ifdef __cpp_lib_ranges
       "sized range"_test = [] { expect(glz::write_json(std::views::iota(0, 3)) == glz::sv{R"([0,1,2])"}); };
+
+      "unsized range"_test = [] {
+         auto unsized_range = std::views::iota(0, 5) //
+                              | std::views::filter([](const auto i) { return i % 2 == 0; });
+         static_assert(!std::ranges::sized_range<decltype(unsized_range)>);
+         expect(glz::write_json(unsized_range) == glz::sv{"[0,2,4]"});
+      };
+
+      "uncommon range"_test = [] {
+         auto uncommon_range = std::views::iota(0) //
+                               | std::views::take(5) //
+                               | std::views::filter([](const auto i) { return i % 2 == 0; });
+         static_assert(!std::ranges::common_range<decltype(uncommon_range)>);
+         expect(glz::write_json(uncommon_range) == glz::sv{"[0,2,4]"});
+      };
 #endif
 
       "initializer list"_test = [] {
@@ -1931,6 +1954,7 @@ suite write_tests = [] {
          Write_pair_test_case{0.78, std::array{1, 2, 3}, R"({"0.78":[1,2,3]})"},
          Write_pair_test_case{"k", glz::obj{"in1", 1, "in2", "v"}, R"({"k":{"in1":1,"in2":"v"}})"},
          Write_pair_test_case{std::array{1, 2}, 99, R"({"[1,2]":99})"},
+         Write_pair_test_case{std::array{"one", "two"}, 99, R"({"[\"one\",\"two\"]":99})"},
          Write_pair_test_case{"knot", std::nullopt, "{}"}, // nullopt_t, not std::optional
          Write_pair_test_case{"kmaybe", std::optional<int>{}, "{}"},
       };
@@ -1945,6 +1969,19 @@ suite write_tests = [] {
          auto str_view = std::views::iota(-2, 3) |
                          std::views::transform([](const auto i) { return std::pair(i, std::to_string(i * i)); });
          expect(glz::write_json(str_view) == glz::sv{R"({"-2":"4","-1":"1","0":"0","1":"1","2":"4"})"});
+      };
+
+      "unsized range of pairs"_test = [] {
+         auto base_rng = std::views::iota(-2, 3) | std::views::filter([](const auto i) { return i < 0; });
+
+         auto num_view = base_rng | std::views::transform([](const auto i) { return std::pair(i, i * i); });
+         static_assert(!std::ranges::sized_range<decltype(num_view)>);
+         expect(glz::write_json(num_view) == glz::sv{R"({"-2":4,"-1":1})"});
+
+         auto str_view =
+            base_rng | std::views::transform([](const auto i) { return std::pair(i, std::to_string(i * i)); });
+         static_assert(!std::ranges::sized_range<decltype(str_view)>);
+         expect(glz::write_json(str_view) == glz::sv{R"({"-2":"4","-1":"1"})"});
       };
 
       "initializer list w/ ranges"_test = [] {
@@ -2393,8 +2430,16 @@ suite tagged_variant_tests = [] {
       expect(glz::read_json(var, R"({"action":"DELETE","data":"the_internet"})") == glz::error_code::none);
       expect(std::get<delete_action>(var).data == "the_internet");
 
+      // tag at end
+      expect(glz::read_json(var, R"({"data":"the_internet","action":"DELETE"})") == glz::error_code::none);
+      expect(std::get<delete_action>(var).data == "the_internet");
+
       tagged_variant2 var2{};
       expect(glz::read_json(var2, R"({"type":"put_action","data":{"x":100,"y":200}})") == glz::error_code::none);
+      expect(std::get<put_action>(var2).data["y"] == 200);
+
+      // tag at end
+      expect(glz::read_json(var2, R"({"data":{"x":100,"y":200},"type":"put_action"})") == glz::error_code::none);
       expect(std::get<put_action>(var2).data["y"] == 200);
    };
 
@@ -3354,7 +3399,8 @@ suite json_schema = [] {
       // when you update this string
       expect(
          schema ==
-         R"({"type":["object"],"properties":{"array":{"$ref":"#/$defs/std::array<std::string,4>"},"b":{"$ref":"#/$defs/bool"},"c":{"$ref":"#/$defs/char"},"color":{"$ref":"#/$defs/Color"},"d":{"$ref":"#/$defs/double","description":"double is the best type"},"deque":{"$ref":"#/$defs/std::deque<double>"},"i":{"$ref":"#/$defs/int32_t","minimum":2},"list":{"$ref":"#/$defs/std::list<int32_t>"},"map":{"$ref":"#/$defs/std::map<std::string,int32_t>"},"mapi":{"$ref":"#/$defs/std::map<int32_t,double>"},"optional":{"$ref":"#/$defs/std::optional<V3>"},"sptr":{"$ref":"#/$defs/std::shared_ptr<sub_thing>"},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"$ref":"#/$defs/std::array<sub_thing2,1>"},"thing_ptr":{"$ref":"#/$defs/sub_thing*"},"v":{"$ref":"#/$defs/std::variant<var1_t,var2_t>"},"vb":{"$ref":"#/$defs/std::vector<bool>"},"vec3":{"$ref":"#/$defs/V3"},"vector":{"$ref":"#/$defs/std::vector<V3>"}},"additionalProperties":false,"$defs":{"Color":{"type":["string"],"oneOf":[{"const":"Red"},{"const":"Green"},{"const":"Blue"}]},"V3":{"type":["array"]},"bool":{"type":["boolean"]},"char":{"type":["string"]},"double":{"type":["number"]},"float":{"type":["number"]},"int32_t":{"type":["integer"]},"std::array<std::string,4>":{"type":["array"],"items":{"$ref":"#/$defs/std::string"}},"std::array<sub_thing2,1>":{"type":["array"],"items":{"$ref":"#/$defs/sub_thing2"}},"std::deque<double>":{"type":["array"],"items":{"$ref":"#/$defs/double"}},"std::list<int32_t>":{"type":["array"],"items":{"$ref":"#/$defs/int32_t"}},"std::map<int32_t,double>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/double"}},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::optional<V3>":{"type":["array","null"]},"std::shared_ptr<sub_thing>":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double","description":"Test comment 1"},"b":{"$ref":"#/$defs/std::string","description":"Test comment 2"}},"additionalProperties":false},"std::string":{"type":["string"]},"std::variant<var1_t,var2_t>":{"type":["number","string","boolean","object","array","null"],"oneOf":[{"type":["object"],"properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false},{"type":["object"],"properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false}]},"std::vector<V3>":{"type":["array"],"items":{"$ref":"#/$defs/V3"}},"std::vector<bool>":{"type":["array"],"items":{"$ref":"#/$defs/bool"}},"sub_thing":{"type":["object"],"properties":{"a":{"$ref":"#/$defs/double","description":"Test comment 1"},"b":{"$ref":"#/$defs/std::string","description":"Test comment 2"}},"additionalProperties":false},"sub_thing*":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double","description":"Test comment 1"},"b":{"$ref":"#/$defs/std::string","description":"Test comment 2"}},"additionalProperties":false},"sub_thing2":{"type":["object"],"properties":{"a":{"$ref":"#/$defs/double","description":"Test comment 1"},"b":{"$ref":"#/$defs/std::string","description":"Test comment 2"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false}}})");
+         R"({"type":["object"],"properties":{"array":{"$ref":"#/$defs/std::array<std::string,4>"},"b":{"$ref":"#/$defs/bool"},"c":{"$ref":"#/$defs/char"},"color":{"$ref":"#/$defs/Color"},"d":{"$ref":"#/$defs/double","description":"double is the best type"},"deque":{"$ref":"#/$defs/std::deque<double>"},"i":{"$ref":"#/$defs/int32_t","minimum":2},"list":{"$ref":"#/$defs/std::list<int32_t>"},"map":{"$ref":"#/$defs/std::map<std::string,int32_t>"},"mapi":{"$ref":"#/$defs/std::map<int32_t,double>"},"optional":{"$ref":"#/$defs/std::optional<V3>"},"sptr":{"$ref":"#/$defs/std::shared_ptr<sub_thing>"},"thing":{"$ref":"#/$defs/sub_thing"},"thing2array":{"$ref":"#/$defs/std::array<sub_thing2,1>"},"thing_ptr":{"$ref":"#/$defs/sub_thing*"},"v":{"$ref":"#/$defs/std::variant<var1_t,var2_t>"},"vb":{"$ref":"#/$defs/std::vector<bool>"},"vec3":{"$ref":"#/$defs/V3"},"vector":{"$ref":"#/$defs/std::vector<V3>"}},"additionalProperties":false,"$defs":{"Color":{"type":["string"],"oneOf":[{"const":"Red"},{"const":"Green"},{"const":"Blue"}]},"V3":{"type":["array"]},"bool":{"type":["boolean"]},"char":{"type":["string"]},"double":{"type":["number"]},"float":{"type":["number"]},"int32_t":{"type":["integer"]},"std::array<std::string,4>":{"type":["array"],"items":{"$ref":"#/$defs/std::string"}},"std::array<sub_thing2,1>":{"type":["array"],"items":{"$ref":"#/$defs/sub_thing2"}},"std::deque<double>":{"type":["array"],"items":{"$ref":"#/$defs/double"}},"std::list<int32_t>":{"type":["array"],"items":{"$ref":"#/$defs/int32_t"}},"std::map<int32_t,double>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/double"}},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::optional<V3>":{"type":["array","null"]},"std::shared_ptr<sub_thing>":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double","description":"Test comment 1"},"b":{"$ref":"#/$defs/std::string","description":"Test comment 2"}},"additionalProperties":false},"std::string":{"type":["string"]},"std::variant<var1_t,var2_t>":{"type":["number","string","boolean","object","array","null"],"oneOf":[{"type":["object"],"properties":{"x":{"$ref":"#/$defs/double"}},"additionalProperties":false},{"type":["object"],"properties":{"y":{"$ref":"#/$defs/double"}},"additionalProperties":false}]},"std::vector<V3>":{"type":["array"],"items":{"$ref":"#/$defs/V3"}},"std::vector<bool>":{"type":["array"],"items":{"$ref":"#/$defs/bool"}},"sub_thing":{"type":["object"],"properties":{"a":{"$ref":"#/$defs/double","description":"Test comment 1"},"b":{"$ref":"#/$defs/std::string","description":"Test comment 2"}},"additionalProperties":false},"sub_thing*":{"type":["object","null"],"properties":{"a":{"$ref":"#/$defs/double","description":"Test comment 1"},"b":{"$ref":"#/$defs/std::string","description":"Test comment 2"}},"additionalProperties":false},"sub_thing2":{"type":["object"],"properties":{"a":{"$ref":"#/$defs/double","description":"Test comment 1"},"b":{"$ref":"#/$defs/std::string","description":"Test comment 2"},"c":{"$ref":"#/$defs/double"},"d":{"$ref":"#/$defs/double"},"e":{"$ref":"#/$defs/double"},"f":{"$ref":"#/$defs/float"},"g":{"$ref":"#/$defs/double"},"h":{"$ref":"#/$defs/double"}},"additionalProperties":false}},"required":["thing","i"],"examples":[{"thing":{},"i":42}]})")
+         << schema;
    };
 };
 
@@ -4374,6 +4420,123 @@ suite lamda_wrapper = [] {
    };
 };
 
+struct map_quoted_num
+{
+   std::map<uint32_t, uint64_t> x;
+};
+
+template <>
+struct glz::meta<map_quoted_num>
+{
+   static constexpr auto value = object("x", glz::quoted_num<&map_quoted_num::x>);
+};
+
+suite quote_map = [] {
+   "map_quoted_num"_test = [] {
+      map_quoted_num a{{{1, 2}}};
+      std::string buffer{};
+      glz::write_json(a, buffer);
+      expect(buffer == R"({"x":{"1":"2"}})");
+
+      a = {};
+      buffer = R"({"x":{"3":"4"}})";
+      expect(glz::read_json(a, buffer) == glz::error_code::none);
+      expect(a.x == std::map<uint32_t, uint64_t>{{3, 4}});
+   };
+};
+
+struct bool_map
+{
+   std::map<bool, std::string> x;
+};
+
+template <>
+struct glz::meta<bool_map>
+{
+   static constexpr auto value = object("x", &bool_map::x);
+};
+
+suite map_with_bool_key = [] {
+   "bool_map"_test = [] {
+      bool_map a{{{true, "true"}}};
+      std::string buffer{};
+      glz::write_json(a, buffer);
+      expect(buffer == R"({"x":{"true":"true"}})");
+
+      a = {};
+      buffer = R"({"x":{"false":"false"}})";
+      expect(glz::read_json(a, buffer) == glz::error_code::none);
+      expect(a.x == std::map<bool, std::string>{{false, "false"}});
+   };
+};
+
+struct array_map
+{
+   std::map<std::array<int, 3>, std::string> x;
+};
+
+template <>
+struct glz::meta<array_map>
+{
+   static constexpr auto value = object("x", &array_map::x);
+};
+
+struct custom_key_map
+{
+   struct key_type
+   {
+      int field1{};
+      std::string field2{};
+
+      [[nodiscard]] std::strong_ordering operator<=>(const key_type&) const noexcept = default;
+
+      struct glaze
+      {
+         static constexpr auto value = glz::object("field1", &key_type::field1, "field2", &key_type::field2);
+      };
+   };
+
+   std::map<key_type, std::string> x;
+};
+
+template <>
+struct glz::meta<custom_key_map>
+{
+   static constexpr auto value = object("x", &custom_key_map::x);
+};
+
+template <typename Map>
+struct Arbitrary_key_test_case
+{
+   std::string_view name{};
+   Map input{};
+   std::string_view serialized{};
+};
+
+suite arbitrary_key_maps = [] {
+   using namespace boost::ut;
+   using namespace boost::ut::operators;
+   "arbitrary_key_maps"_test =
+      [](const auto& test_case) {
+         const auto& [name, input, serialized] = test_case;
+         std::string buffer{};
+         glz::write_json(input, buffer);
+         expect(buffer == serialized);
+
+         std::decay_t<decltype(input)> parsed{};
+         expect(glz::read_json(parsed, serialized) == glz::error_code::none);
+         expect(parsed.x == input.x);
+      } |
+      std::tuple{Arbitrary_key_test_case<array_map>{.name = "array_map",
+                                                    .input = {.x = {{{1, 2, 3}, "hello"}, {{4, 5, 6}, "goodbye"}}},
+                                                    .serialized = R"({"x":{"[1,2,3]":"hello","[4,5,6]":"goodbye"}})"},
+                 Arbitrary_key_test_case<custom_key_map>{
+                    .name = "custom_key_map",
+                    .input = {.x = {{{-1, "k.2"}, "value"}}},
+                    .serialized = R"({"x":{"{\"field1\":-1,\"field2\":\"k.2\"}":"value"}})",
+                 }};
+};
+
 suite char_array = [] {
    "char array write"_test = [] {
       char arr[12] = "Hello World";
@@ -4942,6 +5105,26 @@ suite number_reading = [] {
       expect(!glz::read_json(d, buffer));
       expect(d == 0.0);
    };
+
+   "minimum int32_t"_test = [] {
+      std::string buffer{"-2147483648"};
+      int32_t i{};
+      expect(!glz::read_json(i, buffer));
+      expect(i == (std::numeric_limits<int32_t>::min)());
+
+      glz::write_json(i, buffer);
+      expect(buffer == "-2147483648");
+   };
+
+   "minimum int64_t"_test = [] {
+      std::string buffer{"-9223372036854775808"};
+      int64_t i{};
+      expect(!glz::read_json(i, buffer));
+      expect(i == (std::numeric_limits<int64_t>::min)());
+
+      glz::write_json(i, buffer);
+      expect(buffer == "-9223372036854775808");
+   };
 };
 
 suite whitespace_testing = [] {
@@ -5162,6 +5345,37 @@ suite custom_encoding_test = [] {
    };
 };
 
+struct custom_load_t
+{
+   std::vector<int> x{};
+   std::vector<int> y{};
+
+   struct glaze
+   {
+      using T = custom_load_t;
+      static constexpr auto read_x = [](auto& s) -> auto& { return s.x; };
+      static constexpr auto write_x = [](auto& s) -> auto& { return s.y; };
+      static constexpr auto value = glz::object("x", glz::custom<read_x, write_x>);
+   };
+};
+
+suite custom_load_test = [] {
+   "custom_load"_test = [] {
+      custom_load_t obj{};
+      std::string s = R"({"x":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+      s.clear();
+      glz::write_json(obj, s);
+      expect(s == R"({"x":[]})");
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+   };
+};
+
 struct client_state
 {
    uint64_t id{};
@@ -5211,21 +5425,15 @@ struct manage_x
    std::vector<int> x{};
    std::vector<int> y{};
 
-   bool handle_x(const glz::manage_state state)
+   bool read_x()
    {
-      switch (state) {
-      case glz::manage_state::read: {
-         y = x;
-         break;
-      }
-      case glz::manage_state::write: {
-         x = y;
-         break;
-      }
-      default: {
-         return false;
-      }
-      }
+      y = x;
+      return true;
+   }
+
+   bool write_x()
+   {
+      x = y;
       return true;
    }
 };
@@ -5234,7 +5442,28 @@ template <>
 struct glz::meta<manage_x>
 {
    using T = manage_x;
-   static constexpr auto value = object("x", manage<&T::x, &T::handle_x>);
+   static constexpr auto value = object("x", manage<&T::x, &T::read_x, &T::write_x>);
+};
+
+struct manage_x_lambda
+{
+   std::vector<int> x{};
+   std::vector<int> y{};
+};
+
+template <>
+struct glz::meta<manage_x_lambda>
+{
+   using T = manage_x_lambda;
+   static constexpr auto read_x = [](auto& s) {
+      s.y = s.x;
+      return true;
+   };
+   static constexpr auto write_x = [](auto& s) {
+      s.x = s.y;
+      return true;
+   };
+   [[maybe_unused]] static constexpr auto value = object("x", manage<&T::x, read_x, write_x>);
 };
 
 suite manage_test = [] {
@@ -5253,7 +5482,343 @@ suite manage_test = [] {
       expect(obj.x[1] == 2);
       expect(obj.x[2] == 3);
    };
+
+   "manage_lambdas"_test = [] {
+      manage_x_lambda obj{};
+      std::string s = R"({"x":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.y[0] == 1);
+      expect(obj.y[1] == 2);
+      expect(obj.y[2] == 3);
+      obj.x.clear();
+      s.clear();
+      glz::write_json(obj, s);
+      expect(s == R"({"x":[1,2,3]})");
+      expect(obj.x[0] == 1);
+      expect(obj.x[1] == 2);
+      expect(obj.x[2] == 3);
+   };
 };
+
+struct varx
+{
+   GLZ_LOCAL_META(varx);
+};
+struct vary
+{
+   GLZ_LOCAL_META(vary);
+};
+
+using vari = std::variant<varx, vary>;
+
+template <>
+struct glz::meta<vari>
+{
+   static constexpr std::string_view tag = "type";
+};
+
+suite empty_variant_objects = [] {
+   "empty_variant_objects"_test = [] {
+      vari v = varx{};
+      std::string s;
+      glz::write_json(v, s);
+      expect(s == R"({"type":"varx"})");
+
+      v = vary{};
+
+      expect(!glz::read_json(v, s));
+      expect(std::holds_alternative<varx>(v));
+   };
+};
+
+template <typename PARAMS>
+struct request_t
+{
+   int id = -1;
+   std::optional<bool> proxy;
+   std::string method;
+   PARAMS params;
+
+   // meta
+   struct glaze
+   {
+      using T = request_t<PARAMS>;
+      static constexpr auto value =
+         glz::object("id", &T::id, "proxy", &T::proxy, "method", &T::method, "params", &T::params);
+   };
+};
+
+struct QuoteData
+{
+   // session
+   uint64_t time;
+   std::string action; // send, recv
+   std::string quote; // order, kill
+   std::string account;
+   uint32_t uid;
+   uint32_t session_id;
+   uint32_t request_id;
+   // order
+   int state = 0;
+   std::string order_id = "";
+   std::string exchange = "";
+   std::string type = "";
+   std::string tif = "";
+   std::string offset = "";
+   std::string side = "";
+   std::string symbol = "";
+   double price = 0;
+   double quantity = 0;
+   double traded = 0;
+};
+
+typedef request_t<QuoteData> SaveQuote;
+
+GLZ_META(QuoteData, time, action, quote, account, uid, session_id, request_id, state, order_id, exchange, type, tif,
+         offset, side, symbol, price, quantity, traded);
+
+suite trade_quote_test = [] {
+   "trade_quote"_test = [] {
+      SaveQuote q{};
+      q.id = 706;
+      q.method = "save_quote";
+      q.params.time = 1698627291351456360;
+      q.params.action = "send";
+      q.params.quote = "kill";
+      q.params.account = "603302";
+      q.params.uid = 11;
+      q.params.session_id = 1;
+      q.params.request_id = 41;
+      q.params.state = 0;
+      q.params.order_id = "2023103000180021";
+      q.params.exchange = "CZCE";
+      q.params.symbol = "SPD RM401&RM403";
+
+      std::string buffer;
+      glz::write<glz::opts{}>(q, buffer);
+
+      expect(
+         buffer ==
+         R"({"id":706,"method":"save_quote","params":{"time":1698627291351456360,"action":"send","quote":"kill","account":"603302","uid":11,"session_id":1,"request_id":41,"state":0,"order_id":"2023103000180021","exchange":"CZCE","type":"","tif":"","offset":"","side":"","symbol":"SPD RM401&RM403","price":0,"quantity":0,"traded":0}})")
+         << buffer;
+   };
+};
+
+suite invoke_update_test = [] {
+   "invoke"_test = [] {
+      int x = 5;
+
+      std::map<std::string, glz::invoke_update<void()>> funcs;
+      funcs["square"] = [&] { x *= x; };
+      funcs["add_one"] = [&] { x += 1; };
+
+      std::string s = R"(
+ {
+    "square":[],
+    "add_one":[]
+ })";
+      expect(!glz::read_json(funcs, s));
+      expect(x == 5);
+
+      std::string s2 = R"(
+ {
+    "square":[],
+    "add_one":[ ]
+ })";
+      expect(!glz::read_json(funcs, s2));
+      expect(x == 6);
+
+      std::string s3 = R"(
+ {
+    "square":[ ],
+    "add_one":[ ]
+ })";
+      expect(!glz::read_json(funcs, s3));
+      expect(x == 36);
+   };
+};
+
+struct updater
+{
+   int x = 5;
+   glz::invoke_update<void()> square;
+   glz::invoke_update<void()> add_one;
+
+   // constructor required by MSVC
+   updater()
+   {
+      square = [&] { x *= x; };
+      add_one = [&] { x += 1; };
+   }
+
+   GLZ_LOCAL_META(updater, x, square, add_one);
+};
+
+suite invoke_updater_test = [] {
+   "invoke_updater"_test = [] {
+      updater obj{};
+      auto& x = obj.x;
+
+      std::string s = R"(
+ {
+    "square":[],
+    "add_one":[]
+ })";
+      expect(!glz::read_json(obj, s));
+      expect(x == 5) << x;
+
+      std::string s2 = R"(
+ {
+    "square":[],
+    "add_one":[ ]
+ })";
+      expect(!glz::read_json(obj, s2));
+      expect(x == 6) << x;
+
+      std::string s3 = R"(
+ {
+    "square":[ ],
+    "add_one":[ ]
+ })";
+      expect(!glz::read_json(obj, s3));
+      expect(x == 36) << x;
+   };
+};
+
+struct raw_stuff
+{
+   std::string a{};
+   std::string b{};
+   std::string c{};
+
+   struct glaze
+   {
+      using T = raw_stuff;
+      static constexpr auto value = glz::object("a", &T::a, "b", &T::b, "c", &T::c);
+   };
+};
+
+struct raw_stuff_wrapper
+{
+   raw_stuff data{};
+
+   struct glaze
+   {
+      using T = raw_stuff_wrapper;
+      static constexpr auto value{glz::raw_string<&T::data>};
+   };
+};
+
+struct raw_stuff_escaped
+{
+   raw_stuff data{};
+
+   struct glaze
+   {
+      using T = raw_stuff_escaped;
+      static constexpr auto value{glz::escaped<&T::data>};
+   };
+};
+
+suite raw_string_test = [] {
+   "raw_string"_test = [] {
+      raw_stuff obj{};
+      std::string buffer = R"({"a":"Hello\nWorld","b":"Hello World","c":"\tHello\bWorld"})";
+
+      expect(!glz::read<glz::opts{.raw_string = true}>(obj, buffer));
+      expect(obj.a == R"(Hello\nWorld)");
+      expect(obj.b == R"(Hello World)");
+      expect(obj.c == R"(\tHello\bWorld)");
+
+      buffer.clear();
+      glz::write<glz::opts{.raw_string = true}>(obj, buffer);
+      expect(buffer == R"({"a":"Hello\nWorld","b":"Hello World","c":"\tHello\bWorld"})");
+   };
+
+   "raw_string_wrapper"_test = [] {
+      raw_stuff_wrapper obj{};
+      std::string buffer = R"({"a":"Hello\nWorld","b":"Hello World","c":"\tHello\bWorld"})";
+
+      expect(!glz::read_json(obj, buffer));
+      expect(obj.data.a == R"(Hello\nWorld)");
+      expect(obj.data.b == R"(Hello World)");
+      expect(obj.data.c == R"(\tHello\bWorld)");
+
+      buffer.clear();
+      glz::write_json(obj, buffer);
+      expect(buffer == R"({"a":"Hello\nWorld","b":"Hello World","c":"\tHello\bWorld"})");
+   };
+
+   "raw_string_escaped"_test = [] {
+      raw_stuff_escaped obj{};
+      std::string buffer = R"({"a":"Hello\nWorld"})";
+
+      expect(!glz::read_json(obj, buffer));
+      expect(obj.data.a ==
+             R"(Hello
+World)");
+
+      buffer.clear();
+      glz::write_json(obj, buffer);
+      expect(buffer == R"({"a":"Hello\nWorld","b":"","c":""})");
+   };
+};
+
+struct Update
+{
+   int64_t time;
+   GLZ_LOCAL_META(Update, time);
+};
+
+suite ndjson_error_test = [] {
+   "ndjson_error"_test = [] {
+      auto x = glz::read_ndjson<std::vector<Update>>("{\"t\":73}\n{\"t\":37}");
+      expect(x.error() == glz::error_code::syntax_error);
+   };
+};
+
+suite bitset = [] {
+   "bitset8"_test = [] {
+      std::bitset<8> b = 0b10101010;
+
+      std::string s{};
+      glz::write_json(b, s);
+
+      expect(s == R"("10101010")") << s;
+
+      b.reset();
+      expect(!glz::read_json(b, s));
+      expect(b == 0b10101010);
+   };
+
+   "bitset16"_test = [] {
+      std::bitset<16> b = 0b10010010'00000010;
+
+      std::string s{};
+      glz::write_json(b, s);
+
+      expect(s == R"("1001001000000010")") << s;
+
+      b.reset();
+      expect(!glz::read_json(b, s));
+      expect(b == 0b10010010'00000010);
+   };
+};
+
+#if defined(__STDCPP_FLOAT128_T__)
+suite float128_test = [] {
+   "float128"_test = [] {
+      std::float128_t x = 3.14;
+
+      std::string s{};
+      glz::write_json(x, s);
+
+      x = 0.0;
+      expect(!glz::read_json(x, s));
+      expect(x == 3.14);
+   };
+};
+#endif
 
 int main()
 {

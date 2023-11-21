@@ -569,22 +569,23 @@ namespace glz
 
       // using span_t = std::span<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>;
       using span_t = std::span<const char>; // TODO: should be more generic, but currently broken with mingw
+      using result_t = expected<span_t, parse_error>;
 
       auto start = it;
 
       if (bool(ctx.error)) [[unlikely]] {
-         return expected<span_t, parse_error>{unexpected(parse_error{ctx.error, 0})};
+         return result_t{unexpected(parse_error{ctx.error, 0})};
       }
 
       if constexpr (N == 0) {
-         return std::span{it, end};
+         return result_t{span_t{it, end}};
       }
       else {
          using namespace glz::detail;
 
          skip_ws<Opts>(ctx, it, end);
 
-         expected<span_t, parse_error> ret;
+         result_t ret;
 
          for_each<N>([&](auto I) {
             static constexpr auto key = std::get<I>(tokens);

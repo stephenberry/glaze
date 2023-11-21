@@ -65,6 +65,37 @@ namespace glz
          }
       };
 
+      template <is_bitset T>
+      struct from_binary<T>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            const auto tag = uint8_t(*it);
+
+            constexpr uint8_t type = uint8_t(3) << 3;
+            constexpr uint8_t header = tag::typed_array | type;
+
+            if (tag != header) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            ++it;
+
+            const auto n = int_from_compressed(it, end);
+
+            const auto num_bytes = (value.size() + 7) / 8;
+            for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
+               uint8_t byte;
+               std::memcpy(&byte, &*it, 1);
+               for (size_t bit_i = 0; bit_i < 8 && i < n; ++bit_i, ++i) {
+                  value[i] = byte >> bit_i & uint8_t(1);
+               }
+            }
+         }
+      };
+
       template <>
       struct from_binary<skip>
       {
@@ -182,7 +213,7 @@ namespace glz
                return;
             }
 
-            value = tag >> 3;
+            value = tag >> 4;
             ++it;
          }
       };
@@ -268,6 +299,115 @@ namespace glz
                value.resize(n);
                std::memcpy(value.data(), &(*it), n);
                std::advance(it, n);
+            }
+         }
+      };
+
+      // for set types
+      template <class T>
+         requires(readable_array_t<T> && !emplace_backable<T> && !resizeable<T> && emplaceable<T>)
+      struct from_binary<T> final
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            using V = range_value_t<std::decay_t<T>>;
+
+            const auto tag = uint8_t(*it);
+
+            if constexpr (boolean_like<V>) {
+               constexpr uint8_t type = uint8_t(3) << 3;
+               constexpr uint8_t header = tag::typed_array | type;
+
+               if (tag != header) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               ++it;
+
+               const auto n = int_from_compressed(it, end);
+
+               value.clear();
+
+               const auto num_bytes = (value.size() + 7) / 8;
+               for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
+                  uint8_t byte;
+                  std::memcpy(&byte, &*it, 1);
+                  for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
+                     bool x = byte >> bit_i & uint8_t(1);
+                     value.emplace(x);
+                  }
+               }
+            }
+            else if constexpr (num_t<V>) {
+               constexpr uint8_t type =
+                  std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+               constexpr uint8_t header = tag::typed_array | type | (byte_count<V> << 5);
+
+               if (tag != header) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               ++it;
+
+               const auto n = int_from_compressed(it, end);
+
+               value.clear();
+
+               for (size_t i = 0; i < n; ++i) {
+                  V x;
+                  std::memcpy(&x, &*it, sizeof(V));
+                  std::advance(it, sizeof(V));
+                  value.emplace(x);
+               }
+            }
+            else if constexpr (str_t<V>) {
+               constexpr uint8_t type = uint8_t(3) << 3;
+               constexpr uint8_t string_indicator = uint8_t(1) << 5;
+               constexpr uint8_t header = tag::typed_array | type | string_indicator;
+
+               if (tag != header) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               ++it;
+
+               const auto n = int_from_compressed(it, end);
+
+               value.clear();
+
+               for (size_t i = 0; i < n; ++i) {
+                  const auto length = int_from_compressed(it, end);
+                  V str;
+                  str.resize(length);
+                  std::memcpy(str.data(), &*it, length);
+                  std::advance(it, length);
+                  value.emplace(std::move(str));
+               }
+            }
+            else if constexpr (complex_t<V>) {
+               static_assert(false_v<T>, "TODO");
+            }
+            else {
+               // generic array
+               if ((tag & 0b00000'111) != tag::generic_array) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               ++it;
+
+               const auto n = int_from_compressed(it, end);
+
+               value.clear();
+
+               for (size_t i = 0; i < n; ++i) {
+                  V v;
+                  read<binary>::op<Opts>(v, ctx, it, end);
+                  value.emplace(std::move(v));
+               }
             }
          }
       };

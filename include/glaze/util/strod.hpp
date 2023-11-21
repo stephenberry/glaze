@@ -65,7 +65,7 @@ namespace glz::detail
 #elif defined(_M_X64) || defined(_M_ARM64)
 #define mulhi64 __umulh
 #else
-   uint64_t mulhi64(uint64_t a, uint64_t b) noexcept
+   inline uint64_t mulhi64(uint64_t a, uint64_t b) noexcept
    {
       uint64_t a_lo = (uint32_t)a;
       uint64_t a_hi = a >> 32;
@@ -396,8 +396,8 @@ namespace glz::detail
       }
    };
 
-   template <std::floating_point T, bool force_conformance = false>
-   inline bool parse_float(T& val, auto*& cur) noexcept
+   template <std::floating_point T, bool force_conformance = false> requires (sizeof(T) <= 8)
+   inline bool parse_float(T& val, const uint8_t*& cur) noexcept
    {
       const uint8_t* sig_cut = nullptr; /* significant part cutting position for long number */
       [[maybe_unused]] const uint8_t* sig_end = nullptr; /* significant part ending position */
@@ -742,5 +742,17 @@ namespace glz::detail
       num += raw_t(round);
       std::memcpy(&val, &num, sizeof(T));
       return true;
+   }
+
+   template <std::floating_point T, bool force_conformance = false> requires (sizeof(T) <= 8)
+   inline bool parse_float(T& val, auto& itr) noexcept
+   {
+      const uint8_t* cur = reinterpret_cast<const uint8_t*>(&*itr);
+      const uint8_t* beg = cur;
+      if (parse_float<T, force_conformance>(val, cur)) {
+         itr += (cur - beg);
+         return true;
+      }
+      return false;
    }
 }

@@ -30,6 +30,14 @@
 
 namespace glz
 {
+   // write out a string like type without quoting it
+   template <class T>
+   struct raw_t
+   {
+      using value_type = T;
+      T& val;
+   };
+
    // Allows developers to add `static constexpr auto custom_read = true;` to their glz::meta to prevent ambiguous
    // partial specialization for custom parsers
    template <class T>
@@ -147,8 +155,11 @@ namespace glz
    using range_value_t = std::iter_value_t<iterator_t<R>>;
 
    template <range R>
-   [[nodiscard]] bool empty_range(const R& rng)
+   [[nodiscard]] constexpr bool empty_range(R&& rng)
    {
+#ifdef __cpp_lib_ranges
+      return std::ranges::empty(rng);
+#else
       // in lieu of std::ranges::empty
       if constexpr (requires() {
                        {
@@ -162,11 +173,12 @@ namespace glz
                                rng.size()
                                } -> std::same_as<std::size_t>;
                          }) {
-         return rng.size() == 0;
+         return rng.size() == std::size_t{0};
       }
       else {
          return std::cbegin(rng) == std::cend(rng);
       }
+#endif
    }
 
    template <class T>
@@ -460,6 +472,25 @@ namespace glz
                                        } -> std::same_as<std::true_type>;
                                  } && std::decay_t<T>{}.size() > 0);
 
+      template <typename T>
+      concept is_bitset = requires(T bitset) {
+                             bitset.flip();
+                             bitset.set(0);
+                             {
+                                bitset.to_string()
+                                } -> std::same_as<std::string>;
+                             {
+                                bitset.count()
+                                } -> std::same_as<std::size_t>;
+                          };
+
+      template <class T>
+      concept is_float128 =
+         requires(T x) {
+            requires sizeof(x) == 16;
+            requires std::floating_point<T>;
+         };
+
       template <class T>
       constexpr size_t get_size() noexcept
       {
@@ -495,7 +526,10 @@ namespace glz
                                       };
 
       template <class T>
-      concept null_t = nullable_t<T> || always_null_t<T>;
+      concept raw_nullable = is_specialization_v<T, raw_t> && requires { requires nullable_t<typename T::value_type>; };
+
+      template <class T>
+      concept null_t = nullable_t<T> || always_null_t<T> || raw_nullable<T>;
 
       template <class T>
       concept func_t = requires(T t) {

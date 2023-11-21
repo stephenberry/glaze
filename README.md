@@ -3,25 +3,6 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from C++ 
 
 Glaze also supports binary messages via [BEVE](https://github.com/stephenberry/beve) and CSV support. And, the library has many more useful features for building APIs.
 
-## Breaking Wrapper Changes! (v1.5.1)
-Wrappers now consistently leave off the `()` for less typing
-
-- `glz::quoted` for reading numbers as strings and writing them as strings has been replaced with `glz::quoted_num`
-- The recent `glz::unquote` has been replaced with the name `glz::quoted`, which reads a string into a value and writes the value with quotes. This is less efficient for numbers than `glz::quoted_num`. `glz::quoted_num` also handles nested decoding of numbers unlike `glz::quoted`.
-
-Below shows the format for adding wrappers within glaze metadata.
-```c++
-glz::quoted_num<&T::x> // reads a number as a string and writes it as a string
-glz::quoted<&T::x> // reads a value as a string and unescapes, to avoid the user having to parse twice
-glz::number<&T::x> // reads a string as a number and writes the string as a number
-glz::invoke<&T::func> // invokes a std::function or member function with n-arguments as an array input
-glz::custom<&T::read, &T::write> // calls custom read and write std::functions or member functions
-```
-
-## New Custom JSON Read/Write Support!
-
-Glaze version 1.5.0 adds the ability to register member functions to customize reading and writing. See [Custom Read/Write](#custom-readwrite) for more information.
-
 ## Highlights
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
@@ -31,6 +12,8 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - Direct to memory serialization/deserialization
 - Compile time maps with constant time lookups and perfect hashing
 - Nearly zero intermediate allocations
+- Powerful wrappers to modify read/write behavior ([Wrappers](./docs/wrappers.md))
+- Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
 - Direct memory access through JSON pointer syntax
 - [Tagged binary spec](./docs/binary.md) through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
@@ -39,31 +22,31 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - [JSON-RPC 2.0 support](./docs/json-rpc.md)
 - [JSON Schema generation](./docs/json-schema.md)
 - [CSV Reading/Writing](./docs/csv.md)
-- Much more!
+- [Much more!](#more-features)
 
 ## Performance
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.20**           | **930**      | **1085**    |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.18**           | **925**      | **1141**    |
 | [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1124**    |
-| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.48**           | **713**      | **930**     |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.78**           | **353**      | **539**     |
-| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.53**           | **268**      | **456**     |
-| [**json_struct**](https://github.com/jorgen/json_struct)     | **5.33**           | **167**      | **328**     |
-| [**Boost.JSON**](https://boost.org/libs/json)                | **5.40**           | **180**      | **283**     |
-| [**nlohmann**](https://github.com/nlohmann/json)             | **15.39**          | **79**       | **75**      |
+| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.48**           | **722**      | **912**     |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.77**           | **350**      | **540**     |
+| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.57**           | **270**      | **435**     |
+| [**json_struct**](https://github.com/jorgen/json_struct)     | **5.52**           | **163**      | **325**     |
+| [**Boost.JSON**](https://boost.org/libs/json)                | **5.30**           | **182**      | **294**     |
+| [**nlohmann**](https://github.com/nlohmann/json)             | **14.92**          | **80**       | **79**      |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
-*Note: [simdjson](https://github.com/simdjson/simdjson) is great for parsing, but can experience major performance losses when the data is not in the expected sequence (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user.*
+*Note: [simdjson](https://github.com/simdjson/simdjson) is great, but can experience major performance losses when the data is not in the expected sequence or any keys are missing (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user.*
 
 [ABC Test](https://github.com/stephenberry/json_performance) shows how simdjson has poor performance when keys are not in the expected sequence:
 
-| Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
-| ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **2.22**           | **1271**     | **662**     |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **91**      |
+| Library                                                      | Read (MB/s) |
+| ------------------------------------------------------------ | ----------- |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **632**     |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **107**     |
 
 ## Binary Performance
 
@@ -85,8 +68,6 @@ Binary message size: 564 bytes
 [Actions](https://github.com/stephenberry/glaze/actions) automatically build and test with [Clang](https://clang.llvm.org), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/), and [GCC](https://gcc.gnu.org) compilers on apple, windows, and linux.
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc_2022.yml/badge.svg) 
-
-> MSVC 2019 is no longer supported as of v1.3.0
 
 ## Example
 
@@ -197,7 +178,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze)
 ### [Conan](https://conan.io)
 
 - [Glaze Conan recipe](https://github.com/Ahajha/glaze-conan)
-- Also included in [Conan Center](https://conan.io/center/)
+- Also included in [Conan Center](https://conan.io/center/) ![Conan Center](https://img.shields.io/conan/v/glaze)
 
 ```
 find_package(glaze REQUIRED)
@@ -239,7 +220,7 @@ struct my_struct
 };
 ```
 
-> Template specialization of `glz::meta` is preferred when separating class definition from the serialization mapping. Local glaze metadata is helpful for working within the local namespace or when the class itself is templated.
+> Template specialization of `glz::meta` is preferred when separating class definition from the serialization mapping. Local glaze metadata is helpful for working within the local namespace.
 
 ## Struct Registration Macros
 
@@ -272,7 +253,7 @@ struct local_macro_t {
 
 Custom reading and writing can be achieved through the powerful `to_json`/`from_json` specialization approach, which is described here: [custom-serialization.md](https://github.com/stephenberry/glaze/blob/main/docs/custom-serialization.md). However, this only works for user defined types.
 
-For common use cases or cases where a specific member variable should have special reading and writing, you can use `glz::custom` to register read/write member functions or std::functions.
+For common use cases or cases where a specific member variable should have special reading and writing, you can use `glz::custom` to register read/write member functions, std::functions, or lambda functions.
 
 See an example:
 
@@ -826,6 +807,8 @@ glz::read_ndjson(x, s);
 ### [JSON Schema](./docs/json-schema.md)
 
 ### [JSON Include System](./docs/json-include.md)
+
+### [Wrappers](./docs/wrappers.md)
 
 # Extensions
 

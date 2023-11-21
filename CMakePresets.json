@@ -15,7 +15,8 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "glaze_DEVELOPER_MODE": true,
-                "BUILD_TESTING": true
+                "BUILD_TESTING": true,
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true
             }
         },
         {
@@ -27,18 +28,32 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
                 "glaze_DEVELOPER_MODE": false,
-                "BUILD_TESTING": false
+                "BUILD_TESTING": false,
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true
             }
         },
         {
-            "name": "Clang 17",
-            "displayName": "Clang 17.0.2 x86_64-pc-linux-gnu",
+            "name": "clang_latest",
+            "displayName": "Clang 17.0.3 x86_64-pc-linux-gnu",
             "description": "Using compilers: C = /usr/bin/clang-17, CXX = /usr/bin/clang++-17",
             "binaryDir": "${sourceDir}/out/build/${presetName}",
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
                 "CMAKE_C_COMPILER": "/usr/bin/clang-17",
                 "CMAKE_CXX_COMPILER": "/usr/bin/clang++-17",
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": true
+            }
+        },
+        {
+            "name": "gcc",
+            "displayName": "GCC 13.1.0 x86_64-linux-gnu",
+            "description": "Using compilers: C = /usr/bin/gcc, CXX = /usr/bin/g++",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "/usr/bin/gcc",
+                "CMAKE_CXX_COMPILER": "/usr/bin/g++",
                 "CMAKE_BUILD_TYPE": "Debug"
             }
         }

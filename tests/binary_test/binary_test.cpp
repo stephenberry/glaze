@@ -10,6 +10,8 @@
 #include <deque>
 #include <list>
 #include <map>
+#include <set>
+#include <unordered_set>
 
 #include "boost/ut.hpp"
 #include "glaze/binary/read.hpp"
@@ -549,13 +551,14 @@ struct includer_struct
 {
    std::string str = "Hello";
    int i = 55;
+   bool j{false};
 };
 
 template <>
 struct glz::meta<includer_struct>
 {
    using T = includer_struct;
-   static constexpr auto value = object("#include", glz::file_include{}, "str", &T::str, "i", &T::i);
+   static constexpr auto value = object("#include", glz::file_include{}, "str", &T::str, "i", &T::i, "j", &T::j);
 };
 
 void file_include_test()
@@ -566,11 +569,13 @@ void file_include_test()
 
    obj.str = "";
    obj.i = 0;
+   obj.j = true;
 
    expect(glz::read_file_binary(obj, "../alabastar.beve", std::string{}) == glz::error_code::none);
 
    expect(obj.str == "Hello") << obj.str;
    expect(obj.i == 55) << obj.i;
+   expect(obj.j == false) << obj.j;
 }
 
 void container_types()
@@ -958,6 +963,88 @@ suite skip_test = [] {
 
       nothing obj{};
       expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false}>(obj, s));
+   };
+};
+
+suite set_tests = [] {
+   "unordered_set<string>"_test = [] {
+      std::unordered_set<std::string> set{"one", "two", "three"};
+
+      std::string s{};
+      glz::write_binary(set, s);
+
+      set.clear();
+
+      expect(!glz::read_binary(set, s));
+      expect(set.contains("one"));
+      expect(set.contains("two"));
+      expect(set.contains("three"));
+   };
+
+   "unordered_set<uint32_t>"_test = [] {
+      std::unordered_set<uint32_t> set{0, 1, 2};
+
+      std::string s{};
+      glz::write_binary(set, s);
+
+      set.clear();
+
+      expect(!glz::read_binary(set, s));
+      expect(set.contains(0));
+      expect(set.contains(1));
+      expect(set.contains(2));
+   };
+
+   "set<string>"_test = [] {
+      std::set<std::string> set{"one", "two", "three"};
+
+      std::string s{};
+      glz::write_binary(set, s);
+
+      set.clear();
+
+      expect(!glz::read_binary(set, s));
+      expect(set.contains("one"));
+      expect(set.contains("two"));
+      expect(set.contains("three"));
+   };
+
+   "set<uint32_t>"_test = [] {
+      std::set<uint32_t> set{0, 1, 2};
+
+      std::string s{};
+      glz::write_binary(set, s);
+
+      set.clear();
+
+      expect(!glz::read_binary(set, s));
+      expect(set.contains(0));
+      expect(set.contains(1));
+      expect(set.contains(2));
+   };
+};
+
+suite bitset = [] {
+   "bitset"_test = [] {
+      std::bitset<8> b = 0b10101010;
+
+      std::string s{};
+      glz::write_binary(b, s);
+
+      b.reset();
+      expect(!glz::read_binary(b, s));
+      expect(b == 0b10101010);
+   };
+
+   "bitset16"_test = [] {
+      std::bitset<16> b = 0b10010010'00000010;
+
+      std::string s{};
+      glz::write_binary(b, s);
+
+      b.reset();
+      expect(!glz::read_binary(b, s));
+      expect(b == 0b10010010'00000010);
    };
 };
 

@@ -56,11 +56,11 @@ namespace glz
             if constexpr (int_t<V>) {
                if constexpr (std::is_unsigned_v<V>) {
                   uint64_t i{};
-                  if (*it == '-') {
+                  if (*it == '-') [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  auto e = stoui64(i, it);
+                  auto e = stoui64<V>(i, it);
                   if (!e) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
@@ -79,7 +79,7 @@ namespace glz
                      sign = -1;
                      ++it;
                   }
-                  auto e = stoui64(i, it);
+                  auto e = stoui64<V>(i, it);
                   if (!e) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
@@ -93,17 +93,11 @@ namespace glz
                }
             }
             else {
-               // TODO: fix this also, taken from json
-               using X =
-                  std::conditional_t<std::is_const_v<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>,
-                                     const uint8_t*, uint8_t*>;
-               auto cur = reinterpret_cast<X>(it);
-               auto s = parse_float<V, Opts.force_conformance>(value, cur);
+               auto s = parse_float<V, Opts.force_conformance>(value, it);
                if (!s) [[unlikely]] {
                   ctx.error = error_code::parse_number_failure;
                   return;
                }
-               it = reinterpret_cast<std::remove_reference_t<decltype(it)>>(cur);
             }
          }
       };

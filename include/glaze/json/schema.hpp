@@ -3,6 +3,7 @@
 #pragma once
 
 #include "glaze/api/impl.hpp"
+#include "glaze/json/quoted.hpp"
 #include "glaze/json/write.hpp"
 
 namespace glz
@@ -17,9 +18,7 @@ namespace glz
       std::optional<std::string_view> description{};
       std::optional<schema_any> default_value{};
       std::optional<bool> deprecated{};
-#ifdef __cpp_lib_constexpr_vector
-      std::optional<std::vector<schema_any>> examples{};
-#endif
+      std::optional<std::span<const std::string_view>> examples{};
       std::optional<bool> read_only{};
       std::optional<bool> write_only{};
       // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
@@ -37,10 +36,8 @@ namespace glz
       // object only keywords
       std::optional<std::uint64_t> min_properties{};
       std::optional<std::uint64_t> max_properties{};
-//      std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
-#ifdef __cpp_lib_constexpr_vector
-      std::optional<std::vector<std::string_view>> required{};
-#endif
+      //      std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
+      std::optional<std::span<const std::string_view>> required{};
       // array only keywords
       std::optional<std::uint64_t> min_items{};
       std::optional<std::uint64_t> max_items{};
@@ -60,9 +57,7 @@ namespace glz
                                                    "description", &T::description, //
                                                    "default", &T::default_value, //
                                                    "deprecated", &T::deprecated, //
-#ifdef __cpp_lib_constexpr_vector
-                                                   "examples", &T::examples, //
-#endif
+                                                   "examples", raw<&T::examples>, //
                                                    "readOnly", &T::read_only, //
                                                    "writeOnly", &T::write_only, //
                                                    "const", &T::constant, //
@@ -76,10 +71,8 @@ namespace glz
                                                    "multipleOf", &T::multiple_of, //
                                                    "minProperties", &T::min_properties, //
                                                    "maxProperties", &T::max_properties, //
-//               "dependentRequired", &T::dependent_required, //
-#ifdef __cpp_lib_constexpr_vector
+                                                   //               "dependentRequired", &T::dependent_required, //
                                                    "required", &T::required, //
-#endif
                                                    "minItems", &T::min_items, //
                                                    "maxItems", &T::max_items, //
                                                    "minContains", &T::min_contains, //
@@ -102,6 +95,8 @@ namespace glz
          std::optional<std::map<std::string_view, schematic, std::less<>>> defs{};
          std::optional<std::vector<std::string_view>> enumeration{}; // enum
          std::optional<std::vector<schematic>> oneOf{};
+         std::optional<std::span<const std::string_view>> required{};
+         std::optional<std::span<const std::string_view>> examples{};
       };
    }
 }
@@ -119,7 +114,9 @@ struct glz::meta<glz::detail::schematic>
                                              "$defs", &T::defs, //
                                              "enum", &T::enumeration, //
                                              "oneOf", &T::oneOf, //
-                                             "const", &T::constant);
+                                             "const", &T::constant, //
+                                             "required", &T::required, //
+                                             "examples", raw<&T::examples>);
 };
 
 namespace glz
@@ -317,6 +314,15 @@ namespace glz
             s.type = {"object"};
 
             using V = std::decay_t<T>;
+
+            if constexpr (requires { meta<V>::required; }) {
+               s.required = meta<V>::required;
+            }
+
+            if constexpr (requires { meta<V>::examples; }) {
+               s.examples = meta<V>::examples;
+            }
+
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
             s.properties = std::map<std::string_view, schema, std::less<>>();
             for_each<N>([&](auto I) {
