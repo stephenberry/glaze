@@ -13,7 +13,9 @@
 #include <map>
 #include <random>
 #include <ranges>
+#if defined(__STDCPP_FLOAT128_T__)
 #include <stdfloat>
+#endif
 #include <tuple>
 #include <unordered_map>
 #include <variant>
@@ -5803,6 +5805,7 @@ suite bitset = [] {
    };
 };
 
+#if defined(__STDCPP_FLOAT128_T__)
 suite float128_test = [] {
    "float128"_test = [] {
       std::float128_t x = 3.14;
@@ -5815,6 +5818,7 @@ suite float128_test = [] {
       expect(x == 3.14);
    };
 };
+#endif
 
 int main()
 {
