@@ -37,6 +37,7 @@
 #include "glaze/file/file_ops.hpp"
 #include "glaze/json.hpp"
 #include "glaze/record/recorder.hpp"
+#include "glaze/reflection/reflect.hpp"
 
 namespace glz
 {

@@ -4,7 +4,6 @@
 
 #include "boost/ut.hpp"
 #include "glaze/glaze.hpp"
-#include "glaze/reflection/reflect.hpp"
 
 using namespace boost::ut;
 
