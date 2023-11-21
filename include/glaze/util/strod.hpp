@@ -749,7 +749,7 @@ namespace glz::detail
    {
       const uint8_t* cur = reinterpret_cast<const uint8_t*>(&*itr);
       const uint8_t* beg = cur;
-      if (parse_float<T,force_conformance>(val, cur)) {
+      if (parse_float<T, force_conformance>(val, cur)) {
          itr += (cur - beg);
          return true;
       }
