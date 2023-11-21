@@ -53,19 +53,19 @@ namespace glz
       constexpr decltype(auto) to_tuple(T& t) {
          static constexpr auto N = count_members<std::decay_t<T>>();
          if constexpr (N == 0) {
-            return std::tuple{};
+            return tuplet::tuple{};
          } else if constexpr (N == 1) {
             auto&& [p] = t;
-            return std::tuple{p};
+            return tuplet::tuple{p};
          } else if constexpr (N == 2) {
             auto&& [p0, p1] = t;
-            return std::tuple{p0, p1};
+            return tuplet::tuple{p0, p1};
          } else if constexpr (N == 3) {
             auto&& [p0, p1, p2] = t;
-            return std::tuple{p0, p1, p2};
+            return tuplet::tuple{p0, p1, p2};
          } else if constexpr (N == 4) {
             auto&& [p0, p1, p2, p3] = t;
-            return std::tuple{p0, p1, p2, p3};
+            return tuplet::tuple{p0, p1, p2, p3};
          }
       }
 
@@ -75,7 +75,7 @@ namespace glz
          template <auto Options>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
-            auto members = member_names<T>();
+            constexpr auto members = member_names<T>();
             auto t = to_tuple(value);
             using V = decltype(t);
             static constexpr auto N = std::tuple_size_v<V>;
@@ -93,7 +93,7 @@ namespace glz
             bool first = true;
             for_each<N>([&](auto I) {
                static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-               decltype(auto) item = std::get<I>(t);
+               decltype(auto) item = tuplet::get<I>(t);
                using val_t = std::decay_t<decltype(item)>;
 
                if (skip_member<Opts>(item)) {
