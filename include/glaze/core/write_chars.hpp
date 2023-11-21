@@ -70,7 +70,7 @@ namespace glz::detail
          }
          else if constexpr (is_float128<V>) {
             auto start = data_ptr(b) + ix;
-            auto [ptr, ec] = std::to_chars(start, data_ptr(b) + b.size(), value, std::chars_format::scientific);
+            auto [ptr, ec] = std::to_chars(start, data_ptr(b) + b.size(), value, std::chars_format::general);
             if (ec != std::errc()) {
                // TODO: Do we need to handle this error state?
             }

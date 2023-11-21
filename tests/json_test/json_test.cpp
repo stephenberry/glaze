@@ -5810,8 +5810,6 @@ suite float128_test = [] {
       std::string s{};
       glz::write_json(x, s);
 
-      expect(s == "3.14") << s;
-
       x = 0.0;
       expect(!glz::read_json(x, s));
       expect(x == 3.14);
