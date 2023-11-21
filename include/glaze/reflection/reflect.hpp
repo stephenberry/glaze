@@ -200,7 +200,7 @@ namespace glz
             }
             else {
                return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
-                  {std::pair<sv, value_t>{sv(members[I]), nullptr}...});
+                  {std::pair<sv, value_t>{sv(members[I]), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
             }
          };
 
@@ -233,6 +233,13 @@ namespace glz
             static constexpr auto num_members = std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
             // Only used if error_on_missing_keys = true
             [[maybe_unused]] bit_array<num_members> fields{};
+
+            auto frozen_map = make_reflection_map<T, Opts.use_hash_comparison>();
+            // we have to populate the pointers in the reflection map from the structured binding
+            auto t = to_tuple(value);
+            for_each<num_members>([&](auto I) {
+               std::get<std::add_pointer_t<std::decay_t<decltype(tuplet::get<I>(t))>>>(std::get<I>(frozen_map.items).second) = &tuplet::get<I>(t);
+            });
 
             bool first = true;
             while (true) {
@@ -292,8 +299,6 @@ namespace glz
 
                   // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
                   // whitespace and the colon must run after checking if the key exists
-
-                  static constexpr auto frozen_map = make_reflection_map<T, Opts.use_hash_comparison>();
                   if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
                      parse_object_entry_sep<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
