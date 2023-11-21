@@ -1687,18 +1687,18 @@ namespace glz
       struct variant_types<std::variant<Ts...>>
       {
          // TODO this way of filtering types is compile time intensive.
-         using bool_types = decltype(std::tuple_cat(std::conditional_t<bool_t<remove_meta_wrapper_t<Ts>>, std::tuple<Ts>, std::tuple<>>{}...));
-         using number_types = decltype(std::tuple_cat(
-            std::conditional_t<num_t<remove_meta_wrapper_t<Ts>>, std::tuple<Ts>, std::tuple<>>{}...));
-         using string_types = decltype(std::tuple_cat(std::conditional_t < str_t<remove_meta_wrapper_t<Ts>> || glaze_enum_t<remove_meta_wrapper_t<Ts>>,
-                                                      std::tuple<Ts>, std::tuple < >> {}...));
+         using bool_types = decltype(tuplet::tuple_cat(std::conditional_t<bool_t<remove_meta_wrapper_t<Ts>>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
+         using number_types = decltype(tuplet::tuple_cat(
+            std::conditional_t<num_t<remove_meta_wrapper_t<Ts>>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
+         using string_types = decltype(tuplet::tuple_cat(std::conditional_t < str_t<remove_meta_wrapper_t<Ts>> || glaze_enum_t<remove_meta_wrapper_t<Ts>>,
+                                                      tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
          using object_types =
-            decltype(std::tuple_cat(std::conditional_t < readable_map_t<Ts> || writable_map_t<Ts> || glaze_object_t<Ts>,
-                                    std::tuple<Ts>, std::tuple < >> {}...));
-         using array_types = decltype(std::tuple_cat(std::conditional_t < array_t<remove_meta_wrapper_t<Ts>> || glaze_array_t<Ts>,
-                                                     std::tuple<Ts>, std::tuple < >> {}...));
+            decltype(tuplet::tuple_cat(std::conditional_t < readable_map_t<Ts> || writable_map_t<Ts> || glaze_object_t<Ts>,
+                                    tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
+         using array_types = decltype(tuplet::tuple_cat(std::conditional_t < array_t<remove_meta_wrapper_t<Ts>> || glaze_array_t<Ts>,
+                                                     tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
          using nullable_types =
-            decltype(std::tuple_cat(std::conditional_t<null_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+            decltype(tuplet::tuple_cat(std::conditional_t<null_t<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
       };
 
       // post process output of variant_types
@@ -1706,12 +1706,12 @@ namespace glz
       struct tuple_types;
 
       template <typename... Ts>
-      struct tuple_types<std::tuple<Ts...>>
+      struct tuple_types<tuplet::tuple<Ts...>>
       {
          using glaze_const_types =
-            decltype(std::tuple_cat(std::conditional_t<glaze_const_value_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+            decltype(tuplet::tuple_cat(std::conditional_t<glaze_const_value_t<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
          using glaze_non_const_types =
-            decltype(std::tuple_cat(std::conditional_t<!glaze_const_value_t<Ts>, std::tuple<Ts>, std::tuple<>>{}...));
+            decltype(tuplet::tuple_cat(std::conditional_t<!glaze_const_value_t<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
       };
 
       template <typename tuple_types_t>
