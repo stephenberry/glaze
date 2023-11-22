@@ -3,7 +3,7 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from C++ 
 
 Glaze also supports binary messages via [BEVE](https://github.com/stephenberry/beve) and CSV support. And, the library has many more useful features for building APIs.
 
-## New Version 1.6.1 Clang Reflection!
+## New Version 1.7.0 Clang Reflection!
 
 For the Clang compiler only, Glaze will reflect your structs. No need to write any `glz::meta` structures or use any macros. The reflection is hidden from the user and computed at compile time.
 
