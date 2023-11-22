@@ -99,8 +99,7 @@ namespace glz
    template <size_t Start, class Tuple, size_t... Is>
    constexpr auto make_group(Tuple&& t, std::index_sequence<Is...>)
    {
-      auto get_elem = [&](auto i) {
-         constexpr auto I = decltype(i)::value;
+      auto get_elem = [&](auto I) {
          using type = decltype(glz::tuplet::get<Start + I>(t));
          if constexpr (I == 0 || std::convertible_to<type, std::string_view>) {
             return std::string_view(glz::tuplet::get<Start + I>(t));
