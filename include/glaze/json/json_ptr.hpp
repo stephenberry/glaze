@@ -439,9 +439,8 @@ namespace glz
    template <size_t N, auto& Arr>
    inline constexpr auto sub_group(const auto start)
    {
-      constexpr auto arr = Arr; // Msvc currently generates an internal compiler error otherwise
       std::array<sv, N> ret;
-      std::transform(arr.begin() + start, arr.begin() + start + N, ret.begin(), remove_first_key);
+      std::transform(Arr.begin() + start, Arr.begin() + start + N, ret.begin(), remove_first_key);
       return ret;
    }
 
