@@ -804,10 +804,9 @@ namespace glz
       template <const std::string_view& S>
       GLZ_ALWAYS_INLINE constexpr auto array_from_sv() noexcept
       {
-         constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
-         constexpr auto N = s.size();
+         constexpr auto N = S.size();
          std::array<char, N> arr;
-         std::copy_n(s.data(), N, arr.data());
+         std::copy_n(S.data(), N, arr.data());
          return arr;
       }
 
