@@ -83,11 +83,11 @@ namespace glz
             dump<'['>(b, ix);
 
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::tuplet::get<I>(meta_v<T>);
+               static constexpr auto item = glz::get<I>(meta_v<T>);
 
-               if (get_member(value, glz::tuplet::get<1>(item))) {
+               if (get_member(value, glz::get<1>(item))) {
                   dump<'"'>(b, ix);
-                  dump(glz::tuplet::get<0>(item), b, ix);
+                  dump(glz::get<0>(item), b, ix);
                   dump<'"'>(b, ix);
                   dump<','>(b, ix);
                }
@@ -686,10 +686,10 @@ namespace glz
             }
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value.value, glz::tuplet::get<I>(meta_v<T>)), ctx, args...);
+                  write<json>::op<Opts>(get_member(value.value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
                else {
-                  write<json>::op<Opts>(glz::tuplet::get<I>(value.value), ctx, args...);
+                  write<json>::op<Opts>(glz::get<I>(value.value), ctx, args...);
                }
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
@@ -730,10 +730,10 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx, args...);
+                  write<json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
                else {
-                  write<json>::op<Opts>(glz::tuplet::get<I>(value), ctx, args...);
+                  write<json>::op<Opts>(glz::get<I>(value), ctx, args...);
                }
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
@@ -804,10 +804,9 @@ namespace glz
       template <const std::string_view& S>
       GLZ_ALWAYS_INLINE constexpr auto array_from_sv() noexcept
       {
-         constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
-         constexpr auto N = s.size();
+         constexpr auto N = S.size();
          std::array<char, N> arr;
-         std::copy_n(s.data(), N, arr.data());
+         std::copy_n(S.data(), N, arr.data());
          return arr;
       }
 
@@ -843,7 +842,7 @@ namespace glz
             bool first = true;
             for_each<N>([&](auto I) {
                static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-               decltype(auto) item = glz::tuplet::get<2 * I + 1>(value.value);
+               decltype(auto) item = glz::get<2 * I + 1>(value.value);
                using val_t = std::decay_t<decltype(item)>;
 
                if (skip_member<Opts>(item)) {
@@ -870,7 +869,7 @@ namespace glz
                   using Key = typename std::decay_t<std::tuple_element_t<2 * I, V>>;
 
                   if constexpr (str_t<Key> || char_t<Key>) {
-                     const sv key = glz::tuplet::get<2 * I>(value.value);
+                     const sv key = glz::get<2 * I>(value.value);
                      write<json>::op<Opts>(key, ctx, b, ix);
                      dump<':'>(b, ix);
                      if constexpr (Opts.prettify) {
@@ -918,7 +917,7 @@ namespace glz
             static constexpr auto N = std::tuple_size_v<V>;
 
             for_each<N>([&](auto I) {
-               write<json>::op<opening_and_closing_handled<Options>()>(glz::tuplet::get<I>(value.value), ctx, b, ix);
+               write<json>::op<opening_and_closing_handled<Options>()>(glz::get<I>(value.value), ctx, b, ix);
                if constexpr (I < N - 1) {
                   dump<','>(b, ix);
                }
@@ -955,7 +954,7 @@ namespace glz
             bool first = true;
             for_each<N>([&](auto I) {
                static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-               static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
+               static constexpr auto item = glz::get<I>(meta_v<V>);
                using mptr_t = std::tuple_element_t<1, decltype(item)>;
                using val_t = member_t<V, mptr_t>;
 
@@ -965,13 +964,13 @@ namespace glz
                   else {
                      auto is_null = [&]() {
                         if constexpr (std::is_member_pointer_v<mptr_t>) {
-                           return !bool(value.*glz::tuplet::get<1>(item));
+                           return !bool(value.*glz::get<1>(item));
                         }
                         else if constexpr (raw_nullable<val_t>) {
-                           return !bool(glz::tuplet::get<1>(item)(value).val);
+                           return !bool(glz::get<1>(item)(value).val);
                         }
                         else {
-                           return !bool(glz::tuplet::get<1>(item)(value));
+                           return !bool(glz::get<1>(item)(value));
                         }
                      }();
                      if (is_null) return;
@@ -998,7 +997,7 @@ namespace glz
                   using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
 
                   if constexpr (str_t<Key> || char_t<Key>) {
-                     static constexpr sv key = glz::tuplet::get<0>(item);
+                     static constexpr sv key = glz::get<0>(item);
                      if constexpr (needs_escaping(key)) {
                         write<json>::op<Opts>(key, ctx, b, ix);
                         dump<':'>(b, ix);
@@ -1019,16 +1018,16 @@ namespace glz
                   }
                   else {
                      static constexpr auto quoted_key =
-                        concat_arrays(concat_arrays("\"", glz::tuplet::get<0>(item)), "\":", Opts.prettify ? " " : "");
+                        concat_arrays(concat_arrays("\"", glz::get<0>(item)), "\":", Opts.prettify ? " " : "");
                      write<json>::op<Opts>(quoted_key, ctx, b, ix);
                   }
 
-                  write<json>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, b, ix);
+                  write<json>::op<Opts>(get_member(value, glz::get<1>(item)), ctx, b, ix);
 
                   static constexpr auto S = std::tuple_size_v<decltype(item)>;
                   if constexpr (Opts.comments && S > 2) {
-                     if constexpr (std::is_convertible_v<decltype(glz::tuplet::get<2>(item)), std::string_view>) {
-                        static constexpr sv comment = glz::tuplet::get<2>(item);
+                     if constexpr (std::is_convertible_v<decltype(glz::get<2>(item)), std::string_view>) {
+                        static constexpr sv comment = glz::get<2>(item);
                         if constexpr (comment.size() > 0) {
                            if constexpr (Opts.prettify) {
                               dump<' '>(b, ix);

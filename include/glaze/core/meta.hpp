@@ -201,7 +201,7 @@ namespace glz
 
       if constexpr (detail::glaze_t<T>) {
          using U = std::underlying_type_t<T>;
-         return glz::tuplet::get<0>(glz::tuplet::get<static_cast<U>(Enum)>(meta_v<T>));
+         return glz::get<0>(glz::get<static_cast<U>(Enum)>(meta_v<T>));
       }
       else {
          return "glz::unknown";

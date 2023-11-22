@@ -11,7 +11,6 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
-#include "glaze/util/murmur.hpp"
 #include "glaze/util/variant.hpp"
 
 namespace glz
@@ -153,9 +152,9 @@ namespace glz
             std::array<uint8_t, byte_length<T>()> data{};
 
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::tuplet::get<I>(meta_v<T>);
+               static constexpr auto item = glz::get<I>(meta_v<T>);
 
-               data[I / 8] |= static_cast<uint8_t>(get_member(value, glz::tuplet::get<1>(item))) << (7 - (I % 8));
+               data[I / 8] |= static_cast<uint8_t>(get_member(value, glz::get<1>(item))) << (7 - (I % 8));
             });
 
             dump(data, b, ix);
@@ -466,9 +465,9 @@ namespace glz
             dump_compressed_int<N>(args...);
 
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
-               write<binary>::no_header<Opts>(glz::tuplet::get<0>(item), ctx, args...);
-               write<binary>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, args...);
+               static constexpr auto item = glz::get<I>(meta_v<V>);
+               write<binary>::no_header<Opts>(glz::get<0>(item), ctx, args...);
+               write<binary>::op<Opts>(get_member(value, glz::get<1>(item)), ctx, args...);
             });
          }
       };
@@ -487,7 +486,7 @@ namespace glz
 
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-               write<binary>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<V>)), ctx, args...);
+               write<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, args...);
             });
          }
       };
@@ -551,7 +550,7 @@ namespace glz
 
          if constexpr (detail::glaze_object_t<std::decay_t<T>>) {
             for_each<N>([&](auto I) {
-               static constexpr auto group = glz::tuplet::get<I>(groups);
+               static constexpr auto group = glz::get<I>(groups);
 
                static constexpr auto key = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
@@ -567,7 +566,7 @@ namespace glz
          }
          else if constexpr (detail::writable_map_t<std::decay_t<T>>) {
             for_each<N>([&](auto I) {
-               static constexpr auto group = glz::tuplet::get<I>(groups);
+               static constexpr auto group = glz::get<I>(groups);
 
                static constexpr auto key_value = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);

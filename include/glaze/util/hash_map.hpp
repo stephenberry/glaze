@@ -532,15 +532,13 @@ namespace glz::detail
    struct micro_map1
    {
       std::array<std::pair<std::string_view, T>, 1> items{};
-
-      static constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
-
+      
       constexpr decltype(auto) begin() const { return items.begin(); }
       constexpr decltype(auto) end() const { return items.end(); }
 
       constexpr decltype(auto) find(auto&& key) const noexcept
       {
-         if (s == key) [[likely]] {
+         if (S == key) [[likely]] {
             return items.begin();
          }
          else [[unlikely]] {
@@ -552,17 +550,16 @@ namespace glz::detail
    template <const std::string_view& S, bool CheckSize = true>
    inline constexpr bool cx_string_cmp(const std::string_view key) noexcept
    {
-      constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
-      constexpr auto n = s.size();
+      constexpr auto n = S.size();
       if (std::is_constant_evaluated()) {
-         return key == s;
+         return key == S;
       }
       else {
          if constexpr (CheckSize) {
-            return (key.size() == n) && (std::memcmp(key.data(), s.data(), n) == 0);
+            return (key.size() == n) && (std::memcmp(key.data(), S.data(), n) == 0);
          }
          else {
-            return std::memcmp(key.data(), s.data(), n) == 0;
+            return std::memcmp(key.data(), S.data(), n) == 0;
          }
       }
    }
@@ -571,12 +568,9 @@ namespace glz::detail
    struct micro_map2
    {
       std::array<std::pair<std::string_view, T>, 2> items{};
-
-      static constexpr auto s0 = S0; // Needed for MSVC to avoid an internal compiler error
-      static constexpr auto s1 = S1; // Needed for MSVC to avoid an internal compiler error
-
+      
       static constexpr bool same_size =
-         s0.size() == s1.size(); // if we need to check the size again on the second compare
+         S0.size() == S1.size(); // if we need to check the size again on the second compare
       static constexpr bool check_size = !same_size;
 
       constexpr decltype(auto) begin() const { return items.begin(); }
@@ -585,16 +579,16 @@ namespace glz::detail
       constexpr decltype(auto) find(auto&& key) const noexcept
       {
          if constexpr (same_size) {
-            constexpr auto n = s0.size();
+            constexpr auto n = S0.size();
             if (key.size() != n) {
                return items.end();
             }
          }
 
-         if (cx_string_cmp<s0, check_size>(key)) {
+         if (cx_string_cmp<S0, check_size>(key)) {
             return items.begin();
          }
-         else if (cx_string_cmp<s1, check_size>(key)) {
+         else if (cx_string_cmp<S1, check_size>(key)) {
             return items.begin() + 1;
          }
          else [[unlikely]] {
