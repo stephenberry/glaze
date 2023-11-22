@@ -21,7 +21,7 @@ namespace glz
          static constexpr auto value = V;
       };
 
-      template <const std::string_view&... Strs>
+      template <const auto&... Strs>
       inline constexpr std::string_view join()
       {
          constexpr auto joined_arr = []() {
@@ -38,7 +38,7 @@ namespace glz
          return {static_arr.data(), static_arr.size() - 1};
       }
       // Helper to get the value out
-      template <const std::string_view&... Strs>
+      template <const auto&... Strs>
       constexpr auto join_v = join<Strs...>();
    }
 

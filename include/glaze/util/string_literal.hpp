@@ -10,16 +10,18 @@ namespace glz
    template <size_t N>
    struct string_literal
    {
-      static constexpr size_t size = (N > 0) ? (N - 1) : 0;
+      static constexpr size_t length = (N > 0) ? (N - 1) : 0;
+      
+      constexpr size_t size() const noexcept { return length; }
 
-      constexpr string_literal() = default;
+      constexpr string_literal() noexcept = default;
 
-      constexpr string_literal(const char (&str)[N]) { std::copy_n(str, N, value); }
+      constexpr string_literal(const char (&str)[N]) noexcept { std::copy_n(str, N, value); }
 
       char value[N];
-      constexpr const char* end() const noexcept { return value + size; }
+      constexpr const char* end() const noexcept { return value + length; }
 
-      constexpr const std::string_view sv() const noexcept { return {value, size}; }
+      constexpr const std::string_view sv() const noexcept { return {value, length}; }
    };
 
    template <size_t N>
