@@ -29,8 +29,8 @@ struct glz::meta<float_compare_t>
 
 suite comparison = [] {
    "float comparison"_test = [] {
-      float_compare_t obj0{3.14, 5.5, 0.0};
-      float_compare_t obj1{3.15, 5.55, 0.099};
+      float_compare_t obj0{3.14f, 5.5, 0.0};
+      float_compare_t obj1{3.15f, 5.55, 0.099};
 
       expect(glz::approx_equal_to{}(obj0, obj1));
 
@@ -46,8 +46,8 @@ suite comparison = [] {
 
 suite equality = [] {
    "float equality"_test = [] {
-      float_compare_t obj0{3.14, 5.5, 0.0};
-      float_compare_t obj1{3.15, 5.55, 0.099};
+      float_compare_t obj0{3.14f, 5.5, 0.0};
+      float_compare_t obj1{3.15f, 5.55, 0.099};
 
       expect(!glz::equal_to{}(obj0, obj1));
 
