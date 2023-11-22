@@ -48,11 +48,12 @@ namespace glz
    }
 }
 
-#if __has_include(<expected>)
+// C++23 or later
+#if __cplusplus >= 202302L && __has_include(<expected>)
 #include <expected>
 #endif
 
-#ifdef __cpp_lib_expected
+#if __cplusplus >= 202302L && defined(__cpp_lib_expected)
 namespace glz
 {
    template <class expected_t, class unexpected_t>
