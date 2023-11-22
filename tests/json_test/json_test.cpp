@@ -927,9 +927,9 @@ suite json_pointer = [] {
       glz::set(tuple, "/0", 5);
       glz::set(tuple, "/1", 42.0);
       glz::set(tuple, "/2", "fish");
-      expect(glz::tuplet::get<0>(tuple) == 5.0);
-      expect(glz::tuplet::get<1>(tuple) == 42.0);
-      expect(glz::tuplet::get<2>(tuple) == "fish");
+      expect(glz::get<0>(tuple) == 5.0);
+      expect(glz::get<1>(tuple) == 42.0);
+      expect(glz::get<2>(tuple) == "fish");
    };*/
 
    "set tuple"_test = [] {
@@ -4716,7 +4716,7 @@ suite json_logging = [] {
       auto obj = glz::obj{
          "pi", 3.141, "happy", true, "name", "Stephen", "map", map, "arr", glz::arr{"Hello", "World", 2}, "vec", vec};
 
-      glz::tuplet::get<0>(map.value) = "aa"; // testing lvalue reference storage
+      glz::get<0>(map.value) = "aa"; // testing lvalue reference storage
 
       std::string s{};
       glz::write_json(obj, s);
@@ -4748,7 +4748,7 @@ suite json_logging = [] {
       glz::obj obj0{"pi", 3.141};
       glz::obj obj1{"happy", true};
       auto merged = glz::merge{obj0, obj1, glz::obj{"arr", glz::arr{"Hello", "World", 2}}};
-      glz::tuplet::get<0>(obj0.value) = "pie"; // testing that we have an lvalue reference
+      glz::get<0>(obj0.value) = "pie"; // testing that we have an lvalue reference
       std::string s{};
       glz::write_json(merged, s);
 
@@ -5067,7 +5067,7 @@ suite obj_handling = [] {
          vec.emplace_back(glz::obj{"count", size_t{cnt}});
       }
       for (size_t i = 0; i < vec.size(); ++i) {
-         expect(i == glz::tuplet::get<1>(vec[i].value));
+         expect(i == glz::get<1>(vec[i].value));
       }
    };
 
@@ -5079,7 +5079,7 @@ suite obj_handling = [] {
          vec.emplace_back(glz::obj_copy{"cnt", cnt});
       }
       for (size_t i = 0; i < vec.size(); ++i) {
-         expect(i == glz::tuplet::get<1>(vec[i].value));
+         expect(i == glz::get<1>(vec[i].value));
       }
 
       auto s = glz::write_json(vec);
@@ -5114,7 +5114,7 @@ suite write_to_map = [] {
       using T = std::decay_t<decltype(obj.value)>;
       glz::for_each<std::tuple_size_v<T>>([&](auto I) {
          if constexpr (I % 2 == 0) {
-            map[std::string(glz::tuplet::get<I>(obj.value))] = glz::write_json(glz::tuplet::get<I + 1>(obj.value));
+            map[std::string(glz::get<I>(obj.value))] = glz::write_json(glz::get<I + 1>(obj.value));
          }
       });
 

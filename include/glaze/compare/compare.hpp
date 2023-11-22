@@ -22,8 +22,8 @@ namespace glz
 
             bool equal = true;
             for_each<N>([&](auto I) {
-               auto& l = detail::get_member(lhs, tuplet::get<1>(tuplet::get<I>(meta_v<T>)));
-               auto& r = detail::get_member(rhs, tuplet::get<1>(tuplet::get<I>(meta_v<T>)));
+               auto& l = detail::get_member(lhs, get<1>(get<I>(meta_v<T>)));
+               auto& r = detail::get_member(rhs, get<1>(get<I>(meta_v<T>)));
                if (!std::equal_to{}(l, r)) {
                   equal = false;
                }
@@ -43,8 +43,8 @@ namespace glz
 
          bool less_than = true;
          for_each<N>([&](auto I) {
-            auto& l = detail::get_member(lhs, tuplet::get<1>(tuplet::get<I>(meta_v<T>)));
-            auto& r = detail::get_member(rhs, tuplet::get<1>(tuplet::get<I>(meta_v<T>)));
+            auto& l = detail::get_member(lhs, get<1>(get<I>(meta_v<T>)));
+            auto& r = detail::get_member(rhs, get<1>(get<I>(meta_v<T>)));
             if (!std::less{}(l, r)) {
                less_than = false;
             }
@@ -63,8 +63,8 @@ namespace glz
 
          bool less_than = true;
          for_each<N>([&](auto I) {
-            auto& l = detail::get_member(lhs, tuplet::get<1>(tuplet::get<I>(meta_v<T>)));
-            auto& r = detail::get_member(rhs, tuplet::get<1>(tuplet::get<I>(meta_v<T>)));
+            auto& l = detail::get_member(lhs, get<1>(get<I>(meta_v<T>)));
+            auto& r = detail::get_member(rhs, get<1>(get<I>(meta_v<T>)));
             if (!std::less_equal{}(l, r)) {
                less_than = false;
             }
@@ -83,8 +83,8 @@ namespace glz
 
          bool greater_than = true;
          for_each<N>([&](auto I) {
-            auto& l = detail::get_member(lhs, tuplet::get<1>(tuplet::get<I>(meta_v<T>)));
-            auto& r = detail::get_member(rhs, tuplet::get<1>(tuplet::get<I>(meta_v<T>)));
+            auto& l = detail::get_member(lhs, get<1>(get<I>(meta_v<T>)));
+            auto& r = detail::get_member(rhs, get<1>(get<I>(meta_v<T>)));
             if (!std::greater{}(l, r)) {
                greater_than = false;
             }
@@ -103,8 +103,8 @@ namespace glz
 
          bool greater_than = true;
          for_each<N>([&](auto I) {
-            auto& l = detail::get_member(lhs, tuplet::get<1>(tuplet::get<I>(meta_v<T>)));
-            auto& r = detail::get_member(rhs, tuplet::get<1>(tuplet::get<I>(meta_v<T>)));
+            auto& l = detail::get_member(lhs, get<1>(get<I>(meta_v<T>)));
+            auto& r = detail::get_member(rhs, get<1>(get<I>(meta_v<T>)));
             if (!std::greater_equal{}(l, r)) {
                greater_than = false;
             }

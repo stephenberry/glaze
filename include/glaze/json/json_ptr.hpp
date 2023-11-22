@@ -450,9 +450,9 @@ namespace glz
    {
       constexpr auto arr = Arr; // Msvc currently generates an internal compiler error otherwise
       constexpr auto group_info = group_json_ptrs_impl(arr);
-      constexpr auto n_items_per_group = glz::tuplet::get<0>(group_info);
-      constexpr auto n_unique = glz::tuplet::get<1>(group_info);
-      constexpr auto unique_keys = glz::tuplet::get<2>(group_info);
+      constexpr auto n_items_per_group = glz::get<0>(group_info);
+      constexpr auto n_unique = glz::get<1>(group_info);
+      constexpr auto unique_keys = glz::get<2>(group_info);
 
       auto arrs = make_arrays<n_items_per_group>(std::make_index_sequence<n_unique>{});
       size_t start{};
@@ -460,10 +460,10 @@ namespace glz
       for_each<n_unique>([&](auto I) {
          // NOTE: VS 2019 wont let us grab n_items_per_group as constexpr unless
          // its static but this is a constexpr func This is fixed in VS 2022
-         constexpr size_t n_items = std::tuple_size_v<std::decay_t<decltype(glz::tuplet::get<I>(arrs).second)>>;
+         constexpr size_t n_items = std::tuple_size_v<std::decay_t<decltype(glz::get<I>(arrs).second)>>;
 
-         glz::tuplet::get<I>(arrs).first = unique_keys[I];
-         glz::tuplet::get<I>(arrs).second = glz::sub_group<n_items, Arr>(start);
+         glz::get<I>(arrs).first = unique_keys[I];
+         glz::get<I>(arrs).second = glz::sub_group<n_items, Arr>(start);
          start += n_items_per_group[I];
       });
 

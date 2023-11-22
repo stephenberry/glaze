@@ -502,7 +502,7 @@ namespace glz
       template <class T>
       concept tuple_t = requires(T t) {
          std::tuple_size<T>::value;
-         glz::tuplet::get<0>(t);
+         glz::get<0>(t);
       } && !meta_value_t<T> && !range<T>;
 
       template <class T>
@@ -611,7 +611,7 @@ namespace glz
       inline constexpr auto make_array_impl(std::index_sequence<I...>)
       {
          using value_t = typename tuple_variant<meta_t<T>>::type;
-         return std::array<value_t, std::tuple_size_v<meta_t<T>>>{glz::tuplet::get<I>(meta_v<T>)...};
+         return std::array<value_t, std::tuple_size_v<meta_t<T>>>{glz::get<I>(meta_v<T>)...};
       }
 
       template <class T>
@@ -632,7 +632,7 @@ namespace glz
                return &std::get<Is>(t);
             }
             else {
-               return &glz::tuplet::get<Is>(t);
+               return &glz::get<Is>(t);
             }
          }...};
       }
@@ -649,7 +649,7 @@ namespace glz
       template <class T, size_t I>
       struct meta_sv
       {
-         static constexpr sv value = glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>));
+         static constexpr sv value = glz::get<0>(glz::get<I>(meta_v<T>));
       };
 
       template <class T, bool use_hash_comparison, size_t... I>
@@ -661,13 +661,13 @@ namespace glz
          auto naive_or_normal_hash = [&] {
             if constexpr (n <= 20) {
                return glz::detail::naive_map<value_t, n, use_hash_comparison>(
-                  {std::pair<sv, value_t>{sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                          glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))}...});
+                  {std::pair<sv, value_t>{sv(glz::get<0>(glz::get<I>(meta_v<T>))),
+                                          glz::get<1>(glz::get<I>(meta_v<T>))}...});
             }
             else {
                return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
-                  {std::pair<sv, value_t>{sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                          glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))}...});
+                  {std::pair<sv, value_t>{sv(glz::get<0>(glz::get<I>(meta_v<T>))),
+                                          glz::get<1>(glz::get<I>(meta_v<T>))}...});
             }
          };
 
@@ -676,32 +676,32 @@ namespace glz
          }
          else if constexpr (n == 1) {
             return micro_map1<value_t, meta_sv<T, I>::value...>{
-               std::make_pair<sv, value_t>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                           glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...};
+               std::make_pair<sv, value_t>(sv(glz::get<0>(glz::get<I>(meta_v<T>))),
+                                           glz::get<1>(glz::get<I>(meta_v<T>)))...};
          }
          else if constexpr (n == 2) {
             return micro_map2<value_t, meta_sv<T, I>::value...>{
-               std::make_pair<sv, value_t>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                           glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...};
+               std::make_pair<sv, value_t>(sv(glz::get<0>(glz::get<I>(meta_v<T>))),
+                                           glz::get<1>(glz::get<I>(meta_v<T>)))...};
          }
          else if constexpr (n < 128) // don't even attempt a first character hash if we have too many keys
          {
             constexpr auto front_desc =
-               single_char_hash<n>(std::array<sv, n>{sv{glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))}...});
+               single_char_hash<n>(std::array<sv, n>{sv{glz::get<0>(glz::get<I>(meta_v<T>))}...});
 
             if constexpr (front_desc.valid) {
                return make_single_char_map<value_t, front_desc>(
-                  {std::make_pair<sv, value_t>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                               glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
+                  {std::make_pair<sv, value_t>(sv(glz::get<0>(glz::get<I>(meta_v<T>))),
+                                               glz::get<1>(glz::get<I>(meta_v<T>)))...});
             }
             else {
                constexpr auto back_desc = single_char_hash<n, false>(
-                  std::array<sv, n>{sv{glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))}...});
+                  std::array<sv, n>{sv{glz::get<0>(glz::get<I>(meta_v<T>))}...});
 
                if constexpr (back_desc.valid) {
                   return make_single_char_map<value_t, back_desc>(
-                     {std::make_pair<sv, value_t>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                                  glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
+                     {std::make_pair<sv, value_t>(sv(glz::get<0>(glz::get<I>(meta_v<T>))),
+                                                  glz::get<1>(glz::get<I>(meta_v<T>)))...});
                }
                else {
                   return naive_or_normal_hash();
@@ -725,7 +725,7 @@ namespace glz
       {
          using value_t = value_tuple_variant_t<meta_t<T>>;
          return std::array<value_t, std::tuple_size_v<meta_t<T>>>(
-            {glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))...});
+            {glz::get<1>(glz::get<I>(meta_v<T>))...});
       }
 
       template <class T>
@@ -739,7 +739,7 @@ namespace glz
       constexpr auto make_key_int_map_impl(std::index_sequence<I...>)
       {
          return normal_map<sv, size_t, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<sv, size_t>(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>)), I)...});
+            {std::make_pair<sv, size_t>(glz::get<0>(glz::get<I>(meta_v<T>)), I)...});
       }
 
       template <class T>
@@ -754,8 +754,8 @@ namespace glz
       {
          using key_t = std::underlying_type_t<T>;
          return normal_map<key_t, sv, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<key_t, sv>(static_cast<key_t>(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))),
-                                       sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))))...});
+            {std::make_pair<key_t, sv>(static_cast<key_t>(glz::get<1>(glz::get<I>(meta_v<T>))),
+                                       sv(glz::get<0>(glz::get<I>(meta_v<T>))))...});
       }
 
       template <class T>
@@ -779,8 +779,8 @@ namespace glz
       constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>)
       {
          return normal_map<sv, T, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<sv, T>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                   T(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))))...});
+            {std::make_pair<sv, T>(sv(glz::get<0>(glz::get<I>(meta_v<T>))),
+                                   T(glz::get<1>(glz::get<I>(meta_v<T>))))...});
       }
 
       template <class T>
@@ -808,7 +808,7 @@ namespace glz
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
             for_each<std::tuple_size_v<meta_t<V>>>(
-               [&](auto J) { data[index++] = glz::tuplet::get<0>(glz::tuplet::get<J>(meta_v<V>)); });
+               [&](auto J) { data[index++] = glz::get<0>(glz::get<J>(meta_v<V>)); });
          });
 
          std::sort(data.data(), data.data() + max_keys);
@@ -837,7 +837,7 @@ namespace glz
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
             for_each<std::tuple_size_v<meta_t<V>>>([&](auto J) {
-               deduction_map.find(glz::tuplet::get<0>(glz::tuplet::get<J>(meta_v<V>)))->second[I] = true;
+               deduction_map.find(glz::get<0>(glz::get<J>(meta_v<V>)))->second[I] = true;
             });
          });
 

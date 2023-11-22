@@ -13,7 +13,7 @@ namespace glz
    {
       return map_tuple(
          [](auto& v) {
-            using mem_fn_t = std::decay_t<decltype(tuplet::get<1>(v))>;
+            using mem_fn_t = std::decay_t<decltype(get<1>(v))>;
             return typename function_signature<mem_fn_t>::type{};
          },
          meta_v<Spec>);
@@ -27,8 +27,8 @@ namespace glz
    {
       constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
       return detail::normal_map<sv, fn_variant<Spec>, N>(
-         {std::make_pair<sv, fn_variant<Spec>>(sv(tuplet::get<0>(tuplet::get<I>(meta_v<Spec>))),
-                                               get_argument<tuplet::get<1>(tuplet::get<I>(meta_v<Spec>))>())...});
+         {std::make_pair<sv, fn_variant<Spec>>(sv(get<0>(get<I>(meta_v<Spec>))),
+                                               get_argument<get<1>(get<I>(meta_v<Spec>))>())...});
    }
 
    template <class Spec>
@@ -57,13 +57,13 @@ namespace glz
          for_each<N>([&](auto I) {
             static constexpr auto spec = meta_v<Spec>;
 
-            static constexpr sv key = tuplet::get<0>(tuplet::get<I>(spec));
+            static constexpr sv key = glz::get<0>(glz::get<I>(spec));
             static constexpr auto member_it = frozen_map.find(key);
             if constexpr (member_it != frozen_map.end()) {
                static constexpr auto index = cmap.index(key);
                static constexpr auto member_ptr = std::get<member_it->second.index()>(member_it->second);
 
-               using SpecElement = std::decay_t<decltype(tuplet::get<1>(tuplet::get<I>(spec)))>;
+               using SpecElement = std::decay_t<decltype(glz::get<1>(glz::get<I>(spec)))>;
 
                using X = std::decay_t<decltype(member_ptr)>;
                if constexpr (std::is_member_object_pointer_v<X>) {

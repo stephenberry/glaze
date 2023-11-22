@@ -73,7 +73,7 @@ namespace glz
       template <class Func, class Tuple, std::size_t... Is>
       inline constexpr auto map_tuple(Func&& f, Tuple&& tuple, std::index_sequence<Is...>)
       {
-         return tuplet::make_tuple(f(tuplet::get<Is>(tuple))...);
+         return tuplet::make_tuple(f(get<Is>(tuple))...);
       }
    }
 
@@ -100,12 +100,12 @@ namespace glz
    constexpr auto make_group(Tuple&& t, std::index_sequence<Is...>)
    {
       auto get_elem = [&](auto I) {
-         using type = decltype(glz::tuplet::get<Start + I>(t));
+         using type = decltype(glz::get<Start + I>(t));
          if constexpr (I == 0 || std::convertible_to<type, std::string_view>) {
-            return std::string_view(glz::tuplet::get<Start + I>(t));
+            return std::string_view(glz::get<Start + I>(t));
          }
          else {
-            return glz::tuplet::get<Start + I>(t);
+            return glz::get<Start + I>(t);
          }
       };
       return glz::tuplet::make_copy_tuple(get_elem(std::integral_constant<size_t, Is>{})...);
@@ -134,8 +134,8 @@ namespace glz
    struct group_builder
    {
       static constexpr auto h = make_groups_helper<Tuple>();
-      static constexpr auto starts = glz::tuplet::get<0>(h);
-      static constexpr auto sizes = glz::tuplet::get<1>(h);
+      static constexpr auto starts = glz::get<0>(h);
+      static constexpr auto sizes = glz::get<1>(h);
 
       static constexpr auto op(Tuple&& t)
       {
