@@ -44,6 +44,19 @@ suite comparison = [] {
    };
 };
 
+suite equality = [] {
+   "float equality"_test = [] {
+      float_compare_t obj0{ 3.14, 5.5, 0.0 };
+      float_compare_t obj1{ 3.15, 5.55, 0.099 };
+      
+      expect(!glz::equal(obj0, obj1));
+      
+      obj1 = obj0;
+      
+      expect(glz::equal(obj0, obj1));
+   };
+};
+
 int main()
 {
    const auto result = boost::ut::cfg<>.run({.report_errors = true});

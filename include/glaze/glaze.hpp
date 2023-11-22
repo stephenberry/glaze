@@ -34,6 +34,7 @@
 
 #include "glaze/binary.hpp"
 #include "glaze/compare/approx.hpp"
+#include "glaze/compare/equal.hpp"
 #include "glaze/csv.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/json.hpp"
