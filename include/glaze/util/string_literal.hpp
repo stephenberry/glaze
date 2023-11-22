@@ -19,6 +19,7 @@ namespace glz
       constexpr string_literal(const char (&str)[N]) noexcept { std::copy_n(str, N, value); }
 
       char value[N];
+      constexpr const char* begin() const noexcept { return value; }
       constexpr const char* end() const noexcept { return value + length; }
 
       constexpr const std::string_view sv() const noexcept { return {value, length}; }
