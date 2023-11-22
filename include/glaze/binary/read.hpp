@@ -772,9 +772,8 @@ namespace glz
             skip_compressed_int(it, end);
 
             using V = std::decay_t<T>;
-            for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-               read<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, it, end);
-            });
+            for_each<std::tuple_size_v<meta_t<V>>>(
+               [&](auto I) { read<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, it, end); });
          }
       };
 

@@ -218,8 +218,7 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx,
-                                        std::forward<Args>(args)...);
+                  write<json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, std::forward<Args>(args)...);
                }
                else {
                   write<json>::op<Opts>(glz::get<I>(value), ctx, std::forward<Args>(args)...);

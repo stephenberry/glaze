@@ -547,7 +547,7 @@ namespace glz
    constexpr decltype(auto) apply(F&& func, Tup&& tup)
    {
       return tuplet::detail::apply_impl(static_cast<F&&>(func), static_cast<Tup&&>(tup),
-                                typename std::decay_t<Tup>::base_list());
+                                        typename std::decay_t<Tup>::base_list());
    }
    template <class F, class A, class B>
    constexpr decltype(auto) apply(F&& func, tuplet::pair<A, B>& pair)

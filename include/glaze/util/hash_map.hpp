@@ -532,7 +532,7 @@ namespace glz::detail
    struct micro_map1
    {
       std::array<std::pair<std::string_view, T>, 1> items{};
-      
+
       constexpr decltype(auto) begin() const { return items.begin(); }
       constexpr decltype(auto) end() const { return items.end(); }
 
@@ -568,7 +568,7 @@ namespace glz::detail
    struct micro_map2
    {
       std::array<std::pair<std::string_view, T>, 2> items{};
-      
+
       static constexpr bool same_size =
          S0.size() == S1.size(); // if we need to check the size again on the second compare
       static constexpr bool check_size = !same_size;

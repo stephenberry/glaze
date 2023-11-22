@@ -485,9 +485,8 @@ namespace glz
             dump_compressed_int<N>(args...);
 
             using V = std::decay_t<T>;
-            for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-               write<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, args...);
-            });
+            for_each<std::tuple_size_v<meta_t<V>>>(
+               [&](auto I) { write<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, args...); });
          }
       };
 
