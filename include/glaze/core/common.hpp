@@ -50,7 +50,7 @@ namespace glz
    struct obj final
    {
       glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
-      static constexpr auto no_reflect = true;
+      static constexpr auto reflect = false;
    };
 
    template <class... T>
@@ -60,7 +60,7 @@ namespace glz
    struct obj_copy final
    {
       glz::tuplet::tuple<T...> value;
-      static constexpr auto no_reflect = true;
+      static constexpr auto reflect = false;
    };
 
    template <class... T>
@@ -70,7 +70,7 @@ namespace glz
    struct arr final
    {
       glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
-      static constexpr auto no_reflect = true;
+      static constexpr auto reflect = false;
    };
 
    template <class... T>
@@ -90,7 +90,7 @@ namespace glz
    struct merge final
    {
       glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
-      static constexpr auto no_reflect = true;
+      static constexpr auto reflect = false;
    };
 
    template <class... T>
@@ -467,7 +467,7 @@ namespace glz
       
       template <class T>
       concept is_no_reflect = requires(T t) {
-                           T::no_reflect;
+                           requires T::reflect == false;
                         };
 
       template <class T>

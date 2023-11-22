@@ -11,6 +11,10 @@ For the Clang compiler only, Glaze will reflect your structs. No need to write a
 - The `glz::meta` approach is still the most optimized. There is some work to do to make the automatic reflection just as fast.
 - This approach currently uses Clang's `__builtin_dump_struct`, but we will be able to invisibly move to standard C++ reflection whenever it becomes available.
 
+> IMPORTANT:
+>
+> When writing custom serializers specializing `to_json` or `from_json`, your concepts for custom types might take precedence over the reflection engine.
+
 ## Highlights
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
