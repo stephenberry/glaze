@@ -47,11 +47,10 @@ namespace glz
       {};
 
       template <auto Opts, class T, class Ctx, class It0, class It1>
-      concept read_json_invocable =
-         requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
-            from_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                 std::forward<It0>(it), std::forward<It1>(end));
-         };
+      concept read_json_invocable = requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
+         from_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                              std::forward<It0>(it), std::forward<It1>(end));
+      };
 
       template <>
       struct read<json>
@@ -1155,12 +1154,12 @@ namespace glz
                      return;
                }
                else if constexpr (glaze_array_t<T>) {
-                  read<json>::op<ws_handled<Opts>()>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx, it, end);
+                  read<json>::op<ws_handled<Opts>()>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
                else {
-                  read<json>::op<ws_handled<Opts>()>(glz::tuplet::get<I>(value), ctx, it, end);
+                  read<json>::op<ws_handled<Opts>()>(glz::get<I>(value), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
@@ -1261,7 +1260,7 @@ namespace glz
          bool may_escape = false;
          constexpr auto N = std::tuple_size_v<meta_t<T>>;
          for_each<N>([&](auto I) {
-            constexpr auto s = glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>));
+            constexpr auto s = glz::get<0>(glz::get<I>(meta_v<T>));
             for (auto& c : s) {
                if (c == '\\' || c == '"' || is_unicode(c)) {
                   may_escape = true;
@@ -1317,7 +1316,7 @@ namespace glz
 
          constexpr auto N = std::tuple_size_v<meta_t<T>>;
          for_each<N>([&](auto I) {
-            constexpr auto s = glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>));
+            constexpr auto s = glz::get<0>(glz::get<I>(meta_v<T>));
             const auto n = s.size();
             if (n < stats.min_length) {
                stats.min_length = n;

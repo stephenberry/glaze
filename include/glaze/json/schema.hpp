@@ -199,9 +199,9 @@ namespace glz
             // });
             s.oneOf = std::vector<schematic>(N);
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
+               static constexpr auto item = glz::get<I>(meta_v<V>);
                auto& enumeration = (*s.oneOf)[I.value];
-               enumeration.constant = glz::tuplet::get<0>(item);
+               enumeration.constant = glz::get<0>(item);
                if constexpr (std::tuple_size_v < decltype(item) >> 2) {
                   enumeration.description = std::get<2>(item);
                }
@@ -326,8 +326,8 @@ namespace glz
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
             s.properties = std::map<std::string_view, schema, std::less<>>();
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
-               using mptr_t = decltype(glz::tuplet::get<1>(item));
+               static constexpr auto item = glz::get<I>(meta_v<V>);
+               using mptr_t = decltype(glz::get<1>(item));
                using val_t = std::decay_t<member_t<V, mptr_t>>;
                auto& def = defs[name_v<val_t>];
                if (!def.type) {
@@ -336,16 +336,16 @@ namespace glz
                auto ref_val = schema{join_v<chars<"#/$defs/">, name_v<val_t>>};
                static constexpr auto Size = std::tuple_size_v<decltype(item)>;
                if constexpr (Size > 2) {
-                  using additional_data_type = decltype(glz::tuplet::get<2>(item));
+                  using additional_data_type = decltype(glz::get<2>(item));
                   if constexpr (std::is_convertible_v<additional_data_type, std::string_view>) {
-                     ref_val.description = glz::tuplet::get<2>(item);
+                     ref_val.description = glz::get<2>(item);
                   }
                   else if constexpr (std::is_convertible_v<additional_data_type, schema>) {
-                     ref_val = glz::tuplet::get<2>(item);
+                     ref_val = glz::get<2>(item);
                      ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
                   }
                }
-               (*s.properties)[glz::tuplet::get<0>(item)] = ref_val;
+               (*s.properties)[glz::get<0>(item)] = ref_val;
             });
             s.additionalProperties = false;
          }

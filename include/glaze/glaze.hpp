@@ -1,7 +1,7 @@
 /*
   Glaze Library
 
-  Copyright (c) 2019 - present, Anyar Inc.
+  Copyright (c) 2019 - present, Stephen Berry
 
   Permission is hereby granted, free of charge, to any person obtaining
   a copy of this software and associated documentation files (the
@@ -33,6 +33,8 @@
 #pragma once
 
 #include "glaze/binary.hpp"
+#include "glaze/compare/approx.hpp"
+#include "glaze/compare/compare.hpp"
 #include "glaze/csv.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/json.hpp"

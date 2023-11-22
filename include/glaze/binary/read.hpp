@@ -19,11 +19,10 @@ namespace glz
       {};
 
       template <auto Opts, class T, class Ctx, class It0, class It1>
-      concept read_binary_invocable =
-         requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
-            from_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                   std::forward<It0>(it), std::forward<It1>(end));
-         };
+      concept read_binary_invocable = requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
+         from_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                                std::forward<It0>(it), std::forward<It1>(end));
+      };
 
       template <>
       struct read<binary>
@@ -121,9 +120,9 @@ namespace glz
             std::advance(it, Length);
 
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::tuplet::get<I>(meta_v<T>);
+               static constexpr auto item = glz::get<I>(meta_v<T>);
 
-               get_member(value, glz::tuplet::get<1>(item)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
+               get_member(value, glz::get<1>(item)) = data[I / 8] & (uint8_t{1} << (7 - (I % 8)));
             });
          }
       };
@@ -773,9 +772,8 @@ namespace glz
             skip_compressed_int(it, end);
 
             using V = std::decay_t<T>;
-            for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-               read<binary>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<V>)), ctx, it, end);
-            });
+            for_each<std::tuple_size_v<meta_t<V>>>(
+               [&](auto I) { read<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, it, end); });
          }
       };
 

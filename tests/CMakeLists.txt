@@ -62,6 +62,7 @@ endif()
 
 add_subdirectory(api_test)
 add_subdirectory(binary_test)
+add_subdirectory(compare_test)
 add_subdirectory(csv_test)
 add_subdirectory(eigen_test)
 add_subdirectory(exceptions_test)
