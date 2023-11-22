@@ -122,10 +122,10 @@ namespace glz
 
       template <class E2>
          requires(requires(const E& x, E2 const& y) {
-                     {
-                        x == y
-                        } -> std::convertible_to<bool>;
-                  })
+            {
+               x == y
+            } -> std::convertible_to<bool>;
+         })
       friend constexpr auto operator==(const unexpected& x, const unexpected<E2>& y) -> bool
       {
          return x.value() == y.value();
@@ -200,19 +200,48 @@ namespace glz
    namespace detail
    {
       template <typename T, typename E, typename U, typename G, typename UF, typename GF>
-      concept expected_constructible_from_other = std::constructible_from<T, UF> && std::constructible_from<E, GF> &&
-                                                  (!std::constructible_from<T, expected<U, G>&>) &&
-                                                  (!std::constructible_from<T, expected<U, G> >) &&
-                                                  (!std::constructible_from<T, const expected<U, G>&>) &&
-                                                  (!std::constructible_from<T, const expected<U, G> >) &&
-                                                  (!std::convertible_to<expected<U, G>&, T>) &&
-                                                  (!std::convertible_to<expected<U, G> &&, T>) &&
-                                                  (!std::convertible_to<const expected<U, G>&, T>) &&
-                                                  (!std::convertible_to<const expected<U, G> &&, T>) &&
-                                                  (!std::constructible_from<unexpected<E>, expected<U, G>&>) &&
-                                                  (!std::constructible_from<unexpected<E>, expected<U, G> >) &&
-                                                  (!std::constructible_from<unexpected<E>, const expected<U, G>&>) &&
-                                                  (!std::constructible_from<unexpected<E>, const expected<U, G> >);
+      concept expected_constructible_from_other =
+         std::constructible_from<T, UF> && std::constructible_from<E, GF> &&
+         (!std::constructible_from<T, expected<U, G>&>)&&(!std::constructible_from<T, expected<U, G> >)&&(!std::constructible_from<T, const expected<U, G>&>)&&(
+            !std::constructible_from<
+               T,
+               const expected<
+                  U,
+                  G> >)&&(!std::
+                             convertible_to<
+                                expected<U, G>&,
+                                T>)&&(!std::
+                                         convertible_to<
+                                            expected<U, G>&&,
+                                            T>)&&(!std::
+                                                     convertible_to<
+                                                        const expected<U, G>&,
+                                                        T>)&&(!std::
+                                                                 convertible_to<
+                                                                    const expected<U, G>&&,
+                                                                    T>)&&(!std::
+                                                                             constructible_from<
+                                                                                unexpected<E>,
+                                                                                expected<
+                                                                                   U,
+                                                                                   G>&>)&&(!std::
+                                                                                              constructible_from<
+                                                                                                 unexpected<E>,
+                                                                                                 expected<
+                                                                                                    U,
+                                                                                                    G> >)&&(!std::
+                                                                                                               constructible_from<
+                                                                                                                  unexpected<
+                                                                                                                     E>,
+                                                                                                                  const expected<
+                                                                                                                     U,
+                                                                                                                     G>&>)&&(!std::
+                                                                                                                                constructible_from<
+                                                                                                                                   unexpected<
+                                                                                                                                      E>,
+                                                                                                                                   const expected<
+                                                                                                                                      U,
+                                                                                                                                      G> >);
 
       template <typename T>
       concept is_unexpected = std::same_as<std::remove_cvref_t<T>, unexpected<typename T::value_type> >;
@@ -475,7 +504,7 @@ namespace glz
          requires std::constructible_from<E, const G&> && std::is_assignable_v<E&, const G&> &&
                   (std::is_nothrow_constructible_v<E, const G&> || std::is_nothrow_move_constructible_v<T> ||
                    std::is_nothrow_move_constructible_v<E>)
-                  constexpr auto operator=(const unexpected<G>& e) -> expected&
+      constexpr auto operator=(const unexpected<G>& e) -> expected&
       {
          using GF = const G&;
          if (has_value()) {
@@ -492,7 +521,7 @@ namespace glz
          requires std::constructible_from<E, G> && std::is_assignable_v<E&, G> &&
                   (std::is_nothrow_constructible_v<E, G> || std::is_nothrow_move_constructible_v<T> ||
                    std::is_nothrow_move_constructible_v<E>)
-                  constexpr auto operator=(unexpected<G>&& e) -> expected&
+      constexpr auto operator=(unexpected<G>&& e) -> expected&
       {
          using GF = G;
          if (has_value()) {
@@ -667,14 +696,14 @@ namespace glz
 
       template <class U>
          requires std::is_copy_constructible_v<T> && std::is_convertible_v<U, T>
-                                                  constexpr auto value_or(U&& v) const& -> T
+      constexpr auto value_or(U&& v) const& -> T
       {
          return has_value() ? **this : static_cast<T>(std::forward<U>(v));
       }
 
       template <class U>
          requires std::is_move_constructible_v<T> && std::is_convertible_v<U, T>
-                                                  constexpr auto value_or(U&& v) && -> T
+      constexpr auto value_or(U&& v) && -> T
       {
          return has_value() ? std::move(**this) : static_cast<T>(std::forward<U>(v));
       }
@@ -922,15 +951,14 @@ namespace glz
       // equality operators
       template <class T2, class E2>
          requires(!std::is_void_v<T2>) && requires(const T& t1, T2 const& t2, const E& e1, E2 const& e2) {
-                                             {
-                                                t1 == t2
-                                                } -> std::convertible_to<bool>;
-                                             {
-                                                e1 == e2
-                                                } -> std::convertible_to<bool>;
-                                          }
-                                       friend constexpr auto operator==(const expected& x, const expected<T2, E2>& y)
-                                          -> bool
+            {
+               t1 == t2
+            } -> std::convertible_to<bool>;
+            {
+               e1 == e2
+            } -> std::convertible_to<bool>;
+         }
+      friend constexpr auto operator==(const expected& x, const expected<T2, E2>& y) -> bool
       {
          if (x.has_value() != y.has_value()) {
             return false;
@@ -947,10 +975,10 @@ namespace glz
 
       template <class E2>
          requires requires(const E& x, const unexpected<E2>& e) {
-                     {
-                        x == e.value()
-                        } -> std::convertible_to<bool>;
-                  }
+            {
+               x == e.value()
+            } -> std::convertible_to<bool>;
+         }
       friend constexpr auto operator==(const expected& x, const unexpected<E2>& e) -> bool
       {
          return !x.has_value() && bool(x.error() == e.value());
@@ -1115,7 +1143,7 @@ namespace glz
 
       template <class G>
          requires std::is_constructible_v<E, const G&> and std::is_assignable_v<E&, const G&>
-                                                        constexpr auto operator=(const unexpected<G>& e) -> expected&
+      constexpr auto operator=(const unexpected<G>& e) -> expected&
       {
          if (has_value()) {
             std::construct_at(std::addressof(this->unex), std::forward<const G&>(e.value()));
@@ -1129,7 +1157,7 @@ namespace glz
 
       template <class G>
          requires std::is_constructible_v<E, G> && std::is_assignable_v<E&, G>
-                                                constexpr auto operator=(unexpected<G>&& e) -> expected&
+      constexpr auto operator=(unexpected<G>&& e) -> expected&
       {
          if (has_value()) {
             std::construct_at(std::addressof(this->unex), std::forward<G>(e.value()));
@@ -1448,12 +1476,11 @@ namespace glz
       // expected equality operators
       template <class T2, class E2>
          requires std::is_void_v<T2> && requires(E e, E2 e2) {
-                                           {
-                                              e == e2
-                                              } -> std::convertible_to<bool>;
-                                        }
-                                     friend constexpr auto operator==(const expected& x, const expected<T2, E2>& y)
-                                        -> bool
+            {
+               e == e2
+            } -> std::convertible_to<bool>;
+         }
+      friend constexpr auto operator==(const expected& x, const expected<T2, E2>& y) -> bool
       {
          if (x.has_value() != y.has_value()) return false;
          return x.has_value() or bool(x.error() == y.error());
@@ -1461,10 +1488,10 @@ namespace glz
 
       template <class E2>
          requires requires(const expected& x, const unexpected<E2>& e) {
-                     {
-                        x.error() == e.value()
-                        } -> std::convertible_to<bool>;
-                  }
+            {
+               x.error() == e.value()
+            } -> std::convertible_to<bool>;
+         }
       friend constexpr auto operator==(const expected& x, const unexpected<E2>& e) -> bool
       {
          return !x.has_value() && bool(x.error() == e.value());

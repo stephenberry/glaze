@@ -160,11 +160,11 @@ namespace glz
 
    template <class T>
    concept is_invoke_update = requires {
-                                 T::func;
-                                 T::prev;
-                                 T::initialized;
-                                 T::glaze;
-                              };
+      T::func;
+      T::prev;
+      T::initialized;
+      T::glaze;
+   };
 
    namespace detail
    {
