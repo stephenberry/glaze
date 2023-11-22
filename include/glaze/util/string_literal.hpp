@@ -45,13 +45,4 @@ namespace glz
 
    template <string_literal Str>
    inline constexpr std::string_view chars = chars_impl<Str>::value;
-
-   template <const std::string_view& Str>
-   struct stringer_impl
-   {
-      static constexpr std::string_view value = Str;
-   };
-
-   template <const std::string_view& Str>
-   inline constexpr std::string_view stringer = stringer_impl<Str>::value;
 }
