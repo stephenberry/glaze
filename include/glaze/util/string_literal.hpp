@@ -11,7 +11,7 @@ namespace glz
    struct string_literal
    {
       static constexpr size_t length = (N > 0) ? (N - 1) : 0;
-      
+
       constexpr size_t size() const noexcept { return length; }
 
       constexpr string_literal() noexcept = default;

@@ -1003,7 +1003,9 @@ namespace glz
                         }
                      }
                      else {
-                        static constexpr auto quoted_key = join_v<chars<"\"">, key, Opts.prettify ? chars<"\": "> : chars<"\":">>;
+                        static constexpr auto quoted_key = join_v < chars<"\"">, key,
+                                              Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                           ;
                         dump<quoted_key>(b, ix);
                      }
                   }
