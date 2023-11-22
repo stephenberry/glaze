@@ -447,8 +447,7 @@ namespace glz
    template <auto& Arr>
    inline constexpr auto group_json_ptrs()
    {
-      constexpr auto arr = Arr; // Msvc currently generates an internal compiler error otherwise
-      constexpr auto group_info = group_json_ptrs_impl(arr);
+      constexpr auto group_info = group_json_ptrs_impl(Arr);
       constexpr auto n_items_per_group = glz::get<0>(group_info);
       constexpr auto n_unique = glz::get<1>(group_info);
       constexpr auto unique_keys = glz::get<2>(group_info);
