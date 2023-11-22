@@ -32,15 +32,15 @@ suite comparison = [] {
       float_compare_t obj0{ 3.14, 5.5, 0.0 };
       float_compare_t obj1{ 3.15, 5.55, 0.099 };
       
-      expect(glz::approx_equal(obj0, obj1));
+      expect(glz::approx_equal_to{}(obj0, obj1));
       
       obj1.z = 1.0;
       
-      expect(!glz::approx_equal(obj0, obj1));
+      expect(!glz::approx_equal_to{}(obj0, obj1));
       
       obj1.z = 0.1;
       
-      expect(!glz::approx_equal(obj0, obj1));
+      expect(!glz::approx_equal_to{}(obj0, obj1));
    };
 };
 
@@ -49,11 +49,11 @@ suite equality = [] {
       float_compare_t obj0{ 3.14, 5.5, 0.0 };
       float_compare_t obj1{ 3.15, 5.55, 0.099 };
       
-      expect(!glz::equal(obj0, obj1));
+      expect(!glz::equal_to{}(obj0, obj1));
       
       obj1 = obj0;
       
-      expect(glz::equal(obj0, obj1));
+      expect(glz::equal_to{}(obj0, obj1));
    };
 };
 
