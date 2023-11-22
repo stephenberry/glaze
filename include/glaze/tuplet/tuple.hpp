@@ -187,7 +187,8 @@ namespace glz
       // This takes a forwarding tuple as a parameter. The forwarding tuple only
       // contains references, so it should just be taken by value.
       template <class T, class... Outer, class... Inner>
-      constexpr auto cat_impl(T tup, type_list<Outer...>, type_list<Inner...>) -> tuple<type_t<Inner>...>
+      constexpr auto cat_impl([[maybe_unused]] T tup, type_list<Outer...>, type_list<Inner...>)
+         -> tuple<type_t<Inner>...>
       {
          return {{{static_cast<type_t<Outer>&&>(tup.identity_t<Outer>::value).identity_t<Inner>::value}...}};
       }
