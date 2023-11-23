@@ -23,6 +23,8 @@ namespace glz
       constexpr const char* end() const noexcept { return value + length; }
 
       constexpr const std::string_view sv() const noexcept { return {value, length}; }
+      
+      constexpr operator std::string_view() const noexcept { return {value, length}; }
    };
 
    template <size_t N>
