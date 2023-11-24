@@ -6,7 +6,8 @@
 #endif
 
 #include "boost/ut.hpp"
-#include "glaze/glaze.hpp"
+#include "glaze/compare/approx.hpp"
+#include "glaze/compare/compare.hpp"
 
 using namespace boost::ut;
 
