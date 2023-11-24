@@ -5,8 +5,10 @@
 #define BOOST_UT_DISABLE_MODULE
 #endif
 
+#include "glaze/compare/compare.hpp"
+
 #include "boost/ut.hpp"
-#include "glaze/glaze.hpp"
+#include "glaze/compare/approx.hpp"
 
 using namespace boost::ut;
 
