@@ -40,6 +40,8 @@ namespace glz
    template <class... Ts>
    struct recorder
    {
+      static constexpr auto reflect = false;
+      
       using container_type = std::variant<std::deque<Ts>...>;
 
       std::deque<std::pair<std::string, std::pair<container_type, const void*>>> data;

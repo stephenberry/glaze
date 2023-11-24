@@ -16,6 +16,7 @@ namespace glz
       template <class T, class From, class To>
       struct custom_t final
       {
+         static constexpr auto reflect = false;
          using from_t = From;
          using to_t = To;
          T& val;

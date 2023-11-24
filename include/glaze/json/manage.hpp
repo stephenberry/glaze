@@ -15,6 +15,7 @@ namespace glz
       template <class T, class Member, class From, class To>
       struct manage_t
       {
+         static constexpr auto reflect = false;
          using from_t = From;
          using to_t = To;
          T& val;

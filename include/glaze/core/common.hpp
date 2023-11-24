@@ -48,6 +48,7 @@ namespace glz
    struct obj final
    {
       glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
+      static constexpr auto reflect = false;
    };
 
    template <class... T>
@@ -57,6 +58,7 @@ namespace glz
    struct obj_copy final
    {
       glz::tuplet::tuple<T...> value;
+      static constexpr auto reflect = false;
    };
 
    template <class... T>
@@ -66,6 +68,7 @@ namespace glz
    struct arr final
    {
       glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
+      static constexpr auto reflect = false;
    };
 
    template <class... T>
@@ -85,6 +88,7 @@ namespace glz
    struct merge final
    {
       glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
+      static constexpr auto reflect = false;
    };
 
    template <class... T>
@@ -455,6 +459,11 @@ namespace glz
          T::extent;
          typename T::element_type;
       };
+      
+      template <class T>
+      concept is_no_reflect = requires(T t) {
+                           requires T::reflect == false;
+                        };
 
       template <class T>
       concept is_dynamic_span = T::extent == static_cast<size_t>(-1);
@@ -544,6 +553,9 @@ namespace glz
       concept glaze_value_t =
          glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || glaze_flags_t<T>);
 
+      template <class T>
+      concept reflectable = !(is_no_reflect<T> || glaze_value_t<T> || glaze_object_t<T> || glaze_array_t<T> || glaze_flags_t<T> || range<T> || pair_t<T> || null_t<T>) && std::is_aggregate_v<std::remove_cvref_t<T>> && std::is_class_v<T>;
+     
       template <class T>
       concept glaze_const_value_t = glaze_value_t<T> && std::is_pointer_v<glz::meta_wrapper_t<T>> &&
                                     std::is_const_v<std::remove_pointer_t<glz::meta_wrapper_t<T>>>;
