@@ -17,7 +17,8 @@ namespace glz
       struct any_t final
       {
          template <class T>
-         constexpr operator T() {
+         constexpr operator T()
+         {
             if constexpr (std::is_default_constructible_v<T>) {
                return T{};
             }

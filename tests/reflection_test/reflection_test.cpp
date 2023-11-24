@@ -62,7 +62,8 @@ suite nested_reflection = [] {
       buffer.clear();
       glz::write_json(obj, buffer);
 
-      expect(buffer == R"({"str":"reflection","thing":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}})") << buffer;
+      expect(buffer == R"({"str":"reflection","thing":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}})")
+         << buffer;
    };
 };
 
@@ -148,12 +149,14 @@ suite user_types = [] {
          buffer ==
          R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":{"x":3.14,"y":2.7,"z":6.5},"array":["as\"df\\ghjkl","pie","42","foo"],"vector":[{"x":9,"y":6.7,"z":3.1},{"x":3.14,"y":2.7,"z":6.5}],"i":8,"d":2,"b":false,"c":"W","color":"Green","vb":[true,false,false,true,true,true,true],"optional":null,"thing_ptr":{"a":3.14,"b":"stuff"}})")
          << buffer;
-      
+
       expect(!glz::read_json(obj, buffer));
    };
 };
 
-int main() { // Explicitly run registered test suites and report errors
+int main()
+{ // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
-   return result; }
+   return result;
+}

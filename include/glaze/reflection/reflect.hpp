@@ -17,7 +17,8 @@ namespace glz
       template <class T, std::size_t N>
       struct static_vector
       {
-         constexpr auto push_back(const T& elem) {
+         constexpr auto push_back(const T& elem)
+         {
             if (index < N) {
                elems[index++] = elem;
             }
@@ -27,7 +28,7 @@ namespace glz
          T elems[N]{};
          size_t index{};
       };
-      
+
       constexpr auto to_names(auto& out, auto, auto... args)
       {
          if constexpr (sizeof...(args) > 1) {
@@ -151,7 +152,7 @@ namespace glz
          requires(!glaze_t<T> && !array_t<T> && std::is_aggregate_v<std::remove_cvref_t<T>>)
       {
          using V = decltype(to_tuple(std::declval<T>()));
-         
+
          constexpr auto indices = std::make_index_sequence<std::tuple_size_v<V>>{};
          return make_reflection_map_impl<std::decay_t<T>, use_hash_comparison>(indices);
       }
