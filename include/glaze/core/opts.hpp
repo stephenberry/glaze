@@ -36,6 +36,7 @@ namespace glz
       bool closing_handled = false; // the closing character has been handled
       bool ws_handled = false; // whitespace has already been parsed
       bool no_header = false; // whether or not a binary header is needed
+      bool write_unknown = true; // whether to write unkwown fields
    };
 
    template <opts Opts>
@@ -109,4 +110,20 @@ namespace glz
 
    template <opts Opts, auto member_ptr>
    inline constexpr auto opt_false = opt_off<Opts, member_ptr>();
+
+   template <opts Opts>
+   constexpr auto write_unknown_off()
+   {
+      opts ret = Opts;
+      ret.write_unknown = false;
+      return ret;
+   }
+
+   template <opts Opts>
+   constexpr auto write_unknown_on()
+   {
+      opts ret = Opts;
+      ret.write_unknown = true;
+      return ret;
+   }
 }
