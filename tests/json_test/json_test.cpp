@@ -6062,7 +6062,39 @@ suite unknown_fields_method_test = [] {
    };
 };
 
+struct unknown_fields_known_type
+{
+  std::string a;
+  std::string missing;
+  std::string end;
+  std::map<glz::sv, int> extra;
+};
 
+template <>
+struct glz::meta<unknown_fields_known_type>
+{
+   using T = unknown_fields_known_type;
+   static constexpr auto value = object(
+      "a", &T::a,
+      "missing", &T::missing,
+      "end", &T::end
+   );
+   static constexpr auto unknown_write{&T::extra};
+   static constexpr auto unknown_read{&T::extra};
+};
+
+suite unknown_fields_known_type_test = [] {
+   "decode_unknown"_test = [] {
+      std::string buffer = R"({"a":"aaa","unk":5, "unk2":22,"unk3":355, "end":"end"})";
+      
+      unknown_fields_known_type obj{};
+      expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, buffer));
+
+      expect(obj.extra["unk"] == 5);
+      expect(obj.extra["unk2"] == 22);
+      expect(obj.extra["unk3"] == 355);
+   };
+};
 
 
 int main()
