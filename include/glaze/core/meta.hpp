@@ -71,7 +71,7 @@ namespace glz
 
       template <class T>
       concept has_unknown_writer = requires { meta<T>::unknown_write; } || requires { T::glaze::unknown_write; };
-      
+
       template <class T>
       concept has_unknown_reader = requires { meta<T>::unknown_read; } || requires { T::glaze::unknown_read; };
    }
@@ -141,10 +141,10 @@ namespace glz
          return empty{};
       }
    }();
-   
+
    template <class T>
    using meta_unknown_write_t = std::decay_t<decltype(meta_unknown_write_v<std::decay_t<T>>)>;
-   
+
    template <class T>
    inline constexpr auto meta_unknown_read_v = [] {
       if constexpr (detail::local_meta_t<T>) {
@@ -157,7 +157,7 @@ namespace glz
          return empty{};
       }
    }();
-   
+
    template <class T>
    using meta_unknown_read_t = std::decay_t<decltype(meta_unknown_read_v<std::decay_t<T>>)>;
 

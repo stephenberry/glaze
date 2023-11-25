@@ -5951,21 +5951,17 @@ suite float128_test = [] {
 
 struct unknown_fields_member
 {
-  std::string a;
-  std::string missing;
-  std::string end;
-  std::map<glz::sv, glz::raw_json> extra;
+   std::string a;
+   std::string missing;
+   std::string end;
+   std::map<glz::sv, glz::raw_json> extra;
 };
 
 template <>
 struct glz::meta<unknown_fields_member>
 {
    using T = unknown_fields_member;
-   static constexpr auto value = object(
-      "a", &T::a,
-      "missing", &T::missing,
-      "end", &T::end
-   );
+   static constexpr auto value = object("a", &T::a, "missing", &T::missing, "end", &T::end);
    static constexpr auto unknown_write{&T::extra};
    static constexpr auto unknown_read{&T::extra};
 };
@@ -5973,17 +5969,16 @@ struct glz::meta<unknown_fields_member>
 suite unknown_fields_member_test = [] {
    "decode_unknown"_test = [] {
       unknown_fields_member obj{};
-      
+
       std::string buffer = R"({"a":"aaa","unk":"zzz", "unk2":{"sub":3,"sub2":[{"a":"b"}]},"unk3":[], "end":"end"})";
-      
+
       glz::context ctx{};
-      
+
       expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, buffer, ctx));
 
       expect(obj.extra["unk"].str == R"("zzz")");
       expect(obj.extra["unk2"].str == R"({"sub":3,"sub2":[{"a":"b"}]})");
       expect(obj.extra["unk3"].str == R"([])");
-
    };
 
    "encode_unknown"_test = [] {
@@ -5995,39 +5990,30 @@ suite unknown_fields_member_test = [] {
       obj.extra["unk2"] = R"({"sub":3,"sub2":[{"a":"b"}]})";
       obj.extra["unk3"] = R"([])";
 
-      std::string result = R"({"a":"aaa","missing":"","end":"end","unk":"zzz","unk2":{"sub":3,"sub2":[{"a":"b"}]},"unk3":[]})";
+      std::string result =
+         R"({"a":"aaa","missing":"","end":"end","unk":"zzz","unk2":{"sub":3,"sub2":[{"a":"b"}]},"unk3":[]})";
       expect(glz::write_json(obj) == result);
    };
 };
 
 struct unknown_fields_method
 {
-  std::string a;
-  std::string missing;
-  std::string end;
-  unknown_fields_member sub; // test writing of sub extras too
-  std::map<glz::sv, glz::raw_json> extra;
+   std::string a;
+   std::string missing;
+   std::string end;
+   unknown_fields_member sub; // test writing of sub extras too
+   std::map<glz::sv, glz::raw_json> extra;
 
-  void my_unknown_read(const glz::sv& key, const glz::raw_json& value) {
-      extra[key] = value;
-  };
+   void my_unknown_read(const glz::sv& key, const glz::raw_json& value) { extra[key] = value; };
 
-  std::map<glz::sv, glz::raw_json> my_unknown_write() const {
-      return extra;
-  }
-
+   std::map<glz::sv, glz::raw_json> my_unknown_write() const { return extra; }
 };
 
 template <>
 struct glz::meta<unknown_fields_method>
 {
    using T = unknown_fields_method;
-   static constexpr auto value = object(
-      "a", &T::a,
-      "missing", &T::missing,
-      "end", &T::end,
-      "sub", &T::sub
-   );
+   static constexpr auto value = object("a", &T::a, "missing", &T::missing, "end", &T::end, "sub", &T::sub);
    static constexpr auto unknown_write{&T::my_unknown_write};
    static constexpr auto unknown_read{&T::my_unknown_read};
 };
@@ -6035,17 +6021,16 @@ struct glz::meta<unknown_fields_method>
 suite unknown_fields_method_test = [] {
    "decode_unknown"_test = [] {
       unknown_fields_method obj{};
-      
+
       std::string buffer = R"({"a":"aaa","unk":"zzz", "unk2":{"sub":3,"sub2":[{"a":"b"}]},"unk3":[], "end":"end"})";
-      
+
       glz::context ctx{};
-      
+
       expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, buffer, ctx));
 
       expect(obj.extra["unk"].str == R"("zzz")");
       expect(obj.extra["unk2"].str == R"({"sub":3,"sub2":[{"a":"b"}]})");
       expect(obj.extra["unk3"].str == R"([])");
-
    };
 
    "encode_unknown"_test = [] {
@@ -6057,28 +6042,25 @@ suite unknown_fields_method_test = [] {
       obj.my_unknown_read("unk2", R"({"sub":3,"sub2":[{"a":"b"}]})");
       obj.my_unknown_read("unk3", R"([])");
       obj.sub.extra["subextra"] = R"("subextraval")";
-      std::string result = R"({"a":"aaa","missing":"","end":"end","sub":{"a":"","missing":"","end":"","subextra":"subextraval"},"unk":"zzz","unk2":{"sub":3,"sub2":[{"a":"b"}]},"unk3":[]})";
+      std::string result =
+         R"({"a":"aaa","missing":"","end":"end","sub":{"a":"","missing":"","end":"","subextra":"subextraval"},"unk":"zzz","unk2":{"sub":3,"sub2":[{"a":"b"}]},"unk3":[]})";
       expect(glz::write_json(obj) == result);
    };
 };
 
 struct unknown_fields_known_type
 {
-  std::string a;
-  std::string missing;
-  std::string end;
-  std::map<glz::sv, int> extra;
+   std::string a;
+   std::string missing;
+   std::string end;
+   std::map<glz::sv, int> extra;
 };
 
 template <>
 struct glz::meta<unknown_fields_known_type>
 {
    using T = unknown_fields_known_type;
-   static constexpr auto value = object(
-      "a", &T::a,
-      "missing", &T::missing,
-      "end", &T::end
-   );
+   static constexpr auto value = object("a", &T::a, "missing", &T::missing, "end", &T::end);
    static constexpr auto unknown_write{&T::extra};
    static constexpr auto unknown_read{&T::extra};
 };
@@ -6086,7 +6068,7 @@ struct glz::meta<unknown_fields_known_type>
 suite unknown_fields_known_type_test = [] {
    "decode_unknown"_test = [] {
       std::string buffer = R"({"a":"aaa","unk":5, "unk2":22,"unk3":355, "end":"end"})";
-      
+
       unknown_fields_known_type obj{};
       expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, buffer));
 
@@ -6095,7 +6077,6 @@ suite unknown_fields_known_type_test = [] {
       expect(obj.extra["unk3"] == 355);
    };
 };
-
 
 int main()
 {

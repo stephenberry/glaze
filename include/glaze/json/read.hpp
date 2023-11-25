@@ -80,26 +80,23 @@ namespace glz
          }
 
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         GLZ_ALWAYS_INLINE static void handle_unknown(const glz::sv& key, T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
-         {            
+         GLZ_ALWAYS_INLINE static void handle_unknown(const glz::sv& key, T&& value, Ctx&& ctx, It0&& it,
+                                                      It1&& end) noexcept
+         {
             using ValueType = std::decay_t<decltype(value)>;
             if constexpr (detail::has_unknown_reader<ValueType>) {
                constexpr auto& reader = meta_unknown_read_v<ValueType>;
                using ReaderType = meta_unknown_read_t<ValueType>;
-               if constexpr (std::is_member_object_pointer_v<ReaderType>)
-               {
+               if constexpr (std::is_member_object_pointer_v<ReaderType>) {
                   using MemberType = typename member_value<ReaderType>::type;
-                  if constexpr (detail::map_subscriptable<MemberType>)
-                  {
+                  if constexpr (detail::map_subscriptable<MemberType>) {
                      read<json>::op<Opts>((value.*reader)[key], ctx, it, end);
                   }
-                  else
-                  {
+                  else {
                      static_assert(false_v<T>, "target must have subscript operator");
                   }
                }
-               else if constexpr (std::is_member_function_pointer_v<ReaderType>)
-               {
+               else if constexpr (std::is_member_function_pointer_v<ReaderType>) {
                   using ReturnType = typename return_type<ReaderType>::type;
                   if constexpr (std::is_void_v<ReturnType>) {
                      using TupleType = typename inputs_as_tuple<ReaderType>::type;
@@ -110,28 +107,23 @@ namespace glz
                            return;
                         (value.*reader)(key, input);
                      }
-                     else 
-                     {
+                     else {
                         static_assert(false_v<T>, "method must have 2 args");
                      }
                   }
-                  else 
-                  {
+                  else {
                      static_assert(false_v<T>, "method must have void return");
                   }
                }
-               else
-               {
+               else {
                   static_assert(false_v<T>, "unknown_read type not handled");
                }
             }
-            else
-            {
+            else {
                skip_value<Opts>(ctx, it, end);
             }
          }
       };
-
 
       template <glaze_value_t T>
       struct from_json<T>

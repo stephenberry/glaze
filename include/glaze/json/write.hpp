@@ -939,23 +939,19 @@ namespace glz
             using ValueType = std::decay_t<V>;
             if constexpr (detail::has_unknown_writer<ValueType> && Options.write_unknown) {
                constexpr auto& writer = meta_unknown_write_v<ValueType>;
-               
+
                using WriterType = meta_unknown_write_t<ValueType>;
-               if constexpr (std::is_member_object_pointer_v<WriterType>)
-               {
+               if constexpr (std::is_member_object_pointer_v<WriterType>) {
                   write<json>::op<write_unknown_off<Options>()>(glz::merge{value, value.*writer}, ctx, b, ix);
                }
-               else if constexpr (std::is_member_function_pointer_v<WriterType>)
-               {
+               else if constexpr (std::is_member_function_pointer_v<WriterType>) {
                   write<json>::op<write_unknown_off<Options>()>(glz::merge{value, (value.*writer)()}, ctx, b, ix);
                }
-               else
-               {
+               else {
                   static_assert(false_v<T>, "unknown_write type not handled");
                }
             }
-            else
-            {
+            else {
                op_base<write_unknown_on<Options>()>(std::forward<V>(value), ctx, b, ix);
             }
          }
