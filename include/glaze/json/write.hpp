@@ -933,10 +933,10 @@ namespace glz
          requires glaze_object_t<T>
       struct to_json<T>
       {
-         template <auto Options>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         template <auto Options, class V>
+         GLZ_FLATTEN static void op(V&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
-            using ValueType = std::decay_t<decltype(value)>;
+            using ValueType = std::decay_t<V>;
             if constexpr (detail::has_unknown_writer<ValueType> && Options.write_unknown) {
                constexpr auto& writer = meta_unknown_write_v<ValueType>;
                
@@ -956,7 +956,7 @@ namespace glz
             }
             else
             {
-               op_base<write_unknown_on<Options>()>(value, ctx, b, ix);
+               op_base<write_unknown_on<Options>()>(std::forward<V>(value), ctx, b, ix);
             }
          }
 
