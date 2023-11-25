@@ -29,6 +29,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - Nearly zero intermediate allocations
 - Powerful wrappers to modify read/write behavior ([Wrappers](./docs/wrappers.md))
 - Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
+- [Handle unknown keys](./docs/unknown-keys.md) in a fast and flexible manner
 - Direct memory access through JSON pointer syntax
 - [Tagged binary spec](./docs/binary.md) through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
