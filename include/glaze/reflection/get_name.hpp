@@ -24,7 +24,7 @@ namespace glz {
    template <auto P> requires (std::is_member_object_pointer_v<decltype(P)>)
    constexpr std::string_view get_name() noexcept {
 #if defined(_MSC_VER)
-      static_assert(false, "MSVC does not support member variable name reflection");
+      static_assert(false_v<decltype(P)>, "MSVC does not support member variable name reflection");
       return {};
 #else
       // TODO: Use std::source_location when deprecating clang 14
