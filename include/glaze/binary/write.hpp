@@ -465,9 +465,17 @@ namespace glz
             dump_compressed_int<N>(args...);
 
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::get<I>(meta_v<V>);
-               write<binary>::no_header<Opts>(glz::get<0>(item), ctx, args...);
-               write<binary>::op<Opts>(get_member(value, glz::get<1>(item)), ctx, args...);
+               static constexpr auto item = get<I>(meta_v<V>);
+               using T0 = std::decay_t<decltype(get<0>(item))>;
+               static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+               static constexpr auto member_index = use_reflection ? 0 : 1;
+               if constexpr (use_reflection) {
+                  write<binary>::no_header<Opts>(get_name<get<0>(item)>(), ctx, args...);
+               }
+               else {
+                  write<binary>::no_header<Opts>(get<0>(item), ctx, args...);
+               }
+               write<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, args...);
             });
          }
       };
