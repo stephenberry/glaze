@@ -61,7 +61,7 @@ namespace glz
       size_t i = 0;
       for_each<n>([&](auto I) {
          using V = std::decay_t<std::tuple_element_t<I, Tuple>>;
-         if constexpr (!(std::convertible_to<V, std::string_view> || is_schema_class<V>)) {
+         if constexpr (!(std::convertible_to<V, std::string_view> || is_schema_class<V> || std::same_as<V, comment>)) {
             indices[i++] = I - 1;
          }
       });
@@ -103,6 +103,9 @@ namespace glz
          using type = decltype(glz::get<Start + I>(t));
          if constexpr (I == 0 || std::convertible_to<type, std::string_view>) {
             return std::string_view(glz::get<Start + I>(t));
+         }
+         else if constexpr (std::same_as<std::decay_t<type>, comment>) {
+            return glz::get<Start + I>(t).value;
          }
          else {
             return glz::get<Start + I>(t);

@@ -85,8 +85,8 @@ struct glz::meta<sub_thing>
 {
    static constexpr std::string_view name = "sub_thing";
    static constexpr auto value = object(
-      "a", &sub_thing::a, "Test comment 1", //
-      "b", [](auto&& v) -> auto& { return v.b; }, "Test comment 2" //
+      "a", &sub_thing::a, "Test comment 1"_c, //
+      "b", [](auto&& v) -> auto& { return v.b; }, comment("Test comment 2") //
    );
 };
 
