@@ -3,9 +3,9 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from C++ 
 
 Glaze also supports binary messages via [BEVE](https://github.com/stephenberry/beve) and CSV support. And, the library has many more useful features for building APIs.
 
-## Version 1.8.0 GCC and Clang glz::meta reflection!
+## Version 1.8.1 glz::meta reflection! For MSVC, GCC, and Clang!
 
-In the past you were required to write out the key name along with the member object pointer in your `glz::meta` definition. As of 1.8.0, on GCC and Clang the key names are entirely optional. You can individually include custom key names as needed, but otherwise simple reflection will use the name of your member variable.
+In the past you were required to write out the key name along with the member object pointer in your `glz::meta` definition. As of 1.8.1 key names are entirely optional. You can individually include custom key names as needed, but otherwise simple reflection will use the name of your member variable.
 
 Instead of writing:
 
