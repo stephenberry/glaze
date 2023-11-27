@@ -136,11 +136,11 @@ namespace glz
          auto naive_or_normal_hash = [&] {
             if constexpr (n <= 20) {
                return glz::detail::naive_map<value_t, n, use_hash_comparison>(
-                  {std::pair<sv, value_t>{sv(members[I]), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
+                  {std::pair<sv, value_t>{members[I], std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
             }
             else {
                return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
-                  {std::pair<sv, value_t>{sv(members[I]), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
+                  {std::pair<sv, value_t>{members[I], std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
             }
          };
 
