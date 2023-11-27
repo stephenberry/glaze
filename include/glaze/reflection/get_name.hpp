@@ -19,27 +19,30 @@ namespace glz
    extern const T fake_object;
 
    template <class T>
-   struct remove_member_pointer {
-       using type = T;
+   struct remove_member_pointer
+   {
+      using type = T;
    };
 
    template <class C, class T>
-   struct remove_member_pointer<T C::*> {
-       using type = C;
+   struct remove_member_pointer<T C::*>
+   {
+      using type = C;
    };
 
    template <auto P>
-   constexpr std::string_view get_name_msvc() noexcept {
-       std::string_view str = GLZ_PRETTY_FUNCTION;
+   constexpr std::string_view get_name_msvc() noexcept
+   {
+      std::string_view str = GLZ_PRETTY_FUNCTION;
 
-       size_t i = str.find("->");
-       str = str.substr(i + 2);
-       i = str.find(">");
-       str = str.substr(0, i);
+      size_t i = str.find("->");
+      str = str.substr(i + 2);
+      i = str.find(">");
+      str = str.substr(0, i);
 
-       return str;
+      return str;
    }
-   
+
 #if defined(__clang__)
    inline constexpr auto pretty_function_tail = "]";
 #elif defined(__GNUC__) || defined(__GNUG__)
@@ -52,9 +55,9 @@ namespace glz
    constexpr std::string_view get_name() noexcept
    {
 #if defined(_MSC_VER)
-    using T = remove_member_pointer<std::decay_t<decltype(P)>>::type;
-    constexpr auto p = P;
-    return get_name_msvc<&(fake_object<T>.*p)>();
+      using T = remove_member_pointer<std::decay_t<decltype(P)>>::type;
+      constexpr auto p = P;
+      return get_name_msvc<&(fake_object<T>.*p)>();
 #else
       // TODO: Use std::source_location when deprecating clang 14
       // std::string_view str = std::source_location::current().function_name();
