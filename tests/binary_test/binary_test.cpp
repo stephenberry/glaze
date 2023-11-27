@@ -1048,6 +1048,47 @@ suite bitset = [] {
    };
 };
 
+#ifndef _MSC_VER
+struct key_reflection
+{
+   int i = 287;
+   double d = 3.14;
+   std::string hello = "Hello World";
+   std::array<uint64_t, 3> arr = {1, 2, 3};
+};
+
+template <>
+struct glz::meta<key_reflection>
+{
+   static constexpr std::string_view name = "key_reflection";
+   using T = key_reflection;
+   static constexpr auto value = object(&T::i, //
+                                        &T::d, //
+                                        &T::hello, //
+                                        &T::arr //
+   );
+};
+
+suite key_reflection_tests = [] {
+   "reflect keys from glz::meta"_test = [] {
+      std::string s;
+      key_reflection obj{};
+      glz::write_binary(obj, s);
+      
+      obj.i = 0;
+      obj.d = 0;
+      obj.hello = "";
+      obj.arr = {};
+      expect(!glz::read_binary(obj, s));
+
+      expect(obj.i == 287);
+      expect(obj.d == 3.14);
+      expect(obj.hello == "Hello World");
+      expect(obj.arr == std::array<uint64_t, 3>{1, 2, 3});
+   };
+};
+#endif
+
 int main()
 {
    using namespace boost::ut;

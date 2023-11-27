@@ -57,7 +57,7 @@ struct glz::meta<my_struct> {
 > };
 > ```
 
-Next steps will be adding reflection support for wrappers and BEVE.
+Next steps will be adding reflection support for wrappers.
 
 ## Version 1.7.0 Clang Reflection!
 
