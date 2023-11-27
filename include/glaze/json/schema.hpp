@@ -326,8 +326,11 @@ namespace glz
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
             s.properties = std::map<std::string_view, schema, std::less<>>();
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::get<I>(meta_v<V>);
-               using mptr_t = decltype(glz::get<1>(item));
+               static constexpr auto item = get<I>(meta_v<V>);
+               using T0 = std::decay_t<decltype(get<0>(item))>;
+               static constexpr auto use_reflection = std::is_member_object_pointer_v<T0>;
+               static constexpr auto member_index = use_reflection ? 0 : 1;
+               using mptr_t = decltype(get<member_index>(item));
                using val_t = std::decay_t<member_t<V, mptr_t>>;
                auto& def = defs[name_v<val_t>];
                if (!def.type) {
@@ -335,17 +338,23 @@ namespace glz
                }
                auto ref_val = schema{join_v<chars<"#/$defs/">, name_v<val_t>>};
                static constexpr auto Size = std::tuple_size_v<decltype(item)>;
-               if constexpr (Size > 2) {
-                  using additional_data_type = decltype(glz::get<2>(item));
+               static constexpr auto comment_index = member_index + 1;
+               if constexpr (Size > comment_index) {
+                  using additional_data_type = decltype(get<comment_index>(item));
                   if constexpr (std::is_convertible_v<additional_data_type, std::string_view>) {
-                     ref_val.description = glz::get<2>(item);
+                     ref_val.description = get<comment_index>(item);
                   }
                   else if constexpr (std::is_convertible_v<additional_data_type, schema>) {
-                     ref_val = glz::get<2>(item);
+                     ref_val = get<comment_index>(item);
                      ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
                   }
                }
-               (*s.properties)[glz::get<0>(item)] = ref_val;
+               if constexpr (use_reflection) {
+                  (*s.properties)[get_name<get<0>(item)>()] = ref_val;
+               }
+               else {
+                  (*s.properties)[get<0>(item)] = ref_val;
+               }
             });
             s.additionalProperties = false;
          }

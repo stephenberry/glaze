@@ -85,8 +85,8 @@ struct glz::meta<sub_thing>
 {
    static constexpr std::string_view name = "sub_thing";
    static constexpr auto value = object(
-      "a", &sub_thing::a, "Test comment 1", //
-      "b", [](auto&& v) -> auto& { return v.b; }, "Test comment 2" //
+      "a", &sub_thing::a, "Test comment 1"_c, //
+      "b", [](auto&& v) -> auto& { return v.b; }, comment("Test comment 2") //
    );
 };
 
@@ -6077,6 +6077,50 @@ suite unknown_fields_known_type_test = [] {
       expect(obj.extra["unk3"] == 355);
    };
 };
+
+#ifndef _MSC_VER
+struct key_reflection
+{
+   int i = 287;
+   double d = 3.14;
+   std::string hello = "Hello World";
+   std::array<uint64_t, 3> arr = {1, 2, 3};
+};
+
+template <>
+struct glz::meta<key_reflection>
+{
+   static constexpr std::string_view name = "key_reflection";
+   using T = key_reflection;
+   static constexpr auto value = object(
+      &T::i, //
+      &T::d, //
+      &T::hello, //
+      &T::arr //
+   );
+};
+
+suite key_reflection_tests = [] {
+   "reflect keys from glz::meta"_test = [] {
+      std::string s;
+      key_reflection obj{};
+      glz::write_json(obj, s);
+      
+      expect(s == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})") << s;
+      
+      obj.i = 0;
+      obj.d = 0;
+      obj.hello = "";
+      obj.arr = {};
+      expect(!glz::read_json(obj, s));
+      
+      expect(obj.i == 287);
+      expect(obj.d == 3.14);
+      expect(obj.hello == "Hello World");
+      expect(obj.arr == std::array<uint64_t, 3>{1, 2, 3});
+   };
+};
+#endif
 
 int main()
 {

@@ -5,6 +5,7 @@
 
 #include <tuple>
 
+#include "glaze/reflection/get_name.hpp"
 #include "glaze/tuplet/tuple.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/string_view.hpp"
@@ -57,15 +58,27 @@ namespace glz
    constexpr auto filter()
    {
       constexpr auto n = std::tuple_size_v<Tuple>;
-      std::array<size_t, n> indices{};
+      std::array<uint64_t, n> indices{};
       size_t i = 0;
       for_each<n>([&](auto I) {
          using V = std::decay_t<std::tuple_element_t<I, Tuple>>;
-         if constexpr (!(std::convertible_to<V, std::string_view> || is_schema_class<V>)) {
+         if constexpr (std::is_member_object_pointer_v<V>) {
+            if constexpr (I == 0) {
+               indices[i++] = 0;
+            }
+            else if constexpr (std::convertible_to<std::tuple_element_t<I - 1, Tuple>, std::string_view>) {
+               // If the previous element in the tuple is convertible to a std::string_view, then we treat it as the key
+               indices[i++] = I - 1;
+            }
+            else {
+               indices[i++] = I;
+            }
+         }
+         else if constexpr (!(std::convertible_to<V, std::string_view> || is_schema_class<V> || std::same_as<V, comment>)) {
             indices[i++] = I - 1;
          }
       });
-      return std::make_pair(indices, i);
+      return std::make_pair(indices, i); // indices for groups and the number of groups
    }
 
    namespace detail
@@ -101,8 +114,12 @@ namespace glz
    {
       auto get_elem = [&](auto I) {
          using type = decltype(glz::get<Start + I>(t));
-         if constexpr (I == 0 || std::convertible_to<type, std::string_view>) {
+         using T = std::decay_t<type>;
+         if constexpr (std::convertible_to<type, std::string_view>) {
             return std::string_view(glz::get<Start + I>(t));
+         }
+         else if constexpr (std::same_as<T, comment>) {
+            return glz::get<Start + I>(t).value;
          }
          else {
             return glz::get<Start + I>(t);

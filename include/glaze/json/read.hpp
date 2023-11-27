@@ -1305,11 +1305,23 @@ namespace glz
          bool may_escape = false;
          constexpr auto N = std::tuple_size_v<meta_t<T>>;
          for_each<N>([&](auto I) {
-            constexpr auto s = glz::get<0>(glz::get<I>(meta_v<T>));
-            for (auto& c : s) {
-               if (c == '\\' || c == '"' || is_unicode(c)) {
-                  may_escape = true;
-                  return;
+            constexpr auto first = get<0>(get<I>(meta_v<T>));
+            using T0 = std::decay_t<decltype(first)>;
+            if constexpr (std::is_member_object_pointer_v<T0>) {
+               constexpr auto s = get_name<first>();
+               for (auto& c : s) {
+                  if (c == '\\' || c == '"' || is_unicode(c)) {
+                     may_escape = true;
+                     return;
+                  }
+               }
+            }
+            else {
+               for (auto& c : first) {
+                  if (c == '\\' || c == '"' || is_unicode(c)) {
+                     may_escape = true;
+                     return;
+                  }
                }
             }
          });
@@ -1361,13 +1373,27 @@ namespace glz
 
          constexpr auto N = std::tuple_size_v<meta_t<T>>;
          for_each<N>([&](auto I) {
-            constexpr auto s = glz::get<0>(glz::get<I>(meta_v<T>));
-            const auto n = s.size();
-            if (n < stats.min_length) {
-               stats.min_length = n;
+            constexpr auto first = get<0>(get<I>(meta_v<T>));
+            using T0 = std::decay_t<decltype(first)>;
+            if constexpr (std::is_member_object_pointer_v<T0>) {
+               constexpr auto s = get_name<first>();
+               const auto n = s.size();
+               if (n < stats.min_length) {
+                  stats.min_length = n;
+               }
+               if (n > stats.max_length) {
+                  stats.max_length = n;
+               }
             }
-            if (n > stats.max_length) {
-               stats.max_length = n;
+            else {
+               constexpr auto s = get<0>(get<I>(meta_v<T>));
+               const auto n = s.size();
+               if (n < stats.min_length) {
+                  stats.min_length = n;
+               }
+               if (n > stats.max_length) {
+                  stats.max_length = n;
+               }
             }
          });
 
