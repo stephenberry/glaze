@@ -1074,7 +1074,7 @@ suite key_reflection_tests = [] {
       std::string s;
       key_reflection obj{};
       glz::write_binary(obj, s);
-      
+
       obj.i = 0;
       obj.d = 0;
       obj.hello = "";
