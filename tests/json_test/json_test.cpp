@@ -6106,6 +6106,17 @@ suite key_reflection_tests = [] {
       glz::write_json(obj, s);
       
       expect(s == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})") << s;
+      
+      /*obj.i = 0;
+      obj.d = 0;
+      obj.hello = "";
+      obj.arr = {};
+      glz::read_json(obj, s);
+      
+      expect(obj.i == 287);
+      expect(obj.d == 3.14);
+      expect(obj.hello == "Hello World");
+      expect(obj.arr == std::array<uint64_t, 3>{1, 2, 3});*/
    };
 };
 

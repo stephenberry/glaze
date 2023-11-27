@@ -673,11 +673,11 @@ namespace glz
          auto naive_or_normal_hash = [&] {
             if constexpr (n <= 20) {
                return glz::detail::naive_map<value_t, n, use_hash_comparison>({std::pair<sv, value_t>{
-                  sv(glz::get<0>(glz::get<I>(meta_v<T>))), glz::get<1>(glz::get<I>(meta_v<T>))}...});
+                  sv(get<0>(get<I>(meta_v<T>))), get<1>(get<I>(meta_v<T>))}...});
             }
             else {
                return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({std::pair<sv, value_t>{
-                  sv(glz::get<0>(glz::get<I>(meta_v<T>))), glz::get<1>(glz::get<I>(meta_v<T>))}...});
+                  sv(get<0>(get<I>(meta_v<T>))), get<1>(get<I>(meta_v<T>))}...});
             }
          };
 
@@ -686,28 +686,28 @@ namespace glz
          }
          else if constexpr (n == 1) {
             return micro_map1<value_t, meta_sv<T, I>::value...>{std::make_pair<sv, value_t>(
-               sv(glz::get<0>(glz::get<I>(meta_v<T>))), glz::get<1>(glz::get<I>(meta_v<T>)))...};
+               sv(get<0>(get<I>(meta_v<T>))), get<1>(get<I>(meta_v<T>)))...};
          }
          else if constexpr (n == 2) {
             return micro_map2<value_t, meta_sv<T, I>::value...>{std::make_pair<sv, value_t>(
-               sv(glz::get<0>(glz::get<I>(meta_v<T>))), glz::get<1>(glz::get<I>(meta_v<T>)))...};
+               sv(get<0>(get<I>(meta_v<T>))), get<1>(get<I>(meta_v<T>)))...};
          }
          else if constexpr (n < 128) // don't even attempt a first character hash if we have too many keys
          {
             constexpr auto front_desc =
-               single_char_hash<n>(std::array<sv, n>{sv{glz::get<0>(glz::get<I>(meta_v<T>))}...});
+               single_char_hash<n>(std::array<sv, n>{sv{get<0>(get<I>(meta_v<T>))}...});
 
             if constexpr (front_desc.valid) {
                return make_single_char_map<value_t, front_desc>({std::make_pair<sv, value_t>(
-                  sv(glz::get<0>(glz::get<I>(meta_v<T>))), glz::get<1>(glz::get<I>(meta_v<T>)))...});
+                  sv(get<0>(get<I>(meta_v<T>))), get<1>(get<I>(meta_v<T>)))...});
             }
             else {
                constexpr auto back_desc =
-                  single_char_hash<n, false>(std::array<sv, n>{sv{glz::get<0>(glz::get<I>(meta_v<T>))}...});
+                  single_char_hash<n, false>(std::array<sv, n>{sv{get<0>(get<I>(meta_v<T>))}...});
 
                if constexpr (back_desc.valid) {
                   return make_single_char_map<value_t, back_desc>({std::make_pair<sv, value_t>(
-                     sv(glz::get<0>(glz::get<I>(meta_v<T>))), glz::get<1>(glz::get<I>(meta_v<T>)))...});
+                     sv(get<0>(get<I>(meta_v<T>))), get<1>(get<I>(meta_v<T>)))...});
                }
                else {
                   return naive_or_normal_hash();
