@@ -1411,11 +1411,13 @@ suite read_tests = [] {
          const std::pair expected{test_case.expected_key, test_case.expected_value};
          std::remove_cv_t<decltype(expected)> parsed{};
 
-         auto err = glz::read_json(glz::prefer_array_adapter{parsed}, test_case.input_json);
+         glz::prefer_array_adapter array_parsed{parsed};
+         auto err = glz::read_json(array_parsed, test_case.input_json);
          expect(err == glz::error_code::none) << glz::format_error(err, test_case.input_json);
          expect(parsed == expected) << glz::write_json(parsed);
 
-         err = glz::read_json(glz::prefer_arrays_t{parsed}, test_case.input_json);
+         glz::prefer_arrays_t arrays_parsed{parsed};
+         err = glz::read_json(arrays_parsed, test_case.input_json);
          expect(err == glz::error_code::none) << glz::format_error(err, test_case.input_json);
          expect(parsed == expected) << glz::write_json(parsed);
       } |
@@ -1434,11 +1436,13 @@ suite read_tests = [] {
          expect(parsed == expected);
 
          parsed = initial;
-         expect(glz::read_json(glz::prefer_array_adapter{parsed}, input_array_json) == glz::error_code::none);
+         glz::prefer_array_adapter array_parsed{parsed};
+         expect(glz::read_json(array_parsed, input_array_json) == glz::error_code::none);
          expect(parsed == expected);
 
          parsed = initial;
-         expect(glz::read_json(glz::prefer_arrays_t{parsed}, input_array_json) == glz::error_code::none);
+         glz::prefer_arrays_t arrays_parsed{parsed};
+         expect(glz::read_json(arrays_parsed, input_array_json) == glz::error_code::none);
          expect(parsed == expected);
       } |
       std::tuple{Read_map_test_case{std::map<std::string, int>{{"as", 1}, {"so", 2}, {"make", 3}}},
@@ -1983,17 +1987,17 @@ suite write_tests = [] {
       expect(s == glz::sv{R"({"c":211.2})"});
 
       // map as array using single adapter
-      glz::write_json(glz::prefer_array_adapter{m}, s);
+      glz::write_json(glz::prefer_array_adapter<decltype(nullable)>{m}, s);
       expect(s == R"([["a",2.2],["b",11.111],["c",211.2]])");
 
-      glz::write_json(glz::prefer_array_adapter{nullable}, s);
+      glz::write_json(glz::prefer_array_adapter<decltype(nullable)>{nullable}, s);
       expect(s == glz::sv{R"([["c",211.2]])"});
 
-      // map as array using glz::opts flag
-      glz::write_json(glz::prefer_arrays_t{m}, s);
+      // map as array recursively
+      glz::write_json(glz::prefer_arrays_t<decltype(nullable)>{m}, s);
       expect(s == R"([["a",2.2],["b",11.111],["c",211.2]])");
 
-      glz::write_json(glz::prefer_arrays_t{nullable}, s);
+      glz::write_json(glz::prefer_arrays_t<decltype(nullable)>{nullable}, s);
       expect(s == glz::sv{R"([["c",211.2]])"});
    };
 
@@ -2034,7 +2038,7 @@ suite write_tests = [] {
    "Write pair as array (recursive)"_test =
       [](const auto& test_case) {
          const std::pair value{test_case.key, test_case.value};
-         expect(glz::write_json(glz::prefer_arrays_t{value}) == test_case.expected_json);
+         expect(glz::write_json(glz::prefer_arrays_t<decltype(value)>{value}) == test_case.expected_json);
       } |
       std::tuple{
          Write_pair_test_case{"key", "value", R"(["key","value"])"},

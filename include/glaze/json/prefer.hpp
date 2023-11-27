@@ -190,9 +190,9 @@ namespace glz
 
    template <detail::writable_map_t T>
       requires(!detail::readable_map_t<T>)
-   class prefer_array_adapter<T> : public detail::range_common_prefer_array_adapter<T>
+   class prefer_array_adapter<T> : public detail::range_common_prefer_array_adapter<const T>
    {
-      using common = detail::range_common_prefer_array_adapter<T>;
+      using common = detail::range_common_prefer_array_adapter<const T>;
 
      public:
       using value_type = typename common::const_value_type;
@@ -205,8 +205,7 @@ namespace glz
 
       using common::map;
 
-      explicit prefer_array_adapter(const T& map) : detail::range_common_prefer_array_adapter<const T>{map} {}
-      explicit prefer_array_adapter(T& map) : detail::range_common_prefer_array_adapter<T>{map} {}
+      explicit prefer_array_adapter(const T& map) : common{map} {}
 
       [[nodiscard]] constexpr iterator begin() const noexcept { return {map.get().begin()}; }
       [[nodiscard]] constexpr iterator end() const noexcept { return {map.get().end()}; }
@@ -230,7 +229,8 @@ namespace glz
 
       using common::map;
 
-      explicit prefer_array_adapter(T& map) : detail::range_common_prefer_array_adapter<T>{map} {}
+      explicit prefer_array_adapter(T& map) : common{map} {}
+      explicit prefer_array_adapter(T&& map) : detail::range_common_prefer_array_adapter<const T&>{map} {}
 
       [[nodiscard]] constexpr iterator begin() noexcept { return {map.get().begin()}; }
       [[nodiscard]] constexpr iterator end() noexcept { return {map.get().end()}; }
@@ -258,7 +258,7 @@ namespace glz
       struct to_json<prefer_array_adapter<T>>
       {
          template <opts Opts>
-         static void op(const prefer_array_adapter<T>& value, auto&&... args) noexcept
+         static void op(prefer_array_adapter<T>&& value, auto&&... args) noexcept
          {
             // prefer_array_adaptor<pair_t> is not a range, it presents a tuple interface.
             write<json>::op<Opts>(value.val.base_tuple(), args...);
