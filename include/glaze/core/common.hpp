@@ -932,7 +932,9 @@ namespace glz
       {
          if constexpr (glaze_object_t<std::decay_t<T>>) {
             return glz::tuplet::tuple<
-               std::decay_t<member_t<T, std::tuple_element_t<1, std::tuple_element_t<I, meta_t<T>>>>>...>{};
+               std::decay_t<member_t<T, typename member_type<meta_t<T>, I>::type>>...>{};
+            
+            
          }
          else {
             return glz::tuplet::tuple{};
