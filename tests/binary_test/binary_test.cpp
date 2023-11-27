@@ -1048,7 +1048,6 @@ suite bitset = [] {
    };
 };
 
-#ifndef _MSC_VER
 struct key_reflection
 {
    int i = 287;
@@ -1087,7 +1086,6 @@ suite key_reflection_tests = [] {
       expect(obj.arr == std::array<uint64_t, 3>{1, 2, 3});
    };
 };
-#endif
 
 int main()
 {
