@@ -670,6 +670,11 @@ namespace glz
          return std::pair<sv, value_t>{
             sv(get<0>(get<I>(meta_v<T>))), get<1>(get<I>(meta_v<T>))};
       }
+      
+      template <class T, size_t I>
+      constexpr sv get_key() {
+         return {get<0>(get<I>(meta_v<T>))};
+      }
 
       template <class T, bool use_hash_comparison, size_t... I>
       constexpr auto make_map_impl(std::index_sequence<I...>)
@@ -698,14 +703,14 @@ namespace glz
          else if constexpr (n < 128) // don't even attempt a first character hash if we have too many keys
          {
             constexpr auto front_desc =
-               single_char_hash<n>(std::array<sv, n>{sv{get<0>(get<I>(meta_v<T>))}...});
+               single_char_hash<n>(std::array<sv, n>{get_key<T, I>()...});
 
             if constexpr (front_desc.valid) {
                return make_single_char_map<value_t, front_desc>({key_value<T, I>()...});
             }
             else {
                constexpr auto back_desc =
-                  single_char_hash<n, false>(std::array<sv, n>{sv{get<0>(get<I>(meta_v<T>))}...});
+                  single_char_hash<n, false>(std::array<sv, n>{get_key<T, I>()...});
 
                if constexpr (back_desc.valid) {
                   return make_single_char_map<value_t, back_desc>({key_value<T, I>()...});
