@@ -6111,7 +6111,7 @@ suite key_reflection_tests = [] {
       obj.d = 0;
       obj.hello = "";
       obj.arr = {};
-      glz::read_json(obj, s);
+      expect(!glz::read_json(obj, s));
       
       expect(obj.i == 287);
       expect(obj.d == 3.14);

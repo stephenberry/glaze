@@ -608,12 +608,19 @@ namespace glz
 
       template <class Tuple, class = std::make_index_sequence<std::tuple_size<Tuple>::value>>
       struct value_tuple_variant;
+      
+      template <class Tuple, size_t I>
+      struct member_type
+      {
+         using T0 = std::decay_t<std::tuple_element_t<0, std::tuple_element_t<I, Tuple>>>;
+         using type = std::tuple_element_t<std::is_member_object_pointer_v<T0> ? 0 : 1, std::tuple_element_t<I, Tuple>>;
+      };
 
       template <class Tuple, size_t... I>
       struct value_tuple_variant<Tuple, std::index_sequence<I...>>
       {
          using type = typename tuple_variant<decltype(glz::tuplet::tuple_cat(
-            std::declval<glz::tuplet::tuple<std::tuple_element_t<1, std::tuple_element_t<I, Tuple>>>>()...))>::type;
+            std::declval<tuplet::tuple<typename member_type<Tuple, I>::type>>()...))>::type;
       };
 
       template <class Tuple>
@@ -659,7 +666,7 @@ namespace glz
       }
       
       template <class T, size_t I>
-      constexpr auto key_value() {
+      constexpr auto key_value() noexcept {
          using value_t = value_tuple_variant_t<meta_t<T>>;
          constexpr auto first = get<0>(get<I>(meta_v<T>));
          using T0 = std::decay_t<decltype(first)>;
@@ -674,7 +681,7 @@ namespace glz
       }
       
       template <class T, size_t I>
-      constexpr sv get_key() {
+      constexpr sv get_key() noexcept {
          constexpr auto first = get<0>(get<I>(meta_v<T>));
          using T0 = std::decay_t<decltype(first)>;
          if constexpr (std::is_member_object_pointer_v<T0>) {
