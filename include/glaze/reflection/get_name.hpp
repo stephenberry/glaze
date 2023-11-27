@@ -3,13 +3,8 @@
 
 #pragma once
 
+#include <source_location>
 #include <string_view>
-
-#if defined(__clang__) || defined(__GNUC__)
-#define GLZ_PRETTY_FUNCTION __PRETTY_FUNCTION__
-#elif defined(_MSC_VER)
-#define GLZ_PRETTY_FUNCTION __FUNCSIG__
-#endif
 
 namespace glz {
 #if defined(__clang__)
@@ -25,7 +20,7 @@ namespace glz {
       static_assert(false, "MSVC does not support member variable name reflection");
       return {};
 #else
-      std::string_view str = GLZ_PRETTY_FUNCTION;
+      std::string_view str = std::source_location::current().function_name();
 
       size_t i = str.find("&");
       str = str.substr(i + 2);
