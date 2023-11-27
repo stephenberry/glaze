@@ -61,7 +61,7 @@ namespace glz
       std::string_view str = GLZ_PRETTY_FUNCTION;
 
       size_t i = str.find("&");
-      str = str.substr(i + 2);
+      str = str.substr(i + 1);
       i = str.find("::");
       str = str.substr(i + 2);
       i = str.find(pretty_function_tail);
