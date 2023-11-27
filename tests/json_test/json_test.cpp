@@ -6107,7 +6107,7 @@ suite key_reflection_tests = [] {
       
       expect(s == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})") << s;
       
-      /*obj.i = 0;
+      obj.i = 0;
       obj.d = 0;
       obj.hello = "";
       obj.arr = {};
@@ -6116,7 +6116,7 @@ suite key_reflection_tests = [] {
       expect(obj.i == 287);
       expect(obj.d == 3.14);
       expect(obj.hello == "Hello World");
-      expect(obj.arr == std::array<uint64_t, 3>{1, 2, 3});*/
+      expect(obj.arr == std::array<uint64_t, 3>{1, 2, 3});
    };
 };
 
