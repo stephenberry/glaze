@@ -74,7 +74,8 @@ namespace glz
                indices[i++] = I;
             }
          }
-         else if constexpr (!(std::convertible_to<V, std::string_view> || is_schema_class<V> || std::same_as<V, comment>)) {
+         else if constexpr (!(std::convertible_to<V, std::string_view> || is_schema_class<V> ||
+                              std::same_as<V, comment>)) {
             indices[i++] = I - 1;
          }
       });

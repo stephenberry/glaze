@@ -6092,11 +6092,10 @@ struct glz::meta<key_reflection>
 {
    static constexpr std::string_view name = "key_reflection";
    using T = key_reflection;
-   static constexpr auto value = object(
-      &T::i, //
-      &T::d, //
-      &T::hello, //
-      &T::arr //
+   static constexpr auto value = object(&T::i, //
+                                        &T::d, //
+                                        &T::hello, //
+                                        &T::arr //
    );
 };
 
@@ -6105,15 +6104,15 @@ suite key_reflection_tests = [] {
       std::string s;
       key_reflection obj{};
       glz::write_json(obj, s);
-      
+
       expect(s == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})") << s;
-      
+
       obj.i = 0;
       obj.d = 0;
       obj.hello = "";
       obj.arr = {};
       expect(!glz::read_json(obj, s));
-      
+
       expect(obj.i == 287);
       expect(obj.d == 3.14);
       expect(obj.hello == "Hello World");

@@ -608,7 +608,7 @@ namespace glz
 
       template <class Tuple, class = std::make_index_sequence<std::tuple_size<Tuple>::value>>
       struct value_tuple_variant;
-      
+
       template <class Tuple, size_t I>
       struct member_type
       {
@@ -664,24 +664,24 @@ namespace glz
          static constexpr auto runtime_getter = tuple_runtime_getter<T>(indices);
          return runtime_getter[index](t);
       }
-      
+
       template <class T, size_t I>
-      constexpr auto key_value() noexcept {
+      constexpr auto key_value() noexcept
+      {
          using value_t = value_tuple_variant_t<meta_t<T>>;
          constexpr auto first = get<0>(get<I>(meta_v<T>));
          using T0 = std::decay_t<decltype(first)>;
          if constexpr (std::is_member_object_pointer_v<T0>) {
-            return std::pair<sv, value_t>{
-               get_name<first>(), first};
+            return std::pair<sv, value_t>{get_name<first>(), first};
          }
          else {
-            return std::pair<sv, value_t>{
-               sv(first), get<1>(get<I>(meta_v<T>))};
+            return std::pair<sv, value_t>{sv(first), get<1>(get<I>(meta_v<T>))};
          }
       }
-      
+
       template <class T, size_t I>
-      constexpr sv get_key() noexcept {
+      constexpr sv get_key() noexcept
+      {
          constexpr auto first = get<0>(get<I>(meta_v<T>));
          using T0 = std::decay_t<decltype(first)>;
          if constexpr (std::is_member_object_pointer_v<T0>) {
@@ -724,15 +724,13 @@ namespace glz
          }
          else if constexpr (n < 128) // don't even attempt a first character hash if we have too many keys
          {
-            constexpr auto front_desc =
-               single_char_hash<n>(std::array<sv, n>{get_key<T, I>()...});
+            constexpr auto front_desc = single_char_hash<n>(std::array<sv, n>{get_key<T, I>()...});
 
             if constexpr (front_desc.valid) {
                return make_single_char_map<value_t, front_desc>({key_value<T, I>()...});
             }
             else {
-               constexpr auto back_desc =
-                  single_char_hash<n, false>(std::array<sv, n>{get_key<T, I>()...});
+               constexpr auto back_desc = single_char_hash<n, false>(std::array<sv, n>{get_key<T, I>()...});
 
                if constexpr (back_desc.valid) {
                   return make_single_char_map<value_t, back_desc>({key_value<T, I>()...});
@@ -931,10 +929,7 @@ namespace glz
       inline constexpr auto members_from_meta_impl()
       {
          if constexpr (glaze_object_t<std::decay_t<T>>) {
-            return glz::tuplet::tuple<
-               std::decay_t<member_t<T, typename member_type<meta_t<T>, I>::type>>...>{};
-            
-            
+            return glz::tuplet::tuple<std::decay_t<member_t<T, typename member_type<meta_t<T>, I>::type>>...>{};
          }
          else {
             return glz::tuplet::tuple{};

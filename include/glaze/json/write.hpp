@@ -1028,7 +1028,7 @@ namespace glz
                            return get<0>(item);
                         }
                      };
-                     
+
                      static constexpr sv key = name_getter();
                      if constexpr (needs_escaping(key)) {
                         write<json>::op<Opts>(key, ctx, b, ix);
@@ -1049,9 +1049,9 @@ namespace glz
                         concat_arrays(concat_arrays("\"", glz::get<0>(item)), "\":", Opts.prettify ? " " : "");
                      write<json>::op<Opts>(quoted_key, ctx, b, ix);
                   }
-                  
+
                   write<json>::op<Opts>(get_member(value, get<member_index>(item)), ctx, b, ix);
-                  
+
                   static constexpr size_t comment_index = member_index + 1;
                   static constexpr auto S = std::tuple_size_v<decltype(item)>;
                   if constexpr (Opts.comments && S > comment_index) {
