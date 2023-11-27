@@ -78,6 +78,51 @@ namespace glz
                }
             }
          }
+
+         template <auto Opts, class T, is_context Ctx, class It0, class It1>
+         GLZ_ALWAYS_INLINE static void handle_unknown(const glz::sv& key, T&& value, Ctx&& ctx, It0&& it,
+                                                      It1&& end) noexcept
+         {
+            using ValueType = std::decay_t<decltype(value)>;
+            if constexpr (detail::has_unknown_reader<ValueType>) {
+               constexpr auto& reader = meta_unknown_read_v<ValueType>;
+               using ReaderType = meta_unknown_read_t<ValueType>;
+               if constexpr (std::is_member_object_pointer_v<ReaderType>) {
+                  using MemberType = typename member_value<ReaderType>::type;
+                  if constexpr (detail::map_subscriptable<MemberType>) {
+                     read<json>::op<Opts>((value.*reader)[key], ctx, it, end);
+                  }
+                  else {
+                     static_assert(false_v<T>, "target must have subscript operator");
+                  }
+               }
+               else if constexpr (std::is_member_function_pointer_v<ReaderType>) {
+                  using ReturnType = typename return_type<ReaderType>::type;
+                  if constexpr (std::is_void_v<ReturnType>) {
+                     using TupleType = typename inputs_as_tuple<ReaderType>::type;
+                     if constexpr (std::tuple_size_v<TupleType> == 2) {
+                        std::decay_t<std::tuple_element_t<1, TupleType>> input{};
+                        read<json>::op<Opts>(input, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        (value.*reader)(key, input);
+                     }
+                     else {
+                        static_assert(false_v<T>, "method must have 2 args");
+                     }
+                  }
+                  else {
+                     static_assert(false_v<T>, "method must have void return");
+                  }
+               }
+               else {
+                  static_assert(false_v<T>, "unknown_read type not handled");
+               }
+            }
+            else {
+               skip_value<Opts>(ctx, it, end);
+            }
+         }
       };
 
       template <glaze_value_t T>
@@ -1260,11 +1305,23 @@ namespace glz
          bool may_escape = false;
          constexpr auto N = std::tuple_size_v<meta_t<T>>;
          for_each<N>([&](auto I) {
-            constexpr auto s = glz::get<0>(glz::get<I>(meta_v<T>));
-            for (auto& c : s) {
-               if (c == '\\' || c == '"' || is_unicode(c)) {
-                  may_escape = true;
-                  return;
+            constexpr auto first = get<0>(get<I>(meta_v<T>));
+            using T0 = std::decay_t<decltype(first)>;
+            if constexpr (std::is_member_object_pointer_v<T0>) {
+               constexpr auto s = get_name<first>();
+               for (auto& c : s) {
+                  if (c == '\\' || c == '"' || is_unicode(c)) {
+                     may_escape = true;
+                     return;
+                  }
+               }
+            }
+            else {
+               for (auto& c : first) {
+                  if (c == '\\' || c == '"' || is_unicode(c)) {
+                     may_escape = true;
+                     return;
+                  }
                }
             }
          });
@@ -1316,13 +1373,27 @@ namespace glz
 
          constexpr auto N = std::tuple_size_v<meta_t<T>>;
          for_each<N>([&](auto I) {
-            constexpr auto s = glz::get<0>(glz::get<I>(meta_v<T>));
-            const auto n = s.size();
-            if (n < stats.min_length) {
-               stats.min_length = n;
+            constexpr auto first = get<0>(get<I>(meta_v<T>));
+            using T0 = std::decay_t<decltype(first)>;
+            if constexpr (std::is_member_object_pointer_v<T0>) {
+               constexpr auto s = get_name<first>();
+               const auto n = s.size();
+               if (n < stats.min_length) {
+                  stats.min_length = n;
+               }
+               if (n > stats.max_length) {
+                  stats.max_length = n;
+               }
             }
-            if (n > stats.max_length) {
-               stats.max_length = n;
+            else {
+               constexpr auto s = get<0>(get<I>(meta_v<T>));
+               const auto n = s.size();
+               if (n < stats.min_length) {
+                  stats.min_length = n;
+               }
+               if (n > stats.max_length) {
+                  stats.max_length = n;
+               }
             }
          });
 
@@ -1572,7 +1643,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
-                     skip_value<Opts>(ctx, it, end);
+                     read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
@@ -1624,7 +1695,7 @@ namespace glz
                            if (bool(ctx.error)) [[unlikely]]
                               return;
 
-                           skip_value<Opts>(ctx, it, end);
+                           read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                         }
@@ -1635,7 +1706,7 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        skip_value<Opts>(ctx, it, end);
+                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }

@@ -933,8 +933,32 @@ namespace glz
          requires glaze_object_t<T>
       struct to_json<T>
       {
+         template <auto Options, class V>
+         GLZ_FLATTEN static void op(V&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         {
+            using ValueType = std::decay_t<V>;
+            if constexpr (detail::has_unknown_writer<ValueType> && Options.write_unknown) {
+               constexpr auto& writer = meta_unknown_write_v<ValueType>;
+
+               using WriterType = meta_unknown_write_t<ValueType>;
+               if constexpr (std::is_member_object_pointer_v<WriterType>) {
+                  write<json>::op<write_unknown_off<Options>()>(glz::merge{value, value.*writer}, ctx, b, ix);
+               }
+               else if constexpr (std::is_member_function_pointer_v<WriterType>) {
+                  write<json>::op<write_unknown_off<Options>()>(glz::merge{value, (value.*writer)()}, ctx, b, ix);
+               }
+               else {
+                  static_assert(false_v<T>, "unknown_write type not handled");
+               }
+            }
+            else {
+               op_base<write_unknown_on<Options>()>(std::forward<V>(value), ctx, b, ix);
+            }
+         }
+
+         // handles glaze_object_t without extra unknown fields
          template <auto Options>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         GLZ_FLATTEN static void op_base(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             if constexpr (!Options.opening_handled) {
                dump<'{'>(b, ix);
@@ -952,7 +976,11 @@ namespace glz
             for_each<N>([&](auto I) {
                static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
                static constexpr auto item = glz::get<I>(meta_v<V>);
-               using mptr_t = std::tuple_element_t<1, decltype(item)>;
+               using T0 = std::decay_t<std::tuple_element_t<0, decltype(item)>>;
+               static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+               static constexpr size_t member_index = use_reflection ? 0 : 1;
+               using mptr_t = std::decay_t<std::tuple_element_t<member_index, decltype(item)>>;
+               using Key = std::conditional_t<use_reflection, sv, T0>;
                using val_t = member_t<V, mptr_t>;
 
                if constexpr (null_t<val_t> && Opts.skip_null_members) {
@@ -961,13 +989,13 @@ namespace glz
                   else {
                      auto is_null = [&]() {
                         if constexpr (std::is_member_pointer_v<mptr_t>) {
-                           return !bool(value.*glz::get<1>(item));
+                           return !bool(value.*get<member_index>(item));
                         }
                         else if constexpr (raw_nullable<val_t>) {
-                           return !bool(glz::get<1>(item)(value).val);
+                           return !bool(get<member_index>(item)(value).val);
                         }
                         else {
-                           return !bool(glz::get<1>(item)(value));
+                           return !bool(get<member_index>(item)(value));
                         }
                      }();
                      if (is_null) return;
@@ -991,10 +1019,17 @@ namespace glz
                      write_entry_separator<Opts>(ctx, b, ix);
                   }
 
-                  using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
-
                   if constexpr (str_t<Key> || char_t<Key>) {
-                     static constexpr sv key = glz::get<0>(item);
+                     auto name_getter = [&]() -> sv {
+                        if constexpr (use_reflection) {
+                           return get_name<get<0>(item)>();
+                        }
+                        else {
+                           return get<0>(item);
+                        }
+                     };
+
+                     static constexpr sv key = name_getter();
                      if constexpr (needs_escaping(key)) {
                         write<json>::op<Opts>(key, ctx, b, ix);
                         dump<':'>(b, ix);
@@ -1015,12 +1050,13 @@ namespace glz
                      write<json>::op<Opts>(quoted_key, ctx, b, ix);
                   }
 
-                  write<json>::op<Opts>(get_member(value, glz::get<1>(item)), ctx, b, ix);
+                  write<json>::op<Opts>(get_member(value, get<member_index>(item)), ctx, b, ix);
 
+                  static constexpr size_t comment_index = member_index + 1;
                   static constexpr auto S = std::tuple_size_v<decltype(item)>;
-                  if constexpr (Opts.comments && S > 2) {
-                     if constexpr (std::is_convertible_v<decltype(glz::get<2>(item)), std::string_view>) {
-                        static constexpr sv comment = glz::get<2>(item);
+                  if constexpr (Opts.comments && S > comment_index) {
+                     if constexpr (std::is_convertible_v<decltype(get<comment_index>(item)), sv>) {
+                        static constexpr sv comment = get<comment_index>(item);
                         if constexpr (comment.size() > 0) {
                            if constexpr (Opts.prettify) {
                               dump<' '>(b, ix);

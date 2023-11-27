@@ -3,7 +3,63 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from C++ 
 
 Glaze also supports binary messages via [BEVE](https://github.com/stephenberry/beve) and CSV support. And, the library has many more useful features for building APIs.
 
-## New Version 1.7.0 Clang Reflection!
+## Version 1.8.0 GCC and Clang glz::meta reflection!
+
+In the past you were required to write out the key name along with the member object pointer in your `glz::meta` definition. As of 1.8.0, on GCC and Clang the key names are entirely optional. You can individually include custom key names as needed, but otherwise simple reflection will use the name of your member variable.
+
+Instead of writing:
+
+```c++
+template <>
+struct glz::meta<my_struct> {
+   using T = my_struct;
+   static constexpr auto value = object(
+      "i", &T::i,
+      "d", &T::d,
+      "hello", &T::hello,
+      "arr", &T::arr
+   );
+};
+```
+
+You can now write:
+
+```c++
+template <>
+struct glz::meta<my_struct> {
+   using T = my_struct;
+   static constexpr auto value = object(
+      &T::i,
+      &T::d,
+      &T::hello,
+      &T::arr
+   );
+};
+```
+
+- This update has zero runtime performance overhead!
+- Every field can be individually named and customized as before
+- The reflection is very simple and doesn't use esoteric hacks
+- The reflection works on all types, non-aggregates, non-default constructible, non-constexpr etc.
+
+> NOTE: If you want comments in your `glz::meta` without providing key names, you must denote those comments explicitly. Glaze now has a `comment` type and a `_c` literal for denoting comments. These explicit comments are only needed if you remove the key name.
+>
+> ```c++
+> template <>
+> struct glz::meta<my_struct> {
+>    using T = my_struct;
+>    static constexpr auto value = object(
+>       &T::i, "i is an integer"_c,
+>       &T::d, comment("d is a double"),
+>       &T::hello, "hello is a string"_c,
+>       &T::arr, comment("this is an array of integers")
+>    );
+> };
+> ```
+
+Next steps will be adding reflection support for wrappers and BEVE.
+
+## Version 1.7.0 Clang Reflection!
 
 For the Clang compiler only, Glaze will reflect your structs. No need to write any `glz::meta` structures or use any macros. The reflection is hidden from the user and computed at compile time.
 
