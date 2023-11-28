@@ -39,7 +39,6 @@ struct glz::meta<my_struct> {
 
 - This update has zero runtime performance overhead!
 - Every field can be individually named and customized as before
-- The reflection is very simple and doesn't use esoteric hacks
 - The reflection works on all types, non-aggregates, non-default constructible, non-constexpr etc.
 
 > NOTE: If you want comments in your `glz::meta` without providing key names, you must denote those comments explicitly. Glaze now has a `comment` type and a `_c` literal for denoting comments. These explicit comments are only needed if you remove the key name.
