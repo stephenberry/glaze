@@ -1087,6 +1087,45 @@ suite key_reflection_tests = [] {
    };
 };
 
+struct header_t
+{
+   bool valid{};
+   std::string description{};
+   
+   struct glaze {
+      using T = header_t;
+      static constexpr auto value = glz::object(&T::valid, &T::description);
+   };
+};
+
+struct signal_t
+{
+   header_t header{};
+   std::vector<double> v_f64;
+   std::vector<uint8_t> v_u8;
+   
+   struct glaze {
+      using T = signal_t;
+      static constexpr auto value = glz::object(&T::header, &T::v_f64, &T::v_u8);
+   };
+};
+
+suite signal_tests = [] {
+   "signal"_test = [] {
+      std::string s;
+      signal_t obj{{ true, "header description" }, {1.0, 2.0}, {1, 2, 3, 4, 5}};
+      glz::write_binary(obj, s);
+      
+      obj = {};
+      expect(!glz::read_binary(obj, s));
+
+      expect(obj.header.valid == true);
+      expect(obj.header.description == "header description");
+      expect(obj.v_f64 == std::vector{1.0, 2.0});
+      expect(obj.v_u8 == std::vector<uint8_t>{1, 2, 3, 4, 5});
+   };
+};
+
 int main()
 {
    using namespace boost::ut;

@@ -273,6 +273,7 @@ namespace glz::detail
    template <class B>
    GLZ_ALWAYS_INLINE void dump(const std::span<const std::byte> bytes, B&& b, auto& ix) noexcept
    {
+      assert(ix <= b.size());
       const auto n = bytes.size();
       if (ix + n > b.size()) [[unlikely]] {
          b.resize((std::max)(b.size() * 2, ix + n));
@@ -285,6 +286,7 @@ namespace glz::detail
    template <size_t N, class B>
    GLZ_ALWAYS_INLINE void dump(const std::array<uint8_t, N>& bytes, B&& b, auto& ix) noexcept
    {
+      assert(ix <= b.size());
       if (ix + N > b.size()) [[unlikely]] {
          b.resize((std::max)(b.size() * 2, ix + N));
       }
