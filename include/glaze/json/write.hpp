@@ -928,6 +928,41 @@ namespace glz
             dump<'}'>(b, ix);
          }
       };
+      
+      // Allows us to remove a branch if the first item will always be written
+      template <auto Opts, class T>
+      consteval bool first_will_be_written()
+      {
+         using V = std::decay_t<T>;
+         constexpr auto N = std::tuple_size_v<meta_t<V>>;
+         if constexpr (N > 0) {
+            constexpr auto item = glz::get<0>(meta_v<V>);
+            using Item = decltype(item);
+            using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
+            constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+            constexpr size_t member_index = use_reflection ? 0 : 1;
+            using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
+            using val_t = member_t<V, mptr_t>;
+            
+            if constexpr (null_t<val_t> && Opts.skip_null_members) {
+               return false;
+            }
+            
+            // skip file_include
+            if constexpr (std::is_same_v<val_t, includer<std::decay_t<V>>>) {
+               return false;
+            }
+            else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+               return false;
+            }
+            else {
+               return true;
+            }
+         }
+         else {
+            return false;
+         }
+      }
 
       template <class T>
          requires glaze_object_t<T>
@@ -972,7 +1007,8 @@ namespace glz
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
 
-            bool first = true;
+            [[maybe_unused]] bool first = true;
+            static constexpr auto first_is_written = first_will_be_written<Options, T>();
             for_each<N>([&](auto I) {
                static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
                static constexpr auto item = glz::get<I>(meta_v<V>);
@@ -1010,17 +1046,22 @@ namespace glz
                   return;
                }
                else {
-                  if (first) {
-                     first = false;
+                  if constexpr (first_is_written && I > 0) {
+                     write_entry_separator<Opts>(ctx, b, ix);
                   }
                   else {
-                     // Null members may be skipped so we cant just write it out for all but the last member unless
-                     // trailing commas are allowed
-                     write_entry_separator<Opts>(ctx, b, ix);
+                     if (first) {
+                        first = false;
+                     }
+                     else {
+                        // Null members may be skipped so we cant just write it out for all but the last member unless
+                        // trailing commas are allowed
+                        write_entry_separator<Opts>(ctx, b, ix);
+                     }
                   }
 
                   if constexpr (str_t<Key> || char_t<Key>) {
-                     auto name_getter = [&]() -> sv {
+                     auto key_getter = [&] {
                         if constexpr (use_reflection) {
                            return get_name<get<0>(item)>();
                         }
@@ -1029,7 +1070,7 @@ namespace glz
                         }
                      };
 
-                     static constexpr sv key = name_getter();
+                     static constexpr sv key = key_getter();
                      if constexpr (needs_escaping(key)) {
                         write<json>::op<Opts>(key, ctx, b, ix);
                         dump<':'>(b, ix);
@@ -1046,7 +1087,7 @@ namespace glz
                   }
                   else {
                      static constexpr auto quoted_key =
-                        concat_arrays(concat_arrays("\"", glz::get<0>(item)), "\":", Opts.prettify ? " " : "");
+                        concat_arrays(concat_arrays("\"", get<0>(item)), "\":", Opts.prettify ? " " : "");
                      write<json>::op<Opts>(quoted_key, ctx, b, ix);
                   }
 
