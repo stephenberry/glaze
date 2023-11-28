@@ -928,7 +928,7 @@ namespace glz
             dump<'}'>(b, ix);
          }
       };
-      
+
       // Allows us to remove a branch if the first item will always be written
       template <auto Opts, class T>
       consteval bool first_will_be_written()
@@ -943,11 +943,11 @@ namespace glz
             constexpr size_t member_index = use_reflection ? 0 : 1;
             using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
             using val_t = member_t<V, mptr_t>;
-            
+
             if constexpr (null_t<val_t> && Opts.skip_null_members) {
                return false;
             }
-            
+
             // skip file_include
             if constexpr (std::is_same_v<val_t, includer<std::decay_t<V>>>) {
                return false;
