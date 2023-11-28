@@ -229,7 +229,7 @@ namespace glz
                   static constexpr auto use_reflection = std::is_member_object_pointer_v<T0>;
                   static constexpr auto member_index = use_reflection ? 0 : 1;
                   
-                  auto key_getter = [&]() -> sv {
+                  auto key_getter = [&] {
                      if constexpr (use_reflection) {
                         return get_name<get<0>(item)>();
                      }
