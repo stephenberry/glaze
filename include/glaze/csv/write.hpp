@@ -224,13 +224,25 @@ namespace glz
             else {
                // write titles
                for_each<N>([&](auto I) {
-                  static constexpr auto item = glz::get<I>(meta_v<V>);
-                  static constexpr sv key = glz::get<0>(item);
+                  static constexpr auto item = get<I>(meta_v<V>);
+                  using T0 = std::decay_t<decltype(get<0>(item))>;
+                  static constexpr auto use_reflection = std::is_member_object_pointer_v<T0>;
+                  static constexpr auto member_index = use_reflection ? 0 : 1;
+                  
+                  auto key_getter = [&] {
+                     if constexpr (use_reflection) {
+                        return get_name<get<0>(item)>();
+                     }
+                     else {
+                        return get<0>(item);
+                     }
+                  };
+                  static constexpr sv key = key_getter();
 
-                  using X = std::decay_t<decltype(get_member(value, glz::get<1>(item)))>;
+                  using X = std::decay_t<decltype(get_member(value, get<member_index>(item)))>;
 
                   if constexpr (fixed_array_value_t<X>) {
-                     const auto size = get_member(value, glz::get<1>(item))[0].size();
+                     const auto size = get_member(value, get<member_index>(item))[0].size();
                      for (size_t i = 0; i < size; ++i) {
                         dump<key>(b, ix);
                         dump<'['>(b, ix);
@@ -257,12 +269,15 @@ namespace glz
 
                while (true) {
                   for_each<N>([&](auto I) {
-                     static constexpr auto item = glz::get<I>(meta_v<V>);
+                     static constexpr auto item = get<I>(meta_v<V>);
+                     using T0 = std::decay_t<decltype(get<0>(item))>;
+                     static constexpr auto use_reflection = std::is_member_object_pointer_v<T0>;
+                     static constexpr auto member_index = use_reflection ? 0 : 1;
 
-                     using X = std::decay_t<decltype(get_member(value, glz::get<1>(item)))>;
+                     using X = std::decay_t<decltype(get_member(value, get<member_index>(item)))>;
 
                      if constexpr (fixed_array_value_t<X>) {
-                        auto&& member = get_member(value, glz::get<1>(item));
+                        auto&& member = get_member(value, get<member_index>(item));
                         if (row >= member.size()) {
                            end = true;
                            return;
@@ -277,7 +292,7 @@ namespace glz
                         }
                      }
                      else {
-                        auto&& member = get_member(value, glz::get<1>(item));
+                        auto&& member = get_member(value, get<member_index>(item));
                         if (row >= member.size()) {
                            end = true;
                            return;

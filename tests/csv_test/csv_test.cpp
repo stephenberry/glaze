@@ -35,7 +35,7 @@ template <>
 struct glz::meta<string_elements>
 {
    using T = string_elements;
-   static constexpr auto value = glz::object("id", &T::id, "udl", &T::udl);
+   static constexpr auto value = glz::object("id", &T::id, &T::udl);
 };
 
 void csv_tests()
