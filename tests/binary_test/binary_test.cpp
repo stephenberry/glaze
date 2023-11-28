@@ -1113,7 +1113,7 @@ struct signal_t
 suite signal_tests = [] {
    "signal"_test = [] {
       std::string s;
-      signal_t obj{.header = { true, "header description" }, {1.0, 2.0}, {1, 2, 3, 4, 5}};
+      signal_t obj{{ true, "header description" }, {1.0, 2.0}, {1, 2, 3, 4, 5}};
       glz::write_binary(obj, s);
       
       obj = {};
