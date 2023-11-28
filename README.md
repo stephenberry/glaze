@@ -156,10 +156,10 @@ template <>
 struct glz::meta<my_struct> {
    using T = my_struct;
    static constexpr auto value = object(
-      "i", &T::i,
-      "d", &T::d,
-      "hello", &T::hello,
-      "arr", &T::arr
+      &T::i,
+      &T::d,
+      &T::hello,
+      &T::arr
    );
 };
 ```
@@ -283,16 +283,37 @@ struct my_struct
   struct glaze {
      using T = my_struct;
      static constexpr auto value = glz::object(
-        "i", &T::i,
-        "d", &T::d,
-        "hello", &T::hello,
-        "arr", &T::arr
+        &T::i,
+        &T::d,
+        &T::hello,
+        &T::arr
      );
   };
 };
 ```
 
 > Template specialization of `glz::meta` is preferred when separating class definition from the serialization mapping. Local glaze metadata is helpful for working within the local namespace.
+
+## Custom Key Names or Unnamed Types
+
+When you define Glaze metadata, objects will automatically reflect the names of your member object pointers. However, if you want custom names or your register lambda functions or wrappers that do not provide names for your fields, you can optionally add field names in your metadata.
+
+Example of custom names:
+
+```c++
+template <>
+struct glz::meta<my_struct> {
+   using T = my_struct;
+   static constexpr auto value = object(
+      "integer", &T::i,
+      "double", &T::d,
+      "string", &T::hello,
+      "array", &T::arr
+   );
+};
+```
+
+> Each of these strings is optional and can be removed for individual fields if you want the name to be reflected.
 
 ## Struct Registration Macros
 
@@ -438,8 +459,8 @@ template <>
 struct glz::meta<thing> {
    using T = thing;
    static constexpr auto value = object(
-      "x", &T::x, "x is a double",
-      "y", &T::y, "y is an int"
+      &T::x, "x is a double"_c,
+      &T::y, "y is an int"_c
    );
 };
 ```
@@ -452,6 +473,8 @@ Prettified output:
   "y": 7 /*y is an int*/
 }
 ```
+
+> The `_c` is necessary if member object pointer names are reflected. You can also write `comment("x is a double")`
 
 ## Object Mapping
 
