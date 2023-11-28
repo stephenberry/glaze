@@ -1020,7 +1020,7 @@ namespace glz
                   }
 
                   if constexpr (str_t<Key> || char_t<Key>) {
-                     auto name_getter = [&]() -> sv {
+                     auto key_getter = [&] {
                         if constexpr (use_reflection) {
                            return get_name<get<0>(item)>();
                         }
@@ -1029,7 +1029,7 @@ namespace glz
                         }
                      };
 
-                     static constexpr sv key = name_getter();
+                     static constexpr sv key = key_getter();
                      if constexpr (needs_escaping(key)) {
                         write<json>::op<Opts>(key, ctx, b, ix);
                         dump<':'>(b, ix);
@@ -1046,7 +1046,7 @@ namespace glz
                   }
                   else {
                      static constexpr auto quoted_key =
-                        concat_arrays(concat_arrays("\"", glz::get<0>(item)), "\":", Opts.prettify ? " " : "");
+                        concat_arrays(concat_arrays("\"", get<0>(item)), "\":", Opts.prettify ? " " : "");
                      write<json>::op<Opts>(quoted_key, ctx, b, ix);
                   }
 
