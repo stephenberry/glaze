@@ -85,6 +85,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - Nearly zero intermediate allocations
 - Powerful wrappers to modify read/write behavior ([Wrappers](./docs/wrappers.md))
 - Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
+- [Handle unknown keys](./docs/unknown-keys.md) in a fast and flexible manner
 - Direct memory access through JSON pointer syntax
 - [Tagged binary spec](./docs/binary.md) through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
@@ -295,30 +296,7 @@ struct my_struct
 
 ## Struct Registration Macros
 
-Glaze provides macros to more efficiently register your C++ structs.
-
-**Macros must be explicitly included via: `#include "glaze/core/macros.hpp"`**
-
-- GLZ_META is for external registration
-- GLZ_LOCAL_META is for internal registration
-
-```c++
-struct macro_t {
-   double x = 5.0;
-   std::string y = "yay!";
-   int z = 55;
-};
-
-GLZ_META(macro_t, x, y, z);
-
-struct local_macro_t {
-   double x = 5.0;
-   std::string y = "yay!";
-   int z = 55;
-   
-   GLZ_LOCAL_META(local_macro_t, x, y, z);
-};
-```
+GLZ_META and GLZ_LOCAL_META will be deprecated in the future now that we have reflection support for external and local Glaze metadata. Current documentation is here: [Struct Registration Macros](./docs/macros-for-structs.md)
 
 ## Custom Read/Write
 
