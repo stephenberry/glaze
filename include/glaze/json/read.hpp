@@ -588,12 +588,12 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        if (*it == '"') [[likely]] {
+                        if (*it == '"') {
                            value.append(start, static_cast<size_t>(it - start));
                            ++it;
                            return;
                         }
-                        else [[unlikely]] {
+                        else {
                            value.append(start, static_cast<size_t>(it - start));
                            ++it;
                            handle_escaped();

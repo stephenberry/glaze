@@ -290,7 +290,7 @@ namespace glz
                            uint64_t* chunk = reinterpret_cast<uint64_t*>(data_ptr(b) + ix);
                            std::memcpy(chunk, c, 8);
                            const uint64_t test_chars = has_quote(*chunk) | has_escape(*chunk) | is_less_16(*chunk);
-                           if (test_chars != 0) {
+                           if (test_chars) {
                               const auto length = (std::countr_zero(test_chars) >> 3);
                               c += length;
                               ix += length;
