@@ -268,8 +268,9 @@ namespace glz
                      // In the case n == 0 we need two characters for quotes.
                      // For each individual character we need room for two characters to handle escapes.
                      // So, we need 2 + 2 * n characters to handle all cases.
+                     // We add another 8 characters to support SWAR
                      if constexpr (detail::resizeable<B>) {
-                        const auto k = ix + 2 + 2 * n;
+                        const auto k = ix + 10 + 2 * n;
                         if (k >= b.size()) [[unlikely]] {
                            b.resize((std::max)(b.size() * 2, k));
                         }
@@ -281,42 +282,86 @@ namespace glz
                      }
                      else {
                         dump_unchecked<'"'>(b, ix);
-
-                        for (auto&& c : str) {
-                           switch (c) {
-                           case '"':
-                              std::memcpy(data_ptr(b) + ix, R"(\")", 2);
-                              ix += 2;
-                              break;
-                           case '\\':
-                              std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
-                              ix += 2;
-                              break;
-                           case '\b':
-                              std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
-                              ix += 2;
-                              break;
-                           case '\f':
-                              std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
-                              ix += 2;
-                              break;
-                           case '\n':
-                              std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
-                              ix += 2;
-                              break;
-                           case '\r':
-                              std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
-                              ix += 2;
-                              break;
-                           case '\t':
-                              std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
-                              ix += 2;
-                              break;
-                           [[likely]] default:
-                              std::memcpy(data_ptr(b) + ix, &c, 1);
-                              ++ix;
+                        
+                        auto* c = str.data();
+                        const auto* e = c + n;
+                        
+                        for (const auto end_m7 = e - 7; c < end_m7;) {
+                           uint64_t* chunk = reinterpret_cast<uint64_t*>(data_ptr(b) + ix);
+                           std::memcpy(chunk, c, 8);
+                           const uint64_t test_chars = has_quote(*chunk) | has_escape(*chunk) | is_less_16(*chunk);
+                           if (test_chars != 0) {
+                              const auto length = (std::countr_zero(test_chars) >> 3);
+                              c += length;
+                              ix += length;
+                              
+                              switch (*c) {
+                              case '"':
+                                 std::memcpy(data_ptr(b) + ix, R"(\")", 2);
+                                 break;
+                              case '\\':
+                                 std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
+                                 break;
+                              [[unlikely]] case '\b':
+                                 std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
+                                 break;
+                              [[unlikely]] case '\f':
+                                 std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
+                                 break;
+                              case '\n':
+                                 std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
+                                 break;
+                              case '\r':
+                                 std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
+                                 break;
+                              case '\t':
+                                 std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
+                                 break;
+                              }
+                              ix += 2; ++c;
+                           }
+                           else {
+                              ix += 8;
+                              c += 8;
                            }
                         }
+
+                         // Tail end of buffer. Uncommon for long strings.
+                        for (; c < e; ++c) {
+                            switch (*c) {
+                            case '"':
+                               std::memcpy(data_ptr(b) + ix, R"(\")", 2);
+                               ix += 2;
+                               break;
+                            case '\\':
+                               std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
+                               ix += 2;
+                               break;
+                           [[unlikely]] case '\b':
+                               std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
+                               ix += 2;
+                               break;
+                           [[unlikely]] case '\f':
+                               std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
+                               ix += 2;
+                               break;
+                            case '\n':
+                               std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
+                               ix += 2;
+                               break;
+                            case '\r':
+                               std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
+                               ix += 2;
+                               break;
+                            case '\t':
+                               std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
+                               ix += 2;
+                               break;
+                            [[likely]] default:
+                               std::memcpy(data_ptr(b) + ix, c, 1);
+                               ++ix;
+                            }
+                         }
 
                         dump_unchecked<'"'>(b, ix);
                      }
