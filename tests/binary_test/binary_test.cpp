@@ -10,6 +10,7 @@
 #include <deque>
 #include <list>
 #include <map>
+#include <random>
 #include <set>
 #include <unordered_set>
 
@@ -1125,6 +1126,96 @@ suite signal_tests = [] {
       expect(obj.header.description == "header description");
       expect(obj.v_f64 == std::vector{1.0, 2.0});
       expect(obj.v_u8 == std::vector<uint8_t>{1, 2, 3, 4, 5});
+   };
+};
+
+suite vector_tests = [] {
+   "std::vector<uint8_t>"_test = [] {
+      std::string s;
+      static constexpr auto n = 10000;
+      std::vector<uint8_t> v(n);
+      
+      std::mt19937_64 gen{};
+      
+      for (auto i = 0; i < n; ++i) {
+         v[i] = std::uniform_int_distribution<uint8_t>{(std::numeric_limits<uint8_t>::min)(), (std::numeric_limits<uint8_t>::max)()}(gen);
+      }
+      
+      auto copy = v;
+      
+      glz::write_binary(v, s);
+      
+      v.clear();
+
+      expect(!glz::read_binary(v, s));
+
+      expect(v == copy);
+   };
+   
+   "std::vector<uint16_t>"_test = [] {
+      std::string s;
+      static constexpr auto n = 10000;
+      std::vector<uint16_t> v(n);
+      
+      std::mt19937_64 gen{};
+      
+      for (auto i = 0; i < n; ++i) {
+         v[i] = std::uniform_int_distribution<uint16_t>{(std::numeric_limits<uint16_t>::min)(), (std::numeric_limits<uint16_t>::max)()}(gen);
+      }
+      
+      auto copy = v;
+      
+      glz::write_binary(v, s);
+      
+      v.clear();
+
+      expect(!glz::read_binary(v, s));
+
+      expect(v == copy);
+   };
+   
+   "std::vector<float>"_test = [] {
+      std::string s;
+      static constexpr auto n = 10000;
+      std::vector<float> v(n);
+      
+      std::mt19937_64 gen{};
+      
+      for (auto i = 0; i < n; ++i) {
+         v[i] = std::uniform_real_distribution<float>{(std::numeric_limits<float>::min)(), (std::numeric_limits<float>::max)()}(gen);
+      }
+      
+      auto copy = v;
+      
+      glz::write_binary(v, s);
+      
+      v.clear();
+
+      expect(!glz::read_binary(v, s));
+
+      expect(v == copy);
+   };
+   
+   "std::vector<double>"_test = [] {
+      std::string s;
+      static constexpr auto n = 10000;
+      std::vector<double> v(n);
+      
+      std::mt19937_64 gen{};
+      
+      for (auto i = 0; i < n; ++i) {
+         v[i] = std::uniform_real_distribution<double>{(std::numeric_limits<double>::min)(), (std::numeric_limits<double>::max)()}(gen);
+      }
+      
+      auto copy = v;
+      
+      glz::write_binary(v, s);
+      
+      v.clear();
+
+      expect(!glz::read_binary(v, s));
+
+      expect(v == copy);
    };
 };
 
