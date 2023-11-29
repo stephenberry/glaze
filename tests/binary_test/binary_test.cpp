@@ -1221,11 +1221,11 @@ suite vector_tests = [] {
 
 int main()
 {
-   using namespace boost::ut;
-
    write_tests();
    bench();
    test_partial();
    file_include_test();
    container_types();
+   
+   return boost::ut::cfg<>.run({.report_errors = true});
 }
