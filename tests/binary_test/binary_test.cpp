@@ -1138,7 +1138,7 @@ suite vector_tests = [] {
       std::mt19937_64 gen{};
       
       for (auto i = 0; i < n; ++i) {
-         v[i] = std::uniform_int_distribution<uint8_t>{(std::numeric_limits<uint8_t>::min)(), (std::numeric_limits<uint8_t>::max)()}(gen);
+         v[i] = uint8_t(std::uniform_int_distribution<uint16_t>{0, 255}(gen));
       }
       
       auto copy = v;
@@ -1228,7 +1228,7 @@ suite file_write_read_tests = [] {
       std::mt19937_64 gen{};
       
       for (auto i = 0; i < n; ++i) {
-         v[i] = std::uniform_int_distribution<uint8_t>{(std::numeric_limits<uint8_t>::min)(), (std::numeric_limits<uint8_t>::max)()}(gen);
+         v[i] = uint8_t(std::uniform_int_distribution<uint16_t>{0, 255}(gen));
       }
       
       auto copy = v;
