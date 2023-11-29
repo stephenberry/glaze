@@ -50,13 +50,13 @@ namespace glz
 
 // C++23 or later
 // TODO: check for C++23 when supported on GCC
-//#if __cplusplus >= 202302L && __has_include(<expected>)
+// #if __cplusplus >= 202302L && __has_include(<expected>)
 #if __has_include(<expected>)
 #include <expected>
 #endif
 
 // TODO: check for C++23 when supported on GCC
-//#if __cplusplus >= 202302L && defined(__cpp_lib_expected)
+// #if __cplusplus >= 202302L && defined(__cpp_lib_expected)
 #if defined(__cpp_lib_expected)
 namespace glz
 {
