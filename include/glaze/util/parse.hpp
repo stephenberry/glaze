@@ -138,6 +138,11 @@ namespace glz::detail
    {
       return has_zero(chunk ^ 0b0101110001011100010111000101110001011100010111000101110001011100);
    }
+   
+   GLZ_ALWAYS_INLINE uint64_t is_less_16(const uint64_t c) noexcept {
+       return has_zero(
+           c & 0b1111000011110000111100001111000011110000111100001111000011110000);
+   }
 
    GLZ_ALWAYS_INLINE void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {

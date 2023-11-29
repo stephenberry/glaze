@@ -281,42 +281,118 @@ namespace glz
                      }
                      else {
                         dump_unchecked<'"'>(b, ix);
-
-                        for (auto&& c : str) {
-                           switch (c) {
-                           case '"':
-                              std::memcpy(data_ptr(b) + ix, R"(\")", 2);
-                              ix += 2;
-                              break;
-                           case '\\':
-                              std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
-                              ix += 2;
-                              break;
-                           case '\b':
-                              std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
-                              ix += 2;
-                              break;
-                           case '\f':
-                              std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
-                              ix += 2;
-                              break;
-                           case '\n':
-                              std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
-                              ix += 2;
-                              break;
-                           case '\r':
-                              std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
-                              ix += 2;
-                              break;
-                           case '\t':
-                              std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
-                              ix += 2;
-                              break;
-                           [[likely]] default:
-                              std::memcpy(data_ptr(b) + ix, &c, 1);
-                              ++ix;
+                        
+                        auto* c = str.data();
+                        const auto* start = c;
+                        const auto* e = c + n;
+                        
+                        for (const auto end_m7 = e - 7; c < end_m7;) {
+                           uint64_t* chunk = reinterpret_cast<uint64_t*>(data_ptr(b) + ix);
+                           std::memcpy(chunk, c, 8);
+                           const uint64_t test_chars = has_quote(*chunk) | has_escape(*chunk) | is_less_16(*chunk);
+                           if (test_chars != 0) {
+                              c += (std::countr_zero(test_chars) >> 3);
+                              const auto length = size_t(c - start);
+                              switch (length) {
+                                 case 4: {
+                                    std::memcpy(data_ptr(b) + ix, start, 4);
+                                    break;
+                                 }
+                                 case 5: {
+                                    std::memcpy(data_ptr(b) + ix, start, 5);
+                                    break;
+                                 }
+                                 case 6: {
+                                    std::memcpy(data_ptr(b) + ix, start, 6);
+                                    break;
+                                 }
+                                 case 7: {
+                                    std::memcpy(data_ptr(b) + ix, start, 7);
+                                    break;
+                                 }
+                                 default: {
+                                    std::memcpy(data_ptr(b) + ix, start, length);
+                                    break;
+                                 }
+                              }
+                              ix += length;
+                              
+                              switch (*c) {
+                              case '"':
+                                 std::memcpy(data_ptr(b) + ix, R"(\")", 2);
+                                 ix += 2; ++c;
+                                 break;
+                              case '\\':
+                                 std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
+                                 ix += 2; ++c;
+                                 break;
+                              case '\b':
+                                 std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
+                                 ix += 2; ++c;
+                                 break;
+                              case '\f':
+                                 std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
+                                 ix += 2; ++c;
+                                 break;
+                              case '\n':
+                                 std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
+                                 ix += 2; ++c;
+                                 break;
+                              case '\r':
+                                 std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
+                                 ix += 2; ++c;
+                                 break;
+                              case '\t':
+                                 std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
+                                 ix += 2; ++c;
+                                 break;
+                              }
+                              
+                              start = c;
+                           }
+                           else {
+                              ix += 8;
+                              c += 8;
                            }
                         }
+
+                         // Tail end of buffer. Uncommon for long strings.
+                         while (c < e) {
+                            switch (*c) {
+                            case '"':
+                               std::memcpy(data_ptr(b) + ix, R"(\")", 2);
+                               ix += 2;
+                               break;
+                            case '\\':
+                               std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
+                               ix += 2;
+                               break;
+                            case '\b':
+                               std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
+                               ix += 2;
+                               break;
+                            case '\f':
+                               std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
+                               ix += 2;
+                               break;
+                            case '\n':
+                               std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
+                               ix += 2;
+                               break;
+                            case '\r':
+                               std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
+                               ix += 2;
+                               break;
+                            case '\t':
+                               std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
+                               ix += 2;
+                               break;
+                            [[likely]] default:
+                               std::memcpy(data_ptr(b) + ix, c, 1);
+                               ++ix;
+                            }
+                             ++c;
+                         }
 
                         dump_unchecked<'"'>(b, ix);
                      }
