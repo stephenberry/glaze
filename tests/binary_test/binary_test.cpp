@@ -1219,6 +1219,30 @@ suite vector_tests = [] {
    };
 };
 
+suite file_write_read_tests = [] {
+   "file_write_read"_test = [] {
+      std::string s;
+      static constexpr auto n = 10000;
+      std::vector<uint8_t> v(n);
+      
+      std::mt19937_64 gen{};
+      
+      for (auto i = 0; i < n; ++i) {
+         v[i] = std::uniform_int_distribution<uint8_t>{(std::numeric_limits<uint8_t>::min)(), (std::numeric_limits<uint8_t>::max)()}(gen);
+      }
+      
+      auto copy = v;
+      
+      expect(!glz::write_file_binary(v, "file_read_write.beve", s));
+      
+      v.clear();
+
+      expect(!glz::read_file_binary(v, "file_read_write.beve", s));
+
+      expect(v == copy);
+   };
+};
+
 int main()
 {
    write_tests();
