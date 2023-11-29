@@ -906,7 +906,7 @@ suite complex_test = [] {
       expect(vc[1] == std::complex{2.0, 1.0});
       expect(vc[2] == std::complex{3.0, 1.5});
    };
-   
+
    "std::vector<std::complex<float>>"_test = [] {
       std::vector<std::complex<float>> vc = {{1.0f, 0.5f}, {2.0f, 1.0f}, {3.0f, 1.5f}};
       std::string s{};

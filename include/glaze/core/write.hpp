@@ -50,7 +50,7 @@ namespace glz
       context ctx{};
       write<Opts>(std::forward<T>(value), buffer, ctx);
    }
-   
+
    template <opts Opts, class T>
    inline std::string write(T&& value) noexcept
    {
