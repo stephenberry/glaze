@@ -417,7 +417,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_FLATTEN static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using Key = typename T::key_type;
 
@@ -454,7 +454,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t tag = tag::object | type;
