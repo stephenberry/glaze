@@ -109,8 +109,8 @@ Tagged binary specification: [BEVE](https://github.com/stephenberry/beve)
 
 | Metric                | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | --------------------- | ------------------ | ------------ | ----------- |
-| Raw performance       | **0.69**           | **1174**     | **2362**    |
-| Equivalent JSON data* | **0.69**           | **1282**     | **2580**    |
+| Raw performance       | **0.67**           | **1214**     | **2444**    |
+| Equivalent JSON data* | **0.67**           | **1326**     | **2669**    |
 
 JSON message size: 616 bytes
 
