@@ -14,7 +14,7 @@ namespace glz
    template <class T>
    [[nodiscard]] error_code file_to_buffer(T& buffer, const std::string_view file_name) noexcept
    {
-      std::ifstream file{std::string(file_name)};
+      std::ifstream file(std::string(file_name), std::ios::binary);
 
       if (!file) {
          return error_code::file_open_failure;

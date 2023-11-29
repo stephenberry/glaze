@@ -540,33 +540,27 @@ namespace glz
                   ++it;
                }
                else {
-                  auto handle_escaped = [&]() {
+                  auto handle_escaped = [&] {
                      switch (*it) {
                      case '"':
                      case '\\':
                      case '/':
                         value.push_back(*it);
-                        ++it;
                         break;
                      case 'b':
                         value.push_back('\b');
-                        ++it;
                         break;
                      case 'f':
                         value.push_back('\f');
-                        ++it;
                         break;
                      case 'n':
                         value.push_back('\n');
-                        ++it;
                         break;
                      case 'r':
                         value.push_back('\r');
-                        ++it;
                         break;
                      case 't':
                         value.push_back('\t');
-                        ++it;
                         break;
                      case 'u': {
                         ++it;
@@ -578,6 +572,7 @@ namespace glz
                         return;
                      }
                      }
+                     ++it;
                   };
 
                   value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
@@ -588,12 +583,12 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        if (*it == '"') [[likely]] {
+                        if (*it == '"') {
                            value.append(start, static_cast<size_t>(it - start));
                            ++it;
                            return;
                         }
-                        else [[unlikely]] {
+                        else {
                            value.append(start, static_cast<size_t>(it - start));
                            ++it;
                            handle_escaped();
