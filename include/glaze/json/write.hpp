@@ -302,10 +302,10 @@ namespace glz
                               case '\\':
                                  std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
                                  break;
-                              case '\b':
+                              [[unlikely]] case '\b':
                                  std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
                                  break;
-                              case '\f':
+                              [[unlikely]] case '\f':
                                  std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
                                  break;
                               case '\n':
@@ -327,7 +327,7 @@ namespace glz
                         }
 
                          // Tail end of buffer. Uncommon for long strings.
-                         while (c < e) {
+                        for (; c < e; ++c) {
                             switch (*c) {
                             case '"':
                                std::memcpy(data_ptr(b) + ix, R"(\")", 2);
@@ -337,11 +337,11 @@ namespace glz
                                std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
                                ix += 2;
                                break;
-                            case '\b':
+                           [[unlikely]] case '\b':
                                std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
                                ix += 2;
                                break;
-                            case '\f':
+                           [[unlikely]] case '\f':
                                std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
                                ix += 2;
                                break;
@@ -361,7 +361,6 @@ namespace glz
                                std::memcpy(data_ptr(b) + ix, c, 1);
                                ++ix;
                             }
-                             ++c;
                          }
 
                         dump_unchecked<'"'>(b, ix);
