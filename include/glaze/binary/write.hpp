@@ -293,7 +293,7 @@ namespace glz
             dump_type(tag, b, ix);
             const auto n = value.size();
             dump_compressed_int<Opts>(n, b, ix);
-            
+
             assert(ix <= b.size());
             if (ix + n > b.size()) [[unlikely]] {
                b.resize((std::max)(b.size() * 2, ix + n));
@@ -307,7 +307,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
             dump_compressed_int<Opts>(value.size(), b, ix);
-            
+
             assert(ix <= b.size());
             const auto n = value.size();
             if (ix + n > b.size()) [[unlikely]] {
@@ -376,7 +376,7 @@ namespace glz
                      std::memcpy(b.data() + ix, value.data(), n);
                      ix += n;
                   };
-                  
+
                   dump_array(args...);
                }
                else {
@@ -394,7 +394,7 @@ namespace glz
 
                for (auto& x : value) {
                   dump_compressed_int<Opts>(x.size(), args...);
-                  
+
                   auto dump_array = [&](auto&& b, auto&& ix) {
                      assert(ix <= b.size());
                      const auto n = x.size();
@@ -405,7 +405,7 @@ namespace glz
                      std::memcpy(b.data() + ix, x.data(), n);
                      ix += n;
                   };
-                  
+
                   dump_array(args...);
                }
             }
