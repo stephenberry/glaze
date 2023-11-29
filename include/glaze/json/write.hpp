@@ -268,8 +268,9 @@ namespace glz
                      // In the case n == 0 we need two characters for quotes.
                      // For each individual character we need room for two characters to handle escapes.
                      // So, we need 2 + 2 * n characters to handle all cases.
+                     // We add another 8 characters to support SWAR
                      if constexpr (detail::resizeable<B>) {
-                        const auto k = ix + 2 + 2 * n;
+                        const auto k = ix + 10 + 2 * n;
                         if (k >= b.size()) [[unlikely]] {
                            b.resize((std::max)(b.size() * 2, k));
                         }
@@ -283,7 +284,6 @@ namespace glz
                         dump_unchecked<'"'>(b, ix);
                         
                         auto* c = str.data();
-                        const auto* start = c;
                         const auto* e = c + n;
                         
                         for (const auto end_m7 = e - 7; c < end_m7;) {
@@ -291,64 +291,34 @@ namespace glz
                            std::memcpy(chunk, c, 8);
                            const uint64_t test_chars = has_quote(*chunk) | has_escape(*chunk) | is_less_16(*chunk);
                            if (test_chars != 0) {
-                              c += (std::countr_zero(test_chars) >> 3);
-                              const auto length = size_t(c - start);
-                              switch (length) {
-                                 case 4: {
-                                    std::memcpy(data_ptr(b) + ix, start, 4);
-                                    break;
-                                 }
-                                 case 5: {
-                                    std::memcpy(data_ptr(b) + ix, start, 5);
-                                    break;
-                                 }
-                                 case 6: {
-                                    std::memcpy(data_ptr(b) + ix, start, 6);
-                                    break;
-                                 }
-                                 case 7: {
-                                    std::memcpy(data_ptr(b) + ix, start, 7);
-                                    break;
-                                 }
-                                 default: {
-                                    std::memcpy(data_ptr(b) + ix, start, length);
-                                    break;
-                                 }
-                              }
+                              const auto length = (std::countr_zero(test_chars) >> 3);
+                              c += length;
                               ix += length;
                               
                               switch (*c) {
                               case '"':
                                  std::memcpy(data_ptr(b) + ix, R"(\")", 2);
-                                 ix += 2; ++c;
                                  break;
                               case '\\':
                                  std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
-                                 ix += 2; ++c;
                                  break;
                               case '\b':
                                  std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
-                                 ix += 2; ++c;
                                  break;
                               case '\f':
                                  std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
-                                 ix += 2; ++c;
                                  break;
                               case '\n':
                                  std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
-                                 ix += 2; ++c;
                                  break;
                               case '\r':
                                  std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
-                                 ix += 2; ++c;
                                  break;
                               case '\t':
                                  std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
-                                 ix += 2; ++c;
                                  break;
                               }
-                              
-                              start = c;
+                              ix += 2; ++c;
                            }
                            else {
                               ix += 8;
