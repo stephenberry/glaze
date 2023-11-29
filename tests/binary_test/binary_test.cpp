@@ -895,7 +895,7 @@ suite complex_test = [] {
       expect(c.imag() == 0.5);
    };
 
-   "std::vector<std::complex<...>>"_test = [] {
+   "std::vector<std::complex<double>>"_test = [] {
       std::vector<std::complex<double>> vc = {{1.0, 0.5}, {2.0, 1.0}, {3.0, 1.5}};
       std::string s{};
       glz::write_binary(vc, s);
@@ -905,6 +905,18 @@ suite complex_test = [] {
       expect(vc[0] == std::complex{1.0, 0.5});
       expect(vc[1] == std::complex{2.0, 1.0});
       expect(vc[2] == std::complex{3.0, 1.5});
+   };
+   
+   "std::vector<std::complex<float>>"_test = [] {
+      std::vector<std::complex<float>> vc = {{1.0f, 0.5f}, {2.0f, 1.0f}, {3.0f, 1.5f}};
+      std::string s{};
+      glz::write_binary(vc, s);
+
+      vc.clear();
+      expect(!glz::read_binary(vc, s));
+      expect(vc[0] == std::complex{1.0f, 0.5f});
+      expect(vc[1] == std::complex{2.0f, 1.0f});
+      expect(vc[2] == std::complex{3.0f, 1.5f});
    };
 };
 

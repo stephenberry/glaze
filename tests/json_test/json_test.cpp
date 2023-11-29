@@ -6119,6 +6119,15 @@ suite key_reflection_tests = [] {
    };
 };
 
+suite write_buffer_generator = [] {
+   "write_buffer_generator"_test = [] {
+      key_reflection obj{};
+      auto s = glz::write_json(obj);
+
+      expect(s == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})") << s;
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors

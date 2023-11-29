@@ -50,6 +50,15 @@ namespace glz
       context ctx{};
       write<Opts>(std::forward<T>(value), buffer, ctx);
    }
+   
+   template <opts Opts, class T>
+   inline std::string write(T&& value) noexcept
+   {
+      std::string buffer{};
+      context ctx{};
+      write<Opts>(std::forward<T>(value), buffer, ctx);
+      return buffer;
+   }
 
    template <opts Opts, class T, raw_buffer Buffer>
    inline size_t write(T&& value, Buffer&& buffer, is_context auto&& ctx) noexcept
