@@ -17,10 +17,16 @@ namespace glz
 {
    namespace detail
    {
-      template <class... Args>
-      GLZ_ALWAYS_INLINE void dump_type(auto&& value, Args&&... args) noexcept
+      GLZ_ALWAYS_INLINE void dump_type(auto&& value, auto&& b, auto&& ix) noexcept
       {
-         dump(std::as_bytes(std::span{&value, 1}), std::forward<Args>(args)...);
+         assert(ix <= b.size());
+         constexpr auto n = sizeof(std::decay_t<decltype(value)>);
+         if (ix + n > b.size()) [[unlikely]] {
+            b.resize((std::max)(b.size() * 2, ix + n));
+         }
+
+         std::memcpy(b.data() + ix, &value, n);
+         ix += n;
       }
 
       template <uint64_t i, class... Args>
@@ -280,20 +286,36 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
             constexpr uint8_t tag = tag::string;
 
-            dump_type(tag, args...);
-            dump_compressed_int<Opts>(value.size(), args...);
-            dump(std::as_bytes(std::span{value.data(), value.size()}), args...);
+            dump_type(tag, b, ix);
+            const auto n = value.size();
+            dump_compressed_int<Opts>(n, b, ix);
+            
+            assert(ix <= b.size());
+            if (ix + n > b.size()) [[unlikely]] {
+               b.resize((std::max)(b.size() * 2, ix + n));
+            }
+
+            std::memcpy(b.data() + ix, value.data(), n);
+            ix += n;
          }
 
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
-            dump_compressed_int<Opts>(value.size(), args...);
-            dump(std::as_bytes(std::span{value.data(), value.size()}), args...);
+            dump_compressed_int<Opts>(value.size(), b, ix);
+            
+            assert(ix <= b.size());
+            const auto n = value.size();
+            if (ix + n > b.size()) [[unlikely]] {
+               b.resize((std::max)(b.size() * 2, ix + n));
+            }
+
+            std::memcpy(b.data() + ix, value.data(), n);
+            ix += n;
          }
       };
 
@@ -344,7 +366,18 @@ namespace glz
                dump_compressed_int<Opts>(value.size(), args...);
 
                if constexpr (contiguous<T>) {
-                  dump(std::as_bytes(std::span{value.data(), static_cast<size_t>(value.size())}), args...);
+                  auto dump_array = [&](auto&& b, auto&& ix) {
+                     assert(ix <= b.size());
+                     const auto n = value.size() * sizeof(V);
+                     if (ix + n > b.size()) [[unlikely]] {
+                        b.resize((std::max)(b.size() * 2, ix + n));
+                     }
+
+                     std::memcpy(b.data() + ix, value.data(), n);
+                     ix += n;
+                  };
+                  
+                  dump_array(args...);
                }
                else {
                   for (auto& x : value) {
@@ -361,7 +394,19 @@ namespace glz
 
                for (auto& x : value) {
                   dump_compressed_int<Opts>(x.size(), args...);
-                  dump(std::as_bytes(std::span{x.data(), x.size()}), args...);
+                  
+                  auto dump_array = [&](auto&& b, auto&& ix) {
+                     assert(ix <= b.size());
+                     const auto n = x.size();
+                     if (ix + n > b.size()) [[unlikely]] {
+                        b.resize((std::max)(b.size() * 2, ix + n));
+                     }
+
+                     std::memcpy(b.data() + ix, x.data(), n);
+                     ix += n;
+                  };
+                  
+                  dump_array(args...);
                }
             }
             else if constexpr (complex_t<V>) {
