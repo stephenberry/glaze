@@ -1134,83 +1134,86 @@ suite vector_tests = [] {
       std::string s;
       static constexpr auto n = 10000;
       std::vector<uint8_t> v(n);
-      
+
       std::mt19937_64 gen{};
-      
+
       for (auto i = 0; i < n; ++i) {
          v[i] = uint8_t(std::uniform_int_distribution<uint16_t>{0, 255}(gen));
       }
-      
+
       auto copy = v;
-      
+
       glz::write_binary(v, s);
-      
+
       v.clear();
 
       expect(!glz::read_binary(v, s));
 
       expect(v == copy);
    };
-   
+
    "std::vector<uint16_t>"_test = [] {
       std::string s;
       static constexpr auto n = 10000;
       std::vector<uint16_t> v(n);
-      
+
       std::mt19937_64 gen{};
-      
+
       for (auto i = 0; i < n; ++i) {
-         v[i] = std::uniform_int_distribution<uint16_t>{(std::numeric_limits<uint16_t>::min)(), (std::numeric_limits<uint16_t>::max)()}(gen);
+         v[i] = std::uniform_int_distribution<uint16_t>{(std::numeric_limits<uint16_t>::min)(),
+                                                        (std::numeric_limits<uint16_t>::max)()}(gen);
       }
-      
+
       auto copy = v;
-      
+
       glz::write_binary(v, s);
-      
+
       v.clear();
 
       expect(!glz::read_binary(v, s));
 
       expect(v == copy);
    };
-   
+
    "std::vector<float>"_test = [] {
       std::string s;
       static constexpr auto n = 10000;
       std::vector<float> v(n);
-      
+
       std::mt19937_64 gen{};
-      
+
       for (auto i = 0; i < n; ++i) {
-         v[i] = std::uniform_real_distribution<float>{(std::numeric_limits<float>::min)(), (std::numeric_limits<float>::max)()}(gen);
+         v[i] = std::uniform_real_distribution<float>{(std::numeric_limits<float>::min)(),
+                                                      (std::numeric_limits<float>::max)()}(gen);
       }
-      
+
       auto copy = v;
-      
+
       glz::write_binary(v, s);
-      
+
       v.clear();
 
       expect(!glz::read_binary(v, s));
 
       expect(v == copy);
    };
-   
+
    "std::vector<double>"_test = [] {
       std::string s;
       static constexpr auto n = 10000;
       std::vector<double> v(n);
-      
+
       std::mt19937_64 gen{};
-      
+
       for (auto i = 0; i < n; ++i) {
-         v[i] = std::uniform_real_distribution<double>{(std::numeric_limits<double>::min)(), (std::numeric_limits<double>::max)()}(gen);
+         v[i] = std::uniform_real_distribution<double>{(std::numeric_limits<double>::min)(),
+                                                       (std::numeric_limits<double>::max)()}(gen);
       }
-      
+
       auto copy = v;
-      
+
       glz::write_binary(v, s);
-      
+
       v.clear();
 
       expect(!glz::read_binary(v, s));
@@ -1224,17 +1227,17 @@ suite file_write_read_tests = [] {
       std::string s;
       static constexpr auto n = 10000;
       std::vector<uint8_t> v(n);
-      
+
       std::mt19937_64 gen{};
-      
+
       for (auto i = 0; i < n; ++i) {
          v[i] = uint8_t(std::uniform_int_distribution<uint16_t>{0, 255}(gen));
       }
-      
+
       auto copy = v;
-      
+
       expect(!glz::write_file_binary(v, "file_read_write.beve", s));
-      
+
       v.clear();
 
       expect(!glz::read_file_binary(v, "file_read_write.beve", s));
@@ -1250,6 +1253,6 @@ int main()
    test_partial();
    file_include_test();
    container_types();
-   
+
    return boost::ut::cfg<>.run({.report_errors = true});
 }
