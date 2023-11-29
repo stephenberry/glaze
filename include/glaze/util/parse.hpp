@@ -124,22 +124,22 @@ namespace glz::detail
       }
    }
 
-   GLZ_ALWAYS_INLINE auto has_zero(const uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto has_zero(const uint64_t chunk) noexcept
    {
       return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080);
    }
 
-   GLZ_ALWAYS_INLINE auto has_quote(const uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto has_quote(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ 0b0010001000100010001000100010001000100010001000100010001000100010);
    }
 
-   GLZ_ALWAYS_INLINE auto has_escape(const uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr auto has_escape(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ 0b0101110001011100010111000101110001011100010111000101110001011100);
    }
 
-   GLZ_ALWAYS_INLINE uint64_t is_less_16(const uint64_t c) noexcept
+   GLZ_ALWAYS_INLINE constexpr uint64_t is_less_16(const uint64_t c) noexcept
    {
       return has_zero(c & 0b1111000011110000111100001111000011110000111100001111000011110000);
    }
