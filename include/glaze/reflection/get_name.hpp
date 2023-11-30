@@ -31,7 +31,7 @@ namespace glz
    };
 
    template <auto P>
-   constexpr std::string_view get_name_msvc() noexcept
+   consteval std::string_view get_name_msvc() noexcept
    {
       std::string_view str = GLZ_PRETTY_FUNCTION;
 
@@ -52,7 +52,7 @@ namespace glz
 
    template <auto P>
       requires(std::is_member_object_pointer_v<decltype(P)>)
-   constexpr std::string_view get_name() noexcept
+   consteval std::string_view get_name() noexcept
    {
 #if defined(_MSC_VER)
       using T = remove_member_pointer<std::decay_t<decltype(P)>>::type;
