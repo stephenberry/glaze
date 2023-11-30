@@ -1258,6 +1258,28 @@ suite file_write_read_tests = [] {
    };
 };
 
+struct something_t
+{
+   std::vector<double> data;
+   
+   struct glaze {
+      using T = something_t;
+      static constexpr auto value = glz::object(&T::data);
+   };
+};
+
+suite glz_obj_tests = [] {
+   "glz::obj"_test = [] {
+      std::string s;
+      std::vector<double> data;
+      glz::write_binary(glz::obj{"data", data}, s);
+      
+      something_t obj;
+      expect(!glz::read_binary(obj, s));
+      expect(obj.data == data);
+   };
+};
+
 int main()
 {
    write_tests();
