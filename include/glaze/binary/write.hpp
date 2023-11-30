@@ -493,7 +493,7 @@ namespace glz
             }
          }
       };
-      
+
       template <class T>
          requires is_specialization_v<T, glz::obj> || is_specialization_v<T, glz::obj_copy>
       struct to_binary<T>
