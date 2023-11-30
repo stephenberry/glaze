@@ -1439,6 +1439,8 @@ namespace glz
                   return;
             }
             match<'{'>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
          }
 
          skip_ws<Opts>(ctx, it, end);
