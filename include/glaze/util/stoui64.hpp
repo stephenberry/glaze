@@ -44,8 +44,8 @@ namespace glz::detail
       constexpr auto N = max_digits_from_size[std::bit_width(sizeof(T)) - 1];
 
       std::array<uint8_t, N> digits{0};
-      auto next_digit = digits.data();
-      auto end_digit = digits.data() + digits_length;
+      auto next_digit = digits.begin();
+      auto end_digit = digits.begin() + digits_length;
       const auto buffer_available = std::distance(c, end);
       auto consume_digits = [&] {
          if (buffer_available > 31) {
@@ -53,7 +53,7 @@ namespace glz::detail
                uint64_t chunk;
                std::memcpy(&chunk, c, 8);
                chunk -= 0x3030303030303030ULL; // subtract 48 from bytes
-               std::memcpy(next_digit, &chunk, 8);
+               std::memcpy(&*next_digit, &chunk, 8);
                
                const uint64_t test_chars = is_greater_7(chunk);
                if (test_chars) {
@@ -69,7 +69,7 @@ namespace glz::detail
                      ++next_digit;
                   }
                   else {
-                     std::memset(next_digit, 0, size_t(end_digit - next_digit));
+                     std::memset(&*next_digit, 0, size_t(end_digit - next_digit));
                      break;
                   }
                }
@@ -101,7 +101,7 @@ namespace glz::detail
       }
 
       consume_digits();
-      auto n = std::distance(digits.data(), next_digit);
+      auto n = std::distance(digits.begin(), next_digit);
 
       if (*c == '.') {
          ++c;
