@@ -511,7 +511,7 @@ namespace glz
 
             for_each<N>([&](auto I) {
                write<binary>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
-               write<binary>::op<Opts>(get_member(value, get<2 * I + 1>(value.value)), ctx, args...);
+               write<binary>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
             });
          }
       };
