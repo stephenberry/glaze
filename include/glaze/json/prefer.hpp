@@ -23,23 +23,26 @@ namespace glz
 
    namespace detail
    {
+
       template <typename Pair>
       struct base_prefer_array_adapter_tuple
       {
-         // Ideally, the base tuple always refers to the adapted pair's members with l-value references; never owning.
-         // Essentially, need a version of std::tie() that can bind r-value references using const l-value references
-         using first_t = typename Pair::first_type;
-         using second_t = typename Pair::second_type;
-         static constexpr bool first_const = std::is_const_v<Pair> ||
-                                             std::is_const_v<std::remove_reference_t<first_t>> ||
-                                             std::is_rvalue_reference_v<first_t>;
-         static constexpr bool second_const = std::is_const_v<Pair> ||
-                                              std::is_const_v<std::remove_reference_t<second_t>> ||
-                                              std::is_rvalue_reference_v<second_t>;
-         using first_unref_t = std::remove_cvref_t<first_t>;
-         using second_unref_t = std::remove_cvref_t<second_t>;
-         using type_0 = std::conditional_t<first_const, const first_unref_t&, first_unref_t&>;
-         using type_1 = std::conditional_t<second_const, const second_unref_t&, second_unref_t&>;
+         // Cases:
+         // - pair is const -> store const refs to all members
+         // - pair contains const members -> store const refs to the const members
+         // - pair is r-ref -> store r-refs to all members
+         // - pair contains r-ref members -> store r-refs to the r-ref members
+         using raw_pair_t = std::remove_reference_t<Pair>;
+         using first_type = typename raw_pair_t::first_type;
+         using second_type = typename raw_pair_t::second_type;
+         // must apply remove_reference directly to first/second_type aliases in order to add const
+         using first_unref_t = std::remove_reference_t<first_type>;
+         using second_unref_t = std::remove_reference_t<second_type>;
+         using first_const_t = std::conditional_t<std::is_const_v<raw_pair_t>, const first_unref_t, first_unref_t>;
+         using second_const_t = std::conditional_t<std::is_const_v<raw_pair_t>, const second_unref_t, second_unref_t>;
+         using type_0 = std::conditional_t<std::is_rvalue_reference_v<first_type>, first_const_t&&, first_const_t&>;
+         using type_1 = std::conditional_t<std::is_rvalue_reference_v<second_type>, second_const_t&&, second_const_t&>;
+
          using base_tuple = std::tuple<type_0, type_1>;
       };
    }
@@ -47,17 +50,20 @@ namespace glz
    template <typename T>
    class prefer_array_adapter
    {
-      static_assert(false_v<T>, "Only pairs or ranges of pairs can be adapted to JSON arrays");
+      static_assert(false_v<T>, "Only pairs or ranges of pairs can be adapted to prefer JSON arrays");
    };
 
-   template <class T>
-   prefer_array_adapter(T) -> prefer_array_adapter<T>;
+   // template <typename T>
+   //    requires(!detail::pair_t<T>)
+   // prefer_array_adapter(T) -> prefer_array_adapter<T>;
 
+   template <typename T>
+   prefer_array_adapter(T&&) -> prefer_array_adapter<T&&>;
+
+   // cannot give prefer_array_adapter interface of tuple, it must literally be a tuple
    template <detail::pair_t T>
    class prefer_array_adapter<T> : public detail::base_prefer_array_adapter_tuple<T>::base_tuple
    {
-      static_assert(!std::is_reference_v<T>, "You mistakenly explicitly specified a pair reference instead of a pair");
-
      public:
       using tuple_type = typename detail::base_prefer_array_adapter_tuple<T>::base_tuple;
 
@@ -65,27 +71,38 @@ namespace glz
       [[nodiscard]] tuple_type& base_tuple() & noexcept { return static_cast<tuple_type&>(*this); }
       [[nodiscard]] tuple_type&& base_tuple() && noexcept { return static_cast<tuple_type&&>(std::move(*this)); }
 
-      constexpr explicit prefer_array_adapter(T& pair) : tuple_type(pair.first, pair.second) {}
-      constexpr explicit prefer_array_adapter(T&& pair) : tuple_type(pair.first, pair.second) {}
+      constexpr explicit prefer_array_adapter(T pair)
+         requires(std::is_reference_v<T>)
+         : tuple_type(pair.first, pair.second)
+      {}
+
+      constexpr explicit prefer_array_adapter(T& pair)
+         requires(!std::is_reference_v<T>)
+         : tuple_type(pair.first, pair.second)
+      {}
+
+      // constexpr explicit prefer_array_adapter(T&& pair)
+      //    requires(!std::is_reference_v<T> && std::is_const<>)
+      //    : tuple_type(pair.first, pair.second)
+      // {}
 
       prefer_array_adapter(const prefer_array_adapter&) = default;
       prefer_array_adapter(prefer_array_adapter&&) = delete;
-      prefer_array_adapter& operator=(const prefer_array_adapter&) = default;
-      prefer_array_adapter& operator=(prefer_array_adapter&&) noexcept = delete;
       ~prefer_array_adapter() noexcept = default;
 
-      constexpr prefer_array_adapter& operator=(T& pair)
-      {
-         std::get<0>(*this) = pair.first;
-         std::get<1>(*this) = pair.second;
-         return *this;
-      }
-
-      constexpr prefer_array_adapter& operator=(T&& pair) noexcept
-      {
-         *this = prefer_array_adapter{std::move(pair)};
-         return *this;
-      }
+      // prefer_array_adapter& operator=(prefer_array_adapter&&) noexcept = delete;
+      // constexpr prefer_array_adapter& operator=(T& pair)
+      // {
+      //    std::get<0>(*this) = pair.first;
+      //    std::get<1>(*this) = pair.second;
+      //    return *this;
+      // }
+      //
+      // constexpr prefer_array_adapter& operator=(T&& pair) noexcept
+      // {
+      //    *this = prefer_array_adapter{std::move(pair)};
+      //    return *this;
+      // }
 
       [[nodiscard]] constexpr bool operator==(const prefer_array_adapter& other) const noexcept = default;
       [[nodiscard]] constexpr friend bool operator==(const prefer_array_adapter& adapter, const T& pair) noexcept
