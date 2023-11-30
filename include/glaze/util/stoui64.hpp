@@ -23,7 +23,7 @@ namespace glz::detail
    }
 
    template <class T = uint64_t>
-   GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, const char*& c) noexcept
+   GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, const char*& c, [[maybe_unused]] const char* end) noexcept
    {
       if (!is_digit(*c)) [[unlikely]] {
          return false;
@@ -133,12 +133,13 @@ namespace glz::detail
    }
 
    template <class T = uint64_t>
-   GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, auto& it) noexcept
+   GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, auto& it, auto& end) noexcept
    {
       static_assert(sizeof(*it) == sizeof(char));
       const char* cur = reinterpret_cast<const char*>(&*it);
+      const char* e = reinterpret_cast<const char*>(&*end);
       const char* beg = cur;
-      if (stoui64(res, cur)) {
+      if (stoui64(res, cur, e)) {
          it += (cur - beg);
          return true;
       }
