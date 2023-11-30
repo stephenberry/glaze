@@ -13,12 +13,12 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE constexpr bool is_safe_addition(uint64_t a, uint64_t b) noexcept
    {
-      return a <= std::numeric_limits<uint64_t>::max() - b;
+      return a <= (std::numeric_limits<uint64_t>::max)() - b;
    }
 
    GLZ_ALWAYS_INLINE constexpr bool is_safe_multiplication10(uint64_t a) noexcept
    {
-      constexpr auto b = std::numeric_limits<uint64_t>::max() / 10;
+      constexpr auto b = (std::numeric_limits<uint64_t>::max)() / 10;
       return a <= b;
    }
 
@@ -36,9 +36,10 @@ namespace glz::detail
       constexpr auto N = max_digits_from_size[std::bit_width(sizeof(T)) - 1];
 
       std::array<uint8_t, N> digits{0};
-      auto next_digit = digits.begin();
-      auto consume_digit = [&c, &next_digit, &digits]() {
-         if (next_digit < digits.cend()) [[likely]] {
+      auto next_digit = digits.data();
+      auto end_digit = digits.data() + digits.size();
+      auto consume_digit = [&] {
+         if (next_digit < end_digit) [[likely]] {
             *next_digit = (*c - '0');
             ++next_digit;
          }
@@ -58,7 +59,7 @@ namespace glz::detail
       while (is_digit(*c)) {
          consume_digit();
       }
-      auto n = std::distance(digits.begin(), next_digit);
+      auto n = std::distance(digits.data(), next_digit);
 
       if (*c == '.') {
          ++c;
@@ -104,7 +105,7 @@ namespace glz::detail
             else [[unlikely]] {
                return false;
             }
-            if (is_safe_addition(res, digits.back())) [[likely]] {
+            if (is_safe_addition(res, digits[19])) [[likely]] {
                res += digits.back();
             }
             else [[unlikely]] {
