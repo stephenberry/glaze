@@ -34,11 +34,11 @@ namespace glz::detail
    template <string_literal str>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      const auto n = static_cast<size_t>(std::distance(it, end));
-      if ((n < str.size()) || (std::memcmp(&*it, str.value, str.size()) != 0)) [[unlikely]] {
+      const auto n = size_t(end - it);
+      if ((n < str.size()) || std::memcmp(&*it, str.value, str.size())) [[unlikely]] {
          ctx.error = error_code::syntax_error;
       }
-      else {
+      else [[likely]] {
          it += str.size();
       }
    }
@@ -102,22 +102,6 @@ namespace glz::detail
                break;
             }
          }
-         default:
-            return;
-         }
-      }
-   }
-
-   GLZ_ALWAYS_INLINE void skip_ws_no_comments(auto&& it) noexcept
-   {
-      while (true) {
-         switch (*it) {
-         case '\t':
-         case '\n':
-         case '\r':
-         case ' ':
-            ++it;
-            break;
          default:
             return;
          }
