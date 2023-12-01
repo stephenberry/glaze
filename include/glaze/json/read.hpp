@@ -240,6 +240,8 @@ namespace glz
                return;
 
             match<",">(ctx, args...);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             read<json>::op<Opts>(ptr[1], ctx, args...);
 
