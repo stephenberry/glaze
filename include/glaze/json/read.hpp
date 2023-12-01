@@ -240,6 +240,8 @@ namespace glz
                return;
 
             match<",">(ctx, args...);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             read<json>::op<Opts>(ptr[1], ctx, args...);
 
@@ -282,24 +284,22 @@ namespace glz
                   return;
             }
 
-            switch (*it) {
-            case 't': {
-               ++it;
-               value = true;
-               match<"rue">(ctx, it, end);
-               break;
+            if (std::distance(it, end) < 4) [[unlikely]] {
+               ctx.error = error_code::expected_true_or_false;
+               return;
             }
-            case 'f': {
-               ++it;
-               value = false;
-               match<"alse">(ctx, it, end);
-               break;
-            }
-               [[unlikely]] default:
-               {
+
+            if (std::memcmp(&*it, "true", 4)) {
+               if (std::memcmp(&*it, "false", 5)) [[unlikely]] {
                   ctx.error = error_code::expected_true_or_false;
                   return;
                }
+               value = false;
+               it += 5;
+            }
+            else {
+               value = true;
+               it += 4;
             }
 
             if constexpr (Opts.quoted_num) {
