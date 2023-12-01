@@ -179,8 +179,13 @@ namespace glz
       struct to_binary<includer<T>>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
-         {}
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&... args) noexcept
+         {
+            constexpr uint8_t tag = tag::string;
+
+            dump_type(tag, args...);
+            dump_compressed_int<Opts>(0, args...);
+         }
       };
 
       template <boolean_like T>

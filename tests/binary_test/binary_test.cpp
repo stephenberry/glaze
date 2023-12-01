@@ -34,7 +34,8 @@ struct glz::meta<my_struct>
    static constexpr auto value = object("i", &T::i, //
                                         "d", &T::d, //
                                         "hello", &T::hello, //
-                                        "arr", &T::arr //
+                                        "arr", &T::arr, //
+                                        "#include", glz::file_include{} //
    );
 };
 
