@@ -10,8 +10,9 @@
 
 namespace glz::detail
 {
-   GLZ_ALWAYS_INLINE void dump(const char c, vector_like auto& b, auto&& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(const char c, vector_like auto& b, auto& ix) noexcept
    {
+      assert(ix <= b.size());
       if (ix == b.size()) [[unlikely]] {
          b.resize(b.size() == 0 ? 128 : b.size() * 2);
       }
@@ -27,8 +28,9 @@ namespace glz::detail
    }
 
    template <char c>
-   GLZ_ALWAYS_INLINE void dump(vector_like auto& b, auto&& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(vector_like auto& b, auto& ix) noexcept
    {
+      assert(ix <= b.size());
       if (ix == b.size()) [[unlikely]] {
          b.resize(b.size() == 0 ? 128 : b.size() * 2);
       }
@@ -44,14 +46,14 @@ namespace glz::detail
    }
 
    template <char c>
-   GLZ_ALWAYS_INLINE void dump(auto* b, auto&& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(auto* b, auto& ix) noexcept
    {
       b[ix] = c;
       ++ix;
    }
 
    template <char c>
-   GLZ_ALWAYS_INLINE void dump_unchecked(vector_like auto& b, auto&& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump_unchecked(vector_like auto& b, auto& ix) noexcept
    {
       using V = std::decay_t<decltype(b[0])>;
       if constexpr (std::same_as<V, char>) {
@@ -64,10 +66,17 @@ namespace glz::detail
    }
 
    template <char c>
-   GLZ_ALWAYS_INLINE void dump_unchecked(auto* b, auto&& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump_unchecked(auto* b, auto& ix) noexcept
    {
       b[ix] = c;
       ++ix;
+   }
+
+   GLZ_ALWAYS_INLINE void dump_unchecked(const sv str, vector_like auto& b, auto& ix) noexcept
+   {
+      const auto n = str.size();
+      std::memcpy(b.data() + ix, str.data(), n);
+      ix += n;
    }
 
    template <char c>
@@ -93,7 +102,7 @@ namespace glz::detail
    }
 
    template <string_literal str>
-   GLZ_ALWAYS_INLINE void dump(vector_like auto& b, auto&& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(vector_like auto& b, auto& ix) noexcept
    {
       static constexpr auto s = str.sv();
       static constexpr auto n = s.size();
@@ -107,7 +116,7 @@ namespace glz::detail
    }
 
    template <string_literal str>
-   GLZ_ALWAYS_INLINE void dump(auto* b, auto&& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(auto* b, auto& ix) noexcept
    {
       static constexpr auto s = str.sv();
       static constexpr auto n = s.size();
@@ -117,7 +126,7 @@ namespace glz::detail
    }
 
    template <char c>
-   GLZ_ALWAYS_INLINE void dumpn(size_t n, vector_like auto& b, auto&& ix) noexcept
+   GLZ_ALWAYS_INLINE void dumpn(size_t n, vector_like auto& b, auto& ix) noexcept
    {
       if (ix + n > b.size()) [[unlikely]] {
          b.resize((std::max)(b.size() * 2, ix + n));
@@ -128,7 +137,7 @@ namespace glz::detail
    }
 
    template <const sv& str>
-   GLZ_ALWAYS_INLINE void dump(vector_like auto& b, auto&& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(vector_like auto& b, auto& ix) noexcept
    {
       static constexpr auto s = str;
       static constexpr auto n = s.size();
@@ -142,7 +151,7 @@ namespace glz::detail
    }
 
    template <const sv& str>
-   GLZ_ALWAYS_INLINE void dump(auto* b, auto&& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(auto* b, auto& ix) noexcept
    {
       static constexpr auto s = str;
       static constexpr auto n = s.size();
@@ -151,7 +160,7 @@ namespace glz::detail
       ix += n;
    }
 
-   GLZ_ALWAYS_INLINE void dump(const sv str, vector_like auto& b, auto&& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(const sv str, vector_like auto& b, auto& ix) noexcept
    {
       const auto n = str.size();
       if (ix + n > b.size()) [[unlikely]] {
@@ -162,7 +171,7 @@ namespace glz::detail
       ix += n;
    }
 
-   GLZ_ALWAYS_INLINE void dump(const sv str, auto* b, auto&& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(const sv str, auto* b, auto& ix) noexcept
    {
       const auto n = str.size();
 
@@ -195,8 +204,9 @@ namespace glz::detail
    }
 
    template <std::byte c, class B>
-   GLZ_ALWAYS_INLINE void dump(B&& b, auto&& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(B&& b, auto& ix) noexcept
    {
+      assert(ix <= b.size());
       if (ix == b.size()) [[unlikely]] {
          b.resize(b.size() == 0 ? 128 : b.size() * 2);
       }
@@ -231,8 +241,9 @@ namespace glz::detail
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void dump(std::byte c, auto&& b, auto&& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(std::byte c, auto&& b, auto& ix) noexcept
    {
+      assert(ix <= b.size());
       if (ix == b.size()) [[unlikely]] {
          b.resize(b.size() == 0 ? 128 : b.size() * 2);
       }
@@ -262,6 +273,7 @@ namespace glz::detail
    template <class B>
    GLZ_ALWAYS_INLINE void dump(const std::span<const std::byte> bytes, B&& b, auto& ix) noexcept
    {
+      assert(ix <= b.size());
       const auto n = bytes.size();
       if (ix + n > b.size()) [[unlikely]] {
          b.resize((std::max)(b.size() * 2, ix + n));
@@ -274,6 +286,7 @@ namespace glz::detail
    template <size_t N, class B>
    GLZ_ALWAYS_INLINE void dump(const std::array<uint8_t, N>& bytes, B&& b, auto& ix) noexcept
    {
+      assert(ix <= b.size());
       if (ix + N > b.size()) [[unlikely]] {
          b.resize((std::max)(b.size() * 2, ix + N));
       }

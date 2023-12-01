@@ -46,8 +46,7 @@ namespace glz
       concept same_as = std::is_same_v<T, U> && std::is_same_v<U, T>;
 
       template <class T, class U>
-      concept other_than = !
-      std::is_same_v<std::decay_t<T>, U>;
+      concept other_than = !std::is_same_v<std::decay_t<T>, U>;
 
       template <class Tup>
       using base_list_t = typename std::decay_t<Tup>::base_list;
@@ -68,16 +67,16 @@ namespace glz
 
       template <class T>
       concept ordered = requires(const T& t) {
-                           {
-                              t <=> t
-                           };
-                        };
+         {
+            t <=> t
+         };
+      };
       template <class T>
       concept equality_comparable = requires(const T& t) {
-                                       {
-                                          t == t
-                                          } -> same_as<bool>;
-                                    };
+         {
+            t == t
+         } -> same_as<bool>;
+      };
    } // namespace tuplet
 
    // tuplet::type_list implementation
@@ -187,7 +186,8 @@ namespace glz
       // This takes a forwarding tuple as a parameter. The forwarding tuple only
       // contains references, so it should just be taken by value.
       template <class T, class... Outer, class... Inner>
-      constexpr auto cat_impl(T tup, type_list<Outer...>, type_list<Inner...>) -> tuple<type_t<Inner>...>
+      constexpr auto cat_impl([[maybe_unused]] T tup, type_list<Outer...>, type_list<Inner...>)
+         -> tuple<type_t<Inner>...>
       {
          return {{{static_cast<type_t<Outer>&&>(tup.identity_t<Outer>::value).identity_t<Inner>::value}...}};
       }
@@ -528,45 +528,42 @@ namespace glz
       convert(Tuple&&) -> convert<Tuple>;
    } // namespace tuplet
 
-   // tuplet::get implementation
-   // tuplet::tie implementation
-   // tuplet::apply implementation
-   namespace tuplet
+   // glz::get implementation
+   // glz::tie implementation
+   // glz::apply implementation
+   template <size_t I, tuplet::indexable Tup>
+   constexpr decltype(auto) get(Tup&& tup)
    {
-      template <size_t I, indexable Tup>
-      constexpr decltype(auto) get(Tup&& tup)
-      {
-         return static_cast<Tup&&>(tup)[tag<I>()];
-      }
+      return static_cast<Tup&&>(tup)[tuplet::tag<I>()];
+   }
 
-      template <class... T>
-      constexpr tuple<T&...> tie(T&... t)
-      {
-         return {t...};
-      }
+   template <class... T>
+   constexpr tuplet::tuple<T&...> tie(T&... t)
+   {
+      return {t...};
+   }
 
-      template <class F, base_list_tuple Tup>
-      constexpr decltype(auto) apply(F&& func, Tup&& tup)
-      {
-         return detail::apply_impl(static_cast<F&&>(func), static_cast<Tup&&>(tup),
-                                   typename std::decay_t<Tup>::base_list());
-      }
-      template <class F, class A, class B>
-      constexpr decltype(auto) apply(F&& func, tuplet::pair<A, B>& pair)
-      {
-         return static_cast<F&&>(func)(pair.first, pair.second);
-      }
-      template <class F, class A, class B>
-      constexpr decltype(auto) apply(F&& func, const tuplet::pair<A, B>& pair)
-      {
-         return static_cast<F&&>(func)(pair.first, pair.second);
-      }
-      template <class F, class A, class B>
-      constexpr decltype(auto) apply(F&& func, tuplet::pair<A, B>&& pair)
-      {
-         return static_cast<F&&>(func)(std::move(pair).first, std::move(pair).second);
-      }
-   } // namespace tuplet
+   template <class F, tuplet::base_list_tuple Tup>
+   constexpr decltype(auto) apply(F&& func, Tup&& tup)
+   {
+      return tuplet::detail::apply_impl(static_cast<F&&>(func), static_cast<Tup&&>(tup),
+                                        typename std::decay_t<Tup>::base_list());
+   }
+   template <class F, class A, class B>
+   constexpr decltype(auto) apply(F&& func, tuplet::pair<A, B>& pair)
+   {
+      return static_cast<F&&>(func)(pair.first, pair.second);
+   }
+   template <class F, class A, class B>
+   constexpr decltype(auto) apply(F&& func, const tuplet::pair<A, B>& pair)
+   {
+      return static_cast<F&&>(func)(pair.first, pair.second);
+   }
+   template <class F, class A, class B>
+   constexpr decltype(auto) apply(F&& func, tuplet::pair<A, B>&& pair)
+   {
+      return static_cast<F&&>(func)(std::move(pair).first, std::move(pair).second);
+   }
 
    // tuplet::tuple_cat implementation
    // tuplet::make_tuple implementation

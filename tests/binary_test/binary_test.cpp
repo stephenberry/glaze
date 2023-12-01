@@ -10,6 +10,9 @@
 #include <deque>
 #include <list>
 #include <map>
+#include <random>
+#include <set>
+#include <unordered_set>
 
 #include "boost/ut.hpp"
 #include "glaze/binary/read.hpp"
@@ -521,7 +524,7 @@ void test_partial()
 
    static constexpr auto N = std::tuple_size_v<decltype(groups)>;
    glz::for_each<N>([&](auto I) {
-      const auto group = glz::tuplet::get<I>(groups);
+      const auto group = glz::get<I>(groups);
       std::cout << std::get<0>(group) << ": ";
       for (auto& rest : std::get<1>(group)) {
          std::cout << rest << ", ";
@@ -549,13 +552,14 @@ struct includer_struct
 {
    std::string str = "Hello";
    int i = 55;
+   bool j{false};
 };
 
 template <>
 struct glz::meta<includer_struct>
 {
    using T = includer_struct;
-   static constexpr auto value = object("#include", glz::file_include{}, "str", &T::str, "i", &T::i);
+   static constexpr auto value = object("#include", glz::file_include{}, "str", &T::str, "i", &T::i, "j", &T::j);
 };
 
 void file_include_test()
@@ -566,11 +570,13 @@ void file_include_test()
 
    obj.str = "";
    obj.i = 0;
+   obj.j = true;
 
    expect(glz::read_file_binary(obj, "../alabastar.beve", std::string{}) == glz::error_code::none);
 
    expect(obj.str == "Hello") << obj.str;
    expect(obj.i == 55) << obj.i;
+   expect(obj.j == false) << obj.j;
 }
 
 void container_types()
@@ -889,7 +895,7 @@ suite complex_test = [] {
       expect(c.imag() == 0.5);
    };
 
-   "std::vector<std::complex<...>>"_test = [] {
+   "std::vector<std::complex<double>>"_test = [] {
       std::vector<std::complex<double>> vc = {{1.0, 0.5}, {2.0, 1.0}, {3.0, 1.5}};
       std::string s{};
       glz::write_binary(vc, s);
@@ -899,6 +905,18 @@ suite complex_test = [] {
       expect(vc[0] == std::complex{1.0, 0.5});
       expect(vc[1] == std::complex{2.0, 1.0});
       expect(vc[2] == std::complex{3.0, 1.5});
+   };
+
+   "std::vector<std::complex<float>>"_test = [] {
+      std::vector<std::complex<float>> vc = {{1.0f, 0.5f}, {2.0f, 1.0f}, {3.0f, 1.5f}};
+      std::string s{};
+      glz::write_binary(vc, s);
+
+      vc.clear();
+      expect(!glz::read_binary(vc, s));
+      expect(vc[0] == std::complex{1.0f, 0.5f});
+      expect(vc[1] == std::complex{2.0f, 1.0f});
+      expect(vc[2] == std::complex{3.0f, 1.5f});
    };
 };
 
@@ -961,13 +979,315 @@ suite skip_test = [] {
    };
 };
 
+suite set_tests = [] {
+   "unordered_set<string>"_test = [] {
+      std::unordered_set<std::string> set{"one", "two", "three"};
+
+      std::string s{};
+      glz::write_binary(set, s);
+
+      set.clear();
+
+      expect(!glz::read_binary(set, s));
+      expect(set.contains("one"));
+      expect(set.contains("two"));
+      expect(set.contains("three"));
+   };
+
+   "unordered_set<uint32_t>"_test = [] {
+      std::unordered_set<uint32_t> set{0, 1, 2};
+
+      std::string s{};
+      glz::write_binary(set, s);
+
+      set.clear();
+
+      expect(!glz::read_binary(set, s));
+      expect(set.contains(0));
+      expect(set.contains(1));
+      expect(set.contains(2));
+   };
+
+   "set<string>"_test = [] {
+      std::set<std::string> set{"one", "two", "three"};
+
+      std::string s{};
+      glz::write_binary(set, s);
+
+      set.clear();
+
+      expect(!glz::read_binary(set, s));
+      expect(set.contains("one"));
+      expect(set.contains("two"));
+      expect(set.contains("three"));
+   };
+
+   "set<uint32_t>"_test = [] {
+      std::set<uint32_t> set{0, 1, 2};
+
+      std::string s{};
+      glz::write_binary(set, s);
+
+      set.clear();
+
+      expect(!glz::read_binary(set, s));
+      expect(set.contains(0));
+      expect(set.contains(1));
+      expect(set.contains(2));
+   };
+};
+
+suite bitset = [] {
+   "bitset"_test = [] {
+      std::bitset<8> b = 0b10101010;
+
+      std::string s{};
+      glz::write_binary(b, s);
+
+      b.reset();
+      expect(!glz::read_binary(b, s));
+      expect(b == 0b10101010);
+   };
+
+   "bitset16"_test = [] {
+      std::bitset<16> b = 0b10010010'00000010;
+
+      std::string s{};
+      glz::write_binary(b, s);
+
+      b.reset();
+      expect(!glz::read_binary(b, s));
+      expect(b == 0b10010010'00000010);
+   };
+};
+
+struct key_reflection
+{
+   int i = 287;
+   double d = 3.14;
+   std::string hello = "Hello World";
+   std::array<uint64_t, 3> arr = {1, 2, 3};
+};
+
+template <>
+struct glz::meta<key_reflection>
+{
+   static constexpr std::string_view name = "key_reflection";
+   using T = key_reflection;
+   static constexpr auto value = object(&T::i, //
+                                        &T::d, //
+                                        &T::hello, //
+                                        &T::arr //
+   );
+};
+
+suite key_reflection_tests = [] {
+   "reflect keys from glz::meta"_test = [] {
+      std::string s;
+      key_reflection obj{};
+      glz::write_binary(obj, s);
+
+      obj.i = 0;
+      obj.d = 0;
+      obj.hello = "";
+      obj.arr = {};
+      expect(!glz::read_binary(obj, s));
+
+      expect(obj.i == 287);
+      expect(obj.d == 3.14);
+      expect(obj.hello == "Hello World");
+      expect(obj.arr == std::array<uint64_t, 3>{1, 2, 3});
+   };
+};
+
+struct header_t
+{
+   bool valid{};
+   std::string description{};
+
+   struct glaze
+   {
+      using T = header_t;
+      static constexpr auto value = glz::object(&T::valid, &T::description);
+   };
+};
+
+struct signal_t
+{
+   header_t header{};
+   std::vector<double> v_f64;
+   std::vector<uint8_t> v_u8;
+
+   struct glaze
+   {
+      using T = signal_t;
+      static constexpr auto value = glz::object(&T::header, &T::v_f64, &T::v_u8);
+   };
+};
+
+suite signal_tests = [] {
+   "signal"_test = [] {
+      std::string s;
+      signal_t obj{{true, "header description"}, {1.0, 2.0}, {1, 2, 3, 4, 5}};
+      glz::write_binary(obj, s);
+
+      obj = {};
+      expect(!glz::read_binary(obj, s));
+
+      expect(obj.header.valid == true);
+      expect(obj.header.description == "header description");
+      expect(obj.v_f64 == std::vector{1.0, 2.0});
+      expect(obj.v_u8 == std::vector<uint8_t>{1, 2, 3, 4, 5});
+   };
+};
+
+suite vector_tests = [] {
+   "std::vector<uint8_t>"_test = [] {
+      std::string s;
+      static constexpr auto n = 10000;
+      std::vector<uint8_t> v(n);
+
+      std::mt19937_64 gen{};
+
+      for (auto i = 0; i < n; ++i) {
+         v[i] = uint8_t(std::uniform_int_distribution<uint16_t>{0, 255}(gen));
+      }
+
+      auto copy = v;
+
+      glz::write_binary(v, s);
+
+      v.clear();
+
+      expect(!glz::read_binary(v, s));
+
+      expect(v == copy);
+   };
+
+   "std::vector<uint16_t>"_test = [] {
+      std::string s;
+      static constexpr auto n = 10000;
+      std::vector<uint16_t> v(n);
+
+      std::mt19937_64 gen{};
+
+      for (auto i = 0; i < n; ++i) {
+         v[i] = std::uniform_int_distribution<uint16_t>{(std::numeric_limits<uint16_t>::min)(),
+                                                        (std::numeric_limits<uint16_t>::max)()}(gen);
+      }
+
+      auto copy = v;
+
+      glz::write_binary(v, s);
+
+      v.clear();
+
+      expect(!glz::read_binary(v, s));
+
+      expect(v == copy);
+   };
+
+   "std::vector<float>"_test = [] {
+      std::string s;
+      static constexpr auto n = 10000;
+      std::vector<float> v(n);
+
+      std::mt19937_64 gen{};
+
+      for (auto i = 0; i < n; ++i) {
+         v[i] = std::uniform_real_distribution<float>{(std::numeric_limits<float>::min)(),
+                                                      (std::numeric_limits<float>::max)()}(gen);
+      }
+
+      auto copy = v;
+
+      glz::write_binary(v, s);
+
+      v.clear();
+
+      expect(!glz::read_binary(v, s));
+
+      expect(v == copy);
+   };
+
+   "std::vector<double>"_test = [] {
+      std::string s;
+      static constexpr auto n = 10000;
+      std::vector<double> v(n);
+
+      std::mt19937_64 gen{};
+
+      for (auto i = 0; i < n; ++i) {
+         v[i] = std::uniform_real_distribution<double>{(std::numeric_limits<double>::min)(),
+                                                       (std::numeric_limits<double>::max)()}(gen);
+      }
+
+      auto copy = v;
+
+      glz::write_binary(v, s);
+
+      v.clear();
+
+      expect(!glz::read_binary(v, s));
+
+      expect(v == copy);
+   };
+};
+
+suite file_write_read_tests = [] {
+   "file_write_read"_test = [] {
+      std::string s;
+      static constexpr auto n = 10000;
+      std::vector<uint8_t> v(n);
+
+      std::mt19937_64 gen{};
+
+      for (auto i = 0; i < n; ++i) {
+         v[i] = uint8_t(std::uniform_int_distribution<uint16_t>{0, 255}(gen));
+      }
+
+      auto copy = v;
+
+      expect(!glz::write_file_binary(v, "file_read_write.beve", s));
+
+      v.clear();
+
+      expect(!glz::read_file_binary(v, "file_read_write.beve", s));
+
+      expect(v == copy);
+   };
+};
+
+struct something_t
+{
+   std::vector<double> data;
+
+   struct glaze
+   {
+      using T = something_t;
+      static constexpr auto value = glz::object(&T::data);
+   };
+};
+
+suite glz_obj_tests = [] {
+   "glz::obj"_test = [] {
+      std::string s;
+      std::vector<double> data;
+      glz::write_binary(glz::obj{"data", data}, s);
+
+      something_t obj;
+      expect(!glz::read_binary(obj, s));
+      expect(obj.data == data);
+   };
+};
+
 int main()
 {
-   using namespace boost::ut;
-
    write_tests();
    bench();
    test_partial();
    file_include_test();
    container_types();
+
+   return boost::ut::cfg<>.run({.report_errors = true});
 }

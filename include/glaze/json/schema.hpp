@@ -3,6 +3,7 @@
 #pragma once
 
 #include "glaze/api/impl.hpp"
+#include "glaze/json/quoted.hpp"
 #include "glaze/json/write.hpp"
 
 namespace glz
@@ -17,9 +18,7 @@ namespace glz
       std::optional<std::string_view> description{};
       std::optional<schema_any> default_value{};
       std::optional<bool> deprecated{};
-#ifdef __cpp_lib_constexpr_vector
-      std::optional<std::vector<schema_any>> examples{};
-#endif
+      std::optional<std::span<const std::string_view>> examples{};
       std::optional<bool> read_only{};
       std::optional<bool> write_only{};
       // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
@@ -37,10 +36,8 @@ namespace glz
       // object only keywords
       std::optional<std::uint64_t> min_properties{};
       std::optional<std::uint64_t> max_properties{};
-//      std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
-#ifdef __cpp_lib_constexpr_vector
-      std::optional<std::vector<std::string_view>> required{};
-#endif
+      //      std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
+      std::optional<std::span<const std::string_view>> required{};
       // array only keywords
       std::optional<std::uint64_t> min_items{};
       std::optional<std::uint64_t> max_items{};
@@ -60,9 +57,7 @@ namespace glz
                                                    "description", &T::description, //
                                                    "default", &T::default_value, //
                                                    "deprecated", &T::deprecated, //
-#ifdef __cpp_lib_constexpr_vector
-                                                   "examples", &T::examples, //
-#endif
+                                                   "examples", raw<&T::examples>, //
                                                    "readOnly", &T::read_only, //
                                                    "writeOnly", &T::write_only, //
                                                    "const", &T::constant, //
@@ -76,10 +71,8 @@ namespace glz
                                                    "multipleOf", &T::multiple_of, //
                                                    "minProperties", &T::min_properties, //
                                                    "maxProperties", &T::max_properties, //
-//               "dependentRequired", &T::dependent_required, //
-#ifdef __cpp_lib_constexpr_vector
+                                                   //               "dependentRequired", &T::dependent_required, //
                                                    "required", &T::required, //
-#endif
                                                    "minItems", &T::min_items, //
                                                    "maxItems", &T::max_items, //
                                                    "minContains", &T::min_contains, //
@@ -102,6 +95,8 @@ namespace glz
          std::optional<std::map<std::string_view, schematic, std::less<>>> defs{};
          std::optional<std::vector<std::string_view>> enumeration{}; // enum
          std::optional<std::vector<schematic>> oneOf{};
+         std::optional<std::span<const std::string_view>> required{};
+         std::optional<std::span<const std::string_view>> examples{};
       };
    }
 }
@@ -119,7 +114,9 @@ struct glz::meta<glz::detail::schematic>
                                              "$defs", &T::defs, //
                                              "enum", &T::enumeration, //
                                              "oneOf", &T::oneOf, //
-                                             "const", &T::constant);
+                                             "const", &T::constant, //
+                                             "required", &T::required, //
+                                             "examples", raw<&T::examples>);
 };
 
 namespace glz
@@ -202,9 +199,9 @@ namespace glz
             // });
             s.oneOf = std::vector<schematic>(N);
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
+               static constexpr auto item = glz::get<I>(meta_v<V>);
                auto& enumeration = (*s.oneOf)[I.value];
-               enumeration.constant = glz::tuplet::get<0>(item);
+               enumeration.constant = glz::get<0>(item);
                if constexpr (std::tuple_size_v < decltype(item) >> 2) {
                   enumeration.description = std::get<2>(item);
                }
@@ -317,11 +314,23 @@ namespace glz
             s.type = {"object"};
 
             using V = std::decay_t<T>;
+
+            if constexpr (requires { meta<V>::required; }) {
+               s.required = meta<V>::required;
+            }
+
+            if constexpr (requires { meta<V>::examples; }) {
+               s.examples = meta<V>::examples;
+            }
+
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
             s.properties = std::map<std::string_view, schema, std::less<>>();
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
-               using mptr_t = decltype(glz::tuplet::get<1>(item));
+               static constexpr auto item = get<I>(meta_v<V>);
+               using T0 = std::decay_t<decltype(get<0>(item))>;
+               static constexpr auto use_reflection = std::is_member_object_pointer_v<T0>;
+               static constexpr auto member_index = use_reflection ? 0 : 1;
+               using mptr_t = decltype(get<member_index>(item));
                using val_t = std::decay_t<member_t<V, mptr_t>>;
                auto& def = defs[name_v<val_t>];
                if (!def.type) {
@@ -329,17 +338,23 @@ namespace glz
                }
                auto ref_val = schema{join_v<chars<"#/$defs/">, name_v<val_t>>};
                static constexpr auto Size = std::tuple_size_v<decltype(item)>;
-               if constexpr (Size > 2) {
-                  using additional_data_type = decltype(glz::tuplet::get<2>(item));
+               static constexpr auto comment_index = member_index + 1;
+               if constexpr (Size > comment_index) {
+                  using additional_data_type = decltype(get<comment_index>(item));
                   if constexpr (std::is_convertible_v<additional_data_type, std::string_view>) {
-                     ref_val.description = glz::tuplet::get<2>(item);
+                     ref_val.description = get<comment_index>(item);
                   }
                   else if constexpr (std::is_convertible_v<additional_data_type, schema>) {
-                     ref_val = glz::tuplet::get<2>(item);
+                     ref_val = get<comment_index>(item);
                      ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
                   }
                }
-               (*s.properties)[glz::tuplet::get<0>(item)] = ref_val;
+               if constexpr (use_reflection) {
+                  (*s.properties)[get_name<get<0>(item)>()] = ref_val;
+               }
+               else {
+                  (*s.properties)[get<0>(item)] = ref_val;
+               }
             });
             s.additionalProperties = false;
          }

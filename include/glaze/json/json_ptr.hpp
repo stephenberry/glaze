@@ -21,16 +21,16 @@ namespace glz
    {
       template <class F, class T>
          requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
-                  is_std_tuple<std::decay_t<T>> bool
-      seek_impl(F&& func, T&& value, sv json_ptr);
+                  is_std_tuple<std::decay_t<T>>
+      bool seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
-         requires nullable_t<std::decay_t<T>> bool
-      seek_impl(F&& func, T&& value, sv json_ptr);
+         requires nullable_t<std::decay_t<T>>
+      bool seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
-         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T> bool
-      seek_impl(F&& func, T&& value, sv json_ptr);
+         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T>
+      bool seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
       bool seek_impl(F&& func, T&& value, sv json_ptr)
@@ -44,8 +44,8 @@ namespace glz
 
       // TODO: compile time search for `~` and optimize if escape does not exist
       template <class F, class T>
-         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T> bool
-      seek_impl(F&& func, T&& value, sv json_ptr)
+         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T>
+      bool seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
             func(value);
@@ -126,8 +126,8 @@ namespace glz
 
       template <class F, class T>
          requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
-                  is_std_tuple<std::decay_t<T>> bool
-      seek_impl(F&& func, T&& value, sv json_ptr)
+                  is_std_tuple<std::decay_t<T>>
+      bool seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
             func(value);
@@ -162,8 +162,8 @@ namespace glz
       }
 
       template <class F, class T>
-         requires nullable_t<std::decay_t<T>> bool
-      seek_impl(F&& func, T&& value, sv json_ptr)
+         requires nullable_t<std::decay_t<T>>
+      bool seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
             func(value);
@@ -439,20 +439,18 @@ namespace glz
    template <size_t N, auto& Arr>
    inline constexpr auto sub_group(const auto start)
    {
-      constexpr auto arr = Arr; // Msvc currently generates an internal compiler error otherwise
       std::array<sv, N> ret;
-      std::transform(arr.begin() + start, arr.begin() + start + N, ret.begin(), remove_first_key);
+      std::transform(Arr.begin() + start, Arr.begin() + start + N, ret.begin(), remove_first_key);
       return ret;
    }
 
    template <auto& Arr>
    inline constexpr auto group_json_ptrs()
    {
-      constexpr auto arr = Arr; // Msvc currently generates an internal compiler error otherwise
-      constexpr auto group_info = group_json_ptrs_impl(arr);
-      constexpr auto n_items_per_group = glz::tuplet::get<0>(group_info);
-      constexpr auto n_unique = glz::tuplet::get<1>(group_info);
-      constexpr auto unique_keys = glz::tuplet::get<2>(group_info);
+      constexpr auto group_info = group_json_ptrs_impl(Arr);
+      constexpr auto n_items_per_group = glz::get<0>(group_info);
+      constexpr auto n_unique = glz::get<1>(group_info);
+      constexpr auto unique_keys = glz::get<2>(group_info);
 
       auto arrs = make_arrays<n_items_per_group>(std::make_index_sequence<n_unique>{});
       size_t start{};
@@ -460,10 +458,10 @@ namespace glz
       for_each<n_unique>([&](auto I) {
          // NOTE: VS 2019 wont let us grab n_items_per_group as constexpr unless
          // its static but this is a constexpr func This is fixed in VS 2022
-         constexpr size_t n_items = std::tuple_size_v<std::decay_t<decltype(glz::tuplet::get<I>(arrs).second)>>;
+         constexpr size_t n_items = std::tuple_size_v<std::decay_t<decltype(glz::get<I>(arrs).second)>>;
 
-         glz::tuplet::get<I>(arrs).first = unique_keys[I];
-         glz::tuplet::get<I>(arrs).second = glz::sub_group<n_items, Arr>(start);
+         glz::get<I>(arrs).first = unique_keys[I];
+         glz::get<I>(arrs).second = glz::sub_group<n_items, Arr>(start);
          start += n_items_per_group[I];
       });
 
@@ -569,22 +567,23 @@ namespace glz
 
       // using span_t = std::span<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>;
       using span_t = std::span<const char>; // TODO: should be more generic, but currently broken with mingw
+      using result_t = expected<span_t, parse_error>;
 
       auto start = it;
 
       if (bool(ctx.error)) [[unlikely]] {
-         return expected<span_t, parse_error>{unexpected(parse_error{ctx.error, 0})};
+         return result_t{unexpected(parse_error{ctx.error, 0})};
       }
 
       if constexpr (N == 0) {
-         return std::span{it, end};
+         return result_t{span_t{it, end}};
       }
       else {
          using namespace glz::detail;
 
          skip_ws<Opts>(ctx, it, end);
 
-         expected<span_t, parse_error> ret;
+         result_t ret;
 
          for_each<N>([&](auto I) {
             static constexpr auto key = std::get<I>(tokens);

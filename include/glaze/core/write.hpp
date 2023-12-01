@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <fstream>
+
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/validate.hpp"
@@ -47,6 +49,15 @@ namespace glz
    {
       context ctx{};
       write<Opts>(std::forward<T>(value), buffer, ctx);
+   }
+
+   template <opts Opts, class T>
+   inline std::string write(T&& value) noexcept
+   {
+      std::string buffer{};
+      context ctx{};
+      write<Opts>(std::forward<T>(value), buffer, ctx);
+      return buffer;
    }
 
    template <opts Opts, class T, raw_buffer Buffer>

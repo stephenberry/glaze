@@ -5,6 +5,7 @@
 
 #include <tuple>
 
+#include "glaze/reflection/get_name.hpp"
 #include "glaze/tuplet/tuple.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/string_view.hpp"
@@ -49,23 +50,36 @@ namespace glz
 
    template <class Type>
    concept is_schema_class = requires {
-                                requires std::is_class_v<Type>;
-                                requires Type::schema_attributes;
-                             };
+      requires std::is_class_v<Type>;
+      requires Type::schema_attributes;
+   };
 
    template <class Tuple>
    constexpr auto filter()
    {
       constexpr auto n = std::tuple_size_v<Tuple>;
-      std::array<size_t, n> indices{};
+      std::array<uint64_t, n> indices{};
       size_t i = 0;
       for_each<n>([&](auto I) {
          using V = std::decay_t<std::tuple_element_t<I, Tuple>>;
-         if constexpr (!(std::convertible_to<V, std::string_view> || is_schema_class<V>)) {
+         if constexpr (std::is_member_object_pointer_v<V>) {
+            if constexpr (I == 0) {
+               indices[i++] = 0;
+            }
+            else if constexpr (std::convertible_to<std::tuple_element_t<I - 1, Tuple>, std::string_view>) {
+               // If the previous element in the tuple is convertible to a std::string_view, then we treat it as the key
+               indices[i++] = I - 1;
+            }
+            else {
+               indices[i++] = I;
+            }
+         }
+         else if constexpr (!(std::convertible_to<V, std::string_view> || is_schema_class<V> ||
+                              std::same_as<V, comment>)) {
             indices[i++] = I - 1;
          }
       });
-      return std::make_pair(indices, i);
+      return std::make_pair(indices, i); // indices for groups and the number of groups
    }
 
    namespace detail
@@ -73,7 +87,7 @@ namespace glz
       template <class Func, class Tuple, std::size_t... Is>
       inline constexpr auto map_tuple(Func&& f, Tuple&& tuple, std::index_sequence<Is...>)
       {
-         return tuplet::make_tuple(f(tuplet::get<Is>(tuple))...);
+         return tuplet::make_tuple(f(get<Is>(tuple))...);
       }
    }
 
@@ -82,26 +96,6 @@ namespace glz
    {
       constexpr auto N = std::tuple_size_v<std::decay_t<Tuple>>;
       return detail::map_tuple(f, tuple, std::make_index_sequence<N>{});
-   }
-
-   template <class M>
-   inline constexpr void check_member()
-   {
-      constexpr auto N = std::tuple_size_v<M>;
-
-      static_assert(N == 0 || N > 1, "members need at least a name and a member pointer");
-      static_assert(N < 4, "only member_ptr (or enum, or lambda), name, and comment are supported at the momment");
-
-      if constexpr (N > 0)
-         static_assert(sv_convertible<std::tuple_element_t<0, M>>, "first element should be the name");
-      /*if constexpr (N > 1) {
-       TODO: maybe someday add better error messaging that handles lambdas
-         using E = std::tuple_element_t<1, M>;
-         static_assert(std::is_member_pointer_v<E> || std::is_enum_v<E>>,
-                       "second element should be the member pointer");
-      }*/
-      if constexpr (N > 2)
-         static_assert(sv_convertible<std::tuple_element_t<2, M>>, "third element should be a string comment");
    }
 
    template <size_t n_groups>
@@ -119,19 +113,20 @@ namespace glz
    template <size_t Start, class Tuple, size_t... Is>
    constexpr auto make_group(Tuple&& t, std::index_sequence<Is...>)
    {
-      auto get_elem = [&](auto i) {
-         constexpr auto I = decltype(i)::value;
-         using type = decltype(glz::tuplet::get<Start + I>(t));
-         if constexpr (I == 0 || std::convertible_to<type, std::string_view>) {
-            return std::string_view(glz::tuplet::get<Start + I>(t));
+      auto get_elem = [&](auto I) {
+         using type = decltype(glz::get<Start + I>(t));
+         using T = std::decay_t<type>;
+         if constexpr (std::convertible_to<type, std::string_view>) {
+            return std::string_view(glz::get<Start + I>(t));
+         }
+         else if constexpr (std::same_as<T, comment>) {
+            return glz::get<Start + I>(t).value;
          }
          else {
-            return glz::tuplet::get<Start + I>(t);
+            return glz::get<Start + I>(t);
          }
       };
-      auto r = glz::tuplet::make_copy_tuple(get_elem(std::integral_constant<size_t, Is>{})...);
-      // check_member<decltype(r)>();
-      return r;
+      return glz::tuplet::make_copy_tuple(get_elem(std::integral_constant<size_t, Is>{})...);
    }
 
    template <auto& GroupStartArr, auto& GroupSizeArr, class Tuple, size_t... GroupNumber>
@@ -157,8 +152,8 @@ namespace glz
    struct group_builder
    {
       static constexpr auto h = make_groups_helper<Tuple>();
-      static constexpr auto starts = glz::tuplet::get<0>(h);
-      static constexpr auto sizes = glz::tuplet::get<1>(h);
+      static constexpr auto starts = glz::get<0>(h);
+      static constexpr auto sizes = glz::get<1>(h);
 
       static constexpr auto op(Tuple&& t)
       {

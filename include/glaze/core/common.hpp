@@ -19,10 +19,8 @@
 #include "glaze/core/meta.hpp"
 #include "glaze/util/bit_array.hpp"
 #include "glaze/util/expected.hpp"
-#include "glaze/util/fixed_string.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/hash_map.hpp"
-#include "glaze/util/murmur.hpp"
 #include "glaze/util/string_view.hpp"
 #include "glaze/util/tuple.hpp"
 #include "glaze/util/type_traits.hpp"
@@ -30,6 +28,14 @@
 
 namespace glz
 {
+   // write out a string like type without quoting it
+   template <class T>
+   struct raw_t
+   {
+      using value_type = T;
+      T& val;
+   };
+
    // Allows developers to add `static constexpr auto custom_read = true;` to their glz::meta to prevent ambiguous
    // partial specialization for custom parsers
    template <class T>
@@ -42,6 +48,7 @@ namespace glz
    struct obj final
    {
       glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
+      static constexpr auto reflect = false;
    };
 
    template <class... T>
@@ -51,6 +58,7 @@ namespace glz
    struct obj_copy final
    {
       glz::tuplet::tuple<T...> value;
+      static constexpr auto reflect = false;
    };
 
    template <class... T>
@@ -60,6 +68,7 @@ namespace glz
    struct arr final
    {
       glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
+      static constexpr auto reflect = false;
    };
 
    template <class... T>
@@ -79,6 +88,7 @@ namespace glz
    struct merge final
    {
       glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
+      static constexpr auto reflect = false;
    };
 
    template <class... T>
@@ -134,10 +144,10 @@ namespace glz
 
    template <class T>
    concept range = requires(T& t) {
-                      requires !std::same_as<void, decltype(t.begin())>;
-                      requires !std::same_as<void, decltype(t.end())>;
-                      requires std::input_iterator<decltype(t.begin())>;
-                   };
+      requires !std::same_as<void, decltype(t.begin())>;
+      requires !std::same_as<void, decltype(t.end())>;
+      requires std::input_iterator<decltype(t.begin())>;
+   };
 
    // range like
    template <class T>
@@ -147,26 +157,30 @@ namespace glz
    using range_value_t = std::iter_value_t<iterator_t<R>>;
 
    template <range R>
-   [[nodiscard]] bool empty_range(const R& rng)
+   [[nodiscard]] constexpr bool empty_range(R&& rng)
    {
+#ifdef __cpp_lib_ranges
+      return std::ranges::empty(rng);
+#else
       // in lieu of std::ranges::empty
       if constexpr (requires() {
                        {
                           rng.empty()
-                          } -> std::convertible_to<bool>;
+                       } -> std::convertible_to<bool>;
                     }) {
          return rng.empty();
       }
       else if constexpr (requires() {
                             {
                                rng.size()
-                               } -> std::same_as<std::size_t>;
+                            } -> std::same_as<std::size_t>;
                          }) {
-         return rng.size() == 0;
+         return rng.size() == std::size_t{0};
       }
       else {
          return std::cbegin(rng) == std::cend(rng);
       }
+#endif
    }
 
    template <class T>
@@ -284,36 +298,35 @@ namespace glz
          std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>;
 
       template <class T>
-      concept int_t = std::integral<std::decay_t<T>> && !
-      char_t<std::decay_t<T>> && !bool_t<T>;
+      concept int_t = std::integral<std::decay_t<T>> && !char_t<std::decay_t<T>> && !bool_t<T>;
 
       template <class T>
       concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
 
       template <typename T>
       concept complex_t = requires(T a, T b) {
-                             {
-                                a.real()
-                                } -> std::convertible_to<typename T::value_type>;
-                             {
-                                a.imag()
-                                } -> std::convertible_to<typename T::value_type>;
-                             {
-                                T(a.real(), a.imag())
-                                } -> std::same_as<T>;
-                             {
-                                a + b
-                                } -> std::same_as<T>;
-                             {
-                                a - b
-                                } -> std::same_as<T>;
-                             {
-                                a* b
-                                } -> std::same_as<T>;
-                             {
-                                a / b
-                                } -> std::same_as<T>;
-                          };
+         {
+            a.real()
+         } -> std::convertible_to<typename T::value_type>;
+         {
+            a.imag()
+         } -> std::convertible_to<typename T::value_type>;
+         {
+            T(a.real(), a.imag())
+         } -> std::same_as<T>;
+         {
+            a + b
+         } -> std::same_as<T>;
+         {
+            a - b
+         } -> std::same_as<T>;
+         {
+            a* b
+         } -> std::same_as<T>;
+         {
+            a / b
+         } -> std::same_as<T>;
+      };
 
       template <class T>
       concept constructible = requires { meta<std::decay_t<T>>::construct; } || local_construct_t<std::decay_t<T>>;
@@ -322,16 +335,14 @@ namespace glz
       concept meta_value_t = glaze_t<std::decay_t<T>>;
 
       template <class T>
-      concept str_t = !
-      std::same_as<std::nullptr_t, T>&& std::convertible_to<std::decay_t<T>, std::string_view>;
+      concept str_t = !std::same_as<std::nullptr_t, T> && std::convertible_to<std::decay_t<T>, std::string_view>;
 
       template <class T>
       concept has_push_back = requires(T t, typename T::value_type v) { t.push_back(v); };
 
       // this concept requires that T is string and copies the string in json
       template <class T>
-      concept string_t = str_t<T> && !
-      std::same_as<std::decay_t<T>, std::string_view>&& has_push_back<T>;
+      concept string_t = str_t<T> && !std::same_as<std::decay_t<T>, std::string_view> && has_push_back<T>;
 
       template <class T>
       concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
@@ -342,39 +353,39 @@ namespace glz
 
       template <class T>
       concept pair_t = requires(T pair) {
-                          {
-                             pair.first
-                             } -> std::same_as<typename T::first_type&>;
-                          {
-                             pair.second
-                             } -> std::same_as<typename T::second_type&>;
-                       };
+         {
+            pair.first
+         } -> std::same_as<typename T::first_type&>;
+         {
+            pair.second
+         } -> std::same_as<typename T::second_type&>;
+      };
 
       template <class T>
       concept map_subscriptable = requires(T container) {
-                                     {
-                                        container[std::declval<typename T::key_type>()]
-                                        } -> std::same_as<typename T::mapped_type&>;
-                                  };
+         {
+            container[std::declval<typename T::key_type>()]
+         } -> std::same_as<typename T::mapped_type&>;
+      };
 
       template <class T>
-      concept readable_map_t = !
-      custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>> && map_subscriptable<T>;
+      concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
+                               pair_t<range_value_t<T>> && map_subscriptable<T>;
 
       template <class T>
-      concept writable_map_t = !
-      custom_write<T> && !meta_value_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>>;
+      concept writable_map_t =
+         !custom_write<T> && !meta_value_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>>;
 
       template <class Map>
       concept heterogeneous_map = requires {
-                                     typename Map::key_compare;
-                                     requires(std::same_as<typename Map::key_compare, std::less<>> ||
-                                              std::same_as<typename Map::key_compare, std::greater<>> ||
-                                              requires { typename Map::key_compare::is_transparent; });
-                                  };
+         typename Map::key_compare;
+         requires(std::same_as<typename Map::key_compare, std::less<>> ||
+                  std::same_as<typename Map::key_compare, std::greater<>> ||
+                  requires { typename Map::key_compare::is_transparent; });
+      };
 
       template <class T>
-      concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
+      concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>)&&range<T>);
 
       template <class T>
       concept readable_array_t = (!custom_read<T> && array_t<T>);
@@ -384,24 +395,24 @@ namespace glz
 
       template <class T>
       concept emplace_backable = requires(T container) {
-                                    {
-                                       container.emplace_back()
-                                       } -> std::same_as<typename T::reference>;
-                                 };
+         {
+            container.emplace_back()
+         } -> std::same_as<typename T::reference>;
+      };
 
       template <class T>
       concept emplaceable = requires(T container) {
-                               {
-                                  container.emplace(std::declval<typename T::value_type>())
-                               };
-                            };
+         {
+            container.emplace(std::declval<typename T::value_type>())
+         };
+      };
 
       template <class T>
       concept push_backable = requires(T container) {
-                                 {
-                                    container.push_back(std::declval<typename T::value_type>())
-                                 };
-                              };
+         {
+            container.push_back(std::declval<typename T::value_type>())
+         };
+      };
 
       template <class T>
       concept resizeable = requires(T container) { container.resize(0); };
@@ -410,18 +421,18 @@ namespace glz
       concept erasable = requires(T container) { container.erase(container.cbegin(), container.cend()); };
 
       template <class T>
-      concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> && !
-      resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
+      concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> &&
+                                    !resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
 
       template <class T>
       concept has_size = requires(T container) { container.size(); };
 
       template <class T>
       concept has_empty = requires(T container) {
-                             {
-                                container.empty()
-                                } -> std::convertible_to<bool>;
-                          };
+         {
+            container.empty()
+         } -> std::convertible_to<bool>;
+      };
 
       template <class T>
       concept has_data = requires(T container) { container.data(); };
@@ -431,10 +442,10 @@ namespace glz
 
       template <class T>
       concept accessible = requires(T container) {
-                              {
-                                 container[size_t{}]
-                                 } -> std::same_as<typename T::reference>;
-                           };
+         {
+            container[size_t{}]
+         } -> std::same_as<typename T::reference>;
+      };
 
       template <class T>
       concept boolean_like = std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> ||
@@ -445,20 +456,40 @@ namespace glz
 
       template <class T>
       concept is_span = requires(T t) {
-                           T::extent;
-                           typename T::element_type;
-                        };
+         T::extent;
+         typename T::element_type;
+      };
+
+      template <class T>
+      concept is_no_reflect = requires(T t) { requires T::reflect == false; };
 
       template <class T>
       concept is_dynamic_span = T::extent == static_cast<size_t>(-1);
 
       template <class T>
-      concept has_static_size = (is_span<T> && !is_dynamic_span<T>) ||
-                                (requires(T container) {
-                                    {
-                                       std::bool_constant<(std::decay_t<T>{}.size(), true)>()
-                                       } -> std::same_as<std::true_type>;
-                                 } && std::decay_t<T>{}.size() > 0);
+      concept has_static_size = (is_span<T> && !is_dynamic_span<T>) || (requires(T container) {
+                                   {
+                                      std::bool_constant<(std::decay_t<T>{}.size(), true)>()
+                                   } -> std::same_as<std::true_type>;
+                                } && std::decay_t<T>{}.size() > 0);
+
+      template <typename T>
+      concept is_bitset = requires(T bitset) {
+         bitset.flip();
+         bitset.set(0);
+         {
+            bitset.to_string()
+         } -> std::same_as<std::string>;
+         {
+            bitset.count()
+         } -> std::same_as<std::size_t>;
+      };
+
+      template <class T>
+      concept is_float128 = requires(T x) {
+         requires sizeof(x) == 16;
+         requires std::floating_point<T>;
+      };
 
       template <class T>
       constexpr size_t get_size() noexcept
@@ -476,33 +507,33 @@ namespace glz
 
       template <class T>
       concept tuple_t = requires(T t) {
-                           std::tuple_size<T>::value;
-                           glz::tuplet::get<0>(t);
-                        } && !
-      meta_value_t<T> && !range<T>;
+         std::tuple_size<T>::value;
+         glz::get<0>(t);
+      } && !meta_value_t<T> && !range<T>;
 
       template <class T>
       concept always_null_t =
-         std::same_as<T, std::nullptr_t> || std::same_as<T, std::monostate> || std::same_as<T, std::nullopt_t>;
+         std::same_as<T, std::nullptr_t> || std::convertible_to<T, std::monostate> || std::same_as<T, std::nullopt_t>;
 
       template <class T>
-      concept nullable_t = !
-      meta_value_t<T> && !str_t<T> && requires(T t) {
-                                         bool(t);
-                                         {
-                                            *t
-                                         };
-                                      };
+      concept nullable_t = !meta_value_t<T> && !str_t<T> && requires(T t) {
+         bool(t);
+         {
+            *t
+         };
+      };
 
       template <class T>
-      concept null_t = nullable_t<T> || always_null_t<T>;
+      concept raw_nullable = is_specialization_v<T, raw_t> && requires { requires nullable_t<typename T::value_type>; };
+
+      template <class T>
+      concept null_t = nullable_t<T> || always_null_t<T> || raw_nullable<T>;
 
       template <class T>
       concept func_t = requires(T t) {
-                          typename T::result_type;
-                          std::function(t);
-                       } && !
-      glaze_t<T>;
+         typename T::result_type;
+         std::function(t);
+      } && !glaze_t<T>;
 
       template <class T>
       concept glaze_array_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Array>;
@@ -520,15 +551,25 @@ namespace glz
       concept glaze_value_t =
          glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || glaze_flags_t<T>);
 
+      template <class T>
+      concept reflectable =
+         !(is_no_reflect<T> || glaze_value_t<T> || glaze_object_t<T> || glaze_array_t<T> || glaze_flags_t<T> ||
+           range<T> || pair_t<T> || null_t<T>)&&std::is_aggregate_v<std::remove_cvref_t<T>> &&
+         std::is_class_v<T>;
+
+      template <class T>
+      concept glaze_const_value_t = glaze_value_t<T> && std::is_pointer_v<glz::meta_wrapper_t<T>> &&
+                                    std::is_const_v<std::remove_pointer_t<glz::meta_wrapper_t<T>>>;
+
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to) {
 #if __GNUC__
-                                             // TODO: guard gcc against narrowing conversions when fixed
-                                             to = from;
+         // TODO: guard gcc against narrowing conversions when fixed
+         to = from;
 #else
-                                             To{from};
+         To{from};
 #endif
-                                          };
+      };
 
       // from
       // https://stackoverflow.com/questions/55941964/how-to-filter-duplicate-types-from-tuple-c
@@ -568,11 +609,18 @@ namespace glz
       template <class Tuple, class = std::make_index_sequence<std::tuple_size<Tuple>::value>>
       struct value_tuple_variant;
 
+      template <class Tuple, size_t I>
+      struct member_type
+      {
+         using T0 = std::decay_t<std::tuple_element_t<0, std::tuple_element_t<I, Tuple>>>;
+         using type = std::tuple_element_t<std::is_member_object_pointer_v<T0> ? 0 : 1, std::tuple_element_t<I, Tuple>>;
+      };
+
       template <class Tuple, size_t... I>
       struct value_tuple_variant<Tuple, std::index_sequence<I...>>
       {
          using type = typename tuple_variant<decltype(glz::tuplet::tuple_cat(
-            std::declval<glz::tuplet::tuple<std::tuple_element_t<1, std::tuple_element_t<I, Tuple>>>>()...))>::type;
+            std::declval<tuplet::tuple<typename member_type<Tuple, I>::type>>()...))>::type;
       };
 
       template <class Tuple>
@@ -582,7 +630,7 @@ namespace glz
       inline constexpr auto make_array_impl(std::index_sequence<I...>)
       {
          using value_t = typename tuple_variant<meta_t<T>>::type;
-         return std::array<value_t, std::tuple_size_v<meta_t<T>>>{glz::tuplet::get<I>(meta_v<T>)...};
+         return std::array<value_t, std::tuple_size_v<meta_t<T>>>{glz::get<I>(meta_v<T>)...};
       }
 
       template <class T>
@@ -603,7 +651,7 @@ namespace glz
                return &std::get<Is>(t);
             }
             else {
-               return &glz::tuplet::get<Is>(t);
+               return &glz::get<Is>(t);
             }
          }...};
       }
@@ -618,9 +666,36 @@ namespace glz
       }
 
       template <class T, size_t I>
+      constexpr auto key_value() noexcept
+      {
+         using value_t = value_tuple_variant_t<meta_t<T>>;
+         constexpr auto first = get<0>(get<I>(meta_v<T>));
+         using T0 = std::decay_t<decltype(first)>;
+         if constexpr (std::is_member_object_pointer_v<T0>) {
+            return std::pair<sv, value_t>{get_name<first>(), first};
+         }
+         else {
+            return std::pair<sv, value_t>{sv(first), get<1>(get<I>(meta_v<T>))};
+         }
+      }
+
+      template <class T, size_t I>
+      constexpr sv get_key() noexcept
+      {
+         constexpr auto first = get<0>(get<I>(meta_v<T>));
+         using T0 = std::decay_t<decltype(first)>;
+         if constexpr (std::is_member_object_pointer_v<T0>) {
+            return get_name<first>();
+         }
+         else {
+            return {first};
+         }
+      }
+
+      template <class T, size_t I>
       struct meta_sv
       {
-         static constexpr sv value = glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>));
+         static constexpr sv value = get_key<T, I>();
       };
 
       template <class T, bool use_hash_comparison, size_t... I>
@@ -631,48 +706,34 @@ namespace glz
 
          auto naive_or_normal_hash = [&] {
             if constexpr (n <= 20) {
-               return glz::detail::naive_map<value_t, n, use_hash_comparison>(
-                  {std::pair<sv, value_t>{sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                          glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))}...});
+               return glz::detail::naive_map<value_t, n, use_hash_comparison>({key_value<T, I>()...});
             }
             else {
-               return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
-                  {std::pair<sv, value_t>{sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                          glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))}...});
+               return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({key_value<T, I>()...});
             }
          };
 
          if constexpr (n == 0) {
-            static_assert(false_v<T>, "empty object in glz::meta");
+            static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
          }
          else if constexpr (n == 1) {
-            return micro_map1<value_t, meta_sv<T, I>::value...>{
-               std::make_pair<sv, value_t>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                           glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...};
+            return micro_map1<value_t, meta_sv<T, I>::value...>{key_value<T, I>()...};
          }
          else if constexpr (n == 2) {
-            return micro_map2<value_t, meta_sv<T, I>::value...>{
-               std::make_pair<sv, value_t>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                           glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...};
+            return micro_map2<value_t, meta_sv<T, I>::value...>{key_value<T, I>()...};
          }
          else if constexpr (n < 128) // don't even attempt a first character hash if we have too many keys
          {
-            constexpr auto front_desc =
-               single_char_hash<n>(std::array<sv, n>{sv{glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))}...});
+            constexpr auto front_desc = single_char_hash<n>(std::array<sv, n>{get_key<T, I>()...});
 
             if constexpr (front_desc.valid) {
-               return make_single_char_map<value_t, front_desc>(
-                  {std::make_pair<sv, value_t>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                               glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
+               return make_single_char_map<value_t, front_desc>({key_value<T, I>()...});
             }
             else {
-               constexpr auto back_desc = single_char_hash<n, false>(
-                  std::array<sv, n>{sv{glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))}...});
+               constexpr auto back_desc = single_char_hash<n, false>(std::array<sv, n>{get_key<T, I>()...});
 
                if constexpr (back_desc.valid) {
-                  return make_single_char_map<value_t, back_desc>(
-                     {std::make_pair<sv, value_t>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                                  glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
+                  return make_single_char_map<value_t, back_desc>({key_value<T, I>()...});
                }
                else {
                   return naive_or_normal_hash();
@@ -695,8 +756,7 @@ namespace glz
       constexpr auto make_int_storage_impl(std::index_sequence<I...>)
       {
          using value_t = value_tuple_variant_t<meta_t<T>>;
-         return std::array<value_t, std::tuple_size_v<meta_t<T>>>(
-            {glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))...});
+         return std::array<value_t, std::tuple_size_v<meta_t<T>>>({glz::get<1>(glz::get<I>(meta_v<T>))...});
       }
 
       template <class T>
@@ -710,7 +770,7 @@ namespace glz
       constexpr auto make_key_int_map_impl(std::index_sequence<I...>)
       {
          return normal_map<sv, size_t, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<sv, size_t>(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>)), I)...});
+            {std::make_pair<sv, size_t>(glz::get<0>(glz::get<I>(meta_v<T>)), I)...});
       }
 
       template <class T>
@@ -721,30 +781,11 @@ namespace glz
       }
 
       template <class T, size_t... I>
-      constexpr auto make_crusher_map_impl(std::index_sequence<I...>)
-      {
-         using value_t = value_tuple_variant_t<meta_t<T>>;
-         constexpr auto n = std::tuple_size_v<meta_t<T>>;
-
-         return normal_map<uint32_t, value_t, n>(
-            {std::make_pair<uint32_t, value_t>(murmur3_32(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                               glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>)))...});
-      }
-
-      template <class T>
-      constexpr auto make_crusher_map()
-      {
-         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_crusher_map_impl<T>(indices);
-      }
-
-      template <class T, size_t... I>
       constexpr auto make_enum_to_string_map_impl(std::index_sequence<I...>)
       {
          using key_t = std::underlying_type_t<T>;
-         return normal_map<key_t, sv, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<key_t, sv>(static_cast<key_t>(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))),
-                                       sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))))...});
+         return normal_map<key_t, sv, std::tuple_size_v<meta_t<T>>>({std::make_pair<key_t, sv>(
+            static_cast<key_t>(glz::get<1>(glz::get<I>(meta_v<T>))), sv(glz::get<0>(glz::get<I>(meta_v<T>))))...});
       }
 
       template <class T>
@@ -767,9 +808,8 @@ namespace glz
       template <class T, size_t... I>
       constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>)
       {
-         return normal_map<sv, T, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<sv, T>(sv(glz::tuplet::get<0>(glz::tuplet::get<I>(meta_v<T>))),
-                                   T(glz::tuplet::get<1>(glz::tuplet::get<I>(meta_v<T>))))...});
+         return normal_map<sv, T, std::tuple_size_v<meta_t<T>>>({std::make_pair<sv, T>(
+            sv(glz::get<0>(glz::get<I>(meta_v<T>))), T(glz::get<1>(glz::get<I>(meta_v<T>))))...});
       }
 
       template <class T>
@@ -797,7 +837,7 @@ namespace glz
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
             for_each<std::tuple_size_v<meta_t<V>>>(
-               [&](auto J) { data[index++] = glz::tuplet::get<0>(glz::tuplet::get<J>(meta_v<V>)); });
+               [&](auto J) { data[index++] = glz::get<0>(glz::get<J>(meta_v<V>)); });
          });
 
          std::sort(data.data(), data.data() + max_keys);
@@ -825,9 +865,8 @@ namespace glz
          constexpr auto N = std::variant_size_v<T>;
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
-            for_each<std::tuple_size_v<meta_t<V>>>([&](auto J) {
-               deduction_map.find(glz::tuplet::get<0>(glz::tuplet::get<J>(meta_v<V>)))->second[I] = true;
-            });
+            for_each<std::tuple_size_v<meta_t<V>>>(
+               [&](auto J) { deduction_map.find(glz::get<0>(glz::get<J>(meta_v<V>)))->second[I] = true; });
          });
 
          return deduction_map;
@@ -847,7 +886,7 @@ namespace glz
          return make_variant_id_map_impl<T>(indices, ids_v<T>);
       }
 
-      inline decltype(auto) get_member(auto&& value, auto& member_ptr)
+      inline decltype(auto) get_member(auto&& value, auto&& member_ptr)
       {
          using V = std::decay_t<decltype(member_ptr)>;
          if constexpr (std::is_member_object_pointer_v<V>) {
@@ -890,8 +929,7 @@ namespace glz
       inline constexpr auto members_from_meta_impl()
       {
          if constexpr (glaze_object_t<std::decay_t<T>>) {
-            return glz::tuplet::tuple<
-               std::decay_t<member_t<T, std::tuple_element_t<1, std::tuple_element_t<I, meta_t<T>>>>>...>{};
+            return glz::tuplet::tuple<std::decay_t<member_t<T, typename member_type<meta_t<T>, I>::type>>...>{};
          }
          else {
             return glz::tuplet::tuple{};

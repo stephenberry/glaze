@@ -68,6 +68,12 @@ namespace glz
 
       template <class T>
       concept glaze_t = requires { meta<std::decay_t<T>>::value; } || local_meta_t<std::decay_t<T>>;
+
+      template <class T>
+      concept has_unknown_writer = requires { meta<T>::unknown_write; } || requires { T::glaze::unknown_write; };
+
+      template <class T>
+      concept has_unknown_reader = requires { meta<T>::unknown_read; } || requires { T::glaze::unknown_read; };
    }
 
    struct empty
@@ -109,6 +115,51 @@ namespace glz
 
    template <class T>
    using meta_wrapper_t = std::decay_t<decltype(meta_wrapper_v<std::decay_t<T>>)>;
+
+   template <class T>
+   struct remove_meta_wrapper
+   {
+      using type = T;
+   };
+   template <detail::glaze_t T>
+   struct remove_meta_wrapper<T>
+   {
+      using type = std::remove_pointer_t<std::remove_const_t<meta_wrapper_t<T>>>;
+   };
+   template <class T>
+   using remove_meta_wrapper_t = typename remove_meta_wrapper<T>::type;
+
+   template <class T>
+   inline constexpr auto meta_unknown_write_v = [] {
+      if constexpr (detail::local_meta_t<T>) {
+         return T::glaze::unknown_write;
+      }
+      else if constexpr (detail::global_meta_t<T>) {
+         return meta<T>::unknown_write;
+      }
+      else {
+         return empty{};
+      }
+   }();
+
+   template <class T>
+   using meta_unknown_write_t = std::decay_t<decltype(meta_unknown_write_v<std::decay_t<T>>)>;
+
+   template <class T>
+   inline constexpr auto meta_unknown_read_v = [] {
+      if constexpr (detail::local_meta_t<T>) {
+         return T::glaze::unknown_read;
+      }
+      else if constexpr (detail::global_meta_t<T>) {
+         return meta<T>::unknown_read;
+      }
+      else {
+         return empty{};
+      }
+   }();
+
+   template <class T>
+   using meta_unknown_read_t = std::decay_t<decltype(meta_unknown_read_v<std::decay_t<T>>)>;
 
    template <class T>
    concept named = requires { meta<T>::name; } || requires { T::glaze::name; };
@@ -188,7 +239,7 @@ namespace glz
 
       if constexpr (detail::glaze_t<T>) {
          using U = std::underlying_type_t<T>;
-         return glz::tuplet::get<0>(glz::tuplet::get<static_cast<U>(Enum)>(meta_v<T>));
+         return glz::get<0>(glz::get<static_cast<U>(Enum)>(meta_v<T>));
       }
       else {
          return "glz::unknown";

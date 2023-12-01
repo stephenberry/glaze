@@ -1,7 +1,10 @@
 # Glaze
-One of the fastest JSON libraries in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
+One of the fastest JSON libraries in the world. Glaze reads and writes from object memory, simplifying interfaces and offering incredible performance.
 
-Glaze also supports binary messages via [BEVE](https://github.com/stephenberry/beve) and CSV support. And, the library has many more useful features for building APIs.
+Glaze isn't just a JSON library. Glaze also supports:
+
+- [BEVE](https://github.com/stephenberry/beve) (binary efficient versatile encoding)
+- [CSV](https://en.wikipedia.org/wiki/Comma-separated_values#:~:text=Comma%2Dseparated%20values%20(CSV),commas%20in%20the%20CSV%20file.) (comma separated value)
 
 ## Highlights
 
@@ -9,41 +12,49 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 - Simple registration
 - Standard C++ library support
+- Header only
 - Direct to memory serialization/deserialization
 - Compile time maps with constant time lookups and perfect hashing
 - Nearly zero intermediate allocations
+- Reflection for member object pointers
+- [Pure compile time reflection](./docs/pure-reflection.md) for aggregate, constexpr structs in Clang
+- Powerful wrappers to modify read/write behavior ([Wrappers](./docs/wrappers.md))
+- Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
+- [Handle unknown keys](./docs/unknown-keys.md) in a fast and flexible manner
 - Direct memory access through JSON pointer syntax
 - [Tagged binary spec](./docs/binary.md) through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
 - If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](./docs/exceptions.md)
 - No runtime type information necessary (compiles with `-fno-rtti`)
+- Rapid error handling with short circuiting
 - [JSON-RPC 2.0 support](./docs/json-rpc.md)
 - [JSON Schema generation](./docs/json-schema.md)
 - [CSV Reading/Writing](./docs/csv.md)
-- Much more!
+- [Much more!](#more-features)
 
 ## Performance
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.23**           | **897**      | **1094**    |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1286**    |
-| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.77**           | **628**      | **1000**    |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.89**           | **354**      | **490**     |
-| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.59**           | **304**      | **507**     |
-| [**json_struct**](https://github.com/jorgen/json_struct)     | **4.30**           | **235**      | **332**     |
-| [**nlohmann**](https://github.com/nlohmann/json)             | **15.35**          | **89**       | **85**      |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.21**           | **988**      | **1016**    |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1134**    |
+| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.45**           | **731**      | **941**     |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.73**           | **360**      | **547**     |
+| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.50**           | **271**      | **445**     |
+| [**json_struct**](https://github.com/jorgen/json_struct)     | **5.31**           | **167**      | **330**     |
+| [**Boost.JSON**](https://boost.org/libs/json)                | **5.28**           | **182**      | **276**     |
+| [**nlohmann**](https://github.com/nlohmann/json)             | **14.66**          | **83**       | **81**      |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
-*Note: [simdjson](https://github.com/simdjson/simdjson) is great for parsing, but can experience major performance losses when the data is not in the expected sequence (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user.*
+*Note: [simdjson](https://github.com/simdjson/simdjson) is great, but can experience major performance losses when the data is not in the expected sequence or any keys are missing (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user.*
 
 [ABC Test](https://github.com/stephenberry/json_performance) shows how simdjson has poor performance when keys are not in the expected sequence:
 
-| Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
-| ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **2.25**           | **1269**     | **639**     |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **171**     |
+| Library                                                      | Read (MB/s) |
+| ------------------------------------------------------------ | ----------- |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **632**     |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **107**     |
 
 ## Binary Performance
 
@@ -51,8 +62,8 @@ Tagged binary specification: [BEVE](https://github.com/stephenberry/beve)
 
 | Metric                | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | --------------------- | ------------------ | ------------ | ----------- |
-| Raw performance       | **0.45**           | **2859**     | **2178**    |
-| Equivalent JSON data* | **0.45**           | **3123**     | **2379**    |
+| Raw performance       | **0.41**           | **3121**     | **2366**    |
+| Equivalent JSON data* | **0.41**           | **3409**     | **2584**    |
 
 JSON message size: 616 bytes
 
@@ -65,8 +76,6 @@ Binary message size: 564 bytes
 [Actions](https://github.com/stephenberry/glaze/actions) automatically build and test with [Clang](https://clang.llvm.org), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/), and [GCC](https://gcc.gnu.org) compilers on apple, windows, and linux.
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc_2022.yml/badge.svg) 
-
-> MSVC 2019 is no longer supported as of v1.3.0
 
 ## Example
 
@@ -83,10 +92,10 @@ template <>
 struct glz::meta<my_struct> {
    using T = my_struct;
    static constexpr auto value = object(
-      "i", &T::i,
-      "d", &T::d,
-      "hello", &T::hello,
-      "arr", &T::arr
+      &T::i,
+      &T::d,
+      &T::hello,
+      &T::arr
    );
 };
 ```
@@ -177,7 +186,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze)
 ### [Conan](https://conan.io)
 
 - [Glaze Conan recipe](https://github.com/Ahajha/glaze-conan)
-- Also included in [Conan Center](https://conan.io/center/)
+- Also included in [Conan Center](https://conan.io/center/) ![Conan Center](https://img.shields.io/conan/v/glaze)
 
 ```
 find_package(glaze REQUIRED)
@@ -210,41 +219,107 @@ struct my_struct
   struct glaze {
      using T = my_struct;
      static constexpr auto value = glz::object(
-        "i", &T::i,
-        "d", &T::d,
-        "hello", &T::hello,
-        "arr", &T::arr
+        &T::i,
+        &T::d,
+        &T::hello,
+        &T::arr
      );
   };
 };
 ```
 
-> Template specialization of `glz::meta` is preferred when separating class definition from the serialization mapping. Local glaze metadata is helpful for working within the local namespace or when the class itself is templated.
+> Template specialization of `glz::meta` is preferred when separating class definition from the serialization mapping. Local glaze metadata is helpful for working within the local namespace.
+
+## Custom Key Names or Unnamed Types
+
+When you define Glaze metadata, objects will automatically reflect the names of your member object pointers. However, if you want custom names or your register lambda functions or wrappers that do not provide names for your fields, you can optionally add field names in your metadata.
+
+Example of custom names:
+
+```c++
+template <>
+struct glz::meta<my_struct> {
+   using T = my_struct;
+   static constexpr auto value = object(
+      "integer", &T::i,
+      "double", &T::d,
+      "string", &T::hello,
+      "array", &T::arr
+   );
+};
+```
+
+> Each of these strings is optional and can be removed for individual fields if you want the name to be reflected.
+>
+> Names are required for:
+>
+> - Wrappers
+> - Lambda functions
 
 ## Struct Registration Macros
 
-Glaze provides macros to more efficiently register your C++ structs.
+GLZ_META and GLZ_LOCAL_META will be deprecated in the future now that we have reflection support for external and local Glaze metadata. Current documentation is here: [Struct Registration Macros](./docs/macros-for-structs.md)
 
-**Macros must be explicitly included via: `#include "glaze/core/macros.hpp"`**
+## Custom Read/Write
 
-- GLZ_META is for external registration
-- GLZ_LOCAL_META is for internal registration
+Custom reading and writing can be achieved through the powerful `to_json`/`from_json` specialization approach, which is described here: [custom-serialization.md](https://github.com/stephenberry/glaze/blob/main/docs/custom-serialization.md). However, this only works for user defined types.
+
+For common use cases or cases where a specific member variable should have special reading and writing, you can use `glz::custom` to register read/write member functions, std::functions, or lambda functions.
+
+See an example:
 
 ```c++
-struct macro_t {
-   double x = 5.0;
-   std::string y = "yay!";
-   int z = 55;
+struct custom_encoding
+{
+   uint64_t x{};
+   std::string y{};
+   std::array<uint32_t, 3> z{};
+   
+   void read_x(const std::string& s) {
+      x = std::stoi(s);
+   }
+   
+   uint64_t write_x() {
+      return x;
+   }
+   
+   void read_y(const std::string& s) {
+      y = "hello" + s;
+   }
+   
+   auto& write_z() {
+      z[0] = 5;
+      return z;
+   }
 };
 
-GLZ_META(macro_t, x, y, z);
+template <>
+struct glz::meta<custom_encoding>
+{
+   using T = custom_encoding;
+   static constexpr auto value = object("x", custom<&T::read_x, &T::write_x>, //
+                                        "y", custom<&T::read_y, &T::y>, //
+                                        "z", custom<&T::z, &T::write_z>);
+};
 
-struct local_macro_t {
-   double x = 5.0;
-   std::string y = "yay!";
-   int z = 55;
+suite custom_encoding_test = [] {
+   "custom_reading"_test = [] {
+      custom_encoding obj{};
+      std::string s = R"({"x":"3","y":"world","z":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.x == 3);
+      expect(obj.y == "helloworld");
+      expect(obj.z == std::array<uint32_t, 3>{1, 2, 3});
+   };
    
-   GLZ_LOCAL_META(local_macro_t, x, y, z);
+   "custom_writing"_test = [] {
+      custom_encoding obj{};
+      std::string s = R"({"x":"3","y":"world","z":[1,2,3]})";
+      expect(!glz::read_json(obj, s));
+      std::string out{};
+      glz::write_json(obj, out);
+      expect(out == R"({"x":3,"y":"helloworld","z":[5,2,3]})");
+   };
 };
 ```
 
@@ -325,8 +400,8 @@ template <>
 struct glz::meta<thing> {
    using T = thing;
    static constexpr auto value = object(
-      "x", &T::x, "x is a double",
-      "y", &T::y, "y is an int"
+      &T::x, "x is a double"_c,
+      &T::y, "y is an int"_c
    );
 };
 ```
@@ -339,6 +414,8 @@ Prettified output:
   "y": 7 /*y is an int*/
 }
 ```
+
+> The `_c` is necessary if member object pointer names are reflected. You can also write `comment("x is a double")`
 
 ## Object Mapping
 
@@ -569,6 +646,8 @@ assert(json[2]["pi"].get<double>() == 3.14);
 
 Glaze is safe to use with untrusted messages. Errors are returned as error codes, typically within a `glz::expected`, which behaves just like a `std::expected`.
 
+> Glaze works to short circuit error handling, which means the parsing exits very rapidly if an error is encountered.
+
 To generate more helpful error messages, call `format_error`:
 
 ```c++
@@ -637,7 +716,7 @@ struct opts {
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
       uint32_t layout = rowwise; // CSV row wise output/input
-      bool quoted = false; // treat numbers as quoted or array-like types as having quoted numbers
+      bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool number = false; // read numbers as strings and write these string as numbers
 };
 ```
@@ -653,7 +732,7 @@ struct S {
 
 template <>
 struct glz::meta<S> {
-  static constexpr auto value = object("key_to_skip", skip{}, "x", &S::i);
+  static constexpr auto value = object("key_to_skip", skip{}, &S::i);
 };
 ```
 
@@ -681,8 +760,8 @@ struct hide_struct {
 template <>
 struct glz::meta<hide_struct> {
    using T = hide_struct;
-   static constexpr auto value = object("i", &T::i,  //
-                                        "d", &T::d, //
+   static constexpr auto value = object(&T::i,  //
+                                        &T::d, //
                                         "hello", hide{&T::hello});
 };
 ```
@@ -705,7 +784,7 @@ struct A {
 
 template <>
 struct glz::meta<A> {
-   static constexpr auto value = object("x", glz::quoted<&A::x>(), "y", glz::quoted<&A::y>());
+   static constexpr auto value = object("x", glz::quoted_num<&A::x>, "y", glz::quoted_num<&A::y>;
 };
 ```
 
@@ -743,6 +822,8 @@ glz::read_ndjson(x, s);
 ### [JSON Schema](./docs/json-schema.md)
 
 ### [JSON Include System](./docs/json-include.md)
+
+### [Wrappers](./docs/wrappers.md)
 
 # Extensions
 

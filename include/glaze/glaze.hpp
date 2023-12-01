@@ -1,7 +1,7 @@
 /*
   Glaze Library
 
-  Copyright (c) 2019 - present, Anyar Inc.
+  Copyright (c) 2019 - present, Stephen Berry
 
   Permission is hereby granted, free of charge, to any person obtaining
   a copy of this software and associated documentation files (the
@@ -37,6 +37,7 @@
 #include "glaze/file/file_ops.hpp"
 #include "glaze/json.hpp"
 #include "glaze/record/recorder.hpp"
+#include "glaze/reflection/reflect.hpp"
 
 namespace glz
 {

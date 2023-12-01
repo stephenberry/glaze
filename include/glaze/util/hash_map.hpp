@@ -35,7 +35,7 @@ namespace glz::detail
       uint64_t res{};
       if (std::is_constant_evaluated()) {
          for (size_t i = 0; i < N; ++i) {
-            res |= uint64_t(bytes[i]) << (i << 3);
+            res |= (uint64_t(bytes[i]) << (i << 3));
          }
       }
       else {
@@ -84,7 +84,7 @@ namespace glz::detail
       if (std::is_constant_evaluated()) {
          uint64_t res{};
          for (size_t i = 0; i < N; ++i) {
-            res |= uint64_t(bytes[i]) << (i << 3);
+            res |= (uint64_t(bytes[i]) << (i << 3));
          }
          return res;
       }
@@ -92,7 +92,7 @@ namespace glz::detail
          uint64_t res{};
          std::memcpy(&res, bytes, N);
          constexpr auto num_bytes = sizeof(uint64_t);
-         constexpr auto shift = uint64_t(num_bytes - N) << 3;
+         constexpr auto shift = (uint64_t(num_bytes - N) << 3);
          if constexpr (shift == 0) {
             return res;
          }
@@ -106,7 +106,7 @@ namespace glz::detail
    struct naive_prng
    {
       uint64_t x = 7185499250578500046;
-      constexpr uint64_t operator()()
+      constexpr uint64_t operator()() noexcept
       {
          x ^= x >> 12;
          x ^= x << 25;
@@ -121,13 +121,13 @@ namespace glz::detail
    // This is one such terible hashing alg
    struct naive_hash
    {
-      static constexpr uint64_t bitmix(uint64_t h)
+      static constexpr uint64_t bitmix(uint64_t h) noexcept
       {
-         h ^= h >> 33;
+         h ^= (h >> 33);
          h *= 0xff51afd7ed558ccdL;
-         h ^= h >> 33;
+         h ^= (h >> 33);
          h *= 0xc4ceb9fe1a85ec53L;
-         h ^= h >> 33;
+         h ^= (h >> 33);
          return h;
       };
 
@@ -138,7 +138,7 @@ namespace glz::detail
       //   return x;
       // };
 
-      constexpr uint64_t operator()(std::integral auto value, const uint64_t seed)
+      constexpr uint64_t operator()(std::integral auto value, const uint64_t seed) noexcept
       {
          return bitmix(uint64_t(value) ^ seed);
       }
@@ -357,6 +357,10 @@ namespace glz::detail
 
       constexpr void find_perfect_hash() noexcept
       {
+         if constexpr (N == 0) {
+            return;
+         }
+
          std::array<std::array<storage_type, max_bucket_size>, N> full_buckets{};
          std::array<size_t, N> bucket_sizes{};
          detail::naive_prng gen{};
@@ -529,14 +533,12 @@ namespace glz::detail
    {
       std::array<std::pair<std::string_view, T>, 1> items{};
 
-      static constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
-
       constexpr decltype(auto) begin() const { return items.begin(); }
       constexpr decltype(auto) end() const { return items.end(); }
 
       constexpr decltype(auto) find(auto&& key) const noexcept
       {
-         if (s == key) [[likely]] {
+         if (S == key) [[likely]] {
             return items.begin();
          }
          else [[unlikely]] {
@@ -548,17 +550,16 @@ namespace glz::detail
    template <const std::string_view& S, bool CheckSize = true>
    inline constexpr bool cx_string_cmp(const std::string_view key) noexcept
    {
-      constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
-      constexpr auto n = s.size();
+      constexpr auto n = S.size();
       if (std::is_constant_evaluated()) {
-         return key == s;
+         return key == S;
       }
       else {
          if constexpr (CheckSize) {
-            return (key.size() == n) && (std::memcmp(key.data(), s.data(), n) == 0);
+            return (key.size() == n) && (std::memcmp(key.data(), S.data(), n) == 0);
          }
          else {
-            return std::memcmp(key.data(), s.data(), n) == 0;
+            return std::memcmp(key.data(), S.data(), n) == 0;
          }
       }
    }
@@ -568,11 +569,8 @@ namespace glz::detail
    {
       std::array<std::pair<std::string_view, T>, 2> items{};
 
-      static constexpr auto s0 = S0; // Needed for MSVC to avoid an internal compiler error
-      static constexpr auto s1 = S1; // Needed for MSVC to avoid an internal compiler error
-
       static constexpr bool same_size =
-         s0.size() == s1.size(); // if we need to check the size again on the second compare
+         S0.size() == S1.size(); // if we need to check the size again on the second compare
       static constexpr bool check_size = !same_size;
 
       constexpr decltype(auto) begin() const { return items.begin(); }
@@ -581,16 +579,16 @@ namespace glz::detail
       constexpr decltype(auto) find(auto&& key) const noexcept
       {
          if constexpr (same_size) {
-            constexpr auto n = s0.size();
+            constexpr auto n = S0.size();
             if (key.size() != n) {
                return items.end();
             }
          }
 
-         if (cx_string_cmp<s0, check_size>(key)) {
+         if (cx_string_cmp<S0, check_size>(key)) {
             return items.begin();
          }
-         else if (cx_string_cmp<s1, check_size>(key)) {
+         else if (cx_string_cmp<S1, check_size>(key)) {
             return items.begin() + 1;
          }
          else [[unlikely]] {

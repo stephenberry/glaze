@@ -10,19 +10,23 @@
 #include "glaze/core/write.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/util/dump.hpp"
-#include "glaze/util/error.hpp"
 #include "glaze/util/for_each.hpp"
-#include "glaze/util/murmur.hpp"
 #include "glaze/util/variant.hpp"
 
 namespace glz
 {
    namespace detail
    {
-      template <class... Args>
-      GLZ_ALWAYS_INLINE void dump_type(auto&& value, Args&&... args) noexcept
+      GLZ_ALWAYS_INLINE void dump_type(auto&& value, auto&& b, auto&& ix) noexcept
       {
-         dump(std::as_bytes(std::span{&value, 1}), std::forward<Args>(args)...);
+         assert(ix <= b.size());
+         constexpr auto n = sizeof(std::decay_t<decltype(value)>);
+         if (ix + n > b.size()) [[unlikely]] {
+            b.resize((std::max)(b.size() * 2, ix + n));
+         }
+
+         std::memcpy(b.data() + ix, &value, n);
+         ix += n;
       }
 
       template <uint64_t i, class... Args>
@@ -78,11 +82,10 @@ namespace glz
       {};
 
       template <auto Opts, class T, class Ctx, class B, class IX>
-      concept write_binary_invocable =
-         requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-            to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                 std::forward<B>(b), std::forward<IX>(ix));
-         };
+      concept write_binary_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+         to_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                              std::forward<B>(b), std::forward<IX>(ix));
+      };
 
       template <>
       struct write<binary>
@@ -118,6 +121,32 @@ namespace glz
          }
       };
 
+      template <is_bitset T>
+      struct to_binary<T>
+      {
+         template <auto Opts, class... Args>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&&... args) noexcept
+         {
+            constexpr uint8_t type = uint8_t(3) << 3;
+            constexpr uint8_t tag = tag::typed_array | type;
+            dump_type(tag, args...);
+            dump_compressed_int<Opts>(value.size(), args...);
+
+            // constexpr auto num_bytes = (value.size() + 7) / 8;
+            const auto num_bytes = (value.size() + 7) / 8;
+            // .size() should be constexpr, but clang doesn't support this
+            std::vector<uint8_t> bytes(num_bytes);
+            // std::array<uint8_t, num_bytes> bytes{};
+            for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
+               for (size_t bit_i = 0; bit_i < 8 && i < value.size(); ++bit_i, ++i) {
+                  bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
+               }
+            }
+            // dump(bytes, args...);
+            dump(std::as_bytes(std::span{bytes}), args...);
+         }
+      };
+
       template <glaze_flags_t T>
       struct to_binary<T>
       {
@@ -129,9 +158,9 @@ namespace glz
             std::array<uint8_t, byte_length<T>()> data{};
 
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::tuplet::get<I>(meta_v<T>);
+               static constexpr auto item = glz::get<I>(meta_v<T>);
 
-               data[I / 8] |= static_cast<uint8_t>(get_member(value, glz::tuplet::get<1>(item))) << (7 - (I % 8));
+               data[I / 8] |= static_cast<uint8_t>(get_member(value, glz::get<1>(item))) << (7 - (I % 8));
             });
 
             dump(data, b, ix);
@@ -257,20 +286,36 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
             constexpr uint8_t tag = tag::string;
 
-            dump_type(tag, args...);
-            dump_compressed_int<Opts>(value.size(), args...);
-            dump(std::as_bytes(std::span{value.data(), value.size()}), args...);
+            dump_type(tag, b, ix);
+            const auto n = value.size();
+            dump_compressed_int<Opts>(n, b, ix);
+
+            assert(ix <= b.size());
+            if (ix + n > b.size()) [[unlikely]] {
+               b.resize((std::max)(b.size() * 2, ix + n));
+            }
+
+            std::memcpy(b.data() + ix, value.data(), n);
+            ix += n;
          }
 
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
-            dump_compressed_int<Opts>(value.size(), args...);
-            dump(std::as_bytes(std::span{value.data(), value.size()}), args...);
+            dump_compressed_int<Opts>(value.size(), b, ix);
+
+            assert(ix <= b.size());
+            const auto n = value.size();
+            if (ix + n > b.size()) [[unlikely]] {
+               b.resize((std::max)(b.size() * 2, ix + n));
+            }
+
+            std::memcpy(b.data() + ix, value.data(), n);
+            ix += n;
          }
       };
 
@@ -292,14 +337,14 @@ namespace glz
                if constexpr (has_static_size<T>) {
                   constexpr auto num_bytes = (value.size() + 7) / 8;
                   std::array<uint8_t, num_bytes> bytes{};
-                  for (size_t byte_i{}, i{}; byte_i < num_bytes - 1; ++byte_i) {
+                  for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
                      for (size_t bit_i = 7; bit_i < 8 && i < value.size(); --bit_i, ++i) {
                         bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
                      }
                   }
                   dump(bytes, args...);
                }
-               else {
+               else if constexpr (accessible<T>) {
                   const auto num_bytes = (value.size() + 7) / 8;
                   for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i) {
                      uint8_t byte{};
@@ -308,6 +353,9 @@ namespace glz
                      }
                      dump_type(byte, args...);
                   }
+               }
+               else {
+                  static_assert(false_v<T>);
                }
             }
             else if constexpr (num_t<V>) {
@@ -318,7 +366,18 @@ namespace glz
                dump_compressed_int<Opts>(value.size(), args...);
 
                if constexpr (contiguous<T>) {
-                  dump(std::as_bytes(std::span{value.data(), static_cast<size_t>(value.size())}), args...);
+                  auto dump_array = [&](auto&& b, auto&& ix) {
+                     assert(ix <= b.size());
+                     const auto n = value.size() * sizeof(V);
+                     if (ix + n > b.size()) [[unlikely]] {
+                        b.resize((std::max)(b.size() * 2, ix + n));
+                     }
+
+                     std::memcpy(b.data() + ix, value.data(), n);
+                     ix += n;
+                  };
+
+                  dump_array(args...);
                }
                else {
                   for (auto& x : value) {
@@ -335,7 +394,19 @@ namespace glz
 
                for (auto& x : value) {
                   dump_compressed_int<Opts>(x.size(), args...);
-                  dump(std::as_bytes(std::span{x.data(), x.size()}), args...);
+
+                  auto dump_array = [&](auto&& b, auto&& ix) {
+                     assert(ix <= b.size());
+                     const auto n = x.size();
+                     if (ix + n > b.size()) [[unlikely]] {
+                        b.resize((std::max)(b.size() * 2, ix + n));
+                     }
+
+                     std::memcpy(b.data() + ix, x.data(), n);
+                     ix += n;
+                  };
+
+                  dump_array(args...);
                }
             }
             else if constexpr (complex_t<V>) {
@@ -391,7 +462,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_FLATTEN static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using Key = typename T::key_type;
 
@@ -424,11 +495,33 @@ namespace glz
       };
 
       template <class T>
+         requires is_specialization_v<T, glz::obj> || is_specialization_v<T, glz::obj_copy>
+      struct to_binary<T>
+      {
+         template <auto Opts>
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         {
+            constexpr uint8_t type = 0; // string key
+            constexpr uint8_t tag = tag::object | type;
+            dump_type(tag, args...);
+
+            using V = std::decay_t<decltype(value.value)>;
+            static constexpr auto N = std::tuple_size_v<V> / 2;
+            dump_compressed_int<N>(args...);
+
+            for_each<N>([&](auto I) {
+               write<binary>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
+               write<binary>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
+            });
+         }
+      };
+
+      template <class T>
          requires glaze_object_t<T>
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t tag = tag::object | type;
@@ -439,9 +532,17 @@ namespace glz
             dump_compressed_int<N>(args...);
 
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
-               write<binary>::no_header<Opts>(glz::tuplet::get<0>(item), ctx, args...);
-               write<binary>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, args...);
+               static constexpr auto item = get<I>(meta_v<V>);
+               using T0 = std::decay_t<decltype(get<0>(item))>;
+               static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+               static constexpr auto member_index = use_reflection ? 0 : 1;
+               if constexpr (use_reflection) {
+                  write<binary>::no_header<Opts>(get_name<get<0>(item)>(), ctx, args...);
+               }
+               else {
+                  write<binary>::no_header<Opts>(get<0>(item), ctx, args...);
+               }
+               write<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, args...);
             });
          }
       };
@@ -459,9 +560,8 @@ namespace glz
             dump_compressed_int<N>(args...);
 
             using V = std::decay_t<T>;
-            for_each<std::tuple_size_v<meta_t<V>>>([&](auto I) {
-               write<binary>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<V>)), ctx, args...);
-            });
+            for_each<std::tuple_size_v<meta_t<V>>>(
+               [&](auto I) { write<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, args...); });
          }
       };
 
@@ -524,7 +624,7 @@ namespace glz
 
          if constexpr (detail::glaze_object_t<std::decay_t<T>>) {
             for_each<N>([&](auto I) {
-               static constexpr auto group = glz::tuplet::get<I>(groups);
+               static constexpr auto group = glz::get<I>(groups);
 
                static constexpr auto key = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
@@ -540,7 +640,7 @@ namespace glz
          }
          else if constexpr (detail::writable_map_t<std::decay_t<T>>) {
             for_each<N>([&](auto I) {
-               static constexpr auto group = glz::tuplet::get<I>(groups);
+               static constexpr auto group = glz::get<I>(groups);
 
                static constexpr auto key_value = std::get<0>(group);
                static constexpr auto sub_partial = std::get<1>(group);
@@ -600,6 +700,8 @@ namespace glz
    template <class T>
    [[nodiscard]] inline write_error write_file_binary(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
+      static_assert(sizeof(decltype(*buffer.data())) == 1);
+
       write<opts{.format = binary}>(std::forward<T>(value), buffer);
 
       std::ofstream file(file_name, std::ios::binary);

@@ -25,11 +25,10 @@ namespace glz
       {};
 
       template <auto Opts, class T, class Ctx, class B, class IX>
-      concept write_json_invocable =
-         requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-            to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                               std::forward<B>(b), std::forward<IX>(ix));
-         };
+      concept write_json_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+         to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                            std::forward<B>(b), std::forward<IX>(ix));
+      };
 
       template <>
       struct write<json>
@@ -59,6 +58,20 @@ namespace glz
          }
       };
 
+      template <is_bitset T>
+      struct to_json<T>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&, auto&& b, auto&& ix)
+         {
+            dump<'"'>(b, ix);
+            for (size_t i = value.size(); i > 0; --i) {
+               value[i - 1] ? dump<'1'>(b, ix) : dump<'0'>(b, ix);
+            }
+            dump<'"'>(b, ix);
+         }
+      };
+
       template <glaze_flags_t T>
       struct to_json<T>
       {
@@ -70,11 +83,11 @@ namespace glz
             dump<'['>(b, ix);
 
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::tuplet::get<I>(meta_v<T>);
+               static constexpr auto item = glz::get<I>(meta_v<T>);
 
-               if (get_member(value, glz::tuplet::get<1>(item))) {
+               if (get_member(value, glz::get<1>(item))) {
                   dump<'"'>(b, ix);
-                  dump(glz::tuplet::get<0>(item), b, ix);
+                  dump(glz::get<0>(item), b, ix);
                   dump<'"'>(b, ix);
                   dump<','>(b, ix);
                }
@@ -128,6 +141,20 @@ namespace glz
          }
       };
 
+      template <complex_t T>
+      struct to_json<T>
+      {
+         template <auto Opts, class B>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+         {
+            dump<'['>(b, ix);
+            write<json>::op<Opts>(value.real(), ctx, b, ix);
+            dump<','>(b, ix);
+            write<json>::op<Opts>(value.imag(), ctx, b, ix);
+            dump<']'>(b, ix);
+         }
+      };
+
       template <boolean_like T>
       struct to_json<T>
       {
@@ -149,11 +176,11 @@ namespace glz
          template <auto Opts, class B>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            if constexpr (Opts.quoted) {
+            if constexpr (Opts.quoted_num) {
                dump<'"'>(b, ix);
             }
             write_chars::op<Opts>(value, ctx, b, ix);
-            if constexpr (Opts.quoted) {
+            if constexpr (Opts.quoted_num) {
                dump<'"'>(b, ix);
             }
          }
@@ -172,38 +199,45 @@ namespace glz
             }
             else {
                if constexpr (char_t<T>) {
-                  dump<'"'>(b, ix);
-                  switch (value) {
-                  case '"':
-                     dump<"\\\"">(b, ix);
-                     break;
-                  case '\\':
-                     dump<"\\\\">(b, ix);
-                     break;
-                  case '\b':
-                     dump<"\\b">(b, ix);
-                     break;
-                  case '\f':
-                     dump<"\\f">(b, ix);
-                     break;
-                  case '\n':
-                     dump<"\\n">(b, ix);
-                     break;
-                  case '\r':
-                     dump<"\\r">(b, ix);
-                     break;
-                  case '\t':
-                     dump<"\\t">(b, ix);
-                     break;
-                  case '\0':
-                     // escape character treated as empty string
-                     break;
-                  default:
-                     // Hiding warning for build, this is an error with wider char types
-                     dump(static_cast<char>(value), b,
-                          ix); // TODO: This warning is an error We need to be able to dump wider char types
+                  if constexpr (Opts.raw) {
+                     dump(value, b, ix);
                   }
-                  dump<'"'>(b, ix);
+                  else {
+                     dump<'"'>(b, ix);
+
+                     switch (value) {
+                     case '"':
+                        dump<"\\\"">(b, ix);
+                        break;
+                     case '\\':
+                        dump<"\\\\">(b, ix);
+                        break;
+                     case '\b':
+                        dump<"\\b">(b, ix);
+                        break;
+                     case '\f':
+                        dump<"\\f">(b, ix);
+                        break;
+                     case '\n':
+                        dump<"\\n">(b, ix);
+                        break;
+                     case '\r':
+                        dump<"\\r">(b, ix);
+                        break;
+                     case '\t':
+                        dump<"\\t">(b, ix);
+                        break;
+                     case '\0':
+                        // escape character treated as empty string
+                        break;
+                     default:
+                        // Hiding warning for build, this is an error with wider char types
+                        dump(static_cast<char>(value), b,
+                             ix); // TODO: This warning is an error We need to be able to dump wider char types
+                     }
+
+                     dump<'"'>(b, ix);
+                  }
                }
                else {
                   const sv str = [&]() -> sv {
@@ -216,56 +250,123 @@ namespace glz
                   }();
                   const auto n = str.size();
 
-                  // we use 4 * n to handle potential escape characters and quoted bounds
-                  // Example: if n were of length 1 and needed to be escaped, then it would require 4 characters
-                  // for the original, the escape, and the quote
-                  if constexpr (detail::resizeable<B>) {
-                     const auto k = ix + 4 * n;
-                     if (k >= b.size()) [[unlikely]] {
-                        b.resize((std::max)(b.size() * 2, k));
+                  if constexpr (Opts.raw_string) {
+                     // We need at space for quotes and the string length: 2 + n.
+                     if constexpr (detail::resizeable<B>) {
+                        const auto k = ix + 2 + n;
+                        if (k >= b.size()) [[unlikely]] {
+                           b.resize((std::max)(b.size() * 2, k));
+                        }
+                     }
+                     // now we don't have to check writing
+
+                     dump_unchecked<'"'>(b, ix);
+                     dump_unchecked(str, b, ix);
+                     dump_unchecked<'"'>(b, ix);
+                  }
+                  else {
+                     // In the case n == 0 we need two characters for quotes.
+                     // For each individual character we need room for two characters to handle escapes.
+                     // So, we need 2 + 2 * n characters to handle all cases.
+                     // We add another 8 characters to support SWAR
+                     if constexpr (detail::resizeable<B>) {
+                        const auto k = ix + 10 + 2 * n;
+                        if (k >= b.size()) [[unlikely]] {
+                           b.resize((std::max)(b.size() * 2, k));
+                        }
+                     }
+                     // now we don't have to check writing
+
+                     if constexpr (Opts.raw) {
+                        dump(str, b, ix);
+                     }
+                     else {
+                        dump_unchecked<'"'>(b, ix);
+
+                        auto* c = str.data();
+                        const auto* e = c + n;
+
+                        for (const auto end_m7 = e - 7; c < end_m7;) {
+                           uint64_t* chunk = reinterpret_cast<uint64_t*>(data_ptr(b) + ix);
+                           std::memcpy(chunk, c, 8);
+                           const uint64_t test_chars = has_quote(*chunk) | has_escape(*chunk) | is_less_16(*chunk);
+                           if (test_chars) {
+                              const auto length = (std::countr_zero(test_chars) >> 3);
+                              c += length;
+                              ix += length;
+
+                              switch (*c) {
+                              case '"':
+                                 std::memcpy(data_ptr(b) + ix, R"(\")", 2);
+                                 break;
+                              case '\\':
+                                 std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
+                                 break;
+                              [[unlikely]] case '\b':
+                                 std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
+                                 break;
+                              [[unlikely]] case '\f':
+                                 std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
+                                 break;
+                              case '\n':
+                                 std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
+                                 break;
+                              case '\r':
+                                 std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
+                                 break;
+                              case '\t':
+                                 std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
+                                 break;
+                              }
+                              ix += 2;
+                              ++c;
+                           }
+                           else {
+                              ix += 8;
+                              c += 8;
+                           }
+                        }
+
+                        // Tail end of buffer. Uncommon for long strings.
+                        for (; c < e; ++c) {
+                           switch (*c) {
+                           case '"':
+                              std::memcpy(data_ptr(b) + ix, R"(\")", 2);
+                              ix += 2;
+                              break;
+                           case '\\':
+                              std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
+                              ix += 2;
+                              break;
+                           [[unlikely]] case '\b':
+                              std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
+                              ix += 2;
+                              break;
+                           [[unlikely]] case '\f':
+                              std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
+                              ix += 2;
+                              break;
+                           case '\n':
+                              std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
+                              ix += 2;
+                              break;
+                           case '\r':
+                              std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
+                              ix += 2;
+                              break;
+                           case '\t':
+                              std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
+                              ix += 2;
+                              break;
+                           [[likely]] default:
+                              std::memcpy(data_ptr(b) + ix, c, 1);
+                              ++ix;
+                           }
+                        }
+
+                        dump_unchecked<'"'>(b, ix);
                      }
                   }
-                  // now we don't have to check writing
-
-                  dump_unchecked<'"'>(b, ix);
-
-                  for (auto&& c : str) {
-                     switch (c) {
-                     case '"':
-                        std::memcpy(data_ptr(b) + ix, R"(\")", 2);
-                        ix += 2;
-                        break;
-                     case '\\':
-                        std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
-                        ix += 2;
-                        break;
-                     case '\b':
-                        std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
-                        ix += 2;
-                        break;
-                     case '\f':
-                        std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
-                        ix += 2;
-                        break;
-                     case '\n':
-                        std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
-                        ix += 2;
-                        break;
-                     case '\r':
-                        std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
-                        ix += 2;
-                        break;
-                     case '\t':
-                        std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
-                        ix += 2;
-                        break;
-                     [[likely]] default:
-                        std::memcpy(data_ptr(b) + ix, &c, 1);
-                        ++ix;
-                     }
-                  }
-
-                  dump_unchecked<'"'>(b, ix);
                }
             }
          }
@@ -282,17 +383,14 @@ namespace glz
             const auto& member_it = frozen_map.find(static_cast<key_t>(value));
             if (member_it != frozen_map.end()) {
                const sv str = {member_it->second.data(), member_it->second.size()};
-               // Note: Assumes people dont use strings with chars that need to
-               // be
-               // escaped for their enum names
-               // TODO: Could create a pre qouted map for better perf
+               // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
+               // TODO: Could create a pre quoted map for better performance
                dump<'"'>(args...);
                dump(str, args...);
                dump<'"'>(args...);
             }
             else [[unlikely]] {
-               // What do we want to happen if the value doesnt have a mapped
-               // string
+               // What do we want to happen if the value doesnt have a mapped string
                write<json>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
             }
          }
@@ -346,9 +444,10 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(const auto& value, is_context auto&& ctx, Args&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<'['>(args...);
+
             if (!empty_range(value)) {
                if constexpr (Opts.prettify) {
                   ctx.indentation_level += Opts.indentation_width;
@@ -356,10 +455,10 @@ namespace glz
                   dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                }
 
-               auto it = std::cbegin(value);
+               auto it = std::begin(value);
                write<json>::op<Opts>(*it, ctx, args...);
                ++it;
-               for (; it != std::cend(value); ++it) {
+               for (; it != std::end(value); ++it) {
                   write_entry_separator<Opts>(ctx, args...);
                   write<json>::op<Opts>(*it, ctx, args...);
                }
@@ -369,6 +468,7 @@ namespace glz
                   dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                }
             }
+
             dump<']'>(args...);
          }
       };
@@ -376,17 +476,17 @@ namespace glz
       template <opts Opts, typename Key, typename Value, is_context Ctx>
       void write_pair_content(const Key& key, const Value& value, Ctx& ctx, auto&&... args) noexcept
       {
-         if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key>) {
+         if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
             write<json>::op<Opts>(key, ctx, args...);
-            dump<':'>(args...);
          }
          else {
-            dump<'"'>(args...);
-            write<json>::op<Opts>(key, ctx, args...);
-            dump<R"(":)">(args...);
+            write<json>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<const Key>{key}, ctx, args...);
          }
          if constexpr (Opts.prettify) {
-            dump<' '>(args...);
+            dump<": ">(args...);
+         }
+         else {
+            dump<':'>(args...);
          }
 
          write<json>::op<opening_and_closing_handled_off<Opts>()>(value, ctx, args...);
@@ -402,7 +502,9 @@ namespace glz
                return !bool(value);
             }
          }
-         return false;
+         else {
+            return false;
+         }
       }
 
       template <pair_t T>
@@ -462,9 +564,9 @@ namespace glz
                   return false;
                };
 
-               auto it = std::cbegin(value);
+               auto it = std::begin(value);
                [[maybe_unused]] bool previous_skipped = write_first_entry(it);
-               for (++it; it != std::cend(value); ++it) {
+               for (++it; it != std::end(value); ++it) {
                   const auto& [key, entry_val] = *it;
                   if (skip_member<Opts>(entry_val)) {
                      previous_skipped = true;
@@ -473,7 +575,8 @@ namespace glz
 
                   // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
                   // conditional for every entry. Avoid this branch when not skipping null members.
-                  // Alternatively, write separator after each entry, except on last entry but then branch is permanent
+                  // Alternatively, write separator after each entry, except on last entry but then branch is
+                  // permanent
                   if constexpr (Opts.skip_null_members) {
                      if (!previous_skipped) {
                         write_entry_separator<Opts>(ctx, args...);
@@ -537,6 +640,8 @@ namespace glz
                   using V = std::decay_t<decltype(val)>;
 
                   if constexpr (Opts.write_type_info && !tag_v<T>.empty() && glaze_object_t<V>) {
+                     constexpr auto num_members = std::tuple_size_v<meta_t<V>>;
+
                      // must first write out type
                      if constexpr (Opts.prettify) {
                         dump<"{\n">(args...);
@@ -546,7 +651,12 @@ namespace glz
                         dump(tag_v<T>, args...);
                         dump<"\": \"">(args...);
                         dump(ids_v<T>[value.index()], args...);
-                        dump<"\",\n">(args...);
+                        if constexpr (num_members == 0) {
+                           dump<"\"\n">(args...);
+                        }
+                        else {
+                           dump<"\",\n">(args...);
+                        }
                         dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                      }
                      else {
@@ -554,7 +664,12 @@ namespace glz
                         dump(tag_v<T>, args...);
                         dump<"\":\"">(args...);
                         dump(ids_v<T>[value.index()], args...);
-                        dump<R"(",)">(args...);
+                        if constexpr (num_members == 0) {
+                           dump<R"(")">(args...);
+                        }
+                        else {
+                           dump<R"(",)">(args...);
+                        }
                      }
                      write<json>::op<opening_handled<Opts>()>(val, ctx, args...);
                   }
@@ -614,10 +729,10 @@ namespace glz
             }
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value.value, glz::tuplet::get<I>(meta_v<T>)), ctx, args...);
+                  write<json>::op<Opts>(get_member(value.value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
                else {
-                  write<json>::op<Opts>(glz::tuplet::get<I>(value.value), ctx, args...);
+                  write<json>::op<Opts>(glz::get<I>(value.value), ctx, args...);
                }
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
@@ -658,10 +773,10 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value, glz::tuplet::get<I>(meta_v<T>)), ctx, args...);
+                  write<json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
                else {
-                  write<json>::op<Opts>(glz::tuplet::get<I>(value), ctx, args...);
+                  write<json>::op<Opts>(glz::get<I>(value), ctx, args...);
                }
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
@@ -681,7 +796,7 @@ namespace glz
       struct to_json<includer<T>>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& /*ctx*/, Args&&...) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
          {}
       };
 
@@ -732,10 +847,9 @@ namespace glz
       template <const std::string_view& S>
       GLZ_ALWAYS_INLINE constexpr auto array_from_sv() noexcept
       {
-         constexpr auto s = S; // Needed for MSVC to avoid an internal compiler error
-         constexpr auto N = s.size();
+         constexpr auto N = S.size();
          std::array<char, N> arr;
-         std::copy_n(s.data(), N, arr.data());
+         std::copy_n(S.data(), N, arr.data());
          return arr;
       }
 
@@ -771,7 +885,7 @@ namespace glz
             bool first = true;
             for_each<N>([&](auto I) {
                static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-               decltype(auto) item = glz::tuplet::get<2 * I + 1>(value.value);
+               decltype(auto) item = glz::get<2 * I + 1>(value.value);
                using val_t = std::decay_t<decltype(item)>;
 
                if (skip_member<Opts>(item)) {
@@ -798,7 +912,7 @@ namespace glz
                   using Key = typename std::decay_t<std::tuple_element_t<2 * I, V>>;
 
                   if constexpr (str_t<Key> || char_t<Key>) {
-                     const sv key = glz::tuplet::get<2 * I>(value.value);
+                     const sv key = glz::get<2 * I>(value.value);
                      write<json>::op<Opts>(key, ctx, b, ix);
                      dump<':'>(b, ix);
                      if constexpr (Opts.prettify) {
@@ -846,7 +960,7 @@ namespace glz
             static constexpr auto N = std::tuple_size_v<V>;
 
             for_each<N>([&](auto I) {
-               write<json>::op<opening_and_closing_handled<Options>()>(glz::tuplet::get<I>(value.value), ctx, b, ix);
+               write<json>::op<opening_and_closing_handled<Options>()>(glz::get<I>(value.value), ctx, b, ix);
                if constexpr (I < N - 1) {
                   dump<','>(b, ix);
                }
@@ -861,12 +975,71 @@ namespace glz
          }
       };
 
+      // Allows us to remove a branch if the first item will always be written
+      template <auto Opts, class T>
+      consteval bool first_will_be_written()
+      {
+         using V = std::decay_t<T>;
+         constexpr auto N = std::tuple_size_v<meta_t<V>>;
+         if constexpr (N > 0) {
+            constexpr auto item = glz::get<0>(meta_v<V>);
+            using Item = decltype(item);
+            using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
+            constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+            constexpr size_t member_index = use_reflection ? 0 : 1;
+            using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
+            using val_t = member_t<V, mptr_t>;
+
+            if constexpr (null_t<val_t> && Opts.skip_null_members) {
+               return false;
+            }
+
+            // skip file_include
+            if constexpr (std::is_same_v<val_t, includer<std::decay_t<V>>>) {
+               return false;
+            }
+            else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+               return false;
+            }
+            else {
+               return true;
+            }
+         }
+         else {
+            return false;
+         }
+      }
+
       template <class T>
          requires glaze_object_t<T>
       struct to_json<T>
       {
+         template <auto Options, class V>
+         GLZ_FLATTEN static void op(V&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         {
+            using ValueType = std::decay_t<V>;
+            if constexpr (detail::has_unknown_writer<ValueType> && Options.write_unknown) {
+               constexpr auto& writer = meta_unknown_write_v<ValueType>;
+
+               using WriterType = meta_unknown_write_t<ValueType>;
+               if constexpr (std::is_member_object_pointer_v<WriterType>) {
+                  write<json>::op<write_unknown_off<Options>()>(glz::merge{value, value.*writer}, ctx, b, ix);
+               }
+               else if constexpr (std::is_member_function_pointer_v<WriterType>) {
+                  write<json>::op<write_unknown_off<Options>()>(glz::merge{value, (value.*writer)()}, ctx, b, ix);
+               }
+               else {
+                  static_assert(false_v<T>, "unknown_write type not handled");
+               }
+            }
+            else {
+               op_base<write_unknown_on<Options>()>(std::forward<V>(value), ctx, b, ix);
+            }
+         }
+
+         // handles glaze_object_t without extra unknown fields
          template <auto Options>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         GLZ_FLATTEN static void op_base(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             if constexpr (!Options.opening_handled) {
                dump<'{'>(b, ix);
@@ -880,11 +1053,16 @@ namespace glz
             using V = std::decay_t<T>;
             static constexpr auto N = std::tuple_size_v<meta_t<V>>;
 
-            bool first = true;
+            [[maybe_unused]] bool first = true;
+            static constexpr auto first_is_written = first_will_be_written<Options, T>();
             for_each<N>([&](auto I) {
                static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-               static constexpr auto item = glz::tuplet::get<I>(meta_v<V>);
-               using mptr_t = std::tuple_element_t<1, decltype(item)>;
+               static constexpr auto item = glz::get<I>(meta_v<V>);
+               using T0 = std::decay_t<std::tuple_element_t<0, decltype(item)>>;
+               static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+               static constexpr size_t member_index = use_reflection ? 0 : 1;
+               using mptr_t = std::decay_t<std::tuple_element_t<member_index, decltype(item)>>;
+               using Key = std::conditional_t<use_reflection, sv, T0>;
                using val_t = member_t<V, mptr_t>;
 
                if constexpr (null_t<val_t> && Opts.skip_null_members) {
@@ -893,10 +1071,13 @@ namespace glz
                   else {
                      auto is_null = [&]() {
                         if constexpr (std::is_member_pointer_v<mptr_t>) {
-                           return !bool(value.*glz::tuplet::get<1>(item));
+                           return !bool(value.*get<member_index>(item));
+                        }
+                        else if constexpr (raw_nullable<val_t>) {
+                           return !bool(get<member_index>(item)(value).val);
                         }
                         else {
-                           return !bool(glz::tuplet::get<1>(item)(value));
+                           return !bool(get<member_index>(item)(value));
                         }
                      }();
                      if (is_null) return;
@@ -911,19 +1092,31 @@ namespace glz
                   return;
                }
                else {
-                  if (first) {
-                     first = false;
-                  }
-                  else {
-                     // Null members may be skipped so we cant just write it out for all but the last member unless
-                     // trailing commas are allowed
+                  if constexpr (first_is_written && I > 0) {
                      write_entry_separator<Opts>(ctx, b, ix);
                   }
-
-                  using Key = typename std::decay_t<std::tuple_element_t<0, decltype(item)>>;
+                  else {
+                     if (first) {
+                        first = false;
+                     }
+                     else {
+                        // Null members may be skipped so we cant just write it out for all but the last member unless
+                        // trailing commas are allowed
+                        write_entry_separator<Opts>(ctx, b, ix);
+                     }
+                  }
 
                   if constexpr (str_t<Key> || char_t<Key>) {
-                     static constexpr sv key = glz::tuplet::get<0>(item);
+                     auto key_getter = [&] {
+                        if constexpr (use_reflection) {
+                           return get_name<get<0>(item)>();
+                        }
+                        else {
+                           return get<0>(item);
+                        }
+                     };
+
+                     static constexpr sv key = key_getter();
                      if constexpr (needs_escaping(key)) {
                         write<json>::op<Opts>(key, ctx, b, ix);
                         dump<':'>(b, ix);
@@ -932,28 +1125,25 @@ namespace glz
                         }
                      }
                      else {
-                        if constexpr (Opts.prettify) {
-                           static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\": ">>;
-                           dump<quoted>(b, ix);
-                        }
-                        else {
-                           static constexpr auto quoted = join_v<chars<"\"">, key, chars<"\":">>;
-                           dump<quoted>(b, ix);
-                        }
+                        static constexpr auto quoted_key = join_v < chars<"\"">, key,
+                                              Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                           ;
+                        dump<quoted_key>(b, ix);
                      }
                   }
                   else {
-                     static constexpr auto quoted =
-                        concat_arrays(concat_arrays("\"", glz::tuplet::get<0>(item)), "\":", Opts.prettify ? " " : "");
-                     write<json>::op<Opts>(quoted, ctx, b, ix);
+                     static constexpr auto quoted_key =
+                        concat_arrays(concat_arrays("\"", get<0>(item)), "\":", Opts.prettify ? " " : "");
+                     write<json>::op<Opts>(quoted_key, ctx, b, ix);
                   }
 
-                  write<json>::op<Opts>(get_member(value, glz::tuplet::get<1>(item)), ctx, b, ix);
+                  write<json>::op<Opts>(get_member(value, get<member_index>(item)), ctx, b, ix);
 
+                  static constexpr size_t comment_index = member_index + 1;
                   static constexpr auto S = std::tuple_size_v<decltype(item)>;
-                  if constexpr (Opts.comments && S > 2) {
-                     if constexpr (std::is_convertible_v<decltype(glz::tuplet::get<2>(item)), std::string_view>) {
-                        static constexpr sv comment = glz::tuplet::get<2>(item);
+                  if constexpr (Opts.comments && S > comment_index) {
+                     if constexpr (std::is_convertible_v<decltype(get<comment_index>(item)), sv>) {
+                        static constexpr sv comment = get<comment_index>(item);
                         if constexpr (comment.size() > 0) {
                            if constexpr (Opts.prettify) {
                               dump<' '>(b, ix);

@@ -1,13 +1,46 @@
-*build/
-*build-*/
-*bin/
-.idea/
-.vscode/
-.cache/
-conan/
-compile_commands.json
-.DS_Store
+# Build directories and binary files
+out/
+**/bin/
+**/build*/
+**/lib*/
+
+# CMake spesific settings
 CMakeUserPresets.json
+**/CMakeFiles/
+**/CMakeCache.txt
+
+# IDE files
+.idea/
+.vs/
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*~
+_ReSharper*
+*.log
+.cache/
+compile_commands.json
+
+# Package Manager Files
+conan/
+conan-cache/
 conanbuildinfo.txt
 conaninfo.txt
 graph_info.json
+
+# OS Generated Files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.Trash-*
+$RECYCLE.BIN/
+.TemporaryItems
+ehthumbs.db
+Thumbs.db
+*.json

@@ -26,14 +26,17 @@ namespace glz
       bool error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
       uint32_t layout = rowwise; // CSV row wise output/input
-      bool quoted = false; // treat numbers as quoted or array-like types as having quoted numbers
+      bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool number = false; // read numbers as strings and write these string as numbers
+      bool raw = false; // write out string like values without quotes
+      bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
 
       // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled
       bool closing_handled = false; // the closing character has been handled
       bool ws_handled = false; // whitespace has already been parsed
       bool no_header = false; // whether or not a binary header is needed
+      bool write_unknown = true; // whether to write unkwown fields
    };
 
    template <opts Opts>
@@ -107,4 +110,20 @@ namespace glz
 
    template <opts Opts, auto member_ptr>
    inline constexpr auto opt_false = opt_off<Opts, member_ptr>();
+
+   template <opts Opts>
+   constexpr auto write_unknown_off()
+   {
+      opts ret = Opts;
+      ret.write_unknown = false;
+      return ret;
+   }
+
+   template <opts Opts>
+   constexpr auto write_unknown_on()
+   {
+      opts ret = Opts;
+      ret.write_unknown = true;
+      return ret;
+   }
 }

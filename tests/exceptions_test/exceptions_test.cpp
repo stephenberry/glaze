@@ -85,11 +85,20 @@ suite basic_types = [] {
       expect(val == true);
    };
 
+   "bool read valid"_test = [] {
+      bool val = glz::ex::read_json<bool>("true");
+      expect(val == true);
+   };
+
    "bool read invalid"_test = [] {
       expect(throws([] {
          bool val{};
          glz::ex::read_json(val, "tru");
       }));
+   };
+
+   "bool read invalid"_test = [] {
+      expect(throws([] { [[maybe_unused]] bool val = glz::ex::read_json<bool>("tru"); }));
    };
 };
 
@@ -139,6 +148,23 @@ suite read_file_test = [] {
 
       file_struct s;
       expect(throws([&] { glz::ex::read_file(s, "../nonexsistant_file.json", std::string{}); }));
+   };
+};
+
+suite thread_pool = [] {
+   "thread pool throw"_test = [] {
+      glz::pool pool{1};
+
+      std::atomic<int> x = 0;
+
+      expect(throws([&] {
+         auto future = pool.emplace_back([&] {
+            ++x;
+            throw std::runtime_error("aha!");
+         });
+         pool.wait();
+         future.get();
+      }));
    };
 };
 
