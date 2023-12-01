@@ -1042,7 +1042,8 @@ namespace glz
                buffer[0] = '0';
                buffer[1] = '.';
                buffer += 2;
-               for (; buffer < num_hdr; ++buffer) *buffer = '0';
+               // we don't have to increment the buffer because we are returning
+               std::memset(buffer, '0', num_hdr - buffer);
                return num_end;
             }
             else {
@@ -1053,7 +1054,7 @@ namespace glz
                std::memset(buffer + 16, '0', 8);
                auto num_hdr = buffer + 1;
                auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
-               for (int i = 0; i < dot_pos; i++) buffer[i] = buffer[i + 1];
+               for (int i = 0; i < dot_pos; ++i) buffer[i] = buffer[i + 1];
                buffer[dot_pos] = '.';
                return ((num_end - num_hdr) <= dot_pos) ? buffer + dot_pos : num_end;
             }
