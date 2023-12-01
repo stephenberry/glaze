@@ -104,7 +104,7 @@ struct foo_result
 {
    bool foo_c{};
    std::string foo_d{};
-   auto operator<=>(const foo_result&) const = default;
+   bool operator==(const foo_result& rhs) const noexcept { return foo_c == rhs.foo_c && foo_d == rhs.foo_d; }
 };
 template <>
 struct glz::meta<foo_result>
@@ -128,7 +128,7 @@ struct bar_result
 {
    bool bar_c{};
    std::string bar_d{};
-   auto operator<=>(const bar_result&) const = default;
+   bool operator==(const bar_result& rhs) const noexcept { return bar_c == rhs.bar_c && bar_d == rhs.bar_d; }
 };
 template <>
 struct glz::meta<bar_result>
