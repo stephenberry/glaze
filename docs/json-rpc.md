@@ -40,7 +40,7 @@ template <>
 struct glz::meta<bar_params>
 {
    using T = bar_params;
-   static constexpr auto value{glz::object("bar_a", &T::bar_a, "bar_b", &T::bar_b)};
+   static constexpr auto value{object(&T::bar_a, &T::bar_b)};
 };
 struct bar_result
 {
@@ -52,7 +52,7 @@ template <>
 struct glz::meta<bar_result>
 {
    using T = bar_result;
-   static constexpr auto value{glz::object("bar_c", &T::bar_c, "bar_d", &T::bar_d)};
+   static constexpr auto value{object(&T::bar_c, &T::bar_d)};
 };
 
 namespace rpc = glz::rpc;
