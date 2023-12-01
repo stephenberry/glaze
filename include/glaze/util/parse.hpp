@@ -74,6 +74,40 @@ namespace glz::detail
       }
    }
 
+   GLZ_ALWAYS_INLINE constexpr auto has_zero(const uint64_t chunk) noexcept
+   {
+      return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080);
+   }
+
+   GLZ_ALWAYS_INLINE constexpr auto has_quote(const uint64_t chunk) noexcept
+   {
+      return has_zero(chunk ^ 0b0010001000100010001000100010001000100010001000100010001000100010);
+   }
+
+   GLZ_ALWAYS_INLINE constexpr auto has_escape(const uint64_t chunk) noexcept
+   {
+      return has_zero(chunk ^ 0b0101110001011100010111000101110001011100010111000101110001011100);
+   }
+   
+   GLZ_ALWAYS_INLINE constexpr auto has_space(const uint64_t chunk) noexcept
+   {
+      return has_zero(chunk ^ 0b0010000000100000001000000010000000100000001000000010000000100000);
+   }
+   
+   GLZ_ALWAYS_INLINE constexpr auto has_forward_slash(const uint64_t chunk) noexcept
+   {
+      return has_zero(chunk ^ 0b0010111100101111001011110010111100101111001011110010111100101111);
+   }
+
+   GLZ_ALWAYS_INLINE constexpr uint64_t is_less_16(const uint64_t c) noexcept
+   {
+      return has_zero(c & 0b1111000011110000111100001111000011110000111100001111000011110000);
+   }
+   
+   GLZ_ALWAYS_INLINE constexpr uint64_t is_greater_15(const uint64_t c) noexcept {
+      return (c & 0b1111000011110000111100001111000011110000111100001111000011110000);
+   }
+   
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
@@ -106,26 +140,6 @@ namespace glz::detail
             return;
          }
       }
-   }
-
-   GLZ_ALWAYS_INLINE constexpr auto has_zero(const uint64_t chunk) noexcept
-   {
-      return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080);
-   }
-
-   GLZ_ALWAYS_INLINE constexpr auto has_quote(const uint64_t chunk) noexcept
-   {
-      return has_zero(chunk ^ 0b0010001000100010001000100010001000100010001000100010001000100010);
-   }
-
-   GLZ_ALWAYS_INLINE constexpr auto has_escape(const uint64_t chunk) noexcept
-   {
-      return has_zero(chunk ^ 0b0101110001011100010111000101110001011100010111000101110001011100);
-   }
-
-   GLZ_ALWAYS_INLINE constexpr uint64_t is_less_16(const uint64_t c) noexcept
-   {
-      return has_zero(c & 0b1111000011110000111100001111000011110000111100001111000011110000);
    }
 
    GLZ_ALWAYS_INLINE void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -201,10 +215,10 @@ namespace glz::detail
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          uint64_t test_chars = has_quote(chunk);
-         if (test_chars != 0) {
+         if (test_chars) {
             it += (std::countr_zero(test_chars) >> 3);
 
-            sv ret{start, static_cast<size_t>(it - start)};
+            sv ret{start, size_t(it - start)};
             ++it;
             return ret;
          }
@@ -212,12 +226,10 @@ namespace glz::detail
 
       // Tail end of buffer. Should be rare we even get here
       while (it < end) {
-         switch (*it) {
-         case '"': {
-            sv ret{start, static_cast<size_t>(it - start)};
+         if (*it == '"') {
+            sv ret{start, size_t(it - start)};
             ++it;
             return ret;
-         }
          }
          ++it;
       }
@@ -242,7 +254,7 @@ namespace glz::detail
          if (test_chunk != 0) [[likely]] {
             it += (std::countr_zero(test_chunk) >> 3);
 
-            sv ret{start, static_cast<size_t>(it - start)};
+            sv ret{start, size_t(it - start)};
             ++it;
             return ret;
          }
@@ -254,7 +266,7 @@ namespace glz::detail
          if (test_chunk != 0) {
             it += (std::countr_zero(test_chunk) >> 3);
 
-            sv ret{start, static_cast<size_t>(it - start)};
+            sv ret{start, size_t(it - start)};
             ++it;
             return ret;
          }
@@ -267,7 +279,7 @@ namespace glz::detail
             if (test_chunk != 0) {
                it += (std::countr_zero(test_chunk) >> 3);
 
-               sv ret{start, static_cast<size_t>(it - start)};
+               sv ret{start, size_t(it - start)};
                ++it;
                return ret;
             }
@@ -280,7 +292,7 @@ namespace glz::detail
          if (test_chunk != 0) [[likely]] {
             it += (std::countr_zero(test_chunk) >> 3);
 
-            sv ret{start, static_cast<size_t>(it - start)};
+            sv ret{start, size_t(it - start)};
             ++it;
             return ret;
          }
