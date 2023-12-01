@@ -536,6 +536,10 @@ namespace glz
                using T0 = std::decay_t<decltype(get<0>(item))>;
                static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
                static constexpr auto member_index = use_reflection ? 0 : 1;
+               using Value = std::decay_t<decltype(get<member_index>(item))>;
+               if constexpr (std::is_same_v<Value, includer<V>>) {
+                  return;
+               }
                if constexpr (use_reflection) {
                   write<binary>::no_header<Opts>(get_name<get<0>(item)>(), ctx, args...);
                }
