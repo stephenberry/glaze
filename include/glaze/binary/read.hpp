@@ -703,15 +703,15 @@ namespace glz
             }
             else {
                constexpr uint8_t header = tag::string;
-               
+
                const auto tag = uint8_t(*it);
                if (tag != header) [[unlikely]] {
                   ctx.error = error_code::syntax_error;
                   return;
                }
-               
+
                ++it;
-               
+
                std::ignore = int_from_compressed(it, end);
             }
          }
