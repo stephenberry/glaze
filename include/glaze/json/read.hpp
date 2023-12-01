@@ -289,17 +289,23 @@ namespace glz
                return;
             }
 
-            if (std::memcmp(&*it, "true", 4)) {
-               if (std::memcmp(&*it, "false", 5)) [[unlikely]] {
+            uint64_t c{};
+            // Note that because our buffer must be null terminated, we can read one more index without checking: std::distance(it, end) < 5
+            std::memcpy(&c, &*it, 5);
+            constexpr uint64_t u_true = 0b00000000'00000000'00000000'00000000'01100101'01110101'01110010'01110100;
+            constexpr uint64_t u_false = 0b00000000'00000000'00000000'01100101'01110011'01101100'01100001'01100110;
+            // We have to wipe the 5th character for true testing
+            if ((c & 0b11111111'11111111'11111111'00000000'11111111'11111111'11111111'11111111) == u_true) {
+               value = true;
+               it += 4;
+            }
+            else {
+               if (c != u_false) [[unlikely]] {
                   ctx.error = error_code::expected_true_or_false;
                   return;
                }
-               value = false;
-               it += 5;
-            }
-            else {
-               value = true;
-               it += 4;
+              value = false;
+              it += 5;
             }
 
             if constexpr (Opts.quoted_num) {
