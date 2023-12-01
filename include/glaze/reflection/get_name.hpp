@@ -30,7 +30,7 @@ namespace glz
       using type = C;
    };
 
-   template <auto P>
+   template <class T, auto P>
    consteval std::string_view get_name_msvc() noexcept
    {
       std::string_view str = GLZ_PRETTY_FUNCTION;
@@ -57,7 +57,7 @@ namespace glz
 #if defined(_MSC_VER)
       using T = remove_member_pointer<std::decay_t<decltype(P)>>::type;
       constexpr auto p = P;
-      return get_name_msvc<&(fake_object<T>.*p)>();
+      return get_name_msvc<T, &(fake_object<T>.*p)>();
 #else
       // TODO: Use std::source_location when deprecating clang 14
       // std::string_view str = std::source_location::current().function_name();
