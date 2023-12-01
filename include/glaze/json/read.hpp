@@ -282,13 +282,13 @@ namespace glz
                   return;
             }
             
-            if (std::distance(it, end) < 4) {
+            if (std::distance(it, end) < 4) [[unlikely]] {
                ctx.error = error_code::expected_true_or_false;
                return;
             }
             
             if (std::memcmp(&*it, "true", 4)) {
-               if (std::memcmp(&*it, "false", 5)) {
+               if (std::memcmp(&*it, "false", 5)) [[unlikely]] {
                   ctx.error = error_code::expected_true_or_false;
                   return;
                }
