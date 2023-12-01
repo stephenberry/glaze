@@ -513,6 +513,9 @@ namespace glz
             if constexpr (Opts.number) {
                auto start = it;
                skip_number<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
                value.append(start, static_cast<size_t>(it - start));
             }
             else {

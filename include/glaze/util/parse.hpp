@@ -148,10 +148,6 @@ namespace glz::detail
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
-      if (bool(ctx.error)) [[unlikely]] {
-         return;
-      }
-
       const auto end_m7 = end - 7;
       for (; it < end_m7; it += 8) {
          uint64_t chunk;
@@ -178,10 +174,6 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (bool(ctx.error)) [[unlikely]] {
-         return;
-      }
-
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
       auto* pc = std::memchr(it, '"', std::distance(it, end));
@@ -216,10 +208,6 @@ namespace glz::detail
    // very similar code to skip_till_quote, but it consumes the iterator and returns the key
    [[nodiscard]] GLZ_ALWAYS_INLINE const sv parse_unescaped_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (bool(ctx.error)) [[unlikely]] {
-         return {};
-      }
-
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
       auto start = it;
@@ -519,10 +507,6 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (bool(ctx.error)) [[unlikely]] {
-         return;
-      }
-
       if constexpr (!Opts.force_conformance) {
          it = std::find_if_not(it + 1, end, is_numeric<char>);
       }
