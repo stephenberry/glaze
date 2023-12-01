@@ -98,19 +98,19 @@ template <>
 struct glz::meta<foo_params>
 {
    using T = foo_params;
-   static constexpr auto value{glz::object("foo_a", &T::foo_a, "foo_b", &T::foo_b)};
+   static constexpr auto value{object(&T::foo_a, &T::foo_b)};
 };
 struct foo_result
 {
    bool foo_c{};
    std::string foo_d{};
-   bool operator==(const foo_result& rhs) const noexcept { return foo_c == rhs.foo_c && foo_d == rhs.foo_d; }
+   auto operator<=>(const foo_result&) const = default;
 };
 template <>
 struct glz::meta<foo_result>
 {
    using T = foo_result;
-   static constexpr auto value{glz::object("foo_c", &T::foo_c, "foo_d", &T::foo_d)};
+   static constexpr auto value{object(&T::foo_c, &T::foo_d)};
 };
 
 struct bar_params
@@ -122,19 +122,19 @@ template <>
 struct glz::meta<bar_params>
 {
    using T = bar_params;
-   static constexpr auto value{glz::object("bar_a", &T::bar_a, "bar_b", &T::bar_b)};
+   static constexpr auto value{object(&T::bar_a, &T::bar_b)};
 };
 struct bar_result
 {
    bool bar_c{};
    std::string bar_d{};
-   bool operator==(const bar_result& rhs) const noexcept { return bar_c == rhs.bar_c && bar_d == rhs.bar_d; }
+   auto operator<=>(const bar_result&) const = default;
 };
 template <>
 struct glz::meta<bar_result>
 {
    using T = bar_result;
-   static constexpr auto value{glz::object("bar_c", &T::bar_c, "bar_d", &T::bar_d)};
+   static constexpr auto value{object("bar_c", &T::bar_c, "bar_d", &T::bar_d)};
 };
 
 ut::suite struct_test_cases = [] {
