@@ -1054,7 +1054,7 @@ namespace glz
                std::memset(buffer + 16, '0', 8);
                auto num_hdr = buffer + 1;
                auto num_end = write_u64_len_15_to_17_trim(num_hdr, sig_dec);
-               for (int i = 0; i < dot_pos; ++i) buffer[i] = buffer[i + 1];
+               std::memmove(buffer, buffer + 1, dot_pos); // shift characters to the left
                buffer[dot_pos] = '.';
                return ((num_end - num_hdr) <= dot_pos) ? buffer + dot_pos : num_end;
             }
