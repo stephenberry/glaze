@@ -88,12 +88,12 @@ namespace glz::detail
    {
       return has_zero(chunk ^ 0b0101110001011100010111000101110001011100010111000101110001011100);
    }
-   
+
    GLZ_ALWAYS_INLINE constexpr auto has_space(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ 0b0010000000100000001000000010000000100000001000000010000000100000);
    }
-   
+
    GLZ_ALWAYS_INLINE constexpr auto has_forward_slash(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ 0b0010111100101111001011110010111100101111001011110010111100101111);
@@ -103,11 +103,12 @@ namespace glz::detail
    {
       return has_zero(c & 0b1111000011110000111100001111000011110000111100001111000011110000);
    }
-   
-   GLZ_ALWAYS_INLINE constexpr uint64_t is_greater_15(const uint64_t c) noexcept {
+
+   GLZ_ALWAYS_INLINE constexpr uint64_t is_greater_15(const uint64_t c) noexcept
+   {
       return (c & 0b1111000011110000111100001111000011110000111100001111000011110000);
    }
-   
+
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {

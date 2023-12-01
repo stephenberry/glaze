@@ -290,7 +290,8 @@ namespace glz
             }
 
             uint64_t c{};
-            // Note that because our buffer must be null terminated, we can read one more index without checking: std::distance(it, end) < 5
+            // Note that because our buffer must be null terminated, we can read one more index without checking:
+            // std::distance(it, end) < 5
             std::memcpy(&c, &*it, 5);
             constexpr uint64_t u_true = 0b00000000'00000000'00000000'00000000'01100101'01110101'01110010'01110100;
             constexpr uint64_t u_false = 0b00000000'00000000'00000000'01100101'01110011'01101100'01100001'01100110;
@@ -304,8 +305,8 @@ namespace glz
                   ctx.error = error_code::expected_true_or_false;
                   return;
                }
-              value = false;
-              it += 5;
+               value = false;
+               it += 5;
             }
 
             if constexpr (Opts.quoted_num) {
