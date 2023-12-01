@@ -5343,8 +5343,7 @@ suite error_message_test = [] {
       std::string s =
          R"([{"first":"George","last":"Martin"},{"first":"Sally","last":"Adams"},{"first":"Caleb","middle":"Patrick","last":"Boardwalk"},{"first":"James","last":"Brown"}])";
       const auto error = glz::read_json(arr, s);
-      expect(error == glz::error_code::unknown_key);
-      // const auto formmatted = glz::format_error(error, s);
+      expect(error == glz::error_code::unknown_key) << glz::format_error(error, s);
    };
 };
 
@@ -5902,7 +5901,7 @@ struct Update
 suite ndjson_error_test = [] {
    "ndjson_error"_test = [] {
       auto x = glz::read_ndjson<std::vector<Update>>("{\"t\":73}\n{\"t\":37}");
-      expect(x.error() == glz::error_code::syntax_error);
+      expect(x.error() == glz::error_code::unknown_key);
    };
 };
 
