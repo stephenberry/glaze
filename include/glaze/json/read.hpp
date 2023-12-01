@@ -1493,7 +1493,7 @@ namespace glz
                return static_key;
             }
             else [[likely]] {
-               const sv key{start, static_cast<size_t>(it - start)};
+               const sv key{start, size_t(it - start)};
                ++it;
                return key;
             }
@@ -1505,15 +1505,36 @@ namespace glz
                   if constexpr (stats.length_range == 0) {
                      const sv key{it, stats.max_length};
                      it += stats.max_length;
-                     match<'"'>(ctx, it, end);
+                     if (*it != '"') [[unlikely]] {
+                        ctx.error = error_code::unknown_key;
+                     }
+                     ++it;
                      return key;
+                  }
+                  else if constexpr (stats.length_range == 1) {
+                     auto start = it;
+                     it += stats.min_length;
+                     if (*it == '"') {
+                        const sv key{start, size_t(it - start)};
+                        ++it;
+                        return key;
+                     }
+                     else {
+                        ++it;
+                        const sv key{start, size_t(it - start)};
+                        if (*it != '"') [[unlikely]] {
+                           ctx.error = error_code::unknown_key;
+                        }
+                        ++it;
+                        return key;
+                     }
                   }
                   else if constexpr (stats.length_range < 4) {
                      auto start = it;
                      it += stats.min_length;
-                     for (uint32_t i = 0; i <= stats.length_range; ++it, ++i) {
+                     for (const auto e = it + stats.length_range + 1; it < e; ++it) {
                         if (*it == '"') {
-                           const sv key{start, static_cast<size_t>(it - start)};
+                           const sv key{start, size_t(it - start)};
                            ++it;
                            return key;
                         }
@@ -1931,7 +1952,7 @@ namespace glz
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                         }
-                        std::string_view key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
+                        const sv key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
