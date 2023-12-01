@@ -1,7 +1,10 @@
 # Glaze
-One of the fastest JSON libraries in the world. Glaze reads and writes from C++ memory, simplifying interfaces and offering incredible performance.
+One of the fastest JSON libraries in the world. Glaze reads and writes from object memory, simplifying interfaces and offering incredible performance.
 
-Glaze also supports binary messages via [BEVE](https://github.com/stephenberry/beve) and CSV support. And, the library has many more useful features for building APIs.
+Glaze isn't just a JSON library. Glaze also supports:
+
+- [BEVE](https://github.com/stephenberry/beve) (binary efficient versatile encoding)
+- [CSV](https://en.wikipedia.org/wiki/Comma-separated_values#:~:text=Comma%2Dseparated%20values%20(CSV),commas%20in%20the%20CSV%20file.) (comma separated value)
 
 ## Highlights
 
@@ -9,9 +12,11 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 - Simple registration
 - Standard C++ library support
+- Header only
 - Direct to memory serialization/deserialization
 - Compile time maps with constant time lookups and perfect hashing
 - Nearly zero intermediate allocations
+- Reflection for member object pointers
 - [Pure compile time reflection](./docs/pure-reflection.md) for aggregate, constexpr structs in Clang
 - Powerful wrappers to modify read/write behavior ([Wrappers](./docs/wrappers.md))
 - Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
