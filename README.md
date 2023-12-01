@@ -71,8 +71,6 @@ Binary message size: 564 bytes
 
 *Binary data packs more efficiently than JSON, so transporting the same amount of information is even faster.
 
-> Performance improvements and size savings are much more significant when testing large numeric arrays.
-
 ## Compiler Support
 
 [Actions](https://github.com/stephenberry/glaze/actions) automatically build and test with [Clang](https://clang.llvm.org), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/), and [GCC](https://gcc.gnu.org) compilers on apple, windows, and linux.
