@@ -3,59 +3,6 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from C++ 
 
 Glaze also supports binary messages via [BEVE](https://github.com/stephenberry/beve) and CSV support. And, the library has many more useful features for building APIs.
 
-## Version 1.8.1 glz::meta reflection! For MSVC, GCC, and Clang!
-
-In the past you were required to write out the key name along with the member object pointer in your `glz::meta` definition. As of 1.8.1 key names are entirely optional. You can individually include custom key names as needed, but otherwise simple reflection will use the name of your member variable.
-
-Instead of writing:
-
-```c++
-template <>
-struct glz::meta<my_struct> {
-   using T = my_struct;
-   static constexpr auto value = object(
-      "i", &T::i,
-      "d", &T::d,
-      "hello", &T::hello,
-      "arr", &T::arr
-   );
-};
-```
-
-You can now write:
-
-```c++
-template <>
-struct glz::meta<my_struct> {
-   using T = my_struct;
-   static constexpr auto value = object(
-      &T::i,
-      &T::d,
-      &T::hello,
-      &T::arr
-   );
-};
-```
-
-- This update has zero runtime performance overhead!
-- Every field can be individually named and customized as before
-- The reflection works on all types, non-aggregates, non-default constructible, non-constexpr etc.
-
-> NOTE: If you want comments in your `glz::meta` without providing key names, you must denote those comments explicitly. Glaze now has a `comment` type and a `_c` literal for denoting comments. These explicit comments are only needed if you remove the key name.
->
-> ```c++
-> template <>
-> struct glz::meta<my_struct> {
->    using T = my_struct;
->    static constexpr auto value = object(
->       &T::i, "i is an integer"_c,
->       &T::d, comment("d is a double"),
->       &T::hello, "hello is a string"_c,
->       &T::arr, comment("this is an array of integers")
->    );
-> };
-> ```
-
 ## Highlights
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
@@ -74,6 +21,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - No exceptions (compiles with `-fno-exceptions`)
 - If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](./docs/exceptions.md)
 - No runtime type information necessary (compiles with `-fno-rtti`)
+- Rapid error handling with short circuiting
 - [JSON-RPC 2.0 support](./docs/json-rpc.md)
 - [JSON Schema generation](./docs/json-schema.md)
 - [CSV Reading/Writing](./docs/csv.md)
@@ -299,6 +247,11 @@ struct glz::meta<my_struct> {
 ```
 
 > Each of these strings is optional and can be removed for individual fields if you want the name to be reflected.
+>
+> Names are required for:
+>
+> - Wrappers
+> - Lambda functions
 
 ## Struct Registration Macros
 
@@ -690,6 +643,8 @@ assert(json[2]["pi"].get<double>() == 3.14);
 
 Glaze is safe to use with untrusted messages. Errors are returned as error codes, typically within a `glz::expected`, which behaves just like a `std::expected`.
 
+> Glaze works to short circuit error handling, which means the parsing exits very rapidly if an error is encountered.
+
 To generate more helpful error messages, call `format_error`:
 
 ```c++
@@ -774,7 +729,7 @@ struct S {
 
 template <>
 struct glz::meta<S> {
-  static constexpr auto value = object("key_to_skip", skip{}, "x", &S::i);
+  static constexpr auto value = object("key_to_skip", skip{}, &S::i);
 };
 ```
 
@@ -802,8 +757,8 @@ struct hide_struct {
 template <>
 struct glz::meta<hide_struct> {
    using T = hide_struct;
-   static constexpr auto value = object("i", &T::i,  //
-                                        "d", &T::d, //
+   static constexpr auto value = object(&T::i,  //
+                                        &T::d, //
                                         "hello", hide{&T::hello});
 };
 ```

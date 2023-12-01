@@ -522,7 +522,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               value.append(start, static_cast<size_t>(it - start));
+               value.append(start, size_t(it - start));
             }
             else {
                if constexpr (!Opts.opening_handled) {
@@ -593,12 +593,12 @@ namespace glz
                            return;
 
                         if (*it == '"') {
-                           value.append(start, static_cast<size_t>(it - start));
+                           value.append(start, size_t(it - start));
                            ++it;
                            return;
                         }
                         else {
-                           value.append(start, static_cast<size_t>(it - start));
+                           value.append(start, size_t(it - start));
                            ++it;
                            handle_escaped();
                            if (bool(ctx.error)) [[unlikely]]
@@ -609,7 +609,7 @@ namespace glz
                      else {
                         switch (*it) {
                         [[likely]] case '"' : {
-                           value.append(start, static_cast<size_t>(it - start));
+                           value.append(start, size_t(it - start));
                            ++it;
                            return;
                         }
@@ -626,7 +626,7 @@ namespace glz
                            return;
                         }
                         [[unlikely]] case '\\' : {
-                           value.append(start, static_cast<size_t>(it - start));
+                           value.append(start, size_t(it - start));
                            ++it;
                            handle_escaped();
                            if (bool(ctx.error)) [[unlikely]]
