@@ -696,8 +696,25 @@ namespace glz
       struct from_binary<includer<T>>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&, auto&&) noexcept
-         {}
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            if constexpr (Opts.no_header) {
+               std::ignore = int_from_compressed(it, end);
+            }
+            else {
+               constexpr uint8_t header = tag::string;
+
+               const auto tag = uint8_t(*it);
+               if (tag != header) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               ++it;
+
+               std::ignore = int_from_compressed(it, end);
+            }
+         }
       };
 
       template <class T>

@@ -179,8 +179,13 @@ namespace glz
       struct to_binary<includer<T>>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
-         {}
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&... args) noexcept
+         {
+            constexpr uint8_t tag = tag::string;
+
+            dump_type(tag, args...);
+            dump_compressed_int<Opts>(0, args...);
+         }
       };
 
       template <boolean_like T>
@@ -495,6 +500,28 @@ namespace glz
       };
 
       template <class T>
+         requires is_specialization_v<T, glz::obj> || is_specialization_v<T, glz::obj_copy>
+      struct to_binary<T>
+      {
+         template <auto Opts>
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         {
+            constexpr uint8_t type = 0; // string key
+            constexpr uint8_t tag = tag::object | type;
+            dump_type(tag, args...);
+
+            using V = std::decay_t<decltype(value.value)>;
+            static constexpr auto N = std::tuple_size_v<V> / 2;
+            dump_compressed_int<N>(args...);
+
+            for_each<N>([&](auto I) {
+               write<binary>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
+               write<binary>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
+            });
+         }
+      };
+
+      template <class T>
          requires glaze_object_t<T>
       struct to_binary<T> final
       {
@@ -514,6 +541,10 @@ namespace glz
                using T0 = std::decay_t<decltype(get<0>(item))>;
                static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
                static constexpr auto member_index = use_reflection ? 0 : 1;
+               using Value = std::decay_t<decltype(get<member_index>(item))>;
+               if constexpr (std::is_same_v<Value, includer<V>>) {
+                  return;
+               }
                if constexpr (use_reflection) {
                   write<binary>::no_header<Opts>(get_name<get<0>(item)>(), ctx, args...);
                }

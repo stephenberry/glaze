@@ -240,6 +240,8 @@ namespace glz
                return;
 
             match<",">(ctx, args...);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
 
             read<json>::op<Opts>(ptr[1], ctx, args...);
 
@@ -282,24 +284,29 @@ namespace glz
                   return;
             }
 
-            switch (*it) {
-            case 't': {
-               ++it;
+            if (std::distance(it, end) < 4) [[unlikely]] {
+               ctx.error = error_code::expected_true_or_false;
+               return;
+            }
+
+            uint64_t c{};
+            // Note that because our buffer must be null terminated, we can read one more index without checking:
+            // std::distance(it, end) < 5
+            std::memcpy(&c, &*it, 5);
+            constexpr uint64_t u_true = 0b00000000'00000000'00000000'00000000'01100101'01110101'01110010'01110100;
+            constexpr uint64_t u_false = 0b00000000'00000000'00000000'01100101'01110011'01101100'01100001'01100110;
+            // We have to wipe the 5th character for true testing
+            if ((c & 0b11111111'11111111'11111111'00000000'11111111'11111111'11111111'11111111) == u_true) {
                value = true;
-               match<"rue">(ctx, it, end);
-               break;
+               it += 4;
             }
-            case 'f': {
-               ++it;
-               value = false;
-               match<"alse">(ctx, it, end);
-               break;
-            }
-               [[unlikely]] default:
-               {
+            else {
+               if (c != u_false) [[unlikely]] {
                   ctx.error = error_code::expected_true_or_false;
                   return;
                }
+               value = false;
+               it += 5;
             }
 
             if constexpr (Opts.quoted_num) {
@@ -513,7 +520,10 @@ namespace glz
             if constexpr (Opts.number) {
                auto start = it;
                skip_number<Opts>(ctx, it, end);
-               value.append(start, static_cast<size_t>(it - start));
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               value.append(start, size_t(it - start));
             }
             else {
                if constexpr (!Opts.opening_handled) {
@@ -584,12 +594,12 @@ namespace glz
                            return;
 
                         if (*it == '"') {
-                           value.append(start, static_cast<size_t>(it - start));
+                           value.append(start, size_t(it - start));
                            ++it;
                            return;
                         }
                         else {
-                           value.append(start, static_cast<size_t>(it - start));
+                           value.append(start, size_t(it - start));
                            ++it;
                            handle_escaped();
                            if (bool(ctx.error)) [[unlikely]]
@@ -600,7 +610,7 @@ namespace glz
                      else {
                         switch (*it) {
                         [[likely]] case '"' : {
-                           value.append(start, static_cast<size_t>(it - start));
+                           value.append(start, size_t(it - start));
                            ++it;
                            return;
                         }
@@ -617,7 +627,7 @@ namespace glz
                            return;
                         }
                         [[unlikely]] case '\\' : {
-                           value.append(start, static_cast<size_t>(it - start));
+                           value.append(start, size_t(it - start));
                            ++it;
                            handle_escaped();
                            if (bool(ctx.error)) [[unlikely]]
@@ -1484,7 +1494,7 @@ namespace glz
                return static_key;
             }
             else [[likely]] {
-               const sv key{start, static_cast<size_t>(it - start)};
+               const sv key{start, size_t(it - start)};
                ++it;
                return key;
             }
@@ -1496,15 +1506,36 @@ namespace glz
                   if constexpr (stats.length_range == 0) {
                      const sv key{it, stats.max_length};
                      it += stats.max_length;
-                     match<'"'>(ctx, it, end);
+                     if (*it != '"') [[unlikely]] {
+                        ctx.error = error_code::unknown_key;
+                     }
+                     ++it;
                      return key;
+                  }
+                  else if constexpr (stats.length_range == 1) {
+                     auto start = it;
+                     it += stats.min_length;
+                     if (*it == '"') {
+                        const sv key{start, size_t(it - start)};
+                        ++it;
+                        return key;
+                     }
+                     else {
+                        ++it;
+                        const sv key{start, size_t(it - start)};
+                        if (*it != '"') [[unlikely]] {
+                           ctx.error = error_code::unknown_key;
+                        }
+                        ++it;
+                        return key;
+                     }
                   }
                   else if constexpr (stats.length_range < 4) {
                      auto start = it;
                      it += stats.min_length;
-                     for (uint32_t i = 0; i <= stats.length_range; ++it, ++i) {
+                     for (const auto e = it + stats.length_range + 1; it < e; ++it) {
                         if (*it == '"') {
-                           const sv key{start, static_cast<size_t>(it - start)};
+                           const sv key{start, size_t(it - start)};
                            ++it;
                            return key;
                         }
@@ -1922,7 +1953,7 @@ namespace glz
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                         }
-                        std::string_view key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
+                        const sv key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
