@@ -6,6 +6,7 @@
 #include <iterator>
 
 #include "glaze/util/inline.hpp"
+#include "glaze/util/strod.hpp"
 
 namespace glz::detail
 {
@@ -144,4 +145,628 @@ namespace glz::detail
       }
       return false;
    }
+   
+   template <class T, bool force_conformance, class CharType> requires (std::is_unsigned_v<T>)
+   inline bool parse_int(T& val, const CharType*& cur) noexcept
+   {
+      const CharType* sig_cut{}; // significant part cutting position for long number
+      [[maybe_unused]] const CharType* sig_end{}; // significant part ending position
+      const CharType* dot_pos{}; // decimal point position
+      uint32_t frac_zeros = 0;
+      uint64_t sig = uint64_t(*cur - '0'); // significant part of the number
+      int32_t exp = 0; // exponent part of the number
+      bool exp_sign; // temporary exponent sign from literal part
+      int32_t exp_sig = 0; // temporary exponent number from significant part
+      int32_t exp_lit = 0; // temporary exponent number from exponent literal part
+      uint64_t num_tmp; // temporary number for reading
+      const CharType* tmp; // temporary cursor for reading
+      
+      /* begin with non-zero digit */
+      if (sig > 9) {
+         return false;
+      }
+      constexpr auto zero = uint8_t('0');
+#define expr_intg(i)                              \
+   if ((num_tmp = cur[i] - zero) <= 9) [[likely]] \
+      sig = num_tmp + sig * 10;                   \
+   else {                                         \
+      if constexpr (force_conformance && i > 1) { \
+         if (*cur == zero) return false;          \
+      }                                           \
+      goto digi_sepr_##i;                         \
+   }
+      repeat_in_1_18(expr_intg);
+#undef expr_intg
+      if constexpr (force_conformance) {
+         if (*cur == zero) return false;
+      }
+      cur += 19; /* skip continuous 19 digits */
+      if (!digi_is_digit_or_fp(*cur)) {
+         val = static_cast<T>(sig);
+         if constexpr (!std::is_unsigned_v<T>) {
+            val *= 1;
+         }
+         return true;
+      }
+      goto digi_intg_more; /* read more digits in integral part */
+      /* process first non-digit character */
+#define expr_sepr(i)                                           \
+   digi_sepr_##i : if ((!digi_is_fp(uint8_t(cur[i])))) [[likely]]       \
+   {                                                           \
+      cur += i;                                                \
+      val = sig;                                   \
+      return true;                                             \
+   }                                                           \
+   dot_pos = cur + i;                                          \
+   if ((cur[i] == '.')) [[likely]] {                           \
+      if (sig == 0)                                            \
+         while (cur[frac_zeros + i + 1] == zero) ++frac_zeros; \
+      goto digi_frac_##i;                                      \
+   }                                                           \
+   cur += i;                                                   \
+   sig_end = cur;                                              \
+   goto digi_exp_more;
+      repeat_in_1_18(expr_sepr)
+#undef expr_sepr
+      /* read fraction part */
+#define expr_frac(i)                                                                                              \
+   digi_frac_##i : if (((num_tmp = uint64_t(cur[i + 1 + frac_zeros] - zero)) <= 9)) [[likely]] sig = \
+                      num_tmp + sig * 10;                                                                         \
+   else                                                                                                           \
+   {                                                                                                              \
+      goto digi_stop_##i;                                                                                         \
+   }
+         repeat_in_1_18(expr_frac)
+#undef expr_frac
+            cur += 20 + frac_zeros; /* skip 19 digits and 1 decimal point */
+      if (uint8_t(*cur - zero) > 9) goto digi_frac_end; /* fraction part end */
+      goto digi_frac_more; /* read more digits in fraction part */
+      /* significant part end */
+#define expr_stop(i)                          \
+   digi_stop_##i : cur += i + 1 + frac_zeros; \
+   goto digi_frac_end;
+      repeat_in_1_18(expr_stop)
+#undef expr_stop
+         /* read more digits in integral part */
+         digi_intg_more : static constexpr uint64_t U64_MAX = (std::numeric_limits<uint64_t>::max)(); // todo
+      if ((num_tmp = *cur - zero) < 10) {
+         if (!digi_is_digit_or_fp(cur[1])) {
+            /* this number is an integer consisting of 20 digits */
+            if ((sig < (U64_MAX / 10)) || (sig == (U64_MAX / 10) && num_tmp <= (U64_MAX % 10))) {
+               sig = num_tmp + sig * 10;
+               cur++;
+               val = static_cast<T>(sig);
+               if constexpr (!std::is_unsigned_v<T>) {
+                  val *= 1;
+               }
+               return true;
+            }
+         }
+      }
+      if ((e_bit | *cur) == 'e') {
+         dot_pos = cur;
+         goto digi_exp_more;
+      }
+      if (*cur == '.') {
+         dot_pos = cur++;
+         if (uint8_t(*cur - zero) > 9) {
+            return false;
+         }
+      }
+      /* read more digits in fraction part */
+   digi_frac_more:
+      sig_cut = cur; /* too large to fit in u64, excess digits need to be cut */
+      sig += (*cur >= '5'); /* round */
+      while (uint8_t(*++cur - zero) < 10) {
+      }
+      if (!dot_pos) {
+         dot_pos = cur;
+         if (*cur == '.') {
+            if (uint8_t(*++cur - zero) > 9) {
+               return false;
+            }
+            while (uint8_t(*++cur - zero) < 10) {
+            }
+         }
+      }
+      exp_sig = static_cast<int32_t>(dot_pos - sig_cut);
+      exp_sig += (dot_pos < sig_cut);
+      /* ignore trailing zeros */
+      tmp = cur - 1;
+      while (*tmp == '0' || *tmp == '.') tmp--;
+      if (tmp < sig_cut) {
+         sig_cut = nullptr;
+      }
+      else {
+         sig_end = cur;
+      }
+      if ((e_bit | *cur) == 'e') goto digi_exp_more;
+      goto digi_exp_finish;
+      /* fraction part end */
+   digi_frac_end:
+      sig_end = cur;
+      exp_sig = -int32_t((cur - dot_pos) - 1);
+      if constexpr (force_conformance) {
+         if (exp_sig == 0) return false;
+      }
+      if ((e_bit | *cur) != 'e') [[likely]] {
+         if ((exp_sig < F64_MIN_DEC_EXP - 19)) [[unlikely]] {
+            val = 0;
+            return true;
+         }
+         exp = exp_sig;
+         goto digi_finish;
+      }
+      else {
+         goto digi_exp_more;
+      }
+      /* read exponent part */
+   digi_exp_more:
+      exp_sign = (*++cur == '-');
+      cur += (*cur == '+' || *cur == '-');
+      if (uint8_t(*cur - zero) > 9) [[unlikely]] {
+         if constexpr (force_conformance) {
+            return false;
+         }
+         else {
+            goto digi_finish;
+         }
+      }
+      while (*cur == '0') cur++;
+      /* read exponent literal */
+      tmp = cur;
+      uint8_t c;
+      while (uint8_t(c = *cur - zero) < 10) {
+         ++cur;
+         exp_lit = c + uint32_t(exp_lit) * 10;
+      }
+      // large exponent case
+      if ((cur - tmp >= 6)) [[unlikely]] {
+         if (sig == 0 || exp_sign) {
+            val = 0;
+            val = static_cast<T>(sig);
+            return true;
+         }
+         else {
+            val = std::numeric_limits<T>::infinity();
+            return true;
+         }
+      }
+      exp_sig += exp_sign ? -exp_lit : exp_lit;
+      // validate exponent value
+   digi_exp_finish:
+      if (sig == 0) {
+         val = 0;
+         return true;
+      }
+      if (exp_sig < -20) {
+         val = 0;
+         return true;
+      }
+      else if (exp_sig > 20) {
+         val = std::numeric_limits<T>::infinity();
+         return true;
+      }
+      exp = exp_sig;
+      /* all digit read finished */
+   digi_finish:
+
+      val = static_cast<T>(sig);
+      static constexpr auto n_powers_of_ten_int = powers_of_ten_int.size();
+      const uint32_t abs_exp = std::abs(exp);
+      if (abs_exp >= n_powers_of_ten_int) [[unlikely]] {
+         if (exp > 0) {
+            return false;
+         }
+         else {
+            val = T(0);
+            return true;
+         }
+      }
+      if (exp >= 0) {
+         val *= T(powers_of_ten_int[abs_exp]);
+      }
+      else {
+         val /= T(powers_of_ten_int[abs_exp]);
+      }
+      return true;
+   }
+   
+   /*constexpr int16_t ascii_to_value_table[]{ -48, -47, -46, -45, -44, -43, -42, -41, -40, -39, -38, -37, -36, -35, -34, -33, -32, -31, -30, -29, -28, -27, -26, -25, -24, -23, -22,
+         -21, -20, -19, -18, -17, -16, -15, -14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+         21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
+         64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79 };
+   
+   constexpr int64_t f64MaxDecExp = 308;
+   constexpr int64_t f64MinDecExp = (-324);
+   
+   constexpr uint8_t digi_type_zero = 1 << 0;
+   constexpr uint8_t digi_type_non_zero = 1 << 1;
+   constexpr uint8_t digi_type_neg     = 1 << 3;
+   constexpr uint8_t digiTypeDot     = 1 << 4;
+   constexpr uint8_t digiTypeExp     = 1 << 5;
+
+   GLZ_ALWAYS_INLINE bool digiIsType(uint8_t d, uint8_t type) noexcept {
+      return (digi_table[d] & type) != 0;
+   }
+
+   GLZ_ALWAYS_INLINE bool digiIsFp(uint8_t d) noexcept {
+      return digiIsType(d, uint8_t(digiTypeDot | digiTypeExp));
+   }
+
+   GLZ_ALWAYS_INLINE bool digiIsDigitOrFp(uint8_t d) noexcept {
+      return digiIsType(d, uint8_t(digi_type_zero | digi_type_non_zero | digiTypeDot | digiTypeExp));
+   }
+   
+#define repeat_in_1_18(x) \
+   { x(1) x(2) x(3) x(4) x(5) x(6) x(7) x(8) x(9) x(10) x(11) x(12) x(13) x(14) x(15) x(16) x(17) x(18) }
+
+   
+   template <class T, class char_type> requires (std::is_signed_v<T>)
+   inline bool parse_int(T& value, char_type* cur)
+   {
+      [[maybe_unused]] const char_type* sigEnd{};
+      const char_type *tmp{}, *sigCut{}, *dotPos{}, *hdr{cur};
+      uint64_t fracZeros{}, numTmp{}, sig{};
+      int64_t exp{}, expSig{}, expLit{};
+      bool sign{(*hdr == 0x2Du)}, expSign{};
+      auto applySign = [&](auto&& value) -> T {
+         return sign ? -static_cast<T>(value) : static_cast<T>(value);
+      };
+      cur += sign;
+      sig = static_cast<uint64_t>(ascii_to_value_table[static_cast<uint64_t>(*cur)]);
+      if (sig > 9) {
+         if (*cur == 0x6Eu && cur[1] == 0x75u && cur[2] == 0x6Cu && cur[3] == 0x6Cu) {
+            value = applySign(0);
+            return true;
+         }
+         else if ((*cur | e_bit) == 0x6Eu && (cur[1] | e_bit) == 0x61u && (cur[2] | e_bit) == 0x6Eu) {
+            value = applySign(std::numeric_limits<T>::quiet_NaN());
+            return true;
+         }
+         else {
+            return false;
+         }
+      }
+      static constexpr auto zero = static_cast<uint8_t>(0x30u);
+#define expr_intg(x)                                                                                             \
+   if (numTmp = static_cast<uint64_t>(ascii_to_value_table[static_cast<uint64_t>(cur[x])]); numTmp <= 9) [[likely]] \
+      sig = static_cast<uint64_t>(numTmp) + sig * 10ull;                                                         \
+   else {                                                                                                        \
+      goto digi_sepr_##x;                                                                                        \
+   }
+      repeat_in_1_18(expr_intg);
+#undef expr_intg
+      cur += 19;
+      if (!digiIsDigitOrFp(static_cast<uint8_t>(*cur))) {
+         value = applySign(static_cast<T>(sig));
+         return true;
+      }
+      goto digi_intg_more;
+#define expr_sepr(x)                                                                \
+   digi_sepr_##x : if (!digiIsFp(static_cast<uint8_t>(cur[x]))) [[likely]]          \
+   {                                                                                \
+      cur += x;                                                                     \
+      value = applySign(static_cast<T>(sig));                            \
+      return true;                                                                  \
+   }                                                                                \
+   dotPos = cur + x;                                                                \
+   if (cur[x] == 0x2Eu) [[likely]] {                                                \
+      if (sig == 0)                                                                 \
+         while (cur[fracZeros + x + 1] == static_cast<uint64_t>(zero)) ++fracZeros; \
+      goto digi_frac_##x;                                                           \
+   }                                                                                \
+   cur += x;                                                                        \
+   sigEnd = cur;                                                                    \
+   goto digi_exp_more;
+      repeat_in_1_18(expr_sepr)
+#undef expr_sepr
+#define expr_frac(x)                                                                                           \
+   digi_frac_##x : if (numTmp = static_cast<uint64_t>(ascii_to_value_table[cur[x + 1 + fracZeros]]); numTmp <= 9) \
+                      [[likely]] sig = numTmp + sig * 10;                                                      \
+   else                                                                                                        \
+   {                                                                                                           \
+      goto digi_stop_##x;                                                                                      \
+   }
+         repeat_in_1_18(expr_frac)
+#undef expr_frac
+            cur += 20ull + fracZeros;
+      if (ascii_to_value_table[uint64_t(*cur)] > 9) goto digi_frac_end;
+      goto digi_frac_more;
+#define expr_stop(x)                                 \
+   digi_stop_##x : cur += x##ull + 1ull + fracZeros; \
+   goto digi_frac_end;
+      repeat_in_1_18(expr_stop)
+#undef expr_stop
+         digi_intg_more : static constexpr uint64_t uint64_tMax = std::numeric_limits<uint64_t>::max();
+      if (numTmp = uint64_t(ascii_to_value_table[uint64_t(*cur)]); numTmp < 10) {
+         if (!digiIsDigitOrFp(uint8_t(cur[1]))) {
+            if ((sig < (uint64_tMax / 10)) || (sig == (uint64_tMax / 10) && numTmp <= (uint64_tMax % 10))) {
+               sig = numTmp + sig * 10;
+               ++cur;
+               value = applySign(static_cast<T>(sig));
+               return true;
+            }
+         }
+      }
+      if ((e_bit | *cur) == 0x65u) {
+         dotPos = cur;
+         goto digi_exp_more;
+      }
+      if (*cur == 0x2Eu) {
+         dotPos = cur++;
+         if (ascii_to_value_table[static_cast<uint64_t>(*cur)] > 9) {
+            return false;
+         }
+      }
+   digi_frac_more:
+      sigCut = cur;
+      sig += (*cur >= 0x35u);
+      while (ascii_to_value_table[*++cur] < 10) {
+      }
+      if (!dotPos) {
+         dotPos = cur;
+         if (*cur == 0x2Eu) {
+            if (ascii_to_value_table[*++cur] > 9) {
+               return false;
+            }
+            while (ascii_to_value_table[*++cur] < 10) {
+            }
+         }
+      }
+      expSig = static_cast<int64_t>(dotPos - sigCut);
+      expSig += (dotPos < sigCut);
+      tmp = cur - 1;
+      while (*tmp == 0x30u || *tmp == 0x2Eu) --tmp;
+      if (tmp < sigCut) {
+         sigCut = nullptr;
+      }
+      if ((e_bit | *cur) == 0x65u) goto digi_exp_more;
+      goto digi_exp_finish;
+   digi_frac_end:
+      expSig = -int64_t((cur - dotPos) - 1);
+      if ((e_bit | *cur) != 0x65u) [[likely]] {
+         if (expSig < f64MinDecExp - 19) [[unlikely]] {
+            value = applySign(0);
+            return true;
+         }
+         exp = expSig;
+         goto digi_finish;
+      }
+      else {
+         goto digi_exp_more;
+      }
+   digi_exp_more : {
+      expSign = (*++cur == 0x2Du);
+      cur += (*cur == 0x2Bu || *cur == 0x2Du);
+      if (ascii_to_value_table[static_cast<uint64_t>(*cur)] > 9) [[unlikely]] {
+         goto digi_finish;
+      }
+      while (*cur == 0x30u) ++cur;
+      tmp = cur;
+      uint8_t c{};
+      while (c < 10) {
+         c = static_cast<uint8_t>(ascii_to_value_table[static_cast<uint64_t>(*cur)]);
+         ++cur;
+         expLit = c + int64_t(expLit) * 10;
+      }
+      if (cur - tmp >= 6) [[unlikely]] {
+         if (sig == 0 || expSign) {
+            value = applySign(sig);
+            return true;
+         }
+         else {
+            value = applySign(std::numeric_limits<T>::infinity());
+            return true;
+         }
+      }
+      expSig += expSign ? -expLit : expLit;
+   }
+
+   digi_exp_finish:
+      if (sig == 0) {
+         value = applySign(!sign ? -0 : 0);
+         return true;
+      }
+      if (expSig < -20) {
+         value = applySign(0);
+         return true;
+      }
+      else if (expSig > 20) {
+         value = applySign(std::numeric_limits<T>::infinity());
+         return true;
+      }
+      exp = expSig;
+   digi_finish:
+
+      value = applySign(sig);
+      if (exp >= 0 && exp < 20) {
+         value *= applySign(powers_of_ten_int[exp]);
+      }
+      else if (exp > -20 && exp < 0) {
+         value /= applySign(powers_of_ten_int[-exp]);
+      }
+      return true;
+   }
+
+   template <class T, class char_type> requires (std::is_unsigned_v<T>)
+   inline bool parse_int(T& value, char_type* cur)
+   {
+      [[maybe_unused]] const char_type* sigEnd{};
+      const char_type *tmp{}, *sigCut{}, *dotPos{};
+      uint64_t fracZeros{}, numTmp{}, sig{};
+      int64_t exp{}, expSig{}, expLit{};
+      sig = static_cast<uint64_t>(ascii_to_value_table[static_cast<uint64_t>(*cur)]);
+      if (sig > 9) {
+         if (*cur == 0x6Eu && cur[1] == 0x75u && cur[2] == 0x6Cu && cur[3] == 0x6Cu) {
+            value = static_cast<T>(0);
+            return true;
+         }
+         else if ((*cur | e_bit) == 0x6Eu && (cur[1] | e_bit) == 0x61u && (cur[2] | e_bit) == 0x6Eu) {
+            value = static_cast<T>(std::numeric_limits<T>::quiet_NaN());
+            return true;
+         }
+         else {
+            return false;
+         }
+      }
+      static constexpr auto zero = uint8_t(0x30u);
+#define expr_intg(x)                                                                                             \
+   if (numTmp = static_cast<uint64_t>(ascii_to_value_table[static_cast<uint64_t>(cur[x])]); numTmp <= 9) [[likely]] \
+      sig = static_cast<uint64_t>(numTmp) + sig * 10ull;                                                         \
+   else {                                                                                                        \
+      goto digi_sepr_##x;                                                                                        \
+   }
+      repeat_in_1_18(expr_intg);
+#undef expr_intg
+      cur += 19;
+      if (!digiIsDigitOrFp(uint8_t(*cur))) {
+         value = static_cast<T>(static_cast<T>(sig));
+         return true;
+      }
+      goto digi_intg_more;
+#define expr_sepr(x)                                                                \
+   digi_sepr_##x : if (!digiIsFp(static_cast<uint8_t>(cur[x]))) [[likely]]          \
+   {                                                                                \
+      cur += x;                                                                     \
+      value = static_cast<T>(static_cast<T>(sig));            \
+      return true;                                                                  \
+   }                                                                                \
+   dotPos = cur + x;                                                                \
+   if (cur[x] == 0x2Eu) [[likely]] {                                                \
+      if (sig == 0)                                                                 \
+         while (cur[fracZeros + x + 1] == static_cast<uint64_t>(zero)) ++fracZeros; \
+      goto digi_frac_##x;                                                           \
+   }                                                                                \
+   cur += x;                                                                        \
+   sigEnd = cur;                                                                    \
+   goto digi_exp_more;
+      repeat_in_1_18(expr_sepr)
+#undef expr_sepr
+#define expr_frac(x)                                                                                           \
+   digi_frac_##x : if (numTmp = static_cast<uint64_t>(ascii_to_value_table[cur[x + 1 + fracZeros]]); numTmp <= 9) \
+                      [[likely]] sig = numTmp + sig * 10;                                                      \
+   else                                                                                                        \
+   {                                                                                                           \
+      goto digi_stop_##x;                                                                                      \
+   }
+         repeat_in_1_18(expr_frac)
+#undef expr_frac
+            cur += 20ull + fracZeros;
+      if (ascii_to_value_table[uint64_t(*cur)] > 9) goto digi_frac_end;
+      goto digi_frac_more;
+#define expr_stop(x)                                 \
+   digi_stop_##x : cur += x##ull + 1ull + fracZeros; \
+   goto digi_frac_end;
+      repeat_in_1_18(expr_stop)
+#undef expr_stop
+         digi_intg_more : static constexpr uint64_t uint64_tMax = std::numeric_limits<uint64_t>::max();
+      if (numTmp = uint64_t(ascii_to_value_table[uint64_t(*cur)]); numTmp < 10) {
+         if (!digiIsDigitOrFp(static_cast<uint8_t>(cur[1]))) {
+            if ((sig < (uint64_tMax / 10)) || (sig == (uint64_tMax / 10) && numTmp <= (uint64_tMax % 10))) {
+               sig = numTmp + sig * 10;
+               ++cur;
+               value = static_cast<T>(static_cast<T>(sig));
+               return true;
+            }
+         }
+      }
+      if ((e_bit | *cur) == 0x65u) {
+         dotPos = cur;
+         goto digi_exp_more;
+      }
+      if (*cur == 0x2Eu) {
+         dotPos = cur++;
+         if (ascii_to_value_table[uint64_t(*cur)] > 9) {
+            return false;
+         }
+      }
+   digi_frac_more:
+      sigCut = cur;
+      sig += (*cur >= 0x35u);
+      while (ascii_to_value_table[*++cur] < 10) {
+      }
+      if (!dotPos) {
+         dotPos = cur;
+         if (*cur == 0x2Eu) {
+            if (ascii_to_value_table[*++cur] > 9) {
+               return false;
+            }
+            while (ascii_to_value_table[*++cur] < 10) {
+            }
+         }
+      }
+      expSig = static_cast<int64_t>(dotPos - sigCut);
+      expSig += (dotPos < sigCut);
+      tmp = cur - 1;
+      while (*tmp == 0x30u || *tmp == 0x2Eu) tmp--;
+      if (tmp < sigCut) {
+         sigCut = nullptr;
+      }
+      if ((e_bit | *cur) == 0x65u) goto digi_exp_more;
+      goto digi_exp_finish;
+   digi_frac_end:
+      expSig = -int64_t((cur - dotPos) - 1);
+      if ((e_bit | *cur) != 0x65u) [[likely]] {
+         if (expSig < f64MinDecExp - 19) [[unlikely]] {
+            value = static_cast<T>(0);
+            return true;
+         }
+         exp = expSig;
+         goto digi_finish;
+      }
+      else {
+         goto digi_exp_more;
+      }
+   digi_exp_more : {
+      cur += (*cur == 0x2Bu || *cur == 0x2Du);
+      if (ascii_to_value_table[uint64_t(*cur)] > 9) [[unlikely]] {
+         goto digi_finish;
+      }
+      while (*cur == 0x30u) ++cur;
+      tmp = cur;
+      uint8_t c{};
+      while (c < 10) {
+         c = static_cast<uint8_t>(ascii_to_value_table[uint64_t(*cur)]);
+         ++cur;
+         expLit = c + int64_t(expLit) * 10;
+      }
+      if (cur - tmp >= 6) [[unlikely]] {
+         if (sig == 0) {
+            value = static_cast<T>(sig);
+            return true;
+         }
+         else {
+            value = static_cast<T>(std::numeric_limits<T>::infinity());
+            return true;
+         }
+      }
+      expSig += expLit;
+   }
+
+   digi_exp_finish:
+      if (sig == 0) {
+         value = 0;
+         return true;
+      }
+      if (expSig < -20) {
+         value = static_cast<T>(0);
+         return true;
+      }
+      else if (expSig > 20) {
+         value = static_cast<T>(std::numeric_limits<T>::infinity());
+         return true;
+      }
+      exp = expSig;
+   digi_finish:
+
+      value = static_cast<T>(sig);
+      if (exp >= 0 && exp < 20) {
+         value *= static_cast<T>(powers_of_ten_int[exp]);
+      }
+      else if (exp > -20 && exp < 0) {
+         value /= static_cast<T>(powers_of_ten_int[-exp]);
+      }
+      return true;
+   }*/
 }

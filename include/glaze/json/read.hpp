@@ -340,8 +340,17 @@ namespace glz
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  auto e = stoui64<V>(i, it);
+                  /*auto e = stoui64<V>(i, it);
                   if (!e) [[unlikely]] {
+                     ctx.error = error_code::parse_number_failure;
+                     return;
+                  }*/
+                  
+                  static_assert(sizeof(*it) == sizeof(char));
+                  const char* cur = reinterpret_cast<const char*>(&*it);
+                  const char* beg = cur;
+                  auto s = parse_int<std::decay_t<decltype(i)>, Options.force_conformance>(i, cur);
+                  if (!s) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
@@ -351,6 +360,7 @@ namespace glz
                      return;
                   }
                   value = V(i);
+                  it += (cur - beg);
                }
                else {
                   uint64_t i{};
