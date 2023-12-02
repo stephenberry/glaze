@@ -150,7 +150,7 @@ namespace glz::detail
    inline bool parse_int(T& val, const CharType*& cur) noexcept
    {
       const CharType* sig_cut{}; // significant part cutting position for long number
-      [[maybe_unused]] const CharType* sig_end{}; // significant part ending position
+      const CharType* sig_end{}; // significant part ending position
       const CharType* dot_pos{}; // decimal point position
       uint32_t frac_zeros = 0;
       uint64_t sig = uint64_t(*cur - '0'); // significant part of the number
@@ -162,7 +162,7 @@ namespace glz::detail
       const CharType* tmp; // temporary cursor for reading
       
       /* begin with non-zero digit */
-      if (sig > 9) {
+      if (sig > 9) [[unlikely]] {
          return false;
       }
       constexpr auto zero = uint8_t('0');
@@ -183,9 +183,6 @@ namespace glz::detail
       cur += 19; /* skip continuous 19 digits */
       if (!digi_is_digit_or_fp(*cur)) {
          val = static_cast<T>(sig);
-         if constexpr (!std::is_unsigned_v<T>) {
-            val *= 1;
-         }
          return true;
       }
       goto digi_intg_more; /* read more digits in integral part */
@@ -246,7 +243,7 @@ namespace glz::detail
       }
       if (*cur == '.') {
          dot_pos = cur++;
-         if (uint8_t(*cur - zero) > 9) {
+         if (uint8_t(*cur - zero) > 9) [[unlikely]] {
             return false;
          }
       }
@@ -259,14 +256,14 @@ namespace glz::detail
       if (!dot_pos) {
          dot_pos = cur;
          if (*cur == '.') {
-            if (uint8_t(*++cur - zero) > 9) {
+            if (uint8_t(*++cur - zero) > 9) [[unlikely]] {
                return false;
             }
             while (uint8_t(*++cur - zero) < 10) {
             }
          }
       }
-      exp_sig = static_cast<int32_t>(dot_pos - sig_cut);
+      exp_sig = int32_t(dot_pos - sig_cut);
       exp_sig += (dot_pos < sig_cut);
       /* ignore trailing zeros */
       tmp = cur - 1;
@@ -284,7 +281,7 @@ namespace glz::detail
       sig_end = cur;
       exp_sig = -int32_t((cur - dot_pos) - 1);
       if constexpr (force_conformance) {
-         if (exp_sig == 0) return false;
+         if (exp_sig == 0) [[unlikely]] return false;
       }
       if ((e_bit | *cur) != 'e') [[likely]] {
          if ((exp_sig < F64_MIN_DEC_EXP - 19)) [[unlikely]] {
@@ -301,7 +298,7 @@ namespace glz::detail
    digi_exp_more:
       exp_sign = (*++cur == '-');
       cur += (*cur == '+' || *cur == '-');
-      if (uint8_t(*cur - zero) > 9) [[unlikely]] {
+      if (uint8_t(*cur - zero) > 9) {
          if constexpr (force_conformance) {
             return false;
          }
@@ -309,7 +306,7 @@ namespace glz::detail
             goto digi_finish;
          }
       }
-      while (*cur == '0') cur++;
+      while (*cur == '0') ++cur;
       /* read exponent literal */
       tmp = cur;
       uint8_t c;
