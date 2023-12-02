@@ -46,9 +46,8 @@ namespace glz::detail
       
       const auto buffer_available = std::distance(c, end);
       
-      bool prepared_data = false;
-      if (buffer_available >= N) [[likely]] {
-         prepared_data = true;
+      const bool prepared_data = buffer_available >= N;
+      if (prepared_data) [[likely]] {
          std::memcpy(digits.data(), c, N); // copy buffer into digits
          
          constexpr uint32_t iters = N / 8;
