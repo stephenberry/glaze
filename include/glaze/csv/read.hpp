@@ -46,7 +46,7 @@ namespace glz
       struct from_csv<T>
       {
          template <auto Opts, class It>
-         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&&) noexcept
+         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
             if (bool(ctx.error)) [[unlikely]] {
                return;
@@ -60,7 +60,7 @@ namespace glz
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  auto e = stoui64<V>(i, it);
+                  auto e = stoui64<V>(i, it, end);
                   if (!e) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
@@ -79,7 +79,7 @@ namespace glz
                      sign = -1;
                      ++it;
                   }
-                  auto e = stoui64<V>(i, it);
+                  auto e = stoui64<V>(i, it, end);
                   if (!e) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
@@ -146,14 +146,14 @@ namespace glz
       struct from_csv<T>
       {
          template <auto Opts, class It>
-         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&&) noexcept
+         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
 
             uint64_t temp;
-            auto s = stoui64(temp, it);
+            auto s = stoui64(temp, it, end);
             if (!s) [[unlikely]] {
                ctx.error = error_code::expected_true_or_false;
                return;

@@ -340,7 +340,7 @@ namespace glz
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  auto e = stoui64<V>(i, it);
+                  auto e = stoui64<V>(i, it, end);
                   if (!e) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
@@ -359,7 +359,7 @@ namespace glz
                      sign = -1;
                      ++it;
                   }
-                  auto e = stoui64<V>(i, it);
+                  auto e = stoui64<V>(i, it, end);
                   if (!e) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;

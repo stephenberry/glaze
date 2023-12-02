@@ -23,7 +23,7 @@ namespace glz::detail
    }
 
    template <class T = uint64_t>
-   GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, const char*& c) noexcept
+   GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, const char*& c, [[maybe_unused]] const char* end) noexcept
    {
       if (!is_digit(*c)) [[unlikely]] {
          return false;
@@ -32,18 +32,33 @@ namespace glz::detail
       // maximum number of digits need is: 3, 5, 10, 20, for byte sizes of 1, 2, 4, 8
       // we need to store one extra space for a digit for sizes of 1, 2, and 4 because we avoid checking for overflow
       // since we store in a uint64_t
-      constexpr std::array<uint32_t, 4> max_digits_from_size = {4, 6, 11, 20};
+      // Maximum number of digits need is: 3, 5, 10, 20, for byte sizes of 1, 2, 4, 8
+      // We need to store one extra space for a digit for sizes of 1, 2, and 4 because we avoid checking for overflow
+      // since we store in a uint64_t
+      // However, use 8 byte alignment so we can use SWAR, and we want to have extra space for next_digit increments for '0' and '.'
+      // we need to have 8 bytes available after the period
+      constexpr std::array<uint32_t, 4> digits_end = {4, 6, 11, 20}; // for non SWAR approach
+      constexpr auto digits_length = digits_end[std::bit_width(sizeof(T)) - 1];
+      constexpr std::array<uint32_t, 4> max_digits_from_size = {16, 16, 24, 32};
       constexpr auto N = max_digits_from_size[std::bit_width(sizeof(T)) - 1];
 
       std::array<uint8_t, N> digits{0};
+      
+      const auto buffer_available = std::distance(c, end);
+      
+      bool prepared_data = false;
+      if (buffer_available >= N) [[likely]] {
+         prepared_data = true;
+         std::memcpy(digits.data(), c, N); // copy buffer into digits
+         
+         constexpr uint32_t iters = N / 8;
+         for_each<iters>([&](auto I) {
+            uint64_t* ptr = reinterpret_cast<uint64_t*>(digits.data() + I * 8);
+            (*ptr) -= 0x3030303030303030ULL; // subtract 48 from bytes
+         });
+      }
+      
       auto next_digit = digits.begin();
-      auto consume_digit = [&c, &next_digit, &digits]() {
-         if (next_digit < digits.cend()) [[likely]] {
-            *next_digit = (*c - '0');
-            ++next_digit;
-         }
-         ++c;
-      };
 
       if (*c == '0') {
          // digits[i] = 0; already set to zero
@@ -54,17 +69,36 @@ namespace glz::detail
             return false;
          }
       }
+      
+      const auto end_digit = digits.begin() + digits_length;
+      auto consume_digits = [&]() {
+         if (prepared_data) [[likely]] {
+            while (*next_digit < 10 && next_digit < end_digit) {
+               ++next_digit;
+               ++c;
+            }
+         }
+         else [[unlikely]] {
+            while (is_digit(*c)) {
+               if (next_digit < end_digit) [[likely]] {
+                  *next_digit = (*c - '0');
+                  ++next_digit;
+               }
+               ++c;
+            }
+         }
+      };
 
-      while (is_digit(*c)) {
-         consume_digit();
-      }
+      consume_digits();
       auto n = std::distance(digits.begin(), next_digit);
 
       if (*c == '.') {
-         ++c;
-         while (is_digit(*c)) {
-            consume_digit();
+         if (prepared_data) [[likely]] {
+            // we need to memmove to cover over the period
+            std::memmove(next_digit, next_digit + 1, size_t(end_digit - (next_digit + 1)));
          }
+         ++c;
+         consume_digits();
       }
 
       if (*c == 'e' || *c == 'E') {
@@ -104,8 +138,8 @@ namespace glz::detail
             else [[unlikely]] {
                return false;
             }
-            if (is_safe_addition(res, digits.back())) [[likely]] {
-               res += digits.back();
+            if (is_safe_addition(res, digits[19])) [[likely]] {
+               res += digits[19];
             }
             else [[unlikely]] {
                return false;
@@ -133,12 +167,13 @@ namespace glz::detail
    }
 
    template <class T = uint64_t>
-   GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, auto& it) noexcept
+   GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, auto& it, auto& end) noexcept
    {
       static_assert(sizeof(*it) == sizeof(char));
       const char* cur = reinterpret_cast<const char*>(&*it);
+      const char* e = reinterpret_cast<const char*>(&*end);
       const char* beg = cur;
-      if (stoui64(res, cur)) {
+      if (stoui64(res, cur, e)) {
          it += (cur - beg);
          return true;
       }

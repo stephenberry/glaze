@@ -451,7 +451,7 @@ namespace glz::detail
 
       uint64_t ret;
       auto* c = s.data();
-      bool valid = detail::stoui64(ret, c);
+      bool valid = detail::stoui64(ret, c, c + s.size());
       if (valid) {
          return ret;
       }
