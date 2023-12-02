@@ -74,11 +74,6 @@ namespace glz::detail
       }
    }
 
-   GLZ_ALWAYS_INLINE constexpr auto has_zero(const uint64_t chunk) noexcept
-   {
-      return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080);
-   }
-
    GLZ_ALWAYS_INLINE constexpr auto has_quote(const uint64_t chunk) noexcept
    {
       return has_zero(chunk ^ 0b0010001000100010001000100010001000100010001000100010001000100010);
@@ -452,7 +447,7 @@ namespace glz::detail
       uint64_t ret;
       auto* c = s.data();
       auto* end = c + s.size();
-      bool valid = detail::stoui64(ret, c, end);
+      bool valid = detail::stoui64_constexpr(ret, c, end);
       if (valid) {
          return ret;
       }
