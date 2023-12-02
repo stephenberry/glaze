@@ -236,9 +236,6 @@ namespace glz::detail
                sig = num_tmp + sig * 10;
                cur++;
                val = static_cast<T>(sig);
-               if constexpr (!std::is_unsigned_v<T>) {
-                  val *= 1;
-               }
                return true;
             }
          }
@@ -339,7 +336,16 @@ namespace glz::detail
          val = 0;
          return true;
       }
-      if (exp_sig >= 20) {
+      if (exp_sig == 19) {
+         val *= T(powers_of_ten_int[exp_sig - 1]);
+         if (is_safe_multiplication10(val)) [[likely]] {
+            return val *= 10;
+         }
+         else [[unlikely]] {
+            return false;
+         }
+      }
+      else if (exp_sig >= 20) [[unlikely]] {
          return false;
       }
       exp = exp_sig;
