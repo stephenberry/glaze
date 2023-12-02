@@ -339,35 +339,24 @@ namespace glz::detail
          val = 0;
          return true;
       }
-      if (exp_sig < -20) {
-         val = 0;
-         return true;
-      }
-      else if (exp_sig > 20) {
-         val = std::numeric_limits<T>::infinity();
-         return true;
+      if (exp_sig >= 20) {
+         return false;
       }
       exp = exp_sig;
       /* all digit read finished */
    digi_finish:
-
-      val = static_cast<T>(sig);
-      static constexpr auto n_powers_of_ten_int = powers_of_ten_int.size();
-      const uint32_t abs_exp = std::abs(exp);
-      if (abs_exp >= n_powers_of_ten_int) [[unlikely]] {
-         if (exp > 0) {
-            return false;
-         }
-         else {
-            val = T(0);
-            return true;
-         }
+      
+      if (exp <= -20) [[unlikely]] {
+         val = T(0);
+         return true;
       }
+      
+      val = static_cast<T>(sig);
       if (exp >= 0) {
-         val *= T(powers_of_ten_int[abs_exp]);
+         val *= T(powers_of_ten_int[exp]);
       }
       else {
-         val /= T(powers_of_ten_int[abs_exp]);
+         val /= T(powers_of_ten_int[-exp]);
       }
       return true;
    }
