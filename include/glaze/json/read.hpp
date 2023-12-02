@@ -335,22 +335,46 @@ namespace glz
             using V = std::decay_t<decltype(value)>;
             if constexpr (int_t<V>) {
                if constexpr (std::is_unsigned_v<V>) {
-                  uint64_t i{};
-                  if (*it == '-') [[unlikely]] {
-                     ctx.error = error_code::parse_number_failure;
-                     return;
+                  if constexpr (std::same_as<V, uint64_t>) {
+                     if (*it == '-') [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     
+                     static_assert(sizeof(*it) == sizeof(char));
+                     const char* cur = reinterpret_cast<const char*>(&*it);
+                     const char* beg = cur;
+                     auto s = parse_int<V, Options.force_conformance>(value, cur);
+                     if (!s) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     
+                     it += (cur - beg);
                   }
-                  auto e = stoui64<V>(i, it);
-                  if (!e) [[unlikely]] {
-                     ctx.error = error_code::parse_number_failure;
-                     return;
+                  else {
+                     uint64_t i{};
+                     if (*it == '-') [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     
+                     static_assert(sizeof(*it) == sizeof(char));
+                     const char* cur = reinterpret_cast<const char*>(&*it);
+                     const char* beg = cur;
+                     auto s = parse_int<std::decay_t<decltype(i)>, Options.force_conformance>(i, cur);
+                     if (!s) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     
+                     if (i > (std::numeric_limits<V>::max)()) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     value = V(i);
+                     it += (cur - beg);
                   }
-
-                  if (i > (std::numeric_limits<V>::max)()) [[unlikely]] {
-                     ctx.error = error_code::parse_number_failure;
-                     return;
-                  }
-                  value = V(i);
                }
                else {
                   uint64_t i{};
@@ -359,8 +383,12 @@ namespace glz
                      sign = -1;
                      ++it;
                   }
-                  auto e = stoui64<V>(i, it);
-                  if (!e) [[unlikely]] {
+                  
+                  static_assert(sizeof(*it) == sizeof(char));
+                  const char* cur = reinterpret_cast<const char*>(&*it);
+                  const char* beg = cur;
+                  auto s = parse_int<std::decay_t<decltype(i)>, Options.force_conformance>(i, cur);
+                  if (!s) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
@@ -380,6 +408,7 @@ namespace glz
                      }
                      value = V(i);
                   }
+                  it += (cur - beg);
                }
             }
             else {
