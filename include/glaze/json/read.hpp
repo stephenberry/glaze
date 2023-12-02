@@ -340,7 +340,7 @@ namespace glz
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
-                     
+
                      static_assert(sizeof(*it) == sizeof(char));
                      const char* cur = reinterpret_cast<const char*>(&*it);
                      const char* beg = cur;
@@ -349,7 +349,7 @@ namespace glz
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
-                     
+
                      it += (cur - beg);
                   }
                   else {
@@ -358,7 +358,7 @@ namespace glz
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
-                     
+
                      static_assert(sizeof(*it) == sizeof(char));
                      const char* cur = reinterpret_cast<const char*>(&*it);
                      const char* beg = cur;
@@ -367,7 +367,7 @@ namespace glz
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
-                     
+
                      if (i > (std::numeric_limits<V>::max)()) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
@@ -383,7 +383,7 @@ namespace glz
                      sign = -1;
                      ++it;
                   }
-                  
+
                   static_assert(sizeof(*it) == sizeof(char));
                   const char* cur = reinterpret_cast<const char*>(&*it);
                   const char* beg = cur;

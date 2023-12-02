@@ -145,8 +145,9 @@ namespace glz::detail
       }
       return false;
    }
-   
-   template <class T, bool force_conformance, class CharType> requires (std::is_unsigned_v<T>)
+
+   template <class T, bool force_conformance, class CharType>
+      requires(std::is_unsigned_v<T>)
    inline bool parse_int(T& val, const CharType*& cur) noexcept
    {
       const CharType* sig_cut{}; // significant part cutting position for long number
@@ -160,7 +161,7 @@ namespace glz::detail
       int32_t exp_lit = 0; // temporary exponent number from exponent literal part
       uint64_t num_tmp; // temporary number for reading
       const CharType* tmp; // temporary cursor for reading
-      
+
       /* begin with non-zero digit */
       if (sig > 9) [[unlikely]] {
          return false;
@@ -187,31 +188,31 @@ namespace glz::detail
       }
       goto digi_intg_more; /* read more digits in integral part */
       /* process first non-digit character */
-#define expr_sepr(i)                                           \
-   digi_sepr_##i : if ((!digi_is_fp(uint8_t(cur[i])))) [[likely]]       \
-   {                                                           \
-      cur += i;                                                \
-      val = sig;                                   \
-      return true;                                             \
-   }                                                           \
-   dot_pos = cur + i;                                          \
-   if ((cur[i] == '.')) [[likely]] {                           \
-      if (sig == 0)                                            \
-         while (cur[frac_zeros + i + 1] == zero) ++frac_zeros; \
-      goto digi_frac_##i;                                      \
-   }                                                           \
-   cur += i;                                                   \
-   sig_end = cur;                                              \
+#define expr_sepr(i)                                              \
+   digi_sepr_##i : if ((!digi_is_fp(uint8_t(cur[i])))) [[likely]] \
+   {                                                              \
+      cur += i;                                                   \
+      val = sig;                                                  \
+      return true;                                                \
+   }                                                              \
+   dot_pos = cur + i;                                             \
+   if ((cur[i] == '.')) [[likely]] {                              \
+      if (sig == 0)                                               \
+         while (cur[frac_zeros + i + 1] == zero) ++frac_zeros;    \
+      goto digi_frac_##i;                                         \
+   }                                                              \
+   cur += i;                                                      \
+   sig_end = cur;                                                 \
    goto digi_exp_more;
       repeat_in_1_18(expr_sepr)
 #undef expr_sepr
       /* read fraction part */
-#define expr_frac(i)                                                                                              \
+#define expr_frac(i)                                                                                 \
    digi_frac_##i : if (((num_tmp = uint64_t(cur[i + 1 + frac_zeros] - zero)) <= 9)) [[likely]] sig = \
-                      num_tmp + sig * 10;                                                                         \
-   else                                                                                                           \
-   {                                                                                                              \
-      goto digi_stop_##i;                                                                                         \
+                      num_tmp + sig * 10;                                                            \
+   else                                                                                              \
+   {                                                                                                 \
+      goto digi_stop_##i;                                                                            \
    }
          repeat_in_1_18(expr_frac)
 #undef expr_frac
@@ -281,7 +282,8 @@ namespace glz::detail
       sig_end = cur;
       exp_sig = -int32_t((cur - dot_pos) - 1);
       if constexpr (force_conformance) {
-         if (exp_sig == 0) [[unlikely]] return false;
+         if (exp_sig == 0) [[unlikely]]
+            return false;
       }
       if ((e_bit | *cur) != 'e') [[likely]] {
          if ((exp_sig < F64_MIN_DEC_EXP - 19)) [[unlikely]] {
@@ -346,12 +348,12 @@ namespace glz::detail
       exp = exp_sig;
       /* all digit read finished */
    digi_finish:
-      
+
       if (exp <= -20) [[unlikely]] {
          val = T(0);
          return true;
       }
-      
+
       val = static_cast<T>(sig);
       if (exp >= 0) {
          val *= T(powers_of_ten_int[exp]);
