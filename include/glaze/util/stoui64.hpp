@@ -318,12 +318,10 @@ namespace glz::detail
       if ((cur - tmp >= 6)) [[unlikely]] {
          if (sig == 0 || exp_sign) {
             val = 0;
-            val = static_cast<T>(sig);
             return true;
          }
          else {
-            val = std::numeric_limits<T>::infinity();
-            return true;
+            return false;
          }
       }
       exp_sig += exp_sign ? -exp_lit : exp_lit;
