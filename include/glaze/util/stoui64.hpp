@@ -48,7 +48,7 @@ namespace glz::detail
       auto end_digit = digits.begin() + digits_length;
       const auto buffer_available = std::distance(c, end);
       auto consume_digits = [&] {
-         if (buffer_available > 31) {
+         if (buffer_available > N) {
             while (next_digit < end_digit) {
                uint64_t chunk;
                std::memcpy(&chunk, c, 8);
