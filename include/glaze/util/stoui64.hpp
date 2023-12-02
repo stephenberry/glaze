@@ -150,7 +150,7 @@ namespace glz::detail
    inline bool parse_int(T& val, const CharType*& cur) noexcept
    {
       const CharType* sig_cut{}; // significant part cutting position for long number
-      const CharType* sig_end{}; // significant part ending position
+      [[maybe_unused]] const CharType* sig_end{}; // significant part ending position
       const CharType* dot_pos{}; // decimal point position
       uint32_t frac_zeros = 0;
       uint64_t sig = uint64_t(*cur - '0'); // significant part of the number
