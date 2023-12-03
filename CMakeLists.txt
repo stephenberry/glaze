@@ -16,17 +16,20 @@ add_library(glaze::glaze ALIAS glaze_glaze)
 
 option(OPTIMIZE "Add optimization flags to compiler and linker" OFF)
 
-if(OPTIMIZE)
-  if (MSVC)
-    string(REGEX MATCH "\/cl(.exe)?$" matched_cl ${CMAKE_CXX_COMPILER})
-    if (matched_cl)
-      # for a C++ standards compliant preprocessor, not needed for clang-cl
-      target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /GL /permissive- /Zc:lambda)
-      target_link_options(glaze_glaze INTERFACE /LTCG /INCREMENTAL:NO)
-     endif()
-  else()
-    target_compile_options(glaze_glaze INTERFACE "-Wno-missing-braces")
-  endif()
+if (MSVC)
+  string(REGEX MATCH "\/cl(.exe)?$" matched_cl ${CMAKE_CXX_COMPILER})
+  if (matched_cl)
+    # for a C++ standards compliant preprocessor, not needed for clang-cl
+    target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /permissive- /Zc:lambda)
+    target_link_options(glaze_glaze INTERFACE /INCREMENTAL:NO)
+    
+    if(OPTIMIZE)
+      target_compile_options(glaze_glaze INTERFACE /GL)
+      target_link_options(glaze_glaze INTERFACE /LTCG)
+    endif()
+   endif()
+else()
+  target_compile_options(glaze_glaze INTERFACE "-Wno-missing-braces")
 endif()
 
 set_property(TARGET glaze_glaze PROPERTY EXPORT_NAME glaze)
