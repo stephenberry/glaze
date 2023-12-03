@@ -1987,7 +1987,7 @@ suite write_tests = [] {
       expect(s == glz::sv{R"({"c":211.2})"});
 
       // map as array using single adapter
-      glz::write_json(glz::prefer_array_adapter<decltype(nullable)>{m}, s);
+      glz::write_json(glz::prefer_array_adapter{m}, s);
       expect(s == R"([["a",2.2],["b",11.111],["c",211.2]])");
 
       glz::write_json(glz::prefer_array_adapter<decltype(nullable)>{nullable}, s);

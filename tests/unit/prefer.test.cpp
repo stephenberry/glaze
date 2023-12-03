@@ -10,6 +10,7 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
+#include <vector>
 //
 #include <boost/ut.hpp>
 
@@ -32,229 +33,432 @@ using ut::operator>>;
 //    }
 // }
 
-// template <typename T>
-// consteval void assert_range_adaptor_types(const T&) noexcept
-// {
-//    static_assert(std::input_iterator<typename T::iterator>);
-//    static_assert(std::input_iterator<typename T::const_iterator>);
-//    static_assert(glz::detail::array_t<T>);
-//    static_assert(glz::detail::readable_array_t<T>);
-//    static_assert(!glz::detail::writable_array_t<T>);
-// }
-
 template <typename T>
-consteval void assert_range_adaptor_types(T&) noexcept
+consteval void assert_range_adaptor_types() noexcept
 {
-   if constexpr (!std::same_as<typename T::iterator, typename T::const_iterator>) {
-      static_assert(std::output_iterator<typename T::iterator, typename T::value_type>);
-   }
+   static_assert(std::input_iterator<typename T::iterator>);
    static_assert(std::input_iterator<typename T::const_iterator>);
    static_assert(glz::detail::array_t<T>);
-   static_assert(glz::detail::readable_array_t<T>);
    static_assert(glz::detail::writable_array_t<T>);
+   if constexpr (std::same_as<typename T::iterator, typename T::const_iterator>) {
+      // readable_array_t does not check the readability of elements, merely that glaze can read it
+      // static_assert(!glz::detail::readable_array_t<T>);
+      static_assert(glz::detail::array_t<T>);
+   }
+   else {
+      static_assert(glz::detail::readable_array_t<T>);
+      static_assert(std::output_iterator<typename T::iterator, typename T::value_type>);
+   }
 }
 
-consteval void assert_pair_adaptor_deduction() noexcept
+// consteval void assert_pair_adaptor_deduced_types() noexcept
+// {
+//    // Ensure type deduction of pair type produces proper reference members in adaptors
+//    { // pair
+//       std::pair<int, int> pair{1, 2};
+//       glz::prefer_array_adapter a{pair};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a)::tuple_type>, int&>);
+//
+//       glz::prefer_array_adapter a_r{std::move(pair)};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_r)::tuple_type>, int&&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_r)::tuple_type>, int&&>);
+//    }
+//    { // const-pair
+//       const std::pair<int, int> const_pair{1, 2};
+//       glz::prefer_array_adapter a{const_pair};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a)::tuple_type>, const int&>);
+//    }
+//    { // pair of const
+//       std::pair<int, const int> pair_of_const_1{1, 2};
+//       std::pair<const int, int> pair_of_const_2{1, 2};
+//       glz::prefer_array_adapter a_1{pair_of_const_1};
+//       glz::prefer_array_adapter a_2{pair_of_const_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, int&>);
+//    }
+//    { // pair of ref
+//       int i{1};
+//       std::pair<int&, int> pair_of_ref_1{i, 2};
+//       std::pair<int, int&> pair_of_ref_2{2, i};
+//       glz::prefer_array_adapter a_1{pair_of_ref_1};
+//       glz::prefer_array_adapter a_2{pair_of_ref_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, int&>);
+//
+//       glz::prefer_array_adapter a_r_1{std::move(pair_of_ref_1)};
+//       glz::prefer_array_adapter a_r_2{std::move(pair_of_ref_2)};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_r_1)::tuple_type>, int&&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_r_1)::tuple_type>, int&&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_r_2)::tuple_type>, int&&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_r_2)::tuple_type>, int&&>);
+//    }
+//    { // cosnt pair of ref
+//       int i{1};
+//       const std::pair<int&, int> const_pair_of_ref_1{i, 2};
+//       const std::pair<int, int&> const_pair_of_ref_2{2, i};
+//       glz::prefer_array_adapter a_1{const_pair_of_ref_1};
+//       glz::prefer_array_adapter a_2{const_pair_of_ref_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, const int&>);
+//    }
+//    { // const pair of const ref
+//       int i{1};
+//       const std::pair<const int&, int> const_pair_of_cref_1{i, 2};
+//       const std::pair<int, const int&> const_pair_of_cref_2{2, i};
+//       glz::prefer_array_adapter a_1{const_pair_of_cref_1};
+//       glz::prefer_array_adapter a_2{const_pair_of_cref_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, const int&>);
+//    }
+//    { // rref-pair
+//       std::pair<int, int> pair{1, 2};
+//       glz::prefer_array_adapter a{std::move(pair)};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a)::tuple_type>, int&&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a)::tuple_type>, int&&>);
+//    }
+//    { // pair of rref
+//       int first{1};
+//       int second{2};
+//       std::pair<int&&, int> pair_of_rref_1{std::move(first), 2};
+//       std::pair<int, int&&> pair_of_rref_2{1, std::move(second)};
+//       glz::prefer_array_adapter a_1{pair_of_rref_1};
+//       glz::prefer_array_adapter a_2{pair_of_rref_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, const int&>);
+//    }
+// }
+//
+// consteval void assert_pair_adaptor_explicit_types() noexcept
+// {
+//    std::pair<int, int> pair{1, 2};
+//    { // type
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<int, int>> a{pair};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a)::tuple_type>, int&>);
+//    }
+//    { // ref
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<int, int>&> a{pair};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a)::tuple_type>, int&>);
+//    }
+//    { // const
+//       [[maybe_unused]] glz::prefer_array_adapter<const std::pair<int, int>> a{pair};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a)::tuple_type>, const int&>);
+//    }
+//    { // const-ref
+//       [[maybe_unused]] glz::prefer_array_adapter<const std::pair<int, int>&> a{pair};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a)::tuple_type>, const int&>);
+//    }
+//    { // r-ref
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<int, int>&&> a{std::move(pair)};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a)::tuple_type>, int&&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a)::tuple_type>, int&&>);
+//    }
+//
+//    std::pair<int, const int> pair_of_const_1{1, 2};
+//    std::pair<const int, int> pair_of_const_2{1, 2};
+//    { // type
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<int, const int>> a_1{pair_of_const_1};
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<const int, int>> a_2{pair_of_const_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, int&>);
+//    }
+//
+//    { // ref
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<int, const int>&> a_1{pair_of_const_1};
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<const int, int>&> a_2{pair_of_const_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, int&>);
+//    }
+//
+//    { // const
+//       [[maybe_unused]] glz::prefer_array_adapter<const std::pair<int, const int>> a_1{pair_of_const_1};
+//       [[maybe_unused]] glz::prefer_array_adapter<const std::pair<const int, int>> a_2{pair_of_const_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, const int&>);
+//    }
+//
+//    { // const-ref
+//       [[maybe_unused]] glz::prefer_array_adapter<const std::pair<int, const int>> a_1{pair_of_const_1};
+//       [[maybe_unused]] glz::prefer_array_adapter<const std::pair<const int, int>> a_2{pair_of_const_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, const int&>);
+//    }
+//
+//    int pair_of_ref_i{1};
+//    std::pair<int&, int> pair_of_ref_1{pair_of_ref_i, 2};
+//    std::pair<int, int&> pair_of_ref_2{2, pair_of_ref_i};
+//    { // type
+//       [[maybe_unused]] [[maybe_unused]] glz::prefer_array_adapter<std::pair<int&, int>> a_1{pair_of_ref_1};
+//       [[maybe_unused]] [[maybe_unused]] glz::prefer_array_adapter<std::pair<int, int&>> a_2{pair_of_ref_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, int&>);
+//    }
+//    { // ref
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<int&, int>&> a_1{pair_of_ref_1};
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<int, int&>&> a_2{pair_of_ref_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, int&>);
+//    }
+//    { // const
+//       [[maybe_unused]] glz::prefer_array_adapter<const std::pair<int&, int>> a_1{pair_of_ref_1};
+//       [[maybe_unused]] glz::prefer_array_adapter<const std::pair<int, int&>> a_2{pair_of_ref_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, const int&>);
+//    }
+//    { // const-ref
+//       [[maybe_unused]] glz::prefer_array_adapter<const std::pair<int&, int>&> a_1{pair_of_ref_1};
+//       [[maybe_unused]] glz::prefer_array_adapter<const std::pair<int, int&>&> a_2{pair_of_ref_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, const int&>);
+//    }
+//    { // r-ref
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<int&, int>&&> a_1{std::move(pair_of_ref_1)};
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<int, int&>&&> a_2{std::move(pair_of_ref_2)};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, int&&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, int&&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, int&&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, int&&>);
+//    }
+//
+//    int pair_of_cref_i{1};
+//    std::pair<const int&, int> pair_of_cref_1{pair_of_cref_i, 2};
+//    std::pair<int, const int&> pair_of_cref_2{2, pair_of_cref_i};
+//    { // type
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<const int&, int>> a_1{pair_of_cref_1};
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<int, const int&>> a_2{pair_of_cref_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, const int&>);
+//    }
+//    { // ref
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<const int&, int>&> a_1{pair_of_cref_1};
+//       [[maybe_unused]] glz::prefer_array_adapter<std::pair<int, const int&>&> a_2{pair_of_cref_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, const int&>);
+//    }
+//    { // const
+//       [[maybe_unused]] glz::prefer_array_adapter<const std::pair<const int&, int>> a_1{pair_of_cref_1};
+//       [[maybe_unused]] glz::prefer_array_adapter<const std::pair<int, const int&>> a_2{pair_of_cref_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, const int&>);
+//    }
+//    { // const-ref
+//       [[maybe_unused]] glz::prefer_array_adapter<const std::pair<const int&, int>&> a_1{pair_of_cref_1};
+//       [[maybe_unused]] glz::prefer_array_adapter<const std::pair<int, const int&>&> a_2{pair_of_cref_2};
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, const int&>);
+//       static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, const int&>);
+//    }
+// }
+template <typename Pair>
+void pair_construction_assertions(Pair test_pair)
 {
-   {
-   std::pair<int, int> pair{1, 2};
-   glz::prefer_array_adapter a{pair};
-   static_assert(std::same_as<std::tuple_element_t<0, decltype(a)::tuple_type>, int&>);
-   static_assert(std::same_as<std::tuple_element_t<1, decltype(a)::tuple_type>, int&>);
+   { // CTAD
+      glz::prefer_array_adapter as_array(test_pair);
+      ut::expect(as_array == test_pair);
+      ut::expect(get<0>(as_array) == test_pair.first);
+      ut::expect(get<1>(as_array) == test_pair.second);
+
+      const glz::prefer_array_adapter as_const_array(test_pair);
+      ut::expect(as_const_array == test_pair);
+      ut::expect(get<0>(as_const_array) == test_pair.first);
+      ut::expect(get<1>(as_const_array) == test_pair.second);
+
+      glz::prefer_array_adapter as_array_clone{as_array};
+      ut::expect(get<0>(as_array_clone) == get<0>(as_array));
+      ut::expect(get<1>(as_array_clone) == get<1>(as_array));
+
+      glz::prefer_array_adapter as_const_array_clone{as_const_array};
+      ut::expect(get<0>(as_const_array_clone) == get<0>(as_const_array));
+      ut::expect(get<1>(as_const_array_clone) == get<1>(as_const_array));
    }
+   { // explicit template type
+      glz::prefer_array_adapter<Pair> as_array(test_pair);
+      ut::expect(as_array == test_pair);
+      ut::expect(get<0>(as_array) == test_pair.first);
+      ut::expect(get<1>(as_array) == test_pair.second);
 
-   {
-   const std::pair<int, int> const_pair{1, 2};
-   glz::prefer_array_adapter a{const_pair};
-   static_assert(std::same_as<std::tuple_element_t<0, decltype(a)::tuple_type>, const int&>);
-   static_assert(std::same_as<std::tuple_element_t<1, decltype(a)::tuple_type>, const int&>);
-   }
+      const glz::prefer_array_adapter<Pair> as_const_array(test_pair);
+      ut::expect(as_const_array == test_pair);
+      ut::expect(get<0>(as_const_array) == test_pair.first);
+      ut::expect(get<1>(as_const_array) == test_pair.second);
 
+      glz::prefer_array_adapter<Pair> as_array_clone{as_array};
+      ut::expect(get<0>(as_array_clone) == get<0>(as_array));
+      ut::expect(get<1>(as_array_clone) == get<1>(as_array));
 
-   {
-   std::pair<int, const int> pair_of_const_1{1, 2};
-   std::pair<const int, int> pair_of_const_2{1, 2};
-   glz::prefer_array_adapter a_1{pair_of_const_1};
-   glz::prefer_array_adapter a_2{pair_of_const_2};
-   static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, int&>);
-   static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, const int&>);
-   static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, const int&>);
-   static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, int&>);
-   }
-
-   {
-   int i{1};
-   std::pair<int&, int> pair_of_ref_1{i, 2};
-   std::pair<int, int&> pair_of_ref_2{2, i};
-   glz::prefer_array_adapter a_1{pair_of_ref_1};
-   glz::prefer_array_adapter a_2{pair_of_ref_2};
-   static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, int&>);
-   static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, int&>);
-   static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, int&>);
-   static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, int&>);
-   }
-
-   {
-   int i{1};
-   const std::pair<int&, int> const_pair_of_ref_1{i, 2};
-   const std::pair<int, int&> const_pair_of_ref_2{2, i};
-   glz::prefer_array_adapter a_1{const_pair_of_ref_1};
-   glz::prefer_array_adapter a_2{const_pair_of_ref_2};
-   static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, const int&>);
-   static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, const int&>);
-   static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, const int&>);
-   static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, const int&>);
-   }
-
-   {
-   int i{1};
-   const std::pair<const int&, int> const_pair_of_cref_1{i, 2};
-   const std::pair<int, const int&> const_pair_of_cref_2{2, i};
-   glz::prefer_array_adapter a_1{const_pair_of_cref_1};
-   glz::prefer_array_adapter a_2{const_pair_of_cref_2};
-   static_assert(std::same_as<std::tuple_element_t<0, decltype(a_1)::tuple_type>, const int&>);
-   static_assert(std::same_as<std::tuple_element_t<1, decltype(a_1)::tuple_type>, const int&>);
-   static_assert(std::same_as<std::tuple_element_t<0, decltype(a_2)::tuple_type>, const int&>);
-   static_assert(std::same_as<std::tuple_element_t<1, decltype(a_2)::tuple_type>, const int&>);
+      glz::prefer_array_adapter<Pair> as_const_array_clone{as_const_array};
+      ut::expect(get<0>(as_const_array_clone) == get<0>(as_const_array));
+      ut::expect(get<1>(as_const_array_clone) == get<1>(as_const_array));
    }
 }
 
-// ut::suite pair_array_adaptors = [] {
-//    std::pair<int, int> pair{4, 5};
-//    std::pair<int&, int> ref_pair{pair.first, 8};
-//    std::pair<const int&, int> const_ref_pair{pair.first, 8};
-//    std::pair<const int, int> map_value_pair{pair.first, 8};
-//
-//    // Note: accepting a reference to the pair does not modify the first/second_type.
-//    ut::test("construct & mutate array adapter") = []<typename Test_pair>(Test_pair& pair) {
-//       static_assert(!std::is_reference_v<Test_pair>);
-//       static_assert(glz::detail::pair_t<Test_pair>);
-//       static_assert(glz::detail::pair_t<Test_pair&&>);
-//       static_assert(glz::detail::pair_t<const Test_pair&>);
-//       static_assert(!glz::detail::writable_map_t<Test_pair>);
-//       static_assert(!glz::detail::readable_map_t<Test_pair>);
-//
-//       auto assertions = []<typename PUT>(PUT pair_under_test) {
-//          glz::prefer_array_adapter as_array(pair_under_test);
-//          ut::expect(as_array == pair_under_test);
-//          ut::expect(as_array == pair_under_test);
-//
-//          int different_first_int{909};
-//          int different_second_int{808};
-//          const PUT another_pair{different_first_int, different_second_int};
-//          glz::prefer_array_adapter<const PUT> constructed_from_adapter{another_pair};
-//          ut::expect(std::get<0>(constructed_from_adapter) == 909);
-//          ut::expect(std::get<1>(constructed_from_adapter) == 808);
-//
-//          const glz::prefer_array_adapter as_const_array(pair_under_test);
-//          ut::expect(as_const_array == pair_under_test);
-//          ut::expect(as_const_array == pair_under_test);
-//       };
-//
-//       ut::test("across qualifications") =
-//          assertions | std::tuple<Test_pair&, const Test_pair&, Test_pair>{pair, pair, pair};
-//
-//       ut::test("as r-ref (can't parameterize)") = [&pair, &assertions] {
-//          Test_pair&& rref_pair{Test_pair{pair}};
-//          assertions(rref_pair);
-//       };
-//
-//       ut::test("mutate through adapter") = [&pair] {
-//          auto pair_copy = pair;
-//          glz::prefer_array_adapter as_array(pair_copy);
-//          ut::expect(as_array == pair_copy);
-//
-//          std::get<1>(as_array) = 7777;
-//          ut::expect(std::get<1>(as_array) = 7777);
-//          ut::expect(std::get<1>(pair_copy) = 7777);
-//       };
-//    } | std::tuple(pair, ref_pair, const_ref_pair, map_value_pair);
-//
-//    ut::test("assign pair adapter") = []<typename Test_pair>(Test_pair pair) {
-//       const glz::prefer_array_adapter as_array{pair};
-//
-//       int different_first_int{909};
-//       int different_second_int{808};
-//       Test_pair another_pair{different_first_int, different_second_int};
-//
-//       glz::prefer_array_adapter assignee{pair};
-//       assignee = another_pair;
-//       ut::expect(std::get<0>(assignee) == 909);
-//       ut::expect(std::get<1>(assignee) == 808);
-//       ut::expect(std::get<0>(pair) == 909);
-//       ut::expect(std::get<1>(pair) == 808);
-//    } | std::tuple(pair, ref_pair);
-// };
-//
-// ut::suite range_array_adaptors = [] {
-//    std::map<int, int> map{{4, 5}, {6, 7}};
-//    std::map<int, int> empty_map{};
-//    std::list<std::pair<int, int>> pair_list{{4, 5}, {4, 5}};
-//
-//    ut::test("construct array adapter from containers") = []<typename Test_map>(Test_map& map) {
-//       static_assert(!std::is_reference_v<Test_map>);
-//       static_assert(glz::detail::readable_map_t<Test_map> || glz::detail::writable_map_t<Test_map>);
-//       static_assert(glz::detail::readable_map_t<Test_map&&> || glz::detail::writable_map_t<Test_map&&>);
-//       static_assert(glz::detail::readable_map_t<const Test_map&> || glz::detail::writable_map_t<const Test_map&>);
-//       static_assert(!glz::detail::pair_t<Test_map>);
-//       static_assert(!glz::detail::pair_t<Test_map>);
-//
-//       auto assertions = [](auto map_under_test) {
-//          glz::prefer_array_adapter as_array(map_under_test);
-//          ut::expect(ut::that % as_array.size() == map_under_test.size());
-//          ut::expect((as_array.size() == map_under_test.size()) >> ut::fatal);
-//          ut::expect(std::equal(map_under_test.begin(), map_under_test.end(), as_array.begin()));
-//
-//          const glz::prefer_array_adapter as_const_array(map_under_test);
-//          ut::expect(ut::that % as_const_array.size() == map_under_test.size());
-//          ut::expect((as_const_array.size() == map_under_test.size()) >> ut::fatal);
-//          ut::expect(std::equal(map_under_test.begin(), map_under_test.end(), as_const_array.begin()));
-//       };
-//
-//       ut::test("across qualifications") = assertions | std::tuple<Test_map&, const Test_map&, Test_map>{map, map,
-//       map};
-//
-//       ut::test("as r-ref (can't parameterize)") = [&map, &assertions] {
-//          Test_map&& rref_map{Test_map{map}};
-//          assertions(rref_map);
-//       };
-//    } | std::tuple(map, empty_map, pair_list);
-//
-// #ifdef __cpp_lib_ranges
-//    ut::test("construct array adapter from view") = [] {
-//       // reading views are non-const operations. Split out from test parameterization to assert only non-const
-//
-//       auto as_tuples = std::views::transform([](const auto& pair) { return std::tie(pair.first, pair.second); });
-//       auto sized_view = std::ranges::iota_view{0, 5} | std::views::transform([](auto i) { return std::pair(i, i); });
-//       static_assert(std::ranges::sized_range<decltype(sized_view)>);
-//
-//       ut::test("sized view") = [&as_tuples, &sized_view]() mutable {
-//          auto view_tuples = sized_view | as_tuples; // for comparisons
-//
-//          glz::prefer_array_adapter as_array(sized_view);
-//          ut::expect(ut::that % as_array.size() == sized_view.size());
-//          ut::expect(std::ranges::equal(view_tuples, as_array));
-//
-//          const glz::prefer_array_adapter as_const_array(sized_view);
-//          ut::expect(ut::that % as_const_array.size() == sized_view.size());
-//          ut::expect(std::ranges::equal(view_tuples, as_const_array));
-//       };
-//
-//       ut::test("unsized view") = [&as_tuples, &sized_view]() mutable {
-//          auto unsized_view = sized_view | std::views::filter([](const auto& pair) { return pair.first % 2 == 0; });
-//          auto view_tuples = unsized_view | as_tuples; // for comparisons
-//          static_assert(!std::ranges::sized_range<decltype(unsized_view)>);
-//
-//          glz::prefer_array_adapter as_array{unsized_view};
-//          ut::expect(std::ranges::equal(view_tuples, as_array));
-//
-//          const glz::prefer_array_adapter as_const_array{unsized_view};
-//          ut::expect(std::ranges::equal(view_tuples, as_const_array));
-//       };
-//    };
-// #endif
-//
-//    // TODO: assign array adapter
-// };
+template <typename Map>
+void container_construction_assertions(Map test_map)
+{
+   { // CTAD
+      glz::prefer_array_adapter as_array(test_map);
+      assert_range_adaptor_types<decltype(as_array)>();
+      ut::expect(ut::that % as_array.size() == test_map.size());
+      ut::expect((as_array.size() == test_map.size()) >> ut::fatal);
+      ut::expect(std::equal(test_map.begin(), test_map.end(), as_array.begin()));
 
-int main() { assert_pair_adaptor_deduction(); }
+      const glz::prefer_array_adapter as_const_array(test_map);
+      assert_range_adaptor_types<decltype(as_const_array)>();
+      ut::expect(ut::that % as_const_array.size() == test_map.size());
+      ut::expect((as_const_array.size() == test_map.size()) >> ut::fatal);
+      ut::expect(std::equal(test_map.begin(), test_map.end(), as_const_array.begin()));
+
+      glz::prefer_array_adapter as_array_clone{as_array};
+      ut::expect(std::ranges::equal(as_array_clone, as_array_clone));
+
+      glz::prefer_array_adapter as_const_array_clone{as_const_array};
+      ut::expect(std::ranges::equal(as_const_array_clone, as_const_array));
+   }
+   { // explicit template type
+      glz::prefer_array_adapter<Map> as_array(test_map);
+      assert_range_adaptor_types<decltype(as_array)>();
+      ut::expect(ut::that % as_array.size() == test_map.size());
+      ut::expect((as_array.size() == test_map.size()) >> ut::fatal);
+      ut::expect(std::equal(test_map.begin(), test_map.end(), as_array.begin()));
+
+      const glz::prefer_array_adapter<Map> as_const_array(test_map);
+      assert_range_adaptor_types<decltype(as_const_array)>();
+      ut::expect(ut::that % as_const_array.size() == test_map.size());
+      ut::expect((as_const_array.size() == test_map.size()) >> ut::fatal);
+      ut::expect(std::equal(test_map.begin(), test_map.end(), as_const_array.begin()));
+
+      glz::prefer_array_adapter<Map> as_array_clone{as_array};
+      ut::expect(std::ranges::equal(as_array_clone, as_array_clone));
+
+      glz::prefer_array_adapter<Map> as_const_array_clone{as_const_array};
+      ut::expect(std::ranges::equal(as_const_array_clone, as_const_array));
+   }
+}
+
+ut::suite pair_array_adaptors = [] {
+   std::pair<int, int> pair{4, 5};
+   std::pair<int&, int> ref_pair{pair.first, 8};
+   std::pair<const int&, int> const_ref_pair{pair.first, 8};
+   std::pair<const int, int> map_value_pair{pair.first, 8};
+
+   // Note: accepting a reference to the pair does not modify the first/second_type.
+   ut::test("construct & mutate array adapter") = []<typename Test_pair>(Test_pair& pair) {
+      static_assert(!std::is_reference_v<Test_pair>);
+      static_assert(glz::detail::pair_t<Test_pair>);
+      static_assert(glz::detail::pair_t<Test_pair&&>);
+      static_assert(glz::detail::pair_t<const Test_pair&>);
+      static_assert(!glz::detail::writable_map_t<Test_pair>);
+      static_assert(!glz::detail::readable_map_t<Test_pair>);
+
+      pair_construction_assertions<Test_pair&>(pair);
+      pair_construction_assertions<const Test_pair&>(pair);
+      pair_construction_assertions<Test_pair>(pair);
+      pair_construction_assertions<Test_pair&&>(std::move(pair));
+
+      ut::test("mutate through adapter") = [&pair] {
+         auto pair_copy = pair;
+         glz::prefer_array_adapter as_array(pair_copy);
+         ut::expect(as_array == pair_copy);
+         ut::expect(get<0>(as_array) == pair_copy.first);
+         ut::expect(get<1>(as_array) == pair_copy.second);
+
+         get<1>(as_array) = 7777;
+         ut::expect(get<1>(as_array) = 7777);
+         ut::expect(get<1>(pair_copy) = 7777);
+      };
+   } | std::tuple(pair, ref_pair, const_ref_pair, map_value_pair);
+};
+
+ut::suite range_array_adaptors = [] {
+   std::map<int, int> map{{4, 5}, {6, 7}};
+   std::map<int, int> empty_map{};
+   std::vector<std::pair<int, int>> pair_vec{{4, 5}, {4, 5}};
+   std::list<std::pair<int, int>> pair_list{{4, 5}, {4, 5}};
+
+   ut::test("construct array adapter from containers") = []<typename Test_map>(Test_map& map) {
+      static_assert(!std::is_reference_v<Test_map>);
+      static_assert(glz::detail::readable_map_t<Test_map> || glz::detail::writable_map_t<Test_map>);
+      static_assert(glz::detail::readable_map_t<Test_map&&> || glz::detail::writable_map_t<Test_map&&>);
+      static_assert(glz::detail::readable_map_t<const Test_map&> || glz::detail::writable_map_t<const Test_map&>);
+      static_assert(!glz::detail::pair_t<Test_map>);
+      static_assert(!glz::detail::pair_t<Test_map>);
+
+      container_construction_assertions<Test_map&>(map);
+      container_construction_assertions<const Test_map&>(map);
+      container_construction_assertions<Test_map>(map);
+      container_construction_assertions<Test_map&&>(std::move(map));
+   } | std::tuple(map, empty_map, pair_vec, pair_list);
+#ifdef __cpp_lib_ranges
+   ut::test("construct array adapter from view") = [] {
+      // reading views are non-const operations. Split out from test parameterization to assert only non-const
+
+      auto sized_view = std::ranges::iota_view{0, 5} | std::views::transform([](auto i) { return std::pair(i, i); });
+      static_assert(std::ranges::sized_range<decltype(sized_view)>);
+
+      ut::test("sized view") = [&sized_view]() mutable {
+         glz::prefer_array_adapter as_array(sized_view);
+         ut::expect(ut::that % as_array.size() == sized_view.size());
+         ut::expect(std::equal(sized_view.begin(), sized_view.end(), as_array.begin()));
+
+         const glz::prefer_array_adapter as_const_array(sized_view);
+         ut::expect(ut::that % as_const_array.size() == sized_view.size());
+         ut::expect(std::equal(sized_view.begin(), sized_view.end(), as_const_array.begin()));
+      };
+
+      ut::test("unsized view") = [&sized_view]() mutable {
+         auto unsized_view = sized_view | std::views::filter([](const auto& pair) { return pair.first % 2 == 0; });
+         static_assert(!std::ranges::sized_range<decltype(unsized_view)>);
+
+         glz::prefer_array_adapter as_array{unsized_view};
+         ut::expect(std::equal(unsized_view.begin(), unsized_view.end(), as_array.begin()));
+
+         const glz::prefer_array_adapter as_const_array{unsized_view};
+         ut::expect(std::equal(unsized_view.begin(), unsized_view.end(), as_const_array.begin()));
+      };
+   };
+#endif
+};
+
+int main()
+{
+   // assert_pair_adaptor_deduced_types();
+   // assert_pair_adaptor_explicit_types();
+}
