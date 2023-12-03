@@ -19,20 +19,53 @@ using ut::operator|;
 using ut::operator>>;
 
 template <typename T>
-consteval void assert_range_adaptor_types() noexcept
+consteval void assert_pair_adapter_types() noexcept
 {
-   static_assert(std::input_iterator<typename T::iterator>);
-   static_assert(std::input_iterator<typename T::const_iterator>);
+   static_assert(!std::is_reference_v<T>, "Assertions internally test reference variaions. Provide value type");
+   static_assert(glz::detail::tuple_t<T>);
+   static_assert(glz::detail::tuple_t<T&>);
+   static_assert(glz::detail::tuple_t<T&&>);
+   static_assert(!glz::detail::pair_t<T>);
+   static_assert(!glz::detail::writable_map_t<T>);
+   static_assert(!glz::detail::writable_map_t<const T>);
+   static_assert(!glz::detail::writable_map_t<const T&>);
+   static_assert(!glz::detail::writable_map_t<T&>);
+   static_assert(!glz::detail::writable_map_t<T&&>);
+   static_assert(!glz::detail::readable_map_t<T>);
+   static_assert(!glz::detail::readable_map_t<T&>);
+   static_assert(!glz::detail::readable_map_t<T&&>);
+}
+
+template <typename T>
+consteval void assert_range_adapter_types() noexcept
+{
+   static_assert(!std::is_reference_v<T>, "Assertions internally test reference variaions. Provide value type");
    static_assert(glz::detail::array_t<T>);
    static_assert(glz::detail::writable_array_t<T>);
+   static_assert(glz::detail::writable_array_t<const T>);
+   static_assert(glz::detail::writable_array_t<const T&>);
+   static_assert(glz::detail::writable_array_t<T&>);
+   static_assert(glz::detail::writable_array_t<T&&>);
+   static_assert(!glz::detail::writable_map_t<T>);
+   static_assert(!glz::detail::writable_map_t<const T>);
+   static_assert(!glz::detail::writable_map_t<const T&>);
+   static_assert(!glz::detail::writable_map_t<T&>);
+   static_assert(!glz::detail::writable_map_t<T&&>);
+   static_assert(!glz::detail::readable_map_t<T>);
+   static_assert(!glz::detail::readable_map_t<T&>);
+   static_assert(!glz::detail::readable_map_t<T&&>);
+
+   static_assert(std::input_iterator<typename T::iterator>);
+   static_assert(std::input_iterator<typename T::const_iterator>);
    if constexpr (std::same_as<typename T::iterator, typename T::const_iterator>) {
       // glz::readable_array_t does not check the readability of elements. It merely that glaze is allowed to read it.
       // static_assert(!glz::detail::readable_array_t<T>);
-      static_assert(glz::detail::array_t<T>);
       static_assert(!std::output_iterator<typename T::iterator, typename T::value_type>);
    }
    else {
       static_assert(glz::detail::readable_array_t<T>);
+      static_assert(glz::detail::readable_array_t<T&>);
+      static_assert(glz::detail::readable_array_t<T&&>);
       static_assert(std::output_iterator<typename T::iterator, typename T::value_type>);
    }
 }
@@ -41,25 +74,28 @@ consteval void assert_range_adaptor_types() noexcept
 // TODO: update assertion functions to construct from r-value, not the x-value
 // TODO: maybe move into members of adapters
 
-
 template <typename Pair>
 void pair_construction_assertions(Pair test_pair)
 {
    glz::prefer_array_adapter as_array(test_pair);
+   assert_pair_adapter_types<decltype(as_array)>();
    ut::expect(as_array == test_pair);
    ut::expect(get<0>(as_array) == test_pair.first);
    ut::expect(get<1>(as_array) == test_pair.second);
 
    const glz::prefer_array_adapter as_const_array(test_pair);
+   assert_pair_adapter_types<decltype(as_const_array)>();
    ut::expect(as_const_array == test_pair);
    ut::expect(get<0>(as_const_array) == test_pair.first);
    ut::expect(get<1>(as_const_array) == test_pair.second);
 
    glz::prefer_array_adapter as_array_clone{as_array};
+   assert_pair_adapter_types<decltype(as_array_clone)>();
    ut::expect(get<0>(as_array_clone) == get<0>(as_array));
    ut::expect(get<1>(as_array_clone) == get<1>(as_array));
 
    glz::prefer_array_adapter as_const_array_clone{as_const_array};
+   assert_pair_adapter_types<decltype(as_const_array_clone)>();
    ut::expect(get<0>(as_const_array_clone) == get<0>(as_const_array));
    ut::expect(get<1>(as_const_array_clone) == get<1>(as_const_array));
 }
@@ -68,21 +104,23 @@ template <typename Map>
 void container_construction_assertions(Map test_map)
 {
    glz::prefer_array_adapter as_array(test_map);
-   assert_range_adaptor_types<decltype(as_array)>();
+   assert_range_adapter_types<decltype(as_array)>();
    ut::expect(ut::that % as_array.size() == test_map.size());
    ut::expect((as_array.size() == test_map.size()) >> ut::fatal);
    ut::expect(std::equal(test_map.begin(), test_map.end(), as_array.begin()));
 
    const glz::prefer_array_adapter as_const_array(test_map);
-   assert_range_adaptor_types<decltype(as_const_array)>();
+   assert_range_adapter_types<decltype(as_const_array)>();
    ut::expect(ut::that % as_const_array.size() == test_map.size());
    ut::expect((as_const_array.size() == test_map.size()) >> ut::fatal);
    ut::expect(std::equal(test_map.begin(), test_map.end(), as_const_array.begin()));
 
    glz::prefer_array_adapter as_array_clone{as_array};
+   assert_range_adapter_types<decltype(as_array_clone)>();
    ut::expect(std::ranges::equal(as_array_clone, as_array_clone));
 
    glz::prefer_array_adapter as_const_array_clone{as_const_array};
+   assert_range_adapter_types<decltype(as_const_array_clone)>();
    ut::expect(std::ranges::equal(as_const_array_clone, as_const_array));
 }
 
@@ -170,4 +208,8 @@ ut::suite range_array_adaptors = [] {
 #endif
 };
 
-int main() {}
+int main()
+{
+   auto num_view = std::views::iota(-2, 3) | std::views::transform([](const auto i) { return std::pair(i, i * i); });
+   // return glz::write_json(glz::prefer_array_adapter{num_view}).size();
+}

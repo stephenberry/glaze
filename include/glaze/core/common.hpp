@@ -514,7 +514,7 @@ namespace glz
 
       template <class T>
       concept tuple_t = requires(T t) {
-         std::tuple_size<T>::value;
+         std::tuple_size<std::remove_cvref_t<T>>::value;
          get<0>(t); // ADL
       } && !meta_value_t<T> && !range<T> && !pair_t<T>;
 
