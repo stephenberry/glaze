@@ -1649,90 +1649,47 @@ namespace glz
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
             constexpr auto num_members = std::tuple_size_v<meta_t<T>>;
-            // Only used if error_on_missing_keys = true
-            [[maybe_unused]] bit_array<num_members> fields{};
-
-            bool first = true;
-            while (true) {
-               if (*it == '}') [[unlikely]] {
+            if constexpr (glaze_object_t<T> && num_members == 0 && Opts.error_on_unknown_keys) {
+               if (*it == '}') [[likely]] {
                   ++it;
-                  if constexpr (Opts.error_on_missing_keys) {
-                     constexpr auto req_fields = required_fields<T, Opts>();
-                     if ((req_fields & fields) != req_fields) {
-                        ctx.error = error_code::missing_key;
-                     }
-                  }
                   return;
                }
-               else if (first) [[unlikely]]
-                  first = false;
-               else [[likely]] {
-                  match<','>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  skip_ws<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-               }
+               ctx.error = error_code::unknown_key;
+               return;
+            }
+            else {
+               // Only used if error_on_missing_keys = true
+               [[maybe_unused]] bit_array<num_members> fields{};
 
-               if constexpr (glaze_object_t<T> && num_members == 0) {
-                  // parsing to an empty object, but at this point the JSON presents keys
-                  const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-
-                  if constexpr (Opts.error_on_unknown_keys) {
-                     if constexpr (tag.sv().empty()) {
-                        std::advance(it, -int64_t(key.size()));
-                        ctx.error = error_code::unknown_key;
-                        return;
-                     }
-                     else if (key != tag.sv()) {
-                        std::advance(it, -int64_t(key.size()));
-                        ctx.error = error_code::unknown_key;
-                        return;
-                     }
-                  }
-                  else {
-                     parse_object_entry_sep<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
-               }
-               else if constexpr (glaze_object_t<T>) {
-                  const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-
-                  // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
-                  // whitespace and the colon must run after checking if the key exists
-
-                  static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
-                  if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
-                     parse_object_entry_sep<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
+               bool first = true;
+               while (true) {
+                  if (*it == '}') [[unlikely]] {
+                     ++it;
                      if constexpr (Opts.error_on_missing_keys) {
-                        // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
-                        // At the very least if we are going to do this add a get_index method to the maps and call
-                        // that
-                        auto index = member_it - frozen_map.begin();
-                        fields[index] = true;
+                        constexpr auto req_fields = required_fields<T, Opts>();
+                        if ((req_fields & fields) != req_fields) {
+                           ctx.error = error_code::missing_key;
+                        }
                      }
-                     std::visit(
-                        [&](auto&& member_ptr) {
-                           read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
-                        },
-                        member_it->second);
+                     return;
+                  }
+                  else if (first) [[unlikely]]
+                     first = false;
+                  else [[likely]] {
+                     match<','>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     skip_ws<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
-                  else [[unlikely]] {
+
+                  if constexpr (glaze_object_t<T> && num_members == 0) {
+                     // parsing to an empty object, but at this point the JSON presents keys
+                     const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+
                      if constexpr (Opts.error_on_unknown_keys) {
                         if constexpr (tag.sv().empty()) {
                            std::advance(it, -int64_t(key.size()));
@@ -1743,6 +1700,69 @@ namespace glz
                            std::advance(it, -int64_t(key.size()));
                            ctx.error = error_code::unknown_key;
                            return;
+                        }
+                     }
+                     else {
+                        parse_object_entry_sep<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+
+                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                  }
+                  else if constexpr (glaze_object_t<T>) {
+                     const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+
+                     // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
+                     // whitespace and the colon must run after checking if the key exists
+
+                     static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
+                     if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
+                        parse_object_entry_sep<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+
+                        if constexpr (Opts.error_on_missing_keys) {
+                           // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
+                           // At the very least if we are going to do this add a get_index method to the maps and call
+                           // that
+                           auto index = member_it - frozen_map.begin();
+                           fields[index] = true;
+                        }
+                        std::visit(
+                           [&](auto&& member_ptr) {
+                              read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
+                           },
+                           member_it->second);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                     else [[unlikely]] {
+                        if constexpr (Opts.error_on_unknown_keys) {
+                           if constexpr (tag.sv().empty()) {
+                              std::advance(it, -int64_t(key.size()));
+                              ctx.error = error_code::unknown_key;
+                              return;
+                           }
+                           else if (key != tag.sv()) {
+                              std::advance(it, -int64_t(key.size()));
+                              ctx.error = error_code::unknown_key;
+                              return;
+                           }
+                           else {
+                              // We duplicate this code to avoid generating unreachable code
+                              parse_object_entry_sep<Opts>(ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+
+                              read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+                           }
                         }
                         else {
                            // We duplicate this code to avoid generating unreachable code
@@ -1755,74 +1775,64 @@ namespace glz
                               return;
                         }
                      }
-                     else {
-                        // We duplicate this code to avoid generating unreachable code
+                  }
+                  else {
+                     // using k_t = std::conditional_t<heterogeneous_map<T>, sv, typename T::key_type>;
+                     using k_t = typename T::key_type;
+                     if constexpr (std::is_same_v<k_t, std::string>) {
+                        static thread_local k_t key;
+                        read<json>::op<Opts>(key, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+
+                        parse_object_entry_sep<Opts>(ctx, it, end);
+
+                        read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                     else if constexpr (str_t<k_t>) {
+                        k_t key;
+                        read<json>::op<Opts>(key, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+
                         parse_object_entry_sep<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                        read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                     else {
+                        k_t key_value{};
+                        if constexpr (glaze_enum_t<k_t>) {
+                           read<json>::op<Opts>(key_value, ctx, it, end);
+                        }
+                        else if constexpr (std::is_arithmetic_v<k_t>) {
+                           // prefer over quoted_t below to avoid double parsing of quoted_t
+                           read<json>::op<opt_true<Opts, &opts::quoted_num>>(key_value, ctx, it, end);
+                        }
+                        else {
+                           read<json>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<k_t>{key_value}, ctx, it, end);
+                        }
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+
+                        parse_object_entry_sep<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+
+                        read<json>::op<Opts>(value[key_value], ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }
                   }
+                  skip_ws<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
                }
-               else {
-                  // using k_t = std::conditional_t<heterogeneous_map<T>, sv, typename T::key_type>;
-                  using k_t = typename T::key_type;
-                  if constexpr (std::is_same_v<k_t, std::string>) {
-                     static thread_local k_t key;
-                     read<json>::op<Opts>(key, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     parse_object_entry_sep<Opts>(ctx, it, end);
-
-                     read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
-                  else if constexpr (str_t<k_t>) {
-                     k_t key;
-                     read<json>::op<Opts>(key, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     parse_object_entry_sep<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
-                  else {
-                     k_t key_value{};
-                     if constexpr (glaze_enum_t<k_t>) {
-                        read<json>::op<Opts>(key_value, ctx, it, end);
-                     }
-                     else if constexpr (std::is_arithmetic_v<k_t>) {
-                        // prefer over quoted_t below to avoid double parsing of quoted_t
-                        read<json>::op<opt_true<Opts, &opts::quoted_num>>(key_value, ctx, it, end);
-                     }
-                     else {
-                        read<json>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<k_t>{key_value}, ctx, it, end);
-                     }
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     parse_object_entry_sep<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     read<json>::op<Opts>(value[key_value], ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
-               }
-               skip_ws<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
             }
          }
       };
