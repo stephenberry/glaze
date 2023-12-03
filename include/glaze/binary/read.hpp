@@ -795,7 +795,7 @@ namespace glz
       };
 
       template <class T>
-         requires is_std_tuple<T>
+         requires tuple_t<T>
       struct from_binary<T> final
       {
          template <auto Opts>
@@ -811,7 +811,7 @@ namespace glz
             skip_compressed_int(it, end);
 
             using V = std::decay_t<T>;
-            for_each<std::tuple_size_v<V>>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+            for_each<std::tuple_size_v<V>>([&](auto I) { read<binary>::op<Opts>(get<I>(value), ctx, it, end); });
          }
       };
    }

@@ -575,7 +575,7 @@ namespace glz
       };
 
       template <class T>
-         requires is_std_tuple<std::decay_t<T>>
+         requires tuple<std::decay_t<T>>
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
@@ -587,7 +587,7 @@ namespace glz
             dump_compressed_int<N>(args...);
 
             using V = std::decay_t<T>;
-            for_each<std::tuple_size_v<V>>([&](auto I) { write<binary>::op<Opts>(std::get<I>(value), ctx, args...); });
+            for_each<std::tuple_size_v<V>>([&](auto I) { write<binary>::op<Opts>(get<I>(value), ctx, args...); });
          }
       };
    }

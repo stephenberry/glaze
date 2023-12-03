@@ -101,7 +101,7 @@ namespace glz
       };
 
       template <class T>
-         requires glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>
+         requires glaze_array_t<T> || tuple_t<T>
       struct from_ndjson<T>
       {
          template <auto Opts>
@@ -143,14 +143,11 @@ namespace glz
                if constexpr (I != 0) {
                   read_new_lines();
                }
-               if constexpr (is_std_tuple<T>) {
-                  read<json>::op<Opts>(std::get<I>(value), ctx, it, end);
-               }
                else if constexpr (glaze_array_t<T>) {
                   read<json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
                }
                else {
-                  read<json>::op<Opts>(glz::get<I>(value), ctx, it, end);
+                  read<json>::op<Opts>(get<I>(value), ctx, it, end);
                }
             });
          }
@@ -221,7 +218,7 @@ namespace glz
                   write<json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, std::forward<Args>(args)...);
                }
                else {
-                  write<json>::op<Opts>(glz::get<I>(value), ctx, std::forward<Args>(args)...);
+                  write<json>::op<Opts>(get<I>(value), ctx, std::forward<Args>(args)...);
                }
                constexpr bool needs_new_line = I < N - 1;
                if constexpr (needs_new_line) {
@@ -231,37 +228,6 @@ namespace glz
          }
       };
 
-      template <class T>
-         requires is_std_tuple<std::decay_t<T>>
-      struct to_ndjson<T>
-      {
-         template <auto Opts, class... Args>
-         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
-         {
-            static constexpr auto N = []() constexpr {
-               if constexpr (glaze_array_t<std::decay_t<T>>) {
-                  return std::tuple_size_v<meta_t<std::decay_t<T>>>;
-               }
-               else {
-                  return std::tuple_size_v<std::decay_t<T>>;
-               }
-            }();
-
-            using V = std::decay_t<T>;
-            for_each<N>([&](auto I) {
-               if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
-               }
-               else {
-                  write<json>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...);
-               }
-               constexpr bool needs_new_line = I < N - 1;
-               if constexpr (needs_new_line) {
-                  dump<'\n'>(std::forward<Args>(args)...);
-               }
-            });
-         }
-      };
    } // namespace detail
 
    template <class T, class Buffer>

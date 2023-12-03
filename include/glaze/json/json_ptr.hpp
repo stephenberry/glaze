@@ -149,7 +149,7 @@ namespace glz
                },
                member_array[index]);
          }
-         else if constexpr (tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>) {
+         else if constexpr (tuple_t<std::decay_t<T>>) {
             if (index >= std::tuple_size_v<std::decay_t<T>>) return false;
             auto tuple_element_ptr = get_runtime(value, index);
             return std::visit(

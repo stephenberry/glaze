@@ -1188,7 +1188,7 @@ namespace glz
       };
 
       template <class T>
-         requires glaze_array_t<T> || tuple_t<T> || is_std_tuple<T>
+         requires glaze_array_t<T> || tuple_t<T>
       struct from_json<T>
       {
          template <auto Opts>
@@ -1228,18 +1228,13 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
-               if constexpr (is_std_tuple<T>) {
-                  read<json>::op<ws_handled<Opts>()>(std::get<I>(value), ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-               }
                else if constexpr (glaze_array_t<T>) {
                   read<json>::op<ws_handled<Opts>()>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
                else {
-                  read<json>::op<ws_handled<Opts>()>(glz::get<I>(value), ctx, it, end);
+                  read<json>::op<ws_handled<Opts>()>(get<I>(value), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }

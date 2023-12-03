@@ -516,7 +516,7 @@ namespace glz
       concept tuple_t = requires(T t) {
          std::tuple_size<T>::value;
          get<0>(t); // ADL
-      } && !meta_value_t<T> && !range<T>;
+      } && !meta_value_t<T> && !range<T> && !pair_t<T>;
 
       template <class T>
       concept always_null_t =
@@ -653,14 +653,7 @@ namespace glz
          using value_t = typename tuple_ptr_variant<Tuple>::type;
          using tuple_ref = std::add_lvalue_reference_t<Tuple>;
          using getter_t = value_t (*)(tuple_ref);
-         return std::array<getter_t, std::tuple_size_v<Tuple>>{+[](tuple_ref t) -> value_t {
-            if constexpr (is_std_tuple<Tuple>) {
-               return &std::get<Is>(t);
-            }
-            else {
-               return &glz::get<Is>(t);
-            }
-         }...};
+         return std::array<getter_t, std::tuple_size_v<Tuple>>{+[](tuple_ref t) -> value_t { return &get<Is>(t); }...};
       }
 
       template <class Tuple>

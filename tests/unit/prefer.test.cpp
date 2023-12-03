@@ -41,6 +41,7 @@ consteval void assert_range_adaptor_types() noexcept
 // TODO: update assertion functions to construct from r-value, not the x-value
 // TODO: maybe move into members of adapters
 
+
 template <typename Pair>
 void pair_construction_assertions(Pair test_pair)
 {
