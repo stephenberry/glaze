@@ -14,15 +14,13 @@ include(cmake/variables.cmake)
 add_library(glaze_glaze INTERFACE)
 add_library(glaze::glaze ALIAS glaze_glaze)
 
-option(OPTIMIZE "Add optimization flags to compiler and linker" OFF)
-
 if (MSVC)
   string(REGEX MATCH "\/cl(.exe)?$" matched_cl ${CMAKE_CXX_COMPILER})
   if (matched_cl)
     # for a C++ standards compliant preprocessor, not needed for clang-cl
     target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /permissive- /Zc:lambda)
     
-    if(OPTIMIZE)
+    if(PROJECT_IS_TOP_LEVEL)
       target_compile_options(glaze_glaze INTERFACE /GL)
       target_link_options(glaze_glaze INTERFACE /LTCG /INCREMENTAL:NO)
     endif()
