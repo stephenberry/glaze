@@ -1102,19 +1102,25 @@ struct Read_map_test_case
    std::string_view input_json{R"(   { "as" : 1, "so" : 2, "make" : 3 } )"};
    std::string_view input_array_json{R"( [ [ "as", 1] , [so" ,2 ],[ "make",3] ])"};
 
-   Read_map_test_case(Map&& expected) : expected_map{std::move(expected)} {}
-   Read_map_test_case(Map&& expected, Map&& initial)
-      : expected_map{std::move(expected)}, initial_map{std::move(initial)}
-   {}
-   Read_map_test_case(Map&& expected, Map&& initial, const std::string_view input_json)
-      : Map{std::move(expected), std::move(initial)}, input_json{input_json}
-   {}
-
-   Read_map_test_case(Map&& expected, Map&& initial, const std::string_view input_json,
-                      const std::string_view input_array_json)
-      : Map{std::move(expected), std::move(initial), input_json}, input_array_json{input_array_json}
-   {}
+   // explicit Read_map_test_case(Map&& expected) : expected_map{std::move(expected)} {}
+   // Read_map_test_case(Map&& expected, Map&& initial)
+   //    : expected_map{std::move(expected)}, initial_map{std::move(initial)}
+   // {}
+   // Read_map_test_case(Map&& expected, Map&& initial, const std::string_view input_json)
+   //    : expected_map{std::move(expected)}, initial_map{std::move(initial)}, input_json{input_json}
+   // {}
+   //
+   // Read_map_test_case(Map&& expected, Map&& initial, const std::string_view input_json,
+   //                    const std::string_view input_array_json)
+   //    : expected_map{std::move(expected)},
+   //      initial_map{std::move(initial)},
+   //      input_json{input_json},
+   //      input_array_json{input_array_json}
+   // {}
 };
+
+// template <typename Mape, typename... T>
+// Read_pair_test_case(Map, Pair_value, std::string_view) -> Read_pair_test_case<Pair_key, Pair_value>;
 
 suite read_tests = [] {
    using namespace boost::ut;
@@ -1990,11 +1996,11 @@ suite write_tests = [] {
       glz::write_json(glz::prefer_array_adapter{m}, s);
       expect(s == R"([["a",2.2],["b",11.111],["c",211.2]])");
 
-      glz::write_json(glz::prefer_array_adapter<decltype(nullable)>{nullable}, s);
+      glz::write_json(glz::prefer_array_adapter{nullable}, s);
       expect(s == glz::sv{R"([["c",211.2]])"});
 
       // map as array recursively
-      glz::write_json(glz::prefer_arrays_t<decltype(nullable)>{m}, s);
+      glz::write_json(glz::prefer_arrays_t<decltype(nullable)>{nullable}, s);
       expect(s == R"([["a",2.2],["b",11.111],["c",211.2]])");
 
       glz::write_json(glz::prefer_arrays_t<decltype(nullable)>{nullable}, s);
@@ -2021,7 +2027,7 @@ suite write_tests = [] {
       [](const auto& test_case) {
          const std::pair value{test_case.key, test_case.value};
          const glz::prefer_array_adapter as_array{value};
-         expect(glz::write_json(value) == test_case.expected_json);
+         expect(glz::write_json(as_array) == test_case.expected_json);
       } |
       std::tuple{
          Write_pair_test_case{"key", "value", R"(["key","value"])"},

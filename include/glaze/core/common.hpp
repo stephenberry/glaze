@@ -515,7 +515,7 @@ namespace glz
       template <class T>
       concept tuple_t = requires(T t) {
          std::tuple_size<T>::value;
-         get<0>(t);
+         get<0>(t); // ADL
       } && !meta_value_t<T> && !range<T>;
 
       template <class T>

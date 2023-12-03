@@ -25,11 +25,10 @@ namespace glz
       {};
 
       template <auto Opts, class T, class Ctx, class B, class IX>
-      concept write_json_invocable =
-         requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-            to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                               std::forward<B>(b), std::forward<IX>(ix));
-         };
+      concept write_json_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+         to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                            std::forward<B>(b), std::forward<IX>(ix));
+      };
 
       template <>
       struct write<json>
@@ -777,7 +776,7 @@ namespace glz
                   write<json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
                else {
-                  write<json>::op<Opts>(glz::get<I>(value), ctx, args...);
+                  write<json>::op<Opts>(get<I>(value), ctx, args...);
                }
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {

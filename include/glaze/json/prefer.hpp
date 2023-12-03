@@ -26,32 +26,13 @@ namespace glz
    };
 
    template <typename T>
-   prefer_array_adapter(T&&) -> prefer_array_adapter<T&&>;
+   prefer_array_adapter(T&&) -> prefer_array_adapter<T>;
 
    template <detail::pair_t T>
    class prefer_array_adapter<T>
    {
      public:
       // no-ref to allow explicitly making non-ref
-      T adaptee;
-
-      [[nodiscard]] constexpr bool operator==(const prefer_array_adapter other) const noexcept
-      {
-         return adaptee == other.adaptee;
-      }
-
-      template <detail::pair_t Pair>
-      [[nodiscard]] constexpr friend bool operator==(const prefer_array_adapter adapter, const Pair& pair) noexcept
-         requires(std::equality_comparable_with<T, Pair>)
-      {
-         return adapter.adaptee == pair;
-      }
-   };
-
-   template <detail::pair_t T>
-   class prefer_array_adapter<T&&>
-   {
-     public:
       T adaptee;
 
       [[nodiscard]] constexpr bool operator==(const prefer_array_adapter other) const noexcept
@@ -234,14 +215,21 @@ namespace glz
    template <typename T>
    struct prefer_arrays_t
    {
-      T& val;
+      T val;
    };
 
    template <typename T>
    struct no_prefer_arrays_t
    {
-      T& val;
+      T val;
    };
+
+   template <typename T>
+   prefer_arrays_t(T&&) -> prefer_arrays_t<T>;
+
+   template <typename T>
+   no_prefer_arrays_t(T&&) -> no_prefer_arrays_t<T>;
+
    namespace detail
    {
       template <class T>
