@@ -78,11 +78,10 @@ namespace glz
                }
             }
          }
-         
+
          // This unknown key handler should not be given unescaped keys, that is for the user to handle.
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         GLZ_ALWAYS_INLINE static void handle_unknown(const sv& key, T&& value, Ctx&& ctx, It0&& it,
-                                                      It1&& end) noexcept
+         GLZ_ALWAYS_INLINE static void handle_unknown(const sv& key, T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
             using ValueType = std::decay_t<decltype(value)>;
             if constexpr (detail::has_unknown_reader<ValueType>) {
@@ -1331,7 +1330,7 @@ namespace glz
             ctx.current_file = current_file;
          }
       };
-      
+
       // TODO: count the maximum number of escapes that can be seen if error_on_unknown_keys is true
       template <glaze_object_t T>
       GLZ_ALWAYS_INLINE constexpr bool keys_may_contain_escape()
@@ -1497,7 +1496,8 @@ namespace glz
 
       // Key parsing for meta objects or variants of meta objects.
       // TODO We could expand this to compiletime known strings in general like enums
-      template <class T, auto Opts, string_literal tag = ""> requires (Opts.error_on_unknown_keys)
+      template <class T, auto Opts, string_literal tag = "">
+         requires(Opts.error_on_unknown_keys)
       GLZ_ALWAYS_INLINE std::string_view parse_object_key(is_context auto&& ctx, auto&& it, auto&& end)
       {
          // skip white space and escape characters and find the string
@@ -1583,10 +1583,11 @@ namespace glz
 
          return parse_unescaped_key(ctx, it, end);
       }
-      
+
       // This version is for when we do not error on unknown keys
       // We do not parse the quote here so that we can skip to unknown key handling if it doesn't exist
-      template <class T, opts Opts, string_literal tag = ""> requires (!Opts.error_on_unknown_keys)
+      template <class T, opts Opts, string_literal tag = "">
+         requires(!Opts.error_on_unknown_keys)
       GLZ_ALWAYS_INLINE std::string_view parse_object_key(is_context auto&& ctx, auto&& it, auto&& end)
       {
          // skip white space and escape characters and find the string
@@ -1759,7 +1760,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
-                  
+
                   if constexpr (glaze_object_t<T> && num_members == 0 && Opts.error_on_unknown_keys) {
                      static_assert(false_v<T>, "This should be unreachable");
                   }
@@ -1767,18 +1768,19 @@ namespace glz
                      match<'"'>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     
+
                      // parsing to an empty object, but at this point the JSON presents keys
-                     
-                     // Unknown key handler does not unescape keys or want unescaped keys. Unknown escaped keys are handled by the user.
-                     
+
+                     // Unknown key handler does not unescape keys or want unescaped keys. Unknown escaped keys are
+                     // handled by the user.
+
                      sv key;
                      const auto start = it;
                      while (true) {
                         skip_till_escape_or_quote(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        
+
                         if (*it == '"') [[likely]] {
                            key = {start, size_t(it - start)};
                            ++it;
@@ -1801,15 +1803,15 @@ namespace glz
                         return;
                   }
                   else if constexpr (glaze_object_t<T>) {
-                     std::conditional_t<Opts.error_on_unknown_keys, const sv, sv> key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
+                     std::conditional_t<Opts.error_on_unknown_keys, const sv, sv> key =
+                        parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
                      // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
                      // whitespace and the colon must run after checking if the key exists
-                     
-                     if constexpr (Opts.error_on_unknown_keys)
-                     {
+
+                     if constexpr (Opts.error_on_unknown_keys) {
                         static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
                         if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
                            parse_object_entry_sep<Opts>(ctx, it, end);
@@ -1818,8 +1820,8 @@ namespace glz
 
                            if constexpr (Opts.error_on_missing_keys) {
                               // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
-                              // At the very least if we are going to do this add a get_index method to the maps and call
-                              // that
+                              // At the very least if we are going to do this add a get_index method to the maps and
+                              // call that
                               auto index = member_it - frozen_map.begin();
                               fields[index] = true;
                            }
@@ -1856,20 +1858,20 @@ namespace glz
                      }
                      else {
                         static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
-                        
+
                         if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
                            match<'"'>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
-                           
+
                            parse_object_entry_sep<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
 
                            if constexpr (Opts.error_on_missing_keys) {
                               // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
-                              // At the very least if we are going to do this add a get_index method to the maps and call
-                              // that
+                              // At the very least if we are going to do this add a get_index method to the maps and
+                              // call that
                               auto index = member_it - frozen_map.begin();
                               fields[index] = true;
                            }
@@ -1883,15 +1885,16 @@ namespace glz
                         }
                         else [[unlikely]] {
                            it -= key.size(); // rewind to skip the potentially escaped key
-                           
-                           // Unknown key handler does not unescape keys or want unescaped keys. Unknown escaped keys are handled by the user.
-                           
+
+                           // Unknown key handler does not unescape keys or want unescaped keys. Unknown escaped keys
+                           // are handled by the user.
+
                            const auto start = it;
                            while (true) {
                               skip_till_escape_or_quote(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
-                              
+
                               if (*it == '"') [[likely]] {
                                  key = {start, size_t(it - start)};
                                  ++it;
@@ -1904,12 +1907,12 @@ namespace glz
                                  }
                               }
                            }
-                           
+
                            // We duplicate this code to avoid generating unreachable code
                            parse_object_entry_sep<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
-                          
+
                            read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;

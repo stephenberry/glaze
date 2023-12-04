@@ -170,7 +170,7 @@ namespace glz
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
             static constexpr auto num_members = std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
-            
+
             if constexpr (num_members == 0 && Options.error_on_unknown_keys) {
                if (*it == '}') [[likely]] {
                   ++it;

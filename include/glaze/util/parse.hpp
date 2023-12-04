@@ -302,8 +302,9 @@ namespace glz::detail
       ctx.error = error_code::unknown_key;
       return {};
    }
-   
-   template <opts Opts, uint32_t MinLength, uint32_t LengthRange> requires (!Opts.error_on_unknown_keys)
+
+   template <opts Opts, uint32_t MinLength, uint32_t LengthRange>
+      requires(!Opts.error_on_unknown_keys)
    [[nodiscard]] GLZ_ALWAYS_INLINE const sv parse_key_cx(auto&& it) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
