@@ -1585,7 +1585,7 @@ namespace glz
       
       // This version is for when we do not error on unknown keys
       // We do not parse the quote here so that we can skip to unknown key handling if it doesn't exist
-      template <class T, auto Opts, string_literal tag = ""> requires (!Opts.error_on_unknown_keys)
+      template <class T, opts Opts, string_literal tag = ""> requires (!Opts.error_on_unknown_keys)
       GLZ_ALWAYS_INLINE std::string_view parse_object_key(is_context auto&& ctx, auto&& it, auto&& end)
       {
          // skip white space and escape characters and find the string
@@ -1610,43 +1610,31 @@ namespace glz
                it = start;
                std::string& static_key = string_buffer();
                read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
+               --it; // revert the '"'
                return static_key;
             }
             else [[likely]] {
-               const sv key{start, size_t(it - start)};
-               ++it;
-               return key;
+               return {start, size_t(it - start)};
             }
          }
          else if constexpr (std::tuple_size_v<meta_t<T>> > 0) {
             static constexpr auto stats = key_stats<T, tag>();
-            if constexpr (stats.length_range < 16 && Opts.error_on_unknown_keys) {
+            if constexpr (stats.length_range < 16) {
                if ((it + stats.max_length) < end) [[likely]] {
                   if constexpr (stats.length_range == 0) {
-                     const sv key{it, stats.max_length};
+                     auto start = it;
                      it += stats.max_length;
-                     if (*it != '"') [[unlikely]] {
-                        ctx.error = error_code::unknown_key;
-                     }
-                     ++it;
-                     return key;
+                     return {start, stats.max_length};
                   }
                   else if constexpr (stats.length_range == 1) {
                      auto start = it;
                      it += stats.min_length;
                      if (*it == '"') {
-                        const sv key{start, size_t(it - start)};
-                        ++it;
-                        return key;
+                        return {start, size_t(it - start)};
                      }
                      else {
                         ++it;
-                        const sv key{start, size_t(it - start)};
-                        if (*it != '"') [[unlikely]] {
-                           ctx.error = error_code::unknown_key;
-                        }
-                        ++it;
-                        return key;
+                        return {start, size_t(it - start)};
                      }
                   }
                   else if constexpr (stats.length_range < 4) {
@@ -1654,16 +1642,13 @@ namespace glz
                      it += stats.min_length;
                      for (const auto e = it + stats.length_range + 1; it < e; ++it) {
                         if (*it == '"') {
-                           const sv key{start, size_t(it - start)};
-                           ++it;
-                           return key;
+                           return {start, size_t(it - start)};
                         }
                      }
-                     ctx.error = error_code::unknown_key;
-                     return {};
+                     return {start, size_t(it - start - 1)};
                   }
                   else {
-                     return parse_key_cx<stats.min_length, stats.length_range>(ctx, it);
+                     return parse_key_cx<Opts, stats.min_length, stats.length_range>(it);
                   }
                }
             }
@@ -1773,34 +1758,43 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
-
-                  if constexpr (glaze_object_t<T> && num_members == 0) {
+                  
+                  if constexpr (glaze_object_t<T> && num_members == 0 && Opts.error_on_unknown_keys) {
+                     static_assert(false_v<T>, "This should be unreachable");
+                  }
+                  else if constexpr (glaze_object_t<T> && num_members == 0) {
+                     match<'"'>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     
                      // parsing to an empty object, but at this point the JSON presents keys
-                     const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
+                     auto start = it;
+
+                     skip_till_escape_or_quote(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     
+                     sv key;
+                     if (*it == '\\') [[unlikely]] {
+                        // we don't optimize this currently because it would increase binary size significantly with the
+                        // complexity of generating escaped compile time versions of keys
+                        it = start;
+                        std::string& static_key = string_buffer();
+                        read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
+                        key = static_key;
+                     }
+                     else [[likely]] {
+                        key = {start, size_t(it - start)};
+                        ++it;
+                     }
+
+                     parse_object_entry_sep<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
-                     if constexpr (Opts.error_on_unknown_keys) {
-                        if constexpr (tag.sv().empty()) {
-                           std::advance(it, -int64_t(key.size()));
-                           ctx.error = error_code::unknown_key;
-                           return;
-                        }
-                        else if (key != tag.sv()) {
-                           std::advance(it, -int64_t(key.size()));
-                           ctx.error = error_code::unknown_key;
-                           return;
-                        }
-                     }
-                     else {
-                        parse_object_entry_sep<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-
-                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                     }
+                     read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                   }
                   else if constexpr (glaze_object_t<T>) {
                      const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
@@ -1809,30 +1803,31 @@ namespace glz
 
                      // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
                      // whitespace and the colon must run after checking if the key exists
+                     
+                     if constexpr (Opts.error_on_unknown_keys)
+                     {
+                        static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
+                        if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
+                           parse_object_entry_sep<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
 
-                     static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
-                     if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
-                        parse_object_entry_sep<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-
-                        if constexpr (Opts.error_on_missing_keys) {
-                           // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
-                           // At the very least if we are going to do this add a get_index method to the maps and call
-                           // that
-                           auto index = member_it - frozen_map.begin();
-                           fields[index] = true;
+                           if constexpr (Opts.error_on_missing_keys) {
+                              // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
+                              // At the very least if we are going to do this add a get_index method to the maps and call
+                              // that
+                              auto index = member_it - frozen_map.begin();
+                              fields[index] = true;
+                           }
+                           std::visit(
+                              [&](auto&& member_ptr) {
+                                 read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
+                              },
+                              member_it->second);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
                         }
-                        std::visit(
-                           [&](auto&& member_ptr) {
-                              read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
-                           },
-                           member_it->second);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                     }
-                     else [[unlikely]] {
-                        if constexpr (Opts.error_on_unknown_keys) {
+                        else [[unlikely]] {
                            if constexpr (tag.sv().empty()) {
                               std::advance(it, -int64_t(key.size()));
                               ctx.error = error_code::unknown_key;
@@ -1854,7 +1849,51 @@ namespace glz
                                  return;
                            }
                         }
-                        else {
+                     }
+                     else {
+                        static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
+                        
+                        if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
+                           match<'"'>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                           
+                           parse_object_entry_sep<Opts>(ctx, it, end);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+
+                           if constexpr (Opts.error_on_missing_keys) {
+                              // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
+                              // At the very least if we are going to do this add a get_index method to the maps and call
+                              // that
+                              auto index = member_it - frozen_map.begin();
+                              fields[index] = true;
+                           }
+                           std::visit(
+                              [&](auto&& member_ptr) {
+                                 read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
+                              },
+                              member_it->second);
+                           if (bool(ctx.error)) [[unlikely]]
+                              return;
+                        }
+                        else [[unlikely]] {
+                           it -= key.size(); // rewind to skip the potentially escaped key
+                           
+                           while (true) {
+                              skip_till_escape_or_quote(ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+                              
+                              if (*it == '"') [[likely]] {
+                                 ++it;
+                                 break;
+                              }
+                              else {
+                                 ++it;
+                              }
+                           }
+                           
                            // We duplicate this code to avoid generating unreachable code
                            parse_object_entry_sep<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
