@@ -274,8 +274,12 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(bool_t auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (Opts.quoted_num) {
-               skip_ws<Opts>(ctx, it, end);
+               skip_ws_no_pre_check<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                match<'"'>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
 
             if constexpr (!Opts.ws_handled) {
@@ -963,7 +967,7 @@ namespace glz
             match<'['>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws<Opts>(ctx, it, end);
+            skip_ws_no_pre_check<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -980,7 +984,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
                value.emplace(std::move(v));
-               skip_ws<Opts>(ctx, it, end);
+               skip_ws_no_pre_check<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                if (*it == ']') {
@@ -1011,7 +1015,7 @@ namespace glz
             match<'['>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws<Opts>(ctx, it, end);
+            skip_ws_no_pre_check<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -1035,12 +1039,12 @@ namespace glz
                read<json>::op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               skip_ws<Opts>(ctx, it, end);
+               skip_ws_no_pre_check<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                if (*it == ',') [[likely]] {
                   ++it;
-                  skip_ws<Opts>(ctx, it, end);
+                  skip_ws_no_pre_check<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
@@ -1068,12 +1072,12 @@ namespace glz
                   read<json>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-                  skip_ws<Opts>(ctx, it, end);
+                  skip_ws_no_pre_check<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                   if (*it == ',') [[likely]] {
                      ++it;
-                     skip_ws<Opts>(ctx, it, end);
+                     skip_ws_no_pre_check<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
@@ -1101,7 +1105,7 @@ namespace glz
       [[nodiscard]] GLZ_ALWAYS_INLINE size_t number_of_array_elements(is_context auto&& ctx, auto it,
                                                                       auto&& end) noexcept
       {
-         skip_ws<Opts>(ctx, it, end);
+         skip_ws_no_pre_check<Opts>(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return {};
 
@@ -1177,6 +1181,8 @@ namespace glz
             for (auto& x : value) {
                read<json>::op<Opts>(x, ctx, it, end);
                skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
                if (i < n - 1) {
                   match<','>(ctx, it, end);
                }
@@ -1211,7 +1217,7 @@ namespace glz
             match<'['>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws<Opts>(ctx, it, end);
+            skip_ws_no_pre_check<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -1223,7 +1229,7 @@ namespace glz
                   match<','>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-                  skip_ws<Opts>(ctx, it, end);
+                  skip_ws_no_pre_check<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
@@ -1479,19 +1485,25 @@ namespace glz
                   return;
             }
             match<'{'>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
          }
 
-         skip_ws<Opts>(ctx, it, end);
+         skip_ws_no_pre_check<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
       }
 
       template <glz::opts Opts>
       GLZ_ALWAYS_INLINE void parse_object_entry_sep(is_context auto& ctx, auto& it, const auto end)
       {
-         skip_ws<Opts>(ctx, it, end);
+         skip_ws_no_pre_check<Opts>(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
          match<':'>(ctx, it, end);
-         skip_ws<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         skip_ws_no_pre_check<Opts>(ctx, it, end);
       }
 
       // Key parsing for meta objects or variants of meta objects.
@@ -1704,7 +1716,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            skip_ws<Opts>(ctx, it, end);
+            skip_ws_no_pre_check<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -1756,7 +1768,7 @@ namespace glz
                      match<','>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     skip_ws<Opts>(ctx, it, end);
+                     skip_ws_no_pre_check<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
@@ -2154,7 +2166,7 @@ namespace glz
                                     read<json>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
                                     if (bool(ctx.error)) [[unlikely]]
                                        return;
-                                    skip_ws<Opts>(ctx, it, end);
+                                    skip_ws_no_pre_check<Opts>(ctx, it, end);
                                     if (bool(ctx.error)) [[unlikely]]
                                        return;
                                     if (!(*it == ',' || *it == '}')) {
@@ -2207,7 +2219,7 @@ namespace glz
                               read<json>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
-                              skip_ws<Opts>(ctx, it, end);
+                              skip_ws_no_pre_check<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
 
@@ -2262,7 +2274,7 @@ namespace glz
                         skip_value<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        skip_ws<Opts>(ctx, it, end);
+                        skip_ws_no_pre_check<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }
@@ -2326,7 +2338,7 @@ namespace glz
             match<'['>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws<Opts>(ctx, it, end);
+            skip_ws_no_pre_check<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
