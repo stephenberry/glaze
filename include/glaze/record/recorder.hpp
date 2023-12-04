@@ -124,11 +124,11 @@ namespace glz
             }
 
             if constexpr (!Options.opening_handled) {
-               skip_ws<Options>(ctx, it, end);
+               skip_ws_no_pre_check<Options>(ctx, it, end);
                match<'{'>(ctx, it, end);
             }
 
-            skip_ws<Options>(ctx, it, end);
+            skip_ws_no_pre_check<Options>(ctx, it, end);
 
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
