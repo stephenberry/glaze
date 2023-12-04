@@ -185,23 +185,107 @@ namespace glz
             }
          }
       };
-      
+
       constexpr uint16_t combine(const char chars[2]) noexcept
       {
-          return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8);
+         return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8);
       }
-      
-      constexpr std::array<uint16_t, 256> char_escape_table = { //
-         0, 0, 0, 0, 0, 0, 0, 0, combine(R"(\b)"), combine(R"(\t)"), //
-         combine(R"(\n)"),  0,  combine(R"(\f)"),  combine(R"(\r)"), 0, 0, 0, 0, 0, 0, //
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-         0, 0, 0, 0, combine(R"(\")"), 0, 0, 0, 0, 0, //
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-         0, 0, combine(R"(\\)") //
+
+      constexpr std::array<uint16_t, 256> char_escape_table = {
+         //
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         combine(R"(\b)"),
+         combine(R"(\t)"), //
+         combine(R"(\n)"),
+         0,
+         combine(R"(\f)"),
+         combine(R"(\r)"),
+         0,
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         0,
+         0,
+         combine(R"(\")"),
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         combine(R"(\\)") //
       };
 
       template <class T>
@@ -312,7 +396,7 @@ namespace glz
                               const auto length = (std::countr_zero(test_chars) >> 3);
                               c += length;
                               ix += length;
-                              
+
                               if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) [[likely]] {
                                  std::memcpy(data_ptr(b) + ix, &escaped, 2);
                               }
