@@ -14,6 +14,7 @@ include(cmake/variables.cmake)
 add_library(glaze_glaze INTERFACE)
 add_library(glaze::glaze ALIAS glaze_glaze)
 
+
 if (MSVC)
   string(REGEX MATCH "\/cl(.exe)?$" matched_cl ${CMAKE_CXX_COMPILER})
   if (matched_cl)
@@ -21,8 +22,12 @@ if (MSVC)
     target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /permissive- /Zc:lambda)
     
     if(PROJECT_IS_TOP_LEVEL)
-      target_compile_options(glaze_glaze INTERFACE /GL)
-      target_link_options(glaze_glaze INTERFACE /LTCG /INCREMENTAL:NO)
+      target_compile_options(glaze_glaze INTERFACE 
+        $<$<CONFIG:Release>:/GL>
+        $<$<CONFIG:MinSizeRel>:/GL>)
+      target_link_options(glaze_glaze INTERFACE 
+        $<$<CONFIG:Release>:/LTCG /INCREMENTAL:NO>
+        $<$<CONFIG:MinSizeRel>:/LTCG /INCREMENTAL:NO>)
     endif()
    endif()
 else()
