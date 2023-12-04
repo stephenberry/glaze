@@ -186,10 +186,12 @@ ut::suite range_array_adaptors = [] {
 
       ut::test("sized view") = [&sized_view]() mutable {
          glz::prefer_array_adapter as_array(sized_view);
+         assert_range_adapter_types<decltype(as_array)>();
          ut::expect(ut::that % as_array.size() == sized_view.size());
          ut::expect(std::equal(sized_view.begin(), sized_view.end(), as_array.begin()));
 
          const glz::prefer_array_adapter as_const_array(sized_view);
+         assert_range_adapter_types<decltype(as_const_array)>();
          ut::expect(ut::that % as_const_array.size() == sized_view.size());
          ut::expect(std::equal(sized_view.begin(), sized_view.end(), as_const_array.begin()));
       };
@@ -199,9 +201,11 @@ ut::suite range_array_adaptors = [] {
          static_assert(!std::ranges::sized_range<decltype(unsized_view)>);
 
          glz::prefer_array_adapter as_array{unsized_view};
+         assert_range_adapter_types<decltype(as_array)>();
          ut::expect(std::equal(unsized_view.begin(), unsized_view.end(), as_array.begin()));
 
          const glz::prefer_array_adapter as_const_array{unsized_view};
+         assert_range_adapter_types<decltype(as_const_array)>();
          ut::expect(std::equal(unsized_view.begin(), unsized_view.end(), as_const_array.begin()));
       };
    };
@@ -210,6 +214,7 @@ ut::suite range_array_adaptors = [] {
 
 int main()
 {
-   auto num_view = std::views::iota(-2, 3) | std::views::transform([](const auto i) { return std::pair(i, i * i); });
-   // return glz::write_json(glz::prefer_array_adapter{num_view}).size();
+   std::map<std::string_view, int> m;
+   glz::prefer_array_adapter a{m};
+   static_assert(std::ranges::input_range<decltype(a)>);
 }

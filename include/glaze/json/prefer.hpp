@@ -69,20 +69,27 @@ namespace glz
    namespace detail
    {
 
-#define _GLAZE_DETAIL_RANGE_COMMON_PREFER_ARRAY_TYPE_ALIASES(T)                                 \
-   using value_type = prefer_array_adapter<std::ranges::range_reference_t<T>>;                  \
-   using const_value_type = const value_type;                                                   \
-   using reference = value_type;                                                                \
-   using const_reference = const prefer_array_adapter<const std::ranges::range_reference_t<T>>; \
-   using size_type = std::size_t;                                                               \
+#define _GLAZE_DETAIL_RANGE_COMMON_PREFER_ARRAY_TYPE_ALIASES(T)                                                  \
+   using value_type = prefer_array_adapter<std::ranges::range_reference_t<T>>;                                   \
+   using const_value_type =                                                                                      \
+      prefer_array_adapter<std::conditional_t<std::is_lvalue_reference_v<std::ranges::range_reference_t<T>>,     \
+                                              const std::remove_reference_t<std::ranges::range_reference_t<T>>&, \
+                                              std::ranges::range_reference_t<T>>>;                               \
+   using reference = value_type;                                                                                 \
+   using const_reference = const_value_type;                                                                     \
+   using size_type = std::size_t;                                                                                \
    using difference_type = std::ptrdiff_t;
+
+      // need a common_reference b
 
       // Common facilities required by prefer_array_adapters for ranges
       template <typename T>
       struct range_common_prefer_array_adapter
       {
          _GLAZE_DETAIL_RANGE_COMMON_PREFER_ARRAY_TYPE_ALIASES(T)
-         std::conditional_t<std::is_rvalue_reference_v<T>, std::remove_cvref_t<T>, T&> map;
+
+         T map;
+         // std::conditional_t<std::is_rvalue_reference_v<T>, std::remove_cvref_t<T>, T&> map;
 
          [[nodiscard]] constexpr bool empty() const noexcept
             requires(empty_range(map))
@@ -169,6 +176,7 @@ namespace glz
 
      public:
       using value_type = typename common::const_value_type;
+      using const_value_type = typename common::const_value_type;
       using reference = typename common::const_reference;
       using const_reference = typename common::const_reference;
       using size_type = typename common::size_type;
@@ -193,6 +201,7 @@ namespace glz
 
      public:
       using value_type = typename common::value_type;
+      using const_value_type = typename common::const_value_type;
       using reference = typename common::reference;
       using const_reference = typename common::const_reference;
       using size_type = typename common::size_type;

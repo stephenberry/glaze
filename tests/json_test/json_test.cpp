@@ -2000,10 +2000,10 @@ suite write_tests = [] {
       expect(s == glz::sv{R"([["c",211.2]])"});
 
       // map as array recursively
-      glz::write_json(glz::prefer_arrays_t<decltype(nullable)>{nullable}, s);
+      glz::write_json(glz::prefer_arrays_t{nullable}, s);
       expect(s == R"([["a",2.2],["b",11.111],["c",211.2]])");
 
-      glz::write_json(glz::prefer_arrays_t<decltype(nullable)>{nullable}, s);
+      glz::write_json(glz::prefer_arrays_t{nullable}, s);
       expect(s == glz::sv{R"([["c",211.2]])"});
    };
 
@@ -2044,7 +2044,7 @@ suite write_tests = [] {
    "Write pair as array (recursive)"_test =
       [](const auto& test_case) {
          const std::pair value{test_case.key, test_case.value};
-         expect(glz::write_json(glz::prefer_arrays_t<decltype(value)>{value}) == test_case.expected_json);
+         expect(glz::write_json(glz::prefer_arrays_t{value}) == test_case.expected_json);
       } |
       std::tuple{
          Write_pair_test_case{"key", "value", R"(["key","value"])"},
