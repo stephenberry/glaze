@@ -78,9 +78,10 @@ namespace glz
                }
             }
          }
-
+         
+         // This unknown key handler should not be given unescaped keys, that is for the user to handle.
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
-         GLZ_ALWAYS_INLINE static void handle_unknown(const glz::sv& key, T&& value, Ctx&& ctx, It0&& it,
+         GLZ_ALWAYS_INLINE static void handle_unknown(const sv& key, T&& value, Ctx&& ctx, It0&& it,
                                                       It1&& end) noexcept
          {
             using ValueType = std::decay_t<decltype(value)>;
@@ -1768,24 +1769,27 @@ namespace glz
                         return;
                      
                      // parsing to an empty object, but at this point the JSON presents keys
-                     auto start = it;
-
-                     skip_till_escape_or_quote(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
+                     
+                     // Unknown key handler does not unescape keys or want unescaped keys. Unknown escaped keys are handled by the user.
                      
                      sv key;
-                     if (*it == '\\') [[unlikely]] {
-                        // we don't optimize this currently because it would increase binary size significantly with the
-                        // complexity of generating escaped compile time versions of keys
-                        it = start;
-                        std::string& static_key = string_buffer();
-                        read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
-                        key = static_key;
-                     }
-                     else [[likely]] {
-                        key = {start, size_t(it - start)};
-                        ++it;
+                     const auto start = it;
+                     while (true) {
+                        skip_till_escape_or_quote(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        
+                        if (*it == '"') [[likely]] {
+                           key = {start, size_t(it - start)};
+                           ++it;
+                           break;
+                        }
+                        else {
+                           ++it; // skip the escape
+                           if (*it == '"') {
+                              ++it; // skip the escaped quote
+                           }
+                        }
                      }
 
                      parse_object_entry_sep<Opts>(ctx, it, end);
@@ -1797,7 +1801,7 @@ namespace glz
                         return;
                   }
                   else if constexpr (glaze_object_t<T>) {
-                     const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
+                     std::conditional_t<Opts.error_on_unknown_keys, const sv, sv> key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
@@ -1880,17 +1884,24 @@ namespace glz
                         else [[unlikely]] {
                            it -= key.size(); // rewind to skip the potentially escaped key
                            
+                           // Unknown key handler does not unescape keys or want unescaped keys. Unknown escaped keys are handled by the user.
+                           
+                           const auto start = it;
                            while (true) {
                               skip_till_escape_or_quote(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
                               
                               if (*it == '"') [[likely]] {
+                                 key = {start, size_t(it - start)};
                                  ++it;
                                  break;
                               }
                               else {
-                                 ++it;
+                                 ++it; // skip the escape
+                                 if (*it == '"') {
+                                    ++it; // skip the escaped quote
+                                 }
                               }
                            }
                            
@@ -1898,7 +1909,7 @@ namespace glz
                            parse_object_entry_sep<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
-
+                          
                            read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
