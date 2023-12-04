@@ -142,7 +142,7 @@ namespace glz::detail
          }
       }
    }
-   
+
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws_no_pre_check(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
