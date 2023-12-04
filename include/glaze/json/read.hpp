@@ -1330,7 +1330,8 @@ namespace glz
             ctx.current_file = current_file;
          }
       };
-
+      
+      // TODO: count the maximum number of escapes that can be seen if error_on_unknown_keys is true
       template <glaze_object_t T>
       GLZ_ALWAYS_INLINE constexpr bool keys_may_contain_escape()
       {
