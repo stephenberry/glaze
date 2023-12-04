@@ -1668,7 +1668,9 @@ namespace glz
             }
          }
 
-         return parse_unescaped_key(ctx, it, end);
+         const sv key = parse_unescaped_key(ctx, it, end);
+         --it; // rewind to expose the quote
+         return key;
       }
 
       template <pair_t T>
