@@ -55,6 +55,7 @@ consteval void assert_range_adapter_types() noexcept
    static_assert(!glz::detail::readable_map_t<T&>);
    static_assert(!glz::detail::readable_map_t<T&&>);
 
+   static_assert(std::ranges::input_range<T>);
    static_assert(std::input_iterator<typename T::iterator>);
    static_assert(std::input_iterator<typename T::const_iterator>);
    if constexpr (std::same_as<typename T::iterator, typename T::const_iterator>) {
@@ -160,6 +161,7 @@ ut::suite pair_array_adaptors = [] {
 
 ut::suite range_array_adaptors = [] {
    std::map<int, int> map{{4, 5}, {6, 7}};
+   std::map<std::string, int> str_map{{"four", 5}, {"hello", 7}};
    std::map<int, int> empty_map{};
    std::vector<std::pair<int, int>> pair_vec{{4, 5}, {4, 5}};
    std::list<std::pair<int, int>> pair_list{{4, 5}, {4, 5}};
@@ -176,7 +178,7 @@ ut::suite range_array_adaptors = [] {
       container_construction_assertions<const Test_map&>(map);
       container_construction_assertions<Test_map>(map);
       container_construction_assertions<Test_map&&>(std::move(map));
-   } | std::tuple(map, empty_map, pair_vec, pair_list);
+   } | std::tuple(map, str_map, empty_map, pair_vec, pair_list);
 #ifdef __cpp_lib_ranges
    ut::test("construct array adapter from view") = [] {
       // reading views are non-const operations. Split out from test parameterization to assert only non-const
@@ -214,7 +216,18 @@ ut::suite range_array_adaptors = [] {
 
 int main()
 {
-   std::map<std::string_view, int> m;
+   using Common = std::common_type_t<
+            std::pair<const std::string_view, int>,
+            std::pair<const std::string_view, int>
+        >;
+    static_assert(std::same_as<
+        Common
+        ,
+            std::pair<const std::string_view, int>
+    >);
+
+   std::map<std::string, int> m;
    glz::prefer_array_adapter a{m};
+   // assert_range_adapter_types<decltype(a)>();
    static_assert(std::ranges::input_range<decltype(a)>);
 }

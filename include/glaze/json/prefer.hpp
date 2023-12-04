@@ -35,6 +35,11 @@ namespace glz
       // no-ref to allow explicitly making non-ref
       T adaptee;
 
+      operator T()
+      {
+         return adaptee;
+      }
+
       [[nodiscard]] constexpr bool operator==(const prefer_array_adapter other) const noexcept
       {
          return adaptee == other.adaptee;
@@ -351,6 +356,18 @@ namespace std
    struct tuple_element<1, glz::prefer_array_adapter<Pair>>
    {
       using type = typename std::remove_reference_t<Pair>::second_type;
+   };
+
+   template<typename T1, typename T2>
+   struct common_type<glz::prefer_array_adapter<T1>, glz::prefer_array_adapter<T2>>
+   {
+      using type = glz::prefer_array_adapter<common_reference_t<T1, T2>>;
+   };
+
+   template<typename T1, typename T2>
+   struct common_reference<glz::prefer_array_adapter<T1>, glz::prefer_array_adapter<T2>>
+   {
+      using type = glz::prefer_array_adapter<common_reference_t<T1, T2>>;
    };
 
 }
