@@ -1495,7 +1495,96 @@ namespace glz
 
       // Key parsing for meta objects or variants of meta objects.
       // TODO We could expand this to compiletime known strings in general like enums
-      template <class T, auto Opts, string_literal tag = "">
+      template <class T, auto Opts, string_literal tag = ""> requires (Opts.error_on_unknown_keys)
+      GLZ_ALWAYS_INLINE std::string_view parse_object_key(is_context auto&& ctx, auto&& it, auto&& end)
+      {
+         // skip white space and escape characters and find the string
+         if constexpr (!Opts.ws_handled) {
+            skip_ws<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return {};
+         }
+         match<'"'>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]]
+            return {};
+
+         if constexpr (keys_may_contain_escape<T>()) {
+            auto start = it;
+
+            skip_till_escape_or_quote(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return {};
+            if (*it == '\\') [[unlikely]] {
+               // we don't optimize this currently because it would increase binary size significantly with the
+               // complexity of generating escaped compile time versions of keys
+               it = start;
+               std::string& static_key = string_buffer();
+               read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
+               return static_key;
+            }
+            else [[likely]] {
+               const sv key{start, size_t(it - start)};
+               ++it;
+               return key;
+            }
+         }
+         else if constexpr (std::tuple_size_v<meta_t<T>> > 0) {
+            static constexpr auto stats = key_stats<T, tag>();
+            if constexpr (stats.length_range < 16 && Opts.error_on_unknown_keys) {
+               if ((it + stats.max_length) < end) [[likely]] {
+                  if constexpr (stats.length_range == 0) {
+                     const sv key{it, stats.max_length};
+                     it += stats.max_length;
+                     if (*it != '"') [[unlikely]] {
+                        ctx.error = error_code::unknown_key;
+                     }
+                     ++it;
+                     return key;
+                  }
+                  else if constexpr (stats.length_range == 1) {
+                     auto start = it;
+                     it += stats.min_length;
+                     if (*it == '"') {
+                        const sv key{start, size_t(it - start)};
+                        ++it;
+                        return key;
+                     }
+                     else {
+                        ++it;
+                        const sv key{start, size_t(it - start)};
+                        if (*it != '"') [[unlikely]] {
+                           ctx.error = error_code::unknown_key;
+                        }
+                        ++it;
+                        return key;
+                     }
+                  }
+                  else if constexpr (stats.length_range < 4) {
+                     auto start = it;
+                     it += stats.min_length;
+                     for (const auto e = it + stats.length_range + 1; it < e; ++it) {
+                        if (*it == '"') {
+                           const sv key{start, size_t(it - start)};
+                           ++it;
+                           return key;
+                        }
+                     }
+                     ctx.error = error_code::unknown_key;
+                     return {};
+                  }
+                  else {
+                     return parse_key_cx<stats.min_length, stats.length_range>(ctx, it);
+                  }
+               }
+            }
+         }
+
+         return parse_unescaped_key(ctx, it, end);
+      }
+      
+      // This version is for when we do not error on unknown keys
+      // We do not parse the quote here so that we can skip to unknown key handling if it doesn't exist
+      template <class T, auto Opts, string_literal tag = ""> requires (!Opts.error_on_unknown_keys)
       GLZ_ALWAYS_INLINE std::string_view parse_object_key(is_context auto&& ctx, auto&& it, auto&& end)
       {
          // skip white space and escape characters and find the string
