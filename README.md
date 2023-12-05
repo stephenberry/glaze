@@ -6,18 +6,24 @@ Glaze isn't just a JSON library. Glaze also supports:
 - [BEVE](https://github.com/stephenberry/beve) (binary efficient versatile encoding)
 - [CSV](https://en.wikipedia.org/wiki/Comma-separated_values#:~:text=Comma%2Dseparated%20values%20(CSV),commas%20in%20the%20CSV%20file.) (comma separated value)
 
+## Now with full compile time reflection for MSVC, Clang, and GCC!
+
+- No need to write `glz::meta` definitions unless you want to customize your reflection
+- Will be officially supported with version 1.9.0
+- Works on non-constexpr types!
+- Compile time reflection so we still get perfect hashing!
+
 ## Highlights
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
-- Simple registration
+- Pure, compile time reflection for structs
 - Standard C++ library support
 - Header only
 - Direct to memory serialization/deserialization
 - Compile time maps with constant time lookups and perfect hashing
 - Nearly zero intermediate allocations
-- Reflection for member object pointers
-- [Pure compile time reflection](./docs/pure-reflection.md) for aggregate, constexpr structs in Clang
+- Reflection for member object pointers when customizing
 - Powerful wrappers to modify read/write behavior ([Wrappers](./docs/wrappers.md))
 - Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
 - [Handle unknown keys](./docs/unknown-keys.md) in a fast and flexible manner
@@ -88,6 +94,7 @@ struct my_struct
   std::array<uint64_t, 3> arr = { 1, 2, 3 };
 };
 
+// The code below is not needed as of version 1.9.0
 template <>
 struct glz::meta<my_struct> {
    using T = my_struct;

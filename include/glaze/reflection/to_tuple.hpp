@@ -3,9 +3,6 @@
 
 #pragma once
 
-#if defined(__has_builtin)
-#if __has_builtin(__builtin_dump_struct)
-
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -16,16 +13,22 @@ namespace glz
    {
       struct any_t final
       {
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
          template <class T>
-         constexpr operator T()
-         {
-            if constexpr (std::is_default_constructible_v<T>) {
-               return T{};
-            }
-            else {
-               static_assert(false_v<T>, "Your type must be default constructible");
-            }
-         }
+         [[maybe_unused]] constexpr operator T();
+#pragma clang diagnostic pop
+#elif defined(_MSC_VER)
+      template <class T>
+      [[maybe_unused]] constexpr operator T();
+#else
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-declarations"
+      template <class T>
+      [[maybe_unused]] constexpr operator T();
+#pragma GCC diagnostic pop
+#endif
       };
 
       template <class T, class... Args>
@@ -201,6 +204,3 @@ namespace glz
       }
    }
 }
-
-#endif
-#endif
