@@ -16,14 +16,13 @@ Glaze isn't just a JSON library. Glaze also supports:
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
-- Simple registration
+- Pure, compile time reflection for structs
 - Standard C++ library support
 - Header only
 - Direct to memory serialization/deserialization
 - Compile time maps with constant time lookups and perfect hashing
 - Nearly zero intermediate allocations
-- Reflection for member object pointers
-- [Pure compile time reflection](./docs/pure-reflection.md) for aggregate, constexpr structs in Clang
+- Reflection for member object pointers when customizing
 - Powerful wrappers to modify read/write behavior ([Wrappers](./docs/wrappers.md))
 - Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
 - [Handle unknown keys](./docs/unknown-keys.md) in a fast and flexible manner
