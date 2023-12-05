@@ -12,10 +12,9 @@ namespace glz
 {
    namespace detail
    {
-      template <std::size_t N>
-      class fixed_string final
+      template <size_t N>
+      struct fixed_string final
       {
-        public:
          constexpr explicit(true) fixed_string(const auto... cs) : data{cs...} {}
          constexpr explicit(false) fixed_string(const char (&str)[N + 1]) { std::copy_n(str, N + 1, std::data(data)); }
          [[nodiscard]] constexpr auto operator<=>(const fixed_string&) const = default;
