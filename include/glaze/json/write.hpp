@@ -303,8 +303,8 @@ namespace glz
                      dump_unchecked<'"'>(b, ix);
 
                      if (!str.empty()) {
-                        auto c = str.cbegin();
-                        const auto e = c + n;
+                        const auto* c = str.data();
+                        const auto* const e = c + n;
 
                         for (const auto end_m7 = e - 7; c < end_m7;) {
                            auto* const chunk = reinterpret_cast<uint64_t*>(data_ptr(b) + ix);
