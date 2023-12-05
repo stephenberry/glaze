@@ -12,20 +12,6 @@ namespace glz
 {
    namespace detail
    {
-      template <size_t N>
-      struct fixed_string final
-      {
-         constexpr explicit(true) fixed_string(const auto... cs) : data{cs...} {}
-         constexpr explicit(false) fixed_string(const char (&str)[N + 1]) { std::copy_n(str, N + 1, std::data(data)); }
-         [[nodiscard]] constexpr auto operator<=>(const fixed_string&) const = default;
-         [[nodiscard]] constexpr explicit(false) operator std::string_view() const { return {std::data(data), N}; }
-         [[nodiscard]] constexpr auto size() const -> std::size_t { return N; }
-         std::array<char, N + 1> data{};
-      };
-
-      template <std::size_t N>
-      fixed_string(const char (&str)[N]) -> fixed_string<N - 1>;
-
       template <fixed_string Name>
       struct named final
       {
