@@ -190,7 +190,7 @@ namespace glz
       {
          return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8);
       }
-      
+
       // clang-format off
       constexpr std::array<uint16_t, 256> char_escape_table = { //
          0, 0, 0, 0, 0, 0, 0, 0, combine(R"(\b)"), combine(R"(\t)"), //

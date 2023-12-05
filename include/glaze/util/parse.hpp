@@ -73,7 +73,7 @@ namespace glz::detail
          ctx.error = error_code::expected_end_comment;
       }
    }
-   
+
    consteval uint64_t repeat_byte(char c)
    {
       const auto byte = uint8_t(c);
@@ -225,7 +225,7 @@ namespace glz::detail
          it = reinterpret_cast<std::decay_t<decltype(it)>>(pc);
          return;
       }
-      
+
       ctx.error = error_code::expected_quote;
    }
 
