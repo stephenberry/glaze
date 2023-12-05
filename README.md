@@ -702,22 +702,26 @@ The struct below shows the available options and the default behavior.
 
 ```c++
 struct opts {
-   uint32_t format = json;
-      bool comments = false; // Write out comments
-      bool error_on_unknown_keys = true; // Error when an unknown key is encountered
-      bool skip_null_members = true; // Skip writing out params in an object if the value is null
-      bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
-      bool prettify = false; // Write out prettified JSON
-      char indentation_char = ' '; // Prettified JSON indentation char
-      uint8_t indentation_width = 3; // Prettified JSON indentation size
-      bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
-      bool write_type_info = true; // Write type info for meta objects in variants
-      bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
-      bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
-                                          // skip_null_members = false to require nullable members
-      uint32_t layout = rowwise; // CSV row wise output/input
-      bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
-      bool number = false; // read numbers as strings and write these string as numbers
+  uint32_t format = json;
+  bool comments = false; // Write out comments
+  bool error_on_unknown_keys = true; // Error when an unknown key is encountered
+  bool skip_null_members = true; // Skip writing out params in an object if the value is null
+  bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
+  bool prettify = false; // Write out prettified JSON
+  char indentation_char = ' '; // Prettified JSON indentation char
+  uint8_t indentation_width = 3; // Prettified JSON indentation size
+  bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
+  bool write_type_info = true; // Write type info for meta objects in variants
+  bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
+  bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
+                                      // skip_null_members = false to require nullable members
+  bool error_on_const_read = false; // Error if attempt is made to read into a const value, by 
+                                    // default the value is skipped without error
+  uint32_t layout = rowwise; // CSV row wise output/input
+  bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
+  bool number = false; // read numbers as strings and write these string as numbers
+  bool raw = false; // write out string like values without quotes
+  bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
 };
 ```
 
