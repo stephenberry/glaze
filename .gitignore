@@ -3,6 +3,7 @@ out/
 **/bin/
 **/build*/
 **/lib*/
+**/_build*/
 
 # CMake spesific settings
 CMakeUserPresets.json

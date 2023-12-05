@@ -25,11 +25,16 @@ namespace glz
             }
          }
 #else
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wmissing-declarations"
+   #if defined(_MSC_VER)
          template <class T>
          [[maybe_unused]] constexpr operator T();
-#pragma GCC diagnostic pop
+   #else
+   #pragma GCC diagnostic push
+   #pragma GCC diagnostic ignored "-Wmissing-declarations"
+         template <class T>
+         [[maybe_unused]] constexpr operator T();
+   #pragma GCC diagnostic pop
+   #endif
 #endif
       };
 

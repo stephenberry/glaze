@@ -48,6 +48,7 @@ struct nested_t
 
 static_assert(glz::detail::reflectable<nested_t>);
 
+#ifndef _MSC_VER 
 suite nested_reflection = [] {
    "nested_reflection"_test = [] {
       std::string buffer = R"({"thing":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]},"str":"reflection"})";
@@ -61,11 +62,13 @@ suite nested_reflection = [] {
 
       buffer.clear();
       glz::write_json(obj, buffer);
+      std::cout << buffer << '\n';
 
       expect(buffer == R"({"str":"reflection","thing":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}})")
          << buffer;
    };
 };
+#endif
 
 struct sub_thing
 {

@@ -3,10 +3,6 @@
 
 #pragma once
 
-#if defined(_MSC_VER)
-// No MSVC pure reflection support yet
-#else
-
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/reflection/to_tuple.hpp"
@@ -88,15 +84,16 @@ namespace glz
       [[nodiscard]] consteval auto member_name_impl() -> std::string_view {
           //const auto name = std::string_view{std::source_location::current().function_name()};
           const std::string_view name = GLZ_PRETTY_FUNCTION;
-      #if defined(__clang__)
+#if defined(__clang__)
           const auto split = name.substr(0, name.find("}]"));
           return split.substr(split.find_last_of(".") + 1);
-      #elif defined(__GNUC__)
+#elif defined(__GNUC__)
           const auto split = name.substr(0, name.find(")}"));
-          return split.substr(split.find_last_of("::") + 1);
-      #elif defined(_MSC_VER)
-          return name;  // needs some adjustments here
-      #endif
+          return split.substr(split.find_last_of(":") + 1);
+#elif defined(_MSC_VER)
+          const auto split = name.substr(0, name.find_last_of("}"));
+          return split.substr(split.find_last_of(">") + 1);
+#endif
       }
       
       template <auto N>
@@ -568,5 +565,3 @@ namespace glz
       };
    }
 }
-
-#endif
