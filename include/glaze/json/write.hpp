@@ -217,97 +217,97 @@ namespace glz
                // TODO: Should we check if the string number is valid?
                dump(value, b, ix);
             }
-            else {
-               if constexpr (char_t<T>) {
-                  if constexpr (Opts.raw) {
-                     dump(value, b, ix);
-                  }
-                  else {
-                     dump<'"'>(b, ix);
-
-                     switch (value) {
-                     case '"':
-                        dump<"\\\"">(b, ix);
-                        break;
-                     case '\\':
-                        dump<"\\\\">(b, ix);
-                        break;
-                     case '\b':
-                        dump<"\\b">(b, ix);
-                        break;
-                     case '\f':
-                        dump<"\\f">(b, ix);
-                        break;
-                     case '\n':
-                        dump<"\\n">(b, ix);
-                        break;
-                     case '\r':
-                        dump<"\\r">(b, ix);
-                        break;
-                     case '\t':
-                        dump<"\\t">(b, ix);
-                        break;
-                     case '\0':
-                        // escape character treated as empty string
-                        break;
-                     default:
-                        // Hiding warning for build, this is an error with wider char types
-                        dump(static_cast<char>(value), b,
-                             ix); // TODO: This warning is an error We need to be able to dump wider char types
-                     }
-
-                     dump<'"'>(b, ix);
-                  }
+            else if constexpr (char_t<T>) {
+               if constexpr (Opts.raw) {
+                  dump(value, b, ix);
                }
                else {
-                  const sv str = [&]() -> sv {
-                     if constexpr (!detail::char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-                        return value ? value : "";
-                     }
-                     else {
-                        return value;
-                     }
-                  }();
-                  const auto n = str.size();
+                  dump<'"'>(b, ix);
 
-                  if constexpr (Opts.raw_string) {
-                     // We need at space for quotes and the string length: 2 + n.
-                     if constexpr (detail::resizeable<B>) {
-                        const auto k = ix + 2 + n;
-                        if (k >= b.size()) [[unlikely]] {
-                           b.resize((std::max)(b.size() * 2, k));
-                        }
-                     }
-                     // now we don't have to check writing
+                  switch (value) {
+                  case '"':
+                     dump<"\\\"">(b, ix);
+                     break;
+                  case '\\':
+                     dump<"\\\\">(b, ix);
+                     break;
+                  case '\b':
+                     dump<"\\b">(b, ix);
+                     break;
+                  case '\f':
+                     dump<"\\f">(b, ix);
+                     break;
+                  case '\n':
+                     dump<"\\n">(b, ix);
+                     break;
+                  case '\r':
+                     dump<"\\r">(b, ix);
+                     break;
+                  case '\t':
+                     dump<"\\t">(b, ix);
+                     break;
+                  case '\0':
+                     // escape character treated as empty string
+                     break;
+                  default:
+                     // Hiding warning for build, this is an error with wider char types
+                     dump(static_cast<char>(value), b,
+                          ix); // TODO: This warning is an error We need to be able to dump wider char types
+                  }
 
-                     dump_unchecked<'"'>(b, ix);
-                     dump_unchecked(str, b, ix);
-                     dump_unchecked<'"'>(b, ix);
+                  dump<'"'>(b, ix);
+               }
+            }
+            else {
+               const sv str = [&]() -> sv {
+                  if constexpr (!detail::char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
+                     return value ? value : "";
                   }
                   else {
-                     // In the case n == 0 we need two characters for quotes.
-                     // For each individual character we need room for two characters to handle escapes.
-                     // So, we need 2 + 2 * n characters to handle all cases.
-                     // We add another 8 characters to support SWAR
-                     if constexpr (detail::resizeable<B>) {
-                        const auto k = ix + 10 + 2 * n;
-                        if (k >= b.size()) [[unlikely]] {
-                           b.resize((std::max)(b.size() * 2, k));
-                        }
-                     }
-                     // now we don't have to check writing
+                     return value;
+                  }
+               }();
+               const auto n = str.size();
 
-                     if constexpr (Opts.raw) {
-                        dump(str, b, ix);
+               if constexpr (Opts.raw_string) {
+                  // We need at space for quotes and the string length: 2 + n.
+                  if constexpr (detail::resizeable<B>) {
+                     const auto k = ix + 2 + n;
+                     if (k >= b.size()) [[unlikely]] {
+                        b.resize((std::max)(b.size() * 2, k));
                      }
-                     else {
-                        dump_unchecked<'"'>(b, ix);
+                  }
+                  // now we don't have to check writing
 
-                        auto* c = str.data();
-                        const auto* e = c + n;
+                  dump_unchecked<'"'>(b, ix);
+                  dump_unchecked(str, b, ix);
+                  dump_unchecked<'"'>(b, ix);
+               }
+               else {
+                  // In the case n == 0 we need two characters for quotes.
+                  // For each individual character we need room for two characters to handle escapes.
+                  // So, we need 2 + 2 * n characters to handle all cases.
+                  // We add another 8 characters to support SWAR
+                  if constexpr (detail::resizeable<B>) {
+                     const auto k = ix + 10 + 2 * n;
+                     if (k >= b.size()) [[unlikely]] {
+                        b.resize((std::max)(b.size() * 2, k));
+                     }
+                  }
+                  // now we don't have to check writing
+
+                  if constexpr (Opts.raw) {
+                     dump(str, b, ix);
+                  }
+                  else {
+                     dump_unchecked<'"'>(b, ix);
+
+                     if (!str.empty()) {
+                        auto c = str.cbegin();
+                        const auto e = c + n;
 
                         for (const auto end_m7 = e - 7; c < end_m7;) {
-                           uint64_t* chunk = reinterpret_cast<uint64_t*>(data_ptr(b) + ix);
+                           auto* const chunk = reinterpret_cast<uint64_t*>(data_ptr(b) + ix);
                            std::memcpy(chunk, c, 8);
                            const uint64_t test_chars = has_quote(*chunk) | has_escape(*chunk) | is_less_16(*chunk);
                            if (test_chars) {
@@ -338,9 +338,9 @@ namespace glz
                               ++ix;
                            }
                         }
-
-                        dump_unchecked<'"'>(b, ix);
                      }
+
+                     dump_unchecked<'"'>(b, ix);
                   }
                }
             }
