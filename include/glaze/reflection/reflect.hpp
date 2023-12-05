@@ -5,78 +5,78 @@
 
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
-#include "glaze/reflection/to_tuple.hpp"
 #include "glaze/reflection/get_name.hpp"
+#include "glaze/reflection/to_tuple.hpp"
 
 namespace glz
 {
    namespace detail
    {
       template <std::size_t N>
-      class fixed_string final {
-         public:
-          constexpr explicit(true) fixed_string(const auto... cs) : data{cs...} {}
-          constexpr explicit(false) fixed_string(const char (&str)[N + 1]) {
-              std::copy_n(str, N + 1, std::data(data));
-          }
-          [[nodiscard]] constexpr auto operator<=>(const fixed_string&) const =
-              default;
-          [[nodiscard]] constexpr explicit(false) operator std::string_view() const {
-              return {std::data(data), N};
-          }
-          [[nodiscard]] constexpr auto size() const -> std::size_t { return N; }
-          std::array<char, N + 1> data{};
+      class fixed_string final
+      {
+        public:
+         constexpr explicit(true) fixed_string(const auto... cs) : data{cs...} {}
+         constexpr explicit(false) fixed_string(const char (&str)[N + 1]) { std::copy_n(str, N + 1, std::data(data)); }
+         [[nodiscard]] constexpr auto operator<=>(const fixed_string&) const = default;
+         [[nodiscard]] constexpr explicit(false) operator std::string_view() const { return {std::data(data), N}; }
+         [[nodiscard]] constexpr auto size() const -> std::size_t { return N; }
+         std::array<char, N + 1> data{};
       };
 
       template <std::size_t N>
       fixed_string(const char (&str)[N]) -> fixed_string<N - 1>;
 
       template <fixed_string Name>
-      struct named {
-          static constexpr std::string_view name = Name;
+      struct named
+      {
+         static constexpr std::string_view name = Name;
       };
-      
+
       template <class TPtr>
-      struct ptr {
-          const TPtr* ptr;
+      struct ptr
+      {
+         const TPtr* ptr;
       };
 
       template <class T>
       extern const T external;
 
       template <auto Ptr>
-      [[nodiscard]] consteval auto member_name_impl() -> std::string_view {
-          //const auto name = std::string_view{std::source_location::current().function_name()};
-          const std::string_view name = GLZ_PRETTY_FUNCTION;
+      [[nodiscard]] consteval auto member_name_impl() -> std::string_view
+      {
+         // const auto name = std::string_view{std::source_location::current().function_name()};
+         const std::string_view name = GLZ_PRETTY_FUNCTION;
 #if defined(__clang__)
-          const auto split = name.substr(0, name.find("}]"));
-          return split.substr(split.find_last_of(".") + 1);
+         const auto split = name.substr(0, name.find("}]"));
+         return split.substr(split.find_last_of(".") + 1);
 #elif defined(__GNUC__)
-          const auto split = name.substr(0, name.find(")}"));
-          return split.substr(split.find_last_of(":") + 1);
+         const auto split = name.substr(0, name.find(")}"));
+         return split.substr(split.find_last_of(":") + 1);
 #elif defined(_MSC_VER)
-          const auto split = name.substr(0, name.find_last_of("}"));
-          return split.substr(split.find_last_of(">") + 1);
+         const auto split = name.substr(0, name.find_last_of("}"));
+         return split.substr(split.find_last_of(">") + 1);
 #endif
       }
-      
+
       template <auto N>
-      [[nodiscard]] consteval auto nth(auto... args) {
-          return [&]<std::size_t... Ns>(std::index_sequence<Ns...>) {
-              return [](decltype((void*)Ns)..., auto* nth, auto*...) {
-                  return *nth;
-              }(&args...);
-          }(std::make_index_sequence<N>{});
+      [[nodiscard]] consteval auto nth(auto... args)
+      {
+         return [&]<std::size_t... Ns>(std::index_sequence<Ns...>) {
+            return [](decltype((void*)Ns)..., auto* nth, auto*...) { return *nth; }(&args...);
+         }(std::make_index_sequence<N>{});
       }
 
-      template <auto N, class T, size_t M = count_members<T>()> requires (M <= 14)
-      constexpr auto get_ptr(T&& t) {
+      template <auto N, class T, size_t M = count_members<T>()>
+         requires(M <= 14)
+      constexpr auto get_ptr(T&& t)
+      {
          if constexpr (M == 14) {
-             auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14] = t;
-             // structure bindings is not constexpr :/
-             if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
-             if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
-             if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
             if constexpr (N == 3) return ptr<decltype(p4)>{&p4};
             if constexpr (N == 4) return ptr<decltype(p5)>{&p5};
             if constexpr (N == 5) return ptr<decltype(p6)>{&p6};
@@ -90,11 +90,11 @@ namespace glz
             if constexpr (N == 13) return ptr<decltype(p14)>{&p14};
          }
          else if constexpr (M == 13) {
-             auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13] = t;
-             // structure bindings is not constexpr :/
-             if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
-             if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
-             if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
             if constexpr (N == 3) return ptr<decltype(p4)>{&p4};
             if constexpr (N == 4) return ptr<decltype(p5)>{&p5};
             if constexpr (N == 5) return ptr<decltype(p6)>{&p6};
@@ -107,11 +107,11 @@ namespace glz
             if constexpr (N == 12) return ptr<decltype(p13)>{&p13};
          }
          else if constexpr (M == 12) {
-             auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12] = t;
-             // structure bindings is not constexpr :/
-             if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
-             if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
-             if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
             if constexpr (N == 3) return ptr<decltype(p4)>{&p4};
             if constexpr (N == 4) return ptr<decltype(p5)>{&p5};
             if constexpr (N == 5) return ptr<decltype(p6)>{&p6};
@@ -123,11 +123,11 @@ namespace glz
             if constexpr (N == 11) return ptr<decltype(p12)>{&p12};
          }
          else if constexpr (M == 11) {
-             auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11] = t;
-             // structure bindings is not constexpr :/
-             if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
-             if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
-             if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
             if constexpr (N == 3) return ptr<decltype(p4)>{&p4};
             if constexpr (N == 4) return ptr<decltype(p5)>{&p5};
             if constexpr (N == 5) return ptr<decltype(p6)>{&p6};
@@ -138,11 +138,11 @@ namespace glz
             if constexpr (N == 10) return ptr<decltype(p11)>{&p11};
          }
          else if constexpr (M == 10) {
-             auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10] = t;
-             // structure bindings is not constexpr :/
-             if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
-             if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
-             if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
             if constexpr (N == 3) return ptr<decltype(p4)>{&p4};
             if constexpr (N == 4) return ptr<decltype(p5)>{&p5};
             if constexpr (N == 5) return ptr<decltype(p6)>{&p6};
@@ -152,11 +152,11 @@ namespace glz
             if constexpr (N == 9) return ptr<decltype(p10)>{&p10};
          }
          else if constexpr (M == 9) {
-             auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9] = t;
-             // structure bindings is not constexpr :/
-             if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
-             if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
-             if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
             if constexpr (N == 3) return ptr<decltype(p4)>{&p4};
             if constexpr (N == 4) return ptr<decltype(p5)>{&p5};
             if constexpr (N == 5) return ptr<decltype(p6)>{&p6};
@@ -165,11 +165,11 @@ namespace glz
             if constexpr (N == 8) return ptr<decltype(p9)>{&p9};
          }
          else if constexpr (M == 8) {
-             auto&& [p1, p2, p3, p4, p5, p6, p7, p8] = t;
-             // structure bindings is not constexpr :/
-             if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
-             if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
-             if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
             if constexpr (N == 3) return ptr<decltype(p4)>{&p4};
             if constexpr (N == 4) return ptr<decltype(p5)>{&p5};
             if constexpr (N == 5) return ptr<decltype(p6)>{&p6};
@@ -177,63 +177,66 @@ namespace glz
             if constexpr (N == 7) return ptr<decltype(p8)>{&p8};
          }
          else if constexpr (M == 7) {
-             auto&& [p1, p2, p3, p4, p5, p6, p7] = t;
-             // structure bindings is not constexpr :/
-             if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
-             if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
-             if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
+            auto&& [p1, p2, p3, p4, p5, p6, p7] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
             if constexpr (N == 3) return ptr<decltype(p4)>{&p4};
             if constexpr (N == 4) return ptr<decltype(p5)>{&p5};
             if constexpr (N == 5) return ptr<decltype(p6)>{&p6};
             if constexpr (N == 6) return ptr<decltype(p7)>{&p7};
          }
          else if constexpr (M == 6) {
-             auto&& [p1, p2, p3, p4, p5, p6] = t;
-             // structure bindings is not constexpr :/
-             if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
-             if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
-             if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
+            auto&& [p1, p2, p3, p4, p5, p6] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
             if constexpr (N == 3) return ptr<decltype(p4)>{&p4};
             if constexpr (N == 4) return ptr<decltype(p5)>{&p5};
             if constexpr (N == 5) return ptr<decltype(p6)>{&p6};
          }
          else if constexpr (M == 5) {
-             auto&& [p1, p2, p3, p4, p5] = t;
-             // structure bindings is not constexpr :/
-             if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
-             if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
-             if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
+            auto&& [p1, p2, p3, p4, p5] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
             if constexpr (N == 3) return ptr<decltype(p4)>{&p4};
             if constexpr (N == 4) return ptr<decltype(p5)>{&p5};
          }
          else if constexpr (M == 4) {
-             auto&& [p1, p2, p3, p4] = t;
-             // structure bindings is not constexpr :/
-             if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
-             if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
-             if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
+            auto&& [p1, p2, p3, p4] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
             if constexpr (N == 3) return ptr<decltype(p4)>{&p4};
          }
-          else if constexpr (M == 3) {
-              auto&& [p1, p2, p3] = t;
-              // structure bindings is not constexpr :/
-              if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
-              if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
-              if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
-          } else if constexpr (M == 2) {
-              auto&& [p1, p2] = t;
-              // structure bindings is not constexpr :/
-              if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
-              if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
-          } else if constexpr (M == 1) {
-              auto&& [p1] = t;
-              // structure bindings is not constexpr :/
-              if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
-          }
+         else if constexpr (M == 3) {
+            auto&& [p1, p2, p3] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr<decltype(p3)>{&p3};
+         }
+         else if constexpr (M == 2) {
+            auto&& [p1, p2] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr<decltype(p2)>{&p2};
+         }
+         else if constexpr (M == 1) {
+            auto&& [p1] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr<decltype(p1)>{&p1};
+         }
       }
-      
+
       template <class T, auto N>
-      [[nodiscard]] consteval auto member_name() {
+      [[nodiscard]] consteval auto member_name()
+      {
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
@@ -242,19 +245,21 @@ namespace glz
 #else
          constexpr auto name = member_name_impl<get_ptr<N>(external<T>)>();
 #endif
-          return [&]<auto... Ns>(std::index_sequence<Ns...>) {
-              return fixed_string<sizeof...(Ns)>{name[Ns]...};
-          }(std::make_index_sequence<name.size()>{});
+         return [&]<auto... Ns>(std::index_sequence<Ns...>) {
+            return fixed_string<sizeof...(Ns)>{name[Ns]...};
+         }(std::make_index_sequence<name.size()>{});
       }
-      
+
       template <class T, size_t... I>
-      [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>) {
-          return std::make_tuple(named<member_name<T, I>()>{}...);
+      [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
+      {
+         return std::make_tuple(named<member_name<T, I>()>{}...);
       }
-      
+
       template <class T>
-      [[nodiscard]] constexpr auto member_names() {
-          return member_names_impl<T>(std::make_index_sequence<count_members<T>()>{});
+      [[nodiscard]] constexpr auto member_names()
+      {
+         return member_names_impl<T>(std::make_index_sequence<count_members<T>()>{});
       }
 
       template <reflectable T>
@@ -304,7 +309,7 @@ namespace glz
                      // trailing commas are allowed
                      write_entry_separator<Opts>(ctx, b, ix);
                   }
-                  
+
                   const auto key = get<I>(members).name;
 
                   write<json>::op<Opts>(key, ctx, b, ix);

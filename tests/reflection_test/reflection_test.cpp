@@ -48,7 +48,7 @@ struct nested_t
 
 static_assert(glz::detail::reflectable<nested_t>);
 
-#ifndef _MSC_VER 
+#ifndef _MSC_VER
 suite nested_reflection = [] {
    "nested_reflection"_test = [] {
       std::string buffer = R"({"thing":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]},"str":"reflection"})";
