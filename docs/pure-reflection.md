@@ -3,8 +3,7 @@
 Version 1.9.0 adds pure reflection for aggregate initializable structs in Clang, MSVC, and GCC.
 
 There's no need to write any `glz::meta` structures or use any macros. The reflection is hidden from
-the user and computed at compile time, available with the inclusion of
-`glaze/reflection/reflect.hpp`.
+the user and computed at compile time.
 
 - You can still write a `glz::meta` to customize your serialization, which will override the default reflection.
 - The `glz::meta` approach is still the most optimized. There is some work to be done to make the automatic reflection just as fast.

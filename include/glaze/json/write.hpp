@@ -15,6 +15,7 @@
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/itoa.hpp"
+#include "glaze/reflection/reflect.hpp"
 
 namespace glz
 {
@@ -1132,6 +1133,77 @@ namespace glz
                   }
                }
             });
+            if constexpr (!Options.closing_handled) {
+               if constexpr (Options.prettify) {
+                  ctx.indentation_level -= Options.indentation_width;
+                  dump<'\n'>(b, ix);
+                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+               }
+               dump<'}'>(b, ix);
+            }
+         }
+      };
+      
+      template <reflectable T>
+      struct to_json<T>
+      {
+         template <auto Options>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         {
+            static constexpr auto members = member_names<T>();
+            auto t = to_tuple(value);
+            using V = decltype(t);
+            static constexpr auto N = std::tuple_size_v<V>;
+            static_assert(count_members<T>() == N);
+
+            if constexpr (!Options.opening_handled) {
+               dump<'{'>(b, ix);
+               if constexpr (Options.prettify) {
+                  ctx.indentation_level += Options.indentation_width;
+                  dump<'\n'>(b, ix);
+                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+               }
+            }
+
+            bool first = true;
+            for_each<N>([&](auto I) {
+               static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
+               decltype(auto) item = std::get<I>(t);
+               using val_t = std::decay_t<decltype(item)>;
+
+               if (skip_member<Opts>(item)) {
+                  return;
+               }
+
+               // skip file_include
+               if constexpr (std::is_same_v<val_t, includer<V>>) {
+                  return;
+               }
+               else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+                  return;
+               }
+               else {
+                  if (first) {
+                     first = false;
+                  }
+                  else {
+                     // Null members may be skipped so we cant just write it out for all but the last member unless
+                     // trailing commas are allowed
+                     write_entry_separator<Opts>(ctx, b, ix);
+                  }
+
+                  const auto key = get<I>(members).name;
+
+                  write<json>::op<Opts>(key, ctx, b, ix);
+                  dump<':'>(b, ix);
+                  if constexpr (Opts.prettify) {
+                     dump<' '>(b, ix);
+                  }
+
+                  write<json>::op<Opts>(item, ctx, b, ix);
+               }
+            });
+
             if constexpr (!Options.closing_handled) {
                if constexpr (Options.prettify) {
                   ctx.indentation_level -= Options.indentation_width;

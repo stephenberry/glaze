@@ -202,5 +202,413 @@ namespace glz
                             p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31);
          }
       }
+      
+      template <class T>
+      struct ptr_t final
+      {
+         const T* ptr;
+      };
+      
+      template <auto N, class T, size_t M = count_members<T>()>
+         requires(M <= 24)
+      constexpr auto get_ptr(T&& t) noexcept
+      {
+         if constexpr (M == 24) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, p24] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
+            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
+            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
+            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
+            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
+            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
+            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
+            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
+            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
+            if constexpr (N == 19) return ptr_t<decltype(p20)>{&p20};
+            if constexpr (N == 20) return ptr_t<decltype(p21)>{&p21};
+            if constexpr (N == 21) return ptr_t<decltype(p22)>{&p22};
+            if constexpr (N == 22) return ptr_t<decltype(p23)>{&p23};
+            if constexpr (N == 23) return ptr_t<decltype(p24)>{&p24};
+         }
+         else if constexpr (M == 23) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, p23] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
+            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
+            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
+            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
+            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
+            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
+            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
+            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
+            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
+            if constexpr (N == 19) return ptr_t<decltype(p20)>{&p20};
+            if constexpr (N == 20) return ptr_t<decltype(p21)>{&p21};
+            if constexpr (N == 21) return ptr_t<decltype(p22)>{&p22};
+            if constexpr (N == 22) return ptr_t<decltype(p23)>{&p23};
+         }
+         else if constexpr (M == 22) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
+            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
+            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
+            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
+            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
+            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
+            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
+            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
+            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
+            if constexpr (N == 19) return ptr_t<decltype(p20)>{&p20};
+            if constexpr (N == 20) return ptr_t<decltype(p21)>{&p21};
+            if constexpr (N == 21) return ptr_t<decltype(p22)>{&p22};
+         }
+         else if constexpr (M == 21) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
+            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
+            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
+            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
+            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
+            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
+            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
+            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
+            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
+            if constexpr (N == 19) return ptr_t<decltype(p20)>{&p20};
+            if constexpr (N == 20) return ptr_t<decltype(p21)>{&p21};
+         }
+         else if constexpr (M == 20) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
+            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
+            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
+            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
+            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
+            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
+            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
+            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
+            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
+            if constexpr (N == 19) return ptr_t<decltype(p20)>{&p20};
+         }
+         else if constexpr (M == 19) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
+            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
+            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
+            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
+            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
+            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
+            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
+            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
+            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
+         }
+         else if constexpr (M == 18) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
+            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
+            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
+            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
+            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
+            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
+            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
+            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
+         }
+         else if constexpr (M == 17) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
+            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
+            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
+            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
+            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
+            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
+            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
+         }
+         else if constexpr (M == 16) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
+            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
+            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
+            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
+            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
+            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
+         }
+         else if constexpr (M == 15) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
+            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
+            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
+            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
+            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
+         }
+         else if constexpr (M == 14) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
+            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
+            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
+            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
+         }
+         else if constexpr (M == 13) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
+            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
+            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
+         }
+         else if constexpr (M == 12) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
+            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
+         }
+         else if constexpr (M == 11) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
+         }
+         else if constexpr (M == 10) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
+         }
+         else if constexpr (M == 9) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
+         }
+         else if constexpr (M == 8) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
+         }
+         else if constexpr (M == 7) {
+            auto&& [p1, p2, p3, p4, p5, p6, p7] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
+         }
+         else if constexpr (M == 6) {
+            auto&& [p1, p2, p3, p4, p5, p6] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
+         }
+         else if constexpr (M == 5) {
+            auto&& [p1, p2, p3, p4, p5] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
+         }
+         else if constexpr (M == 4) {
+            auto&& [p1, p2, p3, p4] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
+         }
+         else if constexpr (M == 3) {
+            auto&& [p1, p2, p3] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
+         }
+         else if constexpr (M == 2) {
+            auto&& [p1, p2] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
+         }
+         else if constexpr (M == 1) {
+            auto&& [p1] = t;
+            // structure bindings is not constexpr :/
+            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
+         }
+      }
    }
 }
