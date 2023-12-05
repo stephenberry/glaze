@@ -271,10 +271,6 @@ struct glz::meta<my_struct> {
 > - Wrappers
 > - Lambda functions
 
-## Struct Registration Macros
-
-GLZ_META and GLZ_LOCAL_META will be deprecated in the future now that we have reflection support for external and local Glaze metadata. Current documentation is here: [Struct Registration Macros](./docs/macros-for-structs.md)
-
 ## Custom Read/Write
 
 Custom reading and writing can be achieved through the powerful `to_json`/`from_json` specialization approach, which is described here: [custom-serialization.md](https://github.com/stephenberry/glaze/blob/main/docs/custom-serialization.md). However, this only works for user defined types.
