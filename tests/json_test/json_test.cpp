@@ -437,10 +437,38 @@ suite basic_types = [] {
       expect(buffer == "\"as\\\"df\\\\ghjkl\"");
 
       "empty"_test = [] {
-         static constexpr std::string_view expected{"\"\""};
-         expect(that % glz::write_json(std::string_view{}) == expected);
-         expect(that % glz::write_json(std::string{}) == expected);
-         expect(that % glz::write_json("") == expected);
+         static constexpr std::string_view expected_empty{"\"\""};
+         static constexpr std::string_view expected_nothing{};
+         expect(that % glz::write_json(std::string_view{}) == expected_empty);
+         expect(that % glz::write_json(std::string{}) == expected_empty);
+         expect(that % glz::write_json("") == expected_empty);
+
+         auto write_raw = [](const auto& input) {
+            std::string result{};
+            glz::write<glz::opts{.raw = true}>(input, result);
+            return result;
+         };
+         expect(that % write_raw(std::string_view{}) == expected_nothing);
+         expect(that % write_raw(std::string{}) == expected_nothing);
+         expect(that % write_raw("") == expected_nothing);
+
+         auto write_raw_str = [](const auto& input) {
+            std::string result{};
+            glz::write<glz::opts{.raw_string = true}>(input, result);
+            return result;
+         };
+         expect(that % write_raw_str(std::string_view{}) == expected_empty);
+         expect(that % write_raw_str(std::string{}) == expected_empty);
+         expect(that % write_raw_str("") == expected_empty);
+
+         auto write_num = [](const auto& input) {
+            std::string result{};
+            glz::write<glz::opts{.number = true}>(input, result);
+            return result;
+         };
+         expect(that % write_num(std::string_view{}) == expected_nothing);
+         expect(that % write_num(std::string{}) == expected_nothing);
+         expect(that % write_num("") == expected_nothing);
       };
    };
 
