@@ -12,10 +12,10 @@
 #include "glaze/core/write.hpp"
 #include "glaze/core/write_chars.hpp"
 #include "glaze/json/ptr.hpp"
+#include "glaze/reflection/reflect.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/itoa.hpp"
-#include "glaze/reflection/reflect.hpp"
 
 namespace glz
 {
@@ -1143,7 +1143,7 @@ namespace glz
             }
          }
       };
-      
+
       template <reflectable T>
       struct to_json<T>
       {

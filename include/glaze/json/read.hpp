@@ -19,11 +19,11 @@
 #include "glaze/file/file_ops.hpp"
 #include "glaze/json/json_t.hpp"
 #include "glaze/json/skip.hpp"
+#include "glaze/reflection/reflect.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/strod.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
-#include "glaze/reflection/reflect.hpp"
 
 namespace glz
 {
@@ -2434,7 +2434,7 @@ namespace glz
             }
          }
       };
-      
+
       template <reflectable T>
       struct from_json<T>
       {

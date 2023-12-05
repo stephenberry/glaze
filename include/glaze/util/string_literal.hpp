@@ -21,7 +21,7 @@ namespace glz
       char value[N];
       constexpr const char* begin() const noexcept { return value; }
       constexpr const char* end() const noexcept { return value + length; }
-      
+
       [[nodiscard]] constexpr auto operator<=>(const string_literal&) const = default;
 
       constexpr const std::string_view sv() const noexcept { return {value, length}; }
@@ -52,7 +52,7 @@ namespace glz
 
    template <string_literal Str>
    inline constexpr std::string_view chars = chars_impl<Str>::value;
-   
+
    template <size_t N>
    struct fixed_string final
    {

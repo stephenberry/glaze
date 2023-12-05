@@ -202,19 +202,20 @@ namespace glz
                             p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31);
          }
       }
-      
+
       template <class T>
       struct ptr_t final
       {
          const T* ptr;
       };
-      
+
       template <auto N, class T, size_t M = count_members<T>()>
          requires(M <= 24)
       constexpr auto get_ptr(T&& t) noexcept
       {
          if constexpr (M == 24) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, p24] = t;
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22,
+                    p23, p24] = t;
             // structure bindings is not constexpr :/
             if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
             if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
@@ -242,7 +243,8 @@ namespace glz
             if constexpr (N == 23) return ptr_t<decltype(p24)>{&p24};
          }
          else if constexpr (M == 23) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, p23] = t;
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22,
+                    p23] = t;
             // structure bindings is not constexpr :/
             if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
             if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
@@ -269,7 +271,8 @@ namespace glz
             if constexpr (N == 22) return ptr_t<decltype(p23)>{&p23};
          }
          else if constexpr (M == 22) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22] = t;
+            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22] = t;
             // structure bindings is not constexpr :/
             if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
             if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
