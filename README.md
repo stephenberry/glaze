@@ -204,6 +204,8 @@ target_link_libraries(main PRIVATE glaze::glaze)
 
 If you want to specialize your reflection then you can optionally write the code below:
 
+> This metadata is also necessary for non-aggregate initializable structs.
+
 ```c++
 template <>
 struct glz::meta<my_struct> {
