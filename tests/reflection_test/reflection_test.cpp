@@ -62,7 +62,6 @@ suite nested_reflection = [] {
 
       buffer.clear();
       glz::write_json(obj, buffer);
-      std::cout << buffer << '\n';
 
       expect(buffer == R"({"str":"reflection","thing":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}})")
          << buffer;

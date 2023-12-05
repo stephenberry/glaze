@@ -14,27 +14,20 @@ namespace glz
       struct any_t final
       {
 #if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
          template <class T>
-         constexpr operator T()
-         {
-            if constexpr (std::is_default_constructible_v<T>) {
-               return T{};
-            }
-            else {
-               static_assert(false_v<T>, "Your type must be default constructible");
-            }
-         }
+         [[maybe_unused]] constexpr operator T();
+#pragma clang diagnostic pop
+#elif defined(_MSC_VER)
+      template <class T>
+      [[maybe_unused]] constexpr operator T();
 #else
-   #if defined(_MSC_VER)
-         template <class T>
-         [[maybe_unused]] constexpr operator T();
-   #else
-   #pragma GCC diagnostic push
-   #pragma GCC diagnostic ignored "-Wmissing-declarations"
-         template <class T>
-         [[maybe_unused]] constexpr operator T();
-   #pragma GCC diagnostic pop
-   #endif
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-declarations"
+      template <class T>
+      [[maybe_unused]] constexpr operator T();
+#pragma GCC diagnostic pop
 #endif
       };
 

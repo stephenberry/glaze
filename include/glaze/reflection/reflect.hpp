@@ -12,42 +12,6 @@ namespace glz
 {
    namespace detail
    {
-#if defined(__clang__)
-      template <class T, std::size_t N>
-      struct static_vector
-      {
-         constexpr auto push_back(const T& elem)
-         {
-            if (index < N) {
-               elems[index++] = elem;
-            }
-         }
-         constexpr auto& operator[](auto i) const { return elems[i]; }
-
-         T elems[N]{};
-         size_t index{};
-      };
-
-      constexpr auto to_names(auto& out, auto, auto... args)
-      {
-         if constexpr (sizeof...(args) > 1) {
-            auto t = tuplet::tuple{args...};
-            if (sv{get<0>(t)} == "  ") {
-               out.push_back(get<2>(t));
-            }
-         }
-      }
-
-      template <class T>
-      constexpr auto member_names()
-      {
-         constexpr auto N = count_members<T>();
-         static_vector<std::string_view, N> v{};
-         T t;
-         __builtin_dump_struct(&t, to_names, v);
-         return v;
-      }
-#else
       template <std::size_t N>
       class fixed_string final {
          public:
@@ -270,7 +234,14 @@ namespace glz
       
       template <class T, auto N>
       [[nodiscard]] consteval auto member_name() {
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
          constexpr auto name = member_name_impl<get_ptr<N>(external<T>)>();
+#pragma clang diagnostic pop
+#else
+         constexpr auto name = member_name_impl<get_ptr<N>(external<T>)>();
+#endif
           return [&]<auto... Ns>(std::index_sequence<Ns...>) {
               return fixed_string<sizeof...(Ns)>{name[Ns]...};
           }(std::make_index_sequence<name.size()>{});
@@ -285,7 +256,6 @@ namespace glz
       [[nodiscard]] constexpr auto member_names() {
           return member_names_impl<T>(std::make_index_sequence<count_members<T>()>{});
       }
-#endif
 
       template <reflectable T>
       struct to_json<T>
@@ -335,11 +305,7 @@ namespace glz
                      write_entry_separator<Opts>(ctx, b, ix);
                   }
                   
-#if defined(__clang__)
-                  const auto key = members[I];
-#else
                   const auto key = get<I>(members).name;
-#endif
 
                   write<json>::op<Opts>(key, ctx, b, ix);
                   dump<':'>(b, ix);
@@ -377,22 +343,12 @@ namespace glz
 
          auto naive_or_normal_hash = [&] {
             if constexpr (n <= 20) {
-#if defined(__clang__)
-               return glz::detail::naive_map<value_t, n, use_hash_comparison>(
-                  {std::pair<sv, value_t>{members[I], std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
-#else
                return glz::detail::naive_map<value_t, n, use_hash_comparison>(
                   {std::pair<sv, value_t>{get<I>(members).name, std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
-#endif
             }
             else {
-#if defined(__clang__)
-               return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
-                  {std::pair<sv, value_t>{members[I], std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
-#else
                return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
                   {std::pair<sv, value_t>{get<I>(members).name, std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
-#endif
             }
          };
 
