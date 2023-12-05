@@ -73,6 +73,21 @@ namespace glz::detail
          ctx.error = error_code::expected_end_comment;
       }
    }
+   
+   consteval uint64_t repeat_byte(char c)
+   {
+      const auto byte = uint8_t(c);
+      uint64_t res{};
+      res |= uint64_t(byte) << 56;
+      res |= uint64_t(byte) << 48;
+      res |= uint64_t(byte) << 40;
+      res |= uint64_t(byte) << 32;
+      res |= uint64_t(byte) << 24;
+      res |= uint64_t(byte) << 16;
+      res |= uint64_t(byte) << 8;
+      res |= uint64_t(byte);
+      return res;
+   }
 
    GLZ_ALWAYS_INLINE constexpr auto has_zero(const uint64_t chunk) noexcept
    {
@@ -81,22 +96,22 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE constexpr auto has_quote(const uint64_t chunk) noexcept
    {
-      return has_zero(chunk ^ 0b0010001000100010001000100010001000100010001000100010001000100010);
+      return has_zero(chunk ^ repeat_byte('"'));
    }
 
    GLZ_ALWAYS_INLINE constexpr auto has_escape(const uint64_t chunk) noexcept
    {
-      return has_zero(chunk ^ 0b0101110001011100010111000101110001011100010111000101110001011100);
+      return has_zero(chunk ^ repeat_byte('\\'));
    }
 
    GLZ_ALWAYS_INLINE constexpr auto has_space(const uint64_t chunk) noexcept
    {
-      return has_zero(chunk ^ 0b0010000000100000001000000010000000100000001000000010000000100000);
+      return has_zero(chunk ^ repeat_byte(' '));
    }
 
    GLZ_ALWAYS_INLINE constexpr auto has_forward_slash(const uint64_t chunk) noexcept
    {
-      return has_zero(chunk ^ 0b0010111100101111001011110010111100101111001011110010111100101111);
+      return has_zero(chunk ^ repeat_byte('/'));
    }
 
    GLZ_ALWAYS_INLINE constexpr uint64_t is_less_16(const uint64_t c) noexcept
@@ -210,27 +225,7 @@ namespace glz::detail
          it = reinterpret_cast<std::decay_t<decltype(it)>>(pc);
          return;
       }
-
-      /*const auto end_m7 = end - 7;
-      for (; it < end_m7; it += 8) {
-         uint64_t chunk;
-         std::memcpy(&chunk, it, 8);
-         uint64_t char_test = has_quote(chunk);
-         if (char_test != 0) {
-            it += (std::countr_zero(char_test) >> 3);
-            return;
-         }
-      }
-
-      // Tail end of buffer. Should be rare we even get here
-      while (it < end) {
-         switch (*it) {
-            case '"': {
-               return;
-            }
-         }
-         ++it;
-      }*/
+      
       ctx.error = error_code::expected_quote;
    }
 
