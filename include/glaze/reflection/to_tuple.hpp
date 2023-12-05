@@ -16,6 +16,7 @@ namespace glz
    {
       struct any_t final
       {
+#if defined(__clang__)
          template <class T>
          constexpr operator T()
          {
@@ -26,6 +27,10 @@ namespace glz
                static_assert(false_v<T>, "Your type must be default constructible");
             }
          }
+#else
+         template <class T>
+         constexpr operator T();
+#endif
       };
 
       template <class T, class... Args>
