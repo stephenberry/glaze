@@ -433,7 +433,7 @@ namespace glz
                auto it = std::begin(value);
                write<json>::op<Opts>(*it, ctx, args...);
                ++it;
-               for (; it != std::end(value); ++it) {
+               for (const auto fin = std::end(value); it != fin; ++it) {
                   write_entry_separator<Opts>(ctx, args...);
                   write<json>::op<Opts>(*it, ctx, args...);
                }
