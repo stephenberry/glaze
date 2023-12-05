@@ -34,23 +34,23 @@ namespace glz::detail
             skip_string<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws<Opts>(ctx, it, end);
+            skip_ws_no_pre_check<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
             match<':'>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws<Opts>(ctx, it, end);
+            skip_ws_no_pre_check<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
             skip_value<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws<Opts>(ctx, it, end);
+            skip_ws_no_pre_check<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
             if (*it != ',') break;
-            skip_ws<Opts>(ctx, ++it, end);
+            skip_ws_no_pre_check<Opts>(ctx, ++it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
          }
@@ -81,11 +81,11 @@ namespace glz::detail
             skip_value<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws<Opts>(ctx, it, end);
+            skip_ws_no_pre_check<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
             if (*it != ',') break;
-            skip_ws<Opts>(ctx, ++it, end);
+            skip_ws_no_pre_check<Opts>(ctx, ++it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
          }

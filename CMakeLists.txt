@@ -1,10 +1,10 @@
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.21)
 
 include(cmake/prelude.cmake)
 
 project(
     glaze
-    VERSION 1.8.3
+    VERSION 1.8.4
     LANGUAGES CXX
 )
 
@@ -14,15 +14,24 @@ include(cmake/variables.cmake)
 add_library(glaze_glaze INTERFACE)
 add_library(glaze::glaze ALIAS glaze_glaze)
 
+
 if (MSVC)
-   string(REGEX MATCH "\/cl(.exe)?$" matched_cl ${CMAKE_CXX_COMPILER})
-   if (matched_cl)
-      # for a C++ standards compliant preprocessor, not needed for clang-cl
-      target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /GL /permissive- /Zc:lambda)
-      target_link_options(glaze_glaze INTERFACE /LTCG /INCREMENTAL:NO)
+  string(REGEX MATCH "\/cl(.exe)?$" matched_cl ${CMAKE_CXX_COMPILER})
+  if (matched_cl)
+    # for a C++ standards compliant preprocessor, not needed for clang-cl
+    target_compile_options(glaze_glaze INTERFACE "/Zc:preprocessor" /permissive- /Zc:lambda)
+    
+    if(PROJECT_IS_TOP_LEVEL)
+      target_compile_options(glaze_glaze INTERFACE 
+        $<$<CONFIG:Release>:/GL>
+        $<$<CONFIG:MinSizeRel>:/GL>)
+      target_link_options(glaze_glaze INTERFACE 
+        $<$<CONFIG:Release>:/LTCG /INCREMENTAL:NO>
+        $<$<CONFIG:MinSizeRel>:/LTCG /INCREMENTAL:NO>)
+    endif()
    endif()
 else()
-   target_compile_options(glaze_glaze INTERFACE "-Wno-missing-braces")
+  target_compile_options(glaze_glaze INTERFACE "-Wno-missing-braces")
 endif()
 
 set_property(TARGET glaze_glaze PROPERTY EXPORT_NAME glaze)

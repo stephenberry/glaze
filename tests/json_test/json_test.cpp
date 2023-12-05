@@ -5226,6 +5226,13 @@ suite number_reading = [] {
 
       buffer = "6E19";
       expect(glz::read_json(i, buffer) == glz::error_code::parse_number_failure);
+
+      buffer = "0.1e999999999999999999";
+      expect(glz::read_json(i, buffer) == glz::error_code::parse_number_failure);
+
+      buffer = "0.1e-999999999999999999";
+      expect(!glz::read_json(i, buffer));
+      expect(i == 0);
    };
 
    "long float double"_test = [] {

@@ -34,7 +34,8 @@ struct glz::meta<my_struct>
    static constexpr auto value = object("i", &T::i, //
                                         "d", &T::d, //
                                         "hello", &T::hello, //
-                                        "arr", &T::arr //
+                                        "arr", &T::arr, //
+                                        "#include", glz::file_include{} //
    );
 };
 
@@ -71,7 +72,8 @@ struct glz::meta<sub_thing2>
 {
    using T = sub_thing2;
    static constexpr std::string_view name = "sub_thing2";
-   static constexpr auto value = object("a", &T::a, "Test comment 1", //
+   static constexpr auto value = object("#include", glz::file_include{}, //
+                                        "a", &T::a, "Test comment 1", //
                                         "b", &T::b, "Test comment 2", //
                                         "c", &T::c, //
                                         "d", &T::d, //

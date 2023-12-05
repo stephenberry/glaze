@@ -186,6 +186,108 @@ namespace glz
          }
       };
 
+      constexpr uint16_t combine(const char chars[2]) noexcept
+      {
+         return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8);
+      }
+
+      constexpr std::array<uint16_t, 256> char_escape_table = {
+         //
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         combine(R"(\b)"),
+         combine(R"(\t)"), //
+         combine(R"(\n)"),
+         0,
+         combine(R"(\f)"),
+         combine(R"(\r)"),
+         0,
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         0,
+         0,
+         combine(R"(\")"),
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0,
+         0, //
+         0,
+         0,
+         combine(R"(\\)") //
+      };
+
       template <class T>
          requires str_t<T> || char_t<T>
       struct to_json<T>
@@ -295,28 +397,8 @@ namespace glz
                               c += length;
                               ix += length;
 
-                              switch (*c) {
-                              case '"':
-                                 std::memcpy(data_ptr(b) + ix, R"(\")", 2);
-                                 break;
-                              case '\\':
-                                 std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
-                                 break;
-                              [[unlikely]] case '\b':
-                                 std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
-                                 break;
-                              [[unlikely]] case '\f':
-                                 std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
-                                 break;
-                              case '\n':
-                                 std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
-                                 break;
-                              case '\r':
-                                 std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
-                                 break;
-                              case '\t':
-                                 std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
-                                 break;
+                              if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) [[likely]] {
+                                 std::memcpy(data_ptr(b) + ix, &escaped, 2);
                               }
                               ix += 2;
                               ++c;
@@ -329,36 +411,11 @@ namespace glz
 
                         // Tail end of buffer. Uncommon for long strings.
                         for (; c < e; ++c) {
-                           switch (*c) {
-                           case '"':
-                              std::memcpy(data_ptr(b) + ix, R"(\")", 2);
+                           if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) [[likely]] {
+                              std::memcpy(data_ptr(b) + ix, &escaped, 2);
                               ix += 2;
-                              break;
-                           case '\\':
-                              std::memcpy(data_ptr(b) + ix, R"(\\)", 2);
-                              ix += 2;
-                              break;
-                           [[unlikely]] case '\b':
-                              std::memcpy(data_ptr(b) + ix, R"(\b)", 2);
-                              ix += 2;
-                              break;
-                           [[unlikely]] case '\f':
-                              std::memcpy(data_ptr(b) + ix, R"(\f)", 2);
-                              ix += 2;
-                              break;
-                           case '\n':
-                              std::memcpy(data_ptr(b) + ix, R"(\n)", 2);
-                              ix += 2;
-                              break;
-                           case '\r':
-                              std::memcpy(data_ptr(b) + ix, R"(\r)", 2);
-                              ix += 2;
-                              break;
-                           case '\t':
-                              std::memcpy(data_ptr(b) + ix, R"(\t)", 2);
-                              ix += 2;
-                              break;
-                           [[likely]] default:
+                           }
+                           else {
                               std::memcpy(data_ptr(b) + ix, c, 1);
                               ++ix;
                            }

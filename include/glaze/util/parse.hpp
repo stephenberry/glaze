@@ -143,6 +143,36 @@ namespace glz::detail
       }
    }
 
+   template <opts Opts>
+   GLZ_ALWAYS_INLINE void skip_ws_no_pre_check(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      while (true) {
+         switch (*it) {
+         case '\t':
+         case '\n':
+         case '\r':
+         case ' ':
+            ++it;
+            break;
+         case '/': {
+            if constexpr (Opts.force_conformance) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            else {
+               skip_comment(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               break;
+            }
+         }
+         default:
+            return;
+         }
+      }
+   }
+
    GLZ_ALWAYS_INLINE void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
@@ -301,6 +331,62 @@ namespace glz::detail
 
       ctx.error = error_code::unknown_key;
       return {};
+   }
+
+   template <opts Opts, uint32_t MinLength, uint32_t LengthRange>
+      requires(!Opts.error_on_unknown_keys)
+   [[nodiscard]] GLZ_ALWAYS_INLINE const sv parse_key_cx(auto&& it) noexcept
+   {
+      static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
+
+      auto start = it;
+      it += MinLength; // immediately skip minimum length
+
+      static_assert(LengthRange < 16);
+      if constexpr (LengthRange == 7) {
+         uint64_t chunk; // no need to default initialize
+         std::memcpy(&chunk, it, 8);
+         const uint64_t test_chunk = has_quote(chunk);
+         if (test_chunk != 0) [[likely]] {
+            it += (std::countr_zero(test_chunk) >> 3);
+
+            return {start, size_t(it - start)};
+         }
+      }
+      else if constexpr (LengthRange > 7) {
+         uint64_t chunk; // no need to default initialize
+         std::memcpy(&chunk, it, 8);
+         uint64_t test_chunk = has_quote(chunk);
+         if (test_chunk != 0) {
+            it += (std::countr_zero(test_chunk) >> 3);
+
+            return {start, size_t(it - start)};
+         }
+         else {
+            it += 8;
+            static constexpr auto rest = LengthRange + 1 - 8;
+            chunk = 0; // must zero out the chunk
+            std::memcpy(&chunk, it, rest);
+            test_chunk = has_quote(chunk);
+            if (test_chunk != 0) {
+               it += (std::countr_zero(test_chunk) >> 3);
+
+               return {start, size_t(it - start)};
+            }
+         }
+      }
+      else {
+         uint64_t chunk{};
+         std::memcpy(&chunk, it, LengthRange + 1);
+         const uint64_t test_chunk = has_quote(chunk);
+         if (test_chunk != 0) [[likely]] {
+            it += (std::countr_zero(test_chunk) >> 3);
+
+            return {start, size_t(it - start)};
+         }
+      }
+
+      return {it, size_t(it - start)};
    }
 
    template <opts Opts>
