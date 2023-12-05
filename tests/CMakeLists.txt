@@ -61,6 +61,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 endif()
 
 add_subdirectory(api_test)
+add_subdirectory(binary_rpc)
 add_subdirectory(binary_test)
 add_subdirectory(compare_test)
 add_subdirectory(csv_test)
