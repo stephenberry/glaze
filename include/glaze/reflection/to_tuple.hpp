@@ -25,8 +25,12 @@ namespace glz
             }
          }
 #else
+// Hide used but never defined warning for GCC
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Werror"
          template <class T>
          constexpr operator T();
+#pragma GCC diagnostic pop
 #endif
       };
 
