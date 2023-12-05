@@ -28,7 +28,7 @@ namespace glz
       fixed_string(const char (&str)[N]) -> fixed_string<N - 1>;
 
       template <fixed_string Name>
-      struct named
+      struct named final
       {
          static constexpr std::string_view name = Name;
       };

@@ -204,14 +204,14 @@ namespace glz
       }
       
       template <class T>
-      struct ptr_t
+      struct ptr_t final
       {
          const T* ptr;
       };
       
       template <auto N, class T, size_t M = count_members<T>()>
          requires(M <= 24)
-      constexpr auto get_ptr(T&& t)
+      constexpr auto get_ptr(T&& t) noexcept
       {
          if constexpr (M == 24) {
             auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22, p23, p24] = t;
