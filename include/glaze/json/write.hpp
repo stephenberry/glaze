@@ -190,103 +190,21 @@ namespace glz
       {
          return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8);
       }
-
-      constexpr std::array<uint16_t, 256> char_escape_table = {
-         //
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         combine(R"(\b)"),
-         combine(R"(\t)"), //
-         combine(R"(\n)"),
-         0,
-         combine(R"(\f)"),
-         combine(R"(\r)"),
-         0,
-         0,
-         0,
-         0,
-         0,
-         0, //
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0, //
-         0,
-         0,
-         0,
-         0,
-         combine(R"(\")"),
-         0,
-         0,
-         0,
-         0,
-         0, //
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0, //
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0, //
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0, //
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0, //
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0,
-         0, //
-         0,
-         0,
-         combine(R"(\\)") //
+      
+      // clang-format off
+      constexpr std::array<uint16_t, 256> char_escape_table = { //
+         0, 0, 0, 0, 0, 0, 0, 0, combine(R"(\b)"), combine(R"(\t)"), //
+         combine(R"(\n)"), 0, combine(R"(\f)"), combine(R"(\r)"), 0, 0, 0, 0, 0, 0, //
+         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+         0, 0, 0, 0, combine(R"(\")"), 0, 0, 0, 0, 0, //
+         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+         0, 0, combine(R"(\\)") //
       };
+      // clang-format on
 
       template <class T>
          requires str_t<T> || char_t<T>
@@ -488,7 +406,7 @@ namespace glz
       };
 
       template <glz::opts Opts>
-      GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, auto&&... args)
+      GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, auto&&... args) noexcept
       {
          dump<','>(args...);
          if constexpr (Opts.prettify) {
@@ -515,7 +433,7 @@ namespace glz
                auto it = std::begin(value);
                write<json>::op<Opts>(*it, ctx, args...);
                ++it;
-               for (; it != std::end(value); ++it) {
+               for (const auto fin = std::end(value); it != fin; ++it) {
                   write_entry_separator<Opts>(ctx, args...);
                   write<json>::op<Opts>(*it, ctx, args...);
                }
@@ -623,7 +541,8 @@ namespace glz
 
                auto it = std::begin(value);
                [[maybe_unused]] bool previous_skipped = write_first_entry(it);
-               for (++it; it != std::end(value); ++it) {
+               const auto fin = std::end(value);
+               for (++it; it != fin; ++it) {
                   const auto& [key, entry_val] = *it;
                   if (skip_member<Opts>(entry_val)) {
                      previous_skipped = true;
