@@ -26,7 +26,7 @@ namespace glz
          }
 #else
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wall"
+#pragma GCC diagnostic ignored "-Wno-implicit-function-declaration"
          template <class T>
          [[maybe_unused]] constexpr operator T();
 #pragma GCC diagnostic pop
