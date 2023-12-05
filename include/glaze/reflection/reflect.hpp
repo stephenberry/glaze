@@ -3,8 +3,9 @@
 
 #pragma once
 
-#if defined(__has_builtin)
-#if __has_builtin(__builtin_dump_struct)
+#if defined(_MSC_VER)
+// No MSVC pure reflection support yet
+#else
 
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
@@ -372,7 +373,7 @@ namespace glz
       {
          using V = decltype(to_tuple(std::declval<T>()));
          constexpr auto n = std::tuple_size_v<V>;
-         constexpr auto members = member_names<T>();
+         [[maybe_unused]] constexpr auto members = member_names<T>();
          static_assert(count_members<T>() == n);
 
          using value_t = reflection_value_tuple_variant_t<V>;
@@ -568,5 +569,4 @@ namespace glz
    }
 }
 
-#endif
 #endif
