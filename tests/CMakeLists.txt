@@ -54,7 +54,12 @@ target_compile_features(glz_test_exceptions INTERFACE cxx_std_20)
 target_link_libraries(glz_test_exceptions INTERFACE Boost::ut glaze::glaze)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(glz_test_exceptions INTERFACE -fno-rtti)
-    target_compile_options(glz_test_exceptions INTERFACE -Wall -Wextra -pedantic $<$<CONFIG:Debug>:-Werror>)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        target_compile_options(glz_test_exceptions INTERFACE -Wall -Wextra -pedantic $<$<CONFIG:Debug>:-Werror>)
+    else()
+        # GCC reflection has no means of silencing 'used but never defined', so we can't use -Werror
+        target_compile_options(glz_test_exceptions INTERFACE -Wall -Wextra -pedantic)
+    endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_exceptions INTERFACE /GR- /bigobj) #/fsanitize=address
     target_compile_options(glz_test_exceptions INTERFACE /W4 /wd4459)
