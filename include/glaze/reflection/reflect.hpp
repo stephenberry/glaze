@@ -55,10 +55,7 @@ namespace glz
          constexpr auto name = member_name_impl<get_ptr<N>(external<T>)>();
 #pragma clang diagnostic pop
 #elif __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Weverything"
          constexpr auto name = member_name_impl<get_ptr<N>(external<T>)>();
-#pragma GCC diagnostic pop
 #else
          constexpr auto name = member_name_impl<get_ptr<N>(external<T>)>();
 #endif
