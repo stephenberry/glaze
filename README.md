@@ -6,6 +6,12 @@ Glaze isn't just a JSON library. Glaze also supports:
 - [BEVE](https://github.com/stephenberry/beve) (binary efficient versatile encoding)
 - [CSV](https://en.wikipedia.org/wiki/Comma-separated_values#:~:text=Comma%2Dseparated%20values%20(CSV),commas%20in%20the%20CSV%20file.) (comma separated value)
 
+## Now with full compile time reflection for MSVC, Clang, and GCC!
+
+- No need to write `glz::meta` definitions unless you want to customize your reflection
+- Works on non-constexpr types!
+- Compile time reflection so we still get perfect hashing!
+
 ## Highlights
 
 Glaze requires C++20, using concepts for cleaner code and more helpful errors.
@@ -79,6 +85,8 @@ Binary message size: 564 bytes
 
 ## Example
 
+Your struct will automatically get reflected! No metadata is required by the user.
+
 ```c++
 struct my_struct
 {
@@ -87,20 +95,9 @@ struct my_struct
   std::string hello = "Hello World";
   std::array<uint64_t, 3> arr = { 1, 2, 3 };
 };
-
-template <>
-struct glz::meta<my_struct> {
-   using T = my_struct;
-   static constexpr auto value = object(
-      &T::i,
-      &T::d,
-      &T::hello,
-      &T::arr
-   );
-};
 ```
 
-**JSON Output/Input**
+**JSON Output/Input** (prettified)
 
 ```json
 {
@@ -203,6 +200,23 @@ target_link_libraries(main PRIVATE glaze::glaze)
 ---
 
 ## See [Wiki](https://github.com/stephenberry/glaze/wiki) for Frequently Asked Questions
+
+## Explicit Metadata
+
+If you want to specialize your reflection then you can optionally write the code below:
+
+```c++
+template <>
+struct glz::meta<my_struct> {
+   using T = my_struct;
+   static constexpr auto value = object(
+      &T::i,
+      &T::d,
+      &T::hello,
+      &T::arr
+   );
+};
+```
 
 ## Local Glaze Meta
 
