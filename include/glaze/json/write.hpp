@@ -406,7 +406,7 @@ namespace glz
       };
 
       template <glz::opts Opts>
-      GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, auto&&... args)
+      GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, auto&&... args) noexcept
       {
          dump<','>(args...);
          if constexpr (Opts.prettify) {
@@ -541,7 +541,8 @@ namespace glz
 
                auto it = std::begin(value);
                [[maybe_unused]] bool previous_skipped = write_first_entry(it);
-               for (++it; it != std::end(value); ++it) {
+               const auto fin = std::end(value);
+               for (++it; it != fin; ++it) {
                   const auto& [key, entry_val] = *it;
                   if (skip_member<Opts>(entry_val)) {
                      previous_skipped = true;
