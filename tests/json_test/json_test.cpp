@@ -435,6 +435,13 @@ suite basic_types = [] {
       buffer.clear();
       glz::write_json("as\"df\\ghjkl", buffer);
       expect(buffer == "\"as\\\"df\\\\ghjkl\"");
+
+      "empty"_test = [] {
+         static constexpr std::string_view expected{"\"\""};
+         expect(that % glz::write_json(std::string_view{}) == expected);
+         expect(that % glz::write_json(std::string{}) == expected);
+         expect(that % glz::write_json("") == expected);
+      };
    };
 
    "backslash testing"_test = [] {
