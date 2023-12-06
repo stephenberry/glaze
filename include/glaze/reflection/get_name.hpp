@@ -55,10 +55,10 @@ namespace glz
 {
    template <auto N, class T>
    static constexpr auto nameof = [] {
-       const auto name = detail::get_name_impl<N, T>;
-       const auto begin = name.find(detail::reflector_end);
-       const auto tmp = name.substr(0, begin);
-       return tmp.substr(tmp.find_last_of(detail::reflector_begin) + 1);
+      constexpr auto name = detail::get_name_impl<N, T>;
+      constexpr auto begin = name.find(detail::reflector_end);
+      constexpr auto tmp = name.substr(0, begin);
+      return tmp.substr(tmp.find_last_of(detail::reflector_begin) + 1);
    }();
 }
 
