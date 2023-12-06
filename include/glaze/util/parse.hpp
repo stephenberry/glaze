@@ -125,12 +125,8 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_ws_no_pre_check(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (bool(ctx.error)) [[unlikely]] {
-         return;
-      }
-
       while (true) {
          switch (*it) {
          case '\t':
@@ -159,33 +155,13 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   GLZ_ALWAYS_INLINE void skip_ws_no_pre_check(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      while (true) {
-         switch (*it) {
-         case '\t':
-         case '\n':
-         case '\r':
-         case ' ':
-            ++it;
-            break;
-         case '/': {
-            if constexpr (Opts.force_conformance) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            else {
-               skip_comment(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
-               }
-               break;
-            }
-         }
-         default:
-            return;
-         }
+      if (bool(ctx.error)) [[unlikely]] {
+         return;
       }
+
+      skip_ws_no_pre_check<Opts>(ctx, it, end);
    }
 
    GLZ_ALWAYS_INLINE void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -436,14 +412,14 @@ namespace glz::detail
                   }
                   continue;
                }
-                  [[unlikely]] default:
-                  {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
+               [[unlikely]] default: {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
                }
             }
-               [[likely]] default : ++it;
+            [[likely]] default:
+               ++it;
             }
          }
       }
