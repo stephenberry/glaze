@@ -157,11 +157,9 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (bool(ctx.error)) [[unlikely]] {
-         return;
+      if (ctx.error == error_code::none) [[likely]] {
+         skip_ws_no_pre_check<Opts>(ctx, it, end);
       }
-
-      skip_ws_no_pre_check<Opts>(ctx, it, end);
    }
 
    GLZ_ALWAYS_INLINE void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
