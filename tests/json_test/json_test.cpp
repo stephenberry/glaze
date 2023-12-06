@@ -2629,6 +2629,16 @@ suite variant_tests = [] {
 
       expect(str == R"({"password":"123456","remember":true,"username":"paulo"})") << str;
    };
+
+   "variant write/read enum"_test = [] {
+      std::variant<Color, std::uint16_t> var{Color::Red};
+      auto res{glz::write_json(var)};
+      expect(res == "\"Red\"") << res;
+      auto read{glz::read_json<std::variant<Color, std::uint16_t>>(res)};
+      expect(read.has_value());
+      expect(std::holds_alternative<Color>(read.value()));
+      expect(std::get<Color>(read.value()) == Color::Red);
+   };
 };
 
 suite generic_json_tests = [] {
