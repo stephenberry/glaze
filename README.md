@@ -37,6 +37,8 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 - [CSV Reading/Writing](./docs/csv.md)
 - [Much more!](#more-features)
 
+See [DOCS](https://github.com/stephenberry/glaze/tree/main/docs) for more documentation.
+
 ## Performance
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
@@ -52,7 +54,7 @@ Glaze requires C++20, using concepts for cleaner code and more helpful errors.
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
-*Note: [simdjson](https://github.com/simdjson/simdjson) is great, but can experience major performance losses when the data is not in the expected sequence or any keys are missing (the problem grows as the file size increases, as it must re-iterate through the document). And for large, nested objects, simdjson typically requires significantly more coding from the user.*
+*Note: [simdjson](https://github.com/simdjson/simdjson) is great, but can experience major performance losses when the data is not in the expected sequence or any keys are missing (the problem grows as the file size increases, as it must re-iterate through the document).*
 
 [ABC Test](https://github.com/stephenberry/json_performance) shows how simdjson has poor performance when keys are not in the expected sequence:
 
@@ -399,7 +401,7 @@ expect(view == "5.5");
 
 Comments are supported with the specification defined here: [JSONC](https://github.com/stephenberry/JSONC)
 
-Comments may also be included in the `glaze::meta` description for your types. These comments can be written out to provide a description of your JSON interface. Calling `write_jsonc` as opposed to `write_json` will write out any comments included in the `meta` description.
+Comments may also be included in the `glz::meta` description for your types. These comments can be written out to provide a description of your JSON interface. Calling `write_jsonc` as opposed to `write_json` will write out any comments included in the `meta` description.
 
 ```c++
 struct thing {
