@@ -9,6 +9,7 @@
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
+#include "glaze/reflection/get_name.hpp"
 
 namespace glz
 {
@@ -189,7 +190,7 @@ namespace glz
          static_assert(false_v<T>, "name_v used on unnamed type");
       }
       else {
-         return "glz::unknown";
+         return type_name<std::decay_t<T>>;
       }
    }();
 

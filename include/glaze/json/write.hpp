@@ -1192,7 +1192,7 @@ namespace glz
                      write_entry_separator<Opts>(ctx, b, ix);
                   }
 
-                  const auto key = get<I>(members).name;
+                  const auto key = get<I>(members);
 
                   write<json>::op<Opts>(key, ctx, b, ix);
                   dump<':'>(b, ix);
