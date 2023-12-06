@@ -1,6 +1,13 @@
 # Pure Reflection
 
-Version 1.9.0 adds pure reflection for aggregate initializable structs in Clang, MSVC, and GCC.
+Version 1.9.0 adds pure reflection for [aggregate initializable](https://en.cppreference.com/w/cpp/language/aggregate_initialization) structs in Clang, MSVC, and GCC.
+
+> Aggregate initializable means:
+>
+> - no user-declared constructors
+> - no user-declared or inherited constructors
+> - no private or protected direct non-static data members
+> - no [virtual base classes](https://en.cppreference.com/w/cpp/language/derived_class#Virtual_base_classes)
 
 There's no need to write any `glz::meta` structures or use any macros. The reflection is hidden from
 the user and computed at compile time.
