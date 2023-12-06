@@ -54,8 +54,8 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix)
          {
             using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
-            to_json<V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>), std::forward<Ctx>(ctx),
-                                          std::forward<B>(b), std::forward<IX>(ix));
+            to_json<V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+                                          std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 

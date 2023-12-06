@@ -6201,9 +6201,10 @@ suite write_buffer_generator = [] {
 struct lambda_tester
 {
    int x{};
-   int* ptr{ &x };
-   
-   struct glaze {
+   int* ptr{&x};
+
+   struct glaze
+   {
       static constexpr auto value = [](auto& self) { return self.ptr; };
    };
 };
@@ -6212,7 +6213,7 @@ suite value_lambda_test = [] {
    "value lambda"_test = [] {
       lambda_tester obj{};
       obj.x = 55;
-      
+
       auto s = glz::write_json(obj);
       expect(s == "55") << s;
    };

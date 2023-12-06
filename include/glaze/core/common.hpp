@@ -885,7 +885,7 @@ namespace glz
 
          return make_variant_id_map_impl<T>(indices, ids_v<T>);
       }
-      
+
       template <class Value, class MemPtr>
       inline decltype(auto) get_member(Value&& value, MemPtr&& member_ptr)
       {
