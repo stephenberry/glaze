@@ -62,7 +62,7 @@ namespace glz::detail
        static constexpr auto name = get_mangled_name<GLAZE_REFLECTOR>();
        static constexpr auto end =
            name.substr(name.find("GLAZE_REFLECTOR") + sizeof("GLAZE_REFLECTOR") - 1);
-       static constexpr auto begin = name[name.find("GLAZE_REFLECTOR") - 1];
+       static constexpr auto begin = name.substr(name.find("glz::detail::GLAZE_REFLECTOR") - 4, 4);
    };
 }
 

@@ -17,6 +17,8 @@ struct my_struct
 
 static_assert(glz::detail::reflectable<my_struct>);
 
+static_assert(glz::name_v<my_struct> == "my_struct");
+
 suite reflection = [] {
    "reflect_write"_test = [] {
       std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
