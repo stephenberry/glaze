@@ -1447,7 +1447,7 @@ suite read_tests = [] {
       {
          // allow unknown keys
          std::map<std::string_view, int> v{{"as", -1}, {"make", 10000}}, vr{{"as", 1}, {"so", 2}, {"make", 3}};
-         const auto err= glz::read<glz::opts{.error_on_unknown_keys = false}>(v, in);
+         const auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(v, in);
          expect(err == glz::error_code::none);
          const bool equal = (v == vr);
          expect(equal);
@@ -2489,7 +2489,8 @@ suite tagged_variant_tests = [] {
       expect(std::get<put_action>(var2).data["y"] == 200);
 
       //
-      const auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(var2, R"({"type":"put_action","data":{"x":100,"y":200}})");
+      const auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(
+         var2, R"({"type":"put_action","data":{"x":100,"y":200}})");
       expect(err == glz::error_code::none);
       expect(std::holds_alternative<put_action>(var2));
       expect(std::get<put_action>(var2).data["x"] == 100);

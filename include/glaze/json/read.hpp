@@ -1577,7 +1577,7 @@ namespace glz
                }
             }
          }
-         
+
          auto start = it;
          skip_till_quote(ctx, it, end);
          return {start, size_t(it - start)};
@@ -1741,7 +1741,7 @@ namespace glz
                            return;
                         }
                         ++it;
-                        
+
                         static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
                         if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
                            parse_object_entry_sep<Opts>(ctx, it, end);

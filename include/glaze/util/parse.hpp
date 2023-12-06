@@ -345,14 +345,14 @@ namespace glz::detail
                   }
                   continue;
                }
-               [[unlikely]] default: {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
+                  [[unlikely]] default:
+                  {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
                }
             }
-            [[likely]] default:
-               ++it;
+               [[likely]] default : ++it;
             }
          }
       }
