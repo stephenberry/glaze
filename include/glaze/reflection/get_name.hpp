@@ -20,19 +20,21 @@ namespace glz::detail
 {
    template <class T>
    extern const T external;
-   
+
    template <auto Ptr>
-   [[nodiscard]] consteval std::string_view get_mangled_name() {
-      //return std::source_location::current().function_name();
+   [[nodiscard]] consteval std::string_view get_mangled_name()
+   {
+      // return std::source_location::current().function_name();
       return GLZ_PRETTY_FUNCTION;
    }
-   
+
    template <class T>
-   [[nodiscard]] consteval std::string_view get_mangled_name() {
-      //return std::source_location::current().function_name();
+   [[nodiscard]] consteval std::string_view get_mangled_name()
+   {
+      // return std::source_location::current().function_name();
       return GLZ_PRETTY_FUNCTION;
    }
-   
+
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
@@ -46,22 +48,23 @@ namespace glz::detail
    template <auto N, class T>
    constexpr auto get_name_impl = get_mangled_name<get_ptr<N>(external<T>)>();
 #endif
-   
-   struct GLAZE_REFLECTOR {
+
+   struct GLAZE_REFLECTOR
+   {
       int GLAZE_FIELD;
    };
-   
+
    struct reflect_field
    {
       static constexpr auto name = get_name_impl<0, GLAZE_REFLECTOR>;
       static constexpr auto end = name.substr(name.find("GLAZE_FIELD") + sizeof("GLAZE_FIELD") - 1);
       static constexpr auto begin = name[name.find("GLAZE_FIELD") - 1];
    };
-   
-   struct reflect_type {
-       static constexpr auto name = get_mangled_name<GLAZE_REFLECTOR>();
-       static constexpr auto end =
-           name.substr(name.find("GLAZE_REFLECTOR") + sizeof("GLAZE_REFLECTOR") - 1);
+
+   struct reflect_type
+   {
+      static constexpr auto name = get_mangled_name<GLAZE_REFLECTOR>();
+      static constexpr auto end = name.substr(name.find("GLAZE_REFLECTOR") + sizeof("GLAZE_REFLECTOR") - 1);
 #if defined(__clang__) || defined(__GNUC__)
       static constexpr auto begin = "T = ";
 #else
@@ -79,13 +82,13 @@ namespace glz
       constexpr auto tmp = name.substr(0, begin);
       return tmp.substr(tmp.find_last_of(detail::reflect_field::begin) + 1);
    }();
-   
+
    template <class T>
    static constexpr auto type_name = [] {
-       constexpr auto name = detail::get_mangled_name<T>();
-       constexpr auto begin = name.find(detail::reflect_type::end);
-       constexpr auto tmp = name.substr(0, begin);
-       return tmp.substr(tmp.find_last_of(detail::reflect_type::begin) + 1);
+      constexpr auto name = detail::get_mangled_name<T>();
+      constexpr auto begin = name.find(detail::reflect_type::end);
+      constexpr auto tmp = name.substr(0, begin);
+      return tmp.substr(tmp.find_last_of(detail::reflect_type::begin) + 1);
    }();
 }
 
