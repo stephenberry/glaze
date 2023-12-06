@@ -10,7 +10,6 @@
 #include <iterator>
 #include <locale>
 #include <ranges>
-#include <sstream>
 #include <type_traits>
 
 #include "glaze/core/common.hpp"

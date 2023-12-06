@@ -1419,31 +1419,36 @@ suite read_tests = [] {
       };
 
    "Read map"_test = [] {
+      constexpr std::string_view in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
       {
-         std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
          std::map<std::string, int> v, vr{{"as", 1}, {"so", 2}, {"make", 3}};
          expect(glz::read_json(v, in) == glz::error_code::none);
          const bool equal = (v == vr);
          expect(equal);
       }
       {
-         std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
          std::map<std::string, int> v{{"as", -1}, {"make", 10000}}, vr{{"as", 1}, {"so", 2}, {"make", 3}};
          expect(glz::read_json(v, in) == glz::error_code::none);
          const bool equal = (v == vr);
          expect(equal);
       }
       {
-         std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
          std::map<std::string_view, int> v, vr{{"as", 1}, {"so", 2}, {"make", 3}};
          expect(glz::read_json(v, in) == glz::error_code::none);
          const bool equal = (v == vr);
          expect(equal);
       }
       {
-         std::string in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
          std::map<std::string_view, int> v{{"as", -1}, {"make", 10000}}, vr{{"as", 1}, {"so", 2}, {"make", 3}};
          expect(glz::read_json(v, in) == glz::error_code::none);
+         const bool equal = (v == vr);
+         expect(equal);
+      }
+      {
+         // allow unknown keys
+         std::map<std::string_view, int> v{{"as", -1}, {"make", 10000}}, vr{{"as", 1}, {"so", 2}, {"make", 3}};
+         const auto err= glz::read<glz::opts{.error_on_unknown_keys = false}>(v, in);
+         expect(err == glz::error_code::none);
          const bool equal = (v == vr);
          expect(equal);
       }
@@ -2463,18 +2468,31 @@ suite tagged_variant_tests = [] {
    "tagged_variant_read_tests"_test = [] {
       tagged_variant var{};
       expect(glz::read_json(var, R"({"action":"DELETE","data":"the_internet"})") == glz::error_code::none);
+      expect(std::holds_alternative<delete_action>(var));
       expect(std::get<delete_action>(var).data == "the_internet");
 
       // tag at end
       expect(glz::read_json(var, R"({"data":"the_internet","action":"DELETE"})") == glz::error_code::none);
+      expect(std::holds_alternative<delete_action>(var));
       expect(std::get<delete_action>(var).data == "the_internet");
 
       tagged_variant2 var2{};
       expect(glz::read_json(var2, R"({"type":"put_action","data":{"x":100,"y":200}})") == glz::error_code::none);
+      expect(std::holds_alternative<put_action>(var2));
+      expect(std::get<put_action>(var2).data["x"] == 100);
       expect(std::get<put_action>(var2).data["y"] == 200);
 
       // tag at end
       expect(glz::read_json(var2, R"({"data":{"x":100,"y":200},"type":"put_action"})") == glz::error_code::none);
+      expect(std::holds_alternative<put_action>(var2));
+      expect(std::get<put_action>(var2).data["x"] == 100);
+      expect(std::get<put_action>(var2).data["y"] == 200);
+
+      //
+      const auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(var2, R"({"type":"put_action","data":{"x":100,"y":200}})");
+      expect(err == glz::error_code::none);
+      expect(std::holds_alternative<put_action>(var2));
+      expect(std::get<put_action>(var2).data["x"] == 100);
       expect(std::get<put_action>(var2).data["y"] == 200);
    };
 
