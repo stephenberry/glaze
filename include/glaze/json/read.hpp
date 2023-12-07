@@ -2106,7 +2106,7 @@ namespace glz
                                        std::visit(
                                           [&](auto&& v) {
                                              using V = std::decay_t<decltype(v)>;
-                                             constexpr bool is_object = glaze_object_t<V>;
+                                             constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
                                              if constexpr (is_object) {
                                                 from_json<V>::template op<opening_handled<Opts>(), tag_literal>(
                                                    v, ctx, it, end);
@@ -2182,7 +2182,7 @@ namespace glz
                            std::visit(
                               [&](auto&& v) {
                                  using V = std::decay_t<decltype(v)>;
-                                 constexpr bool is_object = glaze_object_t<V>;
+                                 constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
                                  if constexpr (is_object) {
                                     from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                                  }

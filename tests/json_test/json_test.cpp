@@ -6295,7 +6295,7 @@ struct glz::meta<Obj1>
                   value + 2
               };
    };
-   static constexpr auto value = glz::object(&T::value, &T::text, "list", glz::custom<skip{}, list_write>);
+   static constexpr auto value = object(&T::value, &T::text, "list", glz::custom<skip{}, list_write>);
 };
 
 struct Obj2
@@ -6308,12 +6308,10 @@ struct Obj2
 suite custom_object_variant_test = [] {
    "custom_object_variant"_test = [] {
       using Serializable = std::variant<Obj1, Obj2>;
-      /*std::vector<Serializable> objects{Obj1{1, "text 1"},
+      std::vector<Serializable> objects{Obj1{1, "text 1"},
          Obj1{2, "text 2"},
          Obj2{3, "text 3", 10, "1000"},
-         Obj1{4, "text 4"},};*/
-      
-      std::vector<Serializable> objects{Obj2{3, "text 3", 10, "1000"}};
+         Obj1{4, "text 4"},};
       
       constexpr auto prettify = glz::opts{.prettify = true};
       
@@ -6364,8 +6362,7 @@ suite custom_object_variant_test = [] {
       
       objects.clear();
       
-      const auto e = glz::read_json(objects, data);
-      expect(!e) << glz::format_error(e, data);
+      expect(!glz::read_json(objects, data));
       
       expect(data == glz::write<prettify>(objects));
    };
