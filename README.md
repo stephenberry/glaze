@@ -95,6 +95,7 @@ struct my_struct
   double d = 3.14;
   std::string hello = "Hello World";
   std::array<uint64_t, 3> arr = { 1, 2, 3 };
+  std::map<std::string, int> map{{"one", 1}, {"two", 2}};
 };
 ```
 
@@ -109,7 +110,11 @@ struct my_struct
       1,
       2,
       3
-   ]
+   ],
+   "map": {
+      "one": 1,
+      "two": 2
+   }
 }
 ```
 
@@ -118,7 +123,6 @@ struct my_struct
 ```c++
 my_struct s{};
 std::string buffer = glz::write_json(s);
-// buffer is now: {"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}
 ```
 
 or
@@ -127,13 +131,12 @@ or
 my_struct s{};
 std::string buffer{};
 glz::write_json(s, buffer);
-// buffer is now: {"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}
 ```
 
 **Read JSON**
 
 ```c++
-std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
+std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3],"map":{"one":1,"two":2}})";
 auto s = glz::read_json<my_struct>(buffer);
 if (s) // check for error
 {
@@ -144,7 +147,7 @@ if (s) // check for error
 or
 
 ```c++
-std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
+std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3],"map":{"one":1,"two":2}})";
 my_struct s{};
 auto ec = glz::read_json(s, buffer);
 if (ec) {
