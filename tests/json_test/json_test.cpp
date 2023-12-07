@@ -5632,11 +5632,11 @@ suite unquote_test = [] {
 
 suite complex_test = [] {
    "complex"_test = [] {
-      std::complex<int> cx{};
+      std::complex<double> cx{};
       std::string s = R"([1,2])";
       expect(!glz::read_json(cx, s));
-      expect(cx.real() == 1);
-      expect(cx.imag() == 2);
+      expect(cx.real() == 1.0);
+      expect(cx.imag() == 2.0);
 
       s.clear();
       glz::write_json(cx, s);
