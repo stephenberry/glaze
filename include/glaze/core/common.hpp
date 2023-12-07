@@ -842,16 +842,16 @@ namespace glz
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
             if constexpr (reflectable<V>) {
-               static constexpr auto members = member_names<V>();
+               constexpr auto members = member_names<V>();
                for_each<std::tuple_size_v<decltype(members)>>(
                   [&](auto J) { data[index++] = glz::get<J>(members); });
             }
             else {
                for_each<std::tuple_size_v<meta_t<V>>>(
                                                       [&](auto J) {
-                                                         static constexpr auto item = get<J>(meta_v<V>);
+                                                         constexpr auto item = get<J>(meta_v<V>);
                                                          using T0 = std::decay_t<decltype(get<0>(item))>;
-                                                         static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+                                                         constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
                                                          auto key_getter = [&] {
                                                             if constexpr (use_reflection) {
                                                                return get_name<get<0>(item)>();
