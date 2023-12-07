@@ -842,7 +842,7 @@ namespace glz
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
             if constexpr (reflectable<V>) {
-               constexpr auto members = member_names<V>();
+               constexpr auto members = member_names<V>;
                for_each<std::tuple_size_v<decltype(members)>>(
                   [&](auto J) { data[index++] = glz::get<J>(members); });
             }
@@ -891,7 +891,7 @@ namespace glz
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
             if constexpr (reflectable<V>) {
-               constexpr auto members = member_names<V>();
+               constexpr auto members = member_names<V>;
                for_each<std::tuple_size_v<decltype(members)>>(
                                                       [&](auto J) {
                                                          deduction_map.find(get<J>(members))->second[I] = true;

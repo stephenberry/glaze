@@ -1150,7 +1150,7 @@ namespace glz
          template <auto Options>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
-            static constexpr auto members = member_names<T>();
+            static constexpr auto members = member_names<T>;
             auto t = to_tuple(value);
             using V = decltype(t);
             static constexpr auto N = std::tuple_size_v<V>;
