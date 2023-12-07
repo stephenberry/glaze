@@ -36,8 +36,11 @@ namespace glz
          {
             using V = std::decay_t<decltype(value)>;
             using From = typename V::from_t;
-
-            if constexpr (std::is_member_pointer_v<From>) {
+            
+            if constexpr (std::same_as<From, skip>) {
+               skip_value<Opts>(ctx, it, end);
+            }
+            else if constexpr (std::is_member_pointer_v<From>) {
                if constexpr (std::is_member_function_pointer_v<From>) {
                   using Ret = typename return_type<From>::type;
                   if constexpr (std::is_void_v<Ret>) {

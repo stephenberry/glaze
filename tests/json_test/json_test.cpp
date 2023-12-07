@@ -6277,6 +6277,102 @@ suite reader_writer_test = [] {
    };
 };
 
+struct Obj1
+{
+    int value;
+    std::string text;
+};
+
+template <>
+struct glz::meta<Obj1>
+{
+   using T = Obj1;
+   static constexpr auto list_write = [](T& obj1) {
+      const auto& value = obj1.value;
+      return std::vector<int>{
+                  value,
+                  value + 1,
+                  value + 2
+              };
+   };
+   static constexpr auto value = glz::object(&T::value, &T::text, "list", glz::custom<skip{}, list_write>);
+};
+
+struct Obj2
+{
+    int value;
+    std::string text;
+    Obj1 obj1;
+};
+
+suite custom_object_variant_test = [] {
+   "custom_object_variant"_test = [] {
+      using Serializable = std::variant<Obj1, Obj2>;
+      /*std::vector<Serializable> objects{Obj1{1, "text 1"},
+         Obj1{2, "text 2"},
+         Obj2{3, "text 3", 10, "1000"},
+         Obj1{4, "text 4"},};*/
+      
+      static_assert(std::tuple_size_v<glz::detail::variant_types<Serializable>::object_types> == 2);
+      
+      std::vector<Serializable> objects{Obj2{3, "text 3", 10, "1000"}};
+      
+      constexpr auto prettify = glz::opts{.prettify = true};
+      
+      std::string data = glz::write<prettify>(objects);
+      
+      expect(data == R"([
+   {
+      "value": 1,
+      "text": "text 1",
+      "list": [
+         1,
+         2,
+         3
+      ]
+   },
+   {
+      "value": 2,
+      "text": "text 2",
+      "list": [
+         2,
+         3,
+         4
+      ]
+   },
+   {
+      "value": 3,
+      "text": "text 3",
+      "obj1": {
+         "value": 10,
+         "text": "1000",
+         "list": [
+            10,
+            11,
+            12
+         ]
+      }
+   },
+   {
+      "value": 4,
+      "text": "text 4",
+      "list": [
+         4,
+         5,
+         6
+      ]
+   }
+])");
+      
+      objects.clear();
+      
+      const auto e = glz::read_json(objects, data);
+      expect(!e) << glz::format_error(e, data);
+      
+      expect(data == glz::write<prettify>(objects));
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors

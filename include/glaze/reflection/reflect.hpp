@@ -11,18 +11,6 @@ namespace glz
 {
    namespace detail
    {
-      template <class T, size_t... I>
-      [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
-      {
-         return tuplet::make_tuple(nameof<I, T>...);
-      }
-
-      template <class T>
-      [[nodiscard]] constexpr auto member_names()
-      {
-         return member_names_impl<T>(std::make_index_sequence<count_members<T>()>{});
-      }
-
       template <class Tuple>
       using reflection_value_tuple_variant_t = typename tuple_ptr_variant<Tuple>::type;
 
