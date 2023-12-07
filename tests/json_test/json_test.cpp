@@ -6247,6 +6247,31 @@ suite value_lambda_test = [] {
    };
 };
 
+struct reader_writer1 {
+  void read(const std::string&) {}
+  std::vector<std::string> write() { return {"1", "2", "3"}; }
+  struct glaze {
+     using T = reader_writer1;
+    static constexpr auto value = glz::custom<&T::read, &T::write>;
+  };
+};
+
+struct reader_writer2 {
+   std::vector<reader_writer1> r{{}};
+  struct glaze {
+    static constexpr auto value = &reader_writer2::r;
+  };
+};
+
+suite reader_writer_test = [] {
+   "reader_writer"_test = [] {
+      reader_writer2 obj{};
+      std::string s;
+      glz::write_json(obj, s);
+      expect(s == R"([["1","2","3"]])") << s;
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
