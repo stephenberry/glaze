@@ -132,8 +132,8 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
             using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
-            from_json<V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>), std::forward<Ctx>(ctx),
-                                            std::forward<It0>(it), std::forward<It1>(end));
+            from_json<V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+                                            std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 

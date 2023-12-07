@@ -6216,7 +6216,7 @@ suite value_lambda_test = [] {
 
       auto s = glz::write_json(obj);
       expect(s == "55") << s;
-      
+
       obj.x = 0;
       expect(!glz::read_json(obj, s));
       expect(obj.x == 55);
