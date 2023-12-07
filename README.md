@@ -219,7 +219,8 @@ struct glz::meta<my_struct> {
       &T::i,
       &T::d,
       &T::hello,
-      &T::arr
+      &T::arr,
+      &T::map
    );
 };
 ```
@@ -235,6 +236,7 @@ struct my_struct
   double d = 3.14;
   std::string hello = "Hello World";
   std::array<uint64_t, 3> arr = { 1, 2, 3 };
+  std::map<std::string, int> map{{"one", 1}, {"two", 2}};
   
   struct glaze {
      using T = my_struct;
@@ -242,7 +244,8 @@ struct my_struct
         &T::i,
         &T::d,
         &T::hello,
-        &T::arr
+        &T::arr,
+        &T::map
      );
   };
 };
@@ -264,7 +267,8 @@ struct glz::meta<my_struct> {
       "integer", &T::i,
       "double", &T::d,
       "string", &T::hello,
-      "array", &T::arr
+      "array", &T::arr,
+      "my map", &T::map
    );
 };
 ```
