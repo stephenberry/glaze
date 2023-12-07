@@ -134,7 +134,12 @@ namespace glz
                   read<json>::op<Opts>(value.from(value.val), ctx, it, end);
                }
                else {
-                  static_assert(false_v<T>, "IMPORTANT: If you have two arguments in your lambda (e.g. [](my_struct&, const std::string& input)) you must make all the arguments concrete types. None of the inputs can be `auto`. Also, you probably cannot define these lambdas within a local `struct glaze`, but instead need to use `glz::meta` outside your class so that your lambda can operate on a defined class.");
+                  static_assert(
+                     false_v<T>,
+                     "IMPORTANT: If you have two arguments in your lambda (e.g. [](my_struct&, const std::string& "
+                     "input)) you must make all the arguments concrete types. None of the inputs can be `auto`. Also, "
+                     "you probably cannot define these lambdas within a local `struct glaze`, but instead need to use "
+                     "`glz::meta` outside your class so that your lambda can operate on a defined class.");
                }
             }
          }
