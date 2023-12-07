@@ -890,21 +890,30 @@ namespace glz
          constexpr auto N = std::variant_size_v<T>;
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
-            for_each<std::tuple_size_v<meta_t<V>>>(
-                                                   [&](auto J) {
-                                                      constexpr auto item = get<J>(meta_v<V>);
-                                                      using T0 = std::decay_t<decltype(get<0>(item))>;
-                                                      constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
-                                                      auto key_getter = [&] {
-                                                         if constexpr (use_reflection) {
-                                                            return get_name<get<0>(item)>();
-                                                         }
-                                                         else {
-                                                            return get<0>(item);
-                                                         }
-                                                      };
-                                                      deduction_map.find(key_getter())->second[I] = true;
-                                                   });
+            if constexpr (reflectable<V>) {
+               constexpr auto members = member_names<V>();
+               for_each<std::tuple_size_v<decltype(members)>>(
+                                                      [&](auto J) {
+                                                         deduction_map.find(get<J>(members))->second[I] = true;
+                                                      });
+            }
+            else {
+               for_each<std::tuple_size_v<meta_t<V>>>(
+                                                      [&](auto J) {
+                                                         constexpr auto item = get<J>(meta_v<V>);
+                                                         using T0 = std::decay_t<decltype(get<0>(item))>;
+                                                         constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+                                                         auto key_getter = [&] {
+                                                            if constexpr (use_reflection) {
+                                                               return get_name<get<0>(item)>();
+                                                            }
+                                                            else {
+                                                               return get<0>(item);
+                                                            }
+                                                         };
+                                                         deduction_map.find(key_getter())->second[I] = true;
+                                                      });
+            }
          });
 
          return deduction_map;
