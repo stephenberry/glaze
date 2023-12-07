@@ -101,15 +101,40 @@ namespace glz
                }
             }
             else {
-               using Func = decltype(value.from);
-               using V = decltype(value.val);
-               if constexpr (std::invocable<Func, V, const sv> || std::invocable<Func, V, const std::string&>) {
-                  std::string input{};
-                  read<json>::op<Opts>(input, ctx, it, end);
-                  value.from(value.val, input);
+               if constexpr (is_lambda_concrete<From>) {
+                  using Ret = lambda_result_t<From>;
+                  if constexpr (std::is_void_v<Ret>) {
+                     using Tuple = lambda_args_t<From>;
+                     constexpr auto N = std::tuple_size_v<Tuple>;
+                     if constexpr (N == 0) {
+                        static_assert(false_v<T>, "lambda must take in the class as the first argument");
+                     }
+                     else if constexpr (N == 1) {
+                        skip_array<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        value.from(value.val);
+                     }
+                     else if constexpr (N == 2) {
+                        std::decay_t<std::tuple_element_t<1, Tuple>> input{};
+                        read<json>::op<Opts>(input, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        value.from(value.val, input);
+                     }
+                     else {
+                        static_assert(false_v<T>, "lambda cannot have more than two inputs");
+                     }
+                  }
+                  else {
+                     static_assert(false_v<T>, "lambda must have void return");
+                  }
+               }
+               else if constexpr (std::invocable<From, decltype(value.val)>) {
+                  read<json>::op<Opts>(value.from(value.val), ctx, it, end);
                }
                else {
-                  read<json>::op<Opts>(get_member(value.val, value.from), ctx, it, end);
+                  static_assert(false_v<T>, "IMPORTANT: If you have two arguments in your lambda (e.g. [](my_struct&, const std::string& input)) you must make all the arguments concrete types. None of the inputs can be `auto`. Also, you probably cannot define these lambdas within a local `struct glaze`, but instead need to use `glz::meta` outside your class so that your lambda can operate on a defined class.");
                }
             }
          }

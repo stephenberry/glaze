@@ -5577,13 +5577,14 @@ suite custom_load_test = [] {
 struct custom_buffer_input
 {
    std::string str{};
+};
 
-   struct glaze
-   {
-      static constexpr auto read_x = [](auto& s, const std::string& input) { s.str = input; };
-      static constexpr auto write_x = [](auto& s) -> auto& { return s.str; };
-      static constexpr auto value = glz::object("str", glz::custom<read_x, write_x>);
-   };
+template <>
+struct glz::meta<custom_buffer_input>
+{
+   static constexpr auto read_x = [](custom_buffer_input& s, const std::string& input) { s.str = input; };
+   static constexpr auto write_x = [](auto& s) -> auto& { return s.str; };
+   static constexpr auto value = glz::object("str", glz::custom<read_x, write_x>);
 };
 
 suite custom_buffer_input_test = [] {
