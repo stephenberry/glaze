@@ -36,7 +36,7 @@ namespace glz
          {
             using V = std::decay_t<decltype(value)>;
             using From = typename V::from_t;
-            
+
             if constexpr (std::same_as<From, skip>) {
                skip_value<Opts>(ctx, it, end);
             }

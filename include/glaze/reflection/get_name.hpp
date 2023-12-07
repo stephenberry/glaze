@@ -87,7 +87,7 @@ namespace glz
       constexpr auto tmp = name.substr(0, begin);
       return tmp.substr(tmp.find_last_of(detail::reflect_type::begin) + 1);
    }();
-   
+
    template <class T, size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {

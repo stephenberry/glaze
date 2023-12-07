@@ -1953,8 +1953,8 @@ namespace glz
                glaze_enum_t<Ts>,
             tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
          using object_types = decltype(tuplet::tuple_cat(
-            std::conditional_t < reflectable<Ts> || readable_map_t<Ts> || writable_map_t<Ts> || glaze_object_t<Ts>, tuplet::tuple<Ts>,
-            tuplet::tuple < >> {}...));
+            std::conditional_t < reflectable<Ts> || readable_map_t<Ts> || writable_map_t<Ts> || glaze_object_t<Ts>,
+            tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
          using array_types =
             decltype(tuplet::tuple_cat(std::conditional_t < array_t<remove_meta_wrapper_t<Ts>> || glaze_array_t<Ts>,
                                        tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
