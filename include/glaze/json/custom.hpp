@@ -101,7 +101,16 @@ namespace glz
                }
             }
             else {
-               read<json>::op<Opts>(get_member(value.val, value.from), ctx, it, end);
+               using Func = decltype(value.from);
+               using V = decltype(value.val);
+               if constexpr (std::invocable<Func, V, const sv> || std::invocable<Func, V, const std::string&>) {
+                  std::string input{};
+                  read<json>::op<Opts>(input, ctx, it, end);
+                  value.from(value.val, input);
+               }
+               else {
+                  read<json>::op<Opts>(get_member(value.val, value.from), ctx, it, end);
+               }
             }
          }
       };

@@ -5551,7 +5551,6 @@ struct custom_load_t
 
    struct glaze
    {
-      using T = custom_load_t;
       static constexpr auto read_x = [](auto& s) -> auto& { return s.x; };
       static constexpr auto write_x = [](auto& s) -> auto& { return s.y; };
       static constexpr auto value = glz::object("x", glz::custom<read_x, write_x>);
@@ -5572,6 +5571,31 @@ suite custom_load_test = [] {
       expect(obj.x[0] == 1);
       expect(obj.x[1] == 2);
       expect(obj.x[2] == 3);
+   };
+};
+
+struct custom_buffer_input
+{
+   std::string str{};
+
+   struct glaze
+   {
+      static constexpr auto read_x = [](auto& s, const std::string& input) { s.str = input; };
+      static constexpr auto write_x = [](auto& s) -> auto& { return s.str; };
+      static constexpr auto value = glz::object("str", glz::custom<read_x, write_x>);
+   };
+};
+
+suite custom_buffer_input_test = [] {
+   "custom_buffer_input"_test = [] {
+      custom_buffer_input obj{};
+      std::string s = R"({"str":"Hello!"})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.str == "Hello!");
+      s.clear();
+      glz::write_json(obj, s);
+      expect(s == R"({"str":"Hello!"})");
+      expect(obj.str == "Hello!");
    };
 };
 
