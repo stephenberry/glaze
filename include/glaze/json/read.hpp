@@ -128,11 +128,11 @@ namespace glz
       template <glaze_value_t T>
       struct from_json<T>
       {
-         template <auto Opts, is_context Ctx, class It0, class It1>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
+         template <auto Opts, class Value, is_context Ctx, class It0, class It1>
+         GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
-            using V = std::decay_t<decltype(get_member(std::declval<T>(), meta_wrapper_v<T>))>;
-            from_json<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
+            using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
+            from_json<V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>), std::forward<Ctx>(ctx),
                                             std::forward<It0>(it), std::forward<It1>(end));
          }
       };
