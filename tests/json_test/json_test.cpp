@@ -6313,8 +6313,6 @@ suite custom_object_variant_test = [] {
          Obj2{3, "text 3", 10, "1000"},
          Obj1{4, "text 4"},};*/
       
-      static_assert(std::tuple_size_v<glz::detail::variant_types<Serializable>::object_types> == 2);
-      
       std::vector<Serializable> objects{Obj2{3, "text 3", 10, "1000"}};
       
       constexpr auto prettify = glz::opts{.prettify = true};
