@@ -19,7 +19,7 @@ namespace glz
       {
          using V = decltype(to_tuple(std::declval<T>()));
          constexpr auto n = std::tuple_size_v<V>;
-         [[maybe_unused]] constexpr auto members = member_names<T>();
+         [[maybe_unused]] constexpr auto members = member_names<T>;
          static_assert(count_members<T>() == n);
 
          using value_t = reflection_value_tuple_variant_t<V>;
