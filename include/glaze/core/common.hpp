@@ -896,7 +896,7 @@ namespace glz
          else if constexpr (std::is_member_function_pointer_v<V>) {
             return member_ptr;
          }
-         else if constexpr (std::invocable<MemPtr, decltype(value)>) {
+         else if constexpr (std::invocable<MemPtr, Value>) {
             return std::invoke(std::forward<MemPtr>(member_ptr), std::forward<Value>(value));
          }
          else if constexpr (std::is_pointer_v<V>) {
