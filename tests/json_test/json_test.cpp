@@ -5577,13 +5577,14 @@ suite custom_load_test = [] {
 struct custom_buffer_input
 {
    std::string str{};
+};
 
-   struct glaze
-   {
-      static constexpr auto read_x = [](auto& s, const std::string& input) { s.str = input; };
-      static constexpr auto write_x = [](auto& s) -> auto& { return s.str; };
-      static constexpr auto value = glz::object("str", glz::custom<read_x, write_x>);
-   };
+template <>
+struct glz::meta<custom_buffer_input>
+{
+   static constexpr auto read_x = [](custom_buffer_input& s, const std::string& input) { s.str = input; };
+   static constexpr auto write_x = [](auto& s) -> auto& { return s.str; };
+   static constexpr auto value = glz::object("str", glz::custom<read_x, write_x>);
 };
 
 suite custom_buffer_input_test = [] {
@@ -6244,6 +6245,31 @@ suite value_lambda_test = [] {
       obj.x = 0;
       expect(!glz::read_json(obj, s));
       expect(obj.x == 55);
+   };
+};
+
+struct reader_writer1 {
+  void read(const std::string&) {}
+  std::vector<std::string> write() { return {"1", "2", "3"}; }
+  struct glaze {
+     using T = reader_writer1;
+    static constexpr auto value = glz::custom<&T::read, &T::write>;
+  };
+};
+
+struct reader_writer2 {
+   std::vector<reader_writer1> r{{}};
+  struct glaze {
+    static constexpr auto value = &reader_writer2::r;
+  };
+};
+
+suite reader_writer_test = [] {
+   "reader_writer"_test = [] {
+      reader_writer2 obj{};
+      std::string s;
+      glz::write_json(obj, s);
+      expect(s == R"([["1","2","3"]])") << s;
    };
 };
 

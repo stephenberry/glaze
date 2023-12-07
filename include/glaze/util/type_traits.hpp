@@ -152,4 +152,31 @@ namespace glz
          return typename arguments<MemPtr, Type>::type{};
       }
    }
+   
+   template <class>
+   struct lambda_traits : std::false_type {};
+
+   template <class R, class T, class... Args>
+   struct lambda_traits<R (T::*)(Args...) const> : std::true_type {
+       using result_type = R;
+       using arguments = std::tuple<Args...>;
+       using object_type = T;
+   };
+
+   template <class R, class T, class... Args>
+   struct lambda_traits<R (T::*)(Args...)> : std::true_type {
+       using result_type = R;
+       using arguments = std::tuple<Args...>;
+       using object_type = T;
+   };
+   
+   template <class T>
+   using lambda_args_t = typename lambda_traits<decltype(&T::operator())>::arguments;
+   
+   template <class T>
+   using lambda_result_t = typename lambda_traits<decltype(&T::operator())>::result_type;
+   
+   // checks if type is a lambda with all known arguments
+   template <class T>
+   concept is_lambda_concrete = requires { typename lambda_traits<decltype(&T::operator())>::result_type; };
 }
