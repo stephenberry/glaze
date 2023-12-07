@@ -8,6 +8,7 @@
 #include <string_view>
 
 #include "glaze/reflection/to_tuple.hpp"
+#include "glaze/tuplet/tuple.hpp"
 
 #if defined(__clang__) || defined(__GNUC__)
 #define GLZ_PRETTY_FUNCTION __PRETTY_FUNCTION__
@@ -86,6 +87,18 @@ namespace glz
       constexpr auto tmp = name.substr(0, begin);
       return tmp.substr(tmp.find_last_of(detail::reflect_type::begin) + 1);
    }();
+   
+   template <class T, size_t... I>
+   [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
+   {
+      return tuplet::make_tuple(nameof<I, T>...);
+   }
+
+   template <class T>
+   [[nodiscard]] constexpr auto member_names()
+   {
+      return member_names_impl<T>(std::make_index_sequence<detail::count_members<T>()>{});
+   }
 }
 
 // For member object pointers

@@ -1953,7 +1953,7 @@ namespace glz
                glaze_enum_t<Ts>,
             tuplet::tuple<Ts>, tuplet::tuple < >> {}...));
          using object_types = decltype(tuplet::tuple_cat(
-            std::conditional_t < readable_map_t<Ts> || writable_map_t<Ts> || glaze_object_t<Ts>, tuplet::tuple<Ts>,
+            std::conditional_t < reflectable<Ts> || readable_map_t<Ts> || writable_map_t<Ts> || glaze_object_t<Ts>, tuplet::tuple<Ts>,
             tuplet::tuple < >> {}...));
          using array_types =
             decltype(tuplet::tuple_cat(std::conditional_t < array_t<remove_meta_wrapper_t<Ts>> || glaze_array_t<Ts>,
@@ -2055,7 +2055,7 @@ namespace glz
                   }
                   else {
                      auto possible_types = bit_array<std::variant_size_v<T>>{}.flip();
-                     static constexpr auto deduction_map = glz::detail::make_variant_deduction_map<T>();
+                     static constexpr auto deduction_map = detail::make_variant_deduction_map<T>();
                      static constexpr auto tag_literal = string_literal_from_view<tag_v<T>.size()>(tag_v<T>);
                      skip_ws<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
@@ -2106,7 +2106,7 @@ namespace glz
                                        std::visit(
                                           [&](auto&& v) {
                                              using V = std::decay_t<decltype(v)>;
-                                             constexpr bool is_object = glaze_object_t<V>;
+                                             constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
                                              if constexpr (is_object) {
                                                 from_json<V>::template op<opening_handled<Opts>(), tag_literal>(
                                                    v, ctx, it, end);
@@ -2182,7 +2182,7 @@ namespace glz
                            std::visit(
                               [&](auto&& v) {
                                  using V = std::decay_t<decltype(v)>;
-                                 constexpr bool is_object = glaze_object_t<V>;
+                                 constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
                                  if constexpr (is_object) {
                                     from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it, end);
                                  }
