@@ -821,7 +821,7 @@ namespace glz
 
       // get a std::string_view from an enum value
       template <class T>
-         requires(detail::glaze_t<T> && std::is_enum_v<T>)
+         requires(detail::glaze_t<T> && std::is_enum_v<std::decay_t<T>>)
       constexpr auto get_enum_name(T&& enum_value)
       {
          using V = std::decay_t<T>;
