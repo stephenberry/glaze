@@ -818,6 +818,15 @@ namespace glz
          constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_string_to_enum_map_impl<T>(indices);
       }
+      
+      // get a std::string_view from an enum value
+      template <class T> requires (detail::glaze_t<T> && std::is_enum_v<T>)
+      constexpr auto get_enum_name(T&& enum_value) {
+         using V = std::decay_t<T>;
+        using U = std::underlying_type_t<V>;
+        constexpr auto arr = glz::detail::make_enum_to_string_array<V>();
+         return arr[static_cast<U>(enum_value)];
+      }
 
       template <class T, size_t N>
       constexpr size_t get_max_keys = [] {
