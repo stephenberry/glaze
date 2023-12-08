@@ -153,7 +153,7 @@ static_assert(glz::detail::get_enum_name(Color::Green) == "Green");
 suite get_enum_name_tests = [] {
    "get_enum_name"_test = [] {
       auto color = Color::Green;
-      
+
       const auto name = glz::detail::get_enum_name(color);
       expect(name == "Green");
    };
