@@ -820,8 +820,7 @@ namespace glz
       }
 
       template <class T, size_t N>
-      constexpr size_t get_max_keys = []
-      {
+      constexpr size_t get_max_keys = [] {
          size_t res{};
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
@@ -841,7 +840,8 @@ namespace glz
          constexpr auto N = std::variant_size_v<T>;
 
          std::array<std::string_view, get_max_keys<T, N>> data{};
-         auto* data_ptr = &data; // This intermediate pointer is necessary for GCC 13 (otherwise segfaults with reflection logic)
+         auto* data_ptr =
+            &data; // This intermediate pointer is necessary for GCC 13 (otherwise segfaults with reflection logic)
          size_t index = 0;
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
