@@ -819,31 +819,35 @@ namespace glz
          return make_string_to_enum_map_impl<T>(indices);
       }
 
+      template <class T, size_t N>
+      constexpr size_t get_max_keys = []
+      {
+         size_t res{};
+         for_each<N>([&](auto I) {
+            using V = std::decay_t<std::variant_alternative_t<I, T>>;
+            if constexpr (reflectable<V>) {
+               res += count_members<V>();
+            }
+            else {
+               res += std::tuple_size_v<meta_t<V>>;
+            }
+         });
+         return res;
+      }();
+
       template <class T>
       constexpr auto get_combined_keys_from_variant()
       {
          constexpr auto N = std::variant_size_v<T>;
-         constexpr size_t max_keys = []() {
-            size_t res{};
-            for_each<N>([&](auto I) {
-               using V = std::decay_t<std::variant_alternative_t<I, T>>;
-               if constexpr (reflectable<V>) {
-                  res += count_members<V>();
-               }
-               else {
-                  res += std::tuple_size_v<meta_t<V>>;
-               }
-            });
-            return res;
-         }();
 
-         std::array<std::string_view, max_keys> data{};
+         std::array<std::string_view, get_max_keys<T, N>> data{};
+         auto* data_ptr = &data; // This intermediate pointer is necessary for GCC 13 (otherwise segfaults with reflection logic)
          size_t index = 0;
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
             if constexpr (reflectable<V>) {
                for_each<std::tuple_size_v<decltype(member_names<V>)>>(
-                  [&](auto J) { data[index++] = glz::get<J>(member_names<V>); });
+                  [&](auto J) { (*data_ptr)[index++] = glz::get<J>(member_names<V>); });
             }
             else {
                for_each<std::tuple_size_v<meta_t<V>>>([&](auto J) {
@@ -857,14 +861,14 @@ namespace glz
                         return get<0>(get<J>(meta_v<V>));
                      }
                   };
-                  data[index++] = key_getter();
+                  (*data_ptr)[index++] = key_getter();
                });
             }
          });
 
-         std::sort(data.data(), data.data() + max_keys);
-         const auto end = std::unique(data.data(), data.data() + max_keys);
-         const auto size = std::distance(data.data(), end);
+         std::sort(data.begin(), data.end());
+         const auto end = std::unique(data.begin(), data.end());
+         const auto size = std::distance(data.begin(), end);
 
          return std::pair{data, size};
       }
