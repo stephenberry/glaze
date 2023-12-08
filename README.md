@@ -4,7 +4,7 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from obje
 Glaze isn't just a JSON library. Glaze also supports:
 
 - [BEVE](https://github.com/stephenberry/beve) (binary efficient versatile encoding)
-- [CSV](https://en.wikipedia.org/wiki/Comma-separated_values#:~:text=Comma%2Dseparated%20values%20(CSV),commas%20in%20the%20CSV%20file.) (comma separated value)
+- [CSV](https://github.com/stephenberry/glaze/blob/main/docs/csv.md) (comma separated value)
 
 ## Now with full compile time reflection for MSVC, Clang, and GCC!
 

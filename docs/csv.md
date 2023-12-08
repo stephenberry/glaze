@@ -1,6 +1,6 @@
 # CSV (Comma Separated Values)
 
-Glaze supports CSV reading and writing for glaze meta objects and standard map types.
+Glaze supports [CSV](https://en.wikipedia.org/wiki/Comma-separated_values) reading and writing for glaze meta objects and standard map types.
 
 By default Glaze writes out structures row-wise, which is more efficient if all the data is available at once. However, column-wise CSV format is also supported.
 
