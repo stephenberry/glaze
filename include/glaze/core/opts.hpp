@@ -38,7 +38,7 @@ namespace glz
       bool no_header = false; // whether or not a binary header is needed
       bool write_unknown = true; // whether to write unkwown fields
 
-      [[nodscard]] constexpr bool operator==(const opts&) const noexcept = default;
+      [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
 
    template <opts Opts>
