@@ -67,11 +67,23 @@ namespace glz
       using type = Result (*)(void*, std::decay_t<Args>&&...);
    };
 
+   template <class ClassType, class Result, class... Args>
+   struct function_signature<Result (ClassType::*)(Args...) const>
+   {
+      using type = Result (*)(void*, std::decay_t<Args>&&...);
+   };
+
    template <class T>
    struct std_function_signature;
 
    template <class ClassType, class Result, class... Args>
    struct std_function_signature<Result (ClassType::*)(Args...)>
+   {
+      using type = std::function<Result(Args...)>;
+   };
+
+   template <class ClassType, class Result, class... Args>
+   struct std_function_signature<Result (ClassType::*)(Args...) const>
    {
       using type = std::function<Result(Args...)>;
    };
@@ -95,11 +107,23 @@ namespace glz
       using type = std::function<Result(keep_non_const_ref_t<Args>...)>;
    };
 
+   template <class ClassType, class Result, class... Args>
+   struct std_function_signature_decayed_keep_non_const_ref<Result (ClassType::*)(Args...) const>
+   {
+      using type = std::function<Result(keep_non_const_ref_t<Args>...)>;
+   };
+
    template <class T>
    struct return_type;
 
    template <class ClassType, class Result, class... Args>
    struct return_type<Result (ClassType::*)(Args...)>
+   {
+      using type = Result;
+   };
+
+   template <class ClassType, class Result, class... Args>
+   struct return_type<Result (ClassType::*)(Args...) const>
    {
       using type = Result;
    };
@@ -113,11 +137,23 @@ namespace glz
       using type = std::tuple<Args...>;
    };
 
+   template <class ClassType, class Result, class... Args>
+   struct inputs_as_tuple<Result (ClassType::*)(Args...) const>
+   {
+      using type = std::tuple<Args...>;
+   };
+
    template <class T>
    struct parent_of_fn;
 
    template <class ClassType, class Result, class... Args>
    struct parent_of_fn<Result (ClassType::*)(Args...)>
+   {
+      using type = ClassType;
+   };
+
+   template <class ClassType, class Result, class... Args>
+   struct parent_of_fn<Result (ClassType::*)(Args...) const>
    {
       using type = ClassType;
    };
@@ -133,6 +169,16 @@ namespace glz
 
    template <auto MemPtr, class T, class R, class... Args>
    struct arguments<MemPtr, R (T::*)(Args...)>
+   {
+      static constexpr auto op(void* ptr, std::decay_t<Args>&&... args)
+         -> std::invoke_result_t<decltype(std::mem_fn(MemPtr)), T, Args...>
+      {
+         return (reinterpret_cast<T*>(ptr)->*MemPtr)(std::forward<Args>(args)...);
+      }
+   };
+
+   template <auto MemPtr, class T, class R, class... Args>
+   struct arguments<MemPtr, R (T::*)(Args...) const>
    {
       static constexpr auto op(void* ptr, std::decay_t<Args>&&... args)
          -> std::invoke_result_t<decltype(std::mem_fn(MemPtr)), T, Args...>
