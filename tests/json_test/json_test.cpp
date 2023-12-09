@@ -5611,6 +5611,35 @@ suite custom_buffer_input_test = [] {
    };
 };
 
+class class_with_const_mem_func
+{
+public:
+  int get_i() const { return i; }  // This only works if it's non-const
+  void set_i(int I) { i = I; }
+
+private:
+  int i = 0;
+};
+
+template <>
+struct glz::meta<class_with_const_mem_func>
+{
+   using T = class_with_const_mem_func;
+  static constexpr auto value = object("i", custom<&T::set_i, &T::get_i>);
+};
+
+suite const_mem_func_tests = [] {
+   "const_mem_func"_test = [] {
+      class_with_const_mem_func obj{};
+      std::string s = R"({"i":55})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.get_i() == 55);
+      s.clear();
+      glz::write_json(obj, s);
+      expect(s == R"({"i":55})");
+   };
+};
+
 struct client_state
 {
    uint64_t id{};
