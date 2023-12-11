@@ -1753,7 +1753,7 @@ namespace glz
                         
                         decltype(auto) frozen_map = [&]{
                            if constexpr (reflectable<T>) {
-                              static constinit auto cmap = make_reflection_map<T, Opts.use_hash_comparison>();
+                              static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
                               // we have to populate the pointers in the reflection map from the structured binding
                               auto t = to_tuple(value);
                               for_each<num_members>([&](auto I) {
@@ -1763,7 +1763,7 @@ namespace glz
                               return cmap;
                            }
                            else {
-                              static constexpr auto cmap = detail::make_map<T, Opts.use_hash_comparison>();
+                              static constexpr auto cmap = make_map<T, Opts.use_hash_comparison>();
                               return cmap;
                            }
                         }();

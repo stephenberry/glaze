@@ -746,7 +746,7 @@ namespace glz
          }
       }
 
-      template <class T, bool use_hash_comparison = false>
+      template <class T, bool use_hash_comparison = false> requires (!reflectable<T>)
       constexpr auto make_map()
       {
          constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
