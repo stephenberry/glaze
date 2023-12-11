@@ -704,18 +704,6 @@ namespace glz
          using value_t = value_tuple_variant_t<meta_t<T>>;
          constexpr auto n = std::tuple_size_v<meta_t<T>>;
 
-         auto naive_or_normal_hash = [&] {
-            if constexpr (n == 0) { // Need for MSVC?
-               static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
-            }
-            else if constexpr (n <= 20) {
-               return glz::detail::naive_map<value_t, n, use_hash_comparison>({key_value<T, I>()...});
-            }
-            else {
-               return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({key_value<T, I>()...});
-            }
-         };
-
          if constexpr (n == 0) {
             static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
          }
@@ -739,12 +727,22 @@ namespace glz
                   return make_single_char_map<value_t, back_desc>({key_value<T, I>()...});
                }
                else {
-                  return naive_or_normal_hash();
+                  if constexpr (n <= 20) {
+                     return glz::detail::naive_map<value_t, n, use_hash_comparison>({key_value<T, I>()...});
+                  }
+                  else {
+                     return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({key_value<T, I>()...});
+                  }
                }
             }
          }
          else {
-            return naive_or_normal_hash();
+            if constexpr (n <= 20) {
+               return glz::detail::naive_map<value_t, n, use_hash_comparison>({key_value<T, I>()...});
+            }
+            else {
+               return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({key_value<T, I>()...});
+            }
          }
       }
 
