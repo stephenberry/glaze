@@ -66,7 +66,11 @@ namespace glz::detail
    {
       static constexpr auto name = get_mangled_name<GLAZE_REFLECTOR>();
       static constexpr auto end = name.substr(name.find("GLAZE_REFLECTOR") + sizeof("GLAZE_REFLECTOR") - 1);
-      static constexpr auto begin = "T = ";
+#if defined(__GNUC__) || defined(__clang__)
+      static constexpr auto begin = std::string_view{"T = "};
+#else
+      static constexpr auto begin = std::string_view{"glz::detail::get_mangled_name<"};
+#endif
    };
 }
 
@@ -85,7 +89,12 @@ namespace glz
       constexpr auto name = detail::get_mangled_name<T>();
       constexpr auto begin = name.find(detail::reflect_type::end);
       constexpr auto tmp = name.substr(0, begin);
-      return tmp.substr(tmp.find_last_of(detail::reflect_type::begin) + 1);
+#if defined(__GNUC__) || defined(__clang__)
+      return tmp.substr(tmp.rfind(detail::reflect_type::begin) + detail::reflect_type::begin.size());
+#else
+      constexpr auto name_with_keyword = tmp.substr(tmp.rfind(detail::reflect_type::begin) + detail::reflect_type::begin.size());
+      return name_with_keyword.substr(name_with_keyword.find(' ') + 1);
+#endif
    }();
 
    template <class T, size_t... I>

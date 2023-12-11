@@ -6,10 +6,9 @@ Glaze isn't just a JSON library. Glaze also supports:
 - [BEVE](https://github.com/stephenberry/beve) (binary efficient versatile encoding)
 - [CSV](https://github.com/stephenberry/glaze/blob/main/docs/csv.md) (comma separated value)
 
-## Now with full compile time reflection for MSVC, Clang, and GCC!
+## Now with pure compile time reflection for MSVC, Clang, and GCC!
 
-- No need to write `glz::meta` definitions unless you want to customize your reflection
-- Works on non-constexpr types!
+- For aggregate initializable structs
 - Compile time reflection so we still get perfect hashing!
 
 ## Highlights
