@@ -338,6 +338,7 @@ namespace glz
 
             using V = std::decay_t<decltype(value)>;
             if constexpr (int_t<V>) {
+               static constexpr auto maximum = uint64_t((std::numeric_limits<V>::max)());
                if constexpr (std::is_unsigned_v<V>) {
                   if constexpr (std::same_as<V, uint64_t>) {
                      if (*it == '-') [[unlikely]] {
@@ -371,8 +372,9 @@ namespace glz
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
-
-                     if (i > (std::numeric_limits<V>::max)()) [[unlikely]] {
+                     
+                     
+                     if (i > maximum) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
@@ -406,7 +408,7 @@ namespace glz
                      value = V(sign * i);
                   }
                   else {
-                     if (i > (std::numeric_limits<V>::max)()) [[unlikely]] {
+                     if (i > maximum) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
