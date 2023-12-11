@@ -1283,7 +1283,7 @@ suite glz_obj_tests = [] {
    };
 };
 
-/*struct reflectable_t
+struct reflectable_t
 {
    int x{1};
    int y{2};
@@ -1292,17 +1292,19 @@ suite glz_obj_tests = [] {
    constexpr bool operator==(const reflectable_t&) const noexcept = default;
 };
 
+static_assert(glz::detail::reflectable<reflectable_t>);
+
 suite reflection_test = [] {
    "reflectable_t"_test = [] {
       std::string s;
       reflectable_t obj{};
       glz::write_binary(obj, s);
 
-      reflectable_t copy = obj;
-      expect(!glz::read_binary(copy, s));
-      expect(copy == obj);
+      reflectable_t compare{};
+      expect(!glz::read_binary(compare, s));
+      expect(compare == obj);
    };
-};*/
+};
 
 int main()
 {
