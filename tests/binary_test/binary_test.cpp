@@ -1288,7 +1288,7 @@ struct reflectable_t
    int x{1};
    int y{2};
    int z{3};
-   
+
    constexpr bool operator==(const reflectable_t&) const noexcept = default;
 };
 

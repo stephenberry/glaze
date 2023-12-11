@@ -533,7 +533,7 @@ namespace glz
             dump_type(tag, args...);
 
             using V = std::decay_t<T>;
-            static constexpr auto N = []{
+            static constexpr auto N = [] {
                if constexpr (reflectable<T>) {
                   return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
                }
@@ -541,9 +541,9 @@ namespace glz
                   return std::tuple_size_v<meta_t<V>>;
                }
             }();
-            
+
             dump_compressed_int<N>(args...);
-            
+
             if constexpr (reflectable<T>) {
                static constexpr auto members = member_names<T>;
                auto t = to_tuple(value);

@@ -372,8 +372,7 @@ namespace glz
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
-                     
-                     
+
                      if (i > maximum) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
@@ -1637,17 +1636,17 @@ namespace glz
             match<'}'>(ctx, it, end);
          }
       };
-      
+
       template <reflectable T>
-       constexpr void populate_map(T&& value, auto& cmap) noexcept
-       {
-          // we have to populate the pointers in the reflection map from the structured binding
-          auto t = to_tuple(value);
-          for_each<std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>>([&](auto I) {
-             std::get<std::add_pointer_t<std::decay_t<decltype(std::get<I>(t))>>>(std::get<I>(cmap.items).second) =
-                &std::get<I>(t);
-          });
-       }
+      constexpr void populate_map(T&& value, auto& cmap) noexcept
+      {
+         // we have to populate the pointers in the reflection map from the structured binding
+         auto t = to_tuple(value);
+         for_each<std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>>([&](auto I) {
+            std::get<std::add_pointer_t<std::decay_t<decltype(std::get<I>(t))>>>(std::get<I>(cmap.items).second) =
+               &std::get<I>(t);
+         });
+      }
 
       template <class T>
          requires readable_map_t<T> || glaze_object_t<T> || reflectable<T>
@@ -1662,7 +1661,7 @@ namespace glz
 
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
-            static constexpr auto num_members = []{
+            static constexpr auto num_members = [] {
                if constexpr (reflectable<T>) {
                   return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
                }
@@ -1705,7 +1704,7 @@ namespace glz
                         return;
                   }
 
-                  if constexpr ((glaze_object_t<T> || reflectable<T>) && num_members == 0 && Opts.error_on_unknown_keys) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
                      static_assert(false_v<T>, "This should be unreachable");
                   }
                   else if constexpr (glaze_object_t<T> && num_members == 0) {
@@ -1761,8 +1760,8 @@ namespace glz
                            return;
                         }
                         ++it;
-                        
-                        decltype(auto) frozen_map = [&]{
+
+                        decltype(auto) frozen_map = [&] {
                            if constexpr (reflectable<T>) {
                               static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
                               populate_map(value, cmap); // Function required for MSVC to build
@@ -1773,7 +1772,7 @@ namespace glz
                               return cmap;
                            }
                         }();
-                        
+
                         if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
                            parse_object_entry_sep<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]

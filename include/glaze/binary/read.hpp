@@ -8,8 +8,8 @@
 #include "glaze/core/format.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
-#include "glaze/util/dump.hpp"
 #include "glaze/reflection/reflect.hpp"
+#include "glaze/util/dump.hpp"
 
 namespace glz
 {
@@ -735,10 +735,10 @@ namespace glz
             }
 
             ++it;
-            
+
             const auto n_keys = int_from_compressed(it, end);
-            
-            decltype(auto) storage = [&]{
+
+            decltype(auto) storage = [&] {
                if constexpr (reflectable<T>) {
                   static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
                   populate_map(value, cmap); // Function required for MSVC to build
