@@ -25,7 +25,6 @@
 // Typically short keys are not going to be at the end of the buffer
 // For valid keys we always have a quote and a null character '\0'
 // Our key can be empty, which means we need 6 bytes of additional padding
-// Getting rid of the page boundary check is an improvement to performance and safer overall
 
 namespace glz::detail
 {
@@ -282,13 +281,12 @@ namespace glz::detail
       static constexpr auto max_bucket_size = 2 * std::bit_width(N);
       using hash_alg = naive_hash;
       uint64_t seed{};
-      // TODO: We can probably save space by using smaller items in the table (We know the range stored)
       // The extra info in the bucket most likely does not need to be 64 bits
       std::array<int64_t, N> buckets{};
       using storage_type = decltype(fit_unsigned_type<N>());
       std::array<storage_type, storage_size> table{};
       std::array<std::pair<Key, Value>, N> items{};
-      std::array<uint64_t, N> hashes{};
+      std::array<uint64_t, N + 1> hashes{}; // Save one more hash value of 0 for unknown keys
 
       constexpr decltype(auto) begin() const { return items.begin(); }
       constexpr decltype(auto) end() const { return items.end(); }
@@ -331,7 +329,7 @@ namespace glz::detail
          // constexpr bucket_size means the compiler can replace the modulos with
          // more efficient instructions So this is not as expensive as this looks
          const auto extra = buckets[hash % N];
-         auto index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
+         const auto index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
          if constexpr (!std::integral<Key> && use_hash_comparison) {
             // Odds of having a uint64_t hash collision is pretty small
             // And no valid keys could colide becuase of perfect hashing so this
@@ -390,7 +388,8 @@ namespace glz::detail
          std::sort(buckets_index.begin(), buckets_index.end(),
                    [&bucket_sizes](size_t i1, size_t i2) { return bucket_sizes[i1] > bucket_sizes[i2]; });
 
-         std::fill(table.begin(), table.end(), storage_type(-1));
+         constexpr auto unknown_key_indice = N;
+         std::fill(table.begin(), table.end(), unknown_key_indice);
          for (auto bucket_index : buckets_index) {
             const auto bucket_size = bucket_sizes[bucket_index];
             if (bucket_size < 1) break;
@@ -402,12 +401,12 @@ namespace glz::detail
             do {
                failed = false;
                // We need to reserve top bit for bucket_size == 1
-               auto secondary_seed = gen() >> 1;
+               const auto secondary_seed = gen() >> 1;
                for (size_t i = 0; i < bucket_size; ++i) {
                   const auto index = full_buckets[bucket_index][i];
                   const auto hash = hashes[index];
                   const auto slot = combine(hash, secondary_seed) % storage_size;
-                  if (table[slot] != storage_type(-1)) {
+                  if (table[slot] != unknown_key_indice) {
                      failed = true;
                      table = table_old;
                      break;
