@@ -705,7 +705,10 @@ namespace glz
          constexpr auto n = std::tuple_size_v<meta_t<T>>;
 
          auto naive_or_normal_hash = [&] {
-            if constexpr (n <= 20) {
+            if constexpr (n == 0) { // Need for MSVC?
+               static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
+            }
+            else if constexpr (n <= 20) {
                return glz::detail::naive_map<value_t, n, use_hash_comparison>({key_value<T, I>()...});
             }
             else {
