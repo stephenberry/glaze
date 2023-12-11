@@ -101,7 +101,7 @@ namespace glz
    template <class T, size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
-      return tuplet::make_tuple(nameof<I, T>...);
+      return std::array{nameof<I, T>...};
    }
 
    template <class T>

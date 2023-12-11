@@ -159,6 +159,36 @@ suite user_types = [] {
    };
 };
 
+struct single_t
+{
+   int integer{};
+};
+
+suite single_test = [] {
+   "single_t"_test = [] {
+      single_t obj{};
+      std::string buffer{};
+      glz::write_json(obj, buffer);
+      
+      expect(!glz::read_json(obj, buffer));
+   };
+};
+
+struct two_elements_t
+{
+   int integer{};
+};
+
+suite two_elements_test = [] {
+   "two_elements_t"_test = [] {
+      two_elements_t obj{};
+      std::string buffer{};
+      glz::write_json(obj, buffer);
+      
+      expect(!glz::read_json(obj, buffer));
+   };
+};
+
 int main()
 { // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
