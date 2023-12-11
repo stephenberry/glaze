@@ -169,7 +169,7 @@ suite single_test = [] {
       single_t obj{};
       std::string buffer{};
       glz::write_json(obj, buffer);
-      
+
       expect(!glz::read_json(obj, buffer));
    };
 };
@@ -184,7 +184,7 @@ suite two_elements_test = [] {
       two_elements_t obj{};
       std::string buffer{};
       glz::write_json(obj, buffer);
-      
+
       expect(!glz::read_json(obj, buffer));
    };
 };

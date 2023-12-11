@@ -13,7 +13,7 @@ namespace glz
    {
       template <class Tuple>
       using reflection_value_tuple_variant_t = typename tuple_ptr_variant<Tuple>::type;
-      
+
       template <class T, size_t I>
       struct named_member
       {
@@ -41,29 +41,33 @@ namespace glz
             }
          };
 
-         //return naive_or_normal_hash();
-         
+         // return naive_or_normal_hash();
+
          if constexpr (n == 0) {
             static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
          }
          else if constexpr (n == 1) {
-            return micro_map1<value_t, named_member<T, I>::value...>{std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...};
+            return micro_map1<value_t, named_member<T, I>::value...>{
+               std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...};
          }
          else if constexpr (n == 2) {
-            return micro_map2<value_t, named_member<T, I>::value...>{std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...};
+            return micro_map2<value_t, named_member<T, I>::value...>{
+               std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...};
          }
          else if constexpr (n < 128) // don't even attempt a first character hash if we have too many keys
          {
             constexpr auto front_desc = single_char_hash<n>(member_names<T>);
 
             if constexpr (front_desc.valid) {
-               return make_single_char_map<value_t, front_desc>({{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
+               return make_single_char_map<value_t, front_desc>(
+                  {{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
             }
             else {
                constexpr auto back_desc = single_char_hash<n, false>(member_names<T>);
 
                if constexpr (back_desc.valid) {
-                  return make_single_char_map<value_t, back_desc>({{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
+                  return make_single_char_map<value_t, back_desc>(
+                     {{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
                }
                else {
                   return naive_or_normal_hash();
