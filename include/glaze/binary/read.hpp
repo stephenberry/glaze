@@ -741,12 +741,7 @@ namespace glz
             decltype(auto) storage = [&]{
                if constexpr (reflectable<T>) {
                   static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
-                  // we have to populate the pointers in the reflection map from the structured binding
-                  auto t = to_tuple(value);
-                  for_each<std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>>([&](auto I) {
-                     std::get<std::add_pointer_t<std::decay_t<decltype(std::get<I>(t))>>>(
-                        std::get<I>(cmap.items).second) = &std::get<I>(t);
-                  });
+                  populate_map(value, cmap); // Function required for MSVC to build
                   return cmap;
                }
                else {
