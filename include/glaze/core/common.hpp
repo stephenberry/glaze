@@ -552,10 +552,10 @@ namespace glz
          glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || glaze_flags_t<T>);
 
       template <class T>
-      concept reflectable =
+      concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> &&
+      std::is_class_v<std::remove_cvref_t<T>> &&
          !(is_no_reflect<T> || glaze_value_t<T> || glaze_object_t<T> || glaze_array_t<T> || glaze_flags_t<T> ||
-           range<T> || pair_t<T> || null_t<T>)&&std::is_aggregate_v<std::remove_cvref_t<T>> &&
-         std::is_class_v<T>;
+           range<T> || pair_t<T> || null_t<T>);
 
       template <class T>
       concept glaze_const_value_t = glaze_value_t<T> && std::is_pointer_v<glz::meta_wrapper_t<T>> &&
