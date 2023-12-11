@@ -522,7 +522,7 @@ namespace glz
       };
 
       template <class T>
-         requires glaze_object_t<T>
+         requires glaze_object_t<T> || reflectable<T>
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
@@ -533,26 +533,41 @@ namespace glz
             dump_type(tag, args...);
 
             using V = std::decay_t<T>;
-            static constexpr auto N = std::tuple_size_v<meta_t<V>>;
-            dump_compressed_int<N>(args...);
-
-            for_each<N>([&](auto I) {
-               static constexpr auto item = get<I>(meta_v<V>);
-               using T0 = std::decay_t<decltype(get<0>(item))>;
-               static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
-               static constexpr auto member_index = use_reflection ? 0 : 1;
-               using Value = std::decay_t<decltype(get<member_index>(item))>;
-               if constexpr (std::is_same_v<Value, includer<V>>) {
-                  return;
-               }
-               if constexpr (use_reflection) {
-                  write<binary>::no_header<Opts>(get_name<get<0>(item)>(), ctx, args...);
+            static constexpr auto N = []{
+               if constexpr (reflectable<T>) {
+                  return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
                }
                else {
-                  write<binary>::no_header<Opts>(get<0>(item), ctx, args...);
+                  return std::tuple_size_v<meta_t<V>>;
                }
-               write<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, args...);
-            });
+            }();
+            
+            dump_compressed_int<N>(args...);
+            
+            if constexpr (reflectable<T>) {
+               static constexpr auto members = member_names<T>;
+               auto t = to_tuple(value);
+               static constexpr auto N = std::tuple_size_v<decltype(t)>;
+               for_each<N>([&](auto I) {
+                  write<binary>::no_header<Opts>(get<I>(members), ctx, args...);
+                  write<binary>::op<Opts>(std::get<I>(t), ctx, args...);
+               });
+            }
+            else {
+               for_each<N>([&](auto I) {
+                  static constexpr auto item = get<I>(meta_v<V>);
+                  using T0 = std::decay_t<decltype(get<0>(item))>;
+                  static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+                  static constexpr auto member_index = use_reflection ? 0 : 1;
+                  if constexpr (use_reflection) {
+                     write<binary>::no_header<Opts>(get_name<get<0>(item)>(), ctx, args...);
+                  }
+                  else {
+                     write<binary>::no_header<Opts>(get<0>(item), ctx, args...);
+                  }
+                  write<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, args...);
+               });
+            }
          }
       };
 

@@ -338,6 +338,7 @@ namespace glz
 
             using V = std::decay_t<decltype(value)>;
             if constexpr (int_t<V>) {
+               static constexpr auto maximum = uint64_t((std::numeric_limits<V>::max)());
                if constexpr (std::is_unsigned_v<V>) {
                   if constexpr (std::same_as<V, uint64_t>) {
                      if (*it == '-') [[unlikely]] {
@@ -371,8 +372,9 @@ namespace glz
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
-
-                     if (i > (std::numeric_limits<V>::max)()) [[unlikely]] {
+                     
+                     
+                     if (i > maximum) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
@@ -406,7 +408,7 @@ namespace glz
                      value = V(sign * i);
                   }
                   else {
-                     if (i > (std::numeric_limits<V>::max)()) [[unlikely]] {
+                     if (i > maximum) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
                      }
@@ -1635,9 +1637,20 @@ namespace glz
             match<'}'>(ctx, it, end);
          }
       };
+      
+      template <reflectable T>
+       constexpr void populate_map(T&& value, auto& cmap) noexcept
+       {
+          // we have to populate the pointers in the reflection map from the structured binding
+          auto t = to_tuple(value);
+          for_each<std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>>([&](auto I) {
+             std::get<std::add_pointer_t<std::decay_t<decltype(std::get<I>(t))>>>(std::get<I>(cmap.items).second) =
+                &std::get<I>(t);
+          });
+       }
 
       template <class T>
-         requires readable_map_t<T> || glaze_object_t<T>
+         requires readable_map_t<T> || glaze_object_t<T> || reflectable<T>
       struct from_json<T>
       {
          template <auto Options, string_literal tag = "">
@@ -1649,7 +1662,14 @@ namespace glz
 
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
-            constexpr auto num_members = std::tuple_size_v<meta_t<T>>;
+            static constexpr auto num_members = []{
+               if constexpr (reflectable<T>) {
+                  return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
+               }
+               else {
+                  return std::tuple_size_v<meta_t<T>>;
+               }
+            }();
             if constexpr (glaze_object_t<T> && num_members == 0 && Opts.error_on_unknown_keys) {
                if (*it == '}') [[likely]] {
                   ++it;
@@ -1685,7 +1705,7 @@ namespace glz
                         return;
                   }
 
-                  if constexpr (glaze_object_t<T> && num_members == 0 && Opts.error_on_unknown_keys) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>) && num_members == 0 && Opts.error_on_unknown_keys) {
                      static_assert(false_v<T>, "This should be unreachable");
                   }
                   else if constexpr (glaze_object_t<T> && num_members == 0) {
@@ -1726,7 +1746,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
-                  else if constexpr (glaze_object_t<T>) {
+                  else if constexpr (glaze_object_t<T> || reflectable<T>) {
                      std::conditional_t<Opts.error_on_unknown_keys, const sv, sv> key =
                         parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
@@ -1741,8 +1761,19 @@ namespace glz
                            return;
                         }
                         ++it;
-
-                        static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
+                        
+                        decltype(auto) frozen_map = [&]{
+                           if constexpr (reflectable<T>) {
+                              static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+                              populate_map(value, cmap); // Function required for MSVC to build
+                              return cmap;
+                           }
+                           else {
+                              static constexpr auto cmap = make_map<T, Opts.use_hash_comparison>();
+                              return cmap;
+                           }
+                        }();
+                        
                         if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
                            parse_object_entry_sep<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
@@ -2351,167 +2382,6 @@ namespace glz
                   }
                }
                read<json>::op<Opts>(*value, ctx, it, end);
-            }
-         }
-      };
-
-      template <reflectable T>
-      struct from_json<T>
-      {
-         template <auto Options, string_literal tag = "">
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
-         {
-            parse_object_opening<Options>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
-            static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
-
-            static constexpr auto num_members = std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
-
-            if constexpr (num_members == 0 && Options.error_on_unknown_keys) {
-               if (*it == '}') [[likely]] {
-                  ++it;
-                  return;
-               }
-               ctx.error = error_code::unknown_key;
-               return;
-            }
-            else {
-               // Only used if error_on_missing_keys = true
-               [[maybe_unused]] bit_array<num_members> fields{};
-
-               static constinit auto frozen_map = make_reflection_map<T, Opts.use_hash_comparison>();
-               // we have to populate the pointers in the reflection map from the structured binding
-               auto t = to_tuple(value);
-               for_each<num_members>([&](auto I) {
-                  std::get<std::add_pointer_t<std::decay_t<decltype(std::get<I>(t))>>>(
-                     std::get<I>(frozen_map.items).second) = &std::get<I>(t);
-               });
-
-               bool first = true;
-               while (true) {
-                  if (*it == '}') [[unlikely]] {
-                     ++it;
-                     if constexpr (Opts.error_on_missing_keys) {
-                        constexpr auto req_fields = required_fields<T, Opts>();
-                        if ((req_fields & fields) != req_fields) {
-                           ctx.error = error_code::missing_key;
-                        }
-                     }
-                     return;
-                  }
-                  else if (first) [[unlikely]]
-                     first = false;
-                  else [[likely]] {
-                     match<','>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                     skip_ws_no_pre_check<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
-
-                  if constexpr (num_members == 0) {
-                     // parsing to an empty object, but at this point the JSON presents keys
-                     const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                     match<'"'>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     if constexpr (Opts.error_on_unknown_keys) {
-                        if constexpr (tag.sv().empty()) {
-                           std::advance(it, -int64_t(key.size()));
-                           ctx.error = error_code::unknown_key;
-                           return;
-                        }
-                        else if (key != tag.sv()) {
-                           std::advance(it, -int64_t(key.size()));
-                           ctx.error = error_code::unknown_key;
-                           return;
-                        }
-                     }
-                     else {
-                        parse_object_entry_sep<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-
-                        skip_value<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                     }
-                  }
-                  else {
-                     const sv key = parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                     match<'"'>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
-                     // whitespace and the colon must run after checking if the key exists
-                     if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
-                        parse_object_entry_sep<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-
-                        if constexpr (Opts.error_on_missing_keys) {
-                           // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
-                           // At the very least if we are going to do this add a get_index method to the maps and call
-                           // that
-                           auto index = member_it - frozen_map.begin();
-                           fields[index] = true;
-                        }
-                        std::visit(
-                           [&](auto&& member_ptr) {
-                              read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
-                           },
-                           member_it->second);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                     }
-                     else [[unlikely]] {
-                        if constexpr (Opts.error_on_unknown_keys) {
-                           if constexpr (tag.sv().empty()) {
-                              std::advance(it, -int64_t(key.size()));
-                              ctx.error = error_code::unknown_key;
-                              return;
-                           }
-                           else if (key != tag.sv()) {
-                              std::advance(it, -int64_t(key.size()));
-                              ctx.error = error_code::unknown_key;
-                              return;
-                           }
-                           else {
-                              // We duplicate this code to avoid generating unreachable code
-                              parse_object_entry_sep<Opts>(ctx, it, end);
-                              if (bool(ctx.error)) [[unlikely]]
-                                 return;
-
-                              skip_value<Opts>(ctx, it, end);
-                              if (bool(ctx.error)) [[unlikely]]
-                                 return;
-                           }
-                        }
-                        else {
-                           // We duplicate this code to avoid generating unreachable code
-                           parse_object_entry_sep<Opts>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
-
-                           skip_value<Opts>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
-                        }
-                     }
-                  }
-                  skip_ws<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-               }
             }
          }
       };

@@ -552,10 +552,10 @@ namespace glz
          glaze_t<T> && !(glaze_array_t<T> || glaze_object_t<T> || glaze_enum_t<T> || glaze_flags_t<T>);
 
       template <class T>
-      concept reflectable =
+      concept reflectable = std::is_aggregate_v<std::remove_cvref_t<T>> &&
+      std::is_class_v<std::remove_cvref_t<T>> &&
          !(is_no_reflect<T> || glaze_value_t<T> || glaze_object_t<T> || glaze_array_t<T> || glaze_flags_t<T> ||
-           range<T> || pair_t<T> || null_t<T>)&&std::is_aggregate_v<std::remove_cvref_t<T>> &&
-         std::is_class_v<T>;
+           range<T> || pair_t<T> || null_t<T>);
 
       template <class T>
       concept glaze_const_value_t = glaze_value_t<T> && std::is_pointer_v<glz::meta_wrapper_t<T>> &&
@@ -704,15 +704,6 @@ namespace glz
          using value_t = value_tuple_variant_t<meta_t<T>>;
          constexpr auto n = std::tuple_size_v<meta_t<T>>;
 
-         auto naive_or_normal_hash = [&] {
-            if constexpr (n <= 20) {
-               return glz::detail::naive_map<value_t, n, use_hash_comparison>({key_value<T, I>()...});
-            }
-            else {
-               return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({key_value<T, I>()...});
-            }
-         };
-
          if constexpr (n == 0) {
             static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
          }
@@ -736,16 +727,26 @@ namespace glz
                   return make_single_char_map<value_t, back_desc>({key_value<T, I>()...});
                }
                else {
-                  return naive_or_normal_hash();
+                  if constexpr (n <= 20) {
+                     return glz::detail::naive_map<value_t, n, use_hash_comparison>({key_value<T, I>()...});
+                  }
+                  else {
+                     return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({key_value<T, I>()...});
+                  }
                }
             }
          }
          else {
-            return naive_or_normal_hash();
+            if constexpr (n <= 20) {
+               return glz::detail::naive_map<value_t, n, use_hash_comparison>({key_value<T, I>()...});
+            }
+            else {
+               return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({key_value<T, I>()...});
+            }
          }
       }
 
-      template <class T, bool use_hash_comparison = false>
+      template <class T, bool use_hash_comparison = false> requires (!reflectable<T>)
       constexpr auto make_map()
       {
          constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};

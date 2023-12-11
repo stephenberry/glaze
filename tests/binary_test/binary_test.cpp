@@ -1283,6 +1283,29 @@ suite glz_obj_tests = [] {
    };
 };
 
+struct reflectable_t
+{
+   int x{1};
+   int y{2};
+   int z{3};
+   
+   constexpr bool operator==(const reflectable_t&) const noexcept = default;
+};
+
+static_assert(glz::detail::reflectable<reflectable_t>);
+
+suite reflection_test = [] {
+   "reflectable_t"_test = [] {
+      std::string s;
+      reflectable_t obj{};
+      glz::write_binary(obj, s);
+
+      reflectable_t compare{};
+      expect(!glz::read_binary(compare, s));
+      expect(compare == obj);
+   };
+};
+
 int main()
 {
    write_tests();

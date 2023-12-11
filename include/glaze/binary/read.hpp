@@ -9,6 +9,7 @@
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/dump.hpp"
+#include "glaze/reflection/reflect.hpp"
 
 namespace glz
 {
@@ -152,7 +153,7 @@ namespace glz
 
                ++it;
 
-               using V = std::decay_t<T>;
+               using V = std::decay_t<decltype(value)>;
                std::memcpy(&value, &(*it), sizeof(V));
                std::advance(it, sizeof(V));
             }
@@ -718,7 +719,7 @@ namespace glz
       };
 
       template <class T>
-         requires glaze_object_t<T>
+         requires glaze_object_t<T> || reflectable<T>
       struct from_binary<T> final
       {
          template <auto Opts>
@@ -734,10 +735,20 @@ namespace glz
             }
 
             ++it;
-
+            
             const auto n_keys = int_from_compressed(it, end);
-
-            static constexpr auto storage = detail::make_map<T, Opts.use_hash_comparison>();
+            
+            decltype(auto) storage = [&]{
+               if constexpr (reflectable<T>) {
+                  static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+                  populate_map(value, cmap); // Function required for MSVC to build
+                  return cmap;
+               }
+               else {
+                  static constexpr auto cmap = make_map<T, Opts.use_hash_comparison>();
+                  return cmap;
+               }
+            }();
 
             for (size_t i = 0; i < n_keys; ++i) {
                const auto length = int_from_compressed(it, end);
@@ -746,9 +757,7 @@ namespace glz
 
                std::advance(it, length);
 
-               const auto& p = storage.find(key);
-
-               if (p != storage.end()) [[likely]] {
+               if (const auto& p = storage.find(key); p != storage.end()) [[likely]] {
                   std::visit(
                      [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
                      p->second);

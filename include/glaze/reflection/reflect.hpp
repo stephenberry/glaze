@@ -79,8 +79,8 @@ namespace glz
          }
       }
 
-      template <class T, bool use_hash_comparison = false>
-      constexpr auto make_reflection_map()
+      template <reflectable T, bool use_hash_comparison = false>
+      constexpr auto make_map()
          requires(!glaze_t<T> && !array_t<T> && std::is_aggregate_v<std::remove_cvref_t<T>>)
       {
          using V = decltype(to_tuple(std::declval<T>()));
