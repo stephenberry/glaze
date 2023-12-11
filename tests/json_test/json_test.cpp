@@ -5614,7 +5614,7 @@ suite custom_buffer_input_test = [] {
 class class_with_const_mem_func
 {
   public:
-   int get_i() const { return i; } // This only works if it's non-const
+   int get_i() const { return i; }
    void set_i(int I) { i = I; }
 
   private:

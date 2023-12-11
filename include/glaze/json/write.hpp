@@ -308,9 +308,10 @@ namespace glz
                         const auto* const e = c + n;
 
                         for (const auto end_m7 = e - 7; c < end_m7;) {
-                           auto* const chunk = reinterpret_cast<uint64_t*>(data_ptr(b) + ix);
-                           std::memcpy(chunk, c, 8);
-                           const uint64_t test_chars = has_quote(*chunk) | has_escape(*chunk) | is_less_16(*chunk);
+                           std::memcpy(data_ptr(b) + ix, c, 8);
+                           uint64_t chunk;
+                           std::memcpy(&chunk, c, 8);
+                           const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_16(chunk);
                            if (test_chars) {
                               const auto length = (std::countr_zero(test_chars) >> 3);
                               c += length;
