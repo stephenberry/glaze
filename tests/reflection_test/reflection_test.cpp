@@ -176,7 +176,8 @@ suite single_test = [] {
 
 struct two_elements_t
 {
-   int integer{};
+   int integer0{};
+   int integer1{};
 };
 
 suite two_elements_test = [] {
