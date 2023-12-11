@@ -389,7 +389,7 @@ namespace glz::detail
                    [&bucket_sizes](size_t i1, size_t i2) { return bucket_sizes[i1] > bucket_sizes[i2]; });
 
          constexpr auto unknown_key_indice = N;
-         std::fill(table.begin(), table.end(), unknown_key_indice);
+         std::fill(table.begin(), table.end(), storage_type(unknown_key_indice));
          for (auto bucket_index : buckets_index) {
             const auto bucket_size = bucket_sizes[bucket_index];
             if (bucket_size < 1) break;
