@@ -92,7 +92,8 @@ namespace glz
 #if defined(__GNUC__) || defined(__clang__)
       return tmp.substr(tmp.rfind(detail::reflect_type::begin) + detail::reflect_type::begin.size());
 #else
-      constexpr auto name_with_keyword = tmp.substr(tmp.rfind(detail::reflect_type::begin) + detail::reflect_type::begin.size());
+      constexpr auto name_with_keyword =
+         tmp.substr(tmp.rfind(detail::reflect_type::begin) + detail::reflect_type::begin.size());
       return name_with_keyword.substr(name_with_keyword.find(' ') + 1);
 #endif
    }();
