@@ -44,7 +44,7 @@ namespace glz
       }
 
       template <class T, size_t N = count_members<std::decay_t<T>>()>
-         requires(N <= 32)
+         requires(N <= 64)
       constexpr decltype(auto) to_tuple(T&& t)
       {
          if constexpr (N == 0) {
@@ -201,6 +201,242 @@ namespace glz
             return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
                             p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31);
          }
+         else if constexpr (N == 33) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32);
+         }
+         else if constexpr (N == 34) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33);
+         }
+         else if constexpr (N == 35) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34);
+         }
+         else if constexpr (N == 36) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35);
+         }
+         else if constexpr (N == 37) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36);
+         }
+         else if constexpr (N == 38) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37);
+         }
+         else if constexpr (N == 39) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38);
+         }
+         else if constexpr (N == 40) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39);
+         }
+         else if constexpr (N == 41) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40);
+         }
+         else if constexpr (N == 42) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41);
+         }
+         else if constexpr (N == 43) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42);
+         }
+         else if constexpr (N == 44) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43);
+         }
+         else if constexpr (N == 45) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44);
+         }
+         else if constexpr (N == 46) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45);
+         }
+         else if constexpr (N == 47) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46);
+         }
+         else if constexpr (N == 48) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47);
+         }
+         else if constexpr (N == 49) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48);
+         }
+         else if constexpr (N == 50) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49);
+         }
+         else if constexpr (N == 51) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49, p50] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49, p50);
+         }
+         else if constexpr (N == 52) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51);
+         }
+         else if constexpr (N == 53) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52);
+         }
+         else if constexpr (N == 54) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53);
+         }
+         else if constexpr (N == 55) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54);
+         }
+         else if constexpr (N == 56) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55);
+         }
+         else if constexpr (N == 57) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56);
+         }
+         else if constexpr (N == 58) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56, p57] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56, p57);
+         }
+         else if constexpr (N == 59) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56, p57, p58] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56, p57, p58);
+         }
+         else if constexpr (N == 60) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56, p57, p58, p59] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56, p57, p58, p59);
+         }
+         else if constexpr (N == 61) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56, p57, p58, p59, p60] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56, p57, p58, p59, p60);
+         }
+         else if constexpr (N == 62) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56, p57, p58, p59, p60, p61] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56, p57, p58, p59, p60, p61);
+         }
+         else if constexpr (N == 63) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56, p57, p58, p59, p60, p61, p62] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56, p57, p58, p59, p60, p61, p62);
+         }
+         else if constexpr (N == 64) {
+            auto&& [p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
+                    p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56, p57, p58, p59, p60, p61, p62, p63] = t;
+            return std::tie(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19,
+                            p20, p21, p22, p23, p24, p25, p26, p27, p28, p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40, p41,
+                            p42, p43, p44, p45, p46, p47, p48, p49, p50, p51, p52, p53, p54, p55, p56, p57, p58, p59, p60, p61, p62, p63);
+         }
       }
 
       template <class T>
@@ -209,535 +445,11 @@ namespace glz
          const T* ptr;
       };
 
-      template <size_t N, class T, size_t M = count_members<T>()>
-         requires(M <= 28)
+      template <size_t N, class T>
       constexpr auto get_ptr(T&& t) noexcept
       {
-         if constexpr (M == 28) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22,
-                    p23, p24, p25, p26, p27, p28] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
-            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
-            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
-            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
-            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
-            if constexpr (N == 19) return ptr_t<decltype(p20)>{&p20};
-            if constexpr (N == 20) return ptr_t<decltype(p21)>{&p21};
-            if constexpr (N == 21) return ptr_t<decltype(p22)>{&p22};
-            if constexpr (N == 22) return ptr_t<decltype(p23)>{&p23};
-            if constexpr (N == 23) return ptr_t<decltype(p24)>{&p24};
-            if constexpr (N == 24) return ptr_t<decltype(p25)>{&p25};
-            if constexpr (N == 25) return ptr_t<decltype(p26)>{&p26};
-            if constexpr (N == 26) return ptr_t<decltype(p27)>{&p27};
-            if constexpr (N == 27) return ptr_t<decltype(p28)>{&p28};
-         }
-         if constexpr (M == 27) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22,
-                    p23, p24, p25, p26, p27] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
-            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
-            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
-            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
-            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
-            if constexpr (N == 19) return ptr_t<decltype(p20)>{&p20};
-            if constexpr (N == 20) return ptr_t<decltype(p21)>{&p21};
-            if constexpr (N == 21) return ptr_t<decltype(p22)>{&p22};
-            if constexpr (N == 22) return ptr_t<decltype(p23)>{&p23};
-            if constexpr (N == 23) return ptr_t<decltype(p24)>{&p24};
-            if constexpr (N == 24) return ptr_t<decltype(p25)>{&p25};
-            if constexpr (N == 25) return ptr_t<decltype(p26)>{&p26};
-            if constexpr (N == 26) return ptr_t<decltype(p27)>{&p27};
-         }
-         else if constexpr (M == 26) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22,
-                    p23, p24, p25, p26] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
-            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
-            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
-            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
-            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
-            if constexpr (N == 19) return ptr_t<decltype(p20)>{&p20};
-            if constexpr (N == 20) return ptr_t<decltype(p21)>{&p21};
-            if constexpr (N == 21) return ptr_t<decltype(p22)>{&p22};
-            if constexpr (N == 22) return ptr_t<decltype(p23)>{&p23};
-            if constexpr (N == 23) return ptr_t<decltype(p24)>{&p24};
-            if constexpr (N == 24) return ptr_t<decltype(p25)>{&p25};
-            if constexpr (N == 25) return ptr_t<decltype(p26)>{&p26};
-         }
-         else if constexpr (M == 25) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22,
-                    p23, p24, p25] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
-            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
-            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
-            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
-            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
-            if constexpr (N == 19) return ptr_t<decltype(p20)>{&p20};
-            if constexpr (N == 20) return ptr_t<decltype(p21)>{&p21};
-            if constexpr (N == 21) return ptr_t<decltype(p22)>{&p22};
-            if constexpr (N == 22) return ptr_t<decltype(p23)>{&p23};
-            if constexpr (N == 23) return ptr_t<decltype(p24)>{&p24};
-            if constexpr (N == 24) return ptr_t<decltype(p25)>{&p25};
-         }
-         else if constexpr (M == 24) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22,
-                    p23, p24] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
-            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
-            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
-            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
-            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
-            if constexpr (N == 19) return ptr_t<decltype(p20)>{&p20};
-            if constexpr (N == 20) return ptr_t<decltype(p21)>{&p21};
-            if constexpr (N == 21) return ptr_t<decltype(p22)>{&p22};
-            if constexpr (N == 22) return ptr_t<decltype(p23)>{&p23};
-            if constexpr (N == 23) return ptr_t<decltype(p24)>{&p24};
-         }
-         else if constexpr (M == 23) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21, p22,
-                    p23] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
-            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
-            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
-            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
-            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
-            if constexpr (N == 19) return ptr_t<decltype(p20)>{&p20};
-            if constexpr (N == 20) return ptr_t<decltype(p21)>{&p21};
-            if constexpr (N == 21) return ptr_t<decltype(p22)>{&p22};
-            if constexpr (N == 22) return ptr_t<decltype(p23)>{&p23};
-         }
-         else if constexpr (M == 22) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21,
-                    p22] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
-            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
-            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
-            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
-            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
-            if constexpr (N == 19) return ptr_t<decltype(p20)>{&p20};
-            if constexpr (N == 20) return ptr_t<decltype(p21)>{&p21};
-            if constexpr (N == 21) return ptr_t<decltype(p22)>{&p22};
-         }
-         else if constexpr (M == 21) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20, p21] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
-            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
-            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
-            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
-            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
-            if constexpr (N == 19) return ptr_t<decltype(p20)>{&p20};
-            if constexpr (N == 20) return ptr_t<decltype(p21)>{&p21};
-         }
-         else if constexpr (M == 20) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19, p20] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
-            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
-            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
-            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
-            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
-            if constexpr (N == 19) return ptr_t<decltype(p20)>{&p20};
-         }
-         else if constexpr (M == 19) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18, p19] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
-            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
-            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
-            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
-            if constexpr (N == 18) return ptr_t<decltype(p19)>{&p19};
-         }
-         else if constexpr (M == 18) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17, p18] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
-            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
-            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
-            if constexpr (N == 17) return ptr_t<decltype(p18)>{&p18};
-         }
-         else if constexpr (M == 17) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16, p17] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
-            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
-            if constexpr (N == 16) return ptr_t<decltype(p17)>{&p17};
-         }
-         else if constexpr (M == 16) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15, p16] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
-            if constexpr (N == 15) return ptr_t<decltype(p16)>{&p16};
-         }
-         else if constexpr (M == 15) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14, p15] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-            if constexpr (N == 14) return ptr_t<decltype(p15)>{&p15};
-         }
-         else if constexpr (M == 14) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13, p14] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-            if constexpr (N == 13) return ptr_t<decltype(p14)>{&p14};
-         }
-         else if constexpr (M == 13) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12, p13] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-            if constexpr (N == 12) return ptr_t<decltype(p13)>{&p13};
-         }
-         else if constexpr (M == 12) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11, p12] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-            if constexpr (N == 11) return ptr_t<decltype(p12)>{&p12};
-         }
-         else if constexpr (M == 11) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10, p11] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-            if constexpr (N == 10) return ptr_t<decltype(p11)>{&p11};
-         }
-         else if constexpr (M == 10) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9, p10] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-            if constexpr (N == 9) return ptr_t<decltype(p10)>{&p10};
-         }
-         else if constexpr (M == 9) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8, p9] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-            if constexpr (N == 8) return ptr_t<decltype(p9)>{&p9};
-         }
-         else if constexpr (M == 8) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7, p8] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-            if constexpr (N == 7) return ptr_t<decltype(p8)>{&p8};
-         }
-         else if constexpr (M == 7) {
-            auto&& [p1, p2, p3, p4, p5, p6, p7] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-            if constexpr (N == 6) return ptr_t<decltype(p7)>{&p7};
-         }
-         else if constexpr (M == 6) {
-            auto&& [p1, p2, p3, p4, p5, p6] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-            if constexpr (N == 5) return ptr_t<decltype(p6)>{&p6};
-         }
-         else if constexpr (M == 5) {
-            auto&& [p1, p2, p3, p4, p5] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-            if constexpr (N == 4) return ptr_t<decltype(p5)>{&p5};
-         }
-         else if constexpr (M == 4) {
-            auto&& [p1, p2, p3, p4] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-            if constexpr (N == 3) return ptr_t<decltype(p4)>{&p4};
-         }
-         else if constexpr (M == 3) {
-            auto&& [p1, p2, p3] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-            if constexpr (N == 2) return ptr_t<decltype(p3)>{&p3};
-         }
-         else if constexpr (M == 2) {
-            auto&& [p1, p2] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-            if constexpr (N == 1) return ptr_t<decltype(p2)>{&p2};
-         }
-         else if constexpr (M == 1) {
-            auto&& [p1] = t;
-            // structure bindings is not constexpr :/
-            if constexpr (N == 0) return ptr_t<decltype(p1)>{&p1};
-         }
+         decltype(auto) p = std::get<N>(to_tuple(t));
+         return ptr_t<std::decay_t<decltype(p)>>{&p};
       }
    }
 }
