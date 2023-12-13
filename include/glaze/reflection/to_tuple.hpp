@@ -29,6 +29,12 @@ namespace glz
          [[maybe_unused]] constexpr operator T();
 #pragma GCC diagnostic pop
 #endif
+         
+         template <class T> requires (std::same_as<std::string_view, std::decay_t<T>>)
+          [[maybe_unused]] constexpr operator T()
+          {
+              return T{};
+          }
       };
 
       template <class T, class... Args>
