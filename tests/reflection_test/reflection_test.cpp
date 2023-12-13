@@ -211,6 +211,17 @@ suite two_elements_test = [] {
    };
 };
 
+struct string_view_member_count
+{
+   int one{};
+   int two{};
+   std::string_view three{};
+   int four{};
+   int five{};
+};
+
+static_assert(glz::detail::count_members<string_view_member_count>() == 5);
+
 int main()
 { // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
