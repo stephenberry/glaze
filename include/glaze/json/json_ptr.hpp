@@ -29,7 +29,7 @@ namespace glz
       bool seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
-         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T>
+         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T> || reflectable<T>
       bool seek_impl(F&& func, T&& value, sv json_ptr);
 
       template <class F, class T>
@@ -44,7 +44,7 @@ namespace glz
 
       // TODO: compile time search for `~` and optimize if escape does not exist
       template <class F, class T>
-         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T>
+         requires readable_map_t<std::decay_t<T>> || glaze_object_t<T> || reflectable<T>
       bool seek_impl(F&& func, T&& value, sv json_ptr)
       {
          if (json_ptr.empty()) {
@@ -97,27 +97,30 @@ namespace glz
             json_ptr = json_ptr.substr(p - json_ptr.data());
          }
 
-         if constexpr (glaze_object_t<T>) {
-            static constexpr auto frozen_map = detail::make_map<T>();
+         if constexpr (glaze_object_t<T> || reflectable<T>) {
+            decltype(auto) frozen_map = [&] {
+               if constexpr (reflectable<T>) {
+                  static constinit auto cmap = make_map<T>();
+                  populate_map(value, cmap); // Function required for MSVC to build
+                  return cmap;
+               }
+               else {
+                  static constexpr auto cmap = make_map<T>();
+                  return cmap;
+               }
+            }();
+            
             const auto& member_it = frozen_map.find(key);
-            if (member_it != frozen_map.end()) {
+            if (member_it != frozen_map.end()) [[likely]] {
                return std::visit(
                   [&](auto&& member_ptr) {
-                     using V = std::decay_t<decltype(member_ptr)>;
-                     if constexpr (std::is_member_object_pointer_v<V>) {
-                        return seek_impl(std::forward<F>(func), value.*member_ptr, json_ptr);
-                     }
-                     else if constexpr (std::is_member_function_pointer_v<V>) {
-                        return seek_impl(std::forward<F>(func), member_ptr, json_ptr);
-                     }
-                     else {
-                        return seek_impl(std::forward<F>(func), member_ptr(value), json_ptr);
-                     }
+                     return seek_impl(std::forward<F>(func), get_member(value, member_ptr), json_ptr);
                   },
                   member_it->second);
             }
-            else
+            else [[unlikely]] {
                return false;
+            }
          }
          else {
             return seek_impl(std::forward<F>(func), value[key], json_ptr);
