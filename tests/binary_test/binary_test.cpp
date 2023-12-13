@@ -1306,6 +1306,34 @@ suite reflection_test = [] {
    };
 };
 
+struct my_example
+{
+   int i = 287;
+   double d = 3.14;
+   std::string hello = "Hello World";
+   std::array<uint64_t, 3> arr = {1, 2, 3};
+   std::map<std::string, int> map{{"one", 1}, {"two", 2}};
+
+   bool operator==(const my_example& other) const noexcept = default;
+};
+
+suite example_reflection_test = [] {
+   "example_reflection"_test = [] {
+      std::string s;
+      my_example obj{};
+      glz::write_binary(obj, s);
+
+      my_example compare{};
+      compare.i = 0;
+      compare.d = 0.0;
+      compare.hello = "";
+      compare.arr = {0, 0, 0};
+      compare.map.clear();
+      expect(!glz::read_binary(compare, s));
+      expect(compare == obj);
+   };
+};
+
 int main()
 {
    write_tests();
