@@ -17,24 +17,22 @@ namespace glz
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
-         template <class T>
+         template <class T> requires (!std::same_as<T, const char*>)
          [[maybe_unused]] constexpr operator T();
 #pragma clang diagnostic pop
 #elif defined(_MSC_VER)
-         template <class T>
+         template <class T> requires (!std::same_as<T, const char*>)
          [[maybe_unused]] constexpr operator T();
 #else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-declarations"
-         template <class T>
+         template <class T> requires (!std::same_as<T, const char*>)
          [[maybe_unused]] constexpr operator T();
 #pragma GCC diagnostic pop
 #endif
          
-         template <class T> requires (std::same_as<std::string_view, std::decay_t<T>>)
-          [[maybe_unused]] constexpr operator T()
-          {
-              return T{};
+         [[maybe_unused]] constexpr operator std::string_view() {
+              return {};
           }
       };
 
