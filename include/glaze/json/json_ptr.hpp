@@ -109,7 +109,7 @@ namespace glz
                   return cmap;
                }
             }();
-            
+
             const auto& member_it = frozen_map.find(key);
             if (member_it != frozen_map.end()) [[likely]] {
                return std::visit(

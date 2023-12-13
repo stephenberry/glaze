@@ -156,10 +156,8 @@ suite user_types = [] {
          << buffer;
 
       expect(!glz::read_json(obj, buffer));
-      
-      
    };
-   
+
    "complex user obect get"_test = [] {
       Thing obj{};
       auto i = glz::get<int>(obj, "/i");
@@ -167,13 +165,13 @@ suite user_types = [] {
       if (i.has_value()) {
          expect(i.value() == 8);
       }
-      
+
       auto array = glz::get<std::array<std::string, 4>>(obj, "/array");
       expect(array.has_value());
       if (array.has_value()) {
          expect(array.value().get()[1] == "pie");
       }
-      
+
       auto b = glz::get<std::string>(obj, "/thing_ptr/b");
       expect(b.has_value());
       if (b.has_value()) {
