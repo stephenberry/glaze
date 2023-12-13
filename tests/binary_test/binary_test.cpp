@@ -1308,12 +1308,12 @@ suite reflection_test = [] {
 
 struct my_example
 {
-  int i = 287;
-  double d = 3.14;
-  std::string hello = "Hello World";
-  std::array<uint64_t, 3> arr = { 1, 2, 3 };
-  std::map<std::string, int> map{{"one", 1}, {"two", 2}};
-   
+   int i = 287;
+   double d = 3.14;
+   std::string hello = "Hello World";
+   std::array<uint64_t, 3> arr = {1, 2, 3};
+   std::map<std::string, int> map{{"one", 1}, {"two", 2}};
+
    bool operator==(const my_example& other) const noexcept = default;
 };
 
