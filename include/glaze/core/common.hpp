@@ -1142,3 +1142,105 @@ namespace glz
       return std::string(error_type_str);
    }
 }
+
+namespace glz::detail
+{
+   // This useless code and the inclusion of N is required for MSVC to build, but not Clang or GCC
+   template <size_t I, size_t N, class T>
+   struct glaze_tuple_element
+   {
+      using V = std::decay_t<T>;
+      using Item = tuplet::tuple<>;
+      using T0 = T;
+      static constexpr bool use_reflection = false;
+      static constexpr size_t member_index = 0;
+      using mptr_t = T;
+      using type = T;
+   };
+
+   // This shouldn't need the requires or the N template paramter, except for the current MSVC
+   template <size_t I, size_t N, class T>
+      requires(N > 0 && !reflectable<T>)
+   struct glaze_tuple_element<I, N, T>
+   {
+      using V = std::decay_t<T>;
+      using Item = std::decay_t<decltype(glz::get<I>(meta_v<V>))>;
+      using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
+      static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+      static constexpr size_t member_index = use_reflection ? 0 : 1;
+      using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
+      using type = member_t<V, mptr_t>;
+   };
+
+   template <size_t I, size_t N, reflectable T>
+      requires(N > 0)
+   struct glaze_tuple_element<I, N, T>
+   {
+      using V = std::decay_t<T>;
+      static constexpr bool use_reflection = false;
+      static constexpr size_t member_index = 0;
+      using Item = decltype(to_tuple(std::declval<T>()));
+      using mptr_t = std::tuple_element_t<I, Item>;
+      using type = member_t<V, mptr_t>;
+      using T0 = mptr_t;
+   };
+
+   template <size_t I, size_t N, class T>
+   using glaze_tuple_element_t = typename glaze_tuple_element<I, N, T>::type;
+   
+   template <auto Opts, class T>
+   struct object_type_info
+   {
+      using V = std::decay_t<T>;
+
+      static constexpr auto N = [] {
+         if constexpr (reflectable<T>) {
+            return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
+         }
+         else {
+            return std::tuple_size_v<meta_t<V>>;
+         }
+      }();
+
+      // Allows us to remove a branch if the first item will always be written
+      static constexpr bool first_will_be_written = [] {
+         if constexpr (N > 0) {
+            using val_t = glaze_tuple_element_t<0, N, T>;
+
+            if constexpr (null_t<val_t> && Opts.skip_null_members) {
+               return false;
+            }
+
+            // skip file_include
+            if constexpr (std::is_same_v<val_t, includer<std::decay_t<V>>>) {
+               return false;
+            }
+            else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+               return false;
+            }
+            else {
+               return true;
+            }
+         }
+         else {
+            return false;
+         }
+      }();
+   };
+   
+   template <size_t I, class T, bool use_reflection>
+   constexpr auto key_name = [] {
+      if constexpr (reflectable<T>) {
+         return get<I>(member_names<T>);
+      }
+      else {
+         using V = std::decay_t<T>;
+         if constexpr (use_reflection) {
+            return get_name<get<0>(get<I>(meta_v<V>))>();
+         }
+         else {
+            return get<0>(get<I>(meta_v<V>));
+         }
+      }
+   }();
+}
