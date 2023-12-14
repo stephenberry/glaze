@@ -38,8 +38,7 @@ struct glz::meta<string_elements>
    static constexpr auto value = glz::object("id", &T::id, &T::udl);
 };
 
-void csv_tests()
-{
+suite csv_tests = [] {
    "read/write column wise"_test = [] {
       std::string input_col =
          R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
@@ -273,6 +272,83 @@ x,1,2,3,4,5)");
 4,5
 )") << s;
    };
-}
+};
 
-int main() { csv_tests(); }
+struct reflect_my_struct
+{
+   std::vector<int> num1{};
+   std::deque<float> num2{};
+   std::vector<bool> maybe{};
+   std::vector<std::array<int, 3>> v3s{};
+};
+
+suite reflect_my_struct_test = [] {
+   "reflection read/write column wise"_test = [] {
+      std::string input_col =
+         R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
+11,22,1,1,1,1
+33,44,1,2,2,2
+55,66,0,3,3,3
+77,88,0,4,4,4)";
+      
+      reflect_my_struct obj{};
+      
+      read_csv<colwise>(obj, input_col);
+      
+      expect(obj.num1[0] == 11);
+      expect(obj.num2[2] == 66);
+      expect(obj.maybe[3] == false);
+      expect(obj.v3s[0] == std::array{1, 1, 1});
+      expect(obj.v3s[1] == std::array{2, 2, 2});
+      expect(obj.v3s[2] == std::array{3, 3, 3});
+      expect(obj.v3s[3] == std::array{4, 4, 4});
+      
+      std::string out{};
+      
+      write<opts{.format = csv, .layout = colwise}>(obj, out);
+      expect(out ==
+             R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
+11,22,1,1,1,1
+33,44,1,2,2,2
+55,66,0,3,3,3
+77,88,0,4,4,4
+)");
+      
+      expect(!write_file_csv<colwise>(obj, "csv_test_colwise.csv", std::string{}));
+   };
+   
+   "reflect read/write row wise"_test = [] {
+      std::string input_row =
+         R"(num1,11,33,55,77
+num2,22,44,66,88
+maybe,1,1,0,0
+v3s[0],1,2,3,4
+v3s[1],1,2,3,4
+v3s[2],1,2,3,4)";
+      
+      reflect_my_struct obj{};
+      read_csv(obj, input_row);
+      
+      expect(obj.num1[0] == 11);
+      expect(obj.num2[2] == 66);
+      expect(obj.maybe[3] == false);
+      expect(obj.v3s[0][2] == 1);
+      
+      std::string out{};
+      
+      write<opts{.format = csv}>(obj, out);
+      expect(out ==
+             R"(num1,11,33,55,77
+num2,22,44,66,88
+maybe,1,1,0,0
+v3s[0],1,2,3,4
+v3s[1],1,2,3,4
+v3s[2],1,2,3,4)");
+      
+      expect(!write_file_csv(obj, "csv_test_rowwise.csv", std::string{}));
+   };
+};
+
+int main() {
+   return boost::ut::cfg<>.run({.report_errors = true});
+}

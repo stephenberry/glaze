@@ -173,25 +173,53 @@ namespace glz
          }
       };
 
-      template <glaze_object_t T>
+      template <class T> requires (glaze_object_t<T> || reflectable<T>)
       struct to_csv<T>
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             using V = std::decay_t<T>;
-            static constexpr auto N = std::tuple_size_v<meta_t<V>>;
+            
+            static constexpr auto N = [] {
+               if constexpr (reflectable<T>) {
+                  return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
+               }
+               else {
+                  return std::tuple_size_v<meta_t<T>>;
+               }
+            }();
+            
+            [[maybe_unused]] decltype(auto) t = [&] {
+               if constexpr (reflectable<T>) {
+                  return to_tuple(value);
+               }
+               else {
+                  return nullptr;
+               }
+            }();
 
             if constexpr (Opts.layout == rowwise) {
                for_each<N>([&](auto I) {
-                  static constexpr auto item = glz::get<I>(meta_v<V>);
-                  static constexpr sv key = glz::get<0>(item);
+                  using Element = glaze_tuple_element<I, N, T>;
+                  static constexpr size_t member_index = Element::member_index;
 
-                  using item_type = std::decay_t<decltype(get_member(value, glz::get<1>(item)))>;
-                  using V = typename item_type::value_type;
+                  using item_type = std::decay_t<typename Element::type>;
+                  using value_type = typename item_type::value_type;
+                  
+                  static constexpr sv key = key_name<I, T, Element::use_reflection>;
+                  
+                  decltype(auto) mem = [&] {
+                     if constexpr (reflectable<T>) {
+                        return std::get<I>(t);
+                     }
+                     else {
+                        return get<member_index>(get<I>(meta_v<V>));
+                     }
+                  }();
 
-                  if constexpr (writable_array_t<V>) {
-                     auto&& member = get_member(value, glz::get<1>(item));
+                  if constexpr (writable_array_t<value_type>) {
+                     decltype(auto) member = get_member(value, mem);
                      const auto count = member.size();
                      const auto size = member[0].size();
                      for (size_t i = 0; i < size; ++i) {
@@ -216,7 +244,7 @@ namespace glz
                   else {
                      dump<key>(b, ix);
                      dump<','>(b, ix);
-                     write<csv>::op<Opts>(get_member(value, glz::get<1>(item)), ctx, b, ix);
+                     write<csv>::op<Opts>(get_member(value, mem), ctx, b, ix);
                      dump<'\n'>(b, ix);
                   }
                });
@@ -224,25 +252,23 @@ namespace glz
             else {
                // write titles
                for_each<N>([&](auto I) {
-                  static constexpr auto item = get<I>(meta_v<V>);
-                  using T0 = std::decay_t<decltype(get<0>(item))>;
-                  static constexpr auto use_reflection = std::is_member_object_pointer_v<T0>;
-                  static constexpr auto member_index = use_reflection ? 0 : 1;
-
-                  auto key_getter = [&] {
-                     if constexpr (use_reflection) {
-                        return get_name<get<0>(item)>();
+                  using Element = glaze_tuple_element<I, N, T>;
+                  static constexpr size_t member_index = Element::member_index;
+                  using X = std::decay_t<typename Element::type>;
+                  
+                  static constexpr sv key = key_name<I, T, Element::use_reflection>;
+                  
+                  decltype(auto) member = [&] {
+                     if constexpr (reflectable<T>) {
+                        return std::get<I>(t);
                      }
                      else {
-                        return get<0>(item);
+                        return get<member_index>(get<I>(meta_v<V>));
                      }
-                  };
-                  static constexpr sv key = key_getter();
-
-                  using X = std::decay_t<decltype(get_member(value, get<member_index>(item)))>;
+                  }();
 
                   if constexpr (fixed_array_value_t<X>) {
-                     const auto size = get_member(value, get<member_index>(item))[0].size();
+                     const auto size = get_member(value, member)[0].size();
                      for (size_t i = 0; i < size; ++i) {
                         dump<key>(b, ix);
                         dump<'['>(b, ix);
@@ -269,15 +295,21 @@ namespace glz
 
                while (true) {
                   for_each<N>([&](auto I) {
-                     static constexpr auto item = get<I>(meta_v<V>);
-                     using T0 = std::decay_t<decltype(get<0>(item))>;
-                     static constexpr auto use_reflection = std::is_member_object_pointer_v<T0>;
-                     static constexpr auto member_index = use_reflection ? 0 : 1;
-
-                     using X = std::decay_t<decltype(get_member(value, get<member_index>(item)))>;
+                     using Element = glaze_tuple_element<I, N, T>;
+                     static constexpr size_t member_index = Element::member_index;
+                     using X = std::decay_t<typename Element::type>;
+                     
+                     decltype(auto) mem = [&] {
+                        if constexpr (reflectable<T>) {
+                           return std::get<I>(t);
+                        }
+                        else {
+                           return get<member_index>(get<I>(meta_v<V>));
+                        }
+                     }();
 
                      if constexpr (fixed_array_value_t<X>) {
-                        auto&& member = get_member(value, get<member_index>(item));
+                        decltype(auto) member = get_member(value, mem);
                         if (row >= member.size()) {
                            end = true;
                            return;
@@ -292,7 +324,7 @@ namespace glz
                         }
                      }
                      else {
-                        auto&& member = get_member(value, get<member_index>(item));
+                        decltype(auto) member = get_member(value, mem);
                         if (row >= member.size()) {
                            end = true;
                            return;

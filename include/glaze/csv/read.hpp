@@ -9,6 +9,7 @@
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/parse.hpp"
+#include "glaze/reflection/reflect.hpp"
 #include "glaze/util/strod.hpp"
 
 namespace glz
@@ -356,14 +357,36 @@ namespace glz
          }
       };
 
-      template <glaze_object_t T>
+      template <class T> requires (glaze_object_t<T> || reflectable<T>)
       struct from_csv<T>
       {
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
-            // static constexpr auto N = std::tuple_size_v<meta_t<T>>;
+            static constexpr auto num_members = [] {
+               if constexpr (reflectable<T>) {
+                  return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
+               }
+               else {
+                  return std::tuple_size_v<meta_t<T>>;
+               }
+            }();
+            
+            decltype(auto) frozen_map = [&] {
+               if constexpr (reflectable<T> && num_members > 0) {
+                  static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+                  // We want to run this populate outside of the while loop
+                  populate_map(value, cmap); // Function required for MSVC to build
+                  return cmap;
+               }
+               else if constexpr (glaze_object_t<T> && num_members > 0) {
+                  static constexpr auto cmap = make_map<T, Opts.use_hash_comparison>();
+                  return cmap;
+               }
+               else {
+                  return nullptr;
+               }
+            }();
 
             if constexpr (Opts.layout == rowwise) {
                while (it != end) {
