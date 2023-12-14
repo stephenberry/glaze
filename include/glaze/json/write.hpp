@@ -953,43 +953,107 @@ namespace glz
          }
       };
 
-      // Allows us to remove a branch if the first item will always be written
-      template <auto Opts, class T>
-      consteval bool first_will_be_written()
+      // This useless code and the inclusion of N is required for MSVC to build, but not Clang or GCC
+      template <size_t I, size_t N, class T>
+      struct glaze_tuple_element
       {
          using V = std::decay_t<T>;
-         constexpr auto N = std::tuple_size_v<meta_t<V>>;
-         if constexpr (N > 0) {
-            constexpr auto item = glz::get<0>(meta_v<V>);
-            using Item = decltype(item);
-            using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
-            constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
-            constexpr size_t member_index = use_reflection ? 0 : 1;
-            using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
-            using val_t = member_t<V, mptr_t>;
+         using Item = tuplet::tuple<>;
+         using T0 = T;
+         static constexpr bool use_reflection = false;
+         static constexpr size_t member_index = 0;
+         using mptr_t = T;
+         using type = T;
+      };
 
-            if constexpr (null_t<val_t> && Opts.skip_null_members) {
-               return false;
-            }
-
-            // skip file_include
-            if constexpr (std::is_same_v<val_t, includer<std::decay_t<V>>>) {
-               return false;
-            }
-            else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
-               return false;
+      // This shouldn't need the requires or the N template paramter, except for the current MSVC
+      template <size_t I, size_t N, class T>
+         requires(N > 0 && !reflectable<T>)
+      struct glaze_tuple_element<I, N, T>
+      {
+         using V = std::decay_t<T>;
+         using Item = std::decay_t<decltype(glz::get<I>(meta_v<V>))>;
+         using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
+         static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+         static constexpr size_t member_index = use_reflection ? 0 : 1;
+         using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
+         using type = member_t<V, mptr_t>;
+      };
+      
+      template <size_t I, size_t N, reflectable T>
+         requires(N > 0)
+      struct glaze_tuple_element<I, N, T>
+      {
+         using V = std::decay_t<T>;
+         static constexpr bool use_reflection = false;
+         static constexpr size_t member_index = 0;
+         using Item = decltype(to_tuple(std::declval<T>()));
+         using mptr_t = std::tuple_element_t<I, Item>;
+         using type = member_t<V, mptr_t>;
+         using T0 = mptr_t;
+      };
+      
+      template <size_t I, size_t N, class T>
+      using glaze_tuple_element_t = typename glaze_tuple_element<I, N, T>::type;
+      
+      template <auto Opts, class T>
+      struct object_type_info
+      {
+         using V = std::decay_t<T>;
+         
+         static constexpr auto N = [] {
+            if constexpr (reflectable<T>) {
+               return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
             }
             else {
-               return true;
+               return std::tuple_size_v<meta_t<V>>;
             }
+         }();
+         
+         // Allows us to remove a branch if the first item will always be written
+         static constexpr bool first_will_be_written = [] {
+            if constexpr (N > 0) {
+               using val_t = glaze_tuple_element_t<0, N, T>;
+               
+               if constexpr (null_t<val_t> && Opts.skip_null_members) {
+                  return false;
+               }
+
+               // skip file_include
+               if constexpr (std::is_same_v<val_t, includer<std::decay_t<V>>>) {
+                  return false;
+               }
+               else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+                  return false;
+               }
+               else {
+                  return true;
+               }
+            }
+            else {
+               return false;
+            }
+         }();
+      };
+      
+      template <size_t I, class T, bool use_reflection>
+      constexpr auto key_name = [] {
+         if constexpr (reflectable<T>) {
+            return get<I>(member_names<T>);
          }
          else {
-            return false;
+            using V = std::decay_t<T>;
+            if constexpr (use_reflection) {
+               return get_name<get<0>(get<I>(meta_v<V>))>();
+            }
+            else {
+               return get<0>(get<I>(meta_v<V>));
+            }
          }
-      }
+      }();
 
       template <class T>
-         requires glaze_object_t<T>
+         requires glaze_object_t<T> || reflectable<T>
       struct to_json<T>
       {
          template <auto Options, class V>
@@ -1027,35 +1091,50 @@ namespace glz
                   dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
                }
             }
+            
+            using Info = object_type_info<Options, T>;
 
             using V = std::decay_t<T>;
-            static constexpr auto N = std::tuple_size_v<meta_t<V>>;
+            static constexpr auto N = Info::N;
+            
+            [[maybe_unused]] decltype(auto) t = [&]{
+               if constexpr (reflectable<T>) {
+                  return to_tuple(value);
+               }
+               else {
+                  return nullptr;
+               }
+            }();
 
             [[maybe_unused]] bool first = true;
-            static constexpr auto first_is_written = first_will_be_written<Options, T>();
+            static constexpr auto first_is_written = Info::first_will_be_written;
             for_each<N>([&](auto I) {
                static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-               static constexpr auto item = glz::get<I>(meta_v<V>);
-               using T0 = std::decay_t<std::tuple_element_t<0, decltype(item)>>;
-               static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
-               static constexpr size_t member_index = use_reflection ? 0 : 1;
-               using mptr_t = std::decay_t<std::tuple_element_t<member_index, decltype(item)>>;
-               using Key = std::conditional_t<use_reflection, sv, T0>;
-               using val_t = member_t<V, mptr_t>;
+               
+               using Element = glaze_tuple_element<I, N, T>;
+               static constexpr size_t member_index = Element::member_index;
+               static constexpr bool use_reflection = Element::use_reflection;
+               using val_t = typename Element::type;
+               
+               decltype(auto) member = [&]{
+                  if constexpr (reflectable<T>) {
+                     return std::get<I>(t);
+                  }
+                  else {
+                     return get<member_index>(get<I>(meta_v<V>));
+                  }
+               }();
 
                if constexpr (null_t<val_t> && Opts.skip_null_members) {
                   if constexpr (always_null_t<T>)
                      return;
                   else {
                      auto is_null = [&]() {
-                        if constexpr (std::is_member_pointer_v<mptr_t>) {
-                           return !bool(value.*get<member_index>(item));
-                        }
-                        else if constexpr (raw_nullable<val_t>) {
-                           return !bool(get<member_index>(item)(value).val);
+                        if constexpr (raw_nullable<val_t>) {
+                           return !bool(member(value).val);
                         }
                         else {
-                           return !bool(get<member_index>(item)(value));
+                           return !bool(get_member(value, member));
                         }
                      }();
                      if (is_null) return;
@@ -1084,44 +1163,29 @@ namespace glz
                      }
                   }
 
-                  if constexpr (str_t<Key> || char_t<Key>) {
-                     auto key_getter = [&] {
-                        if constexpr (use_reflection) {
-                           return get_name<get<0>(item)>();
-                        }
-                        else {
-                           return get<0>(item);
-                        }
-                     };
-
-                     static constexpr sv key = key_getter();
-                     if constexpr (needs_escaping(key)) {
-                        write<json>::op<Opts>(key, ctx, b, ix);
-                        dump<':'>(b, ix);
-                        if constexpr (Opts.prettify) {
-                           dump<' '>(b, ix);
-                        }
-                     }
-                     else {
-                        static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                              Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                           ;
-                        dump<quoted_key>(b, ix);
+                  static constexpr sv key = key_name<I, T, use_reflection>;
+                  if constexpr (needs_escaping(key)) {
+                     write<json>::op<Opts>(key, ctx, b, ix);
+                     dump<':'>(b, ix);
+                     if constexpr (Opts.prettify) {
+                        dump<' '>(b, ix);
                      }
                   }
                   else {
-                     static constexpr auto quoted_key =
-                        concat_arrays(concat_arrays("\"", get<0>(item)), "\":", Opts.prettify ? " " : "");
-                     write<json>::op<Opts>(quoted_key, ctx, b, ix);
+                     static constexpr auto quoted_key = join_v < chars<"\"">, key,
+                                           Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                        ;
+                     dump<quoted_key>(b, ix);
                   }
 
-                  write<json>::op<Opts>(get_member(value, get<member_index>(item)), ctx, b, ix);
+                  write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
 
                   static constexpr size_t comment_index = member_index + 1;
-                  static constexpr auto S = std::tuple_size_v<decltype(item)>;
+                  static constexpr auto S = std::tuple_size_v<typename Element::Item>;
                   if constexpr (Opts.comments && S > comment_index) {
-                     if constexpr (std::is_convertible_v<decltype(get<comment_index>(item)), sv>) {
-                        static constexpr sv comment = get<comment_index>(item);
+                     static constexpr auto i = glz::get<I>(meta_v<V>);
+                     if constexpr (std::is_convertible_v<decltype(get<comment_index>(i)), sv>) {
+                        static constexpr sv comment = get<comment_index>(i);
                         if constexpr (comment.size() > 0) {
                            if constexpr (Opts.prettify) {
                               dump<' '>(b, ix);
@@ -1134,77 +1198,6 @@ namespace glz
                   }
                }
             });
-            if constexpr (!Options.closing_handled) {
-               if constexpr (Options.prettify) {
-                  ctx.indentation_level -= Options.indentation_width;
-                  dump<'\n'>(b, ix);
-                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
-               }
-               dump<'}'>(b, ix);
-            }
-         }
-      };
-
-      template <reflectable T>
-      struct to_json<T>
-      {
-         template <auto Options>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
-         {
-            static constexpr auto members = member_names<T>;
-            auto t = to_tuple(value);
-            using V = decltype(t);
-            static constexpr auto N = std::tuple_size_v<V>;
-            static_assert(count_members<T>() == N);
-
-            if constexpr (!Options.opening_handled) {
-               dump<'{'>(b, ix);
-               if constexpr (Options.prettify) {
-                  ctx.indentation_level += Options.indentation_width;
-                  dump<'\n'>(b, ix);
-                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
-               }
-            }
-
-            bool first = true;
-            for_each<N>([&](auto I) {
-               static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-               decltype(auto) item = std::get<I>(t);
-               using val_t = std::decay_t<decltype(item)>;
-
-               if (skip_member<Opts>(item)) {
-                  return;
-               }
-
-               // skip file_include
-               if constexpr (std::is_same_v<val_t, includer<V>>) {
-                  return;
-               }
-               else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
-                  return;
-               }
-               else {
-                  if (first) {
-                     first = false;
-                  }
-                  else {
-                     // Null members may be skipped so we cant just write it out for all but the last member unless
-                     // trailing commas are allowed
-                     write_entry_separator<Opts>(ctx, b, ix);
-                  }
-
-                  const auto key = get<I>(members);
-
-                  write<json>::op<Opts>(key, ctx, b, ix);
-                  dump<':'>(b, ix);
-                  if constexpr (Opts.prettify) {
-                     dump<' '>(b, ix);
-                  }
-
-                  write<json>::op<Opts>(item, ctx, b, ix);
-               }
-            });
-
             if constexpr (!Options.closing_handled) {
                if constexpr (Options.prettify) {
                   ctx.indentation_level -= Options.indentation_width;
