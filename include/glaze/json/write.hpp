@@ -970,7 +970,8 @@ namespace glz
       {
          static constexpr bool use_reflection = false;
          static constexpr size_t member_index = 0;
-         using type = std::tuple_element_t<I, decltype(to_tuple(std::declval<T>()))>;
+         using Item = decltype(to_tuple(std::declval<T>()));
+         using type = std::tuple_element_t<I, Item>;
          using T0 = type;
          using mptr_t = type;
       };
@@ -1084,12 +1085,12 @@ namespace glz
                using Key = std::conditional_t<Element::use_reflection, sv, typename Element::T0>;
                using mptr_t = typename Element::mptr_t;
                
-               decltype(auto) item = [&]{
+               decltype(auto) member = [&]{
                   if constexpr (reflectable<T>) {
                      return std::get<I>(t);
                   }
                   else {
-                     return glz::get<I>(meta_v<V>);
+                     return get<member_index>(glz::get<I>(meta_v<V>));
                   }
                }();
 
@@ -1099,13 +1100,13 @@ namespace glz
                   else {
                      auto is_null = [&]() {
                         if constexpr (std::is_member_pointer_v<mptr_t>) {
-                           return !bool(value.*get<member_index>(item));
+                           return !bool(value.*member);
                         }
                         else if constexpr (raw_nullable<val_t>) {
-                           return !bool(get<member_index>(item)(value).val);
+                           return !bool(member(value).val);
                         }
                         else {
-                           return !bool(get<member_index>(item)(value));
+                           return !bool(member(value));
                         }
                      }();
                      if (is_null) return;
@@ -1161,15 +1162,25 @@ namespace glz
                      }
                   }
                   else {
+                     auto key_getter = [&]() constexpr {
+                        constexpr auto i = glz::get<I>(meta_v<V>);
+                        if constexpr (use_reflection) {
+                           return get_name<get<0>(i)>();
+                        }
+                        else {
+                           return get<0>(i);
+                        }
+                     };
+                     
                      static constexpr auto quoted_key =
-                        concat_arrays(concat_arrays("\"", get<0>(item)), "\":", Opts.prettify ? " " : "");
+                        concat_arrays(concat_arrays("\"", key_getter()), "\":", Opts.prettify ? " " : "");
                      write<json>::op<Opts>(quoted_key, ctx, b, ix);
                   }
 
-                  write<json>::op<Opts>(get_member(value, get<member_index>(item)), ctx, b, ix);
+                  write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
 
                   static constexpr size_t comment_index = member_index + 1;
-                  static constexpr auto S = std::tuple_size_v<decltype(item)>;
+                  static constexpr auto S = std::tuple_size_v<typename Element::Item>;
                   if constexpr (Opts.comments && S > comment_index) {
                      static constexpr auto i = glz::get<I>(meta_v<V>);
                      if constexpr (std::is_convertible_v<decltype(get<comment_index>(i)), sv>) {
