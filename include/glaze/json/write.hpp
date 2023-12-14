@@ -968,12 +968,13 @@ namespace glz
       template <size_t I, reflectable T>
       struct glaze_tuple_element<I, T>
       {
+         using V = std::decay_t<T>;
          static constexpr bool use_reflection = false;
          static constexpr size_t member_index = 0;
          using Item = decltype(to_tuple(std::declval<T>()));
-         using type = std::tuple_element_t<I, Item>;
-         using T0 = type;
-         using mptr_t = type;
+         using mptr_t = std::tuple_element_t<I, Item>;
+         using type = member_t<V, mptr_t>;
+         using T0 = mptr_t;
       };
       
       template <size_t I, class T>
@@ -1018,9 +1019,25 @@ namespace glz
             }
          }();
       };
+      
+      template <size_t I, class T, bool use_reflection>
+      constexpr auto key_name = [] {
+         if constexpr (reflectable<T>) {
+            return get<I>(member_names<T>);
+         }
+         else {
+            using V = std::decay_t<T>;
+            if constexpr (use_reflection) {
+               return get_name<get<0>(get<I>(meta_v<V>))>();
+            }
+            else {
+               return get<0>(get<I>(meta_v<V>));
+            }
+         }
+      }();
 
       template <class T>
-         requires glaze_object_t<T>// || reflectable<T>
+         requires glaze_object_t<T> || reflectable<T>
       struct to_json<T>
       {
          template <auto Options, class V>
@@ -1064,7 +1081,7 @@ namespace glz
             using V = std::decay_t<T>;
             static constexpr auto N = Info::N;
             
-            decltype(auto) t = [&]{
+            [[maybe_unused]] decltype(auto) t = [&]{
                if constexpr (reflectable<T>) {
                   return to_tuple(value);
                }
@@ -1082,15 +1099,13 @@ namespace glz
                static constexpr size_t member_index = Element::member_index;
                static constexpr bool use_reflection = Element::use_reflection;
                using val_t = typename Element::type;
-               using Key = std::conditional_t<Element::use_reflection, sv, typename Element::T0>;
-               using mptr_t = typename Element::mptr_t;
                
                decltype(auto) member = [&]{
                   if constexpr (reflectable<T>) {
                      return std::get<I>(t);
                   }
                   else {
-                     return get<member_index>(glz::get<I>(meta_v<V>));
+                     return get<member_index>(get<I>(meta_v<V>));
                   }
                }();
 
@@ -1099,14 +1114,11 @@ namespace glz
                      return;
                   else {
                      auto is_null = [&]() {
-                        if constexpr (std::is_member_pointer_v<mptr_t>) {
-                           return !bool(value.*member);
-                        }
-                        else if constexpr (raw_nullable<val_t>) {
+                        if constexpr (raw_nullable<val_t>) {
                            return !bool(member(value).val);
                         }
                         else {
-                           return !bool(member(value));
+                           return !bool(get_member(value, member));
                         }
                      }();
                      if (is_null) return;
@@ -1135,46 +1147,19 @@ namespace glz
                      }
                   }
 
-                  if constexpr (str_t<Key> || char_t<Key>) {
-                     auto key_getter = [&]() constexpr {
-                        constexpr auto i = glz::get<I>(meta_v<V>);
-                        if constexpr (use_reflection) {
-                           return get_name<get<0>(i)>();
-                        }
-                        else {
-                           return get<0>(i);
-                        }
-                     };
-
-                     static constexpr sv key = key_getter();
-                     if constexpr (needs_escaping(key)) {
-                        write<json>::op<Opts>(key, ctx, b, ix);
-                        dump<':'>(b, ix);
-                        if constexpr (Opts.prettify) {
-                           dump<' '>(b, ix);
-                        }
-                     }
-                     else {
-                        static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                              Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                           ;
-                        dump<quoted_key>(b, ix);
+                  static constexpr sv key = key_name<I, T, use_reflection>;
+                  if constexpr (needs_escaping(key)) {
+                     write<json>::op<Opts>(key, ctx, b, ix);
+                     dump<':'>(b, ix);
+                     if constexpr (Opts.prettify) {
+                        dump<' '>(b, ix);
                      }
                   }
                   else {
-                     auto key_getter = [&]() constexpr {
-                        constexpr auto i = glz::get<I>(meta_v<V>);
-                        if constexpr (use_reflection) {
-                           return get_name<get<0>(i)>();
-                        }
-                        else {
-                           return get<0>(i);
-                        }
-                     };
-                     
-                     static constexpr auto quoted_key =
-                        concat_arrays(concat_arrays("\"", key_getter()), "\":", Opts.prettify ? " " : "");
-                     write<json>::op<Opts>(quoted_key, ctx, b, ix);
+                     static constexpr auto quoted_key = join_v < chars<"\"">, key,
+                                           Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                        ;
+                     dump<quoted_key>(b, ix);
                   }
 
                   write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
@@ -1197,77 +1182,6 @@ namespace glz
                   }
                }
             });
-            if constexpr (!Options.closing_handled) {
-               if constexpr (Options.prettify) {
-                  ctx.indentation_level -= Options.indentation_width;
-                  dump<'\n'>(b, ix);
-                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
-               }
-               dump<'}'>(b, ix);
-            }
-         }
-      };
-
-      template <reflectable T>// requires (std::same_as<T, int>)
-      struct to_json<T>
-      {
-         template <auto Options>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
-         {
-            static constexpr auto members = member_names<T>;
-            auto t = to_tuple(value);
-            using V = decltype(t);
-            static constexpr auto N = std::tuple_size_v<V>;
-            static_assert(count_members<T>() == N);
-
-            if constexpr (!Options.opening_handled) {
-               dump<'{'>(b, ix);
-               if constexpr (Options.prettify) {
-                  ctx.indentation_level += Options.indentation_width;
-                  dump<'\n'>(b, ix);
-                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
-               }
-            }
-
-            bool first = true;
-            for_each<N>([&](auto I) {
-               static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-               decltype(auto) item = std::get<I>(t);
-               using val_t = std::decay_t<decltype(item)>;
-
-               if (skip_member<Opts>(item)) {
-                  return;
-               }
-
-               // skip file_include
-               if constexpr (std::is_same_v<val_t, includer<V>>) {
-                  return;
-               }
-               else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
-                  return;
-               }
-               else {
-                  if (first) {
-                     first = false;
-                  }
-                  else {
-                     // Null members may be skipped so we cant just write it out for all but the last member unless
-                     // trailing commas are allowed
-                     write_entry_separator<Opts>(ctx, b, ix);
-                  }
-
-                  const auto key = get<I>(members);
-
-                  write<json>::op<Opts>(key, ctx, b, ix);
-                  dump<':'>(b, ix);
-                  if constexpr (Opts.prettify) {
-                     dump<' '>(b, ix);
-                  }
-
-                  write<json>::op<Opts>(item, ctx, b, ix);
-               }
-            });
-
             if constexpr (!Options.closing_handled) {
                if constexpr (Options.prettify) {
                   ctx.indentation_level -= Options.indentation_width;
