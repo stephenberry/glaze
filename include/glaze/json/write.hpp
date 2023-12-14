@@ -979,7 +979,7 @@ namespace glz
          using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
          using type = member_t<V, mptr_t>;
       };
-      
+
       template <size_t I, size_t N, reflectable T>
          requires(N > 0)
       struct glaze_tuple_element<I, N, T>
@@ -992,15 +992,15 @@ namespace glz
          using type = member_t<V, mptr_t>;
          using T0 = mptr_t;
       };
-      
+
       template <size_t I, size_t N, class T>
       using glaze_tuple_element_t = typename glaze_tuple_element<I, N, T>::type;
-      
+
       template <auto Opts, class T>
       struct object_type_info
       {
          using V = std::decay_t<T>;
-         
+
          static constexpr auto N = [] {
             if constexpr (reflectable<T>) {
                return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
@@ -1009,12 +1009,12 @@ namespace glz
                return std::tuple_size_v<meta_t<V>>;
             }
          }();
-         
+
          // Allows us to remove a branch if the first item will always be written
          static constexpr bool first_will_be_written = [] {
             if constexpr (N > 0) {
                using val_t = glaze_tuple_element_t<0, N, T>;
-               
+
                if constexpr (null_t<val_t> && Opts.skip_null_members) {
                   return false;
                }
@@ -1035,7 +1035,7 @@ namespace glz
             }
          }();
       };
-      
+
       template <size_t I, class T, bool use_reflection>
       constexpr auto key_name = [] {
          if constexpr (reflectable<T>) {
@@ -1091,13 +1091,13 @@ namespace glz
                   dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
                }
             }
-            
+
             using Info = object_type_info<Options, T>;
 
             using V = std::decay_t<T>;
             static constexpr auto N = Info::N;
-            
-            [[maybe_unused]] decltype(auto) t = [&]{
+
+            [[maybe_unused]] decltype(auto) t = [&] {
                if constexpr (reflectable<T>) {
                   return to_tuple(value);
                }
@@ -1110,13 +1110,13 @@ namespace glz
             static constexpr auto first_is_written = Info::first_will_be_written;
             for_each<N>([&](auto I) {
                static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-               
+
                using Element = glaze_tuple_element<I, N, T>;
                static constexpr size_t member_index = Element::member_index;
                static constexpr bool use_reflection = Element::use_reflection;
                using val_t = typename Element::type;
-               
-               decltype(auto) member = [&]{
+
+               decltype(auto) member = [&] {
                   if constexpr (reflectable<T>) {
                      return std::get<I>(t);
                   }
