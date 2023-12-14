@@ -972,7 +972,7 @@ namespace glz
       };
       
       template <size_t I, class T>
-      using glaze_tuple_element_t = glaze_tuple_element<I, T>::type;
+      using glaze_tuple_element_t = typename glaze_tuple_element<I, T>::type;
       
       template <auto Opts, class T>
       struct object_type_info
