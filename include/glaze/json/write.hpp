@@ -1063,18 +1063,36 @@ namespace glz
 
             using V = std::decay_t<T>;
             static constexpr auto N = Info::N;
+            
+            decltype(auto) t = [&]{
+               if constexpr (reflectable<T>) {
+                  return to_tuple(value);
+               }
+               else {
+                  return nullptr;
+               }
+            }();
 
             [[maybe_unused]] bool first = true;
             static constexpr auto first_is_written = Info::first_will_be_written;
             for_each<N>([&](auto I) {
                static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-               static constexpr auto item = glz::get<I>(meta_v<V>);
-               using T0 = std::decay_t<std::tuple_element_t<0, decltype(item)>>;
+               using Item = std::decay_t<decltype(glz::get<I>(meta_v<V>))>;
+               using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
                static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
                static constexpr size_t member_index = use_reflection ? 0 : 1;
-               using mptr_t = std::decay_t<std::tuple_element_t<member_index, decltype(item)>>;
+               using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
                using Key = std::conditional_t<use_reflection, sv, T0>;
                using val_t = member_t<V, mptr_t>;
+               
+               decltype(auto) item = [&]{
+                  if constexpr (reflectable<T>) {
+                     return std::get<I>(t);
+                  }
+                  else {
+                     return glz::get<I>(meta_v<V>);
+                  }
+               }();
 
                if constexpr (null_t<val_t> && Opts.skip_null_members) {
                   if constexpr (always_null_t<T>)
@@ -1118,12 +1136,13 @@ namespace glz
                   }
 
                   if constexpr (str_t<Key> || char_t<Key>) {
-                     auto key_getter = [&] {
+                     auto key_getter = [&]() constexpr {
+                        constexpr auto i = glz::get<I>(meta_v<V>);
                         if constexpr (use_reflection) {
-                           return get_name<get<0>(item)>();
+                           return get_name<get<0>(i)>();
                         }
                         else {
-                           return get<0>(item);
+                           return get<0>(i);
                         }
                      };
 
@@ -1153,8 +1172,9 @@ namespace glz
                   static constexpr size_t comment_index = member_index + 1;
                   static constexpr auto S = std::tuple_size_v<decltype(item)>;
                   if constexpr (Opts.comments && S > comment_index) {
-                     if constexpr (std::is_convertible_v<decltype(get<comment_index>(item)), sv>) {
-                        static constexpr sv comment = get<comment_index>(item);
+                     static constexpr auto i = glz::get<I>(meta_v<V>);
+                     if constexpr (std::is_convertible_v<decltype(get<comment_index>(i)), sv>) {
+                        static constexpr sv comment = get<comment_index>(i);
                         if constexpr (comment.size() > 0) {
                            if constexpr (Opts.prettify) {
                               dump<' '>(b, ix);
