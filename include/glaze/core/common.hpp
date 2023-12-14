@@ -704,7 +704,8 @@ namespace glz
          constexpr auto n = std::tuple_size_v<meta_t<T>>;
 
          if constexpr (n == 0) {
-            static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
+            return nullptr; // Hack to fix MSVC
+            //static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
          }
          else if constexpr (n == 1) {
             return micro_map1<value_t, meta_sv<T, I>::value...>{key_value<T, I>()...};
