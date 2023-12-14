@@ -957,7 +957,7 @@ namespace glz
       struct glaze_tuple_element
       {
          using V = std::decay_t<T>;
-         using Item = std::decay_t<decltype(glz::get<0>(meta_v<V>))>;
+         using Item = std::decay_t<decltype(glz::get<I>(meta_v<V>))>;
          using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
          static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
          static constexpr size_t member_index = use_reflection ? 0 : 1;
@@ -968,7 +968,11 @@ namespace glz
       template <size_t I, reflectable T>
       struct glaze_tuple_element<I, T>
       {
+         static constexpr bool use_reflection = false;
+         static constexpr size_t member_index = 0;
          using type = std::tuple_element_t<I, decltype(to_tuple(std::declval<T>()))>;
+         using T0 = type;
+         using mptr_t = type;
       };
       
       template <size_t I, class T>
@@ -1072,13 +1076,13 @@ namespace glz
             static constexpr auto first_is_written = Info::first_will_be_written;
             for_each<N>([&](auto I) {
                static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
-               using Item = std::decay_t<decltype(glz::get<I>(meta_v<V>))>;
-               using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
-               static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
-               static constexpr size_t member_index = use_reflection ? 0 : 1;
-               using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
-               using Key = std::conditional_t<use_reflection, sv, T0>;
-               using val_t = member_t<V, mptr_t>;
+               
+               using Element = glaze_tuple_element<I, T>;
+               static constexpr size_t member_index = Element::member_index;
+               static constexpr bool use_reflection = Element::use_reflection;
+               using val_t = typename Element::type;
+               using Key = std::conditional_t<Element::use_reflection, sv, typename Element::T0>;
+               using mptr_t = typename Element::mptr_t;
                
                decltype(auto) item = [&]{
                   if constexpr (reflectable<T>) {
