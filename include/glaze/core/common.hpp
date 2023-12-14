@@ -1187,7 +1187,7 @@ namespace glz::detail
 
    template <size_t I, size_t N, class T>
    using glaze_tuple_element_t = typename glaze_tuple_element<I, N, T>::type;
-   
+
    template <auto Opts, class T>
    struct object_type_info
    {
@@ -1227,7 +1227,7 @@ namespace glz::detail
          }
       }();
    };
-   
+
    template <size_t I, class T, bool use_reflection>
    constexpr auto key_name = [] {
       if constexpr (reflectable<T>) {

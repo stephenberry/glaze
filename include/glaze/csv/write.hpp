@@ -173,14 +173,15 @@ namespace glz
          }
       };
 
-      template <class T> requires (glaze_object_t<T> || reflectable<T>)
+      template <class T>
+         requires(glaze_object_t<T> || reflectable<T>)
       struct to_csv<T>
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             using V = std::decay_t<T>;
-            
+
             static constexpr auto N = [] {
                if constexpr (reflectable<T>) {
                   return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
@@ -189,7 +190,7 @@ namespace glz
                   return std::tuple_size_v<meta_t<T>>;
                }
             }();
-            
+
             [[maybe_unused]] decltype(auto) t = [&] {
                if constexpr (reflectable<T>) {
                   return to_tuple(value);
@@ -206,9 +207,9 @@ namespace glz
 
                   using item_type = std::decay_t<typename Element::type>;
                   using value_type = typename item_type::value_type;
-                  
+
                   static constexpr sv key = key_name<I, T, Element::use_reflection>;
-                  
+
                   decltype(auto) mem = [&] {
                      if constexpr (reflectable<T>) {
                         return std::get<I>(t);
@@ -255,9 +256,9 @@ namespace glz
                   using Element = glaze_tuple_element<I, N, T>;
                   static constexpr size_t member_index = Element::member_index;
                   using X = std::decay_t<typename Element::type>;
-                  
+
                   static constexpr sv key = key_name<I, T, Element::use_reflection>;
-                  
+
                   decltype(auto) member = [&] {
                      if constexpr (reflectable<T>) {
                         return std::get<I>(t);
@@ -298,7 +299,7 @@ namespace glz
                      using Element = glaze_tuple_element<I, N, T>;
                      static constexpr size_t member_index = Element::member_index;
                      using X = std::decay_t<typename Element::type>;
-                     
+
                      decltype(auto) mem = [&] {
                         if constexpr (reflectable<T>) {
                            return std::get<I>(t);

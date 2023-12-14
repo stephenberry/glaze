@@ -8,8 +8,8 @@
 #include "glaze/core/format.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
-#include "glaze/util/parse.hpp"
 #include "glaze/reflection/reflect.hpp"
+#include "glaze/util/parse.hpp"
 #include "glaze/util/strod.hpp"
 
 namespace glz
@@ -357,7 +357,8 @@ namespace glz
          }
       };
 
-      template <class T> requires (glaze_object_t<T> || reflectable<T>)
+      template <class T>
+         requires(glaze_object_t<T> || reflectable<T>)
       struct from_csv<T>
       {
          template <auto Opts, class It>
@@ -371,7 +372,7 @@ namespace glz
                   return std::tuple_size_v<meta_t<T>>;
                }
             }();
-            
+
             decltype(auto) frozen_map = [&] {
                if constexpr (reflectable<T> && num_members > 0) {
                   static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
