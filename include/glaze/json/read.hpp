@@ -1680,6 +1680,22 @@ namespace glz
             else {
                // Only used if error_on_missing_keys = true
                [[maybe_unused]] bit_array<num_members> fields{};
+               
+               decltype(auto) frozen_map = [&] {
+                  if constexpr (reflectable<T> && num_members > 0) {
+                     static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+                     // We want to run this populate outside of the while loop
+                     populate_map(value, cmap); // Function required for MSVC to build
+                     return cmap;
+                  }
+                  else if constexpr (glaze_object_t<T> && num_members > 0) {
+                     static constexpr auto cmap = make_map<T, Opts.use_hash_comparison>();
+                     return cmap;
+                  }
+                  else {
+                     return nullptr;
+                  }
+               }();
 
                bool first = true;
                while (true) {
@@ -1707,7 +1723,7 @@ namespace glz
                   if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
                      static_assert(false_v<T>, "This should be unreachable");
                   }
-                  else if constexpr (glaze_object_t<T> && num_members == 0) {
+                  else if constexpr ((glaze_object_t<T> || reflectable<T>) && num_members == 0) {
                      match<'"'>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
@@ -1761,18 +1777,6 @@ namespace glz
                         }
                         ++it;
 
-                        decltype(auto) frozen_map = [&] {
-                           if constexpr (reflectable<T>) {
-                              static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
-                              populate_map(value, cmap); // Function required for MSVC to build
-                              return cmap;
-                           }
-                           else {
-                              static constexpr auto cmap = make_map<T, Opts.use_hash_comparison>();
-                              return cmap;
-                           }
-                        }();
-
                         if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
                            parse_object_entry_sep<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
@@ -1817,8 +1821,6 @@ namespace glz
                         }
                      }
                      else {
-                        static constexpr auto frozen_map = detail::make_map<T, Opts.use_hash_comparison>();
-
                         if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
                            match<'"'>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
