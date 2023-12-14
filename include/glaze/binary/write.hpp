@@ -547,7 +547,6 @@ namespace glz
             if constexpr (reflectable<T>) {
                static constexpr auto members = member_names<T>;
                auto t = to_tuple(value);
-               static constexpr auto N = std::tuple_size_v<decltype(t)>;
                for_each<N>([&](auto I) {
                   write<binary>::no_header<Opts>(get<I>(members), ctx, args...);
                   write<binary>::op<Opts>(std::get<I>(t), ctx, args...);
