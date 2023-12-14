@@ -953,6 +953,27 @@ namespace glz
          }
       };
       
+      template <size_t I, class T>
+      struct glaze_tuple_element
+      {
+         using V = std::decay_t<T>;
+         using Item = std::decay_t<decltype(glz::get<0>(meta_v<V>))>;
+         using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
+         static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+         static constexpr size_t member_index = use_reflection ? 0 : 1;
+         using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
+         using type = member_t<V, mptr_t>;
+      };
+      
+      template <size_t I, reflectable T>
+      struct glaze_tuple_element<I, T>
+      {
+         using type = std::tuple_element_t<I, decltype(to_tuple(std::declval<T>()))>;
+      };
+      
+      template <size_t I, class T>
+      using glaze_tuple_element_t = glaze_tuple_element<I, T>::type;
+      
       template <auto Opts, class T>
       struct object_type_info
       {
@@ -970,47 +991,21 @@ namespace glz
          // Allows us to remove a branch if the first item will always be written
          static constexpr bool first_will_be_written = [] {
             if constexpr (N > 0) {
-               if constexpr (reflectable<T>) {
-                  using val_t = std::tuple_element_t<0, decltype(to_tuple(std::declval<T>()))>;
-                  
-                  if constexpr (null_t<val_t> && Opts.skip_null_members) {
-                     return false;
-                  }
+               using val_t = glaze_tuple_element_t<0, T>;
+               
+               if constexpr (null_t<val_t> && Opts.skip_null_members) {
+                  return false;
+               }
 
-                  // skip file_include
-                  if constexpr (std::is_same_v<val_t, includer<std::decay_t<V>>>) {
-                     return false;
-                  }
-                  else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
-                     return false;
-                  }
-                  else {
-                     return true;
-                  }
+               // skip file_include
+               if constexpr (std::is_same_v<val_t, includer<std::decay_t<V>>>) {
+                  return false;
+               }
+               else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+                  return false;
                }
                else {
-                  const auto item = glz::get<0>(meta_v<V>);
-                  using Item = decltype(item);
-                  using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
-                  constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
-                  constexpr size_t member_index = use_reflection ? 0 : 1;
-                  using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
-                  using val_t = member_t<V, mptr_t>;
-
-                  if constexpr (null_t<val_t> && Opts.skip_null_members) {
-                     return false;
-                  }
-
-                  // skip file_include
-                  if constexpr (std::is_same_v<val_t, includer<std::decay_t<V>>>) {
-                     return false;
-                  }
-                  else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
-                     return false;
-                  }
-                  else {
-                     return true;
-                  }
+                  return true;
                }
             }
             else {
