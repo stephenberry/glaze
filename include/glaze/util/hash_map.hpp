@@ -18,6 +18,11 @@
 #include <span>
 #include <string_view>
 
+#ifdef _MSC_VER
+// Turn off broken warning from MSVC for << operator precedence
+#pragma warning(disable : 4554)
+#endif
+
 // Notes on padding:
 // We only need to do buffer extensions on very short keys (n < 8)
 // Our static thread_local string_buffer always has enough padding for short strings (n < 8)
