@@ -1680,7 +1680,7 @@ namespace glz
             else {
                // Only used if error_on_missing_keys = true
                [[maybe_unused]] bit_array<num_members> fields{};
-               
+
                decltype(auto) frozen_map = [&] {
                   if constexpr (reflectable<T> && num_members > 0) {
                      static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
@@ -1723,7 +1723,7 @@ namespace glz
                   if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
                      static_assert(false_v<T>, "This should be unreachable");
                   }
-                  else if constexpr ((glaze_object_t<T> || reflectable<T>) && num_members == 0) {
+                  else if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0) {
                      match<'"'>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;

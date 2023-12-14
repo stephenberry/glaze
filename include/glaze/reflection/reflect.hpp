@@ -43,7 +43,7 @@ namespace glz
 
          if constexpr (n == 0) {
             return nullptr; // Hack to fix MSVC
-            //static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
+            // static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
          }
          else if constexpr (n == 1) {
             return micro_map1<value_t, named_member<T, I>::value...>{
