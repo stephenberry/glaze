@@ -30,19 +30,6 @@ namespace glz
 
          using value_t = reflection_value_tuple_variant_t<V>;
 
-         auto naive_or_normal_hash = [&] {
-            if constexpr (n <= 20) {
-               return glz::detail::naive_map<value_t, n, use_hash_comparison>(
-                  {std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
-            }
-            else {
-               return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
-                  {std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
-            }
-         };
-
-         // return naive_or_normal_hash();
-
          if constexpr (n == 0) {
             static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
          }
@@ -70,12 +57,26 @@ namespace glz
                      {{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
                }
                else {
-                  return naive_or_normal_hash();
+                  if constexpr (n <= 20) {
+                     return glz::detail::naive_map<value_t, n, use_hash_comparison>(
+                        {std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
+                  }
+                  else {
+                     return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
+                        {std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
+                  }
                }
             }
          }
          else {
-            return naive_or_normal_hash();
+            if constexpr (n <= 20) {
+               return glz::detail::naive_map<value_t, n, use_hash_comparison>(
+                  {std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
+            }
+            else {
+               return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
+                  {std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
+            }
          }
       }
 
