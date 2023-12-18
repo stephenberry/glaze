@@ -542,21 +542,18 @@ namespace glz
                };
 
                auto it = std::begin(value);
-               [[maybe_unused]] bool previous_skipped = write_first_entry(it);
-               const auto fin = std::end(value);
-               for (++it; it != fin; ++it) {
+               [[maybe_unused]] bool starting = write_first_entry(it);
+               for (++it; it != std::end(value); ++it) {
                   const auto& [key, entry_val] = *it;
                   if (skip_member<Opts>(entry_val)) {
-                     previous_skipped = true;
                      continue;
                   }
 
                   // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
                   // conditional for every entry. Avoid this branch when not skipping null members.
-                  // Alternatively, write separator after each entry, except on last entry but then branch is
-                  // permanent
+                  // Alternatively, write separator after each entry except last but then branch is permanent
                   if constexpr (Opts.skip_null_members) {
-                     if (!previous_skipped) {
+                     if (!starting) {
                         write_entry_separator<Opts>(ctx, args...);
                      }
                   }
@@ -565,7 +562,7 @@ namespace glz
                   }
 
                   write_pair_content<Opts>(key, entry_val, ctx, args...);
-                  previous_skipped = false;
+                  starting = false;
                }
 
                if constexpr (!Opts.closing_handled) {
