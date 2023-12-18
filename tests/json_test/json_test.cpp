@@ -1985,13 +1985,14 @@ suite write_tests = [] {
 
    "Write map"_test = [] {
       std::string s;
-      std::map<std::string, double> m{{"a", 2.2}, {"b", 11.111}, {"c", 211.2}};
+      const std::map<std::string, double> m{{"a", 2.2}, {"b", 11.111}, {"c", 211.2}};
       glz::write_json(m, s);
       expect(s == R"({"a":2.2,"b":11.111,"c":211.2})");
 
-      std::map<std::string, std::optional<double>> nullable{{"a", std::nullopt}, {"b", std::nullopt}, {"c", 211.2}};
+      const std::map<std::string, std::optional<double>> nullable{
+         {"a", std::nullopt}, {"b", 13.4}, {"c", std::nullopt}, {"d", 211.2}, {"e", std::nullopt}};
       glz::write_json(nullable, s);
-      expect(s == glz::sv{R"({"c":211.2})"});
+      expect(s == glz::sv{R"({"b":13.4,"d":211.2})"});
    };
 
    "Write pair"_test =
