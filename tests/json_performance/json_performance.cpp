@@ -28,12 +28,10 @@ inline std::string generate_string() {
 suite string_performance = [] {
    
    "string_performance"_test = [] {
-      constexpr auto n = 1000000;
+      constexpr auto n = 1000; // make this number bigger when profiling
       
       std::vector<std::string> vec;
       vec.reserve(n);
-      
-      std::mt19937_64 g{};
       
       for (size_t i = 0; i < n; ++i) {
          vec.emplace_back(generate_string());
