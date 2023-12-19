@@ -41,12 +41,6 @@ namespace glz
          static thread_local std::string buffer(256, ' ');
          return buffer;
       }
-      
-      GLZ_ALWAYS_INLINE std::string& string_parse_buffer() noexcept
-      {
-         static thread_local std::string buffer(256, ' ');
-         return buffer;
-      }
 
       template <class T = void>
       struct from_json
@@ -617,30 +611,27 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      
-                     auto& b = string_parse_buffer(); // we use our own special buffer because we don't want other functions to resize it smaller
-                     
                      static constexpr auto Bytes = 8;
                      
                      const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
-                     if (length > b.size()) [[unlikely]] {
-                        b.resize(length);
+                     if (length > value.size()) [[unlikely]] {
+                        value.resize(length);
                      }
                      
                      char* c;
                      if (length < size_t(end - it)) [[likely]] {
-                        c = parse_string<Bytes>(&*start, b.data(), length);
+                        c = parse_string<Bytes>(&*start, value.data(), length);
                      }
                      else [[unlikely]] {
-                        c = parse_string<1>(&*start, b.data(), length);
+                        c = parse_string<1>(&*start, value.data(), length);
                      }
                      
-                     if (c) [[likely]] {
-                        value = sv{ b.data(), size_t(c - b.data()) };
-                     }
-                     else [[unlikely]] {
+                     if (!c) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
+                     
+                     value.resize(size_t(c - value.data()));
                      
                      ++it;
                   }
