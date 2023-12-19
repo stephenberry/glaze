@@ -165,7 +165,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-      
+
       for (const auto end_m7 = end - 7; it < end_m7; it += 8) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
@@ -208,7 +208,7 @@ namespace glz::detail
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
       auto start = it;
-      
+
       for (const auto end_m7 = end - 7; it < end_m7; it += 8) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
@@ -519,7 +519,7 @@ namespace glz::detail
          return {};
       return sv{start, static_cast<size_t>(it++ - start)};
    }
-   
+
    // clang-format off
    constexpr std::array<char, 256> char_unescape_table = { //
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //

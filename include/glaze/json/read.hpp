@@ -587,7 +587,7 @@ namespace glz
                   if constexpr (!Opts.force_conformance) {
                      value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
                      auto start = it;
-                     
+
                      while (it < end) {
                         skip_till_escape_or_quote(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
@@ -652,10 +652,10 @@ namespace glz
                         }
                         ++it;
                      };
-                     
+
                      value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
                      auto start = it;
-                     
+
                      while (it < end) {
                         switch (*it) {
                         [[likely]] case '"' : {
