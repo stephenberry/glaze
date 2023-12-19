@@ -440,18 +440,6 @@ namespace glz
          }
       };
 
-      /* Copyright (c) 2022 Tero 'stedo' Liukko, MIT License */
-      GLZ_ALWAYS_INLINE unsigned char hex2dec(char hex) { return ((hex & 0xf) + (hex >> 6) * 9); }
-
-      GLZ_ALWAYS_INLINE char32_t hex4_to_char32(const char* hex)
-      {
-         uint32_t value = hex2dec(hex[3]);
-         value |= hex2dec(hex[2]) << 4;
-         value |= hex2dec(hex[1]) << 8;
-         value |= hex2dec(hex[0]) << 12;
-         return value;
-      }
-
       template <class T, class Val, class It, class End>
       GLZ_ALWAYS_INLINE void read_escaped_unicode(Val& value, is_context auto&& ctx, It&& it, End&& end)
       {
@@ -584,38 +572,36 @@ namespace glz
                   ++it;
                }
                else {
-                  if constexpr (!Opts.force_conformance) {
-                     value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
+                  if constexpr (!Opts.force_conformance) {                     
                      auto start = it;
-
-                     while (it < end) {
-                        skip_till_escape_or_quote(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-
-                        if (*it == '"') {
-                           value.append(start, size_t(it - start));
-                           ++it;
-                           return;
-                        }
-                        else {
-                           value.append(start, size_t(it - start));
-                           ++it;
-                           if (*it == 'u') [[unlikely]] {
-                              ++it;
-                              read_escaped_unicode<char>(value, ctx, it, end);
-                           }
-                           else if (char_unescape_table[uint8_t(*it)]) [[likely]] {
-                              value.push_back(char_unescape_table[uint8_t(*it)]);
-                              ++it;
-                           }
-                           else [[unlikely]] {
-                              ctx.error = error_code::invalid_escape;
-                              return;
-                           }
-                           start = it;
-                        }
+                     
+                     skip_till_unescaped_quote(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     
+                     static constexpr auto Bytes = 8;
+                     
+                     const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
+                     if (length > value.size()) [[unlikely]] {
+                        value.resize(length);
                      }
+                     
+                     char* c;
+                     if (length < size_t(end - it)) [[likely]] {
+                        c = parse_string<Bytes>(&*start, value.data(), length);
+                     }
+                     else [[unlikely]] {
+                        c = parse_string<1>(&*start, value.data(), length);
+                     }
+                     
+                     if (!c) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     
+                     value.resize(size_t(c - value.data()));
+                     
+                     ++it;
                   }
                   else {
                      auto handle_escaped = [&] {
