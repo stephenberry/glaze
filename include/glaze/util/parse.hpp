@@ -608,18 +608,18 @@ namespace glz::detail
       return value;
    }
 
-   GLZ_ALWAYS_INLINE bool handle_escaped_unicode(auto*& src, auto*& dst)
+   GLZ_ALWAYS_INLINE bool handle_escaped_unicode(auto*& in, auto*& out)
    {
-      src += 2;
+      in += 2;
       // This is slow but who is escaping unicode nowadays
       // codecvt is problematic on mingw hence mixing with the c character conversion functions
-      if (!std::all_of(src, src + 4, ::isxdigit)) [[unlikely]] {
+      if (!std::all_of(in, in + 4, ::isxdigit)) [[unlikely]] {
          return false;
       }
       
-      char32_t codepoint = hex4_to_char32(src);
+      char32_t codepoint = hex4_to_char32(in);
       
-      src += 4;
+      in += 4;
       
       char8_t buffer[4];
       auto& facet = std::use_facet<std::codecvt<char32_t, char8_t, mbstate_t>>(std::locale());
@@ -633,32 +633,32 @@ namespace glz::detail
       }
       
       const auto offset = size_t(to_next - buffer);
-      std::memcpy(dst, buffer, offset);
-      dst += offset;
+      std::memcpy(out, buffer, offset);
+      out += offset;
       return true;
    }
    
    template <size_t Bytes> requires (Bytes == 8)
-   GLZ_ALWAYS_INLINE char* parse_string(const auto* string1, auto* string2, uint64_t length_new) noexcept {
+   GLZ_ALWAYS_INLINE char* parse_string(const auto* in, auto* out, uint64_t length_new) noexcept {
       
       uint64_t swar;
       while (length_new > 0) {
-         std::memcpy(&swar, string1, Bytes);
-         std::memcpy(string2, string1, Bytes);
+         std::memcpy(&swar, in, Bytes);
+         std::memcpy(out, in, Bytes);
          const auto ix = std::countr_zero(has_quote(swar) | has_escape(swar)) >> 3;
          
          if (ix != 8) {
-            auto escape_char = string1[ix];
+            auto escape_char = in[ix];
             if (escape_char == '"') {
-               return string2 + ix;
+               return out + ix;
             }
             else if (escape_char == '\\') {
-               escape_char = string1[ix + 1];
+               escape_char = in[ix + 1];
                if (escape_char == 'u') {
                   length_new -= ix;
-                  string1 += ix;
-                  string2 += ix;
-                  if (!handle_escaped_unicode(string1, string2)) {
+                  in += ix;
+                  out += ix;
+                  if (!handle_escaped_unicode(in, out)) {
                      return {};
                   }
                   continue;
@@ -667,32 +667,32 @@ namespace glz::detail
                if (escape_char == 0) [[unlikely]] {
                   return {};
                }
-               string2[ix] = escape_char;
+               out[ix] = escape_char;
                length_new -= ix + 2;
-               string2 += ix + 1;
-               string1 += ix + 2;
+               out += ix + 1;
+               in += ix + 2;
             }
          } else {
             length_new -= 8;
-            string2 += 8;
-            string1 += 8;
+            out += 8;
+            in += 8;
          }
       }
-      return string2;
+      return out;
    }
    
    template <size_t Bytes> requires (Bytes == 1)
-   GLZ_ALWAYS_INLINE char* parse_string(const auto* string1, auto* string2, uint64_t length_new) noexcept {
+   GLZ_ALWAYS_INLINE char* parse_string(const auto* in, auto* out, uint64_t length_new) noexcept {
       while (length_new > 0) {
-         *string2 = *string1;
-         if (*string1 == '"' || *string1 == '\\') {
-            auto escape_char = *string1;
+         *out = *in;
+         if (*in == '"' || *in == '\\') {
+            auto escape_char = *in;
             if (escape_char == '"') {
-               return string2;
+               return out;
             } else if (escape_char == '\\') {
-               escape_char = string1[1];
+               escape_char = in[1];
                if (escape_char == 'u') {
-                  if (!handle_escaped_unicode(string1, string2)) {
+                  if (!handle_escaped_unicode(in, out)) {
                      return {};
                   }
                   continue;
@@ -701,18 +701,18 @@ namespace glz::detail
                if (escape_char == 0) {
                   return {};
                }
-               string2[0] = escape_char;
+               out[0] = escape_char;
                length_new -= 2;
-               string2 += 1;
-               string1 += 2;
+               out += 1;
+               in += 2;
             }
          } else {
             --length_new;
-            ++string2;
-            ++string1;
+            ++out;
+            ++in;
          }
       }
-      return string2;
+      return out;
    }
    
    template <auto multiple>
