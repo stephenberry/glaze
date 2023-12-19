@@ -165,9 +165,8 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-
-      const auto end_m7 = end - 7;
-      for (; it < end_m7; it += 8) {
+      
+      for (const auto end_m7 = end - 7; it < end_m7; it += 8) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          const uint64_t test_chars = has_quote(chunk) | has_escape(chunk);
@@ -209,9 +208,8 @@ namespace glz::detail
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
       auto start = it;
-
-      const auto end_m7 = end - 7;
-      for (; it < end_m7; it += 8) {
+      
+      for (const auto end_m7 = end - 7; it < end_m7; it += 8) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
          uint64_t test_chars = has_quote(chunk);
@@ -521,4 +519,22 @@ namespace glz::detail
          return {};
       return sv{start, static_cast<size_t>(it++ - start)};
    }
+   
+   // clang-format off
+   constexpr std::array<char, 256> char_unescape_table = { //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+      0, 0, 0, 0, '"', 0, 0, 0, 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, '/', 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+      0, 0, '\\', 0, 0, 0, 0, 0, '\b', 0, //
+      0, 0, '\f', 0, 0, 0, 0, 0, 0, 0, //
+      '\n', 0, 0, 0, '\r', 0, '\t', 0, 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0 //
+   };
+   // clang-format on
 }
