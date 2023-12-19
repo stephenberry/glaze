@@ -302,11 +302,11 @@ namespace glz
                   }
                   else {
                      dump_unchecked<'"'>(b, ix);
-
-                     if (!str.empty()) {
-                        const auto* c = str.data();
-                        const auto* const e = c + n;
-
+                     
+                     const auto* c = str.data();
+                     const auto* const e = c + n;
+                     
+                     if (str.size() > 7) {
                         for (const auto end_m7 = e - 7; c < end_m7;) {
                            std::memcpy(data_ptr(b) + ix, c, 8);
                            uint64_t chunk;
@@ -328,17 +328,17 @@ namespace glz
                               c += 8;
                            }
                         }
-
-                        // Tail end of buffer. Uncommon for long strings.
-                        for (; c < e; ++c) {
-                           if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) [[likely]] {
-                              std::memcpy(data_ptr(b) + ix, &escaped, 2);
-                              ix += 2;
-                           }
-                           else {
-                              std::memcpy(data_ptr(b) + ix, c, 1);
-                              ++ix;
-                           }
+                     }
+                     
+                     // Tail end of buffer. Uncommon for long strings.
+                     for (; c < e; ++c) {
+                        if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) [[likely]] {
+                           std::memcpy(data_ptr(b) + ix, &escaped, 2);
+                           ix += 2;
+                        }
+                        else {
+                           std::memcpy(data_ptr(b) + ix, c, 1);
+                           ++ix;
                         }
                      }
 
