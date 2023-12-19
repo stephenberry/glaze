@@ -6,8 +6,8 @@
 #include <bit>
 #include <cstring>
 #include <iterator>
-#include <span>
 #include <locale>
+#include <span>
 
 #include "glaze/api/name.hpp"
 #include "glaze/core/context.hpp"
@@ -202,61 +202,61 @@ namespace glz::detail
 
       ctx.error = error_code::expected_quote;
    }
-   
+
    GLZ_ALWAYS_INLINE void skip_till_unescaped_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-      
-      for (const auto fin = end - 7; it < fin;) {
-       uint64_t chunk;
-       std::memcpy(&chunk, it, 8);
-       uint64_t test_chars = has_quote(chunk);
-       if (test_chars) {
-          it += (std::countr_zero(test_chars) >> 3);
 
-          auto* prev = it - 1;
-          while (*prev == '\\') {
-             --prev;
-          }
-          if (size_t(it - prev) % 2) {
-             return;
-          }
-          ++it; // skip the escaped quote
-       }
-       else {
-          it += 8;
-       }
-    }
+      for (const auto fin = end - 7; it < fin;) {
+         uint64_t chunk;
+         std::memcpy(&chunk, it, 8);
+         uint64_t test_chars = has_quote(chunk);
+         if (test_chars) {
+            it += (std::countr_zero(test_chars) >> 3);
+
+            auto* prev = it - 1;
+            while (*prev == '\\') {
+               --prev;
+            }
+            if (size_t(it - prev) % 2) {
+               return;
+            }
+            ++it; // skip the escaped quote
+         }
+         else {
+            it += 8;
+         }
+      }
 
       // Tail end of buffer. Should be rare we even get here
       while (it < end) {
          switch (*it) {
-            case '\\': {
-               ++it;
-               if (it == end) [[unlikely]] {
-                  ctx.error = error_code::expected_quote;
-                  return;
-               }
-               ++it;
-               break;
+         case '\\': {
+            ++it;
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::expected_quote;
+               return;
             }
-            case '"': {
-               auto* prev = it - 1;
-               while (*prev == '\\') {
-                  --prev;
-               }
-               if (size_t(it - prev) % 2) {
-                  return;
-               }
-               ++it; // skip the escaped quote
-               break;
+            ++it;
+            break;
+         }
+         case '"': {
+            auto* prev = it - 1;
+            while (*prev == '\\') {
+               --prev;
             }
-            default: {
-               ++it;
+            if (size_t(it - prev) % 2) {
+               return;
             }
+            ++it; // skip the escaped quote
+            break;
+         }
+         default: {
+            ++it;
+         }
          }
       }
-      
+
       ctx.error = error_code::expected_quote;
    }
 
@@ -595,7 +595,7 @@ namespace glz::detail
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0 //
    };
    // clang-format on
-   
+
    /* Copyright (c) 2022 Tero 'stedo' Liukko, MIT License */
    GLZ_ALWAYS_INLINE unsigned char hex2dec(char hex) { return ((hex & 0xf) + (hex >> 6) * 9); }
 
@@ -616,37 +616,37 @@ namespace glz::detail
       if (!std::all_of(in, in + 4, ::isxdigit)) [[unlikely]] {
          return false;
       }
-      
+
       char32_t codepoint = hex4_to_char32(in);
-      
+
       in += 4;
-      
+
       char8_t buffer[4];
       auto& facet = std::use_facet<std::codecvt<char32_t, char8_t, mbstate_t>>(std::locale());
       std::mbstate_t mbstate{};
       const char32_t* from_next;
       char8_t* to_next;
-      const auto result =
-         facet.out(mbstate, &codepoint, &codepoint + 1, from_next, buffer, buffer + 4, to_next);
+      const auto result = facet.out(mbstate, &codepoint, &codepoint + 1, from_next, buffer, buffer + 4, to_next);
       if (result != std::codecvt_base::ok) {
          return false;
       }
-      
+
       const auto offset = size_t(to_next - buffer);
       std::memcpy(out, buffer, offset);
       out += offset;
       return true;
    }
-   
-   template <size_t Bytes> requires (Bytes == 8)
-   GLZ_ALWAYS_INLINE char* parse_string(const auto* in, auto* out, uint64_t length_new) noexcept {
-      
+
+   template <size_t Bytes>
+      requires(Bytes == 8)
+   GLZ_ALWAYS_INLINE char* parse_string(const auto* in, auto* out, uint64_t length_new) noexcept
+   {
       uint64_t swar;
       while (length_new > 0) {
          std::memcpy(&swar, in, Bytes);
          std::memcpy(out, in, Bytes);
          const auto ix = std::countr_zero(has_quote(swar) | has_escape(swar)) >> 3;
-         
+
          if (ix != 8) {
             auto escape_char = in[ix];
             if (escape_char == '"') {
@@ -672,7 +672,8 @@ namespace glz::detail
                out += ix + 1;
                in += ix + 2;
             }
-         } else {
+         }
+         else {
             length_new -= 8;
             out += 8;
             in += 8;
@@ -680,16 +681,19 @@ namespace glz::detail
       }
       return out;
    }
-   
-   template <size_t Bytes> requires (Bytes == 1)
-   GLZ_ALWAYS_INLINE char* parse_string(const auto* in, auto* out, uint64_t length_new) noexcept {
+
+   template <size_t Bytes>
+      requires(Bytes == 1)
+   GLZ_ALWAYS_INLINE char* parse_string(const auto* in, auto* out, uint64_t length_new) noexcept
+   {
       while (length_new > 0) {
          *out = *in;
          if (*in == '"' || *in == '\\') {
             auto escape_char = *in;
             if (escape_char == '"') {
                return out;
-            } else if (escape_char == '\\') {
+            }
+            else if (escape_char == '\\') {
                escape_char = in[1];
                if (escape_char == 'u') {
                   if (!handle_escaped_unicode(in, out)) {
@@ -706,7 +710,8 @@ namespace glz::detail
                out += 1;
                in += 2;
             }
-         } else {
+         }
+         else {
             --length_new;
             ++out;
             ++in;
@@ -714,9 +719,10 @@ namespace glz::detail
       }
       return out;
    }
-   
+
    template <auto multiple>
-   GLZ_ALWAYS_INLINE constexpr auto round_up_to_multiple(const auto val) noexcept {
+   GLZ_ALWAYS_INLINE constexpr auto round_up_to_multiple(const auto val) noexcept
+   {
       return val + (multiple - (val % multiple)) % multiple;
    }
 }
