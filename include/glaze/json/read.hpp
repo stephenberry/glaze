@@ -595,20 +595,29 @@ namespace glz
                            return;
 
                         if (*it == '"') {
-                           b.append(start, size_t(it - start));
+                           value.append(start, size_t(it - start));
                            ++it;
                            return;
                         }
                         else {
-                           b.append(start, size_t(it - start));
+                           value.append(start, size_t(it - start));
                            ++it;
-                           handle_escaped();
-                           if (bool(ctx.error)) [[unlikely]]
+                           if (*it == 'u') [[unlikely]] {
+                              ++it;
+                              read_escaped_unicode<char>(value, ctx, it, end);
+                           }
+                           else if (char_unescape_table[uint8_t(*it)]) [[likely]] {
+                              value.push_back(char_unescape_table[uint8_t(*it)]);
+                              ++it;
+                           }
+                           else [[unlikely]] {
+                              ctx.error = error_code::invalid_escape;
                               return;
+                           }
                            start = it;
                         }
-                        value = b;
                      }
+                     value = b;
                   }
                   else {
                      auto handle_escaped = [&] {
