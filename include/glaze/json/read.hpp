@@ -585,8 +585,7 @@ namespace glz
                }
                else {
                   if constexpr (!Opts.force_conformance) {
-                     auto& b = string_buffer();
-                     b.clear(); // Single append on unescaped strings so overwrite opt isnt as important
+                     value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
                      auto start = it;
                      
                      while (it < end) {
@@ -595,20 +594,19 @@ namespace glz
                            return;
 
                         if (*it == '"') {
-                           b.append(start, size_t(it - start));
+                           value.append(start, size_t(it - start));
                            ++it;
-                           value = b;
                            return;
                         }
                         else {
-                           b.append(start, size_t(it - start));
+                           value.append(start, size_t(it - start));
                            ++it;
                            if (*it == 'u') [[unlikely]] {
                               ++it;
-                              read_escaped_unicode<char>(b, ctx, it, end);
+                              read_escaped_unicode<char>(value, ctx, it, end);
                            }
                            else if (char_unescape_table[uint8_t(*it)]) [[likely]] {
-                              b.push_back(char_unescape_table[uint8_t(*it)]);
+                              value.push_back(char_unescape_table[uint8_t(*it)]);
                               ++it;
                            }
                            else [[unlikely]] {
