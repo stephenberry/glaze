@@ -41,6 +41,12 @@ namespace glz
          static thread_local std::string buffer(256, ' ');
          return buffer;
       }
+      
+      GLZ_ALWAYS_INLINE std::string& string_parse_buffer() noexcept
+      {
+         static thread_local std::string buffer(256, ' ');
+         return buffer;
+      }
 
       template <class T = void>
       struct from_json
@@ -440,18 +446,6 @@ namespace glz
          }
       };
 
-      /* Copyright (c) 2022 Tero 'stedo' Liukko, MIT License */
-      GLZ_ALWAYS_INLINE unsigned char hex2dec(char hex) { return ((hex & 0xf) + (hex >> 6) * 9); }
-
-      GLZ_ALWAYS_INLINE char32_t hex4_to_char32(const char* hex)
-      {
-         uint32_t value = hex2dec(hex[3]);
-         value |= hex2dec(hex[2]) << 4;
-         value |= hex2dec(hex[1]) << 8;
-         value |= hex2dec(hex[0]) << 12;
-         return value;
-      }
-
       template <class T, class Val, class It, class End>
       GLZ_ALWAYS_INLINE void read_escaped_unicode(Val& value, is_context auto&& ctx, It&& it, End&& end)
       {
@@ -585,7 +579,7 @@ namespace glz
                }
                else {
                   if constexpr (!Opts.force_conformance) {
-                     value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
+                     /*value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
                      auto start = it;
 
                      while (it < end) {
@@ -615,7 +609,40 @@ namespace glz
                            }
                            start = it;
                         }
+                     }*/
+                     
+                     auto start = it;
+                     
+                     skip_till_unescaped_quote(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     
+                     auto& b = string_parse_buffer(); // we use our own special buffer because we don't want other functions to resize it smaller
+                     
+                     static constexpr auto Bytes = 8;
+                     
+                     const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
+                     if (length > b.size()) [[unlikely]] {
+                        b.resize(length);
                      }
+                     
+                     char* c;
+                     if (length < size_t(end - it)) [[likely]] {
+                        c = parse_string<Bytes>(&*start, b.data(), length);
+                     }
+                     else [[unlikely]] {
+                        c = parse_string<1>(&*start, b.data(), length);
+                     }
+                     
+                     if (c) [[likely]] {
+                        value = sv{ b.data(), size_t(c - b.data()) };
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     
+                     ++it;
                   }
                   else {
                      auto handle_escaped = [&] {
