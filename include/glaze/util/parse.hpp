@@ -7,6 +7,7 @@
 #include <cstring>
 #include <iterator>
 #include <span>
+#include <locale>
 
 #include "glaze/api/name.hpp"
 #include "glaze/core/context.hpp"
