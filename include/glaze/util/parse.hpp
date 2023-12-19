@@ -201,63 +201,6 @@ namespace glz::detail
 
       ctx.error = error_code::expected_quote;
    }
-   
-   GLZ_ALWAYS_INLINE void skip_till_unescaped_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
-   {
-      static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-      
-      for (const auto fin = end - 7; it < fin;) {
-       uint64_t chunk;
-       std::memcpy(&chunk, it, 8);
-       uint64_t test_chars = has_quote(chunk);
-       if (test_chars) {
-          it += (std::countr_zero(test_chars) >> 3);
-
-          auto* prev = it - 1;
-          while (*prev == '\\') {
-             --prev;
-          }
-          if (size_t(it - prev) % 2) {
-             return;
-          }
-          ++it; // skip the escaped quote
-       }
-       else {
-          it += 8;
-       }
-    }
-
-      // Tail end of buffer. Should be rare we even get here
-      while (it < end) {
-         switch (*it) {
-            case '\\': {
-               ++it;
-               if (it == end) [[unlikely]] {
-                  ctx.error = error_code::expected_quote;
-                  return;
-               }
-               ++it;
-               break;
-            }
-            case '"': {
-               auto* prev = it - 1;
-               while (*prev == '\\') {
-                  --prev;
-               }
-               if (size_t(it - prev) % 2) {
-                  return;
-               }
-               ++it; // skip the escaped quote
-               break;
-            }
-            default: {
-               ++it;
-            }
-         }
-      }
-      
-      ctx.error = error_code::expected_quote;
-   }
 
    // very similar code to skip_till_quote, but it consumes the iterator and returns the key
    [[nodiscard]] GLZ_ALWAYS_INLINE const sv parse_unescaped_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
