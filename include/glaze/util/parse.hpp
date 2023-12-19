@@ -716,8 +716,7 @@ namespace glz::detail
    }
    
    template <auto multiple>
-   GLZ_ALWAYS_INLINE auto round_up_to_multiple(const auto val) noexcept {
-      const auto remainder = val % multiple;
-      return remainder == 0 ? val : val + (multiple - remainder);
+   GLZ_ALWAYS_INLINE constexpr auto round_up_to_multiple(const auto val) noexcept {
+      return val + (multiple - (val % multiple)) % multiple;
    }
 }
