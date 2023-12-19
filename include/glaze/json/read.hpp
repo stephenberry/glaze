@@ -595,19 +595,20 @@ namespace glz
                            return;
 
                         if (*it == '"') {
-                           value.append(start, size_t(it - start));
+                           b.append(start, size_t(it - start));
                            ++it;
+                           value = b;
                            return;
                         }
                         else {
-                           value.append(start, size_t(it - start));
+                           b.append(start, size_t(it - start));
                            ++it;
                            if (*it == 'u') [[unlikely]] {
                               ++it;
-                              read_escaped_unicode<char>(value, ctx, it, end);
+                              read_escaped_unicode<char>(b, ctx, it, end);
                            }
                            else if (char_unescape_table[uint8_t(*it)]) [[likely]] {
-                              value.push_back(char_unescape_table[uint8_t(*it)]);
+                              b.push_back(char_unescape_table[uint8_t(*it)]);
                               ++it;
                            }
                            else [[unlikely]] {
@@ -617,7 +618,6 @@ namespace glz
                            start = it;
                         }
                      }
-                     value = b;
                   }
                   else {
                      auto handle_escaped = [&] {
