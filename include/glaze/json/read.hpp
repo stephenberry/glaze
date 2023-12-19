@@ -38,7 +38,7 @@ namespace glz
       // not allowed or restricted
       GLZ_ALWAYS_INLINE std::string& string_buffer() noexcept
       {
-         static thread_local std::string buffer(128, ' ');
+         static thread_local std::string buffer(256, ' ');
          return buffer;
       }
 
@@ -584,64 +584,72 @@ namespace glz
                   ++it;
                }
                else {
-                  auto handle_escaped = [&] {
-                     switch (*it) {
-                     case '"':
-                     case '\\':
-                     case '/':
-                        value.push_back(*it);
-                        break;
-                     case 'b':
-                        value.push_back('\b');
-                        break;
-                     case 'f':
-                        value.push_back('\f');
-                        break;
-                     case 'n':
-                        value.push_back('\n');
-                        break;
-                     case 'r':
-                        value.push_back('\r');
-                        break;
-                     case 't':
-                        value.push_back('\t');
-                        break;
-                     case 'u': {
-                        ++it;
-                        read_escaped_unicode<char>(value, ctx, it, end);
-                        return;
-                     }
-                     default: {
-                        ctx.error = error_code::invalid_escape;
-                        return;
-                     }
-                     }
-                     ++it;
-                  };
-
-                  value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
-                  auto start = it;
-                  while (it < end) {
-                     if constexpr (!Opts.force_conformance) {
+                  if constexpr (!Opts.force_conformance) {
+                     auto& b = string_buffer();
+                     b.clear(); // Single append on unescaped strings so overwrite opt isnt as important
+                     auto start = it;
+                     
+                     while (it < end) {
                         skip_till_escape_or_quote(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
                         if (*it == '"') {
-                           value.append(start, size_t(it - start));
+                           b.append(start, size_t(it - start));
                            ++it;
                            return;
                         }
                         else {
-                           value.append(start, size_t(it - start));
+                           b.append(start, size_t(it - start));
                            ++it;
                            handle_escaped();
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                            start = it;
                         }
+                        value = b;
                      }
-                     else {
+                  }
+                  else {
+                     auto handle_escaped = [&] {
+                        switch (*it) {
+                        case '"':
+                        case '\\':
+                        case '/':
+                           value.push_back(*it);
+                           break;
+                        case 'b':
+                           value.push_back('\b');
+                           break;
+                        case 'f':
+                           value.push_back('\f');
+                           break;
+                        case 'n':
+                           value.push_back('\n');
+                           break;
+                        case 'r':
+                           value.push_back('\r');
+                           break;
+                        case 't':
+                           value.push_back('\t');
+                           break;
+                        case 'u': {
+                           ++it;
+                           read_escaped_unicode<char>(value, ctx, it, end);
+                           return;
+                        }
+                        default: {
+                           ctx.error = error_code::invalid_escape;
+                           return;
+                        }
+                        }
+                        ++it;
+                     };
+                     
+                     value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
+                     auto start = it;
+                     
+                     while (it < end) {
                         switch (*it) {
                         [[likely]] case '"' : {
                            value.append(start, size_t(it - start));
