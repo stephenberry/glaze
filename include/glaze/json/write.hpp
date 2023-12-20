@@ -206,16 +206,17 @@ namespace glz
          0, 0, combine(R"(\\)") //
       };
       // clang-format on
-      
+
       template <size_t Bytes>
          requires(Bytes == 8)
-      GLZ_ALWAYS_INLINE void serialize_string(const auto* in, auto* out, auto& ix) {
+      GLZ_ALWAYS_INLINE void serialize_string(const auto* in, auto* out, auto& ix)
+      {
          uint64_t swar;
          while (true) {
             std::memcpy(&swar, in, Bytes);
             std::memcpy(out + ix, in, Bytes);
             const auto next = std::countr_zero(has_quote(swar) | has_escape(swar) | is_less_16(swar)) >> 3;
-            
+
             if (next != 8) {
                const auto escape_char = char_escape_table[uint32_t(in[next])];
                if (escape_char == 0) {
@@ -227,7 +228,8 @@ namespace glz
                std::memcpy(out + ix, &escape_char, 2);
                ix += 2;
                ++in;
-            } else {
+            }
+            else {
                ix += 8;
                in += 8;
             }
@@ -329,9 +331,10 @@ namespace glz
                   }
                   else {
                      dump_unchecked<'"'>(b, ix);
-                     
+
                      if constexpr (string_t<T> && !std::is_const_v<std::remove_reference_t<decltype(value)>>) {
-                        // we know the output buffer has enough space, but we must ensure the string buffer has space for swar as well
+                        // we know the output buffer has enough space, but we must ensure the string buffer has space
+                        // for swar as well
                         value.reserve(round_up_to_multiple<8>(n));
                         serialize_string<8>(value.data(), data_ptr(b), ix);
                      }

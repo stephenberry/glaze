@@ -578,7 +578,7 @@ namespace glz
                      const bool escaped = skip_till_unescaped_quote(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     
+
                      if (escaped) {
                         static constexpr auto Bytes = 8;
 

@@ -339,7 +339,7 @@ namespace glz
 
       template <class T>
       concept has_push_back = requires(T t, typename T::value_type v) { t.push_back(v); };
-      
+
       template <class T>
       concept has_reserve = requires(T t) { t.reserve(size_t(1)); };
 
