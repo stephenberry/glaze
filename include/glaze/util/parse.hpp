@@ -645,10 +645,10 @@ namespace glz::detail
    // errors return the 'in' pointer for better error reporting
    template <size_t Bytes>
       requires(Bytes == 8)
-   GLZ_ALWAYS_INLINE const char* parse_string(const auto* in, auto* out, uint64_t length_new, context& ctx) noexcept
+   GLZ_ALWAYS_INLINE const char* parse_string(const auto* in, auto* out, context& ctx) noexcept
    {
       uint64_t swar;
-      while (length_new > 0) {
+      while (true) {
          std::memcpy(&swar, in, Bytes);
          std::memcpy(out, in, Bytes);
          const auto next = std::countr_zero(has_quote(swar) | has_escape(swar)) >> 3;
@@ -661,7 +661,6 @@ namespace glz::detail
             else if (escape_char == '\\') {
                escape_char = in[next + 1];
                if (escape_char == 'u') {
-                  length_new -= next;
                   in += next;
                   out += next;
                   if (!handle_escaped_unicode(in, out)) {
@@ -676,26 +675,23 @@ namespace glz::detail
                   return in;
                }
                out[next] = escape_char;
-               length_new -= next + 2;
                out += next + 1;
                in += next + 2;
             }
          }
          else {
-            length_new -= 8;
             out += 8;
             in += 8;
          }
       }
-      return out;
    }
    
    // errors return the 'in' pointer for better error reporting
    template <size_t Bytes>
       requires(Bytes == 1)
-   GLZ_ALWAYS_INLINE const char* parse_string(const auto* in, auto* out, uint64_t length_new, context& ctx) noexcept
+   GLZ_ALWAYS_INLINE const char* parse_string(const auto* in, auto* out, context& ctx) noexcept
    {
-      while (length_new > 0) {
+      while (true) {
          *out = *in;
          if (*in == '"' || *in == '\\') {
             auto escape_char = *in;
@@ -717,18 +713,15 @@ namespace glz::detail
                   return in;
                }
                out[0] = escape_char;
-               length_new -= 2;
                out += 1;
                in += 2;
             }
          }
          else {
-            --length_new;
             ++out;
             ++in;
          }
       }
-      return out;
    }
 
    template <size_t multiple>
