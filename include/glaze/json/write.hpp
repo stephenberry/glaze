@@ -289,19 +289,19 @@ namespace glz
                }
             }
             else {
-               const sv str = [&]() -> sv {
-                  if constexpr (!detail::char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
-                     return value ? value : "";
-                  }
-                  else {
-                     return value;
-                  }
-               }();
-               const auto n = str.size();
-
                if constexpr (Opts.raw_string) {
+                  const sv str = [&]() -> sv {
+                     if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
+                        return value ? value : "";
+                     }
+                     else {
+                        return value;
+                     }
+                  }();
+                  
                   // We need at space for quotes and the string length: 2 + n.
-                  if constexpr (detail::resizeable<B>) {
+                  if constexpr (resizeable<B>) {
+                     const auto n = str.size();
                      const auto k = ix + 2 + n;
                      if (k >= b.size()) [[unlikely]] {
                         b.resize((std::max)(b.size() * 2, k));
@@ -314,11 +314,21 @@ namespace glz
                   dump_unchecked<'"'>(b, ix);
                }
                else {
+                  const sv str = [&]() -> sv {
+                     if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
+                        return value ? value : "";
+                     }
+                     else {
+                        return value;
+                     }
+                  }();
+                  const auto n = str.size();
+                  
                   // In the case n == 0 we need two characters for quotes.
                   // For each individual character we need room for two characters to handle escapes.
                   // So, we need 2 + 2 * n characters to handle all cases.
                   // We add another 8 characters to support SWAR
-                  if constexpr (detail::resizeable<B>) {
+                  if constexpr (resizeable<B>) {
                      const auto k = ix + 10 + 2 * n;
                      if (k >= b.size()) [[unlikely]] {
                         b.resize((std::max)(b.size() * 2, k));
