@@ -1380,7 +1380,7 @@ namespace glz
       template <reflectable T>
       inline constexpr bool keys_may_contain_escape()
       {
-         return true;
+         return false; // escapes are not valid in C++ names
       }
 
       template <is_variant T>
