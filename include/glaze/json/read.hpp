@@ -575,31 +575,36 @@ namespace glz
                   if constexpr (!Opts.force_conformance) {
                      auto start = it;
 
-                     skip_till_unescaped_quote(ctx, it, end);
+                     const bool escaped = skip_till_unescaped_quote(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
+                     
+                     if (escaped) {
+                        static constexpr auto Bytes = 8;
 
-                     static constexpr auto Bytes = 8;
+                        const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
+                        if (length > value.size()) {
+                           value.resize(length);
+                        }
 
-                     const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
-                     if (length > value.size()) {
-                        value.resize(length);
+                        char* c;
+                        if (length < size_t(end - it)) [[likely]] {
+                           c = parse_string<Bytes>(&*start, value.data(), length);
+                        }
+                        else [[unlikely]] {
+                           c = parse_string<1>(&*start, value.data(), length);
+                        }
+
+                        if (!c) [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+
+                        value.resize(size_t(c - value.data()));
                      }
-
-                     char* c;
-                     if (length < size_t(end - it)) [[likely]] {
-                        c = parse_string<Bytes>(&*start, value.data(), length);
+                     else {
+                        value = sv{start, size_t(it - start)};
                      }
-                     else [[unlikely]] {
-                        c = parse_string<1>(&*start, value.data(), length);
-                     }
-
-                     if (!c) [[unlikely]] {
-                        ctx.error = error_code::syntax_error;
-                        return;
-                     }
-
-                     value.resize(size_t(c - value.data()));
 
                      ++it;
                   }
