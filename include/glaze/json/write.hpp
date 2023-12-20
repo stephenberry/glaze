@@ -206,6 +206,33 @@ namespace glz
          0, 0, combine(R"(\\)") //
       };
       // clang-format on
+      
+      template <size_t Bytes>
+         requires(Bytes == 8)
+      GLZ_ALWAYS_INLINE void serialize_string(const auto* in, auto* out, auto& ix) {
+         uint64_t swar;
+         while (true) {
+            std::memcpy(&swar, in, Bytes);
+            std::memcpy(out + ix, in, Bytes);
+            const auto next = std::countr_zero(has_quote(swar) | has_escape(swar) | is_less_16(swar)) >> 3;
+            
+            if (next != 8) {
+               const auto escape_char = char_escape_table[uint32_t(in[next])];
+               if (escape_char == 0) {
+                  ix += next;
+                  return;
+               }
+               ix += next;
+               in += next;
+               std::memcpy(out + ix, &escape_char, 2);
+               ix += 2;
+               ++in;
+            } else {
+               ix += 8;
+               in += 8;
+            }
+         }
+      }
 
       template <class T>
          requires str_t<T> || char_t<T>
@@ -302,43 +329,50 @@ namespace glz
                   }
                   else {
                      dump_unchecked<'"'>(b, ix);
+                     
+                     if constexpr (string_t<T> && !std::is_const_v<std::remove_reference_t<decltype(value)>>) {
+                        // we know the output buffer has enough space, but we must ensure the string buffer has space for swar as well
+                        value.reserve(round_up_to_multiple<8>(n));
+                        serialize_string<8>(value.data(), data_ptr(b), ix);
+                     }
+                     else {
+                        const auto* c = str.data();
+                        const auto* const e = c + n;
 
-                     const auto* c = str.data();
-                     const auto* const e = c + n;
+                        if (str.size() > 7) {
+                           for (const auto end_m7 = e - 7; c < end_m7;) {
+                              std::memcpy(data_ptr(b) + ix, c, 8);
+                              uint64_t chunk;
+                              std::memcpy(&chunk, c, 8);
+                              const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_16(chunk);
+                              if (test_chars) {
+                                 const auto length = (std::countr_zero(test_chars) >> 3);
+                                 c += length;
+                                 ix += length;
 
-                     if (str.size() > 7) {
-                        for (const auto end_m7 = e - 7; c < end_m7;) {
-                           std::memcpy(data_ptr(b) + ix, c, 8);
-                           uint64_t chunk;
-                           std::memcpy(&chunk, c, 8);
-                           const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_16(chunk);
-                           if (test_chars) {
-                              const auto length = (std::countr_zero(test_chars) >> 3);
-                              c += length;
-                              ix += length;
-
-                              if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) [[likely]] {
-                                 std::memcpy(data_ptr(b) + ix, &escaped, 2);
+                                 if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) [[likely]] {
+                                    std::memcpy(data_ptr(b) + ix, &escaped, 2);
+                                 }
+                                 ix += 2;
+                                 ++c;
                               }
+                              else {
+                                 ix += 8;
+                                 c += 8;
+                              }
+                           }
+                        }
+
+                        // Tail end of buffer. Uncommon for long strings.
+                        for (; c < e; ++c) {
+                           if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) [[likely]] {
+                              std::memcpy(data_ptr(b) + ix, &escaped, 2);
                               ix += 2;
-                              ++c;
                            }
                            else {
-                              ix += 8;
-                              c += 8;
+                              std::memcpy(data_ptr(b) + ix, c, 1);
+                              ++ix;
                            }
-                        }
-                     }
-
-                     // Tail end of buffer. Uncommon for long strings.
-                     for (; c < e; ++c) {
-                        if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) [[likely]] {
-                           std::memcpy(data_ptr(b) + ix, &escaped, 2);
-                           ix += 2;
-                        }
-                        else {
-                           std::memcpy(data_ptr(b) + ix, c, 1);
-                           ++ix;
                         }
                      }
 

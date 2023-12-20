@@ -575,31 +575,36 @@ namespace glz
                   if constexpr (!Opts.force_conformance) {
                      auto start = it;
 
-                     skip_till_unescaped_quote(ctx, it, end);
+                     const bool escaped = skip_till_unescaped_quote(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
+                     
+                     if (escaped) {
+                        static constexpr auto Bytes = 8;
 
-                     static constexpr auto Bytes = 8;
+                        const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
+                        if (length > value.size()) {
+                           value.resize(length);
+                        }
 
-                     const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
-                     if (length > value.size()) [[unlikely]] {
-                        value.resize(length);
+                        char* c;
+                        if (length < size_t(end - it)) [[likely]] {
+                           c = parse_string<Bytes>(&*start, value.data(), length);
+                        }
+                        else [[unlikely]] {
+                           c = parse_string<1>(&*start, value.data(), length);
+                        }
+
+                        if (!c) [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+
+                        value.resize(size_t(c - value.data()));
                      }
-
-                     char* c;
-                     if (length < size_t(end - it)) [[likely]] {
-                        c = parse_string<Bytes>(&*start, value.data(), length);
+                     else {
+                        value = sv{start, size_t(it - start)};
                      }
-                     else [[unlikely]] {
-                        c = parse_string<1>(&*start, value.data(), length);
-                     }
-
-                     if (!c) [[unlikely]] {
-                        ctx.error = error_code::syntax_error;
-                        return;
-                     }
-
-                     value.resize(size_t(c - value.data()));
 
                      ++it;
                   }
@@ -1375,7 +1380,7 @@ namespace glz
       template <reflectable T>
       inline constexpr bool keys_may_contain_escape()
       {
-         return true;
+         return false; // escapes are not valid in C++ names
       }
 
       template <is_variant T>
@@ -1525,23 +1530,10 @@ namespace glz
             return {};
 
          if constexpr (keys_may_contain_escape<T>()) {
-            auto start = it;
-
-            skip_till_escape_or_quote(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return {};
-            if (*it == '\\') [[unlikely]] {
-               // we don't optimize this currently because it would increase binary size significantly with the
-               // complexity of generating escaped compile time versions of keys
-               it = start;
-               std::string& static_key = string_buffer();
-               read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
-               --it; // reveal the quote
-               return static_key;
-            }
-            else [[likely]] {
-               return {start, size_t(it - start)};
-            }
+            std::string& static_key = string_buffer();
+            read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
+            --it; // reveal the quote
+            return static_key;
          }
          else if constexpr (std::tuple_size_v<meta_t<T>> > 0) {
             static constexpr auto stats = key_stats<T, tag>();
@@ -1577,12 +1569,23 @@ namespace glz
                      return parse_key_cx<stats.min_length, stats.length_range>(it);
                   }
                }
+               else {
+                  auto start = it;
+                  skip_till_quote(ctx, it, end);
+                  return {start, size_t(it - start)};
+               }
+            }
+            else {
+               auto start = it;
+               skip_till_quote(ctx, it, end);
+               return {start, size_t(it - start)};
             }
          }
-
-         auto start = it;
-         skip_till_quote(ctx, it, end);
-         return {start, size_t(it - start)};
+         else {
+            auto start = it;
+            skip_till_quote(ctx, it, end);
+            return {start, size_t(it - start)};
+         }
       }
 
       template <pair_t T>
