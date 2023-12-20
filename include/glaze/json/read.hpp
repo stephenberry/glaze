@@ -1569,12 +1569,23 @@ namespace glz
                      return parse_key_cx<stats.min_length, stats.length_range>(it);
                   }
                }
+               else {
+                  auto start = it;
+                  skip_till_quote(ctx, it, end);
+                  return {start, size_t(it - start)};
+               }
+            }
+            else {
+               auto start = it;
+               skip_till_quote(ctx, it, end);
+               return {start, size_t(it - start)};
             }
          }
-
-         auto start = it;
-         skip_till_quote(ctx, it, end);
-         return {start, size_t(it - start)};
+         else {
+            auto start = it;
+            skip_till_quote(ctx, it, end);
+            return {start, size_t(it - start)};
+         }
       }
 
       template <pair_t T>
