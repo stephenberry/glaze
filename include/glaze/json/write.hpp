@@ -498,7 +498,7 @@ namespace glz
       };
 
       template <opts Opts, typename Key, typename Value, is_context Ctx>
-      void write_pair_content(const Key& key, const Value& value, Ctx& ctx, auto&&... args) noexcept
+      GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, const Value& value, Ctx& ctx, auto&&... args) noexcept
       {
          if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
             write<json>::op<Opts>(key, ctx, args...);
