@@ -1530,23 +1530,10 @@ namespace glz
             return {};
 
          if constexpr (keys_may_contain_escape<T>()) {
-            auto start = it;
-
-            skip_till_escape_or_quote(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return {};
-            if (*it == '\\') [[unlikely]] {
-               // we don't optimize this currently because it would increase binary size significantly with the
-               // complexity of generating escaped compile time versions of keys
-               it = start;
-               std::string& static_key = string_buffer();
-               read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
-               --it; // reveal the quote
-               return static_key;
-            }
-            else [[likely]] {
-               return {start, size_t(it - start)};
-            }
+            std::string& static_key = string_buffer();
+            read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
+            --it; // reveal the quote
+            return static_key;
          }
          else if constexpr (std::tuple_size_v<meta_t<T>> > 0) {
             static constexpr auto stats = key_stats<T, tag>();
