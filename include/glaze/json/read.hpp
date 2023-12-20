@@ -582,7 +582,7 @@ namespace glz
                      static constexpr auto Bytes = 8;
 
                      const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
-                     if (length > value.size()) [[unlikely]] {
+                     if (length > value.size()) {
                         value.resize(length);
                      }
 
