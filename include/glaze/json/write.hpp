@@ -298,7 +298,7 @@ namespace glz
                         return value;
                      }
                   }();
-                  
+
                   // We need at space for quotes and the string length: 2 + n.
                   if constexpr (resizeable<B>) {
                      const auto n = str.size();
@@ -323,7 +323,7 @@ namespace glz
                      }
                   }();
                   const auto n = str.size();
-                  
+
                   // In the case n == 0 we need two characters for quotes.
                   // For each individual character we need room for two characters to handle escapes.
                   // So, we need 2 + 2 * n characters to handle all cases.

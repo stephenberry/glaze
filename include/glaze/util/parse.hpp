@@ -685,7 +685,7 @@ namespace glz::detail
          }
       }
    }
-   
+
    // errors return the 'in' pointer for better error reporting
    template <size_t Bytes>
       requires(Bytes == 1)

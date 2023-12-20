@@ -594,7 +594,7 @@ namespace glz
                         else [[unlikely]] {
                            c = parse_string<1>(&*start, value.data(), ctx);
                         }
-                        
+
                         if (bool(ctx.error)) [[unlikely]] {
                            it = c;
                            return;
