@@ -332,8 +332,7 @@ namespace glz
                      
                      if constexpr (string_t<T> && !std::is_const_v<std::remove_reference_t<decltype(value)>>) {
                         // we know the output buffer has enough space, but we must ensure the string buffer has space for swar as well
-                        const auto length = round_up_to_multiple<8>(n);
-                        value.reserve(length);
+                        value.reserve(round_up_to_multiple<8>(n));
                         serialize_string<8>(value.data(), data_ptr(b), ix);
                      }
                      else {
