@@ -587,16 +587,16 @@ namespace glz
                            value.resize(length);
                         }
 
-                        char* c;
+                        const char* c;
                         if (length < size_t(end - it)) [[likely]] {
-                           c = parse_string<Bytes>(&*start, value.data(), length);
+                           c = parse_string<Bytes>(&*start, value.data(), ctx);
                         }
                         else [[unlikely]] {
-                           c = parse_string<1>(&*start, value.data(), length);
+                           c = parse_string<1>(&*start, value.data(), ctx);
                         }
-
-                        if (!c) [[unlikely]] {
-                           ctx.error = error_code::syntax_error;
+                        
+                        if (bool(ctx.error)) [[unlikely]] {
+                           it = c;
                            return;
                         }
 

@@ -642,56 +642,56 @@ namespace glz::detail
       return true;
    }
 
+   // errors return the 'in' pointer for better error reporting
    template <size_t Bytes>
       requires(Bytes == 8)
-   GLZ_ALWAYS_INLINE char* parse_string(const auto* in, auto* out, uint64_t length_new) noexcept
+   GLZ_ALWAYS_INLINE const char* parse_string(const auto* in, auto* out, context& ctx) noexcept
    {
       uint64_t swar;
-      while (length_new > 0) {
+      while (true) {
          std::memcpy(&swar, in, Bytes);
          std::memcpy(out, in, Bytes);
-         const auto ix = std::countr_zero(has_quote(swar) | has_escape(swar)) >> 3;
+         const auto next = std::countr_zero(has_quote(swar) | has_escape(swar)) >> 3;
 
-         if (ix != 8) {
-            auto escape_char = in[ix];
+         if (next != 8) {
+            auto escape_char = in[next];
             if (escape_char == '"') {
-               return out + ix;
+               return out + next;
             }
             else if (escape_char == '\\') {
-               escape_char = in[ix + 1];
+               escape_char = in[next + 1];
                if (escape_char == 'u') {
-                  length_new -= ix;
-                  in += ix;
-                  out += ix;
+                  in += next;
+                  out += next;
                   if (!handle_escaped_unicode(in, out)) {
-                     return {};
+                     ctx.error = error_code::unicode_escape_conversion_failure;
+                     return in;
                   }
                   continue;
                }
                escape_char = char_unescape_table[escape_char];
                if (escape_char == 0) [[unlikely]] {
-                  return {};
+                  ctx.error = error_code::invalid_escape;
+                  return in;
                }
-               out[ix] = escape_char;
-               length_new -= ix + 2;
-               out += ix + 1;
-               in += ix + 2;
+               out[next] = escape_char;
+               out += next + 1;
+               in += next + 2;
             }
          }
          else {
-            length_new -= 8;
             out += 8;
             in += 8;
          }
       }
-      return out;
    }
-
+   
+   // errors return the 'in' pointer for better error reporting
    template <size_t Bytes>
       requires(Bytes == 1)
-   GLZ_ALWAYS_INLINE char* parse_string(const auto* in, auto* out, uint64_t length_new) noexcept
+   GLZ_ALWAYS_INLINE const char* parse_string(const auto* in, auto* out, context& ctx) noexcept
    {
-      while (length_new > 0) {
+      while (true) {
          *out = *in;
          if (*in == '"' || *in == '\\') {
             auto escape_char = *in;
@@ -702,31 +702,30 @@ namespace glz::detail
                escape_char = in[1];
                if (escape_char == 'u') {
                   if (!handle_escaped_unicode(in, out)) {
-                     return {};
+                     ctx.error = error_code::unicode_escape_conversion_failure;
+                     return in;
                   }
                   continue;
                }
                escape_char = char_unescape_table[escape_char];
                if (escape_char == 0) {
-                  return {};
+                  ctx.error = error_code::invalid_escape;
+                  return in;
                }
                out[0] = escape_char;
-               length_new -= 2;
                out += 1;
                in += 2;
             }
          }
          else {
-            --length_new;
             ++out;
             ++in;
          }
       }
-      return out;
    }
 
-   template <auto multiple>
-   GLZ_ALWAYS_INLINE constexpr auto round_up_to_multiple(const auto val) noexcept
+   template <size_t multiple>
+   GLZ_ALWAYS_INLINE constexpr auto round_up_to_multiple(const std::integral auto val) noexcept
    {
       return val + (multiple - (val % multiple)) % multiple;
    }

@@ -248,7 +248,7 @@ namespace glz
    // Get a refrence to a value at the location of a json_ptr. Will error if
    // value doesnt exist or is wrong type
    template <class V, class T>
-   expected<std::reference_wrapper<V>, parse_error> get(T&& root_value, sv json_ptr)
+   expected<std::reference_wrapper<V>, parse_error> get(T&& root_value, sv json_ptr) noexcept
    {
       V* result{};
       error_code ec{};
@@ -277,7 +277,7 @@ namespace glz
    // Get a pointer to a value at the location of a json_ptr. Will return
    // nullptr if value doesnt exist or is wrong type
    template <class V, class T>
-   V* get_if(T&& root_value, sv json_ptr)
+   V* get_if(T&& root_value, sv json_ptr) noexcept
    {
       V* result{};
       detail::seek_impl(
@@ -323,7 +323,7 @@ namespace glz
    // Assign to a value at the location of a json_ptr with respect to the root_value
    // if assignable and not a narrowing conversion
    template <class T, class V>
-   bool set(T&& root_value, const sv json_ptr, V&& value)
+   bool set(T&& root_value, const sv json_ptr, V&& value) noexcept
    {
       bool result{};
       detail::seek_impl(
