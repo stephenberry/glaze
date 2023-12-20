@@ -11,22 +11,27 @@ using namespace boost::ut;
 
 using sv = glz::sv;
 
-struct empty_object {};
+struct empty_object
+{};
 
-struct bool_object {
+struct bool_object
+{
    bool b{};
 };
 
-struct int_object {
+struct int_object
+{
    int i{};
 };
 
-struct nullable_object {
+struct nullable_object
+{
    std::optional<int> i{};
 };
 
 template <glz::opts Opts>
-inline void should_fail() {
+inline void should_fail()
+{
    "unclosed_array"_test = [] {
       constexpr sv s = R"(["Unclosed array")";
       {
@@ -46,7 +51,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "unquoted_key"_test = [] {
       constexpr sv s = R"({unquoted_key: "keys must be quoted"})";
       {
@@ -59,15 +64,14 @@ inline void should_fail() {
       }
       {
          // TODO: Fix empty object reading for reflection
-         //empty_object obj{};
-         //expect(glz::read_json(obj, buffer));
-      }
-      {
+         // empty_object obj{};
+         // expect(glz::read_json(obj, buffer));
+      } {
          glz::json_t obj{};
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "extra comma"_test = [] {
       constexpr sv s = R"(["extra comma",])";
       {
@@ -79,7 +83,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "double extra comma"_test = [] {
       constexpr sv s = R"(["double extra comma",,])";
       {
@@ -91,7 +95,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "missing value"_test = [] {
       constexpr sv s = R"([   , "<-- missing value"])";
       {
@@ -103,7 +107,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    if constexpr (Opts.force_conformance) {
       // TODO: Add force_conformance testing after parse
       skip / "comma after close"_test = [] {
@@ -113,7 +117,7 @@ inline void should_fail() {
             expect(glz::read_json(v, s));
          }
       };
-      
+
       skip / "extra close"_test = [] {
          constexpr sv s = R"(["Extra close"]])";
          {
@@ -121,7 +125,7 @@ inline void should_fail() {
             expect(glz::read_json(v, s));
          }
       };
-      
+
       skip / "extra value after close"_test = [] {
          constexpr sv s = R"({"b": true} "misplaced quoted value")";
          {
@@ -130,7 +134,7 @@ inline void should_fail() {
          }
       };
    }
-   
+
    "illegal expression"_test = [] {
       constexpr sv s = R"({"i": 1 + 2})";
       {
@@ -142,7 +146,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "illegal invocation"_test = [] {
       constexpr sv s = R"({"i": alert()})";
       {
@@ -154,7 +158,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    // TODO: Support this error in all cases
    skip / "numbers cannot have leading zeroes"_test = [] {
       constexpr sv s = R"({"i": 013})";
@@ -167,7 +171,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "numbers cannot be hex"_test = [] {
       constexpr sv s = R"({"i": 0x14})";
       {
@@ -179,7 +183,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "illegal backslash escape: \x15"_test = [] {
       constexpr sv s = R"(["Illegal backslash escape: \x15"])";
       {
@@ -191,7 +195,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "illegal backslash escape: \017"_test = [] {
       constexpr sv s = R"(["Illegal backslash escape: \017"])";
       {
@@ -203,7 +207,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "naked"_test = [] {
       constexpr sv s = R"([\naked])";
       {
@@ -215,7 +219,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "missing colon"_test = [] {
       constexpr sv s = R"({"i" null})";
       {
@@ -227,7 +231,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "double colon"_test = [] {
       constexpr sv s = R"({"i":: null})";
       {
@@ -239,7 +243,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "comma instead of colon"_test = [] {
       constexpr sv s = R"({"i", null})";
       {
@@ -247,7 +251,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "colon instead of comma"_test = [] {
       constexpr sv s = R"(["Colon instead of comma": false])";
       {
@@ -259,7 +263,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "bad value"_test = [] {
       constexpr sv s = R"(["Bad value", truth])";
       {
@@ -271,7 +275,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    "single quote"_test = [] {
       constexpr sv s = R"(['single quote'])";
       {
@@ -283,7 +287,7 @@ inline void should_fail() {
          expect(glz::read_json(obj, s));
       }
    };
-   
+
    // TODO: This should be an error
    skip / "0e"_test = [] {
       constexpr sv s = R"(0e)";
@@ -300,7 +304,7 @@ inline void should_fail() {
          expect(glz::read_json(v, s));
       }
    };
-   
+
    skip / "0e+"_test = [] {
       constexpr sv s = R"(0e+)";
       {
@@ -319,7 +323,8 @@ inline void should_fail() {
 }
 
 template <glz::opts Opts>
-inline void should_pass() {
+inline void should_pass()
+{
    "bool_object"_test = [] {
       constexpr sv s = R"({"b": true})";
       {
@@ -328,7 +333,7 @@ inline void should_pass() {
          expect(obj.b == true);
       }
    };
-   
+
    "int_object"_test = [] {
       constexpr sv s = R"({"i": 55})";
       {
@@ -344,12 +349,12 @@ suite json_conformance = [] {
       should_fail<glz::opts{}>();
       should_pass<glz::opts{}>();
    };
-   
+
    "error_on_unknown_keys = false"_test = [] {
       should_fail<glz::opts{.error_on_unknown_keys = false}>();
       should_pass<glz::opts{.error_on_unknown_keys = false}>();
    };
-   
+
    "force_conformance = true"_test = [] {
       should_fail<glz::opts{.force_conformance = true}>();
       should_pass<glz::opts{.force_conformance = true}>();
