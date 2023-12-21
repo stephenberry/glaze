@@ -12,6 +12,7 @@
 #include "glaze/api/name.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/core/opts.hpp"
+#include "glaze/simd/simd.hpp"
 #include "glaze/util/expected.hpp"
 #include "glaze/util/inline.hpp"
 #include "glaze/util/stoui64.hpp"
@@ -94,6 +95,15 @@ namespace glz::detail
    {
       return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080);
    }
+   
+#ifdef GLAZE_SIMD
+   GLZ_ALWAYS_INLINE auto has_zero(const simd_u64_128 chunk) noexcept
+   {
+      const auto mask1 = splat_u64(0x0101010101010101);
+      const auto mask8 = splat_u64(0x8080808080808080);
+      return (((chunk - mask1) & ~chunk) & mask8);
+   }
+#endif
 
    GLZ_ALWAYS_INLINE constexpr auto has_quote(const uint64_t chunk) noexcept
    {
@@ -104,6 +114,20 @@ namespace glz::detail
    {
       return has_zero(chunk ^ repeat_byte('\\'));
    }
+   
+#ifdef GLAZE_SIMD
+   GLZ_ALWAYS_INLINE auto has_quote(const simd_u64_128 chunk) noexcept
+   {
+      const auto mask = splat_u64(repeat_byte('"'));
+      return has_zero(chunk ^ mask);
+   }
+   
+   GLZ_ALWAYS_INLINE auto has_escape(const simd_u64_128 chunk) noexcept
+   {
+      const auto mask = splat_u64(repeat_byte('\\'));
+      return has_zero(chunk ^ mask);
+   }
+#endif
 
    GLZ_ALWAYS_INLINE constexpr auto has_space(const uint64_t chunk) noexcept
    {
@@ -208,6 +232,46 @@ namespace glz::detail
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
       bool escaped = false;
+      
+#ifdef GLAZE_EXPERIMENTAL_SIMD
+      for (const auto fin = end - 15; it < fin;) {
+         simd_u64_128 chunk;
+         std::memcpy(&chunk, it, 16);
+         simd_u64_128 test_chars = has_quote(chunk);
+         if (test_chars[0]) {
+            escaped |= has_escape(chunk[0]);
+            it += (std::countr_zero(test_chars[0]) >> 3);
+
+            auto* prev = it - 1;
+            while (*prev == '\\') {
+               --prev;
+            }
+            if (size_t(it - prev) % 2) {
+               return escaped;
+            }
+            ++it; // skip the escaped quote
+         }
+         else if (test_chars[1]) {
+            it += 8;
+            escaped |= has_escape(chunk[1]);
+            it += (std::countr_zero(test_chars[1]) >> 3);
+
+            auto* prev = it - 1;
+            while (*prev == '\\') {
+               --prev;
+            }
+            if (size_t(it - prev) % 2) {
+               return escaped;
+            }
+            ++it; // skip the escaped quote
+         }
+         else {
+            const auto is_escaped = has_escape(chunk);
+            escaped |= is_escaped[0] || is_escaped[1];
+            it += 16;
+         }
+      }
+#else
       for (const auto fin = end - 7; it < fin;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
@@ -229,6 +293,7 @@ namespace glz::detail
             it += 8;
          }
       }
+#endif
 
       // Tail end of buffer. Should be rare we even get here
       while (it < end) {
@@ -641,6 +706,62 @@ namespace glz::detail
       out += offset;
       return true;
    }
+   
+   // errors return the 'in' pointer for better error reporting
+#ifdef GLAZE_SIMD
+   template <size_t Bytes>
+      requires(Bytes == 16)
+   GLZ_ALWAYS_INLINE const char* parse_string(const auto* in, auto* out, context& ctx) noexcept
+   {
+      simd_u64_128 swar;
+      uint32_t index;
+      while (true) {
+         std::memcpy(&swar, in, Bytes);
+         std::memcpy(out, in, Bytes);
+         const auto next = has_quote(swar) | has_escape(swar);
+         
+         if (next[0]) {
+            index = std::countr_zero(next[0]) >> 3;
+            goto handle_escape;
+         }
+         else if (next[1]) {
+            index = 8 + (std::countr_zero(next[1]) >> 3);
+            goto handle_escape;
+         }
+         else {
+            out += Bytes;
+            in += Bytes;
+            continue;
+         }
+         
+      handle_escape:
+         auto escape_char = in[index];
+         if (escape_char == '"') {
+            return out + index;
+         }
+         else if (escape_char == '\\') {
+            escape_char = in[index + 1];
+            if (escape_char == 'u') {
+               in += index;
+               out += index;
+               if (!handle_escaped_unicode(in, out)) {
+                  ctx.error = error_code::unicode_escape_conversion_failure;
+                  return in;
+               }
+               continue;
+            }
+            escape_char = char_unescape_table[escape_char];
+            if (escape_char == 0) [[unlikely]] {
+               ctx.error = error_code::invalid_escape;
+               return in;
+            }
+            out[index] = escape_char;
+            out += index + 1;
+            in += index + 2;
+         }
+      }
+   }
+#endif
 
    // errors return the 'in' pointer for better error reporting
    template <size_t Bytes>
@@ -651,16 +772,17 @@ namespace glz::detail
       while (true) {
          std::memcpy(&swar, in, Bytes);
          std::memcpy(out, in, Bytes);
-         const auto next = std::countr_zero(has_quote(swar) | has_escape(swar)) >> 3;
+         auto next = has_quote(swar) | has_escape(swar);
 
-         if (next != 8) {
+         if (next) {
+            next = std::countr_zero(next) >> 3;
             auto escape_char = in[next];
             if (escape_char == '"') {
                return out + next;
             }
             else if (escape_char == '\\') {
                escape_char = in[next + 1];
-               if (escape_char == 'u') {
+               if (escape_char == 'u') [[unlikely]] {
                   in += next;
                   out += next;
                   if (!handle_escaped_unicode(in, out)) {
@@ -680,8 +802,8 @@ namespace glz::detail
             }
          }
          else {
-            out += 8;
-            in += 8;
+            out += Bytes;
+            in += Bytes;
          }
       }
    }

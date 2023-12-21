@@ -580,18 +580,26 @@ namespace glz
                         return;
 
                      if (escaped) {
+#ifdef GLAZE_SIMD
                         static constexpr auto Bytes = 8;
-
-                        const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
-                        if (length > value.size()) {
-                           value.resize(length);
-                        }
-
+#else
+                        static constexpr auto Bytes = 8;
+#endif
+                        
                         const char* c;
-                        if (length < size_t(end - it)) [[likely]] {
-                           c = parse_string<Bytes>(&*start, value.data(), ctx);
+                        if (value.size() > 8) {
+                           const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
+                           value.resize(length);
+                           
+                           if (length < size_t(end - it)) [[likely]] {
+                              c = parse_string<Bytes>(&*start, value.data(), ctx);
+                           }
+                           else [[unlikely]] {
+                              c = parse_string<1>(&*start, value.data(), ctx);
+                           }
                         }
-                        else [[unlikely]] {
+                        else {
+                           value.resize(size_t(it - start));
                            c = parse_string<1>(&*start, value.data(), ctx);
                         }
 
