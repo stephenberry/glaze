@@ -572,111 +572,38 @@ namespace glz
                   ++it;
                }
                else {
-                  if constexpr (!Opts.force_conformance) {
-                     auto start = it;
+                  auto start = it;
 
-                     const bool escaped = skip_till_unescaped_quote(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
+                  const bool escaped = skip_till_unescaped_quote(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  if (escaped) {
+                     static constexpr auto Bytes = 8;
+
+                     const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
+                     value.resize(length);
+
+                     const char* c;
+                     if (length < size_t(end - it)) [[likely]] {
+                        c = parse_string<Bytes>(&*start, value.data(), ctx);
+                     }
+                     else [[unlikely]] {
+                        c = parse_string<1>(&*start, value.data(), ctx);
+                     }
+
+                     if (bool(ctx.error)) [[unlikely]] {
+                        it = c;
                         return;
-
-                     if (escaped) {
-                        static constexpr auto Bytes = 8;
-
-                        const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
-                        value.resize(length);
-
-                        const char* c;
-                        if (length < size_t(end - it)) [[likely]] {
-                           c = parse_string<Bytes>(&*start, value.data(), ctx);
-                        }
-                        else [[unlikely]] {
-                           c = parse_string<1>(&*start, value.data(), ctx);
-                        }
-
-                        if (bool(ctx.error)) [[unlikely]] {
-                           it = c;
-                           return;
-                        }
-
-                        value.resize(size_t(c - value.data()));
-                     }
-                     else {
-                        value = sv{start, size_t(it - start)};
                      }
 
-                     ++it;
+                     value.resize(size_t(c - value.data()));
                   }
                   else {
-                     auto handle_escaped = [&] {
-                        switch (*it) {
-                        case '"':
-                        case '\\':
-                        case '/':
-                           value.push_back(*it);
-                           break;
-                        case 'b':
-                           value.push_back('\b');
-                           break;
-                        case 'f':
-                           value.push_back('\f');
-                           break;
-                        case 'n':
-                           value.push_back('\n');
-                           break;
-                        case 'r':
-                           value.push_back('\r');
-                           break;
-                        case 't':
-                           value.push_back('\t');
-                           break;
-                        case 'u': {
-                           ++it;
-                           read_escaped_unicode<char>(value, ctx, it, end);
-                           return;
-                        }
-                        default: {
-                           ctx.error = error_code::invalid_escape;
-                           return;
-                        }
-                        }
-                        ++it;
-                     };
-
-                     value.clear(); // Single append on unescaped strings so overwrite opt isnt as important
-                     auto start = it;
-
-                     while (it < end) {
-                        switch (*it) {
-                        [[likely]] case '"' : {
-                           value.append(start, size_t(it - start));
-                           ++it;
-                           return;
-                        }
-                        [[unlikely]] case '\b':
-                        [[unlikely]] case '\f':
-                        [[unlikely]] case '\n':
-                        [[unlikely]] case '\r':
-                        [[unlikely]] case '\t' : {
-                           ctx.error = error_code::syntax_error;
-                           return;
-                        }
-                        [[unlikely]] case '\0' : {
-                           ctx.error = error_code::unexpected_end;
-                           return;
-                        }
-                        [[unlikely]] case '\\' : {
-                           value.append(start, size_t(it - start));
-                           ++it;
-                           handle_escaped();
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
-                           start = it;
-                           break;
-                        }
-                           [[likely]] default : ++it;
-                        }
-                     }
+                     value = sv{start, size_t(it - start)};
                   }
+
+                  ++it;
                }
             }
          }
