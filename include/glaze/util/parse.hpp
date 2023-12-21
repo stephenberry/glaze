@@ -651,16 +651,17 @@ namespace glz::detail
       while (true) {
          std::memcpy(&swar, in, Bytes);
          std::memcpy(out, in, Bytes);
-         const auto next = std::countr_zero(has_quote(swar) | has_escape(swar)) >> 3;
+         auto next = has_quote(swar) | has_escape(swar);
 
-         if (next != 8) {
+         if (next) {
+            next = std::countr_zero(next) >> 3;
             auto escape_char = in[next];
             if (escape_char == '"') {
                return out + next;
             }
             else if (escape_char == '\\') {
                escape_char = in[next + 1];
-               if (escape_char == 'u') {
+               if (escape_char == 'u') [[unlikely]] {
                   in += next;
                   out += next;
                   if (!handle_escaped_unicode(in, out)) {
