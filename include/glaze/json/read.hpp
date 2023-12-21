@@ -581,10 +581,10 @@ namespace glz
 
                      if (escaped) {
                         static constexpr auto Bytes = 8;
-                        
+
                         const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
                         value.resize(length);
-                        
+
                         const char* c;
                         if (length < size_t(end - it)) [[likely]] {
                            c = parse_string<Bytes>(&*start, value.data(), ctx);
