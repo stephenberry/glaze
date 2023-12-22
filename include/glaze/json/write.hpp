@@ -497,7 +497,7 @@ namespace glz
          }
       };
 
-      template <opts Opts, typename Key, typename Value, is_context Ctx>
+      template <opts Opts, class Key, class Value, is_context Ctx>
       GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, const Value& value, Ctx& ctx, auto&&... args) noexcept
       {
          if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
@@ -516,7 +516,7 @@ namespace glz
          write<json>::op<opening_and_closing_handled_off<Opts>()>(value, ctx, args...);
       }
 
-      template <glz::opts Opts, typename Value>
+      template <opts Opts, class Value>
       [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool skip_member(const Value& value) noexcept
       {
          if constexpr (null_t<Value> && Opts.skip_null_members) {
@@ -914,11 +914,8 @@ namespace glz
                   return;
                }
 
-               // skip file_include
-               if constexpr (std::is_same_v<val_t, includer<V>>) {
-                  return;
-               }
-               else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+               // skip
+               if constexpr (std::is_same_v<val_t, includer<V>> || std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
                   return;
                }
                else {
