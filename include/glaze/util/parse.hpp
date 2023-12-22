@@ -49,7 +49,7 @@ namespace glz::detail
          ++it;
       }
    }
-   
+
    // assumes null terminated
    template <char c>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
@@ -429,7 +429,8 @@ namespace glz::detail
    }
 
    // very similar code to skip_till_quote, but it consumes the iterator and returns the key
-   template <uint32_t MinLength, uint32_t LengthRange> requires (LengthRange < 24)
+   template <uint32_t MinLength, uint32_t LengthRange>
+      requires(LengthRange < 24)
    [[nodiscard]] GLZ_ALWAYS_INLINE const sv parse_key_cx(auto&& it) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
@@ -455,14 +456,14 @@ namespace glz::detail
          if (test_chunk) {
             goto finish;
          }
-         
+
          it += 8;
          std::memcpy(&chunk, it, 8);
          test_chunk = has_quote(chunk);
          if (test_chunk) {
             goto finish;
          }
-         
+
          it += 8;
          static constexpr auto rest = LengthRange + 1 - 16;
          chunk = 0; // must zero out the chunk
@@ -471,8 +472,8 @@ namespace glz::detail
          if (!test_chunk) {
             return {};
          }
-         
-         finish:
+
+      finish:
          it += (std::countr_zero(test_chunk) >> 3);
          return {start, size_t(it - start)};
       }

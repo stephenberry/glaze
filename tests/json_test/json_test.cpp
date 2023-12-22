@@ -931,8 +931,9 @@ struct large_length_range_t
 {
    int a{};
    int another_integer_value{};
-   
-   struct glaze {
+
+   struct glaze
+   {
       using T = large_length_range_t;
       static constexpr auto value = glz::object(&T::a, &T::another_integer_value);
    };
@@ -940,7 +941,7 @@ struct large_length_range_t
 
 suite large_length_range = [] {
    using namespace boost::ut;
-   
+
    "large_length_range"_test = [] {
       large_length_range_t obj{};
       std::string_view s = R"({"a":55,"another_integer_value":77})";
