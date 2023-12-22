@@ -522,10 +522,6 @@ namespace glz::detail
    template <char open, char close>
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (bool(ctx.error)) [[unlikely]] {
-         return;
-      }
-
       ++it;
       size_t open_count = 1;
       size_t close_count = 0;
