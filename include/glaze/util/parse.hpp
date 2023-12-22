@@ -20,6 +20,24 @@
 
 namespace glz::detail
 {
+   // clang-format off
+   constexpr std::array<char, 256> char_unescape_table = { //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+      0, 0, 0, 0, '"', 0, 0, 0, 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, '/', 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
+      0, 0, '\\', 0, 0, 0, 0, 0, '\b', 0, //
+      0, 0, '\f', 0, 0, 0, 0, 0, 0, 0, //
+      '\n', 0, 0, 0, '\r', 0, '\t', 0, 0, 0, //
+      0, 0, 0, 0, 0, 0, 0, 0, 0, 0 //
+   };
+   // clang-format on
+   
    // assumes null terminated
    template <char c>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
@@ -202,65 +220,155 @@ namespace glz::detail
 
       ctx.error = error_code::expected_quote;
    }
-
+   
+   template <opts Opts>
    GLZ_ALWAYS_INLINE bool skip_till_unescaped_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
+      
+      if constexpr (!Opts.force_conformance) {
+         bool escaped = false;
+         for (const auto fin = end - 7; it < fin;) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it, 8);
+            uint64_t test_chars = has_quote(chunk);
+            escaped |= has_escape(chunk);
+            if (test_chars) {
+               it += (std::countr_zero(test_chars) >> 3);
 
-      bool escaped = false;
-      for (const auto fin = end - 7; it < fin;) {
-         uint64_t chunk;
-         std::memcpy(&chunk, it, 8);
-         uint64_t test_chars = has_quote(chunk);
-         escaped |= has_escape(chunk);
-         if (test_chars) {
-            it += (std::countr_zero(test_chars) >> 3);
-
-            auto* prev = it - 1;
-            while (*prev == '\\') {
-               --prev;
+               auto* prev = it - 1;
+               while (*prev == '\\') {
+                  --prev;
+               }
+               if (size_t(it - prev) % 2) {
+                  return escaped;
+               }
+               ++it; // skip the escaped quote
             }
-            if (size_t(it - prev) % 2) {
-               return escaped;
+            else {
+               it += 8;
             }
-            ++it; // skip the escaped quote
          }
-         else {
-            it += 8;
+
+         // Tail end of buffer. Should be rare we even get here
+         while (it < end) {
+            switch (*it) {
+            case '\\': {
+               escaped = true;
+               ++it;
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::expected_quote;
+                  return true;
+               }
+               ++it;
+               break;
+            }
+            case '"': {
+               auto* prev = it - 1;
+               while (*prev == '\\') {
+                  --prev;
+                  escaped = true;
+               }
+               if (size_t(it - prev) % 2) {
+                  return escaped;
+               }
+               ++it; // skip the escaped quote
+               break;
+            }
+            default: {
+               ++it;
+            }
+            }
          }
       }
+      else {
+         bool escaped = false;
+         for (const auto fin = end - 7; it < fin;) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it, 8);
+            uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_16(chunk);
+            if (test_chars) {
+               it += (std::countr_zero(test_chars) >> 3);
 
-      // Tail end of buffer. Should be rare we even get here
-      while (it < end) {
-         switch (*it) {
-         case '\\': {
-            escaped = true;
-            ++it;
-            if (it == end) [[unlikely]] {
-               ctx.error = error_code::expected_quote;
+               if (*it == '"') {
+                  return escaped;
+               }
+               else if (*it == '\\') [[likely]] {
+                  ++it;
+                  if (char_unescape_table[*it]) [[likely]] {
+                     ++it;
+                     continue;
+                  }
+                  else if (*it == 'u') [[unlikely]] {
+                     ++it;
+                     if ((end - it) < 4) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return true;
+                     }
+                     else if (std::all_of(it, it + 4, ::isxdigit)) [[likely]] {
+                        it += 4;
+                        continue;
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return true;
+                     }
+                  }
+               }
+               ctx.error = error_code::syntax_error;
                return true;
             }
-            ++it;
-            break;
-         }
-         case '"': {
-            auto* prev = it - 1;
-            while (*prev == '\\') {
-               --prev;
-               escaped = true;
+            else {
+               it += 8;
             }
-            if (size_t(it - prev) % 2) {
+         }
+
+         // Tail end of buffer. Should be rare we even get here
+         while (it < end) {
+            if (*it < 16) [[unlikely]] {
+               ctx.error = error_code::syntax_error;
+               return true;
+            }
+            
+            switch (*it) {
+            case '\\': {
+               escaped = true;
+               ++it;
+               if (char_unescape_table[*it]) [[likely]] {
+                  ++it;
+               }
+               else if (*it == 'u') {
+                  ++it;
+                  if ((end - it) < 4) [[unlikely]] {
+                     ctx.error = error_code::syntax_error;
+                     return true;
+                  }
+                  else if (std::all_of(it, it + 4, ::isxdigit)) [[likely]] {
+                     it += 4;
+                     continue;
+                  }
+                  else [[unlikely]] {
+                     ctx.error = error_code::syntax_error;
+                     return true;
+                  }
+               }
+               else [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return true;
+               }
+               
+               break;
+            }
+            case '"': {
                return escaped;
             }
-            ++it; // skip the escaped quote
-            break;
-         }
-         default: {
-            ++it;
-         }
+            default: {
+               ++it;
+            }
+            }
          }
       }
-
+      
       ctx.error = error_code::expected_quote;
       return false;
    }
@@ -357,64 +465,44 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (bool(ctx.error)) [[unlikely]] {
-         return;
+      if constexpr (!Opts.opening_handled) {
+         ++it;
       }
-
-      ++it;
 
       if constexpr (Opts.force_conformance) {
          while (true) {
-            switch (*it) {
-            case '"':
-               ++it;
-               return;
-            case '\b':
-            case '\f':
-            case '\n':
-            case '\r':
-            case '\t': {
+            if (*it < 16) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
-            case '\\': {
-               ++it;
-               switch (*it) {
-               case '"':
-               case '\\':
-               case '/':
-               case 'b':
-               case 'f':
-               case 'n':
-               case 'r':
-               case 't': {
+            
+            switch (*it) {
+            case '"': {
                   ++it;
-                  continue;
+                  return;
                }
-               case 'u': {
+               case '\\': {
                   ++it;
-                  if ((end - it) < 4) [[unlikely]] {
-                     ctx.error = error_code::syntax_error;
-                     return;
+                  if (char_unescape_table[*it]) {
+                     ++it;
+                     continue;
                   }
-                  else if (std::all_of(it, it + 4, ::isxdigit)) [[likely]] {
-                     it += 4;
+                  else if ('u') {
+                     ++it;
+                     if ((end - it) < 4) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     else if (std::all_of(it, it + 4, ::isxdigit)) [[likely]] {
+                        it += 4;
+                        continue;
+                     }
                   }
-                  else [[unlikely]] {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
-                  continue;
-               }
-                  [[unlikely]] default:
-                  {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
             }
-               [[likely]] default : ++it;
-            }
+            ++it;
          }
       }
       else {
@@ -423,8 +511,9 @@ namespace glz::detail
                ++it;
                break;
             }
-            else if (*it == '\\' && ++it == end) [[unlikely]]
+            else if (*it == '\\' && ++it == end) {
                break;
+            }
             ++it;
          }
       }
@@ -582,24 +671,6 @@ namespace glz::detail
          return {};
       return sv{start, static_cast<size_t>(it++ - start)};
    }
-
-   // clang-format off
-   constexpr std::array<char, 256> char_unescape_table = { //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, '"', 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, '/', 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, '\\', 0, 0, 0, 0, 0, '\b', 0, //
-      0, 0, '\f', 0, 0, 0, 0, 0, 0, 0, //
-      '\n', 0, 0, 0, '\r', 0, '\t', 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0 //
-   };
-   // clang-format on
 
    /* Copyright (c) 2022 Tero 'stedo' Liukko, MIT License */
    GLZ_ALWAYS_INLINE unsigned char hex2dec(char hex) { return ((hex & 0xf) + (hex >> 6) * 9); }

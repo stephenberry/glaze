@@ -215,9 +215,10 @@ namespace glz
          while (true) {
             std::memcpy(&swar, in, Bytes);
             std::memcpy(out + ix, in, Bytes);
-            const auto next = std::countr_zero(has_quote(swar) | has_escape(swar) | is_less_16(swar)) >> 3;
+            auto next = has_quote(swar) | has_escape(swar) | is_less_16(swar);
 
-            if (next != 8) {
+            if (next) {
+               next = std::countr_zero(next) >> 3;
                const auto escape_char = char_escape_table[uint32_t(in[next])];
                if (escape_char == 0) {
                   ix += next;
@@ -497,7 +498,7 @@ namespace glz
          }
       };
 
-      template <opts Opts, typename Key, typename Value, is_context Ctx>
+      template <opts Opts, class Key, class Value, is_context Ctx>
       GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, const Value& value, Ctx& ctx, auto&&... args) noexcept
       {
          if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
@@ -516,7 +517,7 @@ namespace glz
          write<json>::op<opening_and_closing_handled_off<Opts>()>(value, ctx, args...);
       }
 
-      template <glz::opts Opts, typename Value>
+      template <opts Opts, class Value>
       [[nodiscard]] GLZ_ALWAYS_INLINE constexpr bool skip_member(const Value& value) noexcept
       {
          if constexpr (null_t<Value> && Opts.skip_null_members) {
@@ -914,11 +915,8 @@ namespace glz
                   return;
                }
 
-               // skip file_include
-               if constexpr (std::is_same_v<val_t, includer<V>>) {
-                  return;
-               }
-               else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+               // skip
+               if constexpr (std::is_same_v<val_t, includer<V>> || std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
                   return;
                }
                else {
