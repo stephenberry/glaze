@@ -42,14 +42,14 @@ See [DOCS](https://github.com/stephenberry/glaze/tree/main/docs) for more docume
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.24**           | **1028**     | **1018**    |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1167**    |
-| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.56**           | **747**      | **980**     |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.96**           | **359**      | **551**     |
-| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.77**           | **282**      | **430**     |
-| [**Boost.JSON (direct)**](https://boost.org/libs/json)       | **4.85**           | **197**      | **440**     |
-| [**json_struct**](https://github.com/jorgen/json_struct)     | **5.47**           | **180**      | **345**     |
-| [**nlohmann**](https://github.com/nlohmann/json)             | **15.44**          | **85**       | **83**      |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.20**           | **1078**     | **1081**    |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1198**    |
+| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.22**           | **1007**     | **1109**    |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.88**           | **366**      | **560**     |
+| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.70**           | **289**      | **441**     |
+| [**Boost.JSON (direct)**](https://boost.org/libs/json)       | **4.78**           | **198**      | **441**     |
+| [**json_struct**](https://github.com/jorgen/json_struct)     | **5.49**           | **178**      | **336**     |
+| [**nlohmann**](https://github.com/nlohmann/json)             | **15.56**          | **84**       | **82**      |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
