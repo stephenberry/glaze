@@ -254,7 +254,7 @@ namespace glz
                      }
                   }
 
-                  match<','>(ctx, it, end);
+                  match<','>(ctx, it);
 
                   using key_type = typename std::decay_t<decltype(value)>::key_type;
                   auto& member = value[key_type(key)];
@@ -409,7 +409,7 @@ namespace glz
                      }
                   }
 
-                  match<','>(ctx, it, end);
+                  match<','>(ctx, it);
 
                   const auto& member_it = frozen_map.find(key);
 

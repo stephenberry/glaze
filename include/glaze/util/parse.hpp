@@ -40,6 +40,18 @@ namespace glz::detail
 
    // assumes null terminated
    template <char c>
+   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it) noexcept
+   {
+      if (*it != c) [[unlikely]] {
+         ctx.error = error_code::syntax_error;
+      }
+      else [[likely]] {
+         ++it;
+      }
+   }
+   
+   // assumes null terminated
+   template <char c>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
    {
       if (*it != c) [[unlikely]] {
@@ -146,29 +158,39 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws_no_pre_check(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      while (true) {
-         switch (*it) {
-         case '\t':
-         case '\n':
-         case '\r':
-         case ' ':
-            ++it;
-            break;
-         case '/': {
-            if constexpr (Opts.force_conformance) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            else {
+      if constexpr (!Opts.force_conformance) {
+         while (true) {
+            switch (*it) {
+            case '\t':
+            case '\n':
+            case '\r':
+            case ' ':
+               ++it;
+               break;
+            case '/': {
                skip_comment(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
                break;
             }
+            default:
+               return;
+            }
          }
-         default:
-            return;
+      }
+      else {
+         while (true) {
+            switch (*it) {
+            case '\t':
+            case '\n':
+            case '\r':
+            case ' ':
+               ++it;
+               break;
+            default:
+               return;
+            }
          }
       }
    }
@@ -407,7 +429,7 @@ namespace glz::detail
    }
 
    // very similar code to skip_till_quote, but it consumes the iterator and returns the key
-   template <uint32_t MinLength, uint32_t LengthRange>
+   template <uint32_t MinLength, uint32_t LengthRange> requires (LengthRange < 24)
    [[nodiscard]] GLZ_ALWAYS_INLINE const sv parse_key_cx(auto&& it) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
@@ -415,22 +437,50 @@ namespace glz::detail
       auto start = it;
       it += MinLength; // immediately skip minimum length
 
-      static_assert(LengthRange < 16);
       if constexpr (LengthRange == 7) {
          uint64_t chunk; // no need to default initialize
          std::memcpy(&chunk, it, 8);
          const uint64_t test_chunk = has_quote(chunk);
-         if (test_chunk != 0) [[likely]] {
+         if (test_chunk) [[likely]] {
             it += (std::countr_zero(test_chunk) >> 3);
 
             return {start, size_t(it - start)};
          }
+         return {};
+      }
+      else if constexpr (LengthRange > 15) {
+         uint64_t chunk; // no need to default initialize
+         std::memcpy(&chunk, it, 8);
+         uint64_t test_chunk = has_quote(chunk);
+         if (test_chunk) {
+            goto finish;
+         }
+         
+         it += 8;
+         std::memcpy(&chunk, it, 8);
+         test_chunk = has_quote(chunk);
+         if (test_chunk) {
+            goto finish;
+         }
+         
+         it += 8;
+         static constexpr auto rest = LengthRange + 1 - 16;
+         chunk = 0; // must zero out the chunk
+         std::memcpy(&chunk, it, rest);
+         test_chunk = has_quote(chunk);
+         if (!test_chunk) {
+            return {};
+         }
+         
+         finish:
+         it += (std::countr_zero(test_chunk) >> 3);
+         return {start, size_t(it - start)};
       }
       else if constexpr (LengthRange > 7) {
          uint64_t chunk; // no need to default initialize
          std::memcpy(&chunk, it, 8);
          uint64_t test_chunk = has_quote(chunk);
-         if (test_chunk != 0) {
+         if (test_chunk) {
             it += (std::countr_zero(test_chunk) >> 3);
 
             return {start, size_t(it - start)};
@@ -441,25 +491,25 @@ namespace glz::detail
             chunk = 0; // must zero out the chunk
             std::memcpy(&chunk, it, rest);
             test_chunk = has_quote(chunk);
-            if (test_chunk != 0) {
+            if (test_chunk) {
                it += (std::countr_zero(test_chunk) >> 3);
 
                return {start, size_t(it - start)};
             }
          }
+         return {};
       }
       else {
          uint64_t chunk{};
          std::memcpy(&chunk, it, LengthRange + 1);
          const uint64_t test_chunk = has_quote(chunk);
-         if (test_chunk != 0) [[likely]] {
+         if (test_chunk) [[likely]] {
             it += (std::countr_zero(test_chunk) >> 3);
 
             return {start, size_t(it - start)};
          }
+         return {};
       }
-
-      return {start, size_t(it - start)};
    }
 
    template <opts Opts>
@@ -522,10 +572,6 @@ namespace glz::detail
    template <char open, char close>
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (bool(ctx.error)) [[unlikely]] {
-         return;
-      }
-
       ++it;
       size_t open_count = 1;
       size_t close_count = 0;
@@ -662,7 +708,7 @@ namespace glz::detail
       if (bool(ctx.error)) [[unlikely]]
          return {};
 
-      match<'"'>(ctx, it, end);
+      match<'"'>(ctx, it);
       if (bool(ctx.error)) [[unlikely]]
          return {};
       auto start = it;

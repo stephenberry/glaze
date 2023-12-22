@@ -716,7 +716,7 @@ namespace glz
          else if constexpr (n == 2) {
             return micro_map2<value_t, meta_sv<T, I>::value...>{key_value<T, I>()...};
          }
-         else if constexpr (n < 128) // don't even attempt a first character hash if we have too many keys
+         else if constexpr (n < 64) // don't even attempt a first character hash if we have too many keys
          {
             constexpr auto front_desc = single_char_hash<n>(std::array<sv, n>{get_key<T, I>()...});
 
