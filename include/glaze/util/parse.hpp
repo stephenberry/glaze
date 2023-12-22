@@ -465,66 +465,44 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_string(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (bool(ctx.error)) [[unlikely]] {
-         return;
-      }
-      
       if constexpr (!Opts.opening_handled) {
          ++it;
       }
 
       if constexpr (Opts.force_conformance) {
          while (true) {
-            switch (*it) {
-            case '"':
-               ++it;
-               return;
-            case '\b':
-            case '\f':
-            case '\n':
-            case '\r':
-            case '\t': {
+            if (*it < 16) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
-            case '\\': {
-               ++it;
-               switch (*it) {
-               case '"':
-               case '\\':
-               case '/':
-               case 'b':
-               case 'f':
-               case 'n':
-               case 'r':
-               case 't': {
+            
+            switch (*it) {
+            case '"': {
                   ++it;
-                  continue;
+                  return;
                }
-               case 'u': {
+               case '\\': {
                   ++it;
-                  if ((end - it) < 4) [[unlikely]] {
-                     ctx.error = error_code::syntax_error;
-                     return;
+                  if (char_unescape_table[*it]) {
+                     ++it;
+                     continue;
                   }
-                  else if (std::all_of(it, it + 4, ::isxdigit)) [[likely]] {
-                     it += 4;
+                  else if ('u') {
+                     ++it;
+                     if ((end - it) < 4) [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                     else if (std::all_of(it, it + 4, ::isxdigit)) [[likely]] {
+                        it += 4;
+                        continue;
+                     }
                   }
-                  else [[unlikely]] {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
-                  continue;
-               }
-                  [[unlikely]] default:
-                  {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
+                  ctx.error = error_code::syntax_error;
+                  return;
                }
             }
-               [[likely]] default : ++it;
-            }
+            ++it;
          }
       }
       else {
