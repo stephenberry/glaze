@@ -916,7 +916,8 @@ namespace glz
                }
 
                // skip
-               if constexpr (std::is_same_v<val_t, includer<V>> || std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+               if constexpr (std::is_same_v<val_t, includer<V>> || std::is_same_v<val_t, hidden> ||
+                             std::same_as<val_t, skip>) {
                   return;
                }
                else {

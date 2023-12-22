@@ -37,7 +37,7 @@ namespace glz::detail
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0 //
    };
    // clang-format on
-   
+
    // assumes null terminated
    template <char c>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
@@ -220,12 +220,12 @@ namespace glz::detail
 
       ctx.error = error_code::expected_quote;
    }
-   
+
    template <opts Opts>
    GLZ_ALWAYS_INLINE bool skip_till_unescaped_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-      
+
       if constexpr (!Opts.force_conformance) {
          bool escaped = false;
          for (const auto fin = end - 7; it < fin;) {
@@ -329,7 +329,7 @@ namespace glz::detail
                ctx.error = error_code::syntax_error;
                return true;
             }
-            
+
             switch (*it) {
             case '\\': {
                escaped = true;
@@ -356,7 +356,7 @@ namespace glz::detail
                   ctx.error = error_code::syntax_error;
                   return true;
                }
-               
+
                break;
             }
             case '"': {
@@ -368,7 +368,7 @@ namespace glz::detail
             }
          }
       }
-      
+
       ctx.error = error_code::expected_quote;
       return false;
    }
@@ -475,32 +475,32 @@ namespace glz::detail
                ctx.error = error_code::syntax_error;
                return;
             }
-            
+
             switch (*it) {
             case '"': {
+               ++it;
+               return;
+            }
+            case '\\': {
+               ++it;
+               if (char_unescape_table[*it]) {
                   ++it;
-                  return;
+                  continue;
                }
-               case '\\': {
+               else if ('u') {
                   ++it;
-                  if (char_unescape_table[*it]) {
-                     ++it;
+                  if ((end - it) < 4) [[unlikely]] {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+                  else if (std::all_of(it, it + 4, ::isxdigit)) [[likely]] {
+                     it += 4;
                      continue;
                   }
-                  else if ('u') {
-                     ++it;
-                     if ((end - it) < 4) [[unlikely]] {
-                        ctx.error = error_code::syntax_error;
-                        return;
-                     }
-                     else if (std::all_of(it, it + 4, ::isxdigit)) [[likely]] {
-                        it += 4;
-                        continue;
-                     }
-                  }
-                  ctx.error = error_code::syntax_error;
-                  return;
                }
+               ctx.error = error_code::syntax_error;
+               return;
+            }
             }
             ++it;
          }
