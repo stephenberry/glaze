@@ -1442,7 +1442,7 @@ namespace glz
 
       // Key parsing for meta objects or variants of meta objects.
       // We do not check for an ending quote, we simply parse up to the quote
-      // TODO We could expand this to compiletime known strings in general like enums
+      // TODO: We could expand this to compiletime known strings in general like enums
       template <class T, auto Opts, string_literal tag = "">
       GLZ_ALWAYS_INLINE std::string_view parse_object_key(is_context auto&& ctx, auto&& it, auto&& end)
       {
@@ -1630,7 +1630,7 @@ namespace glz
 
                bool first = true;
                while (true) {
-                  if (*it == '}') [[unlikely]] {
+                  if (*it == '}') {
                      ++it;
                      if constexpr (Opts.error_on_missing_keys) {
                         constexpr auto req_fields = required_fields<T, Opts>();
@@ -1640,9 +1640,10 @@ namespace glz
                      }
                      return;
                   }
-                  else if (first) [[unlikely]]
+                  else if (first) {
                      first = false;
-                  else [[likely]] {
+                  }
+                  else {
                      match<','>(ctx, it);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
