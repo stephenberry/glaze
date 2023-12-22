@@ -215,9 +215,10 @@ namespace glz
          while (true) {
             std::memcpy(&swar, in, Bytes);
             std::memcpy(out + ix, in, Bytes);
-            const auto next = std::countr_zero(has_quote(swar) | has_escape(swar) | is_less_16(swar)) >> 3;
+            auto next = has_quote(swar) | has_escape(swar) | is_less_16(swar);
 
-            if (next != 8) {
+            if (next) {
+               next = std::countr_zero(next) >> 3;
                const auto escape_char = char_escape_table[uint32_t(in[next])];
                if (escape_char == 0) {
                   ix += next;
