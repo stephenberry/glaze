@@ -125,7 +125,7 @@ namespace glz
 
             if constexpr (!Options.opening_handled) {
                skip_ws_no_pre_check<Options>(ctx, it, end);
-               match<'{'>(ctx, it, end);
+               match<'{'>(ctx, it);
             }
 
             skip_ws_no_pre_check<Options>(ctx, it, end);
@@ -150,20 +150,20 @@ namespace glz
                }
 
                skip_ws<Opts>(ctx, it, end);
-               match<':'>(ctx, it, end);
+               match<':'>(ctx, it);
                skip_ws<Opts>(ctx, it, end);
 
                std::visit([&](auto&& deq) { read<json>::op<Opts>(deq, ctx, it, end); }, v.first);
 
                if (i < n - 1) {
                   skip_ws<Opts>(ctx, it, end);
-                  match<','>(ctx, it, end);
+                  match<','>(ctx, it);
                   skip_ws<Opts>(ctx, it, end);
                }
             }
 
             skip_ws<Opts>(ctx, it, end);
-            match<'}'>(ctx, it, end);
+            match<'}'>(ctx, it);
          }
       };
 

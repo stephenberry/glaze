@@ -40,6 +40,18 @@ namespace glz::detail
 
    // assumes null terminated
    template <char c>
+   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it) noexcept
+   {
+      if (*it != c) [[unlikely]] {
+         ctx.error = error_code::syntax_error;
+      }
+      else [[likely]] {
+         ++it;
+      }
+   }
+   
+   // assumes null terminated
+   template <char c>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
    {
       if (*it != c) [[unlikely]] {
@@ -146,29 +158,39 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws_no_pre_check(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      while (true) {
-         switch (*it) {
-         case '\t':
-         case '\n':
-         case '\r':
-         case ' ':
-            ++it;
-            break;
-         case '/': {
-            if constexpr (Opts.force_conformance) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
-            else {
+      if constexpr (!Opts.force_conformance) {
+         while (true) {
+            switch (*it) {
+            case '\t':
+            case '\n':
+            case '\r':
+            case ' ':
+               ++it;
+               break;
+            case '/': {
                skip_comment(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
                break;
             }
+            default:
+               return;
+            }
          }
-         default:
-            return;
+      }
+      else {
+         while (true) {
+            switch (*it) {
+            case '\t':
+            case '\n':
+            case '\r':
+            case ' ':
+               ++it;
+               break;
+            default:
+               return;
+            }
          }
       }
    }
@@ -658,7 +680,7 @@ namespace glz::detail
       if (bool(ctx.error)) [[unlikely]]
          return {};
 
-      match<'"'>(ctx, it, end);
+      match<'"'>(ctx, it);
       if (bool(ctx.error)) [[unlikely]]
          return {};
       auto start = it;

@@ -153,7 +153,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            match<'"'>(ctx, it, end);
+            match<'"'>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -277,7 +277,7 @@ namespace glz
                skip_ws_no_pre_check<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               match<'"'>(ctx, it, end);
+               match<'"'>(ctx, it);
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
@@ -314,7 +314,7 @@ namespace glz
             }
 
             if constexpr (Opts.quoted_num) {
-               match<'"'>(ctx, it, end);
+               match<'"'>(ctx, it);
             }
          }
       };
@@ -327,7 +327,9 @@ namespace glz
          {
             if constexpr (Options.quoted_num) {
                skip_ws<Options>(ctx, it, end);
-               match<'"'>(ctx, it, end);
+               match<'"'>(ctx, it);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
 
             if constexpr (!Options.ws_handled) {
@@ -435,7 +437,7 @@ namespace glz
             }
 
             if constexpr (Options.quoted_num) {
-               match<'"'>(ctx, it, end);
+               match<'"'>(ctx, it);
             }
          }
       };
@@ -555,7 +557,7 @@ namespace glz
                         return;
                   }
 
-                  match<'"'>(ctx, it, end);
+                  match<'"'>(ctx, it);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
@@ -623,7 +625,7 @@ namespace glz
                      return;
                }
 
-               match<'"'>(ctx, it, end);
+               match<'"'>(ctx, it);
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
@@ -743,7 +745,7 @@ namespace glz
                      return;
                }
 
-               match<'"'>(ctx, it, end);
+               match<'"'>(ctx, it);
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
@@ -798,7 +800,7 @@ namespace glz
                }
                value = *it++;
             }
-            match<'"'>(ctx, it, end);
+            match<'"'>(ctx, it);
          }
       };
 
@@ -855,13 +857,13 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            match<'"'>(ctx, it, end);
+            match<'"'>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
             skip_till_quote(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            match<'"'>(ctx, it, end);
+            match<'"'>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
          }
@@ -896,7 +898,7 @@ namespace glz
             }
             static constexpr auto Opts = ws_handled_off<Options>();
 
-            match<'['>(ctx, it, end);
+            match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
             skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -923,7 +925,7 @@ namespace glz
                   ++it;
                   return;
                }
-               match<','>(ctx, it, end);
+               match<','>(ctx, it);
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
@@ -944,7 +946,7 @@ namespace glz
             }
             static constexpr auto Opts = ws_handled_off<Options>();
 
-            match<'['>(ctx, it, end);
+            match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
             skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -1102,7 +1104,7 @@ namespace glz
             }
             static constexpr auto Opts = ws_handled_off<Options>();
 
-            match<'['>(ctx, it, end);
+            match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
             const auto n = number_of_array_elements<Opts>(ctx, it, end);
@@ -1116,11 +1118,11 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
                if (i < n - 1) {
-                  match<','>(ctx, it, end);
+                  match<','>(ctx, it);
                }
                ++i;
             }
-            match<']'>(ctx, it, end);
+            match<']'>(ctx, it);
          }
       };
 
@@ -1146,7 +1148,7 @@ namespace glz
                   return;
             }
 
-            match<'['>(ctx, it, end);
+            match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
             skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -1158,7 +1160,7 @@ namespace glz
                   return;
                }
                if constexpr (I != 0) {
-                  match<','>(ctx, it, end);
+                  match<','>(ctx, it);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                   skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -1185,7 +1187,7 @@ namespace glz
                   return;
             });
 
-            match<']'>(ctx, it, end);
+            match<']'>(ctx, it);
          }
       };
 
@@ -1201,7 +1203,7 @@ namespace glz
                   return;
             }
 
-            match<'['>(ctx, it, end);
+            match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -1230,7 +1232,7 @@ namespace glz
                   ++it;
                   return;
                }
-               match<','>(ctx, it, end);
+               match<','>(ctx, it);
             }
          }
       };
@@ -1416,7 +1418,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            match<'{'>(ctx, it, end);
+            match<'{'>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
          }
@@ -1432,7 +1434,7 @@ namespace glz
          skip_ws_no_pre_check<Opts>(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
-         match<':'>(ctx, it, end);
+         match<':'>(ctx, it);
          if (bool(ctx.error)) [[unlikely]]
             return;
          skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -1450,7 +1452,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return {};
          }
-         match<'"'>(ctx, it, end);
+         match<'"'>(ctx, it);
          if (bool(ctx.error)) [[unlikely]]
             return {};
 
@@ -1562,7 +1564,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            match<'}'>(ctx, it, end);
+            match<'}'>(ctx, it);
          }
       };
 
@@ -1641,7 +1643,7 @@ namespace glz
                   else if (first) [[unlikely]]
                      first = false;
                   else [[likely]] {
-                     match<','>(ctx, it, end);
+                     match<','>(ctx, it);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -1653,7 +1655,7 @@ namespace glz
                      static_assert(false_v<T>, "This should be unreachable");
                   }
                   else if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0) {
-                     match<'"'>(ctx, it, end);
+                     match<'"'>(ctx, it);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
@@ -1751,7 +1753,7 @@ namespace glz
                      }
                      else {
                         if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
-                           match<'"'>(ctx, it, end);
+                           match<'"'>(ctx, it);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
 
@@ -2024,14 +2026,14 @@ namespace glz
                      auto start = it;
                      while (*it != '}') {
                         if (it != start) {
-                           match<','>(ctx, it, end);
+                           match<','>(ctx, it);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                         }
                         const sv key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        match<'"'>(ctx, it, end);
+                        match<'"'>(ctx, it);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
@@ -2219,7 +2221,7 @@ namespace glz
             }
             static constexpr auto Opts = ws_handled_off<Options>();
 
-            match<'['>(ctx, it, end);
+            match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
             skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -2227,7 +2229,7 @@ namespace glz
                return;
 
             // TODO Use key parsing for compiletime known keys
-            match<'"'>(ctx, it, end);
+            match<'"'>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
             auto start = it;
@@ -2235,7 +2237,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
             sv type_id = {start, static_cast<size_t>(it - start)};
-            match<'"'>(ctx, it, end);
+            match<'"'>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -2245,7 +2247,7 @@ namespace glz
                skip_ws<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               match<','>(ctx, it, end);
+               match<','>(ctx, it);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                const auto type_index = id_it->second;
@@ -2262,7 +2264,7 @@ namespace glz
             skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            match<']'>(ctx, it, end);
+            match<']'>(ctx, it);
          }
       };
 

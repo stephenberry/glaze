@@ -33,7 +33,7 @@ namespace glz::detail
             skip_ws_no_pre_check<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            match<':'>(ctx, it, end);
+            match<':'>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
             skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -50,7 +50,7 @@ namespace glz::detail
             if (bool(ctx.error)) [[unlikely]]
                return;
          }
-         match<'}'>(ctx, it, end);
+         match<'}'>(ctx, it);
       }
    }
 
@@ -81,7 +81,7 @@ namespace glz::detail
             if (bool(ctx.error)) [[unlikely]]
                return;
          }
-         match<']'>(ctx, it, end);
+         match<']'>(ctx, it);
       }
    }
 
