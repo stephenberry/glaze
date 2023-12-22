@@ -573,8 +573,8 @@ namespace glz
                }
                else {
                   auto start = it;
-
-                  const bool escaped = skip_till_unescaped_quote(ctx, it, end);
+                  
+                  const bool escaped = skip_till_unescaped_quote<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 

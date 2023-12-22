@@ -29,7 +29,7 @@ inline std::string generate_string()
 
 suite string_performance = [] {
    "string_performance"_test = [] {
-      constexpr auto n = 100; // make this number bigger when profiling
+      constexpr auto n = 10000; // make this number bigger when profiling
 
       std::vector<std::string> vec;
       vec.reserve(n);
@@ -45,7 +45,7 @@ suite string_performance = [] {
       glz::parse_error e;
       for (auto i = 0; i < 100; ++i) {
          vec.clear();
-         e = glz::read_json(vec, buffer);
+         e = glz::read_json<glz::opts{.force_conformance}>(vec, buffer);
       }
       auto t1 = std::chrono::steady_clock::now();
 
