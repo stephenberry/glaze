@@ -1487,7 +1487,7 @@ namespace glz
                      it += stats.min_length;
                      for (const auto e = it + stats.length_range + 1; it < e; ++it) {
                         if (*it == '"') {
-                           return {start, size_t(it - start)};
+                           break;
                         }
                      }
                      return {start, size_t(it - start)};
