@@ -429,7 +429,7 @@ namespace glz::detail
    }
 
    // very similar code to skip_till_quote, but it consumes the iterator and returns the key
-   template <uint32_t MinLength, uint32_t LengthRange> requires (LengthRange < 16)
+   template <uint32_t MinLength, uint32_t LengthRange> requires (LengthRange < 24)
    [[nodiscard]] GLZ_ALWAYS_INLINE const sv parse_key_cx(auto&& it) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
@@ -446,6 +446,35 @@ namespace glz::detail
 
             return {start, size_t(it - start)};
          }
+         return {};
+      }
+      else if constexpr (LengthRange > 15) {
+         uint64_t chunk; // no need to default initialize
+         std::memcpy(&chunk, it, 8);
+         uint64_t test_chunk = has_quote(chunk);
+         if (test_chunk) {
+            goto finish;
+         }
+         
+         it += 8;
+         std::memcpy(&chunk, it, 8);
+         test_chunk = has_quote(chunk);
+         if (test_chunk) {
+            goto finish;
+         }
+         
+         it += 8;
+         static constexpr auto rest = LengthRange + 1 - 16;
+         chunk = 0; // must zero out the chunk
+         std::memcpy(&chunk, it, rest);
+         test_chunk = has_quote(chunk);
+         if (!test_chunk) {
+            return {};
+         }
+         
+         finish:
+         it += (std::countr_zero(test_chunk) >> 3);
+         return {start, size_t(it - start)};
       }
       else if constexpr (LengthRange > 7) {
          uint64_t chunk; // no need to default initialize
@@ -468,6 +497,7 @@ namespace glz::detail
                return {start, size_t(it - start)};
             }
          }
+         return {};
       }
       else {
          uint64_t chunk{};
@@ -478,9 +508,8 @@ namespace glz::detail
 
             return {start, size_t(it - start)};
          }
+         return {};
       }
-
-      return {};
    }
 
    template <opts Opts>

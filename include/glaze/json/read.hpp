@@ -1464,7 +1464,7 @@ namespace glz
          }
          else if constexpr (std::tuple_size_v<meta_t<T>> > 0) {
             static constexpr auto stats = key_stats<T, tag>();
-            if constexpr (stats.length_range < 16) {
+            if constexpr (stats.length_range < 24) {
                if ((it + stats.max_length) < end) [[likely]] {
                   if constexpr (stats.length_range == 0) {
                      const sv key{it, stats.max_length};

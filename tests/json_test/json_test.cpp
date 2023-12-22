@@ -927,6 +927,29 @@ suite user_types = [] {
    };
 };
 
+struct large_length_range_t
+{
+   int a{};
+   int another_integer_value{};
+   
+   struct glaze {
+      using T = large_length_range_t;
+      static constexpr auto value = glz::object(&T::a, &T::another_integer_value);
+   };
+};
+
+suite large_length_range = [] {
+   using namespace boost::ut;
+   
+   "large_length_range"_test = [] {
+      large_length_range_t obj{};
+      std::string_view s = R"({"a":55,"another_integer_value":77})";
+      expect(!glz::read_json(obj, s));
+      expect(obj.a == 55);
+      expect(obj.another_integer_value == 77);
+   };
+};
+
 suite json_pointer = [] {
    using namespace boost::ut;
 
