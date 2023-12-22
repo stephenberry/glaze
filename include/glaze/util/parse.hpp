@@ -429,6 +429,7 @@ namespace glz::detail
    }
 
    // very similar code to skip_till_quote, but it consumes the iterator and returns the key
+   // we need to return a string view of the iterator progression so that we can rewind in the case of unknown keys
    template <uint32_t MinLength, uint32_t LengthRange>
       requires(LengthRange < 24)
    [[nodiscard]] GLZ_ALWAYS_INLINE const sv parse_key_cx(auto&& it) noexcept
@@ -444,10 +445,8 @@ namespace glz::detail
          const uint64_t test_chunk = has_quote(chunk);
          if (test_chunk) [[likely]] {
             it += (std::countr_zero(test_chunk) >> 3);
-
-            return {start, size_t(it - start)};
          }
-         return {};
+         return {start, size_t(it - start)};
       }
       else if constexpr (LengthRange > 15) {
          uint64_t chunk; // no need to default initialize
@@ -469,8 +468,10 @@ namespace glz::detail
          chunk = 0; // must zero out the chunk
          std::memcpy(&chunk, it, rest);
          test_chunk = has_quote(chunk);
+         // If our chunk is zero, we have an invalid string
+         // We set the chunk to 1 so that we increment it by 0
          if (!test_chunk) {
-            return {};
+            test_chunk = 1;
          }
 
       finish:
@@ -483,8 +484,6 @@ namespace glz::detail
          uint64_t test_chunk = has_quote(chunk);
          if (test_chunk) {
             it += (std::countr_zero(test_chunk) >> 3);
-
-            return {start, size_t(it - start)};
          }
          else {
             it += 8;
@@ -494,11 +493,9 @@ namespace glz::detail
             test_chunk = has_quote(chunk);
             if (test_chunk) {
                it += (std::countr_zero(test_chunk) >> 3);
-
-               return {start, size_t(it - start)};
             }
          }
-         return {};
+         return {start, size_t(it - start)};
       }
       else {
          uint64_t chunk{};
@@ -506,10 +503,8 @@ namespace glz::detail
          const uint64_t test_chunk = has_quote(chunk);
          if (test_chunk) [[likely]] {
             it += (std::countr_zero(test_chunk) >> 3);
-
-            return {start, size_t(it - start)};
          }
-         return {};
+         return {start, size_t(it - start)};
       }
    }
 
