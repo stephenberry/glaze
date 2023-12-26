@@ -205,7 +205,7 @@ namespace glz
                   using Element = glaze_tuple_element<I, N, T>;
                   static constexpr size_t member_index = Element::member_index;
 
-                  using item_type = std::decay_t<typename Element::type>;
+                  using item_type = typename std::decay<typename Element::type>::type;
                   using value_type = typename item_type::value_type;
 
                   static constexpr sv key = key_name<I, T, Element::use_reflection>;
