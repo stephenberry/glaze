@@ -234,7 +234,7 @@ namespace glz::rpc
       template <class T, T value>
       struct index_of_name<T, value>
       {
-         static constexpr std::size_t index = std::numeric_limits<size_t>::max();
+         static constexpr std::size_t index = (std::numeric_limits<size_t>::max)();
       };
 
       template <class map_t, string_literal name, class... method_type>

@@ -14,12 +14,12 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE constexpr bool is_safe_addition(uint64_t a, uint64_t b) noexcept
    {
-      return a <= std::numeric_limits<uint64_t>::max() - b;
+      return a <= (std::numeric_limits<uint64_t>::max)() - b;
    }
 
    GLZ_ALWAYS_INLINE constexpr bool is_safe_multiplication10(uint64_t a) noexcept
    {
-      constexpr auto b = std::numeric_limits<uint64_t>::max() / 10;
+      constexpr auto b = (std::numeric_limits<uint64_t>::max)() / 10;
       return a <= b;
    }
 

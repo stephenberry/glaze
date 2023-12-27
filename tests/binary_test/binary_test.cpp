@@ -594,8 +594,8 @@ void container_types()
       expect(vec == vec2);
    };
    "vector uint64_t roundtrip"_test = [] {
-      std::uniform_int_distribution<uint64_t> dist(std::numeric_limits<uint64_t>::min(),
-                                                   std::numeric_limits<uint64_t>::max());
+      std::uniform_int_distribution<uint64_t> dist((std::numeric_limits<uint64_t>::min)(),
+                                                   (std::numeric_limits<uint64_t>::max)());
       std::mt19937 gen{};
       std::vector<uint64_t> vec(100);
       for (auto& item : vec) item = dist(gen);
