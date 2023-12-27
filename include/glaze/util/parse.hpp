@@ -427,7 +427,7 @@ namespace glz::detail
       ctx.error = error_code::expected_quote;
       return {};
    }
-   
+
    struct key_stats_t
    {
       uint32_t min_length = (std::numeric_limits<uint32_t>::max)();
@@ -436,26 +436,28 @@ namespace glz::detail
    };
 
    // consumes the iterator and returns the key
-   // for error_on_unknown_keys = false, this may not return a valid key, in which case the iterator will not point to a quote (")
+   // for error_on_unknown_keys = false, this may not return a valid key, in which case the iterator will not point to a
+   // quote (")
    template <opts Opts, key_stats_t stats>
       requires(stats.length_range < 24)
    [[nodiscard]] GLZ_ALWAYS_INLINE const sv parse_key_cx(auto&& it) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-      
+
       static constexpr auto LengthRange = stats.length_range;
 
       auto start = it;
-      
+
       if constexpr (Opts.error_on_unknown_keys) {
          it += stats.min_length; // immediately skip minimum length
       }
       else {
          // unknown keys must be searched for within the min_length
-         
+
          // I don't want to support unknown keys having escaped quotes.
-         // This would make everyone pay significant performance losses for an edge case that can be handled with known keys.
-         
+         // This would make everyone pay significant performance losses for an edge case that can be handled with known
+         // keys.
+
          if constexpr (stats.min_length <= 8) {
             uint64_t chunk{};
             std::memcpy(&chunk, it, stats.min_length);
@@ -477,7 +479,7 @@ namespace glz::detail
                   return {start, size_t(it - start)};
                }
             }
-            
+
             while (it < e) {
                if (*it == '"') {
                   return {start, size_t(it - start)};
@@ -486,7 +488,7 @@ namespace glz::detail
             }
          }
       }
-      
+
       if constexpr (LengthRange == 0) {
          return {start, stats.min_length};
       }
