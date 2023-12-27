@@ -841,7 +841,7 @@ namespace glz
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
             if constexpr (reflectable<V>) {
-               res += count_members<V>();
+               res += count_members<V>;
             }
             else {
                res += std::tuple_size_v<meta_t<V>>;
@@ -1198,7 +1198,7 @@ namespace glz::detail
 
       static constexpr auto N = [] {
          if constexpr (reflectable<T>) {
-            return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
+            return count_members<T>;
          }
          else {
             return std::tuple_size_v<meta_t<V>>;

@@ -229,7 +229,7 @@ struct string_view_member_count
    int five{};
 };
 
-static_assert(glz::detail::count_members<string_view_member_count>() == 5);
+static_assert(glz::detail::count_members<string_view_member_count> == 5);
 
 int main()
 { // Explicitly run registered test suites and report errors
