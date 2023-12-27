@@ -4321,7 +4321,7 @@ struct Sample
 
 suite invalid_keys = [] {
    "invalid_keys"_test = [] {
-      std::string test_str = {"{\"a\":1,\"bbbbbb\":\"0\",\"c\":\"Hello World\",\"d\":{\"e\":\"123\"} }"};
+      std::string test_str = R"({"a":1,"bbbbbb":"0","c":"Hello World","d":{"e":"123"} })";
       auto s = Sample{};
 
       expect(glz::read<glz::opts{.error_on_unknown_keys = true}>(s, test_str) != glz::error_code::none);
