@@ -49,17 +49,18 @@ namespace glz
 
       template <class T, class... Args>
          requires(std::is_aggregate_v<std::remove_cvref_t<T>>)
-      consteval auto count_members()
+      inline constexpr auto count_members = []
       {
-         if constexpr (requires { T{{Args{}}..., {any_t{}}}; } == false) {
+         using V = std::remove_cvref_t<T>;
+         if constexpr (requires { V{{Args{}}..., {any_t{}}}; } == false) {
             return sizeof...(Args);
          }
          else {
-            return count_members<T, Args..., any_t>();
+            return count_members<V, Args..., any_t>;
          }
-      }
+      }();
 
-      template <class T, size_t N = count_members<std::decay_t<T>>()>
+      template <class T, size_t N = count_members<T>>
          requires(N <= 128)
       constexpr decltype(auto) to_tuple(T&& t)
       {

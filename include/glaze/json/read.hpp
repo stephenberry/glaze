@@ -1329,7 +1329,7 @@ namespace glz
       }
 
       // only use this if the keys cannot contain escape characters
-      template <glaze_object_t T, string_literal tag = "">
+      template <class T, string_literal tag = ""> requires (glaze_object_t<T> || reflectable<T>)
       GLZ_ALWAYS_INLINE constexpr auto key_stats()
       {
          key_stats_t stats{};
@@ -1338,30 +1338,26 @@ namespace glz
             stats.max_length = tag_size;
             stats.min_length = tag_size;
          }
-
-         constexpr auto N = std::tuple_size_v<meta_t<T>>;
-         for_each<N>([&](auto I) {
-            constexpr auto first = get<0>(get<I>(meta_v<T>));
-            using T0 = std::decay_t<decltype(first)>;
-            if constexpr (std::is_member_object_pointer_v<T0>) {
-               constexpr auto s = get_name<first>();
-               const auto n = s.size();
-               if (n < stats.min_length) {
-                  stats.min_length = n;
-               }
-               if (n > stats.max_length) {
-                  stats.max_length = n;
-               }
+         
+         constexpr auto N = [] {
+            if constexpr (reflectable<T>) {
+               return count_members<T>;
             }
             else {
-               constexpr auto s = get<0>(get<I>(meta_v<T>));
-               const auto n = s.size();
-               if (n < stats.min_length) {
-                  stats.min_length = n;
-               }
-               if (n > stats.max_length) {
-                  stats.max_length = n;
-               }
+               return std::tuple_size_v<meta_t<T>>;
+            }
+         }();
+         
+         for_each<N>([&](auto I) {
+            using Element = glaze_tuple_element<I, N, T>;
+            constexpr sv key = key_name<I, T, Element::use_reflection>;
+            
+            const auto n = key.size();
+            if (n < stats.min_length) {
+               stats.min_length = n;
+            }
+            if (n > stats.max_length) {
+               stats.max_length = n;
             }
          });
 
@@ -1448,6 +1444,15 @@ namespace glz
          match<'"'>(ctx, it);
          if (bool(ctx.error)) [[unlikely]]
             return {};
+         
+         constexpr auto N = [] {
+            if constexpr (reflectable<T>) {
+               return count_members<T>;
+            }
+            else {
+               return std::tuple_size_v<meta_t<T>>;
+            }
+         }();
 
          if constexpr (keys_may_contain_escape<T>()) {
             std::string& static_key = string_buffer();
@@ -1455,7 +1460,7 @@ namespace glz
             --it; // reveal the quote
             return static_key;
          }
-         else if constexpr (std::tuple_size_v<meta_t<T>> > 0) {
+         else if constexpr (N > 0) {
             static constexpr auto stats = key_stats<T, tag>();
             if constexpr (stats.length_range < 24) {
                if ((it + stats.max_length) < end) [[likely]] {
@@ -1531,7 +1536,7 @@ namespace glz
       {
          // we have to populate the pointers in the reflection map from the structured binding
          auto t = to_tuple(value);
-         for_each<std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>>([&](auto I) {
+         for_each<count_members<T>>([&](auto I) {
             std::get<std::add_pointer_t<std::decay_t<decltype(std::get<I>(t))>>>(std::get<I>(cmap.items).second) =
                &std::get<I>(t);
          });
@@ -1552,7 +1557,7 @@ namespace glz
 
             static constexpr auto num_members = [] {
                if constexpr (reflectable<T>) {
-                  return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
+                  return count_members<T>;
                }
                else {
                   return std::tuple_size_v<meta_t<T>>;
