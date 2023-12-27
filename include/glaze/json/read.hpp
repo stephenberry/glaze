@@ -1328,13 +1328,6 @@ namespace glz
          return may_escape;
       }
 
-      struct key_stats_t
-      {
-         uint32_t min_length = (std::numeric_limits<uint32_t>::max)();
-         uint32_t max_length{};
-         uint32_t length_range{};
-      };
-
       // only use this if the keys cannot contain escape characters
       template <glaze_object_t T, string_literal tag = "">
       GLZ_ALWAYS_INLINE constexpr auto key_stats()
@@ -1466,47 +1459,12 @@ namespace glz
             static constexpr auto stats = key_stats<T, tag>();
             if constexpr (stats.length_range < 24) {
                if ((it + stats.max_length) < end) [[likely]] {
-                  if constexpr (stats.length_range == 0) {
-                     const sv key{it, stats.max_length};
-                     it += stats.max_length;
-                     return key;
-                  }
-                  else if constexpr (stats.length_range == 1) {
-                     auto start = it;
-                     it += stats.min_length;
-                     if (*it == '"') {
-                        return {start, size_t(it - start)};
-                     }
-                     else {
-                        ++it;
-                        return {start, size_t(it - start)};
-                     }
-                  }
-                  else if constexpr (stats.length_range < 4) {
-                     auto start = it;
-                     it += stats.min_length;
-                     for (const auto e = it + stats.length_range + 1; it < e; ++it) {
-                        if (*it == '"') {
-                           break;
-                        }
-                     }
-                     return {start, size_t(it - start)};
-                  }
-                  else {
-                     return parse_key_cx<stats.min_length, stats.length_range>(it);
-                  }
-               }
-               else {
-                  auto start = it;
-                  skip_till_quote(ctx, it, end);
-                  return {start, size_t(it - start)};
+                  return parse_key_cx<Opts, stats>(it);
                }
             }
-            else {
-               auto start = it;
-               skip_till_quote(ctx, it, end);
-               return {start, size_t(it - start)};
-            }
+            auto start = it;
+            skip_till_quote(ctx, it, end);
+            return {start, size_t(it - start)};
          }
          else {
             auto start = it;
@@ -1778,31 +1736,16 @@ namespace glz
                               return;
                         }
                         else [[unlikely]] {
-                           it -= key.size(); // rewind to skip the potentially escaped key
-
-                           // Unknown key handler does not unescape keys or want unescaped keys. Unknown escaped keys
-                           // are handled by the user.
-
-                           const auto start = it;
-                           while (true) {
-                              skip_till_escape_or_quote(ctx, it, end);
+                           if (*it != '"') {
+                              // we need to search until we find the ending quote of the key
+                              skip_till_quote(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
-
-                              if (*it == '"') [[likely]] {
-                                 key = {start, size_t(it - start)};
-                                 ++it;
-                                 break;
-                              }
-                              else {
-                                 ++it; // skip the escape
-                                 if (*it == '"') {
-                                    ++it; // skip the escaped quote
-                                 }
-                              }
+                              auto start = key.data();
+                              key = {start, size_t(it - start)};
                            }
+                           ++it; // skip the quote
 
-                           // We duplicate this code to avoid generating unreachable code
                            parse_object_entry_sep<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;

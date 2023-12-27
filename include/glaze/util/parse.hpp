@@ -427,19 +427,84 @@ namespace glz::detail
       ctx.error = error_code::expected_quote;
       return {};
    }
+   
+   struct key_stats_t
+   {
+      uint32_t min_length = (std::numeric_limits<uint32_t>::max)();
+      uint32_t max_length{};
+      uint32_t length_range{};
+   };
 
-   // very similar code to skip_till_quote, but it consumes the iterator and returns the key
-   // we need to return a string view of the iterator progression so that we can rewind in the case of unknown keys
-   template <uint32_t MinLength, uint32_t LengthRange>
-      requires(LengthRange < 24)
+   // consumes the iterator and returns the key
+   // for error_on_unknown_keys = false, this may not return a valid key, in which case the iterator will not point to a quote (")
+   template <opts Opts, key_stats_t stats>
+      requires(stats.length_range < 24)
    [[nodiscard]] GLZ_ALWAYS_INLINE const sv parse_key_cx(auto&& it) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
+      
+      static constexpr auto LengthRange = stats.length_range;
 
       auto start = it;
-      it += MinLength; // immediately skip minimum length
-
-      if constexpr (LengthRange == 7) {
+      
+      if constexpr (Opts.error_on_unknown_keys) {
+         it += stats.min_length; // immediately skip minimum length
+      }
+      else {
+         // unknown keys must be searched for within the min_length
+         
+         // I don't want to support unknown keys having escaped quotes.
+         // This would make everyone pay significant performance losses for an edge case that can be handled with known keys.
+         
+         if constexpr (stats.min_length <= 8) {
+            uint64_t chunk{};
+            std::memcpy(&chunk, it, stats.min_length);
+            const uint64_t test_chunk = has_quote(chunk);
+            if (test_chunk) [[likely]] {
+               it += (std::countr_zero(test_chunk) >> 3);
+               return {start, size_t(it - start)};
+            }
+            it += stats.min_length;
+         }
+         else {
+            auto e = it + stats.min_length;
+            uint64_t chunk;
+            for (const auto end_m7 = e - 7; it < end_m7; it += 8) {
+               std::memcpy(&chunk, it, 8);
+               const uint64_t test_chars = has_quote(chunk);
+               if (test_chars) {
+                  it += (std::countr_zero(test_chars) >> 3);
+                  return {start, size_t(it - start)};
+               }
+            }
+            
+            while (it < e) {
+               if (*it == '"') {
+                  return {start, size_t(it - start)};
+               }
+               ++it;
+            }
+         }
+      }
+      
+      if constexpr (LengthRange == 0) {
+         return {start, stats.min_length};
+      }
+      else if constexpr (LengthRange == 1) {
+         if (*it != '"') {
+            ++it;
+         }
+         return {start, size_t(it - start)};
+      }
+      else if constexpr (LengthRange < 4) {
+         for (const auto e = it + stats.length_range + 1; it < e; ++it) {
+            if (*it == '"') {
+               break;
+            }
+         }
+         return {start, size_t(it - start)};
+      }
+      else if constexpr (LengthRange == 7) {
          uint64_t chunk; // no need to default initialize
          std::memcpy(&chunk, it, 8);
          const uint64_t test_chunk = has_quote(chunk);
@@ -468,7 +533,7 @@ namespace glz::detail
          chunk = 0; // must zero out the chunk
          std::memcpy(&chunk, it, rest);
          test_chunk = has_quote(chunk);
-         // If our chunk is zero, we have an invalid string
+         // If our chunk is zero, we have an invalid key (for error_on_unknown_keys = true)
          // We set the chunk to 1 so that we increment it by 0
          if (!test_chunk) {
             test_chunk = 1;
