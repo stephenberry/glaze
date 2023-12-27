@@ -3,10 +3,13 @@
 
 #pragma once
 
+#include <optional>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <utility>
+
+#include "glaze/util/type_traits.hpp"
 
 namespace glz
 {
@@ -25,6 +28,13 @@ namespace glz
          template <class T>
             requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
          [[maybe_unused]] constexpr operator T();
+
+         template <class T>
+            requires(is_specialization_v<T, std::optional>)
+         [[maybe_unused]] constexpr operator T()
+         {
+            return std::nullopt;
+         }
 #else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-declarations"
