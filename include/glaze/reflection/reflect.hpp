@@ -82,9 +82,7 @@ namespace glz
       constexpr auto make_map()
          requires(!glaze_t<T> && !array_t<T> && std::is_aggregate_v<std::remove_cvref_t<T>>)
       {
-         using V = decltype(to_tuple(std::declval<T>()));
-
-         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<V>>{};
+         constexpr auto indices = std::make_index_sequence<count_members<T>>{};
          return make_reflection_map_impl<std::decay_t<T>, use_hash_comparison>(indices);
       }
    }
