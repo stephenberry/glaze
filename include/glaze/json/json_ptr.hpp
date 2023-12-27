@@ -22,18 +22,18 @@ namespace glz
       template <class F, class T>
          requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
                   is_std_tuple<std::decay_t<T>>
-      bool seek_impl(F&& func, T&& value, sv json_ptr);
+      bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept;
 
       template <class F, class T>
          requires nullable_t<std::decay_t<T>>
-      bool seek_impl(F&& func, T&& value, sv json_ptr);
+      bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept;
 
       template <class F, class T>
          requires readable_map_t<std::decay_t<T>> || glaze_object_t<T> || reflectable<T>
-      bool seek_impl(F&& func, T&& value, sv json_ptr);
+      bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept;
 
       template <class F, class T>
-      bool seek_impl(F&& func, T&& value, sv json_ptr)
+      bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
       {
          if (json_ptr.empty()) {
             func(value);
@@ -45,7 +45,7 @@ namespace glz
       // TODO: compile time search for `~` and optimize if escape does not exist
       template <class F, class T>
          requires readable_map_t<std::decay_t<T>> || glaze_object_t<T> || reflectable<T>
-      bool seek_impl(F&& func, T&& value, sv json_ptr)
+      bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
       {
          if (json_ptr.empty()) {
             func(value);
@@ -130,7 +130,7 @@ namespace glz
       template <class F, class T>
          requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
                   is_std_tuple<std::decay_t<T>>
-      bool seek_impl(F&& func, T&& value, sv json_ptr)
+      bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
       {
          if (json_ptr.empty()) {
             func(value);
@@ -166,7 +166,7 @@ namespace glz
 
       template <class F, class T>
          requires nullable_t<std::decay_t<T>>
-      bool seek_impl(F&& func, T&& value, sv json_ptr)
+      bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
       {
          if (json_ptr.empty()) {
             func(value);
@@ -179,7 +179,7 @@ namespace glz
 
    // Call a function on an value at the location of a json_ptr
    template <class F, class T>
-   bool seek(F&& func, T&& value, sv json_ptr)
+   bool seek(F&& func, T&& value, sv json_ptr) noexcept
    {
       return detail::seek_impl(std::forward<F>(func), std::forward<T>(value), json_ptr);
    }

@@ -177,6 +177,19 @@ suite user_types = [] {
       if (b.has_value()) {
          expect(b.value().get() == "stuff");
       }
+      
+      std::string out;
+      expect(glz::seek([&](auto& value){
+         glz::write_json(value, out);
+      }, obj, "/d"));
+      
+      expect(out == "2");
+      
+      expect(glz::seek([&](auto& value){
+         glz::write_json(value, out);
+      }, obj, "/thing_ptr/b"));
+      
+      expect(out == R"("stuff")");
    };
 };
 
