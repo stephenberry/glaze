@@ -619,15 +619,56 @@ namespace glz::detail
          }
       }
       else {
+         for (const auto fin = end - 7; it < fin;) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it, 8);
+            const uint64_t test_chars = has_quote(chunk);
+            if (test_chars) {
+               it += (std::countr_zero(test_chars) >> 3);
+
+               auto* prev = it - 1;
+               while (*prev == '\\') {
+                  --prev;
+               }
+               if (size_t(it - prev) % 2) {
+                  ++it; // skip the quote
+                  return;
+               }
+               ++it; // skip the escaped quote
+            }
+            else {
+               it += 8;
+            }
+         }
+
+         // Tail end of buffer. Should be rare we even get here
          while (it < end) {
-            if (*it == '"') {
+            switch (*it) {
+            case '\\': {
+               ++it;
+               if (it == end) [[unlikely]] {
+                  ctx.error = error_code::expected_quote;
+                  return;
+               }
                ++it;
                break;
             }
-            else if (*it == '\\' && ++it == end) {
+            case '"': {
+               auto* prev = it - 1;
+               while (*prev == '\\') {
+                  --prev;
+               }
+               if (size_t(it - prev) % 2) {
+                  ++it; // skip the quote
+                  return;
+               }
+               ++it; // skip the escaped quote
                break;
             }
-            ++it;
+            default: {
+               ++it;
+            }
+            }
          }
       }
    }

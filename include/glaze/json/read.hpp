@@ -1033,7 +1033,7 @@ namespace glz
 
       // counts the number of JSON array elements
       // needed for classes that are resizable, but do not have an emplace_back
-      // it is copied so that it does not actually progress the iterator
+      // 'it' is copied so that it does not actually progress the iterator
       // expects the opening brace ([) to have already been consumed
       template <auto Opts>
       [[nodiscard]] GLZ_ALWAYS_INLINE size_t number_of_array_elements(is_context auto&& ctx, auto it,
