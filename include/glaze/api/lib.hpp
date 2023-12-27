@@ -29,7 +29,7 @@
 #include <dlfcn.h>
 #define SHARED_LIBRARY_EXTENSION ".dylib"
 #define SHARED_LIBRARY_PREFIX "lib"
-#elif __linux__
+#elif __has_include(<dlfcn.h>)
 #include <dlfcn.h>
 #define SHARED_LIBRARY_EXTENSION ".so"
 #define SHARED_LIBRARY_PREFIX "lib"
