@@ -1329,7 +1329,8 @@ namespace glz
       }
 
       // only use this if the keys cannot contain escape characters
-      template <class T, string_literal tag = ""> requires (glaze_object_t<T> || reflectable<T>)
+      template <class T, string_literal tag = "">
+         requires(glaze_object_t<T> || reflectable<T>)
       GLZ_ALWAYS_INLINE constexpr auto key_stats()
       {
          key_stats_t stats{};
@@ -1338,7 +1339,7 @@ namespace glz
             stats.max_length = tag_size;
             stats.min_length = tag_size;
          }
-         
+
          constexpr auto N = [] {
             if constexpr (reflectable<T>) {
                return count_members<T>;
@@ -1347,11 +1348,11 @@ namespace glz
                return std::tuple_size_v<meta_t<T>>;
             }
          }();
-         
+
          for_each<N>([&](auto I) {
             using Element = glaze_tuple_element<I, N, T>;
             constexpr sv key = key_name<I, T, Element::use_reflection>;
-            
+
             const auto n = key.size();
             if (n < stats.min_length) {
                stats.min_length = n;
@@ -1444,7 +1445,7 @@ namespace glz
          match<'"'>(ctx, it);
          if (bool(ctx.error)) [[unlikely]]
             return {};
-         
+
          constexpr auto N = [] {
             if constexpr (reflectable<T>) {
                return count_members<T>;

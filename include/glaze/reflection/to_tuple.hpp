@@ -49,8 +49,7 @@ namespace glz
 
       template <class T, class... Args>
          requires(std::is_aggregate_v<std::remove_cvref_t<T>>)
-      inline constexpr auto count_members = []
-      {
+      inline constexpr auto count_members = [] {
          using V = std::remove_cvref_t<T>;
          if constexpr (requires { V{{Args{}}..., {any_t{}}}; } == false) {
             return sizeof...(Args);
