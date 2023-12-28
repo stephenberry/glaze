@@ -85,5 +85,44 @@ namespace glz
          constexpr auto indices = std::make_index_sequence<count_members<T>>{};
          return make_reflection_map_impl<std::decay_t<T>, use_hash_comparison>(indices);
       }
+      
+      template <reflectable T>
+      constexpr void populate_map(T&& value, auto& cmap) noexcept
+      {
+         // we have to populate the pointers in the reflection map from the structured binding
+         auto t = to_tuple(value);
+         for_each<count_members<T>>([&](auto I) {
+            std::get<std::add_pointer_t<std::decay_t<decltype(std::get<I>(t))>>>(std::get<I>(cmap.items).second) =
+               &std::get<I>(t);
+         });
+      }
+      
+      template <class Tuple>
+      struct tuple_ptr;
+
+      template <class... Ts>
+      struct tuple_ptr<std::tuple<Ts...>> {
+          using type = std::tuple<std::add_pointer_t<Ts>...>;
+      };
+      
+      template <class Tuple>
+      using tuple_ptr_t = typename tuple_ptr<Tuple>::type;
+      
+      template <class T>
+      constexpr auto make_tuple_from_struct()
+      {
+         using V = decltype(to_tuple(std::declval<T>()));
+         return tuple_ptr_t<V>{};
+      }
+      
+      template <reflectable T>
+      constexpr void populate_tuple_ptr(T&& value, auto& tuple_of_ptrs) noexcept
+      {
+         // we have to populate the pointers in the reflection tuple from the structured binding
+         auto t = to_tuple(value);
+         for_each<count_members<T>>([&](auto I) {
+            std::get<I>(tuple_of_ptrs) = &std::get<I>(t);
+         });
+      }
    }
 }
