@@ -8,7 +8,6 @@
 #include "glaze/record/recorder.hpp"
 
 using namespace boost::ut;
-using namespace glz;
 
 struct my_struct
 {
@@ -49,7 +48,7 @@ suite csv_tests = [] {
 
       my_struct obj{};
 
-      read_csv<colwise>(obj, input_col);
+      glz::read_csv<glz::colwise>(obj, input_col);
 
       expect(obj.num1[0] == 11);
       expect(obj.num2[2] == 66);
@@ -61,7 +60,7 @@ suite csv_tests = [] {
 
       std::string out{};
 
-      write<opts{.format = csv, .layout = colwise}>(obj, out);
+      glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out);
       expect(out ==
              R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -70,7 +69,7 @@ suite csv_tests = [] {
 77,88,0,4,4,4
 )");
 
-      expect(!write_file_csv<colwise>(obj, "csv_test_colwise.csv", std::string{}));
+      expect(!glz::write_file_csv<glz::colwise>(obj, "csv_test_colwise.csv", std::string{}));
    };
 
    "column wise string arguments"_test = [] {
@@ -83,7 +82,7 @@ suite csv_tests = [] {
 
       string_elements obj{};
 
-      read_csv<colwise>(obj, input_col);
+      glz::read_csv<glz::colwise>(obj, input_col);
 
       expect(obj.id[0] == 1);
       expect(obj.id[1] == 2);
@@ -96,7 +95,7 @@ suite csv_tests = [] {
 
       std::string out{};
 
-      write<opts{.format = csv, .layout = colwise}>(obj, out);
+      glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out);
       expect(out ==
              R"(id,udl
 1,BRN
@@ -105,7 +104,7 @@ suite csv_tests = [] {
 4,USN
 )");
 
-      expect(!write_file_csv<colwise>(obj, "csv_test_colwise.csv", std::string{}));
+      expect(!glz::write_file_csv<glz::colwise>(obj, "csv_test_colwise.csv", std::string{}));
    };
 
    "read/write row wise"_test = [] {
@@ -118,7 +117,7 @@ v3s[1],1,2,3,4
 v3s[2],1,2,3,4)";
 
       my_struct obj{};
-      read_csv(obj, input_row);
+      glz::read_csv(obj, input_row);
 
       expect(obj.num1[0] == 11);
       expect(obj.num2[2] == 66);
@@ -127,7 +126,7 @@ v3s[2],1,2,3,4)";
 
       std::string out{};
 
-      write<opts{.format = csv}>(obj, out);
+      glz::write<glz::opts{.format = glz::csv}>(obj, out);
       expect(out ==
              R"(num1,11,33,55,77
 num2,22,44,66,88
@@ -136,7 +135,7 @@ v3s[0],1,2,3,4
 v3s[1],1,2,3,4
 v3s[2],1,2,3,4)");
 
-      expect(!write_file_csv(obj, "csv_test_rowwise.csv", std::string{}));
+      expect(!glz::write_file_csv(obj, "csv_test_rowwise.csv", std::string{}));
    };
 
    "std::map row wise"_test = [] {
@@ -150,16 +149,16 @@ v3s[2],1,2,3,4)");
       }
 
       std::string out{};
-      write<opts{.format = csv}>(m, out);
+      glz::write<glz::opts{.format = glz::csv}>(m, out);
       expect(out == R"(x,0,1,2,3,4,5,6,7,8,9
 y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
-      write<opts{.format = csv}>(m, out);
+      glz::write<glz::opts{.format = glz::csv}>(m, out);
 
       m.clear();
-      expect(!read<opts{.format = csv}>(m, out));
+      expect(!glz::read<glz::opts{.format = glz::csv}>(m, out));
 
       expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
@@ -176,7 +175,7 @@ y,1,2,3,4,5,6,7,8,9,10
       }
 
       std::string out{};
-      write<opts{.format = csv, .layout = colwise}>(m, out);
+      glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(m, out);
       expect(out == R"(x,y
 0,1
 1,2
@@ -191,10 +190,10 @@ y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
-      write<opts{.format = csv, .layout = colwise}>(m, out);
+      glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(m, out);
 
       m.clear();
-      expect(!read<opts{.format = csv, .layout = colwise}>(m, out));
+      expect(!glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(m, out));
 
       expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
@@ -211,7 +210,7 @@ y,1,2,3,4,5,6,7,8,9,10
       }
 
       std::string out{};
-      write<opts{.format = csv}>(m, out);
+      glz::write<glz::opts{.format = glz::csv}>(m, out);
       expect(out == R"(y,1,2,3,4,5,6,7,8,9,10
 x,0,1,2,3,4,5,6,7,8,9
 )" || out == R"(x,0,1,2,3,4,5,6,7,8,9
@@ -219,10 +218,10 @@ y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
-      write<opts{.format = csv}>(m, out);
+      glz::write<glz::opts{.format = glz::csv}>(m, out);
 
       m.clear();
-      expect(!read<opts{.format = csv}>(m, out));
+      expect(!glz::read<glz::opts{.format = glz::csv}>(m, out));
 
       expect(m["x"] == std::vector<uint64_t>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
       expect(m["y"] == std::vector<uint64_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
@@ -242,7 +241,7 @@ y,1,2,3,4,5,6,7,8,9,10
          ++x;
       }
 
-      auto s = write_csv(recorder);
+      auto s = glz::write_csv(recorder);
       expect(s == R"(t,0,1,2,3,4
 x,1,2,3,4,5)");
    };
@@ -262,7 +261,7 @@ x,1,2,3,4,5)");
       }
 
       std::string s;
-      write<opts{.format = csv, .layout = colwise}>(recorder, s);
+      write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(recorder, s);
       expect(s ==
              R"(t,x
 0,1
@@ -293,7 +292,7 @@ suite reflect_my_struct_test = [] {
 
       reflect_my_struct obj{};
 
-      read_csv<colwise>(obj, input_col);
+      glz::read_csv<glz::colwise>(obj, input_col);
 
       expect(obj.num1[0] == 11);
       expect(obj.num2[2] == 66);
@@ -305,7 +304,7 @@ suite reflect_my_struct_test = [] {
 
       std::string out{};
 
-      write<opts{.format = csv, .layout = colwise}>(obj, out);
+      glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out);
       expect(out ==
              R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -314,7 +313,7 @@ suite reflect_my_struct_test = [] {
 77,88,0,4,4,4
 )");
 
-      expect(!write_file_csv<colwise>(obj, "csv_test_colwise.csv", std::string{}));
+      expect(!glz::write_file_csv<glz::colwise>(obj, "csv_test_colwise.csv", std::string{}));
    };
 
    "reflect read/write row wise"_test = [] {
@@ -327,7 +326,7 @@ v3s[1],1,2,3,4
 v3s[2],1,2,3,4)";
 
       reflect_my_struct obj{};
-      read_csv(obj, input_row);
+      glz::read_csv(obj, input_row);
 
       expect(obj.num1[0] == 11);
       expect(obj.num2[2] == 66);
@@ -336,7 +335,7 @@ v3s[2],1,2,3,4)";
 
       std::string out{};
 
-      write<opts{.format = csv}>(obj, out);
+      glz::write<glz::opts{.format = glz::csv}>(obj, out);
       expect(out ==
              R"(num1,11,33,55,77
 num2,22,44,66,88
@@ -345,7 +344,7 @@ v3s[0],1,2,3,4
 v3s[1],1,2,3,4
 v3s[2],1,2,3,4)");
 
-      expect(!write_file_csv(obj, "csv_test_rowwise.csv", std::string{}));
+      expect(!glz::write_file_csv(obj, "csv_test_rowwise.csv", std::string{}));
    };
 };
 
