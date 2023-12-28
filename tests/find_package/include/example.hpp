@@ -11,10 +11,3 @@ namespace example
       uint32_t age{};
    };
 }
-
-template <>
-struct glz::meta<example::person>
-{
-   using T = example::person;
-   static constexpr auto value = object("first_name", &T::first_name, "last_name", &T::last_name, "age", &T::age);
-};
