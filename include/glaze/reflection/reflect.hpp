@@ -112,7 +112,7 @@ namespace glz
       constexpr auto make_tuple_from_struct()
       {
          using V = decltype(to_tuple(std::declval<T>()));
-         return tuple_ptr_t<V>{};
+         return typename tuple_ptr<V>::type{};
       }
       
       template <reflectable T>

@@ -56,7 +56,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 #    endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test23_common INTERFACE /GR- /bigobj) #/fsanitize=address
-    target_compile_options(glz_test23_common INTERFACE /W4 /wd4459)
+    target_compile_options(glz_test23_common INTERFACE /W4 /wd4459 /wd4805)
 endif()
 
 add_library(glz_test_exceptions INTERFACE)
