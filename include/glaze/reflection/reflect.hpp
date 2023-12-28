@@ -85,7 +85,7 @@ namespace glz
          constexpr auto indices = std::make_index_sequence<count_members<T>>{};
          return make_reflection_map_impl<std::decay_t<T>, use_hash_comparison>(indices);
       }
-      
+
       template <reflectable T>
       constexpr void populate_map(T&& value, auto& cmap) noexcept
       {
@@ -96,40 +96,40 @@ namespace glz
                &std::get<I>(t);
          });
       }
-      
+
       template <class Tuple>
       struct tuple_ptr;
 
       template <class... Ts>
-      struct tuple_ptr<std::tuple<Ts...>> {
-          using type = std::tuple<std::add_pointer_t<Ts>...>;
+      struct tuple_ptr<std::tuple<Ts...>>
+      {
+         using type = std::tuple<std::add_pointer_t<Ts>...>;
       };
-      
+
       template <class Tuple>
       using tuple_ptr_t = typename tuple_ptr<Tuple>::type;
-      
+
       // This is needed to hack a fix for MSVC evaluating wrong if constexpr branches
-      template <class T> requires (!reflectable<T>)
+      template <class T>
+         requires(!reflectable<T>)
       constexpr auto make_tuple_from_struct()
       {
          return std::tuple{};
       }
-      
+
       template <reflectable T>
       constexpr auto make_tuple_from_struct()
       {
          using V = decltype(to_tuple(std::declval<T>()));
          return typename tuple_ptr<V>::type{};
       }
-      
+
       template <reflectable T>
       constexpr void populate_tuple_ptr(T&& value, auto& tuple_of_ptrs) noexcept
       {
          // we have to populate the pointers in the reflection tuple from the structured binding
          auto t = to_tuple(value);
-         for_each<count_members<T>>([&](auto I) {
-            std::get<I>(tuple_of_ptrs) = &std::get<I>(t);
-         });
+         for_each<count_members<T>>([&](auto I) { std::get<I>(tuple_of_ptrs) = &std::get<I>(t); });
       }
    }
 }
