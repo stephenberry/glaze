@@ -535,13 +535,13 @@ namespace glz
    }
 
    template <uint32_t layout = rowwise, class T, class Buffer>
-   inline auto read_csv(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline auto read_csv(T&& value, Buffer&& buffer) noexcept
    {
       return read<opts{.format = csv, .layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
    template <uint32_t layout = rowwise, class T, class Buffer>
-   inline auto read_csv(Buffer&& buffer) noexcept
+   [[nodiscard]] inline auto read_csv(Buffer&& buffer) noexcept
    {
       T value{};
       read<opts{.format = csv, .layout = rowwise}>(value, std::forward<Buffer>(buffer));
@@ -549,7 +549,7 @@ namespace glz
    }
 
    template <uint32_t layout = rowwise, class T>
-   inline parse_error read_file_csv(T& value, const sv file_name)
+   [[nodiscard]] inline parse_error read_file_csv(T& value, const sv file_name)
    {
       context ctx{};
       ctx.current_file = file_name;
