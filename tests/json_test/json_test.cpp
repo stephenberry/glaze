@@ -1205,55 +1205,55 @@ suite read_tests = [] {
    "Read integral types"_test = [] {
       {
          std::string s = "true";
-         bool v;
+         bool v{};
          expect(glz::read_json(v, s) == glz::error_code::none);
          expect(v);
       }
       {
          std::string s = "1";
-         short v;
+         short v{};
          expect(glz::read_json(v, s) == glz::error_code::none);
          expect(v == 1);
       }
       {
          std::string s = "1";
-         int v;
+         int v{};
          expect(glz::read_json(v, s) == glz::error_code::none);
          expect(v == 1);
       }
       {
          std::string s = "1";
-         long v;
+         long v{};
          expect(glz::read_json(v, s) == glz::error_code::none);
          expect(v == 1);
       }
       {
          std::string s = "1";
-         long long v;
+         long long v{};
          expect(glz::read_json(v, s) == glz::error_code::none);
          expect(v == 1);
       }
       {
          std::string s = "1";
-         unsigned short v;
+         unsigned short v{};
          expect(glz::read_json(v, s) == glz::error_code::none);
          expect(v == 1);
       }
       {
          std::string s = "1";
-         unsigned int v;
+         unsigned int v{};
          expect(glz::read_json(v, s) == glz::error_code::none);
          expect(v == 1);
       }
       {
          std::string s = "1";
-         unsigned long v;
+         unsigned long v{};
          expect(glz::read_json(v, s) == glz::error_code::none);
          expect(v == 1);
       }
       {
          std::string s = "1";
-         unsigned long long v;
+         unsigned long long v{};
          expect(glz::read_json(v, s) == glz::error_code::none);
          expect(v == 1);
       }
