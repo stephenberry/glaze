@@ -470,7 +470,7 @@ namespace glz
                            }
                         },
                         member_it->second);
-                     
+
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
