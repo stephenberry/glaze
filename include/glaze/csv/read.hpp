@@ -435,6 +435,9 @@ namespace glz
                                     ++it;
                                     break;
                                  }
+                                 else if (it == end) {
+                                    return;
+                                 }
 
                                  if (*it == ',') [[likely]] {
                                     ++it;

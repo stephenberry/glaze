@@ -117,8 +117,7 @@ v3s[1],1,2,3,4
 v3s[2],1,2,3,4)";
 
       my_struct obj{};
-      const auto e = glz::read_csv(obj, input_row);
-      expect(!glz::read_csv(obj, input_row)) << glz::format_error(e, input_row);
+      expect(!glz::read_csv(obj, input_row));
 
       expect(obj.num1[0] == 11);
       expect(obj.num2[2] == 66);
