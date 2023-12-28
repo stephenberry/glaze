@@ -53,7 +53,7 @@ namespace glz
             return micro_map2<value_t, named_member<T, I>::value...>{
                std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...};
          }
-         else if constexpr (n < 128) // don't even attempt a first character hash if we have too many keys
+         else if constexpr (n < 64) // don't even attempt a first character hash if we have too many keys
          {
             constexpr auto front_desc = single_char_hash<n>(member_names<T>);
 
