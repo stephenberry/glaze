@@ -97,36 +97,39 @@ else()
     add_subdirectory(reflection_test)
 endif()
 
-add_test(
-  NAME glaze-install_test
-  COMMAND
-  "${CMAKE_COMMAND}"
-  --install "${PROJECT_BINARY_DIR}"
-  --prefix "${CMAKE_CURRENT_BINARY_DIR}/install"
-  --config $<CONFIG>
-  --verbose
-)
+# We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_test(
+    NAME glaze-install_test
+    COMMAND
+    "${CMAKE_COMMAND}"
+    --install "${PROJECT_BINARY_DIR}"
+    --prefix "${CMAKE_CURRENT_BINARY_DIR}/install"
+    --config $<CONFIG>
+    --verbose
+    )
 
-add_test(
-  NAME find_package_test
-  COMMAND
-  "${CMAKE_CTEST_COMMAND}"
-  --verbose
-  --output-on-failure
-  --build-noclean
-  --build-project "${PROJECT_NAME}" # helps msvc when --build-target
-  --build-generator "${CMAKE_GENERATOR}"
-  --build-config $<CONFIG>
-  --build-and-test
-  "${CMAKE_CURRENT_SOURCE_DIR}/find_package"
-  "${CMAKE_CURRENT_BINARY_DIR}/find_package"
-  --build-options
-  "-Dglaze_ROOT:PATH=${CMAKE_CURRENT_BINARY_DIR}/install"
-  "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-  "-DBUILD_TESTING=ON"
-  --test-command "${CMAKE_CTEST_COMMAND}" --verbose --output-on-failure # inner ctest command
-)
+    add_test(
+    NAME find_package_test
+    COMMAND
+    "${CMAKE_CTEST_COMMAND}"
+    --verbose
+    --output-on-failure
+    --build-noclean
+    --build-project "${PROJECT_NAME}" # helps msvc when --build-target
+    --build-generator "${CMAKE_GENERATOR}"
+    --build-config $<CONFIG>
+    --build-and-test
+    "${CMAKE_CURRENT_SOURCE_DIR}/find_package"
+    "${CMAKE_CURRENT_BINARY_DIR}/find_package"
+    --build-options
+    "-Dglaze_ROOT:PATH=${CMAKE_CURRENT_BINARY_DIR}/install"
+    "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+    "-DBUILD_TESTING=ON"
+    --test-command "${CMAKE_CTEST_COMMAND}" --verbose --output-on-failure # inner ctest command
+    )
 
-set_tests_properties(glaze-install_test PROPERTIES FIXTURES_SETUP glaze-install-fixture)
-set_tests_properties(find_package_test PROPERTIES FIXTURES_REQUIRED glaze-install-fixture)
+    set_tests_properties(glaze-install_test PROPERTIES FIXTURES_SETUP glaze-install-fixture)
+    set_tests_properties(find_package_test PROPERTIES FIXTURES_REQUIRED glaze-install-fixture)
+endif()
 
