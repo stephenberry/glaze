@@ -410,6 +410,9 @@ namespace glz
                   }
 
                   match<','>(ctx, it);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
 
                   const auto& member_it = frozen_map.find(key);
 
@@ -464,6 +467,10 @@ namespace glz
                            }
                         },
                         member_it->second);
+                     
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
                   }
                   else [[unlikely]] {
                      ctx.error = error_code::unknown_key;
@@ -475,14 +482,14 @@ namespace glz
             {
                const auto keys = read_column_wise_keys(ctx, it, end);
 
-               if (bool(ctx.error)) {
+               if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
 
-               if (*it == '\n') {
+               if (*it == '\n') [[likely]] {
                   ++it; // skip new line
                }
-               else {
+               else [[unlikely]] {
                   ctx.error = error_code::syntax_error;
                   return;
                }
