@@ -410,6 +410,9 @@ namespace glz
                   }
 
                   match<','>(ctx, it);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
 
                   const auto& member_it = frozen_map.find(key);
 
@@ -431,6 +434,9 @@ namespace glz
                                  if (*it == '\n') {
                                     ++it;
                                     break;
+                                 }
+                                 else if (it == end) {
+                                    return;
                                  }
 
                                  if (*it == ',') [[likely]] {
@@ -464,6 +470,10 @@ namespace glz
                            }
                         },
                         member_it->second);
+                     
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
                   }
                   else [[unlikely]] {
                      ctx.error = error_code::unknown_key;
@@ -475,14 +485,14 @@ namespace glz
             {
                const auto keys = read_column_wise_keys(ctx, it, end);
 
-               if (bool(ctx.error)) {
+               if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
 
-               if (*it == '\n') {
+               if (*it == '\n') [[likely]] {
                   ++it; // skip new line
                }
-               else {
+               else [[unlikely]] {
                   ctx.error = error_code::syntax_error;
                   return;
                }
@@ -535,13 +545,13 @@ namespace glz
    }
 
    template <uint32_t layout = rowwise, class T, class Buffer>
-   inline auto read_csv(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline auto read_csv(T&& value, Buffer&& buffer) noexcept
    {
       return read<opts{.format = csv, .layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
    template <uint32_t layout = rowwise, class T, class Buffer>
-   inline auto read_csv(Buffer&& buffer) noexcept
+   [[nodiscard]] inline auto read_csv(Buffer&& buffer) noexcept
    {
       T value{};
       read<opts{.format = csv, .layout = rowwise}>(value, std::forward<Buffer>(buffer));
@@ -549,7 +559,7 @@ namespace glz
    }
 
    template <uint32_t layout = rowwise, class T>
-   inline parse_error read_file_csv(T& value, const sv file_name)
+   [[nodiscard]] inline parse_error read_file_csv(T& value, const sv file_name)
    {
       context ctx{};
       ctx.current_file = file_name;

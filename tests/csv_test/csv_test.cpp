@@ -48,7 +48,7 @@ suite csv_tests = [] {
 
       my_struct obj{};
 
-      glz::read_csv<glz::colwise>(obj, input_col);
+      expect(!glz::read_csv<glz::colwise>(obj, input_col));
 
       expect(obj.num1[0] == 11);
       expect(obj.num2[2] == 66);
@@ -82,7 +82,7 @@ suite csv_tests = [] {
 
       string_elements obj{};
 
-      glz::read_csv<glz::colwise>(obj, input_col);
+      expect(!glz::read_csv<glz::colwise>(obj, input_col));
 
       expect(obj.id[0] == 1);
       expect(obj.id[1] == 2);
@@ -117,7 +117,7 @@ v3s[1],1,2,3,4
 v3s[2],1,2,3,4)";
 
       my_struct obj{};
-      glz::read_csv(obj, input_row);
+      expect(!glz::read_csv(obj, input_row));
 
       expect(obj.num1[0] == 11);
       expect(obj.num2[2] == 66);
@@ -292,7 +292,7 @@ suite reflect_my_struct_test = [] {
 
       reflect_my_struct obj{};
 
-      glz::read_csv<glz::colwise>(obj, input_col);
+      expect(!glz::read_csv<glz::colwise>(obj, input_col));
 
       expect(obj.num1[0] == 11);
       expect(obj.num2[2] == 66);
@@ -326,7 +326,7 @@ v3s[1],1,2,3,4
 v3s[2],1,2,3,4)";
 
       reflect_my_struct obj{};
-      glz::read_csv(obj, input_row);
+      expect(!glz::read_csv(obj, input_row));
 
       expect(obj.num1[0] == 11);
       expect(obj.num2[2] == 66);
