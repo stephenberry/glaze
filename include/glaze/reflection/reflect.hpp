@@ -108,7 +108,14 @@ namespace glz
       template <class Tuple>
       using tuple_ptr_t = typename tuple_ptr<Tuple>::type;
       
-      template <class T>
+      // This is needed to hack a fix for MSVC evaluating wrong if constexpr branches
+      template <class T> requires (!reflectable<T>)
+      constexpr auto make_tuple_from_struct()
+      {
+         return std::tuple{};
+      }
+      
+      template <reflectable T>
       constexpr auto make_tuple_from_struct()
       {
          using V = decltype(to_tuple(std::declval<T>()));
