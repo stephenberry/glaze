@@ -86,16 +86,7 @@ add_subdirectory(json_performance)
 add_subdirectory(json_test)
 add_subdirectory(jsonrpc_test)
 add_subdirectory(lib_test)
- 
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 15.0)   
-        add_subdirectory(reflection_test)
-    else()
-        message(WARNING "Clang version is below 15.0. Skipping reflection_test.")
-    endif()
-else()
-    add_subdirectory(reflection_test)
-endif()
+add_subdirectory(reflection_test)
 
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
