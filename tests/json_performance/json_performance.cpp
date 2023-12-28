@@ -17,7 +17,7 @@ static constexpr std::string_view charset{
 inline std::string generate_string()
 {
    auto length = std::uniform_int_distribution<uint32_t>{0, 512}(gen);
-   static int32_t charsetSize = charset.size();
+   const auto charsetSize = charset.size();
    std::uniform_int_distribution<uint32_t> distribution(0, charsetSize - 1);
    std::string result{};
    result.reserve(length);
