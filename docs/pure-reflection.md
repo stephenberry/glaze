@@ -1,6 +1,6 @@
 # Pure Reflection
 
-Version 1.9.0 adds pure reflection for [aggregate initializable](https://en.cppreference.com/w/cpp/language/aggregate_initialization) structs in Clang, MSVC, and GCC.
+Since v1.9.0 Glaze supports pure reflection for [aggregate initializable](https://en.cppreference.com/w/cpp/language/aggregate_initialization) structs in Clang, MSVC, and GCC.
 
 > Aggregate initializable means:
 >
@@ -13,7 +13,6 @@ There's no need to write any `glz::meta` structures or use any macros. The refle
 the user and computed at compile time.
 
 - You can still write a `glz::meta` to customize your serialization, which will override the default reflection.
-- The `glz::meta` approach is still the most optimized. There is some work to be done to make the automatic reflection just as fast.
 
 > CUSTOMIZATION NOTE:
 >
