@@ -395,7 +395,7 @@ namespace glz
                   goto_delim<','>(it, end);
                   sv key{start, static_cast<size_t>(it - start)};
 
-                  size_t csv_index;
+                  size_t csv_index{};
 
                   const auto brace_pos = key.find('[');
                   if (brace_pos != sv::npos) {
@@ -403,7 +403,7 @@ namespace glz
                      const auto index = key.substr(brace_pos + 1, close_brace - (brace_pos + 1));
                      key = key.substr(0, brace_pos);
                      const auto [ptr, ec] = std::from_chars(index.data(), index.data() + index.size(), csv_index);
-                     if (ec != std::errc()) {
+                     if (ec != std::errc()) [[unlikely]] {
                         ctx.error = error_code::syntax_error;
                         return;
                      }
@@ -433,10 +433,10 @@ namespace glz
                                     break;
                                  }
 
-                                 if (*it == ',') {
+                                 if (*it == ',') [[likely]] {
                                     ++it;
                                  }
-                                 else {
+                                 else [[unlikely]] {
                                     ctx.error = error_code::syntax_error;
                                     return;
                                  }
@@ -453,10 +453,10 @@ namespace glz
                                     break;
                                  }
 
-                                 if (*it == ',') {
+                                 if (*it == ',') [[likely]] {
                                     ++it;
                                  }
-                                 else {
+                                 else [[unlikely]] {
                                     ctx.error = error_code::syntax_error;
                                     return;
                                  }

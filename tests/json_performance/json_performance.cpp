@@ -17,7 +17,7 @@ static constexpr std::string_view charset{
 inline std::string generate_string()
 {
    auto length = std::uniform_int_distribution<uint32_t>{0, 512}(gen);
-   static int32_t charsetSize = charset.size();
+   const auto charsetSize = charset.size();
    std::uniform_int_distribution<uint32_t> distribution(0, charsetSize - 1);
    std::string result{};
    result.reserve(length);
@@ -29,7 +29,7 @@ inline std::string generate_string()
 
 suite string_performance = [] {
    "string_performance"_test = [] {
-      constexpr auto n = 100; // make this number bigger when profiling
+      constexpr size_t n = 100; // make this number bigger when profiling
 
       std::vector<std::string> vec;
       vec.reserve(n);

@@ -600,7 +600,7 @@ namespace glz::detail
                   ++it;
                   continue;
                }
-               else if ('u') {
+               else if (*it == 'u') {
                   ++it;
                   if ((end - it) < 4) [[unlikely]] {
                      ctx.error = error_code::syntax_error;

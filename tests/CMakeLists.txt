@@ -36,7 +36,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 #    endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_common INTERFACE /GR- /bigobj) #/fsanitize=address
-    target_compile_options(glz_test_common INTERFACE /W4 /wd4459)
+    target_compile_options(glz_test_common INTERFACE /W4 /wd4459 /wd4805)
 endif()
 
 add_library(glz_test23_common INTERFACE)
@@ -56,7 +56,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 #    endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test23_common INTERFACE /GR- /bigobj) #/fsanitize=address
-    target_compile_options(glz_test23_common INTERFACE /W4 /wd4459)
+    target_compile_options(glz_test23_common INTERFACE /W4 /wd4459 /wd4805)
 endif()
 
 add_library(glz_test_exceptions INTERFACE)
@@ -72,7 +72,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_exceptions INTERFACE /GR- /bigobj) #/fsanitize=address
-    target_compile_options(glz_test_exceptions INTERFACE /W4 /wd4459)
+    target_compile_options(glz_test_exceptions INTERFACE /W4 /wd4459 /wd4805)
 endif()
 
 add_subdirectory(api_test)
@@ -86,47 +86,41 @@ add_subdirectory(json_performance)
 add_subdirectory(json_test)
 add_subdirectory(jsonrpc_test)
 add_subdirectory(lib_test)
- 
-if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 15.0)   
-        add_subdirectory(reflection_test)
-    else()
-        message(WARNING "Clang version is below 15.0. Skipping reflection_test.")
-    endif()
-else()
-    add_subdirectory(reflection_test)
+add_subdirectory(reflection_test)
+
+# We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_test(
+    NAME glaze-install_test
+    COMMAND
+    "${CMAKE_COMMAND}"
+    --install "${PROJECT_BINARY_DIR}"
+    --prefix "${CMAKE_CURRENT_BINARY_DIR}/install"
+    --config $<CONFIG>
+    --verbose
+    )
+
+    add_test(
+    NAME find_package_test
+    COMMAND
+    "${CMAKE_CTEST_COMMAND}"
+    --verbose
+    --output-on-failure
+    --build-noclean
+    --build-project "${PROJECT_NAME}" # helps msvc when --build-target
+    --build-generator "${CMAKE_GENERATOR}"
+    --build-config $<CONFIG>
+    --build-and-test
+    "${CMAKE_CURRENT_SOURCE_DIR}/find_package"
+    "${CMAKE_CURRENT_BINARY_DIR}/find_package"
+    --build-options
+    "-Dglaze_ROOT:PATH=${CMAKE_CURRENT_BINARY_DIR}/install"
+    "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
+    "-DBUILD_TESTING=ON"
+    --test-command "${CMAKE_CTEST_COMMAND}" --verbose --output-on-failure # inner ctest command
+    )
+
+    set_tests_properties(glaze-install_test PROPERTIES FIXTURES_SETUP glaze-install-fixture)
+    set_tests_properties(find_package_test PROPERTIES FIXTURES_REQUIRED glaze-install-fixture)
 endif()
-
-add_test(
-  NAME glaze-install_test
-  COMMAND
-  "${CMAKE_COMMAND}"
-  --install "${PROJECT_BINARY_DIR}"
-  --prefix "${CMAKE_CURRENT_BINARY_DIR}/install"
-  --config $<CONFIG>
-  --verbose
-)
-
-add_test(
-  NAME find_package_test
-  COMMAND
-  "${CMAKE_CTEST_COMMAND}"
-  --verbose
-  --output-on-failure
-  --build-noclean
-  --build-project "${PROJECT_NAME}" # helps msvc when --build-target
-  --build-generator "${CMAKE_GENERATOR}"
-  --build-config $<CONFIG>
-  --build-and-test
-  "${CMAKE_CURRENT_SOURCE_DIR}/find_package"
-  "${CMAKE_CURRENT_BINARY_DIR}/find_package"
-  --build-options
-  "-Dglaze_ROOT:PATH=${CMAKE_CURRENT_BINARY_DIR}/install"
-  "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-  "-DBUILD_TESTING=ON"
-  --test-command "${CMAKE_CTEST_COMMAND}" --verbose --output-on-failure # inner ctest command
-)
-
-set_tests_properties(glaze-install_test PROPERTIES FIXTURES_SETUP glaze-install-fixture)
-set_tests_properties(find_package_test PROPERTIES FIXTURES_REQUIRED glaze-install-fixture)
 
