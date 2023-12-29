@@ -1251,17 +1251,17 @@ namespace glz
             const auto file_path = relativize_if_not_absolute(std::filesystem::path(ctx.current_file).parent_path(),
                                                               std::filesystem::path{path});
 
-            std::string& buffer = string_buffer();
-            std::string string_file_path = file_path.string();
+            std::string& buffer = path;
+            const auto string_file_path = file_path.string();
             const auto ec = file_to_buffer(buffer, string_file_path);
 
-            if (bool(ec)) {
+            if (bool(ec)) [[unlikely]] {
                ctx.error = ec;
                return;
             }
 
             const auto current_file = ctx.current_file;
-            ctx.current_file = file_path.string();
+            ctx.current_file = string_file_path;
 
             std::ignore = glz::read<Opts>(value.value, buffer, ctx);
             if (bool(ctx.error)) [[unlikely]]
