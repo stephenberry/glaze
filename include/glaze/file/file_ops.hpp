@@ -26,14 +26,14 @@ namespace glz
 
       return {};
    }
-   
+
    template <class T>
    [[nodiscard]] error_code file_to_buffer(T& buffer, const std::string& file_name) noexcept
    {
       std::ifstream file(file_name, std::ios::binary);
       return file_to_buffer(buffer, file);
    }
-   
+
    template <class T>
    [[nodiscard]] error_code file_to_buffer(T& buffer, const std::string_view file_name) noexcept
    {

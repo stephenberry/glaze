@@ -23,6 +23,7 @@
 #include "boost/ut.hpp"
 #include "glaze/api/impl.hpp"
 #include "glaze/core/macros.hpp"
+#include "glaze/file/hostname_include.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/prettify.hpp"
 #include "glaze/json/ptr.hpp"
@@ -31,7 +32,6 @@
 #include "glaze/json/write.hpp"
 #include "glaze/record/recorder.hpp"
 #include "glaze/util/progress_bar.hpp"
-#include "glaze/file/hostname_include.hpp"
 
 using namespace boost::ut;
 
@@ -6447,10 +6447,10 @@ struct glz::meta<hostname_include_struct>
 
 suite hostname_include_test = [] {
    hostname_include_struct obj{};
-   
+
    glz::context ctx{};
    const auto hostname = glz::detail::get_hostname(ctx);
-   
+
    std::string file_name = "../{}_config.json";
    glz::detail::replace_first_braces(file_name, hostname);
 

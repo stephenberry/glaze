@@ -128,7 +128,7 @@ namespace glz
    struct includer
    {
       T& value;
-      
+
       static constexpr auto glaze_includer = true;
    };
 
@@ -142,14 +142,12 @@ namespace glz
    struct file_include
    {
       constexpr decltype(auto) operator()(auto&& value) const { return includer<std::decay_t<decltype(value)>>{value}; }
-      
+
       static constexpr auto glaze_includer = true;
    };
-   
+
    template <class T>
-   concept is_includer = requires(T t) {
-      T::glaze_includer;
-   };
+   concept is_includer = requires(T t) { T::glaze_includer; };
 
    template <class T>
    concept range = requires(T& t) {

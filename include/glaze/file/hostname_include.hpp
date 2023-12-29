@@ -20,11 +20,11 @@ namespace glz
       struct hostname_includer
       {
          T& value;
-         
+
          static constexpr auto glaze_includer = true;
       };
    }
-   
+
    template <class T>
    struct meta<detail::hostname_includer<T>>
    {
@@ -35,45 +35,49 @@ namespace glz
    // This is useful for configuration files that should be specific to a host
    struct hostname_include
    {
-      constexpr decltype(auto) operator()(auto&& value) const { return detail::hostname_includer<std::decay_t<decltype(value)>>{value}; }
-      
+      constexpr decltype(auto) operator()(auto&& value) const
+      {
+         return detail::hostname_includer<std::decay_t<decltype(value)>>{value};
+      }
+
       static constexpr auto glaze_includer = true;
    };
-   
+
    namespace detail
    {
-      inline void replace_first_braces(std::string& original, const std::string& replacement) noexcept {
+      inline void replace_first_braces(std::string& original, const std::string& replacement) noexcept
+      {
          static constexpr std::string_view braces = "{}";
-         
+
          if (size_t pos = original.find(braces); pos != std::string::npos) {
             original.replace(pos, braces.size(), replacement);
          }
       }
-      
+
       inline std::string get_hostname(context& ctx) noexcept
       {
          char hostname[256]{};
 
-      #ifdef _WIN32
-          WSADATA wsaData;
-          if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-             ctx.error = error_code::hostname_failure;
-             return {};
-          }
-      #endif
+#ifdef _WIN32
+         WSADATA wsaData;
+         if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+            ctx.error = error_code::hostname_failure;
+            return {};
+         }
+#endif
 
-          if (gethostname(hostname, sizeof(hostname))) {
-             ctx.error = error_code::hostname_failure;
-             return {};
-          }
+         if (gethostname(hostname, sizeof(hostname))) {
+            ctx.error = error_code::hostname_failure;
+            return {};
+         }
 
-      #ifdef _WIN32
-          WSACleanup();
-      #endif
-         
+#ifdef _WIN32
+         WSACleanup();
+#endif
+
          return {hostname};
       }
-      
+
       template <class T>
       struct from_json<hostname_includer<T>>
       {
@@ -84,7 +88,7 @@ namespace glz
             read<json>::op<Opts>(path, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            
+
             replace_first_braces(path, get_hostname(ctx));
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -111,7 +115,7 @@ namespace glz
             ctx.current_file = current_file;
          }
       };
-      
+
       template <class T>
       struct to_json<hostname_includer<T>>
       {
