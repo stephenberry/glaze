@@ -1127,7 +1127,8 @@ struct glz::meta<glz::error_code>
                 "elements_not_convertible_to_design", glz::error_code::elements_not_convertible_to_design, //
                 "unknown_distribution", glz::error_code::unknown_distribution, //
                 "invalid_distribution_elements", glz::error_code::invalid_distribution_elements, //
-                "missing_key", glz::error_code::missing_key //
+                "missing_key", glz::error_code::missing_key, //
+                "hostname_failure", glz::error_code::hostname_failure //
       );
 };
 
