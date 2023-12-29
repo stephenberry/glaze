@@ -916,7 +916,7 @@ namespace glz
                }
 
                // skip
-               if constexpr (std::is_same_v<val_t, includer<V>> || std::is_same_v<val_t, hidden> ||
+               if constexpr (is_includer<val_t> || std::is_same_v<val_t, hidden> ||
                              std::same_as<val_t, skip>) {
                   return;
                }
@@ -1088,7 +1088,7 @@ namespace glz
                }
 
                // skip file_include
-               if constexpr (std::is_same_v<val_t, includer<std::decay_t<V>>>) {
+               if constexpr (is_includer<val_t>) {
                   return;
                }
                else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
