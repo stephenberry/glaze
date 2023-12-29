@@ -31,6 +31,7 @@
 #include "glaze/json/write.hpp"
 #include "glaze/record/recorder.hpp"
 #include "glaze/util/progress_bar.hpp"
+#include "glaze/file/hostname_include.hpp"
 
 using namespace boost::ut;
 
@@ -6429,6 +6430,48 @@ suite custom_object_variant_test = [] {
 
       expect(data == glz::write<prettify>(objects));
    };
+};
+
+struct hostname_include_struct
+{
+   std::string str = "Hello";
+   int i = 55;
+};
+
+template <>
+struct glz::meta<hostname_include_struct>
+{
+   using T = hostname_include_struct;
+   static constexpr auto value = object("#hostname_include", glz::hostname_include{}, "str", &T::str, "i", &T::i);
+};
+
+suite hostname_include_test = [] {
+   hostname_include_struct obj{};
+   
+   glz::context ctx{};
+   const auto hostname = glz::detail::get_hostname(ctx);
+   
+   std::string file_name = "../{}_config.json";
+   glz::detail::replace_first_braces(file_name, hostname);
+
+   expect(glz::write_file_json(obj, file_name, std::string{}) == glz::error_code::none);
+
+   obj.str = "";
+   obj.i = 0;
+
+   std::string s = R"({"#hostname_include": "../{}_config.json", "i": 100})";
+   const auto ec = glz::read_json(obj, s);
+   expect(ec == glz::error_code::none) << glz::format_error(ec, s);
+
+   expect(obj.str == "Hello") << obj.str;
+   expect(obj.i == 100) << obj.i;
+
+   obj.str = "";
+
+   std::string buffer{};
+   glz::read_file_json(obj, file_name, buffer);
+   expect(obj.str == "Hello") << obj.str;
+   expect(obj.i == 55) << obj.i;
 };
 
 int main()
