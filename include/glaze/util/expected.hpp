@@ -49,11 +49,11 @@ namespace glz
 }
 
 #ifdef __has_include
-   #if __has_include(<expected>)
-      #include <expected>
-   #elif __has_include(<experimental/expected>)
-      #include <experimental/expected>
-   #endif
+#if __has_include(<expected>)
+#include <expected>
+#elif __has_include(<experimental/expected>)
+#include <experimental/expected>
+#endif
 #endif
 
 #if defined(__cpp_lib_expected)
