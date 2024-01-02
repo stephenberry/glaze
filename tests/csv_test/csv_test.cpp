@@ -445,22 +445,24 @@ suite unicode_keys_test = [] {
 
 struct FishRecord
 {
-     float Duration;
-     float FishSize;
-     std::uint8_t Amount;
+    std::vector<float> Duration;
+    std::vector<float> FishSize;
+    std::vector<std::uint8_t> Amount;
 
-     std::string FishBaitName;
-     std::string SurfaceSlapFishName;
-     std::string MoochFishName;
-     std::string BuffName;
-     std::string FishingSpotPlaceName;
+    std::vector<std::string> FishBaitName;
+    std::vector<std::string> SurfaceSlapFishName;
+    std::vector<std::string> MoochFishName;
+    std::vector<std::string> BuffName;
+    std::vector<std::string> FishingSpotPlaceName;
 
-     std::string BiteTypeName;
-     std::string CaughtFishName;
-     std::string HooksetName;
+    std::vector<std::string> BiteTypeName;
+    std::vector<std::string> CaughtFishName;
+    std::vector<std::string> HooksetName;
+    std::vector<std::string> IsLargeSizeName;
+    std::vector<std::string> IsCollectableName;
 };
 
-template <>
+/*template <>
 struct glz::meta<FishRecord>
 {
     using T = FishRecord;
@@ -474,17 +476,19 @@ struct glz::meta<FishRecord>
                                          "Buff", &T::BuffName, //
                                          "钓场", &T::FishingSpotPlaceName, //
                                          "咬钩类型", &T::BiteTypeName, //
-                                         "提钩类型", &T::HooksetName //
+                                         "提钩类型", &T::HooksetName, //
+                                         "大尺寸", &T::IsLargeSizeName, //
+                                         "收藏品", &T::IsCollectableName //
     );
-};
+};*/
 
 suite fish_record = [] {
    "fish_record"_test = [] {
-      std::vector<FishRecord> obj{FishRecord{}};
+      FishRecord obj{};
       std::string buffer{};
-      glz::write_csv(obj, buffer);
+      glz::write_csv<glz::colwise>(obj, buffer);
 
-      expect(!glz::read_csv(obj, buffer));
+      expect(!glz::read_csv<glz::colwise>(obj, buffer));
    };
 };
 

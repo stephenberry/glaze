@@ -352,17 +352,17 @@ namespace glz
       };
    }
 
-   template <class T, class Buffer>
+   template <uint32_t layout = rowwise, class T, class Buffer>
    GLZ_ALWAYS_INLINE auto write_csv(T&& value, Buffer&& buffer) noexcept
    {
-      return write<opts{.format = csv}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<opts{.format = csv, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <class T>
+   template <uint32_t layout = rowwise, class T>
    GLZ_ALWAYS_INLINE auto write_csv(T&& value) noexcept
    {
       std::string buffer{};
-      write<opts{.format = csv}>(std::forward<T>(value), buffer);
+      write<opts{.format = csv, .layout = layout}>(std::forward<T>(value), buffer);
       return buffer;
    }
 
