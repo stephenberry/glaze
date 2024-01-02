@@ -910,6 +910,6 @@ namespace glz
    [[nodiscard]] inline parse_error read_file_binary_untagged(T& value, const std::string& file_name,
                                                               auto&& buffer) noexcept
    {
-      return read_file_binary<opt_on<Opts, &opts::structs_as_arrays>()>(value, file_name, buffer);
+      return read_file_binary<opt_true<Opts, &opts::structs_as_arrays>>(value, file_name, buffer);
    }
 }
