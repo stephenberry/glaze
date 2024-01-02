@@ -525,7 +525,31 @@ namespace glz
          requires glaze_object_t<T> || reflectable<T>
       struct to_binary<T> final
       {
-         template <auto Opts, class... Args>
+         template <auto Opts, class... Args> requires (Opts.structs_as_arrays == true)
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            if constexpr (reflectable<T>) {
+               const auto t = to_tuple(value);
+               write<binary>::op<Opts>(t, ctx, args...);
+            }
+            else {
+               dump<std::byte(tag::generic_array)>(args...);
+               
+               using V = std::decay_t<T>;
+               static constexpr auto N = std::tuple_size_v<meta_t<V>>;
+               dump_compressed_int<N>(args...);
+               
+               for_each<N>([&](auto I) {
+                  static constexpr auto item = get<I>(meta_v<V>);
+                  using T0 = std::decay_t<decltype(get<0>(item))>;
+                  static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+                  static constexpr auto member_index = use_reflection ? 0 : 1;
+                  write<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, args...);
+               });
+            }
+         }
+         
+         template <auto Opts, class... Args> requires (Opts.structs_as_arrays == false)
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             constexpr uint8_t type = 0; // string key

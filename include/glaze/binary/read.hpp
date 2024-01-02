@@ -722,7 +722,41 @@ namespace glz
          requires glaze_object_t<T> || reflectable<T>
       struct from_binary<T> final
       {
-         template <auto Opts>
+         template <auto Opts> requires (Opts.structs_as_arrays == true)
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            if constexpr (reflectable<T>) {
+               auto t = to_tuple(value);
+               read<binary>::op<Opts>(t, ctx, it, end);
+            }
+            else {
+               const auto tag = uint8_t(*it);
+               if (tag != tag::generic_array) [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+               ++it;
+
+               skip_compressed_int(it, end);
+
+               using V = std::decay_t<T>;
+               for_each<std::tuple_size_v<V>>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+               
+               using V = std::decay_t<T>;
+               static constexpr auto N = std::tuple_size_v<meta_t<V>>;
+               skip_compressed_int(it, end);
+               
+               for_each<N>([&](auto I) {
+                  static constexpr auto item = get<I>(meta_v<V>);
+                  using T0 = std::decay_t<decltype(get<0>(item))>;
+                  static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+                  static constexpr auto member_index = use_reflection ? 0 : 1;
+                  read<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, it, end);
+               });
+            }
+         }
+         
+         template <auto Opts> requires (Opts.structs_as_arrays == false)
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr uint8_t type = 0; // string key
