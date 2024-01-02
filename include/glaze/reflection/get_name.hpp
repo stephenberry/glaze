@@ -131,7 +131,7 @@ namespace glz
       str = str.substr(str.find("->") + 2);
       return str.substr(0, str.find(">"));
    }
-   
+
 #if defined(__clang__)
    inline constexpr auto pretty_function_tail = "]";
 #elif defined(__GNUC__) || defined(__GNUG__)
