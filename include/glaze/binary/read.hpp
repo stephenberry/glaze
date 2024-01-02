@@ -722,7 +722,8 @@ namespace glz
          requires glaze_object_t<T> || reflectable<T>
       struct from_binary<T> final
       {
-         template <auto Opts> requires (Opts.structs_as_arrays == true)
+         template <auto Opts>
+            requires(Opts.structs_as_arrays == true)
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (reflectable<T>) {
@@ -736,11 +737,11 @@ namespace glz
                   return;
                }
                ++it;
-               
+
                using V = std::decay_t<T>;
                static constexpr auto N = std::tuple_size_v<meta_t<V>>;
                skip_compressed_int(it, end);
-               
+
                for_each<N>([&](auto I) {
                   static constexpr auto item = get<I>(meta_v<V>);
                   using T0 = std::decay_t<decltype(get<0>(item))>;
@@ -750,8 +751,9 @@ namespace glz
                });
             }
          }
-         
-         template <auto Opts> requires (Opts.structs_as_arrays == false)
+
+         template <auto Opts>
+            requires(Opts.structs_as_arrays == false)
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr uint8_t type = 0; // string key
@@ -885,11 +887,12 @@ namespace glz
 
       return read<set_binary<Opts>()>(value, buffer, ctx);
    }
-   
+
    template <class T, class Buffer>
    [[nodiscard]] inline parse_error read_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
-      return read<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return read<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value),
+                                                                     std::forward<Buffer>(buffer));
    }
 
    template <class T, class Buffer>
@@ -902,9 +905,10 @@ namespace glz
       }
       return value;
    }
-   
+
    template <opts Opts = opts{}, class T>
-   [[nodiscard]] inline parse_error read_file_binary_untagged(T& value, const std::string& file_name, auto&& buffer) noexcept
+   [[nodiscard]] inline parse_error read_file_binary_untagged(T& value, const std::string& file_name,
+                                                              auto&& buffer) noexcept
    {
       return read_file_binary<opt_on<Opts, &opts::structs_as_arrays>()>(value, file_name, buffer);
    }

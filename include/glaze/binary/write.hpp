@@ -525,7 +525,8 @@ namespace glz
          requires glaze_object_t<T> || reflectable<T>
       struct to_binary<T> final
       {
-         template <auto Opts, class... Args> requires (Opts.structs_as_arrays == true)
+         template <auto Opts, class... Args>
+            requires(Opts.structs_as_arrays == true)
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if constexpr (reflectable<T>) {
@@ -534,11 +535,11 @@ namespace glz
             }
             else {
                dump<std::byte(tag::generic_array)>(args...);
-               
+
                using V = std::decay_t<T>;
                static constexpr auto N = std::tuple_size_v<meta_t<V>>;
                dump_compressed_int<N>(args...);
-               
+
                for_each<N>([&](auto I) {
                   static constexpr auto item = get<I>(meta_v<V>);
                   using T0 = std::decay_t<decltype(get<0>(item))>;
@@ -548,8 +549,9 @@ namespace glz
                });
             }
          }
-         
-         template <auto Opts, class... Args> requires (Opts.structs_as_arrays == false)
+
+         template <auto Opts, class... Args>
+            requires(Opts.structs_as_arrays == false)
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             constexpr uint8_t type = 0; // string key
@@ -748,7 +750,7 @@ namespace glz
    [[nodiscard]] inline write_error write_file_binary(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
-      
+
       write<set_binary<Opts>()>(std::forward<T>(value), buffer);
 
       std::ofstream file(file_name, std::ios::binary);
@@ -762,7 +764,7 @@ namespace glz
 
       return {};
    }
-   
+
    template <class T, class Buffer>
    inline void write_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
@@ -776,9 +778,10 @@ namespace glz
       write<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value), buffer);
       return buffer;
    }
-   
+
    template <opts Opts = opts{}, class T>
-   [[nodiscard]] inline write_error write_file_binary_untagged(T&& value, const std::string& file_name, auto&& buffer) noexcept
+   [[nodiscard]] inline write_error write_file_binary_untagged(T&& value, const std::string& file_name,
+                                                               auto&& buffer) noexcept
    {
       return write_file_binary<opt_on<Opts, &opts::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);
    }
