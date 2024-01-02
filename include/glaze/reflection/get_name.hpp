@@ -159,7 +159,7 @@ namespace glz
 
       size_t i = str.find("&");
       str = str.substr(i + 1);
-      i = str.find("::");
+      i = str.rfind("::");
       str = str.substr(i + 2);
       i = str.find(pretty_function_tail);
       str = str.substr(0, i);
