@@ -136,6 +136,13 @@ namespace glz
 
       return str;
    }
+   
+#if defined(__clang__)
+   inline constexpr auto pretty_function_tail = "]";
+#elif defined(__GNUC__) || defined(__GNUG__)
+   inline constexpr auto pretty_function_tail = ";";
+#elif defined(_MSC_VER)
+#endif
 
    template <auto P>
       requires(std::is_member_object_pointer_v<decltype(P)>)
@@ -149,8 +156,9 @@ namespace glz
       // TODO: Use std::source_location when deprecating clang 14
       // std::string_view str = std::source_location::current().function_name();
       std::string_view str = GLZ_PRETTY_FUNCTION;
-      str = str.substr(str.rfind("::") + 2);
-      return str.substr(0, str.size() - 1);
+      str = str.substr(str.find("= &") + 3);
+      str = str.substr(0, str.find(pretty_function_tail));
+      return str.substr(str.rfind("::") + 2);
 #endif
    }
 }
