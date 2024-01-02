@@ -1,4 +1,4 @@
-# Tagged Binary Messages (BEVE)
+# Binary Format (BEVE)
 
 Glaze provides a binary format to send and receive messages like JSON, but with significantly improved performance and message size savings.
 

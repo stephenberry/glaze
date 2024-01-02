@@ -23,7 +23,7 @@ Glaze also supports:
 - Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
 - [Handle unknown keys](./docs/unknown-keys.md) in a fast and flexible manner
 - Direct memory access through JSON pointer syntax
-- [Tagged binary spec](./docs/binary.md) through the same API for maximum performance
+- [Binary format](./docs/binary.md) through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
 - If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](./docs/exceptions.md)
 - No runtime type information necessary (compiles with `-fno-rtti`)
