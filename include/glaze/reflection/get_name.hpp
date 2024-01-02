@@ -128,13 +128,8 @@ namespace glz
    consteval std::string_view get_name_msvc() noexcept
    {
       std::string_view str = GLZ_PRETTY_FUNCTION;
-
-      size_t i = str.find("->");
-      str = str.substr(i + 2);
-      i = str.find(">");
-      str = str.substr(0, i);
-
-      return str;
+      str = str.substr(str.find("->") + 2);
+      return str.substr(0, str.find(">"));
    }
 
 #if defined(__clang__)
@@ -156,15 +151,9 @@ namespace glz
       // TODO: Use std::source_location when deprecating clang 14
       // std::string_view str = std::source_location::current().function_name();
       std::string_view str = GLZ_PRETTY_FUNCTION;
-
-      size_t i = str.find("&");
-      str = str.substr(i + 1);
-      i = str.find("::");
-      str = str.substr(i + 2);
-      i = str.find(pretty_function_tail);
-      str = str.substr(0, i);
-
-      return str;
+      str = str.substr(str.find("&") + 1);
+      str = str.substr(0, str.find(pretty_function_tail));
+      return str.substr(str.rfind("::") + 2);
 #endif
    }
 }

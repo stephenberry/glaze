@@ -6474,6 +6474,48 @@ suite hostname_include_test = [] {
    expect(obj.i == 55) << obj.i;
 };
 
+enum class some_enum {
+   first,
+   second,
+};
+
+struct enum_glaze_struct
+{
+   some_enum e{};
+   int i{};
+
+   struct glaze
+   {
+      using T = enum_glaze_struct;
+      static constexpr auto value = glz::object(&T::e, &T::i);
+   };
+};
+
+template <some_enum E, class DataType>
+struct wrapper_struct
+{
+   some_enum type{E};
+   DataType data{};
+
+   struct glaze
+   {
+      using B = wrapper_struct;
+      static constexpr auto value = glz::object(&B::type, &B::data);
+   };
+};
+
+suite enum_in_object_reflection_test = [] {
+   "enum_in_object_reflection"_test = [] {
+      enum_glaze_struct obj{};
+      expect(glz::write_json(obj) == R"({"e":0,"i":0})");
+   };
+
+   "enum_in_object_reflection2"_test = [] {
+      wrapper_struct<some_enum::second, int> obj{};
+      expect(glz::write_json(obj) == R"({"type":1,"data":0})");
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors

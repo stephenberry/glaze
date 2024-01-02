@@ -1356,7 +1356,7 @@ suite example_reflection_without_keys_test = [] {
       expect(obj.hello == "happy");
    };
 
-   "example_reflection_without_keys"_test = [] {
+   "example_reflection_without_keys_function_wrappers"_test = [] {
       std::string without_keys;
       my_example obj{.i = 55, .d = 3.14, .hello = "happy"};
       glz::write_binary_untagged(obj, without_keys);
