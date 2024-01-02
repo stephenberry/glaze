@@ -1337,7 +1337,7 @@ suite example_reflection_test = [] {
 suite example_reflection_without_keys_test = [] {
    "example_reflection_without_keys"_test = [] {
       std::string without_keys;
-      my_example obj{.i = 55, .d = 3.14};
+      my_example obj{.i = 55, .d = 3.14, .hello = "happy"};
       constexpr glz::opts options{.format = glz::binary, .structs_as_arrays = true};
       glz::write<options>(obj, without_keys);
       
@@ -1353,13 +1353,14 @@ suite example_reflection_without_keys_test = [] {
       
       expect(obj.i == 55);
       expect(obj.d == 3.14);
+      expect(obj.hello == "happy");
    };
 };
 
 suite my_struct_without_keys_test = [] {
    "my_struct_without_keys"_test = [] {
       std::string without_keys;
-      my_struct obj{.i = 55, .d = 3.14};
+      my_struct obj{.i = 55, .d = 3.14, .hello = "happy"};
       constexpr glz::opts options{.format = glz::binary, .structs_as_arrays = true};
       glz::write<options>(obj, without_keys);
       
@@ -1375,6 +1376,7 @@ suite my_struct_without_keys_test = [] {
       
       expect(obj.i == 55);
       expect(obj.d == 3.14);
+      expect(obj.hello == "happy");
    };
 };
 
