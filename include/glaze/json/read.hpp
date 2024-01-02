@@ -2297,6 +2297,6 @@ namespace glz
          return {ec};
       }
 
-      return read<Opts>(value, buffer, ctx);
+      return read<set_json<Opts>()>(value, buffer, ctx);
    }
 }
