@@ -631,13 +631,13 @@ namespace glz
    }
 
    template <class T, class Buffer>
-   inline void write_binary(T&& value, Buffer&& buffer)
+   inline void write_binary(T&& value, Buffer&& buffer) noexcept
    {
       write<opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
-   inline auto write_binary(T&& value)
+   inline auto write_binary(T&& value) noexcept
    {
       std::string buffer{};
       write<opts{.format = binary}>(std::forward<T>(value), buffer);
@@ -738,7 +738,7 @@ namespace glz
    }
 
    template <auto& Partial, class T, class Buffer>
-   inline auto write_binary(T&& value, Buffer&& buffer)
+   inline auto write_binary(T&& value, Buffer&& buffer) noexcept
    {
       return write<Partial, opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
@@ -761,5 +761,25 @@ namespace glz
       }
 
       return {};
+   }
+   
+   template <class T, class Buffer>
+   inline void write_binary_untagged(T&& value, Buffer&& buffer) noexcept
+   {
+      write<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+   }
+
+   template <class T>
+   inline auto write_binary_untagged(T&& value) noexcept
+   {
+      std::string buffer{};
+      write<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value), buffer);
+      return buffer;
+   }
+   
+   template <opts Opts = opts{}, class T>
+   [[nodiscard]] inline write_error write_file_binary_untagged(T&& value, const std::string& file_name, auto&& buffer) noexcept
+   {
+      return write_file_binary<opt_on<Opts, &opts::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);
    }
 }

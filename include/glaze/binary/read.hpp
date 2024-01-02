@@ -885,4 +885,27 @@ namespace glz
 
       return read<set_binary<Opts>()>(value, buffer, ctx);
    }
+   
+   template <class T, class Buffer>
+   [[nodiscard]] inline parse_error read_binary_untagged(T&& value, Buffer&& buffer) noexcept
+   {
+      return read<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+   }
+
+   template <class T, class Buffer>
+   [[nodiscard]] inline expected<T, parse_error> read_binary_untagged(Buffer&& buffer) noexcept
+   {
+      T value{};
+      const auto pe = read<opts{.format = binary, .structs_as_arrays = true}>(value, std::forward<Buffer>(buffer));
+      if (pe) [[unlikely]] {
+         return unexpected(pe);
+      }
+      return value;
+   }
+   
+   template <opts Opts = opts{}, class T>
+   [[nodiscard]] inline parse_error read_file_binary_untagged(T& value, const std::string& file_name, auto&& buffer) noexcept
+   {
+      return read_file_binary<opt_on<Opts, &opts::structs_as_arrays>()>(value, file_name, buffer);
+   }
 }
