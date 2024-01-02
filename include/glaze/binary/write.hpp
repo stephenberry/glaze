@@ -783,6 +783,6 @@ namespace glz
    [[nodiscard]] inline write_error write_file_binary_untagged(T&& value, const std::string& file_name,
                                                                auto&& buffer) noexcept
    {
-      return write_file_binary<opt_on<Opts, &opts::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);
+      return write_file_binary<opt_true<Opts, &opts::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);
    }
 }
