@@ -6474,6 +6474,72 @@ suite hostname_include_test = [] {
    expect(obj.i == 55) << obj.i;
 };
 
+struct unicode_keys
+{
+    float field1;
+    float field2;
+    std::uint8_t field3;
+    std::string field4;
+    std::string field5;
+    std::string field6;
+    std::string field7;
+};
+
+// example 1
+template <>
+struct glz::meta<unicode_keys>
+{
+    using T = unicode_keys;
+    static constexpr auto value = object("alpha",&T::field1,
+                                         "bravo",&T::field2,
+                                         "charlie",&T::field3,
+                                         "♥️",&T::field4,
+                                         "delta",&T::field5,
+                                         "echo",&T::field6, // wont compile if there are any unicode keys after this
+                                         "😄",&T::field7 // fails
+                                      // "foxtrot",&T::field7 // success
+    );
+};
+
+struct unicode_keys2
+{
+    float field1;
+    float field2;
+    std::uint8_t field3;
+    std::string field4;
+    std::string field5;
+    std::string field6;
+    std::string field7;
+};
+
+template <>
+struct glz::meta<unicode_keys2>
+{
+    using T = unicode_keys2;
+    static constexpr auto value = object("😄",&T::field1,
+                                         "💔",&T::field2, // wont compile if there are any keys(both unicode and non-unicode) after this (order doesn't matter)
+                                         "alpha",&T::field3
+    );
+};
+
+suite unicode_keys_test = [] {
+   "unicode_keys"_test = [] {
+      unicode_keys obj{};
+      std::string buffer{};
+      glz::write_json(obj, buffer);
+
+      expect(!glz::read_json(obj, buffer));
+   };
+   
+   "unicode_keys2"_test = [] {
+      unicode_keys2 obj{};
+      std::string buffer{};
+      glz::write_json(obj, buffer);
+
+      expect(!glz::read_json(obj, buffer));
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
