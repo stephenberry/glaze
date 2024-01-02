@@ -129,4 +129,20 @@ namespace glz
       ret.write_unknown = true;
       return ret;
    }
+   
+   template <opts Opts>
+   constexpr auto set_binary()
+   {
+      opts ret = Opts;
+      ret.format = binary;
+      return ret;
+   }
+   
+   template <opts Opts>
+   constexpr auto set_json()
+   {
+      opts ret = Opts;
+      ret.format = json;
+      return ret;
+   }
 }

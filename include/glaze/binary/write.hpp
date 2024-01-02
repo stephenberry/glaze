@@ -744,12 +744,12 @@ namespace glz
    }
 
    // std::string file_name needed for std::ofstream
-   template <class T>
+   template <opts Opts = opts{}, class T>
    [[nodiscard]] inline write_error write_file_binary(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
-
-      write<opts{.format = binary}>(std::forward<T>(value), buffer);
+      
+      write<set_binary<Opts>()>(std::forward<T>(value), buffer);
 
       std::ofstream file(file_name, std::ios::binary);
 
