@@ -871,7 +871,7 @@ namespace glz
       return value;
    }
 
-   template <class T>
+   template <opts Opts = opts{}, class T>
    [[nodiscard]] inline parse_error read_file_binary(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
@@ -883,6 +883,6 @@ namespace glz
          return parse_error{file_error};
       }
 
-      return read<opts{.format = binary}>(value, buffer, ctx);
+      return read<set_binary<Opts>()>(value, buffer, ctx);
    }
 }
