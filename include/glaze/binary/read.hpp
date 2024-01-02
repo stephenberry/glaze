@@ -736,11 +736,6 @@ namespace glz
                   return;
                }
                ++it;
-
-               skip_compressed_int(it, end);
-
-               using V = std::decay_t<T>;
-               for_each<std::tuple_size_v<V>>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
                
                using V = std::decay_t<T>;
                static constexpr auto N = std::tuple_size_v<meta_t<V>>;

@@ -1356,6 +1356,28 @@ suite example_reflection_without_keys_test = [] {
    };
 };
 
+suite my_struct_without_keys_test = [] {
+   "my_struct_without_keys"_test = [] {
+      std::string without_keys;
+      my_struct obj{.i = 55, .d = 3.14};
+      constexpr glz::opts options{.format = glz::binary, .structs_as_arrays = true};
+      glz::write<options>(obj, without_keys);
+      
+      std::string with_keys;
+      glz::write_binary(obj, with_keys);
+      
+      expect(without_keys.find("hello") == std::string::npos);
+      expect(with_keys.find("hello") != std::string::npos);
+      expect(without_keys != with_keys);
+      
+      obj = {};
+      expect(!glz::read<options>(obj, without_keys));
+      
+      expect(obj.i == 55);
+      expect(obj.d == 3.14);
+   };
+};
+
 int main()
 {
    write_tests();
