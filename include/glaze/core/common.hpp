@@ -144,8 +144,11 @@ namespace glz
       bool reflection_helper{}; // needed for count_members
       static constexpr auto glaze_includer = true;
       static constexpr auto reflect = false;
-      
-      constexpr decltype(auto) operator()(auto&& value) const noexcept { return includer<std::decay_t<decltype(value)>>{value}; }
+
+      constexpr decltype(auto) operator()(auto&& value) const noexcept
+      {
+         return includer<std::decay_t<decltype(value)>>{value};
+      }
    };
 
    template <class T>
