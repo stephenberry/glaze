@@ -32,7 +32,8 @@ namespace glz
       return detail::seek_impl(
          [&](auto&& val) {
             if constexpr (raw_buffer<B>) {
-               std::ignore = write<Opts>(val, buffer); // We assume the user has sufficient null characters at the end of the buffer
+               std::ignore = write<Opts>(
+                  val, buffer); // We assume the user has sufficient null characters at the end of the buffer
             }
             else {
                write<Opts>(val, buffer);
