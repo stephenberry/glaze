@@ -5360,8 +5360,8 @@ suite whitespace_testing = [] {
    };
 };
 
-suite read_as_json_raw = [] {
-   "read_as_json_raw"_test = [] {
+suite write_as_json_raw = [] {
+   "write_as_json_raw"_test = [] {
       static std::array<char, 128> b{};
       my_struct obj{};
       expect(glz::write_as_json(obj, "/i", b.data()));

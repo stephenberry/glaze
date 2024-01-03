@@ -28,19 +28,10 @@ This will read the `./obj.json` file into the `obj` as it is parsed. Since glaze
 
 Similar to `glz::file_include`, glaze provides `glz::hostname_include`. This is used for host-specific configuration files.
 
-```c++
-template <>
-struct glz::meta<includer_struct>
-{
-   using T = includer_struct;
-   static constexpr auto value = object("#hostname_include", glz::hostname_include{}, &T::str, &T::i);
-};
-```
-
 In use:
 
 ```c++
-std::string s = R"({"#hostname_include": "../{}_config.json", "i": 100})";
+std::string s = R"({"hostname_include": "../{}_config.json", "i": 100})";
 auto ec = glz::read_json(obj, s);
 ```
 

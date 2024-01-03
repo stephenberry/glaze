@@ -13,7 +13,7 @@ namespace glz
 {
    // Given a JSON pointer path, reads from the buffer into the object
    template <opts Opts, class T, class B>
-   parse_error read_as(T&& root_value, const sv json_ptr, B&& buffer)
+   [[nodiscard]] parse_error read_as(T&& root_value, const sv json_ptr, B&& buffer)
    {
       parse_error pe{};
       bool b =
@@ -27,12 +27,16 @@ namespace glz
 
    // Given a JSON pointer path, writes into a buffer the specified value
    template <opts Opts, class T, class B>
-   bool write_as(T&& root_value, const sv json_ptr, B&& buffer)
+   [[nodiscard]] bool write_as(T&& root_value, const sv json_ptr, B&& buffer)
    {
       return detail::seek_impl(
          [&](auto&& val) {
-            // TODO: handle raw buffer length output
-            write<Opts>(val, buffer);
+            if constexpr (raw_buffer<B>) {
+               std::ignore = write<Opts>(val, buffer); // We assume the user has sufficient null characters at the end of the buffer
+            }
+            else {
+               write<Opts>(val, buffer);
+            }
          },
          std::forward<T>(root_value), json_ptr);
    }
