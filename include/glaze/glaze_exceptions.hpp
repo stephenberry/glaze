@@ -43,8 +43,9 @@ namespace glz::ex
 namespace glz::ex
 {
    template <class T>
-   [[deprecated("Use specific read_file_json, etc. This old version was a bad design and would instatiate all formats")]]
-   void read_file(T& value, const sv file_name, auto&& buffer)
+   [[deprecated(
+      "Use specific read_file_json, etc. This old version was a bad design and would instatiate all formats")]] void
+   read_file(T& value, const sv file_name, auto&& buffer)
    {
       const auto ec = glz::read_file(value, file_name, buffer);
       if (ec == glz::error_code::file_open_failure) {
@@ -56,8 +57,9 @@ namespace glz::ex
    }
 
    template <class T>
-   [[deprecated("Use specific read_file_json, etc. This old version was a bad design and would instatiate all formats")]]
-   void write_file(T& value, const sv file_name, auto&& buffer)
+   [[deprecated(
+      "Use specific read_file_json, etc. This old version was a bad design and would instatiate all formats")]] void
+   write_file(T& value, const sv file_name, auto&& buffer)
    {
       const auto ec = glz::write_file(value, file_name, buffer);
       if (ec == glz::error_code::file_open_failure) {
