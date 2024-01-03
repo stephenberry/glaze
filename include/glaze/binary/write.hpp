@@ -638,11 +638,11 @@ namespace glz
       write<opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <class T>
+   template <opts Opts = opts{}, class T>
    inline auto write_binary(T&& value) noexcept
    {
       std::string buffer{};
-      write<opts{.format = binary}>(std::forward<T>(value), buffer);
+      write<set_binary<Opts>()>(std::forward<T>(value), buffer);
       return buffer;
    }
 
