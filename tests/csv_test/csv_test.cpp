@@ -348,4 +348,147 @@ v3s[2],1,2,3,4)");
    };
 };
 
+struct unicode_keys
+{
+   std::vector<int> field1{0, 1, 2};
+   std::vector<int> field2{0, 1, 2};
+   std::vector<int> field3{0, 1, 2};
+   std::vector<int> field4{0, 1, 2};
+   std::vector<int> field5{0, 1, 2};
+   std::vector<int> field6{0, 1, 2};
+   std::vector<int> field7{0, 1, 2};
+};
+
+// example 1
+template <>
+struct glz::meta<unicode_keys>
+{
+    using T = unicode_keys;
+    static constexpr auto value = object("alpha",&T::field1,
+                                         "bravo",&T::field2,
+                                         "charlie",&T::field3,
+                                         "♥️",&T::field4,
+                                         "delta",&T::field5,
+                                         "echo",&T::field6,
+                                         "😄", &T::field7
+    );
+};
+
+struct unicode_keys2
+{
+   std::vector<int> field1{0, 1, 2};
+   std::vector<int> field2{0, 1, 2};
+   std::vector<int> field3{0, 1, 2};
+};
+
+template <>
+struct glz::meta<unicode_keys2>
+{
+    using T = unicode_keys2;
+    static constexpr auto value = object("😄",&T::field1,
+                                         "💔",&T::field2,
+                                         "alpha",&T::field3
+    );
+};
+
+struct unicode_keys3
+{
+   std::vector<int> field0{0, 1, 2};
+   std::vector<int> field1{0, 1, 2};
+   std::vector<int> field2{0, 1, 2};
+   std::vector<int> field3{0, 1, 2};
+   std::vector<int> field4{0, 1, 2};
+   std::vector<int> field5{0, 1, 2};
+   std::vector<int> field6{0, 1, 2};
+};
+
+template <>
+struct glz::meta<unicode_keys3>
+{
+    using T = unicode_keys3;
+    static constexpr auto value = object("简体汉字", &T::field0, // simplified chinese characters
+                                         "漢字寿限無寿限無五劫", &T::field1, // traditional chinese characters / kanji
+                                         "こんにちはむところやぶら", &T::field2, // katakana
+                                         "한국인", &T::field3, // korean
+                                         "русский", &T::field4, // cyrillic
+                                         "สวัสดี", &T::field5, // thai
+                                         "english", &T::field6
+    );
+};
+
+suite unicode_keys_test = [] {
+   "unicode_keys"_test = [] {
+      unicode_keys obj{};
+      std::string buffer{};
+      glz::write_csv(obj, buffer);
+
+      expect(!glz::read_csv(obj, buffer));
+   };
+   
+   "unicode_keys2"_test = [] {
+      unicode_keys2 obj{};
+      std::string buffer{};
+      glz::write_csv(obj, buffer);
+
+      expect(!glz::read_csv(obj, buffer));
+   };
+   
+   "unicode_keys3"_test = [] {
+      unicode_keys3 obj{};
+      std::string buffer{};
+      glz::write_csv(obj, buffer);
+
+      expect(!glz::read_csv(obj, buffer));
+   };
+};
+
+struct FishRecord
+{
+    std::vector<float> Duration;
+    std::vector<float> FishSize;
+    std::vector<std::uint8_t> Amount;
+
+    std::vector<std::string> FishBaitName;
+    std::vector<std::string> SurfaceSlapFishName;
+    std::vector<std::string> MoochFishName;
+    std::vector<std::string> BuffName;
+    std::vector<std::string> FishingSpotPlaceName;
+
+    std::vector<std::string> BiteTypeName;
+    std::vector<std::string> CaughtFishName;
+    std::vector<std::string> HooksetName;
+    std::vector<std::string> IsLargeSizeName;
+    std::vector<std::string> IsCollectableName;
+};
+
+template <>
+struct glz::meta<FishRecord>
+{
+    using T = FishRecord;
+    static constexpr auto value = object("上钩的鱼", &T::CaughtFishName, //
+                                         "间隔", &T::Duration, //
+                                         "尺寸", &T::FishSize, //
+                                         "数量", &T::Amount, //
+                                         "鱼饵", &T::FishBaitName, //
+                                         "拍水的鱼", &T::SurfaceSlapFishName, //
+                                         "以小钓大的鱼", &T::MoochFishName, //
+                                         "Buff", &T::BuffName, //
+                                         "钓场", &T::FishingSpotPlaceName, //
+                                         "咬钩类型", &T::BiteTypeName, //
+                                         "提钩类型", &T::HooksetName, //
+                                         "大尺寸", &T::IsLargeSizeName, //
+                                         "收藏品", &T::IsCollectableName //
+    );
+};
+
+suite fish_record = [] {
+   "fish_record"_test = [] {
+      FishRecord obj{};
+      std::string buffer{};
+      glz::write_csv<glz::colwise>(obj, buffer);
+
+      expect(!glz::read_csv<glz::colwise>(obj, buffer));
+   };
+};
+
 int main() { return boost::ut::cfg<>.run({.report_errors = true}); }
