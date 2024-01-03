@@ -499,7 +499,7 @@ namespace glz
       };
 
       template <opts Opts, class Key, class Value, is_context Ctx>
-      GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, const Value& value, Ctx& ctx, auto&&... args) noexcept
+      GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, auto&&... args) noexcept
       {
          if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
             write<json>::op<Opts>(key, ctx, args...);
@@ -514,7 +514,7 @@ namespace glz
             dump<':'>(args...);
          }
 
-         write<json>::op<opening_and_closing_handled_off<Opts>()>(value, ctx, args...);
+         write<json>::op<opening_and_closing_handled_off<Opts>()>(std::forward<Value>(value), ctx, args...);
       }
 
       template <opts Opts, class Value>
@@ -580,8 +580,8 @@ namespace glz
                   }
                }
 
-               auto write_first_entry = [&ctx, &args...](const auto first_it) {
-                  const auto& [first_key, first_val] = *first_it;
+               auto write_first_entry = [&ctx, &args...](auto first_it) {
+                  auto& [first_key, first_val] = *first_it;
                   if (skip_member<Opts>(first_val)) {
                      return true;
                   }
@@ -592,7 +592,7 @@ namespace glz
                auto it = std::begin(value);
                [[maybe_unused]] bool starting = write_first_entry(it);
                for (++it; it != std::end(value); ++it) {
-                  const auto& [key, entry_val] = *it;
+                  auto& [key, entry_val] = *it;
                   if (skip_member<Opts>(entry_val)) {
                      continue;
                   }
