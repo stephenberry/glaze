@@ -37,7 +37,7 @@ namespace glz
    {
       bool reflection_helper{}; // needed for count_members
       static constexpr auto glaze_includer = true;
-      static constexpr auto reflect = false;
+      static constexpr auto glaze_reflect = false;
 
       constexpr decltype(auto) operator()(auto&& value) const noexcept
       {
