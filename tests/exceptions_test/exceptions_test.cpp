@@ -130,24 +130,12 @@ suite read_file_test = [] {
 
       file_struct s;
       std::string buffer{};
-      glz::ex::read_file(s, filename, buffer);
+      glz::ex::read_file_json(s, filename, buffer);
    };
 
    "read_file invalid"_test = [] {
-      std::string filename = "../file.json";
-      {
-         std::ofstream out(filename);
-         expect(bool(out));
-         if (out) {
-            out << R"({
-     "name": "my",
-     "label": "label"
-   })";
-         }
-      }
-
       file_struct s;
-      expect(throws([&] { glz::ex::read_file(s, "../nonexsistant_file.json", std::string{}); }));
+      expect(throws([&] { glz::ex::read_file_json(s, "../nonexsistant_file.json", std::string{}); }));
    };
 };
 

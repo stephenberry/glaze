@@ -2872,80 +2872,65 @@ suite read_file_test = [] {
 
       file_struct s;
       std::string buffer{};
-      expect(glz::read_file(s, filename, buffer) == glz::error_code::none);
+      expect(glz::read_file_json(s, filename, buffer) == glz::error_code::none);
    };
 
    "read_file invalid"_test = [] {
-      std::string filename = "../file.json";
-      {
-         std::ofstream out(filename);
-         expect(bool(out));
-         if (out) {
-            out << R"({
-     "name": "my",
-     "label": "label"
-   })";
-         }
-      }
-
       file_struct s;
-      expect(glz::read_file(s, "../nonexsistant_file.json", std::string{}) != glz::error_code::none);
+      expect(glz::read_file_json(s, "../nonexsistant_file.json", std::string{}) != glz::error_code::none);
    };
 };
 
 struct includer_struct
 {
+   glz::file_include include{};
    std::string str = "Hello";
    int i = 55;
 };
 
-template <>
-struct glz::meta<includer_struct>
-{
-   static constexpr std::string_view name = "includer_struct";
-   using T = includer_struct;
-   static constexpr auto value = object("#include", glz::file_include{}, "str", &T::str, "i", &T::i);
-};
-
 suite file_include_test = [] {
-   includer_struct obj{};
+   "file_include"_test = [] {
+      includer_struct obj{};
 
-   expect(glz::write_file_json(obj, "../alabastar.json", std::string{}) == glz::error_code::none);
+      expect(glz::write_file_json(obj, "../alabastar.json", std::string{}) == glz::error_code::none);
 
-   obj.str = "";
+      obj.str = "";
 
-   std::string s = R"({"#include": "../alabastar.json", "i": 100})";
-   expect(glz::read_json(obj, s) == glz::error_code::none);
+      std::string s = R"({"include": "../alabastar.json", "i": 100})";
+      expect(glz::read_json(obj, s) == glz::error_code::none);
 
-   expect(obj.str == "Hello") << obj.str;
-   expect(obj.i == 100) << obj.i;
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 100) << obj.i;
 
-   obj.str = "";
+      obj.str = "";
 
-   std::string buffer{};
-   glz::read_file_json(obj, "../alabastar.json", buffer);
-   expect(obj.str == "Hello") << obj.str;
-   expect(obj.i == 55) << obj.i;
+      std::string buffer{};
+      glz::read_file_json(obj, "../alabastar.json", buffer);
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 55) << obj.i;
+   };
 };
 
 suite file_include_test_auto = [] {
-   includer_struct obj{};
+   "file_include_test_auto"_test = [] {
+      includer_struct obj{};
 
-   expect(glz::write_file(obj, "./auto.json", std::string{}) == false);
+      expect(glz::write_file_json(obj, "./auto.json", std::string{}) == false);
 
-   obj.str = "";
+      obj.str = "";
 
-   std::string s = R"({"#include": "./auto.json", "i": 100})";
-   expect(glz::read_json(obj, s) == glz::error_code::none);
+      std::string s = R"({"include": "./auto.json", "i": 100})";
+      expect(glz::read_json(obj, s) == glz::error_code::none);
 
-   expect(obj.str == "Hello") << obj.str;
-   expect(obj.i == 100) << obj.i;
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 100) << obj.i;
 
-   obj.str = "";
+      obj.str = "";
 
-   glz::read_file(obj, "./auto.json", std::string{});
-   expect(obj.str == "Hello") << obj.str;
-   expect(obj.i == 55) << obj.i;
+      glz::read_file_json(obj, "./auto.json", std::string{});
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 55) << obj.i;
+   };
 };
 
 struct nested0
@@ -2963,31 +2948,33 @@ struct glz::meta<nested0>
 };
 
 suite nested_file_include_test = [] {
-   nested0 obj;
+   "nested_file_include"_test = [] {
+      nested0 obj;
 
-   std::string a = R"({"#include": "../b/b.json"})";
-   {
-      std::filesystem::create_directory("a");
-      std::ofstream a_file{"./a/a.json"};
+      std::string a = R"({"include": "../b/b.json"})";
+      {
+         std::filesystem::create_directory("a");
+         std::ofstream a_file{"./a/a.json"};
 
-      a_file << a;
-   }
+         a_file << a;
+      }
 
-   {
-      std::filesystem::create_directory("b");
+      {
+         std::filesystem::create_directory("b");
 
-      obj.b.i = 13;
+         obj.b.i = 13;
 
-      expect(glz::write_file_json(obj.b, "./b/b.json", std::string{}) == glz::error_code::none);
-   }
+         expect(glz::write_file_json(obj.b, "./b/b.json", std::string{}) == glz::error_code::none);
+      }
 
-   obj.b.i = 0;
+      obj.b.i = 0;
 
-   std::string s = R"({ "a": { "#include": "./a/a.json" }, "b": { "#include": "./b/b.json" } })";
+      std::string s = R"({ "a": { "include": "./a/a.json" }, "b": { "include": "./b/b.json" } })";
 
-   expect(glz::read_json(obj, s) == glz::error_code::none);
+      expect(glz::read_json(obj, s) == glz::error_code::none);
 
-   expect(obj.a.i == 13);
+      expect(obj.a.i == 13);
+   };
 };
 
 // Shrink to fit is nonbinding and cannot be properly tested
