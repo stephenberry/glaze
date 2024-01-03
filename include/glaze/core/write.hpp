@@ -18,7 +18,7 @@ namespace glz
    concept output_buffer = range<Buffer> && (sizeof(range_value_t<Buffer>) == sizeof(char));
 
    template <class T>
-   GLZ_ALWAYS_INLINE auto data_ptr(T& buffer) noexcept
+   [[nodiscard]] GLZ_ALWAYS_INLINE auto data_ptr(T& buffer) noexcept
    {
       if constexpr (detail::resizeable<T>) {
          return buffer.data();
@@ -52,7 +52,7 @@ namespace glz
    }
 
    template <opts Opts, class T>
-   inline std::string write(T&& value) noexcept
+   [[nodiscard]] inline std::string write(T&& value) noexcept
    {
       std::string buffer{};
       context ctx{};
@@ -61,7 +61,7 @@ namespace glz
    }
 
    template <opts Opts, class T, raw_buffer Buffer>
-   inline size_t write(T&& value, Buffer&& buffer, is_context auto&& ctx) noexcept
+   [[nodiscard]] inline size_t write(T&& value, Buffer&& buffer, is_context auto&& ctx) noexcept
    {
       size_t ix = 0;
       detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
@@ -69,7 +69,7 @@ namespace glz
    }
 
    template <opts Opts, class T, raw_buffer Buffer>
-   inline size_t write(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline size_t write(T&& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);
