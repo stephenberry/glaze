@@ -33,14 +33,17 @@ namespace glz
 
    // Register this with an object to allow file including based on the hostname
    // This is useful for configuration files that should be specific to a host
-   struct hostname_include
+   struct hostname_include final
    {
-      constexpr decltype(auto) operator()(auto&& value) const
-      {
-         return detail::hostname_includer<std::decay_t<decltype(value)>>{value};
-      }
-
+      bool reflection_helper{}; // needed for count_members
       static constexpr auto glaze_includer = true;
+      static constexpr auto reflect = false;
+      
+      constexpr decltype(auto) operator()(auto&& value) const noexcept
+      {
+         using V = std::decay_t<decltype(value)>;
+         return detail::hostname_includer<V>{value};
+      }
    };
 
    namespace detail
@@ -82,7 +85,7 @@ namespace glz
       struct from_json<hostname_includer<T>>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             std::string& path = string_buffer();
             read<json>::op<Opts>(path, ctx, it, end);
