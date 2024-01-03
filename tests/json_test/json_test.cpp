@@ -6518,69 +6518,59 @@ suite enum_in_object_reflection_test = [] {
 
 struct unicode_keys
 {
-    float field1;
-    float field2;
-    std::uint8_t field3;
-    std::string field4;
-    std::string field5;
-    std::string field6;
-    std::string field7;
+   float field1;
+   float field2;
+   std::uint8_t field3;
+   std::string field4;
+   std::string field5;
+   std::string field6;
+   std::string field7;
 };
 
 template <>
 struct glz::meta<unicode_keys>
 {
-    using T = unicode_keys;
-    static constexpr auto value = object("alpha",&T::field1,
-                                         "bravo",&T::field2,
-                                         "charlie",&T::field3,
-                                         "♥️",&T::field4,
-                                         "delta",&T::field5,
-                                         "echo",&T::field6,
-                                         "😄",&T::field7
-    );
+   using T = unicode_keys;
+   static constexpr auto value = object("alpha", &T::field1, "bravo", &T::field2, "charlie", &T::field3, "♥️",
+                                        &T::field4, "delta", &T::field5, "echo", &T::field6, "😄", &T::field7);
 };
 
 struct unicode_keys2
 {
-    float field1;
-    float field2;
-    std::uint8_t field3;
+   float field1;
+   float field2;
+   std::uint8_t field3;
 };
 
 template <>
 struct glz::meta<unicode_keys2>
 {
-    using T = unicode_keys2;
-    static constexpr auto value = object("😄",&T::field1,
-                                         "💔",&T::field2,
-                                         "alpha",&T::field3
-    );
+   using T = unicode_keys2;
+   static constexpr auto value = object("😄", &T::field1, "💔", &T::field2, "alpha", &T::field3);
 };
 
 struct unicode_keys3
 {
    float field0;
-    float field1;
-    float field2;
-    std::uint8_t field3;
-    std::string field4;
-    std::string field5;
-    std::string field6;
+   float field1;
+   float field2;
+   std::uint8_t field3;
+   std::string field4;
+   std::string field5;
+   std::string field6;
 };
 
 template <>
 struct glz::meta<unicode_keys3>
 {
-    using T = unicode_keys3;
-    static constexpr auto value = object("简体汉字", &T::field0, // simplified chinese characters
-                                         "漢字寿限無寿限無五劫", &T::field1, // traditional chinese characters / kanji
-                                         "こんにちはむところやぶら", &T::field2, // katakana
-                                         "한국인", &T::field3, // korean
-                                         "русский", &T::field4, // cyrillic
-                                         "สวัสดี", &T::field5, // thai
-                                         "english", &T::field6
-    );
+   using T = unicode_keys3;
+   static constexpr auto value = object("简体汉字", &T::field0, // simplified chinese characters
+                                        "漢字寿限無寿限無五劫", &T::field1, // traditional chinese characters / kanji
+                                        "こんにちはむところやぶら", &T::field2, // katakana
+                                        "한국인", &T::field3, // korean
+                                        "русский", &T::field4, // cyrillic
+                                        "สวัสดี", &T::field5, // thai
+                                        "english", &T::field6);
 };
 
 suite unicode_keys_test = [] {
@@ -6591,7 +6581,7 @@ suite unicode_keys_test = [] {
 
       expect(!glz::read_json(obj, buffer));
    };
-   
+
    "unicode_keys2"_test = [] {
       unicode_keys2 obj{};
       std::string buffer{};
@@ -6599,7 +6589,7 @@ suite unicode_keys_test = [] {
 
       expect(!glz::read_json(obj, buffer));
    };
-   
+
    "unicode_keys3"_test = [] {
       unicode_keys3 obj{};
       std::string buffer{};
