@@ -499,7 +499,7 @@ namespace glz
       };
 
       template <opts Opts, class Key, class Value, is_context Ctx>
-      GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, const Value& value, Ctx& ctx, auto&&... args) noexcept
+      GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, auto&&... args) noexcept
       {
          if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
             write<json>::op<Opts>(key, ctx, args...);
@@ -514,7 +514,7 @@ namespace glz
             dump<':'>(args...);
          }
 
-         write<json>::op<opening_and_closing_handled_off<Opts>()>(value, ctx, args...);
+         write<json>::op<opening_and_closing_handled_off<Opts>()>(std::forward<Value>(value), ctx, args...);
       }
 
       template <opts Opts, class Value>
@@ -580,36 +580,72 @@ namespace glz
                   }
                }
 
-               auto write_first_entry = [&ctx, &args...](const auto first_it) {
-                  const auto& [first_key, first_val] = *first_it;
-                  if (skip_member<Opts>(first_val)) {
-                     return true;
+               auto write_first_entry = [&ctx, &args...](auto&& it) {
+                  if constexpr(requires { it->first; it->second; }) {
+                     // Allow non-const access, unlike ranges
+                     if (skip_member<Opts>(it->second)) {
+                        return true;
+                     }
+                     write_pair_content<Opts>(it->first, it->second, ctx, args...);
+                     return false;
                   }
-                  write_pair_content<Opts>(first_key, first_val, ctx, args...);
-                  return false;
+                  else {
+                     const auto& [key, entry_val] = *it;
+                     if (skip_member<Opts>(entry_val)) {
+                        return true;
+                     }
+                     write_pair_content<Opts>(key, entry_val, ctx, args...);
+                     return false;
+                  }
                };
 
                auto it = std::begin(value);
                [[maybe_unused]] bool starting = write_first_entry(it);
                for (++it; it != std::end(value); ++it) {
-                  const auto& [key, entry_val] = *it;
-                  if (skip_member<Opts>(entry_val)) {
-                     continue;
-                  }
+                  // I couldn't find an easy way around this code duplication
+                  // Ranges need to be decomposed with const auto& [...],
+                  // but we don't want to const qualify our maps for the sake of reflection writing
+                  // we need to be able to populate the tuple of pointers when writing with reflection
+                  if constexpr(requires { it->first; it->second; }) {
+                     if (skip_member<Opts>(it->second)) {
+                        continue;
+                     }
 
-                  // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
-                  // conditional for every entry. Avoid this branch when not skipping null members.
-                  // Alternatively, write separator after each entry except last but then branch is permanent
-                  if constexpr (Opts.skip_null_members) {
-                     if (!starting) {
+                     // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
+                     // conditional for every entry. Avoid this branch when not skipping null members.
+                     // Alternatively, write separator after each entry except last but then branch is permanent
+                     if constexpr (Opts.skip_null_members) {
+                        if (!starting) {
+                           write_entry_separator<Opts>(ctx, args...);
+                        }
+                     }
+                     else {
                         write_entry_separator<Opts>(ctx, args...);
                      }
+
+                     write_pair_content<Opts>(it->first, it->second, ctx, args...);
                   }
                   else {
-                     write_entry_separator<Opts>(ctx, args...);
-                  }
+                     const auto& [key, entry_val] = *it;
+                     if (skip_member<Opts>(entry_val)) {
+                        continue;
+                     }
 
-                  write_pair_content<Opts>(key, entry_val, ctx, args...);
+                     // When Opts.skip_null_members, *any* entry may be skipped, meaning separator dumping must be
+                     // conditional for every entry. Avoid this branch when not skipping null members.
+                     // Alternatively, write separator after each entry except last but then branch is permanent
+                     if constexpr (Opts.skip_null_members) {
+                        if (!starting) {
+                           write_entry_separator<Opts>(ctx, args...);
+                        }
+                     }
+                     else {
+                        write_entry_separator<Opts>(ctx, args...);
+                     }
+
+                     write_pair_content<Opts>(key, entry_val, ctx, args...);
+                  }
+                  
                   starting = false;
                }
 

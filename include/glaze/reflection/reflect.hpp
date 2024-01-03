@@ -112,20 +112,20 @@ namespace glz
       // This is needed to hack a fix for MSVC evaluating wrong if constexpr branches
       template <class T>
          requires(!reflectable<T>)
-      constexpr auto make_tuple_from_struct()
+      constexpr auto make_tuple_from_struct() noexcept
       {
          return std::tuple{};
       }
 
       template <reflectable T>
-      constexpr auto make_tuple_from_struct()
+      constexpr auto make_tuple_from_struct() noexcept
       {
          using V = decltype(to_tuple(std::declval<T>()));
          return typename tuple_ptr<V>::type{};
       }
 
-      template <reflectable T>
-      constexpr void populate_tuple_ptr(T&& value, auto& tuple_of_ptrs) noexcept
+      template <reflectable T, class TuplePtrs> requires (!std::is_const_v<TuplePtrs>)
+      constexpr void populate_tuple_ptr(T&& value, TuplePtrs& tuple_of_ptrs) noexcept
       {
          // we have to populate the pointers in the reflection tuple from the structured binding
          auto t = to_tuple(std::forward<T>(value));

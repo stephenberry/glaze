@@ -231,6 +231,111 @@ struct string_view_member_count
 
 static_assert(glz::detail::count_members<string_view_member_count> == 5);
 
+namespace testing {
+
+enum Q {
+    A1 = 0,
+    A2 = 1,
+};
+
+enum B {
+    B1 = 0,
+    B2 = 1,
+};
+
+struct V {
+    Q v1;
+    uint8_t v2;
+    B v3;
+    uint64_t v4;
+    uint8_t v5;
+    std::vector<uint8_t> v6;
+};
+
+struct VS {
+    uint16_t w;
+    uint16_t h;
+    uint8_t f;
+};
+
+struct VC {
+    std::string c;
+    bool l;
+    bool s;
+    uint8_t sn;
+    std::string sid;
+    uint64_t time;
+    uint8_t p;
+    uint64_t age;
+    uint32_t gs;
+    VS srs;
+    std::map<uint8_t, V> layers;
+};
+
+struct A {
+    uint64_t b;
+    std::vector<uint8_t> e;
+};
+
+struct ASS {
+    uint32_t sr;
+    uint8_t cc;
+};
+
+struct AC {
+    std::string c;
+    bool m;
+    bool s;
+    uint8_t sn;
+    std::string sid;
+    uint64_t time;
+    uint8_t p;
+    uint64_t age;
+    ASS srs;
+    std::map<uint8_t, A> layers;
+};
+
+struct C {
+    bool a;
+    std::variant<VC, AC> Config;
+};
+   
+   struct UD {
+       std::string id;
+       std::string n;
+       std::string e;
+       std::string aid;
+       uint64_t o;
+       bool ob;
+       std::string ri;
+       std::map<uint8_t, VC> v;
+       std::map<uint8_t, AC> a;
+   };
+
+};
+
+template <>
+struct glz::meta<testing::Q> {
+    using enum testing::Q;
+    static constexpr auto value = enumerate("0", testing::A1, "1", testing::A2);
+};
+
+template <>
+struct glz::meta<testing::B> {
+    using enum testing::B;
+    static constexpr auto value = enumerate("0", testing::B1, "1", testing::B2);
+};
+
+suite testing_structures = [] {
+   "testing_structures"_test = [] {
+      testing::UD obj{};
+      std::string buffer{};
+      glz::write_json(obj, buffer);
+      
+      expect(!glz::read_json(obj, buffer));
+   };
+};
+
 int main()
 { // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
