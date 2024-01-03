@@ -1183,10 +1183,10 @@ namespace glz
       return buffer;
    }
 
-   template <class T>
+   template <opts Opts = opts{}, class T>
    [[nodiscard]] inline write_error write_file_json(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
-      write<opts{}>(std::forward<T>(value), buffer);
+      write<set_json<Opts>()>(std::forward<T>(value), buffer);
       return {buffer_to_file(buffer, file_name)};
    }
 }

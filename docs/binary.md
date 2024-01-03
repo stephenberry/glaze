@@ -1,6 +1,6 @@
-# Tagged Binary Messages (BEVE)
+# Binary Format (BEVE)
 
-Glaze provides a tagged binary format to send and receive messages like JSON, but with significantly improved performance and message size savings.
+Glaze provides a binary format to send and receive messages like JSON, but with significantly improved performance and message size savings.
 
 The binary specification is known as [BEVE](https://github.com/stephenberry/beve).
 
@@ -18,6 +18,10 @@ glz::write_binary(s, buffer);
 my_struct s{};
 glz::read_binary(s, buffer);
 ```
+
+## Untagged Binary
+
+By default Glaze will handle structs as tagged objects, meaning that keys will be written/read. However, structs can be written/read without tags by using the option `structs_as_arrays` or the functions `glz::write_binary_untagged` and `glz::read_binary_untagged`.
 
 ## Partial Objects
 
