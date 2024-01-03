@@ -369,9 +369,8 @@ struct glz::meta<unicode_keys>
                                          "charlie",&T::field3,
                                          "♥️",&T::field4,
                                          "delta",&T::field5,
-                                         "echo",&T::field6, // wont compile if there are any unicode keys after this
-                                         "😄",&T::field7 // fails
-                                      // "foxtrot",&T::field7 // success
+                                         "echo",&T::field6,
+                                         "😄", &T::field7
     );
 };
 
@@ -387,7 +386,7 @@ struct glz::meta<unicode_keys2>
 {
     using T = unicode_keys2;
     static constexpr auto value = object("😄",&T::field1,
-                                         "💔",&T::field2, // wont compile if there are any keys(both unicode and non-unicode) after this (order doesn't matter)
+                                         "💔",&T::field2,
                                          "alpha",&T::field3
     );
 };
@@ -462,7 +461,7 @@ struct FishRecord
     std::vector<std::string> IsCollectableName;
 };
 
-/*template <>
+template <>
 struct glz::meta<FishRecord>
 {
     using T = FishRecord;
@@ -480,7 +479,7 @@ struct glz::meta<FishRecord>
                                          "大尺寸", &T::IsLargeSizeName, //
                                          "收藏品", &T::IsCollectableName //
     );
-};*/
+};
 
 suite fish_record = [] {
    "fish_record"_test = [] {

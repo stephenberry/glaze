@@ -39,7 +39,7 @@ namespace glz::detail
       uint64_t res{};
       if (std::is_constant_evaluated()) {
          for (size_t i = 0; i < N; ++i) {
-            res |= (uint64_t(bytes[i]) << (i << 3));
+            res |= (uint64_t(uint8_t(bytes[i])) << (i << 3));
          }
       }
       else {
@@ -88,7 +88,7 @@ namespace glz::detail
       if (std::is_constant_evaluated()) {
          uint64_t res{};
          for (size_t i = 0; i < N; ++i) {
-            res |= (uint64_t(bytes[i]) << (i << 3));
+            res |= (uint64_t(uint8_t(bytes[i])) << (i << 3));
          }
          return res;
       }
