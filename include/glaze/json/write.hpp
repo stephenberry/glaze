@@ -1006,32 +1006,52 @@ namespace glz
          requires is_specialization_v<T, glz::merge>
       struct to_json<T>
       {
-         template <auto Options>
+         template <auto Opts>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
-            if constexpr (!Options.opening_handled) {
+            if constexpr (!Opts.opening_handled) {
                dump<'{'>(b, ix);
-               if constexpr (Options.prettify) {
-                  ctx.indentation_level += Options.indentation_width;
+               if constexpr (Opts.prettify) {
+                  ctx.indentation_level += Opts.indentation_width;
                   dump<'\n'>(b, ix);
-                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
                }
             }
 
             using V = std::decay_t<decltype(value.value)>;
             static constexpr auto N = std::tuple_size_v<V>;
-
+            
+            bool first = true;
             for_each<N>([&](auto I) {
-               write<json>::op<opening_and_closing_handled<Options>()>(glz::get<I>(value.value), ctx, b, ix);
-               if constexpr (I < N - 1) {
-                  dump<','>(b, ix);
+               decltype(auto) item = get<I>(value.value);
+               using val_t = std::decay_t<decltype(item)>;
+               
+               if (skip_member<Opts>(item)) {
+                  return;
+               }
+               
+               // Handle skipping includer writes for the sake of merging in includers
+               if constexpr (is_includer<val_t> || std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+                  return;
+               }
+               else {
+                  if (first) {
+                     first = false;
+                  }
+                  else {
+                     // Null members may be skipped so we cant just write it out for all but the last member unless
+                     // trailing commas are allowed
+                     write_entry_separator<Opts>(ctx, b, ix);
+                  }
+                  
+                  write<json>::op<opening_and_closing_handled<Opts>()>(get<I>(value.value), ctx, b, ix);
                }
             });
 
-            if constexpr (Options.prettify) {
-               ctx.indentation_level -= Options.indentation_width;
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level -= Opts.indentation_width;
                dump<'\n'>(b, ix);
-               dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
             }
             dump<'}'>(b, ix);
          }
@@ -1128,11 +1148,7 @@ namespace glz
                   }
                }
 
-               // skip file_include
-               if constexpr (is_includer<val_t>) {
-                  return;
-               }
-               else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+               if constexpr (is_includer<val_t> || std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
                   return;
                }
                else {
