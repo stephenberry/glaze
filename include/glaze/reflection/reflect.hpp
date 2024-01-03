@@ -124,7 +124,8 @@ namespace glz
          return typename tuple_ptr<V>::type{};
       }
 
-      template <reflectable T, class TuplePtrs> requires (!std::is_const_v<TuplePtrs>)
+      template <reflectable T, class TuplePtrs>
+         requires(!std::is_const_v<TuplePtrs>)
       constexpr void populate_tuple_ptr(T&& value, TuplePtrs& tuple_of_ptrs) noexcept
       {
          // we have to populate the pointers in the reflection tuple from the structured binding

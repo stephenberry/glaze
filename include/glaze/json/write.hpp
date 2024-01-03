@@ -581,7 +581,10 @@ namespace glz
                }
 
                auto write_first_entry = [&ctx, &args...](auto&& it) {
-                  if constexpr(requires { it->first; it->second; }) {
+                  if constexpr (requires {
+                                   it->first;
+                                   it->second;
+                                }) {
                      // Allow non-const access, unlike ranges
                      if (skip_member<Opts>(it->second)) {
                         return true;
@@ -606,7 +609,10 @@ namespace glz
                   // Ranges need to be decomposed with const auto& [...],
                   // but we don't want to const qualify our maps for the sake of reflection writing
                   // we need to be able to populate the tuple of pointers when writing with reflection
-                  if constexpr(requires { it->first; it->second; }) {
+                  if constexpr (requires {
+                                   it->first;
+                                   it->second;
+                                }) {
                      if (skip_member<Opts>(it->second)) {
                         continue;
                      }
@@ -645,7 +651,7 @@ namespace glz
 
                      write_pair_content<Opts>(key, entry_val, ctx, args...);
                   }
-                  
+
                   starting = false;
                }
 
