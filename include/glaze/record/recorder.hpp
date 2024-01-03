@@ -40,7 +40,7 @@ namespace glz
    template <class... Ts>
    struct recorder
    {
-      static constexpr auto reflect = false;
+      static constexpr auto glaze_reflect = false;
 
       using container_type = std::variant<std::deque<Ts>...>;
 

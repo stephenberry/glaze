@@ -48,7 +48,7 @@ namespace glz
    struct obj final
    {
       glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
-      static constexpr auto reflect = false;
+      static constexpr auto glaze_reflect = false;
    };
 
    template <class... T>
@@ -58,7 +58,7 @@ namespace glz
    struct obj_copy final
    {
       glz::tuplet::tuple<T...> value;
-      static constexpr auto reflect = false;
+      static constexpr auto glaze_reflect = false;
    };
 
    template <class... T>
@@ -68,7 +68,7 @@ namespace glz
    struct arr final
    {
       glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
-      static constexpr auto reflect = false;
+      static constexpr auto glaze_reflect = false;
    };
 
    template <class... T>
@@ -88,7 +88,7 @@ namespace glz
    struct merge final
    {
       glz::tuplet::tuple<std::conditional_t<std::is_convertible_v<std::decay_t<T>, sv>, sv, T>...> value;
-      static constexpr auto reflect = false;
+      static constexpr auto glaze_reflect = false;
    };
 
    template <class... T>
@@ -143,7 +143,7 @@ namespace glz
    {
       bool reflection_helper{}; // needed for count_members
       static constexpr auto glaze_includer = true;
-      static constexpr auto reflect = false;
+      static constexpr auto glaze_reflect = false;
 
       constexpr decltype(auto) operator()(auto&& value) const noexcept
       {
@@ -476,7 +476,7 @@ namespace glz
       };
 
       template <class T>
-      concept is_no_reflect = requires(T t) { requires T::reflect == false; };
+      concept is_no_reflect = requires(T t) { requires T::glaze_reflect == false; };
 
       template <class T>
       concept is_dynamic_span = T::extent == static_cast<size_t>(-1);
