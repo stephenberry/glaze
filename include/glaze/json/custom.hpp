@@ -196,13 +196,18 @@ namespace glz
                }
             }
             else {
-               write<json>::op<Opts>(get_member(value.val, value.to), ctx, args...);
+               if constexpr (std::invocable<To, decltype(value.val)>) {
+                  write<json>::op<Opts>(std::invoke(value.to, value.val), ctx, args...);
+               }
+               else {
+                  static_assert(false_v<To>, "expected invocable function, perhaps you need const qualified input on your lambda");
+               }
             }
          }
       };
 
       template <auto From, auto To>
-      inline constexpr decltype(auto) custom_impl() noexcept
+      inline constexpr auto custom_impl() noexcept
       {
          return [](auto&& v) { return custom_t{v, From, To}; };
       }
