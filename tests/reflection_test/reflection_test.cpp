@@ -349,19 +349,19 @@ suite testing_structures = [] {
 
 struct structure_t
 {
-    std::string doc;
-    std::string id;
+   std::string doc;
+   std::string id;
 };
 
 suite const_object_test = [] {
    "const_object"_test = [] {
       std::string buffer = R"({"doc":"aaa","id":"1111"})";
       structure_t obj{};
-      
+
       expect(!glz::read_json(obj, buffer));
-      
+
       const structure_t const_obj = obj;
-      
+
       static_assert(std::is_const_v<std::remove_reference_t<decltype(const_obj)>>);
       std::string s{};
       glz::write_json(const_obj, s);

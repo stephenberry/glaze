@@ -200,7 +200,8 @@ namespace glz
                   write<json>::op<Opts>(std::invoke(value.to, value.val), ctx, args...);
                }
                else {
-                  static_assert(false_v<To>, "expected invocable function, perhaps you need const qualified input on your lambda");
+                  static_assert(false_v<To>,
+                                "expected invocable function, perhaps you need const qualified input on your lambda");
                }
             }
          }
