@@ -160,11 +160,8 @@ if (ec) {
 ### Read/Write From File
 
 ```c++
-auto ec = glz::read_file(obj, "./obj.json", std::string{}); // reads as JSON from the extension
-auto ec = glz::read_file_json(obj, "./obj.txt", std::string{}); // reads some text file as JSON
-
-auto ec = glz::write_file(obj, "./obj.json", std::string{}); // writes file based on extension
-auto ec = glz::write_file_json(obj, "./obj.txt", std::string{}); // explicit JSON write
+auto ec = glz::read_file_json(obj, "./obj.json", std::string{});
+auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 ```
 
 ## How To Use Glaze
