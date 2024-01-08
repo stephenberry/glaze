@@ -369,6 +369,32 @@ suite const_object_test = [] {
    };
 };
 
+struct user
+{
+   std::string name;
+   std::string email;
+   int age;
+};
+
+suite error_on_missing_keys_test = [] {
+   "error_on_missing_keys"_test = [] {
+      constexpr std::string_view json = R"({"email":"test@email.com","age":20})";
+      constexpr glz::opts options = {.error_on_missing_keys = true};
+      
+      user obj = {};
+      const auto ec = glz::read<options>(obj, json);
+      expect(ec != glz::error_code::none);
+   };
+   
+   "success"_test = [] {
+      constexpr std::string_view json = R"({"email":"test@email.com","age":20,"name":"Fred"})";
+      constexpr glz::opts options = {.error_on_missing_keys = true};
+      
+      user obj = {};
+      expect(!glz::read<options>(obj, json));
+   };
+};
+
 int main()
 { // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
