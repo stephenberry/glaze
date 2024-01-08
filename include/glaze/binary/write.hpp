@@ -215,6 +215,15 @@ namespace glz
             write<binary>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
          }
       };
+      
+      template <class T, class V, size_t... Is>
+      constexpr std::size_t variant_index_impl(std::index_sequence<Is...>)
+      {
+          return ((std::is_same_v<T, std::variant_alternative_t<Is, V>> * Is) + ...);
+      }
+
+      template <class T, class V>
+      constexpr size_t variant_index_v = variant_index_impl<T, V>(std::make_index_sequence<std::variant_size_v<V>>{});
 
       template <is_variant T>
       struct to_binary<T> final
@@ -222,13 +231,13 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
+            using Variant = std::decay_t<decltype(value)>;
+            
             std::visit(
                [&](auto&& v) {
                   using V = std::decay_t<decltype(v)>;
-                  static constexpr auto index = []() {
-                     T var = V{};
-                     return var.index();
-                  }();
+                  
+                  static constexpr uint64_t index = variant_index_v<V, Variant>;
 
                   constexpr uint8_t tag = tag::extensions | 0b00001'000;
 
