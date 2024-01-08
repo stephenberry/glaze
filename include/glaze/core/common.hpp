@@ -1249,7 +1249,7 @@ namespace glz::detail
          }
       }
    }();
-   
+
    template <class T, auto Opts>
    constexpr auto required_fields()
    {
@@ -1261,14 +1261,12 @@ namespace glz::detail
             return std::tuple_size_v<meta_t<T>>;
          }
       }();
-      
+
       bit_array<N> fields{};
       if constexpr (Opts.error_on_missing_keys) {
          for_each<N>([&](auto I) constexpr {
             using Element = glaze_tuple_element<I, N, T>;
-            fields[I] =
-               !bool(Opts.skip_null_members) ||
-               !null_t<std::decay_t<typename Element::type>>;
+            fields[I] = !bool(Opts.skip_null_members) || !null_t<std::decay_t<typename Element::type>>;
          });
       }
       return fields;
