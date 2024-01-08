@@ -1037,21 +1037,6 @@ namespace glz
       {};
       template <class T>
       array_variant(T) -> array_variant<T>; // Only needed on older compilers until we move to template alias deduction
-
-      template <class T, auto Opts>
-      constexpr auto required_fields()
-      {
-         constexpr auto n = std::tuple_size_v<meta_t<T>>;
-         bit_array<n> fields{};
-         if constexpr (Opts.error_on_missing_keys) {
-            for_each<n>([&](auto I) constexpr {
-               fields[I] =
-                  !bool(Opts.skip_null_members) ||
-                  !null_t<std::decay_t<member_t<T, std::tuple_element_t<1, std::tuple_element_t<I, meta_t<T>>>>>>;
-            });
-         }
-         return fields;
-      }
    } // namespace detail
 
    constexpr decltype(auto) conv_sv(auto&& value) noexcept
@@ -1264,4 +1249,28 @@ namespace glz::detail
          }
       }
    }();
+   
+   template <class T, auto Opts>
+   constexpr auto required_fields()
+   {
+      constexpr auto N = [] {
+         if constexpr (reflectable<T>) {
+            return count_members<T>;
+         }
+         else {
+            return std::tuple_size_v<meta_t<T>>;
+         }
+      }();
+      
+      bit_array<N> fields{};
+      if constexpr (Opts.error_on_missing_keys) {
+         for_each<N>([&](auto I) constexpr {
+            using Element = glaze_tuple_element<I, N, T>;
+            fields[I] =
+               !bool(Opts.skip_null_members) ||
+               !null_t<std::decay_t<typename Element::type>>;
+         });
+      }
+      return fields;
+   }
 }
