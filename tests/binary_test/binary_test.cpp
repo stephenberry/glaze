@@ -1400,6 +1400,47 @@ suite my_struct_without_keys_test = [] {
    };
 };
 
+suite buffer_overread_tests = [] {
+   "buffer_overread"_test = [] {
+      const int write_value = 32;
+
+      const auto write_buffer = [&]() {
+         std::vector<std::byte> b{};
+         glz::write_binary(write_value, b);
+         return b;
+      }();
+
+      auto check = [&](auto read_buffer) {
+         int read_value;
+
+         auto ec = glz::read_binary(read_value, read_buffer);
+         if (!ec && read_buffer.size() >= ec.location && write_value == read_value) {
+            std::cout << "ok\n";
+         }
+         else {
+            if (!ec && read_buffer.size() >= ec.location) {
+               std::cout << "ok probably...\n";
+            }
+            else if (!ec && read_buffer.size() < ec.location) {
+               std::cout << "bad over read\n";
+            }
+            else {
+               std::cout << "ok error\n";
+            }
+         }
+      };
+
+      for (size_t i = 0; i <= write_buffer.size(); ++i) {
+         std::vector<std::byte> read_buffer{};
+         std::copy(write_buffer.begin(), write_buffer.begin() + i, std::back_inserter(read_buffer));
+         std::cerr << i << '\n';
+         check(read_buffer);
+         read_buffer.resize(write_buffer.size());
+         check(read_buffer);
+      }
+   };
+};
+
 int main()
 {
    write_tests();
