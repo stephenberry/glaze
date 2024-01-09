@@ -8,24 +8,24 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
     
-    - name: Set up enviroment
+    - name: Set up environment
       run: |
-        echo "CXX=clang++-14" >> "$GITHUB_ENV"
-        echo "CC=clang-14" >> "$GITHUB_ENV"
+        echo "CXX=clang++-16" >> "$GITHUB_ENV"
+        echo "CC=clang-16" >> "$GITHUB_ENV"
         echo "CXXFLAGS="-fprofile-instr-generate -fcoverage-mapping"" >> "$GITHUB_ENV"
         echo "LDFLAGS="-fprofile-instr-generate"" >> "$GITHUB_ENV"
         echo "LLVM_PROFILE_FILE="code-%p.profraw"" >> "$GITHUB_ENV"
 
-    - name: Have llvm-cov point to llvm-cov-14
+    - name: Have llvm-cov point to llvm-cov-16
       run: |
         mkdir -p /home/runner/.local/bin
-        ln -s `which llvm-cov-14` /home/runner/.local/bin/llvm-cov
-        ln -s `which llvm-profdata-14` /home/runner/.local/bin/llvm-profdata
+        ln -s `which llvm-cov-16` /home/runner/.local/bin/llvm-cov
+        ln -s `which llvm-profdata-16` /home/runner/.local/bin/llvm-profdata
 
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
