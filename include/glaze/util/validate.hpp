@@ -75,6 +75,7 @@ namespace glz
                                                const std::string_view filename = "")
       {
          std::string s{};
+         s.reserve(error.size() + info.context.size() + filename.size() + 128);
 
          if (!filename.empty()) {
             s += filename;
