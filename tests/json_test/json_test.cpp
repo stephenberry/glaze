@@ -6428,9 +6428,51 @@ struct hostname_include_struct
 
 static_assert(glz::detail::count_members<hostname_include_struct> == 3);
 
+struct multi_includer
+{
+   int i = 55;
+   std::string str = "Hello";
+};
+
+template <>
+struct glz::meta<multi_includer>
+{
+   using T = multi_includer;
+   static constexpr auto value = object("include", glz::file_include{}, "hostname_include", glz::hostname_include{}, &T::i, &T::str);
+};
+
 suite hostname_include_test = [] {
    "hostname_include"_test = [] {
       hostname_include_struct obj{};
+
+      glz::context ctx{};
+      const auto hostname = glz::detail::get_hostname(ctx);
+
+      std::string file_name = "../{}_config.json";
+      glz::detail::replace_first_braces(file_name, hostname);
+
+      expect(glz::write_file_json(obj, file_name, std::string{}) == glz::error_code::none);
+
+      obj.str = "";
+      obj.i = 0;
+
+      std::string s = R"({"hostname_include": "../{}_config.json", "i": 100})";
+      const auto ec = glz::read_json(obj, s);
+      expect(ec == glz::error_code::none) << glz::format_error(ec, s);
+
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 100) << obj.i;
+
+      obj.str = "";
+
+      std::string buffer{};
+      glz::read_file_json(obj, file_name, buffer);
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 55) << obj.i;
+   };
+   
+   "multi_includer"_test = [] {
+      multi_includer obj{};
 
       glz::context ctx{};
       const auto hostname = glz::detail::get_hostname(ctx);
