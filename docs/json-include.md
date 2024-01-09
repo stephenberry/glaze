@@ -28,6 +28,8 @@ This will read the `./obj.json` file into the `obj` as it is parsed. Since glaze
 
 Similar to `glz::file_include`, glaze provides `glz::hostname_include`. This is used for host-specific configuration files.
 
+> You must explicitly include the header file `#include "glaze/file/hostname_include.hpp"`
+
 In use:
 
 ```c++
