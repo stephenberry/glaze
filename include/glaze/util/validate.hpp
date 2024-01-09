@@ -113,5 +113,5 @@ namespace glz
          fmt::format_to(it, FMT_COMPILE("{: <{}}^\n"), "", info.column - 1);*/
          return s;
       }
-   } // namespace detail
-} // namespace test
+   }
+}
