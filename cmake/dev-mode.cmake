@@ -1,5 +1,7 @@
 enable_language(CXX)
 
+cmake_policy(SET CMP0135 NEW)
+
 set_property(GLOBAL PROPERTY USE_FOLDERS YES)
 
 include(CTest)
