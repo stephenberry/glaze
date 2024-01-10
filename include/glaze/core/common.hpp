@@ -130,6 +130,7 @@ namespace glz
       T& value;
 
       static constexpr auto glaze_includer = true;
+      static constexpr auto glaze_reflect = false;
    };
 
    template <class T>
@@ -152,7 +153,7 @@ namespace glz
    };
 
    template <class T>
-   concept is_includer = requires(T t) { T::glaze_includer; };
+   concept is_includer = requires(T t) { requires T::glaze_includer == true; };
 
    template <class T>
    concept range = requires(T& t) {

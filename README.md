@@ -4,11 +4,11 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from obje
 Glaze also supports:
 
 - [BEVE](https://github.com/stephenberry/beve) (binary efficient versatile encoding)
-- [CSV](https://github.com/stephenberry/glaze/blob/main/docs/csv.md) (comma separated value)
+- [CSV](./docs/csv.md) (comma separated value)
 
 ## With compile time reflection for MSVC, Clang, and GCC!
 
-- Serialize aggregate initializable structs without writing any metadata or using any macros!
+- Read/write aggregate initializable structs without writing any metadata or macros!
 
 ## Highlights
 
@@ -18,14 +18,14 @@ Glaze also supports:
 - Direct to memory serialization/deserialization
 - Compile time maps with constant time lookups and perfect hashing
 - Nearly zero intermediate allocations
-- Reflection for member object pointers when customizing
 - Powerful wrappers to modify read/write behavior ([Wrappers](./docs/wrappers.md))
 - Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
 - [Handle unknown keys](./docs/unknown-keys.md) in a fast and flexible manner
-- Direct memory access through JSON pointer syntax
-- [Binary format](./docs/binary.md) through the same API for maximum performance
+- Direct memory access through [JSON pointer syntax](./docs/json-pointer-syntax.md)
+- [Binary data](./docs/binary.md) through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
-- If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](./docs/exceptions.md)
+  - If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](./docs/exceptions.md)
+
 - No runtime type information necessary (compiles with `-fno-rtti`)
 - Rapid error handling with short circuiting
 - [JSON-RPC 2.0 support](./docs/json-rpc.md)
@@ -70,20 +70,11 @@ Tagged binary specification: [BEVE](https://github.com/stephenberry/beve)
 | Raw performance       | **0.44**           | **3168**     | **2350**    |
 | Equivalent JSON data* | **0.44**           | **3474**     | **2577**    |
 
-JSON message size: 670 bytes
+JSON size: 670 bytes
 
-Binary message size: 611 bytes
+BEVE size: 611 bytes
 
-*Binary data packs more efficiently than JSON, so transporting the same amount of information is even faster.
-
-## Compiler/System Support
-
-- Requires C++20
-- Only designed and tested for 64bit little-endian systems
-
-[Actions](https://github.com/stephenberry/glaze/actions) automatically build and test with [Clang](https://clang.llvm.org) (14+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (2022), and [GCC](https://gcc.gnu.org) (11+) on apple, windows, and linux.
-
-![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc_2022.yml/badge.svg) 
+*BEVE packs more efficiently than JSON, so transporting the same data is even faster.
 
 ## Example
 
@@ -100,7 +91,7 @@ struct my_struct
 };
 ```
 
-**JSON Output/Input** (prettified)
+**JSON** (prettified)
 
 ```json
 {
@@ -139,9 +130,9 @@ glz::write_json(s, buffer);
 ```c++
 std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3],"map":{"one":1,"two":2}})";
 auto s = glz::read_json<my_struct>(buffer);
-if (s) // check for error
+if (s) // check std::expected
 {
-  s.value(); // s.value() is a my_struct populated from JSON
+  s.value(); // s.value() is a my_struct populated from buffer
 }
 ```
 
@@ -150,11 +141,10 @@ or
 ```c++
 std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3],"map":{"one":1,"two":2}})";
 my_struct s{};
-auto ec = glz::read_json(s, buffer);
+auto ec = glz::read_json(s, buffer); // populates s from buffer
 if (ec) {
   // handle error
 }
-// populates s from JSON
 ```
 
 ### Read/Write From File
@@ -163,6 +153,15 @@ if (ec) {
 auto ec = glz::read_file_json(obj, "./obj.json", std::string{});
 auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 ```
+
+## Compiler/System Support
+
+- Requires C++20
+- Only designed and tested for 64bit little-endian systems
+
+[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (14+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (2022), and [GCC](https://gcc.gnu.org) (11+) on apple, windows, and linux.
+
+![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
 
 ## How To Use Glaze
 
@@ -201,9 +200,9 @@ target_link_libraries(main PRIVATE glaze::glaze)
 
 ---
 
-## See [Wiki](https://github.com/stephenberry/glaze/wiki) for Frequently Asked Questions
+## See [FAQ](./docs/FAQ.md) for Frequently Asked Questions
 
-## Explicit Metadata
+# Explicit Metadata
 
 If you want to specialize your reflection then you can optionally write the code below:
 
@@ -341,68 +340,164 @@ suite custom_encoding_test = [] {
 };
 ```
 
-## JSON Pointer Syntax
+## Object Mapping
 
-[Link to simple JSON pointer syntax explanation](https://github.com/stephenberry/JSON-Pointer)
-
-Glaze supports JSON pointer syntax access in a C++ context. This is extremely helpful for building generic APIs, which allows components of complex arguments to be accessed without needed know the encapsulating class.
+When using member pointers (e.g. `&T::a`) the C++ class structures must match the JSON interface. It may be desirable to map C++ classes with differing layouts to the same object interface. This is accomplished through registering lambda functions instead of member pointers.
 
 ```c++
-my_struct s{};
-auto d = glz::get<double>(s, "/d");
-// d.value() is a std::reference_wrapper to d in the structure s
+template <>
+struct glz::meta<Thing> {
+   static constexpr auto value = object(
+      "i", [](auto&& self) -> auto& { return self.subclass.i; }
+   );
+};
 ```
+
+The value `self` passed to the lambda function will be a `Thing` object, and the lambda function allows us to make the subclass invisible to the object interface.
+
+Lambda functions by default copy returns, therefore the `auto&` return type is typically required in order for glaze to write to memory.
+
+> Note that remapping can also be achieved through pointers/references, as glaze treats values, pointers, and references in the same manner when writing/reading.
+
+## Value Types
+
+A class can be treated as an underlying value as follows:
 
 ```c++
-my_struct s{};
-glz::set(s, "/d", 42.0);
-// d is now 42.0
+struct S {
+  int x{};
+};
+
+template <>
+struct glz::meta<S> {
+  static constexpr auto value{ &S::x };
+};
 ```
 
-> JSON pointer syntax works with deeply nested objects and anything serializable.
+or using a lambda:
 
 ```c++
-// Tuple Example
-auto tuple = std::make_tuple(3, 2.7, std::string("curry"));
-glz::set(tuple, "/0", 5);
-expect(std::get<0>(tuple) == 5.0);
+template <>
+struct glz::meta<S> {
+  static constexpr auto value = [](auto& self) -> auto& { return self.x; };
+};
 ```
 
-### read_as
+# Error Handling
 
-`read_as` allows you to read into an object from a JSON pointer and an input buffer.
+Glaze is safe to use with untrusted messages. Errors are returned as error codes, typically within a `glz::expected`, which behaves just like a `std::expected`.
+
+> Glaze works to short circuit error handling, which means the parsing exits very rapidly if an error is encountered.
+
+To generate more helpful error messages, call `format_error`:
 
 ```c++
-Thing thing{};
-glz::read_as_json(thing, "/vec3", "[7.6, 1292.1, 0.333]");
-expect(thing.vec3.x == 7.6 && thing.vec3.y == 1292.1 &&
-thing.vec3.z == 0.333);
-
-glz::read_as_json(thing, "/vec3/2", "999.9");
-expect(thing.vec3.z == 999.9);
+auto pe = glz::read_json(obj, buffer);
+if (pe) {
+  std::string descriptive_error = glz::format_error(pe, s);
+}
 ```
 
-### get_as_json
+This test case:
 
-`get_as_json` allows you to get a targeted value from within an input buffer. This is especially useful if you need to change how an object is parsed based on a value within the object.
+```json
+{"Hello":"World"x, "color": "red"}
+```
+
+Produces this error:
+
+```
+1:17: syntax_error
+   {"Hello":"World"x, "color": "red"}
+                   ^
+```
+
+Denoting that x is invalid here.
+
+# Type Support
+
+## Array Types
+
+Array types logically convert to JSON array values. Concepts are used to allow various containers and even user containers if they match standard library interfaces.
+
+- `glz::array` (compile time mixed types)
+- `std::tuple`
+- `std::array`
+- `std::vector`
+- `std::deque`
+- `std::list`
+- `std::forward_list`
+- `std::span`
+- `std::set`
+- `std::unordered_set`
+
+## Object Types
+
+Object types logically convert to JSON object values, such as maps. Like JSON, Glaze treats object definitions as unordered maps. Therefore the order of an object layout does not have to match the same binary sequence in C++.
+
+- `glz::object` (compile time mixed types)
+- `std::map`
+- `std::unordered_map`
+
+## Variants
+
+- `std::variant`
+
+See [Variant Handling](./docs/variant-handling.md) for more information.
+
+## Nullable Types
+
+- `std::unique_ptr`
+- `std::shared_ptr`
+- `std::optional`
+
+Nullable types may be allocated by valid input or nullified by the `null` keyword.
 
 ```c++
-std::string s = R"({"obj":{"x":5.5}})";
-auto z = glz::get_as_json<double, "/obj/x">(s);
-expect(z == 5.5);
+std::unique_ptr<int> ptr{};
+std::string buffer{};
+glz::write_json(ptr, buffer);
+expect(buffer == "null");
+
+glz::read_json(ptr, "5");
+expect(*ptr == 5);
+buffer.clear();
+glz::write_json(ptr, buffer);
+expect(buffer == "5");
+
+glz::read_json(ptr, "null");
+expect(!bool(ptr));
 ```
 
-### get_sv_json
+## Enums
 
-`get_sv_json` allows you to get a `std::string_view` to a targeted value within an input buffer. This can be more efficient to check values and handle custom parsing than constructing a new value with `get_as_json`.
+By default enums will be written and read in integer form. No `glz::meta` is necessary if this is the desired behavior.
+
+However, if you prefer to use enums as strings in JSON, they can be registered in the `glz::meta` as follows:
 
 ```c++
-std::string s = R"({"obj":{"x":5.5}})";
-auto view = glz::get_sv_json<"/obj/x">(s);
-expect(view == "5.5");
+enum class Color { Red, Green, Blue };
+
+template <>
+struct glz::meta<Color> {
+   using enum Color;
+   static constexpr auto value = enumerate("Red", Red,
+                                           "Green", Green,
+                                           "Blue", Blue
+   );
+};
 ```
 
-## JSON With Comments (JSONC)
+In use:
+
+```c++
+Color color = Color::Red;
+std::string buffer{};
+glz::write_json(color, buffer);
+expect(buffer == "\"Red\"");
+```
+
+# JSON With Comments (JSONC)
 
 Comments are supported with the specification defined here: [JSONC](https://github.com/stephenberry/JSONC)
 
@@ -435,54 +530,7 @@ Prettified output:
 
 > The `_c` is necessary if member object pointer names are reflected. You can also write `comment("x is a double")`
 
-## Object Mapping
-
-When using member pointers (e.g. `&T::a`) the C++ class structures must match the JSON interface. It may be desirable to map C++ classes with differing layouts to the same object interface. This is accomplished through registering lambda functions instead of member pointers.
-
-```c++
-template <>
-struct glz::meta<Thing> {
-   static constexpr auto value = object(
-      "i", [](auto&& self) -> auto& { return self.subclass.i; }
-   );
-};
-```
-
-The value `self` passed to the lambda function will be a `Thing` object, and the lambda function allows us to make the subclass invisible to the object interface.
-
-Lambda functions by default copy returns, therefore the `auto&` return type is typically required in order for glaze to write to memory.
-
-> Note that remapping can also be achieved through pointers/references, as glaze treats values, pointers, and references in the same manner when writing/reading.
-
-## Enums
-
-By default enums will be written and read in integer form. No `glz::meta` is necessary if this is the desired behavior.
-
-However, if you prefer to use enums as strings in JSON, they can be registered in the `glz::meta` as follows:
-
-```c++
-enum class Color { Red, Green, Blue };
-
-template <>
-struct glz::meta<Color> {
-   using enum Color;
-   static constexpr auto value = enumerate("Red", Red,
-                                           "Green", Green,
-                                           "Blue", Blue
-   );
-};
-```
-
-In use:
-
-```c++
-Color color = Color::Red;
-std::string buffer{};
-glz::write_json(color, buffer);
-expect(buffer == "\"Red\"");
-```
-
-## Prettify
+# Prettify JSON
 
 Formatted JSON can be written out directly via a compile time option:
 
@@ -518,74 +566,6 @@ Simplified prettify definition below, which allows the use of tabs or changing t
 string prettify(auto& in, bool tabs = false, uint32_t indent_size = 3)
 ```
 
-
-## Array Types
-
-Array types logically convert to JSON array values. Concepts are used to allow various containers and even user containers if they match standard library interfaces.
-
-- `glz::array` (compile time mixed types)
-- `std::tuple`
-- `std::array`
-- `std::vector`
-- `std::deque`
-- `std::list`
-- `std::forward_list`
-- `std::span`
-- `std::set`
-- `std::unordered_set`
-
-## Object Types
-
-Object types logically convert to JSON object values, such as maps. Like JSON, Glaze treats object definitions as unordered maps. Therefore the order of an object layout does not have to mach the same binary sequence in C++ (hence the tagged specification).
-
-- `glz::object` (compile time mixed types)
-- `std::map`
-- `std::unordered_map`
-
-## Nullable Types
-
-Glaze supports `std::unique_ptr`, `std::shared_ptr`, and `std::optional` as nullable types. Nullable types can be allocated by JSON input or nullified by the `null` keyword.
-
-```c++
-std::unique_ptr<int> ptr{};
-std::string buffer{};
-glz::write_json(ptr, buffer);
-expect(buffer == "null");
-
-glz::read_json(ptr, "5");
-expect(*ptr == 5);
-buffer.clear();
-glz::write_json(ptr, buffer);
-expect(buffer == "5");
-
-glz::read_json(ptr, "null");
-expect(!bool(ptr));
-```
-
-## Value Types
-
-A class can be treated as an underlying value as follows:
-
-```c++
-struct S {
-  int x{};
-};
-
-template <>
-struct glz::meta<S> {
-  static constexpr auto value{ &S::x };
-};
-```
-
-or using a lambda:
-
-```c++
-template <>
-struct glz::meta<S> {
-  static constexpr auto value = [](auto& self) -> auto& { return self.x; };
-};
-```
-
 ## Boolean Flags
 
 Glaze supports registering a set of boolean flags that behave as an array of string options:
@@ -613,10 +593,7 @@ expect(glz::write_json(s) == R"(["x","z"])");
 
 Only `"x"` and `"z"` are written out, because they are true. Reading in the buffer will set the appropriate booleans.
 
-> When writing binary, `flags` only uses one bit per boolean (byte aligned).
-
-## Variant Handling and Type Deduction
-See [Variant Handling](./docs/variant-handling.md) for details on `std::variant` support.
+> When writing BEVE, `flags` only use one bit per boolean (byte aligned).
 
 ## Logging JSON
 
@@ -660,38 +637,7 @@ glz::read_json(json, buffer);
 assert(json[2]["pi"].get<double>() == 3.14);
 ```
 
-## Error Handling
-
-Glaze is safe to use with untrusted messages. Errors are returned as error codes, typically within a `glz::expected`, which behaves just like a `std::expected`.
-
-> Glaze works to short circuit error handling, which means the parsing exits very rapidly if an error is encountered.
-
-To generate more helpful error messages, call `format_error`:
-
-```c++
-auto pe = glz::read_json(obj, buffer);
-if (pe) {
-  std::string descriptive_error = glz::format_error(pe, s);
-}
-```
-
-This test case:
-
-```json
-{"Hello":"World"x, "color": "red"}
-```
-
-Produces this error:
-
-```
-1:17: syntax_error
-   {"Hello":"World"x, "color": "red"}
-                   ^
-```
-
-Denoting that x is invalid here.
-
-### Raw Buffer Performance
+## Raw Buffer Performance
 
 Glaze is just about as fast writing to a `std::string` as it is writing to a raw char buffer. If you have sufficiently allocated space in your buffer you can write to the raw buffer, as shown below, but it is not recommended.
 
@@ -831,19 +777,21 @@ glz::read_ndjson(x, s);
 
 # More Features
 
-### [Tagged Binary Messages](./docs/binary.md)
-
-### [Shared Library API](./docs/glaze-interfaces.md)
-
-### [Thread Pool](./docs/thread-pool.md)
-
 ### [Data Recorder](./docs/recorder.md)
+
+### [JSON Include System](./docs/json-include.md)
+
+### [JSON Pointer Syntax](./docs/json-pointer-syntax.md)
 
 ### [JSON-RPC 2.0](./docs/json-rpc.md)
 
 ### [JSON Schema](./docs/json-schema.md)
 
-### [JSON Include System](./docs/json-include.md)
+### [Shared Library API](./docs/glaze-interfaces.md)
+
+### [Tagged Binary Messages](./docs/binary.md)
+
+### [Thread Pool](./docs/thread-pool.md)
 
 ### [Wrappers](./docs/wrappers.md)
 

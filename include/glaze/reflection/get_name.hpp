@@ -143,7 +143,7 @@ namespace glz
       requires(std::is_member_object_pointer_v<decltype(P)>)
    consteval std::string_view get_name() noexcept
    {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(__clang__)
       using T = remove_member_pointer<std::decay_t<decltype(P)>>::type;
       constexpr auto p = P;
       return get_name_msvc<T, &(detail::external<T>.*p)>();

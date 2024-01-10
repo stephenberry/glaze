@@ -564,6 +564,8 @@ struct glz::meta<includer_struct>
    static constexpr auto value = object("#include", glz::file_include{}, "str", &T::str, "i", &T::i, "j", &T::j);
 };
 
+static_assert(glz::is_includer<glz::includer<includer_struct>>);
+
 void file_include_test()
 {
    includer_struct obj{};
