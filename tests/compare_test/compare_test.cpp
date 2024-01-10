@@ -24,7 +24,7 @@ template <>
 struct glz::meta<float_compare_t>
 {
    using T = float_compare_t;
-   static constexpr auto value = object("x", &T::x, "y", &T::y, "z", &T::z);
+   static constexpr auto value = object(&T::x, &T::y, &T::z);
 
    static constexpr auto compare_epsilon = 0.1;
 };

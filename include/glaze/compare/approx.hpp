@@ -17,8 +17,10 @@ namespace glz
 
          bool equal = true;
          for_each<N>([&](auto I) {
-            auto& l = detail::get_member(lhs, get<1>(get<I>(meta_v<T>)));
-            auto& r = detail::get_member(rhs, get<1>(get<I>(meta_v<T>)));
+            using Element = detail::glaze_tuple_element<I, N, T>;
+            constexpr size_t member_index = Element::member_index;
+            auto& l = detail::get_member(lhs, get<member_index>(get<I>(meta_v<T>)));
+            auto& r = detail::get_member(rhs, get<member_index>(get<I>(meta_v<T>)));
             using V = std::decay_t<decltype(l)>;
             if constexpr (std::floating_point<V> && requires { meta<std::decay_t<T>>::compare_epsilon; }) {
                if (std::abs(l - r) >= meta<std::decay_t<T>>::compare_epsilon) {
