@@ -305,7 +305,8 @@ namespace glz
          }
       };
 
-      template <class T> requires (glaze_object_t<T> || reflectable<T>)
+      template <class T>
+         requires(glaze_object_t<T> || reflectable<T>)
       struct to_json_schema<T>
       {
          template <auto Opts>
@@ -336,7 +337,7 @@ namespace glz
                using Element = glaze_tuple_element<I, N, T>;
                static constexpr size_t member_index = Element::member_index;
                using val_t = std::decay_t<typename Element::type>;
-               
+
                auto& def = defs[name_v<val_t>];
                if (!def.type) {
                   to_json_schema<val_t>::template op<Opts>(def, defs);
@@ -344,7 +345,7 @@ namespace glz
                auto ref_val = schema{join_v<chars<"#/$defs/">, name_v<val_t>>};
                static constexpr size_t comment_index = member_index + 1;
                static constexpr auto Size = std::tuple_size_v<typename Element::Item>;
-               
+
                if constexpr (Size > comment_index && glaze_object_t<T>) {
                   static constexpr auto item = glz::get<I>(meta_v<V>);
                   using additional_data_type = decltype(get<comment_index>(item));
@@ -356,7 +357,7 @@ namespace glz
                      ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
                   }
                }
-               
+
                constexpr sv key = key_name<I, T, Element::use_reflection>;
                (*s.properties)[key] = ref_val;
             });
