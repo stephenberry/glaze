@@ -233,20 +233,6 @@ namespace glz
       }
    }();
 
-   template <auto Enum>
-      requires(std::is_enum_v<decltype(Enum)>)
-   inline constexpr std::string_view enum_name_v = []() -> std::string_view {
-      using T = std::decay_t<decltype(Enum)>;
-
-      if constexpr (detail::glaze_t<T>) {
-         using U = std::underlying_type_t<T>;
-         return glz::get<0>(glz::get<static_cast<U>(Enum)>(meta_v<T>));
-      }
-      else {
-         return "glz::unknown";
-      }
-   }();
-
    using version_t = std::array<uint32_t, 3>;
 
    template <class T>
