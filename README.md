@@ -91,7 +91,7 @@ struct my_struct
 };
 ```
 
-**JSON Output/Input** (prettified)
+**JSON** (prettified)
 
 ```json
 {
