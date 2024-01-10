@@ -200,7 +200,7 @@ target_link_libraries(main PRIVATE glaze::glaze)
 
 ---
 
-## See [Wiki](https://github.com/stephenberry/glaze/wiki) for Frequently Asked Questions
+## See [FAQ](./docs/FAQ.md) for Frequently Asked Questions
 
 # Explicit Metadata
 
