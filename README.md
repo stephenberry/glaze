@@ -383,6 +383,37 @@ struct glz::meta<S> {
 };
 ```
 
+# Error Handling
+
+Glaze is safe to use with untrusted messages. Errors are returned as error codes, typically within a `glz::expected`, which behaves just like a `std::expected`.
+
+> Glaze works to short circuit error handling, which means the parsing exits very rapidly if an error is encountered.
+
+To generate more helpful error messages, call `format_error`:
+
+```c++
+auto pe = glz::read_json(obj, buffer);
+if (pe) {
+  std::string descriptive_error = glz::format_error(pe, s);
+}
+```
+
+This test case:
+
+```json
+{"Hello":"World"x, "color": "red"}
+```
+
+Produces this error:
+
+```
+1:17: syntax_error
+   {"Hello":"World"x, "color": "red"}
+                   ^
+```
+
+Denoting that x is invalid here.
+
 # Type Support
 
 ## Array Types
@@ -605,37 +636,6 @@ std::string buffer = R"([5,"Hello World",{"pi":3.14}])";
 glz::read_json(json, buffer);
 assert(json[2]["pi"].get<double>() == 3.14);
 ```
-
-## Error Handling
-
-Glaze is safe to use with untrusted messages. Errors are returned as error codes, typically within a `glz::expected`, which behaves just like a `std::expected`.
-
-> Glaze works to short circuit error handling, which means the parsing exits very rapidly if an error is encountered.
-
-To generate more helpful error messages, call `format_error`:
-
-```c++
-auto pe = glz::read_json(obj, buffer);
-if (pe) {
-  std::string descriptive_error = glz::format_error(pe, s);
-}
-```
-
-This test case:
-
-```json
-{"Hello":"World"x, "color": "red"}
-```
-
-Produces this error:
-
-```
-1:17: syntax_error
-   {"Hello":"World"x, "color": "red"}
-                   ^
-```
-
-Denoting that x is invalid here.
 
 ## Raw Buffer Performance
 
