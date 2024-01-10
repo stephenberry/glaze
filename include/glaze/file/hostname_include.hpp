@@ -22,6 +22,7 @@ namespace glz
          T& value;
 
          static constexpr auto glaze_includer = true;
+         static constexpr auto glaze_reflect = false;
       };
    }
 
