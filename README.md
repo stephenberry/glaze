@@ -202,7 +202,7 @@ target_link_libraries(main PRIVATE glaze::glaze)
 
 ## See [Wiki](https://github.com/stephenberry/glaze/wiki) for Frequently Asked Questions
 
-## Explicit Metadata
+# Explicit Metadata
 
 If you want to specialize your reflection then you can optionally write the code below:
 
@@ -340,7 +340,133 @@ suite custom_encoding_test = [] {
 };
 ```
 
-## JSON Pointer Syntax
+## Object Mapping
+
+When using member pointers (e.g. `&T::a`) the C++ class structures must match the JSON interface. It may be desirable to map C++ classes with differing layouts to the same object interface. This is accomplished through registering lambda functions instead of member pointers.
+
+```c++
+template <>
+struct glz::meta<Thing> {
+   static constexpr auto value = object(
+      "i", [](auto&& self) -> auto& { return self.subclass.i; }
+   );
+};
+```
+
+The value `self` passed to the lambda function will be a `Thing` object, and the lambda function allows us to make the subclass invisible to the object interface.
+
+Lambda functions by default copy returns, therefore the `auto&` return type is typically required in order for glaze to write to memory.
+
+> Note that remapping can also be achieved through pointers/references, as glaze treats values, pointers, and references in the same manner when writing/reading.
+
+## Value Types
+
+A class can be treated as an underlying value as follows:
+
+```c++
+struct S {
+  int x{};
+};
+
+template <>
+struct glz::meta<S> {
+  static constexpr auto value{ &S::x };
+};
+```
+
+or using a lambda:
+
+```c++
+template <>
+struct glz::meta<S> {
+  static constexpr auto value = [](auto& self) -> auto& { return self.x; };
+};
+```
+
+# Type Support
+
+## Array Types
+
+Array types logically convert to JSON array values. Concepts are used to allow various containers and even user containers if they match standard library interfaces.
+
+- `glz::array` (compile time mixed types)
+- `std::tuple`
+- `std::array`
+- `std::vector`
+- `std::deque`
+- `std::list`
+- `std::forward_list`
+- `std::span`
+- `std::set`
+- `std::unordered_set`
+
+## Object Types
+
+Object types logically convert to JSON object values, such as maps. Like JSON, Glaze treats object definitions as unordered maps. Therefore the order of an object layout does not have to match the same binary sequence in C++.
+
+- `glz::object` (compile time mixed types)
+- `std::map`
+- `std::unordered_map`
+
+## Variants
+
+- `std::variant`
+
+See [Variant Handling](./docs/variant-handling.md) for more information.
+
+## Nullable Types
+
+- `std::unique_ptr`
+- `std::shared_ptr`
+- `std::optional`
+
+Nullable types may be allocated by valid input or nullified by the `null` keyword.
+
+```c++
+std::unique_ptr<int> ptr{};
+std::string buffer{};
+glz::write_json(ptr, buffer);
+expect(buffer == "null");
+
+glz::read_json(ptr, "5");
+expect(*ptr == 5);
+buffer.clear();
+glz::write_json(ptr, buffer);
+expect(buffer == "5");
+
+glz::read_json(ptr, "null");
+expect(!bool(ptr));
+```
+
+## Enums
+
+By default enums will be written and read in integer form. No `glz::meta` is necessary if this is the desired behavior.
+
+However, if you prefer to use enums as strings in JSON, they can be registered in the `glz::meta` as follows:
+
+```c++
+enum class Color { Red, Green, Blue };
+
+template <>
+struct glz::meta<Color> {
+   using enum Color;
+   static constexpr auto value = enumerate("Red", Red,
+                                           "Green", Green,
+                                           "Blue", Blue
+   );
+};
+```
+
+In use:
+
+```c++
+Color color = Color::Red;
+std::string buffer{};
+glz::write_json(color, buffer);
+expect(buffer == "\"Red\"");
+```
+
+# JSON Pointer Syntax
 
 [Link to simple JSON pointer syntax explanation](https://github.com/stephenberry/JSON-Pointer)
 
@@ -401,7 +527,7 @@ auto view = glz::get_sv_json<"/obj/x">(s);
 expect(view == "5.5");
 ```
 
-## JSON With Comments (JSONC)
+# JSON With Comments (JSONC)
 
 Comments are supported with the specification defined here: [JSONC](https://github.com/stephenberry/JSONC)
 
@@ -434,54 +560,7 @@ Prettified output:
 
 > The `_c` is necessary if member object pointer names are reflected. You can also write `comment("x is a double")`
 
-## Object Mapping
-
-When using member pointers (e.g. `&T::a`) the C++ class structures must match the JSON interface. It may be desirable to map C++ classes with differing layouts to the same object interface. This is accomplished through registering lambda functions instead of member pointers.
-
-```c++
-template <>
-struct glz::meta<Thing> {
-   static constexpr auto value = object(
-      "i", [](auto&& self) -> auto& { return self.subclass.i; }
-   );
-};
-```
-
-The value `self` passed to the lambda function will be a `Thing` object, and the lambda function allows us to make the subclass invisible to the object interface.
-
-Lambda functions by default copy returns, therefore the `auto&` return type is typically required in order for glaze to write to memory.
-
-> Note that remapping can also be achieved through pointers/references, as glaze treats values, pointers, and references in the same manner when writing/reading.
-
-## Enums
-
-By default enums will be written and read in integer form. No `glz::meta` is necessary if this is the desired behavior.
-
-However, if you prefer to use enums as strings in JSON, they can be registered in the `glz::meta` as follows:
-
-```c++
-enum class Color { Red, Green, Blue };
-
-template <>
-struct glz::meta<Color> {
-   using enum Color;
-   static constexpr auto value = enumerate("Red", Red,
-                                           "Green", Green,
-                                           "Blue", Blue
-   );
-};
-```
-
-In use:
-
-```c++
-Color color = Color::Red;
-std::string buffer{};
-glz::write_json(color, buffer);
-expect(buffer == "\"Red\"");
-```
-
-## Prettify
+# Prettify JSON
 
 Formatted JSON can be written out directly via a compile time option:
 
@@ -517,84 +596,6 @@ Simplified prettify definition below, which allows the use of tabs or changing t
 string prettify(auto& in, bool tabs = false, uint32_t indent_size = 3)
 ```
 
-
-## Array Types
-
-Array types logically convert to JSON array values. Concepts are used to allow various containers and even user containers if they match standard library interfaces.
-
-- `glz::array` (compile time mixed types)
-- `std::tuple`
-- `std::array`
-- `std::vector`
-- `std::deque`
-- `std::list`
-- `std::forward_list`
-- `std::span`
-- `std::set`
-- `std::unordered_set`
-
-## Object Types
-
-Object types logically convert to JSON object values, such as maps. Like JSON, Glaze treats object definitions as unordered maps. Therefore the order of an object layout does not have to match the same binary sequence in C++.
-
-- `glz::object` (compile time mixed types)
-- `std::map`
-- `std::unordered_map`
-
-## Variants
-
-- `std::variant`
-
-See [Variant Handling](./docs/variant-handling.md) for more information.
-
-## Nullable Types
-
-- `std::unique_ptr`
-- `std::shared_ptr`
-- `std::optional`
-
-Nullable types may be allocated by valid input or nullified by the `null` keyword.
-
-```c++
-std::unique_ptr<int> ptr{};
-std::string buffer{};
-glz::write_json(ptr, buffer);
-expect(buffer == "null");
-
-glz::read_json(ptr, "5");
-expect(*ptr == 5);
-buffer.clear();
-glz::write_json(ptr, buffer);
-expect(buffer == "5");
-
-glz::read_json(ptr, "null");
-expect(!bool(ptr));
-```
-
-## Value Types
-
-A class can be treated as an underlying value as follows:
-
-```c++
-struct S {
-  int x{};
-};
-
-template <>
-struct glz::meta<S> {
-  static constexpr auto value{ &S::x };
-};
-```
-
-or using a lambda:
-
-```c++
-template <>
-struct glz::meta<S> {
-  static constexpr auto value = [](auto& self) -> auto& { return self.x; };
-};
-```
-
 ## Boolean Flags
 
 Glaze supports registering a set of boolean flags that behave as an array of string options:
@@ -622,7 +623,7 @@ expect(glz::write_json(s) == R"(["x","z"])");
 
 Only `"x"` and `"z"` are written out, because they are true. Reading in the buffer will set the appropriate booleans.
 
-> When writing binary, `flags` only uses one bit per boolean (byte aligned).
+> When writing BEVE, `flags` only use one bit per boolean (byte aligned).
 
 ## Logging JSON
 
@@ -697,7 +698,7 @@ Produces this error:
 
 Denoting that x is invalid here.
 
-### Raw Buffer Performance
+## Raw Buffer Performance
 
 Glaze is just about as fast writing to a `std::string` as it is writing to a raw char buffer. If you have sufficiently allocated space in your buffer you can write to the raw buffer, as shown below, but it is not recommended.
 
