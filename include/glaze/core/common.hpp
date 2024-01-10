@@ -853,7 +853,7 @@ namespace glz
       constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>)
       {
          return normal_map<sv, T, std::tuple_size_v<meta_t<T>>>({std::make_pair<sv, T>(
-            sv(glz::get<0>(glz::get<I>(meta_v<T>))), T(glz::get<1>(glz::get<I>(meta_v<T>))))...});
+                                                                                       get_enum_key<T, I>(), T(get_enum_value<T, I>()))...});
       }
 
       template <class T>

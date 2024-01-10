@@ -199,11 +199,15 @@ namespace glz
             // });
             s.oneOf = std::vector<schematic>(N);
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::get<I>(meta_v<V>);
+               static constexpr auto item = get<I>(meta_v<V>);
+               using T0 = std::decay_t<decltype(get<0>(item))>;
                auto& enumeration = (*s.oneOf)[I.value];
-               enumeration.constant = glz::get<0>(item);
-               if constexpr (std::tuple_size_v < decltype(item) >> 2) {
-                  enumeration.description = std::get<2>(item);
+               enumeration.constant = get_enum_key<V, I>();
+               static constexpr size_t member_index = std::is_enum_v<T0> ? 0 : 1;
+               static constexpr size_t comment_index = member_index + 1;
+               constexpr auto Size = std::tuple_size_v<decltype(item)>;
+               if constexpr (Size > comment_index) {
+                  enumeration.description = get<comment_index>(item);
                }
             });
          }

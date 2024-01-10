@@ -74,6 +74,18 @@ namespace glz
                indices[i++] = I;
             }
          }
+         else if constexpr (std::is_enum_v<V>) {
+            if constexpr (I == 0) {
+               indices[i++] = 0;
+            }
+            else if constexpr (std::convertible_to<std::tuple_element_t<I - 1, Tuple>, std::string_view>) {
+               // If the previous element in the tuple is convertible to a std::string_view, then we treat it as the key
+               indices[i++] = I - 1;
+            }
+            else {
+               indices[i++] = I;
+            }
+         }
          else if constexpr (!(std::convertible_to<V, std::string_view> || is_schema_class<V> ||
                               std::same_as<V, comment>)) {
             indices[i++] = I - 1;
