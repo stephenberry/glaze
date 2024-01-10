@@ -8,7 +8,7 @@ Glaze also supports:
 
 ## With compile time reflection for MSVC, Clang, and GCC!
 
-- Serialize aggregate initializable structs without writing any metadata or using any macros!
+- Read/write aggregate initializable structs without writing any metadata or macros!
 
 ## Highlights
 
@@ -18,14 +18,14 @@ Glaze also supports:
 - Direct to memory serialization/deserialization
 - Compile time maps with constant time lookups and perfect hashing
 - Nearly zero intermediate allocations
-- Reflection for member object pointers when customizing
 - Powerful wrappers to modify read/write behavior ([Wrappers](./docs/wrappers.md))
 - Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
 - [Handle unknown keys](./docs/unknown-keys.md) in a fast and flexible manner
 - Direct memory access through JSON pointer syntax
-- [Binary format](./docs/binary.md) through the same API for maximum performance
+- [Binary data](./docs/binary.md) through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
-- If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](./docs/exceptions.md)
+  - If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](./docs/exceptions.md)
+
 - No runtime type information necessary (compiles with `-fno-rtti`)
 - Rapid error handling with short circuiting
 - [JSON-RPC 2.0 support](./docs/json-rpc.md)
@@ -130,9 +130,9 @@ glz::write_json(s, buffer);
 ```c++
 std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3],"map":{"one":1,"two":2}})";
 auto s = glz::read_json<my_struct>(buffer);
-if (s) // check for error
+if (s) // check std::expected
 {
-  s.value(); // s.value() is a my_struct populated from JSON
+  s.value(); // s.value() is a my_struct populated from buffer
 }
 ```
 
@@ -141,11 +141,10 @@ or
 ```c++
 std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3],"map":{"one":1,"two":2}})";
 my_struct s{};
-auto ec = glz::read_json(s, buffer);
+auto ec = glz::read_json(s, buffer); // populates s from buffer
 if (ec) {
   // handle error
 }
-// populates s from JSON
 ```
 
 ### Read/Write From File
