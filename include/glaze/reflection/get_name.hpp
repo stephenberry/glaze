@@ -24,14 +24,14 @@ namespace glz::detail
 
    // using const char* simplifies the complier's output and should improve compile times
    template <auto Ptr>
-   [[nodiscard]] consteval auto get_mangled_name()
+   [[nodiscard]] consteval auto mangled_name()
    {
       // return std::source_location::current().function_name();
       return GLZ_PRETTY_FUNCTION;
    }
 
    template <class T>
-   [[nodiscard]] consteval auto get_mangled_name()
+   [[nodiscard]] consteval auto mangled_name()
    {
       // return std::source_location::current().function_name();
       return GLZ_PRETTY_FUNCTION;
@@ -41,14 +41,14 @@ namespace glz::detail
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
    template <auto N, class T>
-   constexpr std::string_view get_name_impl = get_mangled_name<get_ptr<N>(external<T>)>();
+   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<T>)>();
 #pragma clang diagnostic pop
 #elif __GNUC__
    template <auto N, class T>
-   constexpr std::string_view get_name_impl = get_mangled_name<get_ptr<N>(external<T>)>();
+   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<T>)>();
 #else
    template <auto N, class T>
-   constexpr std::string_view get_name_impl = get_mangled_name<get_ptr<N>(external<T>)>();
+   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<T>)>();
 #endif
 
    struct GLAZE_REFLECTOR
@@ -65,12 +65,12 @@ namespace glz::detail
 
    struct reflect_type
    {
-      static constexpr std::string_view name = get_mangled_name<GLAZE_REFLECTOR>();
+      static constexpr std::string_view name = mangled_name<GLAZE_REFLECTOR>();
       static constexpr auto end = name.substr(name.find("GLAZE_REFLECTOR") + sizeof("GLAZE_REFLECTOR") - 1);
 #if defined(__GNUC__) || defined(__clang__)
       static constexpr auto begin = std::string_view{"T = "};
 #else
-      static constexpr auto begin = std::string_view{"glz::detail::get_mangled_name<"};
+      static constexpr auto begin = std::string_view{"glz::detail::mangled_name<"};
 #endif
    };
 }
@@ -87,7 +87,7 @@ namespace glz
 
    template <class T>
    static constexpr auto type_name = [] {
-      constexpr std::string_view name = detail::get_mangled_name<T>();
+      constexpr std::string_view name = detail::mangled_name<T>();
       constexpr auto begin = name.find(detail::reflect_type::end);
       constexpr auto tmp = name.substr(0, begin);
 #if defined(__GNUC__) || defined(__clang__)
