@@ -693,8 +693,8 @@ namespace glz
          }
       };
 
-      template <class T>
-      struct from_binary<includer<T>>
+      template <is_includer T>
+      struct from_binary<T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept

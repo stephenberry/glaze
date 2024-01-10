@@ -174,9 +174,10 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
          {}
       };
-
-      template <class T>
-      struct to_binary<includer<T>>
+      
+      // // write includers as empty strings
+      template <is_includer T>
+      struct to_binary<T>
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&... args) noexcept
