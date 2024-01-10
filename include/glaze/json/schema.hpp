@@ -339,7 +339,7 @@ namespace glz
                
                auto& def = defs[name_v<val_t>];
                if (!def.type) {
-                  to_json_schema<std::remove_cvref_t<val_t>>::template op<Opts>(def, defs);
+                  to_json_schema<val_t>::template op<Opts>(def, defs);
                }
                auto ref_val = schema{join_v<chars<"#/$defs/">, name_v<val_t>>};
                static constexpr size_t comment_index = member_index + 1;
