@@ -76,15 +76,6 @@ BEVE size: 611 bytes
 
 *BEVE packs more efficiently than JSON, so transporting the same data is even faster.
 
-## Compiler/System Support
-
-- Requires C++20
-- Only designed and tested for 64bit little-endian systems
-
-[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (14+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (2022), and [GCC](https://gcc.gnu.org) (11+) on apple, windows, and linux.
-
-![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
-
 ## Example
 
 Your struct will automatically get reflected! No metadata is required by the user.
@@ -163,6 +154,15 @@ if (ec) {
 auto ec = glz::read_file_json(obj, "./obj.json", std::string{});
 auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 ```
+
+## Compiler/System Support
+
+- Requires C++20
+- Only designed and tested for 64bit little-endian systems
+
+[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (14+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (2022), and [GCC](https://gcc.gnu.org) (11+) on apple, windows, and linux.
+
+![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
 
 ## How To Use Glaze
 
