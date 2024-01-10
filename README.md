@@ -535,7 +535,7 @@ Array types logically convert to JSON array values. Concepts are used to allow v
 
 ## Object Types
 
-Object types logically convert to JSON object values, such as maps. Like JSON, Glaze treats object definitions as unordered maps. Therefore the order of an object layout does not have to mach the same binary sequence in C++ (hence the tagged specification).
+Object types logically convert to JSON object values, such as maps. Like JSON, Glaze treats object definitions as unordered maps. Therefore the order of an object layout does not have to match the same binary sequence in C++.
 
 - `glz::object` (compile time mixed types)
 - `std::map`
@@ -549,7 +549,11 @@ See [Variant Handling](./docs/variant-handling.md) for more information.
 
 ## Nullable Types
 
-Glaze supports `std::unique_ptr`, `std::shared_ptr`, and `std::optional` as nullable types. Nullable types can be allocated by JSON input or nullified by the `null` keyword.
+- `std::unique_ptr`
+- `std::shared_ptr`
+- `std::optional`
+
+Nullable types may be allocated by valid input or nullified by the `null` keyword.
 
 ```c++
 std::unique_ptr<int> ptr{};
