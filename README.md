@@ -248,11 +248,9 @@ struct my_struct
 };
 ```
 
-> Template specialization of `glz::meta` is preferred when separating class definition from the serialization mapping. Local glaze metadata is helpful for working within the local namespace.
-
 ## Custom Key Names or Unnamed Types
 
-When you define Glaze metadata, objects will automatically reflect the names of your member object pointers. However, if you want custom names or your register lambda functions or wrappers that do not provide names for your fields, you can optionally add field names in your metadata.
+When you define Glaze metadata, objects will automatically reflect the names of your member object pointers. However, if you want custom names or you register lambda functions or wrappers that do not provide names for your fields, you can optionally add field names in your metadata.
 
 Example of custom names:
 
