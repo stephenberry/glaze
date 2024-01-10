@@ -816,7 +816,7 @@ namespace glz
                   return;
             }
 
-            const auto key = parse_key(ctx, it, end);
+            const auto key = parse_key(ctx, it, end); // TODO: Use more optimal enum key parsing
             if (bool(ctx.error)) [[unlikely]]
                return;
 

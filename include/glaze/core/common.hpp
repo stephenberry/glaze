@@ -706,6 +706,19 @@ namespace glz
             return {first};
          }
       }
+      
+      template <class T, size_t I>
+      constexpr sv get_enum_key() noexcept
+      {
+         constexpr auto first = get<0>(get<I>(meta_v<T>));
+         using T0 = std::decay_t<decltype(first)>;
+         if constexpr (std::is_enum_v<T0>) {
+            return get_name<first>();
+         }
+         else {
+            return {first};
+         }
+      }
 
       template <class T, size_t I>
       struct meta_sv
