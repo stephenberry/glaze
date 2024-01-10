@@ -18,7 +18,14 @@ namespace glz
             return lhs == rhs;
          }
          else {
-            constexpr auto N = std::tuple_size_v<meta_t<T>>;
+            constexpr auto N = [] {
+               if constexpr (detail::reflectable<T>) {
+                  return detail::count_members<T>;
+               }
+               else {
+                  return std::tuple_size_v<meta_t<T>>;
+               }
+            }();
 
             bool equal = true;
             for_each<N>([&](auto I) {
@@ -41,7 +48,14 @@ namespace glz
       template <detail::glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
-         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         constexpr auto N = [] {
+            if constexpr (detail::reflectable<T>) {
+               return detail::count_members<T>;
+            }
+            else {
+               return std::tuple_size_v<meta_t<T>>;
+            }
+         }();
 
          bool less_than = true;
          for_each<N>([&](auto I) {
@@ -63,7 +77,14 @@ namespace glz
       template <detail::glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
-         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         constexpr auto N = [] {
+            if constexpr (detail::reflectable<T>) {
+               return detail::count_members<T>;
+            }
+            else {
+               return std::tuple_size_v<meta_t<T>>;
+            }
+         }();
 
          bool less_than = true;
          for_each<N>([&](auto I) {
@@ -85,7 +106,14 @@ namespace glz
       template <detail::glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
-         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         constexpr auto N = [] {
+            if constexpr (detail::reflectable<T>) {
+               return detail::count_members<T>;
+            }
+            else {
+               return std::tuple_size_v<meta_t<T>>;
+            }
+         }();
 
          bool greater_than = true;
          for_each<N>([&](auto I) {
@@ -107,7 +135,14 @@ namespace glz
       template <detail::glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
-         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         constexpr auto N = [] {
+            if constexpr (detail::reflectable<T>) {
+               return detail::count_members<T>;
+            }
+            else {
+               return std::tuple_size_v<meta_t<T>>;
+            }
+         }();
 
          bool greater_than = true;
          for_each<N>([&](auto I) {
