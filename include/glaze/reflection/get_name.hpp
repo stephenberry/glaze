@@ -24,14 +24,14 @@ namespace glz::detail
 
    // using const char* simplifies the complier's output and should improve compile times
    template <auto Ptr>
-   [[nodiscard]] consteval const char* get_mangled_name()
+   [[nodiscard]] consteval auto get_mangled_name()
    {
       // return std::source_location::current().function_name();
       return GLZ_PRETTY_FUNCTION;
    }
 
    template <class T>
-   [[nodiscard]] consteval const char* get_mangled_name()
+   [[nodiscard]] consteval auto get_mangled_name()
    {
       // return std::source_location::current().function_name();
       return GLZ_PRETTY_FUNCTION;
