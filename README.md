@@ -4,7 +4,7 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from obje
 Glaze also supports:
 
 - [BEVE](https://github.com/stephenberry/beve) (binary efficient versatile encoding)
-- [CSV](https://github.com/stephenberry/glaze/blob/main/docs/csv.md) (comma separated value)
+- [CSV](./docs/csv.md) (comma separated value)
 
 ## With compile time reflection for MSVC, Clang, and GCC!
 
@@ -541,6 +541,12 @@ Object types logically convert to JSON object values, such as maps. Like JSON, G
 - `std::map`
 - `std::unordered_map`
 
+## Variants
+
+- `std::variant`
+
+See [Variant Handling](./docs/variant-handling.md) for more information.
+
 ## Nullable Types
 
 Glaze supports `std::unique_ptr`, `std::shared_ptr`, and `std::optional` as nullable types. Nullable types can be allocated by JSON input or nullified by the `null` keyword.
@@ -613,9 +619,6 @@ expect(glz::write_json(s) == R"(["x","z"])");
 Only `"x"` and `"z"` are written out, because they are true. Reading in the buffer will set the appropriate booleans.
 
 > When writing binary, `flags` only uses one bit per boolean (byte aligned).
-
-## Variant Handling and Type Deduction
-See [Variant Handling](./docs/variant-handling.md) for details on `std::variant` support.
 
 ## Logging JSON
 
@@ -830,19 +833,19 @@ glz::read_ndjson(x, s);
 
 # More Features
 
-### [Tagged Binary Messages](./docs/binary.md)
-
-### [Shared Library API](./docs/glaze-interfaces.md)
-
-### [Thread Pool](./docs/thread-pool.md)
-
 ### [Data Recorder](./docs/recorder.md)
+
+### [JSON Include System](./docs/json-include.md)
 
 ### [JSON-RPC 2.0](./docs/json-rpc.md)
 
 ### [JSON Schema](./docs/json-schema.md)
 
-### [JSON Include System](./docs/json-include.md)
+### [Shared Library API](./docs/glaze-interfaces.md)
+
+### [Tagged Binary Messages](./docs/binary.md)
+
+### [Thread Pool](./docs/thread-pool.md)
 
 ### [Wrappers](./docs/wrappers.md)
 
