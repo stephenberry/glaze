@@ -70,11 +70,11 @@ Tagged binary specification: [BEVE](https://github.com/stephenberry/beve)
 | Raw performance       | **0.44**           | **3168**     | **2350**    |
 | Equivalent JSON data* | **0.44**           | **3474**     | **2577**    |
 
-JSON message size: 670 bytes
+JSON size: 670 bytes
 
-Binary message size: 611 bytes
+BEVE size: 611 bytes
 
-*Binary data packs more efficiently than JSON, so transporting the same amount of information is even faster.
+*BEVE packs more efficiently than JSON, so transporting the same data is even faster.
 
 ## Compiler/System Support
 
