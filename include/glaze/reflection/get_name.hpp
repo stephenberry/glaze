@@ -157,8 +157,9 @@ namespace glz
       return str.substr(str.rfind("::") + 2);
 #endif
    }
-   
-   template <auto E> requires (std::is_enum_v<decltype(E)>)
+
+   template <auto E>
+      requires(std::is_enum_v<decltype(E)>)
    consteval auto get_name()
    {
 #if defined(_MSC_VER) && !defined(__clang__)

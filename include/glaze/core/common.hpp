@@ -706,7 +706,7 @@ namespace glz
             return {first};
          }
       }
-      
+
       template <class T, size_t I>
       constexpr sv get_enum_key() noexcept
       {
@@ -719,7 +719,7 @@ namespace glz
             return {first};
          }
       }
-      
+
       template <class T, size_t I>
       constexpr auto get_enum_value() noexcept
       {
@@ -828,8 +828,8 @@ namespace glz
       constexpr auto make_enum_to_string_map_impl(std::index_sequence<I...>)
       {
          using key_t = std::underlying_type_t<T>;
-         return normal_map<key_t, sv, std::tuple_size_v<meta_t<T>>>({std::make_pair<key_t, sv>(
-            static_cast<key_t>(get_enum_value<T, I>()), get_enum_key<T, I>())...});
+         return normal_map<key_t, sv, std::tuple_size_v<meta_t<T>>>(
+            {std::make_pair<key_t, sv>(static_cast<key_t>(get_enum_value<T, I>()), get_enum_key<T, I>())...});
       }
 
       template <class T>
@@ -844,16 +844,15 @@ namespace glz
       constexpr auto make_enum_to_string_array()
       {
          std::array<sv, std::tuple_size_v<meta_t<T>>> arr;
-         for_each<std::tuple_size_v<meta_t<T>>>(
-                                                [&](auto I) { arr[I] = get_enum_key<T, I>(); });
+         for_each<std::tuple_size_v<meta_t<T>>>([&](auto I) { arr[I] = get_enum_key<T, I>(); });
          return arr;
       }
 
       template <class T, size_t... I>
       constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>)
       {
-         return normal_map<sv, T, std::tuple_size_v<meta_t<T>>>({std::make_pair<sv, T>(
-                                                                                       get_enum_key<T, I>(), T(get_enum_value<T, I>()))...});
+         return normal_map<sv, T, std::tuple_size_v<meta_t<T>>>(
+            {std::make_pair<sv, T>(get_enum_key<T, I>(), T(get_enum_value<T, I>()))...});
       }
 
       template <class T>
@@ -1169,7 +1168,6 @@ namespace glz
       using T = std::decay_t<decltype(Enum)>;
 
       if constexpr (detail::glaze_t<T>) {
-         
          using U = std::underlying_type_t<T>;
          return detail::get_enum_key<T, static_cast<U>(Enum)>();
       }
@@ -1177,7 +1175,7 @@ namespace glz
          return "glz::unknown";
       }
    }();
-   
+
    [[nodiscard]] inline std::string format_error(const parse_error& pe, const auto& buffer)
    {
       static constexpr auto arr = detail::make_enum_to_string_array<error_code>();
