@@ -38,10 +38,17 @@ namespace glz::repe
       };
    };
    
+   struct state
+   {
+      const sv msg{};
+      const repe::header& header;
+      std::string& buffer;
+   };
+   
    struct procedure
    {
       std::function<void(const sv)> user_data{}; // handle user data
-      std::function<void(const sv, const header&, std::string&)> call{}; // RPC call method
+      std::function<void(state&&)> call{}; // RPC call method
    };
    
    template <opts Opts = opts{}>
@@ -62,12 +69,18 @@ namespace glz::repe
          }, call_method};
       }
       
-      void read_json_params(auto&& value, auto&& msg)
+      bool read_json_params(auto&& value, auto&& state)
       {
-         const auto ec = glz::read_json(value, msg);
+         const auto ec = glz::read_json(value, state.msg);
          if (ec) {
-            glz::write_ndjson(std::tuple(header{.error = 1}, error{1, format_error(ec, msg)}), response);
+            glz::write_ndjson(std::tuple(header{.error = 1}, error{1, format_error(ec, state.msg)}), response);
+            return true;
          }
+         return false;
+      }
+      
+      void write_json_response(auto&& value, auto&& state) {
+         glz::write_ndjson(std::tie(state.header, value), state.buffer);
       }
       
       void call(const sv msg)
@@ -100,7 +113,7 @@ namespace glz::repe
             }
             
             const sv body = msg.substr(size_t(std::distance(start, b)));
-            it->second.call(body, header, response); // handle the body
+            it->second.call(state{body, header, response}); // handle the body
          }
          else {
             response = "method not found";
@@ -108,16 +121,15 @@ namespace glz::repe
       }
    };
    
-   struct client
-   {
-      std::string buffer;
-      
-      template <class Message>
-      void request(Message&& msg)
-      {
-         glz::write_ndjson(std::forward<Message>(msg), buffer);
-      }
-   };
+   template <class Message>
+   inline auto request(Message&& msg) {
+      return glz::write_ndjson(std::forward<Message>(msg));
+   }
+   
+   template <class Message, class Buffer>
+   inline void request(Message&& msg, Buffer&& buffer) {
+      glz::write_ndjson(std::forward<Message>(msg), std::forward<Buffer>(buffer));
+   }
 }
 
 namespace repe = glz::repe;
@@ -126,23 +138,24 @@ suite repe_tests = [] {
    "repe"_test = [] {
       repe::server server{};
       
-      server.on("summer", [&](auto msg, auto& header, std::string& response){
+      server.on("summer", [&](auto&& state){
          std::vector<int> v{};
-         server.read_json_params(v, msg);
-         auto result = std::reduce(std::cbegin(v), std::cend(v));
-         const repe::header h{.id = header.id};
-         glz::write_ndjson(std::tie(h, result), response);
+         if (server.read_json_params(v, state)) {
+            return;
+         }
+         
+         auto result = std::reduce(v.begin(), v.end());
+         
+         server.write_json_response(result, state);
       });
-      
-      repe::client client{};
       
       std::vector<int> v = {1, 2, 3, 4, 5};
       
       repe::header header{.method = "summer", .id = 5ul};
       
-      client.request(std::tie(header, v));
+      auto request = repe::request(std::tie(header, v));
       
-      server.call(client.buffer);
+      server.call(request);
       
       std::cerr << server.response << '\n';
    };
