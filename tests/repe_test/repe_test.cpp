@@ -185,7 +185,7 @@ suite repe_tests = [] {
       my_struct s{};
       
       server.on("concat", s, [&]{
-         s.hello = "Aha ";
+         s.hello = "Aha";
          return s.hello + " " + s.world;
       });
       
@@ -197,7 +197,30 @@ suite repe_tests = [] {
          server.call(request);
       }
       
-      std::cerr << server.response << '\n';
+      expect(server.response ==
+R"([0,0,0,0,"concat",5]
+"Aha World")");
+   };
+   
+   "repe static value"_test = [] {
+      repe::server server{};
+      
+      server.on("concat", [](my_struct& s){
+         s.hello = "Aha";
+         return s.hello + " " + s.world;
+      });
+      
+      {
+         my_struct s{};
+         
+         auto request = repe::request({"concat", 5ul}, s);
+         
+         server.call(request);
+      }
+      
+      expect(server.response ==
+R"([0,0,0,0,"concat",5]
+"Aha World")");
    };
 };
 
