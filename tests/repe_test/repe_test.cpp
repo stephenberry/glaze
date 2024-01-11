@@ -11,6 +11,8 @@
 
 using namespace boost::ut;
 
+#include <shared_mutex>
+
 namespace glz::repe
 {
    // we put the method and id at the top of the class for easier initialization
@@ -69,46 +71,72 @@ namespace glz::repe
       };
    }
    
+   inline auto& get_shared_mutex() {
+      static std::shared_mutex mtx{};
+      return mtx;
+   }
+   
    // This server is designed to be lightweight, so that it is easily constructed on a per client basis
-   // This server does not support adding methods from RPC calls or adding methods once the connection is established
+   // This server does not support adding methods from RPC calls or adding methods once the RPC calls can be made
+   // Each instance of this server is expected to be accessed on a single thread basis, so a single std::string response buffer is used
+   // You can register object memory as the input parameter and the output parameter, which improves efficiency in some cases, or may be required for hardware interfaces or restricted memory interfaces
+   // Access to this registered memory is thread safe across server instances
    template <opts Opts = opts{}>
-   struct server_light
+   struct server
    {
       std::unordered_map<std::string_view, procedure, detail::string_hash, std::equal_to<>> methods;
       
       std::string response;
       
-      template <class Params, class Callback> requires std::is_assignable_v<std::function<void()>, Callback>
-      void on(const sv name, Params& params, Callback&& callback) {
-         methods.emplace(name, procedure{[this, &params, callback](auto&& state){
-            if (this->read_json_params(params, state)) {
-               return;
-            }
-            this->write_json_response(callback(), state);
-         }});
-      }
-      
-      template <class Callback> requires std::is_assignable_v<std::function<void(state&&)>, Callback>
-      void on(const sv name, Callback&& callback) {
-         methods.emplace(name, procedure{callback});
-      }
-      
-      template <class Callback> requires is_lambda_concrete<std::remove_cvref_t<Callback>>
-      void on(const sv name, Callback&& callback) {
-         using Tuple = lambda_args_t<std::remove_cvref_t<Callback>>;
-         constexpr auto N = std::tuple_size_v<Tuple>;
-         if constexpr (N == 1) {
-            using Input = std::decay_t<std::tuple_element_t<0, Tuple>>;
-            methods.emplace(name, procedure{[this, callback](auto&& state){
-               Input params{};
+      template <class Params, class Result, class Callback>// requires std::is_assignable_v<std::function<void()>, Callback>
+      void on(const sv name, Params&& params, Result&& result, Callback&& callback) {
+         if constexpr (std::is_lvalue_reference_v<Params> && std::is_lvalue_reference_v<Result>) {
+            methods.emplace(name, procedure{[this, &params, &result, callback](auto&& state){
+               // we must lock access to params and result as multiple clients might need to manipulate them
+               std::unique_lock lock{get_shared_mutex()};
                if (this->read_json_params(params, state)) {
                   return;
                }
-               this->write_json_response(callback(params), state);
+               callback();
+               this->write_json_response(result, state);
+            }});
+         }
+         else if constexpr (std::is_lvalue_reference_v<Params> && !std::is_lvalue_reference_v<Result>) {
+            methods.emplace(name, procedure{[this, &params, result, callback](auto&& state) mutable {
+               {
+                  std::unique_lock lock{get_shared_mutex()};
+                  if (this->read_json_params(params, state)) {
+                     return;
+                  }
+                  callback(result);
+               }
+               // no need to lock local result writing
+               this->write_json_response(result, state);
+            }});
+         }
+         else if constexpr (!std::is_lvalue_reference_v<Params> && std::is_lvalue_reference_v<Result>) {
+            methods.emplace(name, procedure{[this, params, &result, callback](auto&& state) mutable {
+               // no need to lock locals
+               if (this->read_json_params(params, state)) {
+                  return;
+               }
+               std::unique_lock lock{get_shared_mutex()};
+               callback(params);
+               this->write_json_response(result, state);
+            }});
+         }
+         else if constexpr (!std::is_lvalue_reference_v<Params> && !std::is_lvalue_reference_v<Result>) {
+            methods.emplace(name, procedure{[this, params, result, callback](auto&& state) mutable {
+               // no need to lock locals
+               if (this->read_json_params(params, state)) {
+                  return;
+               }
+               callback(params, result);
+               this->write_json_response(result, state);
             }});
          }
          else {
-            static_assert(false_v<Callback>, "Your lambda must have a single input");
+            static_assert(false_v<Result>, "unsupported");
          }
       }
       
@@ -175,75 +203,26 @@ namespace repe = glz::repe;
 
 struct my_struct
 {
-   std::string hello = "Hello";
-   std::string world = "World";
+   std::string hello{};
+   std::string world{};
 };
 
 suite repe_tests = [] {
    "repe"_test = [] {
-      repe::server_light server{};
+      repe::server server{};
       
-      my_struct s{};
+      my_struct params{};
+      std::string result{};
       
-      server.on("concat", s, [&]{
-         s.hello = "Aha";
-         return s.hello + " " + s.world;
+      server.on("concat", params, result, [&]{
+         params.hello = "Aha";
+         result = params.hello + " " + params.world;
       });
       
       {
-         my_struct s{};
+         my_struct params{"Hello", "World"};
          
-         auto request = repe::request({"concat", 5ul}, s);
-         
-         server.call(request);
-      }
-      
-      expect(server.response ==
-R"([0,0,0,0,"concat",5]
-"Aha World")");
-   };
-   
-   "repe static value"_test = [] {
-      repe::server_light server{};
-      
-      server.on("concat", [](my_struct& s){
-         s.hello = "Aha";
-         return s.hello + " " + s.world;
-      });
-      
-      {
-         my_struct s{};
-         
-         auto request = repe::request({"concat", 5ul}, s);
-         
-         server.call(request);
-      }
-      
-      expect(server.response ==
-R"([0,0,0,0,"concat",5]
-"Aha World")");
-   };
-   
-   "repe low level handling"_test = [] {
-      repe::server_light server{};
-      
-      my_struct s{};
-      
-      server.on("concat", [&](auto&& state){
-         if (server.read_json_params(s, state)) {
-            return;
-         }
-         
-         s.hello = "Aha";
-         auto result = s.hello + " " + s.world;
-         
-         server.write_json_response(result, state);
-      });
-      
-      {
-         my_struct s{};
-         
-         auto request = repe::request({"concat", 5ul}, s);
+         auto request = repe::request({"concat", 5ul}, params);
          
          server.call(request);
       }
