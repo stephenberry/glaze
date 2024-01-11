@@ -145,9 +145,9 @@ suite repe_tests = [] {
          server.write_json_response(result, state);
       });
       
-      std::vector<int> v = {1, 2, 3, 4, 5};
+      std::vector<int> vec = {1, 2, 3, 4, 5};
       
-      auto request = repe::request({"summer", 5ul}, v);
+      auto request = repe::request({"summer", 5ul}, vec);
       
       server.call(request);
       
