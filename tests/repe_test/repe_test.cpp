@@ -16,8 +16,8 @@ namespace glz::repe
    // we put the method and id at the top of the class for easier initialization
    // the order in the actual message is not the same
    struct header {
-      std::string method = ""; // the RPC method to call
-      std::variant<std::monostate, uint64_t, std::string> id{}; // an identifier
+      std::string_view method = ""; // the RPC method to call
+      std::variant<std::monostate, uint64_t, std::string_view> id{}; // an identifier
       static constexpr uint8_t version = 0; // the REPE version
       uint8_t error = 0; // 0 denotes no error
       uint8_t notification = 0; // whether this RPC is a notification (no response returned)
@@ -42,7 +42,7 @@ namespace glz::repe
    
    struct state
    {
-      const sv message{};
+      const std::string_view message{};
       const repe::header& header;
       std::string& buffer;
    };
