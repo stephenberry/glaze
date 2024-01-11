@@ -165,10 +165,6 @@ suite repe_tests = [] {
    "repe"_test = [] {
       repe::server server{};
       
-      /*server.on("concat", [](my_struct& s){
-         return s.hello + " " + s.world;
-      });*/
-      
       my_struct s{};
       
       server.on("concat", s, [&]{
