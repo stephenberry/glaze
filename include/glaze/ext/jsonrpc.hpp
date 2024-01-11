@@ -288,7 +288,7 @@ namespace glz::rpc
       }
 
       using raw_call_return_t = std::vector<raw_response_t>;
-      // Return json stringified std::vector<response_t> meaning it can both be error and non-error and batch request
+      // Return JSON stringified std::vector<response_t> meaning it can both be error and non-error and batch request
       // response. If `id` is null in json_request a response will not be generated
       // If you would like to handle errors for each request:
       // auto response_vector = server.call<decltype(server_instance)::raw_call_return_t>("...");
@@ -463,16 +463,16 @@ namespace glz::rpc
       // that the input was a notification or more serious, conflicting id, the provided id should be unique!
       template <string_literal Name>
       [[nodiscard]] std::pair<std::string, bool> request(id_t&& id, auto&& params, auto&& callback)
-      {
+      {         
          constexpr bool method_found = ((Method::name_v == Name) || ...);
          static_assert(method_found, "Method not declared in client.");
 
-         using params_type = std::remove_cvref_t<decltype(params)>;
-         constexpr bool params_type_found = (std::is_same_v<typename Method::params_t, params_type> || ...);
+         using Params = std::remove_cvref_t<decltype(params)>;
+         constexpr bool params_type_found = (std::is_same_v<typename Method::params_t, Params> || ...);
          static_assert(params_type_found, "Input parameters do not match constructed client parameter types.");
 
          constexpr bool method_params_match =
-            ((Method::name_v == Name && std::is_same_v<typename Method::params_t, params_type>) ||
+            ((Method::name_v == Name && std::is_same_v<typename Method::params_t, Params>) ||
              ...);
          static_assert(method_params_match, "Method name and given params type do not match.");
 
@@ -488,7 +488,7 @@ namespace glz::rpc
             using meth_t = std::remove_reference_t<decltype(method)>;
             if constexpr (Name == meth_t::name_v) {
                [[maybe_unused]] decltype(method.pending_requests.begin()) unused{}; // iterator_t
-               std::tie(unused, inserted) = method.pending_requests.emplace(std::make_pair(req.id, cb));
+               std::tie(unused, inserted) = method.pending_requests.emplace(std::pair{req.id, cb});
                return true; // break methods loop
             }
             else {
