@@ -14,7 +14,7 @@ ut::suite valid_vector_test_cases_server = [] {
 
    rpc::server<rpc::method<"add", vec_t, int>> server;
 
-   server.on<"add">([](vec_t const& vec) -> glz::expected<int, rpc::error> {
+   server.on<"add">([](const vec_t& vec) -> glz::expected<int, rpc::error> {
       int sum{std::reduce(std::cbegin(vec), std::cend(vec))};
       return sum;
    });
@@ -33,7 +33,7 @@ ut::suite valid_vector_test_cases_server = [] {
    std::string raw_json;
    std::string resulting_request;
 
-   for (auto const& pair : valid_requests) {
+   for (const auto& pair : valid_requests) {
       std::tie(raw_json, resulting_request) = pair;
       auto stripped{std::make_shared<std::string>(resulting_request)};
       stripped->erase(std::remove_if(stripped->begin(), stripped->end(), ::isspace), stripped->end());
@@ -55,7 +55,7 @@ ut::suite vector_test_cases = [] {
    rpc::server<rpc::method<"summer", vec_t, int>> server;
    rpc::client<rpc::method<"summer", vec_t, int>> client;
 
-   server.on<"summer">([](vec_t const& vec) -> glz::expected<int, rpc::error> {
+   server.on<"summer">([](const vec_t& vec) -> glz::expected<int, rpc::error> {
       int sum{std::reduce(std::cbegin(vec), std::cend(vec))};
       return sum;
    });
@@ -76,7 +76,7 @@ ut::suite vector_test_cases = [] {
       ut::expect(requests.size() == 1);
       ut::expect(requests.contains(1)); // the id is 1
 
-      server.on<"summer">([](vec_t const& vec) -> glz::expected<int, rpc::error> {
+      server.on<"summer">([](const vec_t& vec) -> glz::expected<int, rpc::error> {
          ut::expect(vec == std::vector{1, 2, 3});
          int sum{std::reduce(std::cbegin(vec), std::cend(vec))};
          return sum;
@@ -133,7 +133,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(request_str.first ==
                  R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})");
 
-      server.on<"foo">([](foo_params const& params) -> glz::expected<foo_result, rpc::error> {
+      server.on<"foo">([](const foo_params& params) -> glz::expected<foo_result, rpc::error> {
          ut::expect(params.foo_a == 1337);
          ut::expect(params.foo_b == "hello world");
          return foo_result{.foo_c = true, .foo_d = "new world"};
@@ -145,7 +145,7 @@ ut::suite struct_test_cases = [] {
       client.call(response);
       ut::expect(called);
 
-      server.on<"foo">([](foo_params const&) -> glz::expected<foo_result, rpc::error> { return {}; });
+      server.on<"foo">([](const foo_params&) -> glz::expected<foo_result, rpc::error> { return {}; });
    };
 
    ut::test("valid bar request") = [&server, &client] {
@@ -162,7 +162,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(request_str.first ==
                  R"({"jsonrpc":"2.0","method":"bar","params":{"bar_a":1337,"bar_b":"hello world"},"id":"bar-uuid"})");
 
-      server.on<"bar">([](bar_params const& params) -> glz::expected<bar_result, rpc::error> {
+      server.on<"bar">([](const bar_params& params) -> glz::expected<bar_result, rpc::error> {
          ut::expect(params.bar_a == 1337);
          ut::expect(params.bar_b == "hello world");
          return bar_result{.bar_c = true, .bar_d = "new world"};
@@ -174,7 +174,7 @@ ut::suite struct_test_cases = [] {
       client.call(response);
       ut::expect(called);
 
-      server.on<"bar">([](bar_params const&) -> glz::expected<bar_result, rpc::error> { return {}; });
+      server.on<"bar">([](const bar_params&) -> glz::expected<bar_result, rpc::error> { return {}; });
    };
 
    ut::test("foo request error") = [&server, &client] {
@@ -192,7 +192,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(request_str.first ==
                  R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})");
 
-      server.on<"foo">([](foo_params const& params) -> glz::expected<foo_result, rpc::error> {
+      server.on<"foo">([](const foo_params& params) -> glz::expected<foo_result, rpc::error> {
          ut::expect(params.foo_a == 1337);
          ut::expect(params.foo_b == "hello world");
          return glz::unexpected(rpc::error{rpc::error_e::server_error_lower, "my error"});
@@ -205,11 +205,11 @@ ut::suite struct_test_cases = [] {
       client.call(response);
       ut::expect(called);
 
-      server.on<"foo">([](foo_params const&) -> glz::expected<foo_result, rpc::error> { return {}; });
+      server.on<"foo">([](const foo_params&) -> glz::expected<foo_result, rpc::error> { return {}; });
    };
 
    ut::test("server invalid version error") = [&server] {
-      server.on<"foo">([](foo_params const&) -> glz::expected<foo_result, rpc::error> { return {}; });
+      server.on<"foo">([](const foo_params&) -> glz::expected<foo_result, rpc::error> { return {}; });
 
       // invalid jsonrpc version
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(
@@ -223,7 +223,7 @@ ut::suite struct_test_cases = [] {
    };
 
    ut::test("server method not found") = [&server] {
-      server.on<"foo">([](foo_params const&) -> glz::expected<foo_result, rpc::error> { return {}; });
+      server.on<"foo">([](const foo_params&) -> glz::expected<foo_result, rpc::error> { return {}; });
 
       // invalid method name
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(
@@ -237,7 +237,7 @@ ut::suite struct_test_cases = [] {
    };
 
    ut::test("server invalid json") = [&server] {
-      server.on<"foo">([](foo_params const&) -> glz::expected<foo_result, rpc::error> { return {}; });
+      server.on<"foo">([](const foo_params&) -> glz::expected<foo_result, rpc::error> { return {}; });
 
       // key "id" illformed missing `"`
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(
@@ -254,7 +254,7 @@ ut::suite struct_test_cases = [] {
    };
 
    ut::test("server invalid json batch") = [&server] {
-      server.on<"foo">([](foo_params const&) -> glz::expected<foo_result, rpc::error> { return {}; });
+      server.on<"foo">([](const foo_params&) -> glz::expected<foo_result, rpc::error> { return {}; });
 
       // batch cut at params key
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(
@@ -270,7 +270,7 @@ ut::suite struct_test_cases = [] {
    };
 
    ut::test("server invalid json batch empty array") = [&server] {
-      server.on<"foo">([](foo_params const&) -> glz::expected<foo_result, rpc::error> { return {}; });
+      server.on<"foo">([](const foo_params&) -> glz::expected<foo_result, rpc::error> { return {}; });
 
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(R"([])");
 
@@ -282,7 +282,7 @@ ut::suite struct_test_cases = [] {
    };
 
    ut::test("server invalid json illformed batch one item") = [&server] {
-      server.on<"foo">([](foo_params const&) -> glz::expected<foo_result, rpc::error> { return {}; });
+      server.on<"foo">([](const foo_params&) -> glz::expected<foo_result, rpc::error> { return {}; });
 
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(R"([1])");
 
@@ -295,7 +295,7 @@ ut::suite struct_test_cases = [] {
    };
 
    ut::test("server invalid json illformed batch three items") = [&server] {
-      server.on<"foo">([](foo_params const&) -> glz::expected<foo_result, rpc::error> { return {}; });
+      server.on<"foo">([](const foo_params&) -> glz::expected<foo_result, rpc::error> { return {}; });
 
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(R"([1,2,3])");
 
@@ -310,8 +310,8 @@ ut::suite struct_test_cases = [] {
    };
 
    "server batch with both invalid and valid"_test = [&server] {
-      server.on<"foo">([](foo_params const&) -> glz::expected<foo_result, rpc::error> { return {}; });
-      server.on<"bar">([](bar_params const&) -> glz::expected<bar_result, rpc::error> { return {}; });
+      server.on<"foo">([](const foo_params&) -> glz::expected<foo_result, rpc::error> { return {}; });
+      server.on<"bar">([](const bar_params&) -> glz::expected<bar_result, rpc::error> { return {}; });
 
       std::string response = server.call(R"(
       [
@@ -332,7 +332,7 @@ ut::suite struct_test_cases = [] {
    };
 
    "server weird id values"_test = [&server] {
-      server.on<"foo">([](foo_params const&) -> glz::expected<foo_result, rpc::error> { return {}; });
+      server.on<"foo">([](const foo_params&) -> glz::expected<foo_result, rpc::error> { return {}; });
 
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(R"(
       [
@@ -347,7 +347,7 @@ ut::suite struct_test_cases = [] {
       }
    };
    "server invalid jsonrpc value"_test = [&server] {
-      server.on<"foo">([](foo_params const&) -> glz::expected<foo_result, rpc::error> { return {}; });
+      server.on<"foo">([](const foo_params&) -> glz::expected<foo_result, rpc::error> { return {}; });
 
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(R"(
       [
@@ -407,7 +407,7 @@ ut::suite struct_test_cases = [] {
       map.clear();
    };
    "client notification"_test = [&client] {
-      auto const notify_str{client.notify<"foo">(foo_params{})};
+      const auto notify_str{client.notify<"foo">(foo_params{})};
       ut::expect(notify_str == R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":0,"foo_b":""},"id":null})");
    };
    "client call erases id from queue"_test = [&client, &server] {

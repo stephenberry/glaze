@@ -99,12 +99,12 @@ namespace glz::rpc
       };
    };
 
-   template <class params_type>
+   template <class Params>
    struct request_t
    {
       id_t id{};
       std::string_view method{};
-      params_type params{};
+      Params params{};
       std::string_view version{rpc::supported_version};
 
       struct glaze
@@ -117,15 +117,15 @@ namespace glz::rpc
       };
    };
 
-   template <class params_type>
-   request_t(id_t&&, std::string_view, params_type&&) -> request_t<std::decay_t<params_type>>;
+   template <class Params>
+   request_t(id_t&&, std::string_view, Params&&) -> request_t<std::decay_t<Params>>;
 
    using generic_request_t = request_t<glz::raw_json_view>;
 
-   template <class result_type>
+   template <class Result>
    struct response_t
    {
-      using result_t = result_type;
+      using result_t = Result;
 
       response_t() = default;
       explicit response_t(rpc::error&& err) : error(std::move(err)) {}
@@ -146,12 +146,12 @@ namespace glz::rpc
    };
    using generic_response_t = response_t<glz::raw_json_view>;
 
-   template <string_literal name, class params_type, class result_type>
+   template <string_literal Name, class Params, class Result>
    struct method
    {
-      static constexpr std::string_view name_v{name};
-      using params_t = params_type;
-      using result_t = result_type;
+      static constexpr std::string_view name_v{Name};
+      using params_t = Params;
+      using result_t = Result;
    };
 
    namespace concepts
