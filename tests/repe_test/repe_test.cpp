@@ -53,26 +53,42 @@ namespace glz::repe
       std::function<void(const sv)> user_data{}; // handle user data
    };
    
+   namespace detail
+   {
+      struct string_hash {
+        using is_transparent = void;
+        [[nodiscard]] size_t operator()(const char *txt) const {
+          return std::hash<std::string_view>{}(txt);
+        }
+        [[nodiscard]] size_t operator()(std::string_view txt) const {
+          return std::hash<std::string_view>{}(txt);
+        }
+        [[nodiscard]] size_t operator()(const std::string &txt) const {
+          return std::hash<std::string>{}(txt);
+        }
+      };
+   }
+   
    template <opts Opts = opts{}>
    struct server
    {
-      std::unordered_map<sv, procedure> methods;
+      std::unordered_map<std::string, procedure, detail::string_hash, std::equal_to<>> methods;
       
       std::string response;
       
       template <class Params, class Callback> requires std::is_assignable_v<std::function<void()>, Callback>
       void on(const sv name, Params& params, Callback&& callback) {
-         methods[name] = procedure{[this, &params, callback](auto&& state){
+         methods.emplace(name, procedure{[this, &params, callback](auto&& state){
             if (this->read_json_params(params, state)) {
                return;
             }
             this->write_json_response(callback(), state);
-         }};
+         }});
       }
       
       template <class Callback> requires std::is_assignable_v<std::function<void(state&&)>, Callback>
       void on(const sv name, Callback&& callback) {
-         methods[name] = procedure{callback};
+         methods.emplace(name, procedure{callback});
       }
       
       template <class Callback> requires is_lambda_concrete<std::remove_cvref_t<Callback>>
@@ -81,13 +97,13 @@ namespace glz::repe
          constexpr auto N = std::tuple_size_v<Tuple>;
          if constexpr (N == 1) {
             using Input = std::decay_t<std::tuple_element_t<0, Tuple>>;
-            methods[name] = procedure{[this, callback](auto&& state){
+            methods.emplace(name, procedure{[this, callback](auto&& state){
                static thread_local Input params{};
                if (this->read_json_params(params, state)) {
                   return;
                }
                this->write_json_response(callback(params), state);
-            }};
+            }});
          }
          else {
             static_assert(false_v<Callback>, "Your lambda must have a single input");
@@ -115,7 +131,7 @@ namespace glz::repe
          context ctx{};
          auto[b, e] = read_iterators<Opts>(ctx, msg);
          auto start = b;
-         detail::read<Opts.format>::template op<Opts>(header, ctx, b, e);
+         glz::detail::read<Opts.format>::template op<Opts>(header, ctx, b, e);
          
          if (bool(ctx.error)) {
             parse_error pe{ctx.error, size_t(std::distance(start, b))};
