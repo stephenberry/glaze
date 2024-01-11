@@ -54,7 +54,6 @@ namespace glz::repe
    template <opts Opts = opts{}>
    struct server
    {
-      // consumes a REPE message and returns a REPE response (empty if notification)
       std::unordered_map<sv, procedure> methods;
       
       std::string response;
@@ -130,24 +129,30 @@ namespace glz::repe
 
 namespace repe = glz::repe;
 
+struct my_struct
+{
+   std::string hello = "Hello";
+   std::string world = "World";
+};
+
 suite repe_tests = [] {
    "repe"_test = [] {
       repe::server server{};
       
-      server.on("summer", [&](auto&& state){
-         std::vector<int> v{};
-         if (server.read_json_params(v, state)) {
+      server.on("concat", [&](auto&& state){
+         my_struct s{};
+         if (server.read_json_params(s, state)) {
             return;
          }
          
-         auto result = std::reduce(v.begin(), v.end());
+         std::string result = s.hello + " " + s.world;
          
          server.write_json_response(result, state);
       });
       
-      std::vector<int> vec = {1, 2, 3, 4, 5};
+      my_struct s{};
       
-      auto request = repe::request({"summer", 5ul}, vec);
+      auto request = repe::request({"concat", 5ul}, s);
       
       server.call(request);
       
