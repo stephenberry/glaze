@@ -714,7 +714,7 @@ expect(s.i == 7); // only the value i will be read into
 
 Glaze is designed to help with building generic APIs. Sometimes a value needs to be exposed to the API, but it is not desirable to read in or write out the value in JSON. This is the use case for `glz::hide`.
 
-`glz::hide` hides the value from JSON output while still allowing API access.
+`glz::hide` hides the value from JSON output while still allowing API (and JSON pointer) access.
 
 ```c++
 struct hide_struct {
