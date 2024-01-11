@@ -88,6 +88,29 @@ namespace glz::repe
       
       std::string response;
       
+      template <class Callback>
+      void on(const sv name, Callback&& callback) {
+         static_assert(is_lambda_concrete<std::remove_cvref_t<Callback>>);
+         using Tuple = lambda_args_t<std::remove_cvref_t<Callback>>;
+         constexpr auto N = std::tuple_size_v<Tuple>;
+         if constexpr (N == 2) {
+            using Params = std::decay_t<std::tuple_element_t<0, Tuple>>;
+            using Result = std::decay_t<std::tuple_element_t<1, Tuple>>;
+            
+            methods.emplace(name, procedure{[this, params = Params{}, result = Result{}, callback](auto&& state) mutable {
+               // no need to lock locals
+               if (this->read_json_params(params, state)) {
+                  return;
+               }
+               callback(params, result);
+               this->write_json_response(result, state);
+            }});
+         }
+         else {
+            static_assert(false_v<Callback>, "Requires params and results inputs");
+         }
+      }
+      
       template <class Params, class Result, class Callback>// requires std::is_assignable_v<std::function<void()>, Callback>
       void on(const sv name, Params&& params, Result&& result, Callback&& callback) {
          if constexpr (std::is_lvalue_reference_v<Params> && std::is_lvalue_reference_v<Result>) {
@@ -214,13 +237,34 @@ struct my_struct
 };
 
 suite repe_tests = [] {
-   "repe"_test = [] {
+   "repe references"_test = [] {
       repe::server server{};
       
       my_struct params{};
       std::string result{};
       
       server.on("concat", params, result, [](auto& params, auto& result){
+         params.hello = "Aha";
+         result = params.hello + " " + params.world;
+      });
+      
+      {
+         my_struct params{"Hello", "World"};
+         
+         auto request = repe::request({"concat", 5ul}, params);
+         
+         server.call(request);
+      }
+      
+      expect(server.response ==
+R"([0,0,0,0,"concat",5]
+"Aha World")");
+   };
+   
+   "repe concrete internal storage"_test = [] {
+      repe::server server{};
+      
+      server.on("concat", [](my_struct& params, std::string& result){
          params.hello = "Aha";
          result = params.hello + " " + params.world;
       });
