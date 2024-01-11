@@ -94,23 +94,12 @@ struct foo_params
    int foo_a{};
    std::string foo_b{};
 };
-template <>
-struct glz::meta<foo_params>
-{
-   using T = foo_params;
-   static constexpr auto value{object(&T::foo_a, &T::foo_b)};
-};
+
 struct foo_result
 {
    bool foo_c{};
    std::string foo_d{};
    bool operator==(const foo_result& rhs) const noexcept { return foo_c == rhs.foo_c && foo_d == rhs.foo_d; }
-};
-template <>
-struct glz::meta<foo_result>
-{
-   using T = foo_result;
-   static constexpr auto value{object(&T::foo_c, &T::foo_d)};
 };
 
 struct bar_params
@@ -118,23 +107,12 @@ struct bar_params
    int bar_a;
    std::string bar_b;
 };
-template <>
-struct glz::meta<bar_params>
-{
-   using T = bar_params;
-   static constexpr auto value{object(&T::bar_a, &T::bar_b)};
-};
+
 struct bar_result
 {
    bool bar_c{};
    std::string bar_d{};
    bool operator==(const bar_result& rhs) const noexcept { return bar_c == rhs.bar_c && bar_d == rhs.bar_d; }
-};
-template <>
-struct glz::meta<bar_result>
-{
-   using T = bar_result;
-   static constexpr auto value{object("bar_c", &T::bar_c, "bar_d", &T::bar_d)};
 };
 
 ut::suite struct_test_cases = [] {
@@ -460,7 +438,7 @@ ut::suite struct_test_cases = [] {
    };
 };
 
-auto main(int, char**) -> int
+auto main() -> int
 {
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
    return result;
