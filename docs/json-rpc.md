@@ -12,23 +12,12 @@ struct foo_params
    int foo_a{};
    std::string foo_b{};
 };
-template <>
-struct glz::meta<foo_params>
-{
-   using T = foo_params;
-   static constexpr auto value{object(&T::foo_a, &T::foo_b)};
-};
+
 struct foo_result
 {
    bool foo_c{};
    std::string foo_d{};
    auto operator<=>(const foo_result&) const = default;
-};
-template <>
-struct glz::meta<foo_result>
-{
-   using T = foo_result;
-   static constexpr auto value{object(&T::foo_c, &T::foo_d)};
 };
 
 struct bar_params
@@ -36,23 +25,12 @@ struct bar_params
    int bar_a;
    std::string bar_b;
 };
-template <>
-struct glz::meta<bar_params>
-{
-   using T = bar_params;
-   static constexpr auto value{object(&T::bar_a, &T::bar_b)};
-};
+
 struct bar_result
 {
    bool bar_c{};
    std::string bar_d{};
    auto operator<=>(const bar_result&) const = default;
-};
-template <>
-struct glz::meta<bar_result>
-{
-   using T = bar_result;
-   static constexpr auto value{object(&T::bar_c, &T::bar_d)};
 };
 
 namespace rpc = glz::rpc;
