@@ -41,7 +41,7 @@ namespace glz::repe
    struct procedure
    {
       std::function<void(const sv)> user_data{}; // handle user data
-      std::function<void(const sv, std::string&)> call{}; // RPC call method
+      std::function<void(const sv, const header&, std::string&)> call{}; // RPC call method
    };
    
    template <opts Opts = opts{}>
@@ -60,6 +60,14 @@ namespace glz::repe
          methods[name] = procedure{[&](const sv msg){
             std::ignore = glz::read_json(user_data, msg);
          }, call_method};
+      }
+      
+      void read_json_params(auto&& value, auto&& msg)
+      {
+         const auto ec = glz::read_json(value, msg);
+         if (ec) {
+            glz::write_ndjson(std::tuple(header{.error = 1}, error{1, format_error(ec, msg)}), response);
+         }
       }
       
       void call(const sv msg)
@@ -92,36 +100,49 @@ namespace glz::repe
             }
             
             const sv body = msg.substr(size_t(std::distance(start, b)));
-            it->second.call(body, response); // handle the body
+            it->second.call(body, header, response); // handle the body
          }
          else {
             response = "method not found";
          }
       }
    };
+   
+   struct client
+   {
+      std::string buffer;
+      
+      template <class Message>
+      void request(Message&& msg)
+      {
+         glz::write_ndjson(std::forward<Message>(msg), buffer);
+      }
+   };
 }
+
+namespace repe = glz::repe;
 
 suite repe_tests = [] {
    "repe"_test = [] {
-      glz::repe::server server{};
+      repe::server server{};
       
-      server.on("summer", [](auto msg, std::string& response){
+      server.on("summer", [&](auto msg, auto& header, std::string& response){
          std::vector<int> v{};
-         std::ignore = glz::read_json(v, msg);
+         server.read_json_params(v, msg);
          auto result = std::reduce(std::cbegin(v), std::cend(v));
-         glz::write_json(result, response);
+         const repe::header h{.id = header.id};
+         glz::write_ndjson(std::tie(h, result), response);
       });
+      
+      repe::client client{};
       
       std::vector<int> v = {1, 2, 3, 4, 5};
       
-      glz::repe::header header{.method = "summer"};
+      repe::header header{.method = "summer", .id = 5ul};
       
-      auto message = std::tie(header, v);
+      client.request(std::tie(header, v));
       
-      std::string buffer;
-      glz::write_ndjson(message, buffer);
-      
-      server.call(buffer);
+      server.call(client.buffer);
       
       std::cerr << server.response << '\n';
    };
