@@ -44,15 +44,15 @@ int main() {
        client;
    
     // One long living callback per method for the server
-    server.on<"foo">([](foo_params const& params) -> glz::expected<foo_result, rpc::error> {
+    server.on<"foo">([](foo_params const& params) {
         // access to member variables for the request `foo`
         // params.foo_a 
         // params.foo_b
         return foo_result{.foo_c = true, .foo_d = "new world"};
         // Or return an error:
-        // return glz::unexpected(rpc::error{rpc::error_e::server_error_lower, "my error"});
+        // return rpc::error{rpc::error_e::server_error_lower, "my error"};
     });
-    server.on<"bar">([](bar_params const& params) -> glz::expected<bar_result, rpc::error> {
+    server.on<"bar">([](bar_params const& params) {
         return bar_result{.bar_c = true, .bar_d = "new world"};
     });
     
