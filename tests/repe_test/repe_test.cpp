@@ -14,12 +14,12 @@ using namespace boost::ut;
 namespace glz::repe
 {
    struct header {
+      std::string method = ""; // the RPC method to call
+      std::variant<std::monostate, uint64_t, std::string> id{}; // an identifier
       uint8_t version = 0; // the REPE version
       uint8_t error = 0; // 0 denotes no error
       uint8_t notification = 0; // whether this RPC is a notification (no response returned)
       uint8_t user_data = 0; // whether this RPC contains user data
-      std::string method = ""; // the RPC method to call
-      std::variant<std::monostate, uint64_t, std::string> id{}; // an identifier
       
       struct glaze {
          using T = header;
@@ -79,8 +79,9 @@ namespace glz::repe
          return false;
       }
       
-      void write_json_response(auto&& value, auto&& state) {
-         glz::write_ndjson(std::tie(state.header, value), state.buffer);
+      template <class Value>
+      void write_json_response(Value&& value, auto&& state) {
+         glz::write_ndjson(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.buffer);
       }
       
       void call(const sv msg)
@@ -121,14 +122,9 @@ namespace glz::repe
       }
    };
    
-   template <class Message>
-   inline auto request(Message&& msg) {
-      return glz::write_ndjson(std::forward<Message>(msg));
-   }
-   
-   template <class Message, class Buffer>
-   inline void request(Message&& msg, Buffer&& buffer) {
-      glz::write_ndjson(std::forward<Message>(msg), std::forward<Buffer>(buffer));
+   template <class Value>
+   inline auto request(const header& header, Value&& value) {
+      return glz::write_ndjson(std::forward_as_tuple(header, std::forward<Value>(value)));
    }
 }
 
@@ -151,9 +147,7 @@ suite repe_tests = [] {
       
       std::vector<int> v = {1, 2, 3, 4, 5};
       
-      repe::header header{.method = "summer", .id = 5ul};
-      
-      auto request = repe::request(std::tie(header, v));
+      auto request = repe::request({"summer", 5ul}, v);
       
       server.call(request);
       
