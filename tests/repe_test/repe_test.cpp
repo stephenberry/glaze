@@ -60,56 +60,37 @@ namespace glz::repe
       
       std::string response;
       
-      template <class Params>
-      void on(const sv name, Params& params, auto&& call_method) {
-         using C = decltype(call_method);
-         if constexpr (is_lambda_concrete<std::remove_cvref_t<C>>) {
-            using Tuple = lambda_args_t<std::remove_cvref_t<C>>;
-            constexpr auto N = std::tuple_size_v<Tuple>;
-            if constexpr (N == 0) {
-               methods[name] = procedure{[this, &params, call_method](auto&& state){
-                  if (this->read_json_params(params, state)) {
-                     return;
-                  }
-                  this->write_json_response(call_method(), state);
-               }};
+      template <class Params, class Callback> requires std::is_assignable_v<std::function<void()>, Callback>
+      void on(const sv name, Params& params, Callback&& callback) {
+         methods[name] = procedure{[this, &params, callback](auto&& state){
+            if (this->read_json_params(params, state)) {
+               return;
             }
-            else {
-               static_assert(false_v<decltype(call_method)>, "Your lambda must take no arguments");
-            }
-         }
-         else {
-            static_assert(false_v<decltype(call_method)>, "Your lambda must be a concrete type");
-         }
+            this->write_json_response(callback(), state);
+         }};
       }
       
-      void on(const sv name, auto&& call_method) {
-         using C = decltype(call_method);
-         if constexpr (std::is_assignable_v<std::function<void(state&&)>, C>) {
-            methods[name] = procedure{call_method};
-         }
-         else if constexpr (is_lambda_concrete<std::remove_cvref_t<C>>) {
-            using Tuple = lambda_args_t<std::remove_cvref_t<C>>;
-            constexpr auto N = std::tuple_size_v<Tuple>;
-            if constexpr (N == 0) {
-               
-            }
-            else if constexpr (N == 1) {
-               using Input = std::decay_t<std::tuple_element_t<0, Tuple>>;
-               methods[name] = procedure{[this, call_method](auto&& state){
-                  static thread_local Input params{};
-                  if (this->read_json_params(params, state)) {
-                     return;
-                  }
-                  this->write_json_response(call_method(params), state);
-               }};
-            }
-            else {
-               static_assert(false_v<decltype(call_method)>, "Your lambda must have a single input");
-            }
+      template <class Callback> requires std::is_assignable_v<std::function<void(state&&)>, Callback>
+      void on(const sv name, Callback&& callback) {
+         methods[name] = procedure{callback};
+      }
+      
+      template <class Callback> requires is_lambda_concrete<std::remove_cvref_t<Callback>>
+      void on(const sv name, Callback&& callback) {
+         using Tuple = lambda_args_t<std::remove_cvref_t<Callback>>;
+         constexpr auto N = std::tuple_size_v<Tuple>;
+         if constexpr (N == 1) {
+            using Input = std::decay_t<std::tuple_element_t<0, Tuple>>;
+            methods[name] = procedure{[this, callback](auto&& state){
+               static thread_local Input params{};
+               if (this->read_json_params(params, state)) {
+                  return;
+               }
+               this->write_json_response(callback(params), state);
+            }};
          }
          else {
-            static_assert(false_v<decltype(call_method)>, "Your lambda must be a concrete type");
+            static_assert(false_v<Callback>, "Your lambda must have a single input");
          }
       }
       
