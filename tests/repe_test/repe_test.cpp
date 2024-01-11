@@ -13,10 +13,12 @@ using namespace boost::ut;
 
 namespace glz::repe
 {
+   // we put the method and id at the top of the class for easier initialization
+   // the order in the actual message is not the same
    struct header {
       std::string method = ""; // the RPC method to call
       std::variant<std::monostate, uint64_t, std::string> id{}; // an identifier
-      uint8_t version = 0; // the REPE version
+      static constexpr uint8_t version = 0; // the REPE version
       uint8_t error = 0; // 0 denotes no error
       uint8_t notification = 0; // whether this RPC is a notification (no response returned)
       uint8_t user_data = 0; // whether this RPC contains user data
@@ -40,7 +42,7 @@ namespace glz::repe
    
    struct state
    {
-      const sv msg{};
+      const sv message{};
       const repe::header& header;
       std::string& buffer;
    };
@@ -70,9 +72,9 @@ namespace glz::repe
       
       bool read_json_params(auto&& value, auto&& state)
       {
-         const auto ec = glz::read_json(value, state.msg);
+         const auto ec = glz::read_json(value, state.message);
          if (ec) {
-            glz::write_ndjson(std::tuple(header{.error = 1}, error{1, format_error(ec, state.msg)}), response);
+            glz::write_ndjson(std::tuple(header{.error = 1}, error{1, format_error(ec, state.message)}), response);
             return true;
          }
          return false;
