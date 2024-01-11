@@ -49,8 +49,8 @@ namespace glz::repe
    
    struct procedure
    {
-      std::function<void(const sv)> user_data{}; // handle user data
       std::function<void(state&&)> call{}; // RPC call method
+      std::function<void(const sv)> user_data{}; // handle user data
    };
    
    template <opts Opts = opts{}>
@@ -60,14 +60,57 @@ namespace glz::repe
       
       std::string response;
       
-      void on(const sv name, auto&& call_method) {
-         methods[name] = procedure{.call = call_method};
+      template <class Params>
+      void on(const sv name, Params& params, auto&& call_method) {
+         using C = decltype(call_method);
+         if constexpr (is_lambda_concrete<std::remove_cvref_t<C>>) {
+            using Tuple = lambda_args_t<std::remove_cvref_t<C>>;
+            constexpr auto N = std::tuple_size_v<Tuple>;
+            if constexpr (N == 0) {
+               methods[name] = procedure{[this, &params, call_method](auto&& state){
+                  if (this->read_json_params(params, state)) {
+                     return;
+                  }
+                  this->write_json_response(call_method(), state);
+               }};
+            }
+            else {
+               static_assert(false_v<decltype(call_method)>, "Your lambda must take no arguments");
+            }
+         }
+         else {
+            static_assert(false_v<decltype(call_method)>, "Your lambda must be a concrete type");
+         }
       }
       
-      void on(const sv name, auto&& call_method, auto& user_data) {
-         methods[name] = procedure{[&](const sv msg){
-            std::ignore = glz::read_json(user_data, msg);
-         }, call_method};
+      void on(const sv name, auto&& call_method) {
+         using C = decltype(call_method);
+         if constexpr (std::is_assignable_v<std::function<void(state&&)>, C>) {
+            methods[name] = procedure{call_method};
+         }
+         else if constexpr (is_lambda_concrete<std::remove_cvref_t<C>>) {
+            using Tuple = lambda_args_t<std::remove_cvref_t<C>>;
+            constexpr auto N = std::tuple_size_v<Tuple>;
+            if constexpr (N == 0) {
+               
+            }
+            else if constexpr (N == 1) {
+               using Input = std::decay_t<std::tuple_element_t<0, Tuple>>;
+               methods[name] = procedure{[this, call_method](auto&& state){
+                  static thread_local Input params{};
+                  if (this->read_json_params(params, state)) {
+                     return;
+                  }
+                  this->write_json_response(call_method(params), state);
+               }};
+            }
+            else {
+               static_assert(false_v<decltype(call_method)>, "Your lambda must have a single input");
+            }
+         }
+         else {
+            static_assert(false_v<decltype(call_method)>, "Your lambda must be a concrete type");
+         }
       }
       
       bool read_json_params(auto&& value, auto&& state)
@@ -137,26 +180,41 @@ struct my_struct
    std::string world = "World";
 };
 
+/*
+ server.on("concat", [&](auto&& state){
+    my_struct s{};
+    if (server.read_json_params(s, state)) {
+       return;
+    }
+    
+    std::string result = s.hello + " " + s.world;
+    
+    server.write_json_response(result, state);
+ });
+ */
+
 suite repe_tests = [] {
    "repe"_test = [] {
       repe::server server{};
       
-      server.on("concat", [&](auto&& state){
-         my_struct s{};
-         if (server.read_json_params(s, state)) {
-            return;
-         }
-         
-         std::string result = s.hello + " " + s.world;
-         
-         server.write_json_response(result, state);
-      });
+      /*server.on("concat", [](my_struct& s){
+         return s.hello + " " + s.world;
+      });*/
       
       my_struct s{};
       
-      auto request = repe::request({"concat", 5ul}, s);
+      server.on("concat", s, [&]{
+         s.hello = "Aha ";
+         return s.hello + " " + s.world;
+      });
       
-      server.call(request);
+      {
+         my_struct s{};
+         
+         auto request = repe::request({"concat", 5ul}, s);
+         
+         server.call(request);
+      }
       
       std::cerr << server.response << '\n';
    };
