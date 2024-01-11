@@ -69,10 +69,12 @@ namespace glz::repe
       };
    }
    
+   // This server is designed to be lightweight, so that it is easily constructed on a per client basis
+   // This server does not support adding methods from RPC calls or adding methods once the connection is established
    template <opts Opts = opts{}>
-   struct server
+   struct server_light
    {
-      std::unordered_map<std::string, procedure, detail::string_hash, std::equal_to<>> methods;
+      std::unordered_map<std::string_view, procedure, detail::string_hash, std::equal_to<>> methods;
       
       std::string response;
       
@@ -98,7 +100,7 @@ namespace glz::repe
          if constexpr (N == 1) {
             using Input = std::decay_t<std::tuple_element_t<0, Tuple>>;
             methods.emplace(name, procedure{[this, callback](auto&& state){
-               static thread_local Input params{};
+               Input params{};
                if (this->read_json_params(params, state)) {
                   return;
                }
@@ -114,7 +116,7 @@ namespace glz::repe
       {
          const auto ec = glz::read_json(value, state.message);
          if (ec) {
-            glz::write_ndjson(std::tuple(header{.error = 1}, error{1, format_error(ec, state.message)}), response);
+            glz::write_ndjson(std::forward_as_tuple(header{.error = 1}, error{3, format_error(ec, state.message)}), response);
             return true;
          }
          return false;
@@ -179,7 +181,7 @@ struct my_struct
 
 suite repe_tests = [] {
    "repe"_test = [] {
-      repe::server server{};
+      repe::server_light server{};
       
       my_struct s{};
       
@@ -202,7 +204,7 @@ R"([0,0,0,0,"concat",5]
    };
    
    "repe static value"_test = [] {
-      repe::server server{};
+      repe::server_light server{};
       
       server.on("concat", [](my_struct& s){
          s.hello = "Aha";
@@ -223,7 +225,7 @@ R"([0,0,0,0,"concat",5]
    };
    
    "repe low level handling"_test = [] {
-      repe::server server{};
+      repe::server_light server{};
       
       my_struct s{};
       
