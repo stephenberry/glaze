@@ -797,8 +797,8 @@ glz::read_ndjson(x, s);
 
 See the `ext` directory for extensions.
 
-- [Eigen](https://gitlab.com/libeigen/eigen). Supports reading and writing from Eigen Vector types.
-- [JSON-RPC documentation](./docs/json-rpc.md). Glaze wrapper supporting [JSON-RPC 2.0 specification](https://www.jsonrpc.org/specification).
+- [Eigen](https://gitlab.com/libeigen/eigen)
+- [JSON-RPC 2.0](./docs/json-rpc.md)
 
 # License
 
