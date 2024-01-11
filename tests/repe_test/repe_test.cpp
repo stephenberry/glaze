@@ -81,6 +81,7 @@ namespace glz::repe
    // Each instance of this server is expected to be accessed on a single thread basis, so a single std::string response buffer is used
    // You can register object memory as the input parameter and the output parameter, which improves efficiency in some cases, or may be required for hardware interfaces or restricted memory interfaces
    // Access to this registered memory is thread safe across server instances
+   // No thread locks are needed if you don't pass input and output parameters by reference
    template <opts Opts = opts{}>
    struct server
    {
