@@ -211,10 +211,10 @@ namespace glz::rpc
                using params_t = typename M::params_t;
                using expected_t = expected<result_t, rpc::error>;
                if constexpr (std::is_invocable_r_v<result_t, decltype(callback), const params_t&>) {
-                  method.callback = [cb = std::move(callback)](const params_t& params) -> expected_t { return cb(params); };
+                  method.callback = [=](const params_t& params) -> expected_t { return callback(params); };
                }
                else if constexpr (std::is_invocable_r_v<rpc::error, decltype(callback), const params_t&>) {
-                  method.callback = [cb = std::move(callback)](const params_t& params) -> expected_t { return glz::unexpected{cb(params)}; };
+                  method.callback = [=](const params_t& params) -> expected_t { return glz::unexpected{callback(params)}; };
                }
                else {
                   static_assert(false_v<M>, "Method supplied is not invocable with registered types");
