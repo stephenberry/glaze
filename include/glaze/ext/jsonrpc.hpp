@@ -204,9 +204,20 @@ namespace glz::rpc
          constexpr bool method_found = ((Method::name_v == name) || ...);
          static_assert(method_found, "Method not settable in given tuple.");
 
-         methods.any([&callback](auto&& method) -> bool {
-            if constexpr (name == std::remove_reference_t<decltype(method)>::name_v) {
-               method.callback = callback;
+         methods.any([&](auto&& method) -> bool {
+            using M = std::decay_t<decltype(method)>;
+            if constexpr (name == M::name_v) {
+               using result_t = typename M::result_t;
+               using params_t = typename M::params_t;
+               if constexpr (std::is_invocable_r_v<result_t, decltype(callback), const params_t&>) {
+                  method.callback = [cb = std::move(callback)](const params_t& params) -> expected<result_t, rpc::error> { return cb(params); };
+               }
+               else if constexpr (std::is_invocable_r_v<rpc::error, decltype(callback), const params_t&>) {
+                  method.callback = [cb = std::move(callback)](const params_t& params) -> expected<result_t, rpc::error> { return glz::unexpected{cb(params)}; };
+               }
+               else {
+                  static_assert(false_v<M>, "Method supplied is not invocable with registered types");
+               }
                return true;
             }
             else {
