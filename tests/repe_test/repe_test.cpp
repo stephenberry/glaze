@@ -97,7 +97,7 @@ namespace glz::repe
                if (this->read_json_params(params, state)) {
                   return;
                }
-               callback();
+               callback(params, result);
                this->write_json_response(result, state);
             }});
          }
@@ -108,7 +108,7 @@ namespace glz::repe
                   if (this->read_json_params(params, state)) {
                      return;
                   }
-                  callback(result);
+                  callback(params, result);
                }
                // no need to lock local result writing
                this->write_json_response(result, state);
@@ -121,7 +121,7 @@ namespace glz::repe
                   return;
                }
                std::unique_lock lock{get_shared_mutex()};
-               callback(params);
+               callback(params, result);
                this->write_json_response(result, state);
             }});
          }
@@ -214,7 +214,7 @@ suite repe_tests = [] {
       my_struct params{};
       std::string result{};
       
-      server.on("concat", params, result, [&]{
+      server.on("concat", params, result, [](auto& params, auto& result){
          params.hello = "Aha";
          result = params.hello + " " + params.world;
       });
