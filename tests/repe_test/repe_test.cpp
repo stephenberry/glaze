@@ -161,19 +161,6 @@ struct my_struct
    std::string world = "World";
 };
 
-/*
- server.on("concat", [&](auto&& state){
-    my_struct s{};
-    if (server.read_json_params(s, state)) {
-       return;
-    }
-    
-    std::string result = s.hello + " " + s.world;
-    
-    server.write_json_response(result, state);
- });
- */
-
 suite repe_tests = [] {
    "repe"_test = [] {
       repe::server server{};
@@ -208,6 +195,35 @@ R"([0,0,0,0,"concat",5]
       server.on("concat", [](my_struct& s){
          s.hello = "Aha";
          return s.hello + " " + s.world;
+      });
+      
+      {
+         my_struct s{};
+         
+         auto request = repe::request({"concat", 5ul}, s);
+         
+         server.call(request);
+      }
+      
+      expect(server.response ==
+R"([0,0,0,0,"concat",5]
+"Aha World")");
+   };
+   
+   "repe low level handling"_test = [] {
+      repe::server server{};
+      
+      my_struct s{};
+      
+      server.on("concat", [&](auto&& state){
+         if (server.read_json_params(s, state)) {
+            return;
+         }
+         
+         s.hello = "Aha";
+         auto result = s.hello + " " + s.world;
+         
+         server.write_json_response(result, state);
       });
       
       {
