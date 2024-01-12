@@ -12,23 +12,12 @@ struct foo_params
    int foo_a{};
    std::string foo_b{};
 };
-template <>
-struct glz::meta<foo_params>
-{
-   using T = foo_params;
-   static constexpr auto value{object(&T::foo_a, &T::foo_b)};
-};
+
 struct foo_result
 {
    bool foo_c{};
    std::string foo_d{};
    auto operator<=>(const foo_result&) const = default;
-};
-template <>
-struct glz::meta<foo_result>
-{
-   using T = foo_result;
-   static constexpr auto value{object(&T::foo_c, &T::foo_d)};
 };
 
 struct bar_params
@@ -36,23 +25,12 @@ struct bar_params
    int bar_a;
    std::string bar_b;
 };
-template <>
-struct glz::meta<bar_params>
-{
-   using T = bar_params;
-   static constexpr auto value{object(&T::bar_a, &T::bar_b)};
-};
+
 struct bar_result
 {
    bool bar_c{};
    std::string bar_d{};
    auto operator<=>(const bar_result&) const = default;
-};
-template <>
-struct glz::meta<bar_result>
-{
-   using T = bar_result;
-   static constexpr auto value{object(&T::bar_c, &T::bar_d)};
 };
 
 namespace rpc = glz::rpc;
@@ -66,15 +44,15 @@ int main() {
        client;
    
     // One long living callback per method for the server
-    server.on<"foo">([](foo_params const& params) -> glz::expected<foo_result, rpc::error> {
+    server.on<"foo">([](foo_params const& params) {
         // access to member variables for the request `foo`
         // params.foo_a 
         // params.foo_b
         return foo_result{.foo_c = true, .foo_d = "new world"};
         // Or return an error:
-        // return glz::unexpected(rpc::error{rpc::error_e::server_error_lower, "my error"});
+        // return rpc::error{rpc::error_e::server_error_lower, "my error"};
     });
-    server.on<"bar">([](bar_params const& params) -> glz::expected<bar_result, rpc::error> {
+    server.on<"bar">([](bar_params const& params) {
         return bar_result{.bar_c = true, .bar_d = "new world"};
     });
     
