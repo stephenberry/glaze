@@ -212,11 +212,11 @@ namespace glz::repe
       
       void call(const sv msg)
       {
-         repe::header header;
+         header h;
          context ctx{};
          auto[b, e] = read_iterators<Opts>(ctx, msg);
          auto start = b;
-         glz::detail::read<Opts.format>::template op<Opts>(header, ctx, b, e);
+         glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
          
          if (bool(ctx.error)) {
             parse_error pe{ctx.error, size_t(std::distance(start, b))};
@@ -230,20 +230,20 @@ namespace glz::repe
          else {
             ctx.error = error_code::syntax_error;
             parse_error pe{ctx.error, size_t(std::distance(start, b))};
-            response = format_error(pe, msg);
+            write_ndjson(std::forward_as_tuple(header{.error = true}, error{error_e::parse_error, format_error(pe, msg)}), response);
             return;
          }
          
-         if (auto it = methods.find(header.method); it != methods.end()) {
-            if (header.user_data) {
+         if (auto it = methods.find(h.method); it != methods.end()) {
+            if (h.user_data) {
                it->second.user_data(msg); // consume the user data
             }
             
             const sv body = msg.substr(size_t(std::distance(start, b)));
-            it->second.call(state{body, header, response}); // handle the body
+            it->second.call(state{body, h, response}); // handle the body
          }
          else {
-            response = "method not found";
+            write_ndjson(std::forward_as_tuple(header{.error = true}, error{error_e::method_not_found}), response);
          }
       }
    };
