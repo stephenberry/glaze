@@ -66,6 +66,19 @@ namespace glz::repe
       std::function<void(const sv)> user_data{}; // handle user data
    };
    
+   struct procedure_base
+   {
+      virtual ~procedure_base() = default;
+      virtual void call() = 0;
+      virtual void user_data(const sv) = 0;
+   };
+   
+   template <class Params, class Result>
+   struct procedure_t : procedure_base
+   {
+      
+   };
+   
    namespace detail
    {
       struct string_hash {
@@ -85,6 +98,32 @@ namespace glz::repe
    inline auto& get_shared_mutex() {
       static std::shared_mutex mtx{};
       return mtx;
+   }
+   
+   template <opts Opts, class Value>
+   bool read_params(Value&& value, auto&& state, auto&& response)
+   {
+      if constexpr (Opts.format == json) {
+         const auto ec = glz::read_json(std::forward<Value>(value), state.message);
+         if (ec) {
+            glz::write_ndjson(std::forward_as_tuple(header{.error = true}, error{error_e::parse_error, format_error(ec, state.message)}), response);
+            return true;
+         }
+         return false;
+      }
+      else {
+         static_assert(false_v<Value>, "TODO: implement BEVE");
+      }
+   }
+   
+   template <opts Opts, class Value>
+   void write_response(Value&& value, auto&& state) {
+      if constexpr (Opts.format == json) {
+         glz::write_ndjson(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.buffer);
+      }
+      else {
+         static_assert(false_v<Value>, "TODO: implement BEVE");
+      }
    }
    
    // This server is designed to be lightweight, so that it is easily constructed on a per client basis
@@ -109,13 +148,13 @@ namespace glz::repe
             using Params = std::decay_t<std::tuple_element_t<0, Tuple>>;
             using Result = std::decay_t<std::tuple_element_t<1, Tuple>>;
             
-            methods.emplace(name, procedure{[this, params = Params{}, result = Result{}, callback](auto&& state) mutable {
+            methods.emplace(name, procedure{[&response = this->response, params = Params{}, result = Result{}, callback](auto&& state) mutable {
                // no need to lock locals
-               if (this->read_params(params, state)) {
+               if (read_params<Opts>(params, state, response)) {
                   return;
                }
                callback(params, result);
-               this->write_response(result, state);
+               write_response<Opts>(result, state);
             }});
          }
          else {
@@ -126,48 +165,48 @@ namespace glz::repe
       template <class Params, class Result, class Callback>// requires std::is_assignable_v<std::function<void()>, Callback>
       void on(const sv name, Params&& params, Result&& result, Callback&& callback) {
          if constexpr (std::is_lvalue_reference_v<Params> && std::is_lvalue_reference_v<Result>) {
-            methods.emplace(name, procedure{[this, &params, &result, callback](auto&& state){
+            methods.emplace(name, procedure{[&response = this->response, &params, &result, callback](auto&& state){
                // we must lock access to params and result as multiple clients might need to manipulate them
                std::unique_lock lock{get_shared_mutex()};
-               if (this->read_params(params, state)) {
+               if (read_params<Opts>(params, state, response)) {
                   return;
                }
                callback(params, result);
-               this->write_response(result, state);
+               write_response<Opts>(result, state);
             }});
          }
          else if constexpr (std::is_lvalue_reference_v<Params> && !std::is_lvalue_reference_v<Result>) {
-            methods.emplace(name, procedure{[this, &params, result, callback](auto&& state) mutable {
+            methods.emplace(name, procedure{[&response = this->response, &params, result, callback](auto&& state) mutable {
                {
                   std::unique_lock lock{get_shared_mutex()};
-                  if (this->read_params(params, state)) {
+                  if (read_params<Opts>(params, state, response)) {
                      return;
                   }
                   callback(params, result);
                }
                // no need to lock local result writing
-               this->write_response(result, state);
+               write_response<Opts>(result, state);
             }});
          }
          else if constexpr (!std::is_lvalue_reference_v<Params> && std::is_lvalue_reference_v<Result>) {
-            methods.emplace(name, procedure{[this, params, &result, callback](auto&& state) mutable {
+            methods.emplace(name, procedure{[&response = this->response, params, &result, callback](auto&& state) mutable {
                // no need to lock locals
-               if (this->read_params(params, state)) {
+               if (read_params<Opts>(params, state, response)) {
                   return;
                }
                std::unique_lock lock{get_shared_mutex()};
                callback(params, result);
-               this->write_response(result, state);
+               write_response<Opts>(result, state);
             }});
          }
          else if constexpr (!std::is_lvalue_reference_v<Params> && !std::is_lvalue_reference_v<Result>) {
-            methods.emplace(name, procedure{[this, params, result, callback](auto&& state) mutable {
+            methods.emplace(name, procedure{[&response = this->response, params, result, callback](auto&& state) mutable {
                // no need to lock locals
-               if (this->read_params(params, state)) {
+               if (read_params<Opts>(params, state, response)) {
                   return;
                }
                callback(params, result);
-               this->write_response(result, state);
+               write_response<Opts>(result, state);
             }});
          }
          else {
@@ -180,32 +219,6 @@ namespace glz::repe
       void on(const sv name, Params&& params, Result&& result, Callback&& callback) {
          
       }*/
-      
-      template <class Value>
-      bool read_params(Value&& value, auto&& state)
-      {
-         if constexpr (Opts.format == json) {
-            const auto ec = glz::read_json(std::forward<Value>(value), state.message);
-            if (ec) {
-               glz::write_ndjson(std::forward_as_tuple(header{.error = true}, error{error_e::parse_error, format_error(ec, state.message)}), response);
-               return true;
-            }
-            return false;
-         }
-         else {
-            static_assert(false_v<Value>, "TODO: implement BEVE");
-         }
-      }
-      
-      template <class Value>
-      void write_response(Value&& value, auto&& state) {
-         if constexpr (Opts.format == json) {
-            glz::write_ndjson(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.buffer);
-         }
-         else {
-            static_assert(false_v<Value>, "TODO: implement BEVE");
-         }
-      }
       
       void call(const sv msg)
       {
