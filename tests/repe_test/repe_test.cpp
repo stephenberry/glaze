@@ -20,6 +20,14 @@ struct my_struct
    std::string world{};
 };
 
+struct thing
+{
+   std::string a{};
+   int b{};
+   float c{};
+   my_struct d{};
+};
+
 suite repe_tests = [] {
    "references"_test = [] {
       repe::server server{};
@@ -103,6 +111,25 @@ suite repe_tests = [] {
       }
       
       expect(server.response == R"([[0,1,0,"",null],[-32603,"my custom error"]])") << server.response;
+   };
+   
+   "thing"_test = [] {
+      repe::server server{};
+      
+      server.on("modify", [&](thing& params, my_struct& result){
+         result.hello = params.a + ", " + std::to_string(params.b) + ", " + std::to_string(params.c) + ", " + params.d.world;
+         result.world = "this is a neat place";
+      });
+      
+      {
+         thing params{"a", 5, 3.14f, { "H", "W" }};
+         
+         auto request = repe::request_json({"modify"}, params);
+         
+         server.call(request);
+      }
+      
+      expect(server.response == R"([[0,0,0,"modify",null],{"hello":"a, 5, 3.140000, W","world":"this is a neat place"}])") << server.response;
    };
 };
 
