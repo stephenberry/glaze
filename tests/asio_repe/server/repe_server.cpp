@@ -16,6 +16,7 @@ using namespace boost::ut;
 inline void init_server(glz::repe::server<>& server)
 {
    server.on("sum", [](std::vector<int>& vec, int& sum) { sum = std::reduce(vec.begin(), vec.end()); });
+   server.on("max", [](std::vector<double>& vec, double& max) { max = std::ranges::max(vec); });
 }
 
 void tester()
