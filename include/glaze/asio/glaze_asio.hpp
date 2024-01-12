@@ -58,16 +58,55 @@ namespace glz
       asio_client() {
          auto endpoints = resolver.resolve(host, service);
          asio::connect(socket, endpoints);
-         std::cerr << "Connected to server.\n";
       }
       
-      template <opts Opts = opts{}, class Value>
-      std::string& call(const repe::header& header, Value&& value) {
-         repe::request<Opts>(header, std::forward<Value>(value), buffer);
+      template <opts Opts = opts{}, class Params, class Result>
+      [[nodiscard]] repe::error_t call(const repe::header& header, Params&& params, Result&& result) {
+         using namespace repe;
+         request<Opts>(header, std::forward<Params>(params), buffer);
          
          send_string(socket, buffer);
          receive_string(socket, buffer);
-         return buffer;
+         
+         repe::header h;
+         context ctx{};
+         auto[b, e] = read_iterators<Opts>(ctx, buffer);
+         auto start = b;
+         
+         auto handle_error = [&] {
+            ctx.error = error_code::syntax_error;
+            parse_error pe{ctx.error, size_t(std::distance(start, b))};
+            return error_t{error_e::parse_error, format_error(pe, buffer)};
+         };
+         
+         if (*b == '[') {
+            ++b;
+         }
+         else {
+            return handle_error();
+         }
+         
+         glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
+         
+         if (bool(ctx.error)) {
+            parse_error pe{ctx.error, size_t(std::distance(start, b))};
+            return {error_e::parse_error, format_error(pe, buffer)};
+         }
+         
+         if (*b == ',') {
+            ++b;
+         }
+         else {
+            return handle_error();
+         }
+         
+         glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
+         
+         if (bool(ctx.error)) {
+            parse_error pe{ctx.error, size_t(std::distance(start, b))};
+            return {error_e::parse_error, format_error(pe, buffer)};
+         }
+         return {};
       }
    };
    

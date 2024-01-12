@@ -18,9 +18,14 @@ void asio_client_test()
    glz::asio_client client{};
    
    std::vector<int> data{};
-   for (int i = 0; i < 100; ++i) {
+   for (int i = 1; i < 100; ++i) {
       data.emplace_back(i);
-      std::cerr << client.call({"sum", uint64_t(i)}, data) << '\n';
+      int sum{};
+      const auto ec = client.call({"sum", uint64_t(i)}, data, sum);
+      if (ec) {
+         std::cerr << ec.message << '\n';
+      }
+      std::cerr << sum << '\n';
    }
 }
 
