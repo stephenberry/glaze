@@ -17,7 +17,7 @@ namespace glz::repe
 {
    // we put the method and id at the top of the class for easier initialization
    // the order in the actual message is not the same
-   struct header {
+   struct header final {
       std::string_view method = ""; // the RPC method to call
       std::variant<std::monostate, uint64_t, std::string_view> id{}; // an identifier
       static constexpr uint8_t version = 0; // the REPE version
@@ -42,10 +42,14 @@ namespace glz::repe
       parse_error = -32700,
    };
 
-   struct error_t
+   struct error_t final
    {
       error_e code = error_e::no_error;
       std::string message = "";
+      
+      operator bool() const noexcept {
+         return bool(code);
+      }
       
       struct glaze {
          using T = error_t;
@@ -53,14 +57,15 @@ namespace glz::repe
       };
    };
    
-   struct state
+   struct state final
    {
       const std::string_view message{};
       const repe::header& header;
       std::string& buffer;
+      error_t& error;
    };
    
-   struct procedure
+   struct procedure final
    {
       std::function<void(state&&)> call{}; // RPC call method
       std::function<void(const sv)> user_data{}; // handle user data
@@ -108,11 +113,21 @@ namespace glz::repe
    
    template <opts Opts, class Value>
    void write_response(Value&& value, auto&& state) {
-      if constexpr (Opts.format == json) {
-         glz::write_ndjson(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.buffer);
+      if (state.error) {
+         if constexpr (Opts.format == json) {
+            write_ndjson(std::forward_as_tuple(header{.error = true}, state.error), state.buffer);
+         }
+         else {
+            static_assert(false_v<Value>, "TODO: implement BEVE");
+         }
       }
       else {
-         static_assert(false_v<Value>, "TODO: implement BEVE");
+         if constexpr (Opts.format == json) {
+            glz::write_ndjson(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.buffer);
+         }
+         else {
+            static_assert(false_v<Value>, "TODO: implement BEVE");
+         }
       }
    }
    
@@ -129,7 +144,7 @@ namespace glz::repe
       
       std::string response;
       
-      error_e error = error_e::no_error;
+      error_t error{};
       
       template <class Callback>
       void on(const sv name, Callback&& callback) {
@@ -140,7 +155,7 @@ namespace glz::repe
             using Params = std::decay_t<std::tuple_element_t<0, Tuple>>;
             using Result = std::decay_t<std::tuple_element_t<1, Tuple>>;
             
-            methods.emplace(name, procedure{[&response = this->response, params = Params{}, result = Result{}, callback](auto&& state) mutable {
+            methods.emplace(name, procedure{[this, params = Params{}, result = Result{}, callback](auto&& state) mutable {
                // no need to lock locals
                if (read_params<Opts>(params, state, response)) {
                   return;
@@ -157,7 +172,7 @@ namespace glz::repe
       template <class Params, class Result, class Callback>// requires std::is_assignable_v<std::function<void()>, Callback>
       void on(const sv name, Params&& params, Result&& result, Callback&& callback) {
          if constexpr (lvalue<Params> && lvalue<Result>) {
-            methods.emplace(name, procedure{[&response = this->response, &params, &result, callback](auto&& state){
+            methods.emplace(name, procedure{[this, &params, &result, callback](auto&& state){
                // we must lock access to params and result as multiple clients might need to manipulate them
                std::unique_lock lock{get_shared_mutex()};
                if (read_params<Opts>(params, state, response)) {
@@ -168,7 +183,7 @@ namespace glz::repe
             }});
          }
          else if constexpr (lvalue<Params> && !lvalue<Result>) {
-            methods.emplace(name, procedure{[&response = this->response, &params, result, callback](auto&& state) mutable {
+            methods.emplace(name, procedure{[this, &params, result, callback](auto&& state) mutable {
                {
                   std::unique_lock lock{get_shared_mutex()};
                   if (read_params<Opts>(params, state, response)) {
@@ -181,7 +196,7 @@ namespace glz::repe
             }});
          }
          else if constexpr (!lvalue<Params> && lvalue<Result>) {
-            methods.emplace(name, procedure{[&response = this->response, params, &result, callback](auto&& state) mutable {
+            methods.emplace(name, procedure{[this, params, &result, callback](auto&& state) mutable {
                // no need to lock locals
                if (read_params<Opts>(params, state, response)) {
                   return;
@@ -192,7 +207,7 @@ namespace glz::repe
             }});
          }
          else if constexpr (!lvalue<Params> && !lvalue<Result>) {
-            methods.emplace(name, procedure{[&response = this->response, params, result, callback](auto&& state) mutable {
+            methods.emplace(name, procedure{[this, params, result, callback](auto&& state) mutable {
                // no need to lock locals
                if (read_params<Opts>(params, state, response)) {
                   return;
@@ -242,7 +257,7 @@ namespace glz::repe
             }
             
             const sv body = msg.substr(size_t(std::distance(start, b)));
-            it->second.call(state{body, h, response}); // handle the body
+            it->second.call(state{body, h, response, error}); // handle the body
          }
          else {
             write_ndjson(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
