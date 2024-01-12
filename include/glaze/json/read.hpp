@@ -1553,7 +1553,7 @@ namespace glz
                   return std::tuple_size_v<meta_t<T>>;
                }
             }();
-            if constexpr (glaze_object_t<T> && num_members == 0 && Opts.error_on_unknown_keys) {
+            if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
                if (*it == '}') [[likely]] {
                   ++it;
                   return;
