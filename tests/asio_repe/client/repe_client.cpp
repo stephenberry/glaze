@@ -9,53 +9,53 @@
 
 using namespace boost::ut;
 
+#include "glaze/asio/glaze_asio.hpp"
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/repe.hpp"
-
-#include "glaze/asio/glaze_asio.hpp"
 
 namespace glz
 {
    struct asio_client
    {
       asio::io_context ctx;
-      asio::ip::tcp::socket socket{ ctx };
-      asio::ip::tcp::resolver resolver{ ctx };
-      
+      asio::ip::tcp::socket socket{ctx};
+      asio::ip::tcp::resolver resolver{ctx};
+
       std::string buffer{};
-      
-      void run() {
+
+      void run()
+      {
          asio::co_spawn(ctx, startup(), asio::detached);
          ctx.run();
       }
-      
-      asio::awaitable<void> startup() {
+
+      asio::awaitable<void> startup()
+      {
          try {
             auto endpoints = co_await resolver.async_resolve("localhost", "1234", asio::use_awaitable);
             co_await asio::async_connect(socket, endpoints, asio::use_awaitable);
             std::cerr << "Connected to server.\n";
-            
+
             std::vector<int> data{};
-            
+
             int i = 0;
-            
-            while (true)
-            {
+
+            while (true) {
                std::this_thread::sleep_for(std::chrono::milliseconds(500));
                data.emplace_back(i);
-               
+
                buffer = repe::request_json({"sum", uint64_t(i)}, data);
                co_await send_buffer(socket, buffer);
                co_await receive_buffer(socket, buffer);
-               
+
                std::cerr << buffer << '\n';
-               
+
                ++i;
-             }
-          }
-          catch (std::exception& e) {
-             std::cerr << "Exception: " << e.what() << '\n';
-          }
+            }
+         }
+         catch (std::exception& e) {
+            std::cerr << "Exception: " << e.what() << '\n';
+         }
       }
    };
 }
@@ -69,7 +69,7 @@ void tester()
 int main()
 {
    tester();
-   
+
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
    return result;
 }
