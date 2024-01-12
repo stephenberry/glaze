@@ -283,4 +283,9 @@ namespace glz::repe
    inline auto request_json(const header& header, Value&& value) {
       return glz::write_json(std::forward_as_tuple(header, std::forward<Value>(value)));
    }
+   
+   template <class Value>
+   inline void request_json(const header& header, Value&& value, auto& buffer) {
+      glz::write_json(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
+   }
 }

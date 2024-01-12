@@ -44,13 +44,13 @@ namespace glz
                std::this_thread::sleep_for(std::chrono::milliseconds(500));
                data.emplace_back(i);
 
-               buffer = repe::request_json({"sum", uint64_t(i)}, data);
+               repe::request_json({"sum", uint64_t(i)}, data, buffer);
                co_await send_buffer(socket, buffer);
                co_await receive_buffer(socket, buffer);
 
                std::cerr << buffer << '\n';
                
-               buffer = repe::request_json({"max"}, data);
+               repe::request_json({"max"}, data, buffer);
                co_await send_buffer(socket, buffer);
                co_await receive_buffer(socket, buffer);
 
