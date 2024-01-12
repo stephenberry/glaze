@@ -10,14 +10,14 @@
 
 namespace glz
 {
-   inline void send_string(asio::ip::tcp::socket& socket, const std::string_view str)
+   inline void send_buffer(asio::ip::tcp::socket& socket, const std::string_view str)
    {
       uint64_t size = str.size();
       asio::write(socket, asio::buffer(&size, sizeof(uint64_t)), asio::transfer_exactly(sizeof(uint64_t)));
       asio::write(socket, asio::buffer(str), asio::transfer_exactly(size));
    }
 
-   inline void receive_string(asio::ip::tcp::socket& socket, std::string& str)
+   inline void receive_buffer(asio::ip::tcp::socket& socket, std::string& str)
    {
       uint64_t size;
       asio::read(socket, asio::buffer(&size, sizeof(size)), asio::transfer_exactly(sizeof(uint64_t)));
@@ -25,14 +25,14 @@ namespace glz
       asio::read(socket, asio::buffer(str), asio::transfer_exactly(size));
    }
    
-   inline asio::awaitable<void> send_buffer(asio::ip::tcp::socket& socket, const std::string_view str)
+   inline asio::awaitable<void> co_send_buffer(asio::ip::tcp::socket& socket, const std::string_view str)
    {
       const uint64_t size = str.size();
       co_await asio::async_write(socket, asio::buffer(&size, sizeof(uint64_t)), asio::use_awaitable);
       co_await asio::async_write(socket, asio::buffer(str), asio::use_awaitable);
    }
 
-   inline asio::awaitable<void> receive_buffer(asio::ip::tcp::socket& socket, std::string& str)
+   inline asio::awaitable<void> co_receive_buffer(asio::ip::tcp::socket& socket, std::string& str)
    {
       uint64_t size;
       co_await asio::async_read(socket, asio::buffer(&size, sizeof(size)), asio::use_awaitable);
@@ -41,8 +41,8 @@ namespace glz
    }
    
    inline asio::awaitable<void> call_rpc(asio::ip::tcp::socket& socket, std::string& buffer) {
-      co_await send_buffer(socket, buffer);
-      co_await receive_buffer(socket, buffer);
+      co_await co_send_buffer(socket, buffer);
+      co_await co_receive_buffer(socket, buffer);
    }
    
    struct asio_client
@@ -65,8 +65,8 @@ namespace glz
          using namespace repe;
          request<Opts>(header, std::forward<Params>(params), buffer);
          
-         send_string(socket, buffer);
-         receive_string(socket, buffer);
+         send_buffer(socket, buffer);
+         receive_buffer(socket, buffer);
          return buffer;
       }
       
@@ -75,8 +75,8 @@ namespace glz
          using namespace repe;
          request<Opts>(header, std::forward<Params>(params), buffer);
          
-         send_string(socket, buffer);
-         receive_string(socket, buffer);
+         send_buffer(socket, buffer);
+         receive_buffer(socket, buffer);
          
          return decode_response<Opts>(std::forward<Result>(result), buffer);
       }
@@ -115,14 +115,14 @@ namespace glz
            
           while (true)
           {
-             co_await receive_buffer(socket, buffer);
+             co_await co_receive_buffer(socket, buffer);
              server.call(buffer);
-             co_await send_buffer(socket, server.response);
+             co_await co_send_buffer(socket, server.response);
           }
         }
         catch (std::exception& e)
         {
-          std::printf("echo Exception: %s\n", e.what());
+          std::printf("Exception: %s\n", e.what());
         }
       }
 
