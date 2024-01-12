@@ -26,7 +26,7 @@ namespace glz
    template <class Server>
    struct asio_server
    {
-      asio::io_context ctx{2}; // number of background threads
+      asio::io_context ctx{1}; // number of background threads
 
       asio::signal_set signals{ctx, SIGINT, SIGTERM};
       

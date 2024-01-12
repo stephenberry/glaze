@@ -49,6 +49,12 @@ namespace glz
                co_await receive_buffer(socket, buffer);
 
                std::cerr << buffer << '\n';
+               
+               buffer = repe::request_json({"max"}, data);
+               co_await send_buffer(socket, buffer);
+               co_await receive_buffer(socket, buffer);
+
+               std::cerr << buffer << '\n';
 
                ++i;
             }
