@@ -75,6 +75,7 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_exceptions INTERFACE /W4 /wd4459 /wd4805)
 endif()
 
+add_subdirectory(asio_repe)
 add_subdirectory(api_test)
 add_subdirectory(binary_test)
 add_subdirectory(compare_test)
