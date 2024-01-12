@@ -45,14 +45,12 @@ namespace glz
                data.emplace_back(i);
 
                repe::request_json({"sum", uint64_t(i)}, data, buffer);
-               co_await send_buffer(socket, buffer);
-               co_await receive_buffer(socket, buffer);
+               co_await call_rpc(socket, buffer);
 
                std::cerr << buffer << '\n';
                
                repe::request_json({"max"}, data, buffer);
-               co_await send_buffer(socket, buffer);
-               co_await receive_buffer(socket, buffer);
+               co_await call_rpc(socket, buffer);
 
                std::cerr << buffer << '\n';
 

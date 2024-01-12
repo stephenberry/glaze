@@ -23,6 +23,11 @@ namespace glz
       co_await asio::async_read(socket, asio::buffer(str), asio::use_awaitable);
    }
    
+   inline asio::awaitable<void> call_rpc(asio::ip::tcp::socket& socket, std::string& buffer) {
+      co_await send_buffer(socket, buffer);
+      co_await receive_buffer(socket, buffer);
+   }
+   
    template <class Server>
    struct asio_server
    {
