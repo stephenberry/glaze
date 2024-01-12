@@ -40,9 +40,7 @@ suite repe_tests = [] {
          server.call(request);
       }
       
-      expect(server.response ==
-R"([0,0,0,0,"concat",5]
-"Aha World")");
+      expect(server.response == R"([[0,0,0,0,"concat",5],"Aha World"])") << server.response;
    };
    
    "concrete internal storage"_test = [] {
@@ -61,9 +59,7 @@ R"([0,0,0,0,"concat",5]
          server.call(request);
       }
       
-      expect(server.response ==
-R"([0,0,0,0,"concat",5]
-"Aha World")");
+      expect(server.response == R"([[0,0,0,0,"concat",5],"Aha World"])") << server.response;
    };
    
    "error support"_test = [] {
@@ -83,9 +79,7 @@ R"([0,0,0,0,"concat",5]
          server.call(request);
       }
       
-      expect(server.response ==
-R"([0,1,0,0,"",null]
-[-32603,"my custom error"])") << server.response;
+      expect(server.response == R"([[0,1,0,0,"",null],[-32603,"my custom error"]])") << server.response;
    };
 };
 

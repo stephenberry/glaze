@@ -95,7 +95,7 @@ namespace glz::repe
       if constexpr (Opts.format == json) {
          const auto ec = glz::read_json(std::forward<Value>(value), state.message);
          if (ec) {
-            glz::write_ndjson(std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(ec, state.message)}), response);
+            write_json(std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(ec, state.message)}), response);
             return true;
          }
          return false;
@@ -109,7 +109,7 @@ namespace glz::repe
    void write_response(Value&& value, auto&& state) {
       if (state.error) {
          if constexpr (Opts.format == json) {
-            write_ndjson(std::forward_as_tuple(header{.error = true}, state.error), state.buffer);
+            write_json(std::forward_as_tuple(header{.error = true}, state.error), state.buffer);
          }
          else {
             static_assert(false_v<Value>, "TODO: implement BEVE");
@@ -117,7 +117,7 @@ namespace glz::repe
       }
       else {
          if constexpr (Opts.format == json) {
-            glz::write_ndjson(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.buffer);
+            write_json(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.buffer);
          }
          else {
             static_assert(false_v<Value>, "TODO: implement BEVE");
@@ -234,6 +234,21 @@ namespace glz::repe
          context ctx{};
          auto[b, e] = read_iterators<Opts>(ctx, msg);
          auto start = b;
+         
+         auto handle_error = [&] {
+            ctx.error = error_code::syntax_error;
+            parse_error pe{ctx.error, size_t(std::distance(start, b))};
+            write_json(std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(pe, msg)}), response);
+         };
+         
+         if (*b == '[') {
+            ++b;
+         }
+         else {
+            handle_error();
+            return;
+         }
+         
          glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
          
          if (bool(ctx.error)) {
@@ -242,13 +257,11 @@ namespace glz::repe
             return;
          }
          
-         if (*b == '\n') {
+         if (*b == ',') {
             ++b;
          }
          else {
-            ctx.error = error_code::syntax_error;
-            parse_error pe{ctx.error, size_t(std::distance(start, b))};
-            write_ndjson(std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(pe, msg)}), response);
+            handle_error();
             return;
          }
          
@@ -261,13 +274,13 @@ namespace glz::repe
             it->second.call(state{body, h, response, error}); // handle the body
          }
          else {
-            write_ndjson(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
+            write_json(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
          }
       }
    };
    
    template <class Value>
    inline auto request_json(const header& header, Value&& value) {
-      return glz::write_ndjson(std::forward_as_tuple(header, std::forward<Value>(value)));
+      return glz::write_json(std::forward_as_tuple(header, std::forward<Value>(value)));
    }
 }
