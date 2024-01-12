@@ -41,9 +41,9 @@ suite repe_tests = [] {
       });
       
       {
-         my_struct params{"Hello", "World"};
+         my_struct client_params{"Hello", "World"};
          
-         auto request = repe::request_json({"concat", 5ul}, params);
+         auto request = repe::request_json({"concat", 5ul}, client_params);
          
          server.call(request);
       }
@@ -60,9 +60,9 @@ suite repe_tests = [] {
       });
       
       {
-         my_struct params{"Hello", "World"};
+         my_struct client_params{"Hello", "World"};
          
-         auto request = repe::request_json({"concat", 5ul}, params);
+         auto request = repe::request_json({"concat", 5ul}, client_params);
          
          server.call(request);
       }
@@ -83,9 +83,9 @@ suite repe_tests = [] {
       });
       
       {
-         my_struct params{"Hello", "World"};
+         my_struct client_params{"Hello", "World"};
          
-         auto request = repe::request_json({.method = "concat", .id = 5ul, .notification = true}, params);
+         auto request = repe::request_json({.method = "concat", .id = 5ul, .notification = true}, client_params);
          
          server.call(request);
       }
@@ -103,9 +103,9 @@ suite repe_tests = [] {
       });
       
       {
-         my_struct params{"Hello", "World"};
+         my_struct client_params{"Hello", "World"};
          
-         auto request = repe::request_json({"concat", 5ul}, params);
+         auto request = repe::request_json({"concat", 5ul}, client_params);
          
          server.call(request);
       }
