@@ -66,18 +66,8 @@ namespace glz::repe
       std::function<void(const sv)> user_data{}; // handle user data
    };
    
-   struct procedure_base
-   {
-      virtual ~procedure_base() = default;
-      virtual void call() = 0;
-      virtual void user_data(const sv) = 0;
-   };
-   
-   template <class Params, class Result>
-   struct procedure_t : procedure_base
-   {
-      
-   };
+   template <class T>
+   constexpr auto lvalue = std::is_lvalue_reference_v<T>;
    
    namespace detail
    {
@@ -125,9 +115,6 @@ namespace glz::repe
          static_assert(false_v<Value>, "TODO: implement BEVE");
       }
    }
-   
-   template <class T>
-   constexpr auto lvalue = std::is_lvalue_reference_v<T>;
    
    // This server is designed to be lightweight, so that it is easily constructed on a per client basis
    // This server does not support adding methods from RPC calls or adding methods once the RPC calls can be made
@@ -262,7 +249,7 @@ namespace glz::repe
    };
    
    template <class Value>
-   inline auto request(const header& header, Value&& value) {
+   inline auto request_json(const header& header, Value&& value) {
       return glz::write_ndjson(std::forward_as_tuple(header, std::forward<Value>(value)));
    }
 }
@@ -290,7 +277,7 @@ suite repe_tests = [] {
       {
          my_struct params{"Hello", "World"};
          
-         auto request = repe::request({"concat", 5ul}, params);
+         auto request = repe::request_json({"concat", 5ul}, params);
          
          server.call(request);
       }
@@ -311,7 +298,7 @@ R"([0,0,0,0,"concat",5]
       {
          my_struct params{"Hello", "World"};
          
-         auto request = repe::request({"concat", 5ul}, params);
+         auto request = repe::request_json({"concat", 5ul}, params);
          
          server.call(request);
       }
