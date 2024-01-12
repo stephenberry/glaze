@@ -407,6 +407,17 @@ suite json_schema = [] {
    };
 };
 
+struct empty_t
+{};
+
+suite empty_test = [] {
+   "empty_t"_test = [] {
+      empty_t obj;
+      expect(glz::write_json(obj) == "{}");
+      expect(!glz::read_json(obj, "{}"));
+   };
+};
+
 int main()
 { // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
