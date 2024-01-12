@@ -62,14 +62,14 @@ ut::suite vector_test_cases = [] {
 
    ut::test("sum_result = 6") = [&server, &client] {
       bool called{};
-      auto request_str = client.request<"summer">(1, std::vector{1, 2, 3},
-                                                [&called](glz::expected<int, rpc::error> value, rpc::id_t id) -> void {
-                                                   called = true;
-                                                   ut::expect(value.has_value());
-                                                   ut::expect(value.value() == 6);
-                                                   ut::expect(std::holds_alternative<std::int64_t>(id));
-                                                   ut::expect(std::get<std::int64_t>(id) == std::int64_t{1});
-                                                });
+      auto request_str = client.request<"summer">(
+         1, std::vector{1, 2, 3}, [&called](glz::expected<int, rpc::error> value, rpc::id_t id) -> void {
+            called = true;
+            ut::expect(value.has_value());
+            ut::expect(value.value() == 6);
+            ut::expect(std::holds_alternative<std::int64_t>(id));
+            ut::expect(std::get<std::int64_t>(id) == std::int64_t{1});
+         });
       ut::expect(request_str.first == R"({"jsonrpc":"2.0","method":"summer","params":[1,2,3],"id":1})");
 
       [[maybe_unused]] auto& requests = client.get_request_map<"summer">();

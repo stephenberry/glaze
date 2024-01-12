@@ -140,8 +140,7 @@ namespace glz::rpc
       struct glaze
       {
          using T = response_t;
-         static constexpr auto value{
-            glz::object("jsonrpc", &T::version, &T::result, &T::error, &T::id)};
+         static constexpr auto value{glz::object("jsonrpc", &T::version, &T::result, &T::error, &T::id)};
       };
    };
    using generic_response_t = response_t<glz::raw_json_view>;
@@ -214,7 +213,9 @@ namespace glz::rpc
                   method.callback = [=](const params_t& params) -> expected_t { return callback(params); };
                }
                else if constexpr (std::is_invocable_r_v<rpc::error, decltype(callback), const params_t&>) {
-                  method.callback = [=](const params_t& params) -> expected_t { return glz::unexpected{callback(params)}; };
+                  method.callback = [=](const params_t& params) -> expected_t {
+                     return glz::unexpected{callback(params)};
+                  };
                }
                else {
                   static_assert(false_v<M>, "Method supplied is not invocable with registered types");
@@ -463,7 +464,7 @@ namespace glz::rpc
       // that the input was a notification or more serious, conflicting id, the provided id should be unique!
       template <string_literal Name>
       [[nodiscard]] std::pair<std::string, bool> request(id_t&& id, auto&& params, auto&& callback)
-      {         
+      {
          constexpr bool method_found = ((Method::name_v == Name) || ...);
          static_assert(method_found, "Method not declared in client.");
 
@@ -472,8 +473,7 @@ namespace glz::rpc
          static_assert(params_type_found, "Input parameters do not match constructed client parameter types.");
 
          constexpr bool method_params_match =
-            ((Method::name_v == Name && std::is_same_v<typename Method::params_t, Params>) ||
-             ...);
+            ((Method::name_v == Name && std::is_same_v<typename Method::params_t, Params>) || ...);
          static_assert(method_params_match, "Method name and given params type do not match.");
 
          rpc::request_t req{std::forward<decltype(id)>(id), Name.sv(), std::forward<decltype(params)>(params)};
