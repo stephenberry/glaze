@@ -21,7 +21,7 @@ void asio_client_test()
    for (int i = 1; i < 100; ++i) {
       data.emplace_back(i);
       int sum{};
-      const auto ec = client.call({"sum", uint64_t(i)}, data, sum);
+      const auto ec = client.call({"sum"}, data, sum);
       if (ec) {
          std::cerr << ec.message << '\n';
       }
