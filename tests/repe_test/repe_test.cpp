@@ -280,7 +280,7 @@ struct my_struct
 };
 
 suite repe_tests = [] {
-   "repe references"_test = [] {
+   "references"_test = [] {
       repe::server server{};
       
       my_struct params{};
@@ -304,7 +304,7 @@ R"([0,0,0,0,"concat",5]
 "Aha World")");
    };
    
-   "repe concrete internal storage"_test = [] {
+   "concrete internal storage"_test = [] {
       repe::server server{};
       
       server.on("concat", [](my_struct& params, std::string& result){
@@ -323,6 +323,28 @@ R"([0,0,0,0,"concat",5]
       expect(server.response ==
 R"([0,0,0,0,"concat",5]
 "Aha World")");
+   };
+   
+   "error support"_test = [] {
+      repe::server server{};
+      
+      server.on("concat", [&](my_struct& params, std::string& result){
+         params.hello = "Aha";
+         result = params.hello + " " + params.world;
+         server.error = {repe::error_e::internal, "my custom error"};
+      });
+      
+      {
+         my_struct params{"Hello", "World"};
+         
+         auto request = repe::request_json({"concat", 5ul}, params);
+         
+         server.call(request);
+      }
+      
+      expect(server.response ==
+R"([0,1,0,0,"",null]
+[-32603,"my custom error"])") << server.response;
    };
 };
 
