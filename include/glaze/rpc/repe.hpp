@@ -133,9 +133,10 @@ namespace glz::repe
       auto[b, e] = read_iterators<Opts>(ctx, buffer);
       auto start = b;
       
-      auto handle_error = [&] {
+      // clang 14 won't build when capturing from structured binding
+      auto handle_error = [&](auto& it) {
          ctx.error = error_code::syntax_error;
-         parse_error pe{ctx.error, size_t(std::distance(start, b))};
+         parse_error pe{ctx.error, size_t(std::distance(start, it))};
          return error_t{error_e::parse_error, format_error(pe, buffer)};
       };
       
@@ -143,7 +144,7 @@ namespace glz::repe
          ++b;
       }
       else {
-         return handle_error();
+         return handle_error(b);
       }
       
       glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
@@ -157,7 +158,7 @@ namespace glz::repe
          ++b;
       }
       else {
-         return handle_error();
+         return handle_error(b);
       }
       
       if (h.error) {
@@ -302,9 +303,9 @@ namespace glz::repe
          auto[b, e] = read_iterators<Opts>(ctx, msg);
          auto start = b;
          
-         auto handle_error = [&] {
+         auto handle_error = [&](auto& it) {
             ctx.error = error_code::syntax_error;
-            parse_error pe{ctx.error, size_t(std::distance(start, b))};
+            parse_error pe{ctx.error, size_t(std::distance(start, it))};
             write_json(std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(pe, msg)}), response);
          };
          
@@ -312,7 +313,7 @@ namespace glz::repe
             ++b;
          }
          else {
-            handle_error();
+            handle_error(b);
             return !h.notification;
          }
          
@@ -328,7 +329,7 @@ namespace glz::repe
             ++b;
          }
          else {
-            handle_error();
+            handle_error(b);
             return !h.notification;
          }
          
