@@ -60,6 +60,16 @@ namespace glz
          asio::connect(socket, endpoints);
       }
       
+      template <opts Opts = opts{}, class Params>
+      [[nodiscard]] std::string& call_raw(const repe::header& header, Params&& params) {
+         using namespace repe;
+         request<Opts>(header, std::forward<Params>(params), buffer);
+         
+         send_string(socket, buffer);
+         receive_string(socket, buffer);
+         return buffer;
+      }
+      
       template <opts Opts = opts{}, class Params, class Result>
       [[nodiscard]] repe::error_t call(const repe::header& header, Params&& params, Result&& result) {
          using namespace repe;
