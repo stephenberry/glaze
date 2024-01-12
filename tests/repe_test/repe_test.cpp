@@ -126,6 +126,9 @@ namespace glz::repe
       }
    }
    
+   template <class T>
+   constexpr auto lvalue = std::is_lvalue_reference_v<T>;
+   
    // This server is designed to be lightweight, so that it is easily constructed on a per client basis
    // This server does not support adding methods from RPC calls or adding methods once the RPC calls can be made
    // Each instance of this server is expected to be accessed on a single thread basis, so a single std::string response buffer is used
@@ -164,7 +167,7 @@ namespace glz::repe
       
       template <class Params, class Result, class Callback>// requires std::is_assignable_v<std::function<void()>, Callback>
       void on(const sv name, Params&& params, Result&& result, Callback&& callback) {
-         if constexpr (std::is_lvalue_reference_v<Params> && std::is_lvalue_reference_v<Result>) {
+         if constexpr (lvalue<Params> && lvalue<Result>) {
             methods.emplace(name, procedure{[&response = this->response, &params, &result, callback](auto&& state){
                // we must lock access to params and result as multiple clients might need to manipulate them
                std::unique_lock lock{get_shared_mutex()};
@@ -175,7 +178,7 @@ namespace glz::repe
                write_response<Opts>(result, state);
             }});
          }
-         else if constexpr (std::is_lvalue_reference_v<Params> && !std::is_lvalue_reference_v<Result>) {
+         else if constexpr (lvalue<Params> && !lvalue<Result>) {
             methods.emplace(name, procedure{[&response = this->response, &params, result, callback](auto&& state) mutable {
                {
                   std::unique_lock lock{get_shared_mutex()};
@@ -188,7 +191,7 @@ namespace glz::repe
                write_response<Opts>(result, state);
             }});
          }
-         else if constexpr (!std::is_lvalue_reference_v<Params> && std::is_lvalue_reference_v<Result>) {
+         else if constexpr (!lvalue<Params> && lvalue<Result>) {
             methods.emplace(name, procedure{[&response = this->response, params, &result, callback](auto&& state) mutable {
                // no need to lock locals
                if (read_params<Opts>(params, state, response)) {
@@ -199,7 +202,7 @@ namespace glz::repe
                write_response<Opts>(result, state);
             }});
          }
-         else if constexpr (!std::is_lvalue_reference_v<Params> && !std::is_lvalue_reference_v<Result>) {
+         else if constexpr (!lvalue<Params> && !lvalue<Result>) {
             methods.emplace(name, procedure{[&response = this->response, params, result, callback](auto&& state) mutable {
                // no need to lock locals
                if (read_params<Opts>(params, state, response)) {
