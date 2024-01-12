@@ -40,7 +40,7 @@ suite repe_tests = [] {
          server.call(request);
       }
       
-      expect(server.response == R"([[0,0,0,0,"concat",5],"Aha World"])") << server.response;
+      expect(server.response == R"([[0,0,0,"concat",5],"Aha World"])") << server.response;
    };
    
    "concrete internal storage"_test = [] {
@@ -59,7 +59,30 @@ suite repe_tests = [] {
          server.call(request);
       }
       
-      expect(server.response == R"([[0,0,0,0,"concat",5],"Aha World"])") << server.response;
+      expect(server.response == R"([[0,0,0,"concat",5],"Aha World"])") << server.response;
+   };
+   
+   "notification"_test = [] {
+      repe::server server{};
+      
+      my_struct params{};
+      std::string result{};
+      
+      server.on("concat", params, result, [](auto& params, auto& result){
+         params.hello = "Aha";
+         // computing result, but we'll ignore it and not write it to the output buffer
+         result = params.hello + " " + params.world;
+      });
+      
+      {
+         my_struct params{"Hello", "World"};
+         
+         auto request = repe::request_json({.method = "concat", .id = 5ul, .notification = true}, params);
+         
+         server.call(request);
+      }
+      
+      expect(server.response == "") << server.response;
    };
    
    "error support"_test = [] {
@@ -79,7 +102,7 @@ suite repe_tests = [] {
          server.call(request);
       }
       
-      expect(server.response == R"([[0,1,0,0,"",null],[-32603,"my custom error"]])") << server.response;
+      expect(server.response == R"([[0,1,0,"",null],[-32603,"my custom error"]])") << server.response;
    };
 };
 

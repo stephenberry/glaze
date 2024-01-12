@@ -17,11 +17,10 @@ namespace glz::repe
       static constexpr uint8_t version = 0; // the REPE version
       uint8_t error = 0; // 0 denotes no error
       uint8_t notification = 0; // whether this RPC is a notification (no response returned)
-      uint8_t user_data = 0; // whether this RPC contains user data
       
       struct glaze {
          using T = header;
-         static constexpr auto value = glz::array(&T::version, &T::error, &T::notification, &T::user_data, &T::method, &T::id);
+         static constexpr auto value = glz::array(&T::version, &T::error, &T::notification, &T::method, &T::id);
       };
    };
    
@@ -161,7 +160,13 @@ namespace glz::repe
          return handle_error();
       }
       
-      glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
+      if (h.error) {
+         error_t error{};
+         glz::detail::read<Opts.format>::template op<Opts>(error, ctx, b, e);
+      }
+      else {
+         glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
+      }
       
       if (bool(ctx.error)) {
          parse_error pe{ctx.error, size_t(std::distance(start, b))};
@@ -208,6 +213,9 @@ namespace glz::repe
                   return;
                }
                callback(params, result);
+               if (state.header.notification) {
+                  return;
+               }
                write_response<Opts>(result, state);
             });
          }
@@ -226,6 +234,9 @@ namespace glz::repe
                   return;
                }
                callback(params, result);
+               if (state.header.notification) {
+                  return;
+               }
                write_response<Opts>(result, state);
             }});
          }
@@ -239,6 +250,9 @@ namespace glz::repe
                   callback(params, result);
                }
                // no need to lock local result writing
+               if (state.header.notification) {
+                  return;
+               }
                write_response<Opts>(result, state);
             });
          }
@@ -250,6 +264,9 @@ namespace glz::repe
                }
                std::unique_lock lock{get_shared_mutex()};
                callback(params, result);
+               if (state.header.notification) {
+                  return;
+               }
                write_response<Opts>(result, state);
             });
          }
@@ -260,6 +277,9 @@ namespace glz::repe
                   return;
                }
                callback(params, result);
+               if (state.header.notification) {
+                  return;
+               }
                write_response<Opts>(result, state);
             });
          }
@@ -274,7 +294,8 @@ namespace glz::repe
          
       }*/
       
-      void call(const sv msg)
+      // returns true if there is a result to send (not a notification)
+      bool call(const sv msg)
       {
          header h;
          context ctx{};
@@ -292,7 +313,7 @@ namespace glz::repe
          }
          else {
             handle_error();
-            return;
+            return !h.notification;
          }
          
          glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
@@ -300,7 +321,7 @@ namespace glz::repe
          if (bool(ctx.error)) {
             parse_error pe{ctx.error, size_t(std::distance(start, b))};
             response = format_error(pe, msg);
-            return;
+            return !h.notification;
          }
          
          if (*b == ',') {
@@ -308,7 +329,7 @@ namespace glz::repe
          }
          else {
             handle_error();
-            return;
+            return !h.notification;
          }
          
          if (auto it = methods.find(h.method); it != methods.end()) {
@@ -318,6 +339,8 @@ namespace glz::repe
          else {
             write_json(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
          }
+         
+         return !h.notification;
       }
    };
    

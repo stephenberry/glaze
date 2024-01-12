@@ -61,17 +61,19 @@ namespace glz
       }
       
       template <opts Opts = opts{}, class Params>
-      [[nodiscard]] std::string& call_raw(const repe::header& header, Params&& params) {
+      void notify(const repe::header& header, Params&& params) {
+         assert(header.notification);
+         
          using namespace repe;
          request<Opts>(header, std::forward<Params>(params), buffer);
          
          send_buffer(socket, buffer);
-         receive_buffer(socket, buffer);
-         return buffer;
       }
       
       template <opts Opts = opts{}, class Params, class Result>
       [[nodiscard]] repe::error_t call(const repe::header& header, Params&& params, Result&& result) {
+         assert(!header.notification);
+         
          using namespace repe;
          request<Opts>(header, std::forward<Params>(params), buffer);
          
@@ -79,6 +81,18 @@ namespace glz
          receive_buffer(socket, buffer);
          
          return decode_response<Opts>(std::forward<Result>(result), buffer);
+      }
+      
+      template <opts Opts = opts{}, class Params>
+      [[nodiscard]] std::string& call_raw(const repe::header& header, Params&& params) {
+         assert(!header.notification);
+         
+         using namespace repe;
+         request<Opts>(header, std::forward<Params>(params), buffer);
+         
+         send_buffer(socket, buffer);
+         receive_buffer(socket, buffer);
+         return buffer;
       }
    };
    
@@ -116,8 +130,9 @@ namespace glz
           while (true)
           {
              co_await co_receive_buffer(socket, buffer);
-             server.call(buffer);
-             co_await co_send_buffer(socket, server.response);
+             if (server.call(buffer)) {
+                co_await co_send_buffer(socket, server.response);
+             }
           }
         }
         catch (std::exception& e)
