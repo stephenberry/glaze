@@ -62,7 +62,7 @@ namespace glz::repe
    struct procedure final
    {
       std::function<void(state&&)> call{}; // RPC call method
-      std::function<void(const sv)> user_data{}; // handle user data
+      std::function<size_t(state&&)> user_data{}; // handle user data
    };
    
    template <class T>
@@ -90,15 +90,22 @@ namespace glz::repe
    }
    
    template <opts Opts, class Value>
-   bool read_params(Value&& value, auto&& state, auto&& response)
+   size_t read_params(Value&& value, auto&& state, auto&& response)
    {
       if constexpr (Opts.format == json) {
-         const auto ec = glz::read_json(std::forward<Value>(value), state.message);
-         if (ec) {
+         glz::context ctx{};
+         auto[b, e] = read_iterators<Opts>(ctx, state.message);
+         auto start = b;
+         
+         glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
+         
+         if (bool(ctx.error)) {
+            parse_error ec{ctx.error, size_t(std::distance(start, b))};
             write_json(std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(ec, state.message)}), response);
-            return true;
+            return 0;
          }
-         return false;
+         
+         return size_t(std::distance(start, b));
       }
       else {
          static_assert(false_v<Value>, "TODO: implement BEVE");
@@ -202,7 +209,7 @@ namespace glz::repe
             
             methods.emplace(name, procedure{[this, params = Params{}, result = Result{}, callback](auto&& state) mutable {
                // no need to lock locals
-               if (read_params<Opts>(params, state, response)) {
+               if (read_params<Opts>(params, state, response) == 0) {
                   return;
                }
                callback(params, result);
@@ -214,13 +221,13 @@ namespace glz::repe
          }
       }
       
-      template <class Params, class Result, class Callback>// requires std::is_assignable_v<std::function<void()>, Callback>
+      template <class Params, class Result, class Callback>
       void on(const sv name, Params&& params, Result&& result, Callback&& callback) {
          if constexpr (lvalue<Params> && lvalue<Result>) {
             methods.emplace(name, procedure{[this, &params, &result, callback](auto&& state){
                // we must lock access to params and result as multiple clients might need to manipulate them
                std::unique_lock lock{get_shared_mutex()};
-               if (read_params<Opts>(params, state, response)) {
+               if (read_params<Opts>(params, state, response) == 0) {
                   return;
                }
                callback(params, result);
@@ -231,7 +238,7 @@ namespace glz::repe
             methods.emplace(name, procedure{[this, &params, result, callback](auto&& state) mutable {
                {
                   std::unique_lock lock{get_shared_mutex()};
-                  if (read_params<Opts>(params, state, response)) {
+                  if (read_params<Opts>(params, state, response) == 0) {
                      return;
                   }
                   callback(params, result);
@@ -243,7 +250,7 @@ namespace glz::repe
          else if constexpr (!lvalue<Params> && lvalue<Result>) {
             methods.emplace(name, procedure{[this, params, &result, callback](auto&& state) mutable {
                // no need to lock locals
-               if (read_params<Opts>(params, state, response)) {
+               if (read_params<Opts>(params, state, response) == 0) {
                   return;
                }
                std::unique_lock lock{get_shared_mutex()};
@@ -254,7 +261,7 @@ namespace glz::repe
          else if constexpr (!lvalue<Params> && !lvalue<Result>) {
             methods.emplace(name, procedure{[this, params, result, callback](auto&& state) mutable {
                // no need to lock locals
-               if (read_params<Opts>(params, state, response)) {
+               if (read_params<Opts>(params, state, response) == 0) {
                   return;
                }
                callback(params, result);
@@ -263,6 +270,33 @@ namespace glz::repe
          }
          else {
             static_assert(false_v<Result>, "unsupported");
+         }
+      }
+      
+      template <class Custom, class Params, class Result, class Callback>
+      void on(Custom&& custom, const sv name, Params&& params, Result&& result, Callback&& callback) {
+         on(name, std::forward<Params>(params), std::forward<Result>(result), std::forward<Callback>(callback));
+         if constexpr (lvalue<Custom>) {
+            methods.at(name).user_data = [this, &custom, callback](auto&& state) {
+               std::unique_lock lock{get_shared_mutex()};
+               const auto length = read_params<Opts>(custom, state, response);
+               if (length == 0) {
+                  return length;
+               }
+               callback(custom);
+               return length;
+            };
+         }
+         else {
+            methods.at(name).user_data = [this, custom, callback](auto&& state) mutable {
+               // no need to lock locals
+               const auto length = read_params<Opts>(custom, state, response);
+               if (length == 0) {
+                  return length;
+               }
+               callback(custom);
+               return length;
+            };
          }
       }
       
@@ -311,7 +345,20 @@ namespace glz::repe
          
          if (auto it = methods.find(h.method); it != methods.end()) {
             if (h.user_data) {
-               it->second.user_data(msg); // consume the user data
+               const auto length = it->second.user_data(state{msg, h, response, error}); // consume the user data
+               if (length == 0) {
+                  return;
+               }
+               
+               b += length;
+               
+               if (*b == ',') {
+                  ++b;
+               }
+               else {
+                  handle_error();
+                  return;
+               }
             }
             
             const sv body = msg.substr(size_t(std::distance(start, b)));
