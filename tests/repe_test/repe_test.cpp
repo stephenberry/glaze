@@ -42,13 +42,13 @@ namespace glz::repe
       parse_error = -32700,
    };
 
-   struct error
+   struct error_t
    {
       error_e code = error_e::no_error;
       std::string message = "";
       
       struct glaze {
-         using T = error;
+         using T = error_t;
          static constexpr auto value = glz::array(&T::code, &T::message);
       };
    };
@@ -96,7 +96,7 @@ namespace glz::repe
       if constexpr (Opts.format == json) {
          const auto ec = glz::read_json(std::forward<Value>(value), state.message);
          if (ec) {
-            glz::write_ndjson(std::forward_as_tuple(header{.error = true}, error{error_e::parse_error, format_error(ec, state.message)}), response);
+            glz::write_ndjson(std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(ec, state.message)}), response);
             return true;
          }
          return false;
@@ -128,6 +128,8 @@ namespace glz::repe
       std::unordered_map<std::string_view, procedure, detail::string_hash, std::equal_to<>> methods;
       
       std::string response;
+      
+      error_e error = error_e::no_error;
       
       template <class Callback>
       void on(const sv name, Callback&& callback) {
@@ -230,7 +232,7 @@ namespace glz::repe
          else {
             ctx.error = error_code::syntax_error;
             parse_error pe{ctx.error, size_t(std::distance(start, b))};
-            write_ndjson(std::forward_as_tuple(header{.error = true}, error{error_e::parse_error, format_error(pe, msg)}), response);
+            write_ndjson(std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(pe, msg)}), response);
             return;
          }
          
@@ -243,7 +245,7 @@ namespace glz::repe
             it->second.call(state{body, h, response}); // handle the body
          }
          else {
-            write_ndjson(std::forward_as_tuple(header{.error = true}, error{error_e::method_not_found}), response);
+            write_ndjson(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
          }
       }
    };
