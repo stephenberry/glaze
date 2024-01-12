@@ -30,10 +30,21 @@ namespace glz::repe
          static constexpr auto value = glz::array(&T::version, &T::error, &T::notification, &T::user_data, &T::method, &T::id);
       };
    };
+   
+   enum struct error_e : int32_t {
+      no_error = 0,
+      server_error_lower = -32000,
+      server_error_upper = -32099,
+      invalid_request = -32600,
+      method_not_found = -32601,
+      invalid_params = -32602,
+      internal = -32603,
+      parse_error = -32700,
+   };
 
    struct error
    {
-      int32_t code = 0;
+      error_e code = error_e::no_error;
       std::string message = "";
       
       struct glaze {
@@ -176,7 +187,7 @@ namespace glz::repe
          if constexpr (Opts.format == json) {
             const auto ec = glz::read_json(std::forward<Value>(value), state.message);
             if (ec) {
-               glz::write_ndjson(std::forward_as_tuple(header{.error = 1}, error{3, format_error(ec, state.message)}), response);
+               glz::write_ndjson(std::forward_as_tuple(header{.error = true}, error{error_e::parse_error, format_error(ec, state.message)}), response);
                return true;
             }
             return false;
