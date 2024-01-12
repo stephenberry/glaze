@@ -60,7 +60,7 @@ namespace glz
    };
 }
 
-void tester()
+void run_client()
 {
    glz::asio_client client{};
    client.run();
@@ -68,7 +68,7 @@ void tester()
 
 int main()
 {
-   tester();
+   run_client();
 
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
    return result;

@@ -19,7 +19,7 @@ inline void init_server(glz::repe::server<>& server)
    server.on("max", [](std::vector<double>& vec, double& max) { max = std::ranges::max(vec); });
 }
 
-void tester()
+void run_server()
 {
    std::cerr << "Server active...\n";
 
@@ -37,7 +37,7 @@ void tester()
 
 int main()
 {
-   tester();
+   run_server();
 
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
    return result;
