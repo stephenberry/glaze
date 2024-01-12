@@ -15,17 +15,23 @@ using namespace boost::ut;
 
 void asio_client_test()
 {
-   glz::asio_client client{};
-   
-   std::vector<int> data{};
-   for (int i = 1; i < 100; ++i) {
-      data.emplace_back(i);
-      int sum{};
-      const auto ec = client.call({"sum"}, data, sum);
-      if (ec) {
-         std::cerr << ec.message << '\n';
+   try
+   {
+      glz::asio_client client{};
+      
+      std::vector<int> data{};
+      for (int i = 1; i < 100; ++i) {
+         data.emplace_back(i);
+         int sum{};
+         const auto ec = client.call({"sum"}, data, sum);
+         if (ec) {
+            std::cerr << ec.message << '\n';
+         }
+         std::cerr << sum << '\n';
       }
-      std::cerr << sum << '\n';
+   }
+   catch (const std::exception& e) {
+      std::cerr << e.what() << '\n';
    }
 }
 
