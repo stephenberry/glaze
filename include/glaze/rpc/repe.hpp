@@ -59,12 +59,6 @@ namespace glz::repe
       error_t& error;
    };
    
-   struct procedure final
-   {
-      std::function<void(state&&)> call{}; // RPC call method
-      std::function<size_t(state&&)> user_data{}; // handle user data
-   };
-   
    template <class T>
    constexpr auto lvalue = std::is_lvalue_reference_v<T>;
    
@@ -192,6 +186,7 @@ namespace glz::repe
    template <opts Opts = opts{}, class UserHeader = void>
    struct server
    {
+      using procedure = std::function<void(state&&)>; // RPC method
       std::unordered_map<std::string_view, procedure, detail::string_hash, std::equal_to<>> methods;
       
       std::string response;
@@ -207,14 +202,14 @@ namespace glz::repe
             using Params = std::decay_t<std::tuple_element_t<0, Tuple>>;
             using Result = std::decay_t<std::tuple_element_t<1, Tuple>>;
             
-            methods.emplace(name, procedure{[this, params = Params{}, result = Result{}, callback](auto&& state) mutable {
+            methods.emplace(name, [this, params = Params{}, result = Result{}, callback](auto&& state) mutable {
                // no need to lock locals
                if (read_params<Opts>(params, state, response) == 0) {
                   return;
                }
                callback(params, result);
                write_response<Opts>(result, state);
-            }});
+            });
          }
          else {
             static_assert(false_v<Callback>, "Requires params and results inputs");
@@ -235,7 +230,7 @@ namespace glz::repe
             }});
          }
          else if constexpr (lvalue<Params> && !lvalue<Result>) {
-            methods.emplace(name, procedure{[this, &params, result, callback](auto&& state) mutable {
+            methods.emplace(name, [this, &params, result, callback](auto&& state) mutable {
                {
                   std::unique_lock lock{get_shared_mutex()};
                   if (read_params<Opts>(params, state, response) == 0) {
@@ -245,10 +240,10 @@ namespace glz::repe
                }
                // no need to lock local result writing
                write_response<Opts>(result, state);
-            }});
+            });
          }
          else if constexpr (!lvalue<Params> && lvalue<Result>) {
-            methods.emplace(name, procedure{[this, params, &result, callback](auto&& state) mutable {
+            methods.emplace(name, [this, params, &result, callback](auto&& state) mutable {
                // no need to lock locals
                if (read_params<Opts>(params, state, response) == 0) {
                   return;
@@ -256,47 +251,20 @@ namespace glz::repe
                std::unique_lock lock{get_shared_mutex()};
                callback(params, result);
                write_response<Opts>(result, state);
-            }});
+            });
          }
          else if constexpr (!lvalue<Params> && !lvalue<Result>) {
-            methods.emplace(name, procedure{[this, params, result, callback](auto&& state) mutable {
+            methods.emplace(name, [this, params, result, callback](auto&& state) mutable {
                // no need to lock locals
                if (read_params<Opts>(params, state, response) == 0) {
                   return;
                }
                callback(params, result);
                write_response<Opts>(result, state);
-            }});
+            });
          }
          else {
             static_assert(false_v<Result>, "unsupported");
-         }
-      }
-      
-      template <class Custom, class Params, class Result, class Callback>
-      void on(Custom&& custom, const sv name, Params&& params, Result&& result, Callback&& callback) {
-         on(name, std::forward<Params>(params), std::forward<Result>(result), std::forward<Callback>(callback));
-         if constexpr (lvalue<Custom>) {
-            methods.at(name).user_data = [this, &custom, callback](auto&& state) {
-               std::unique_lock lock{get_shared_mutex()};
-               const auto length = read_params<Opts>(custom, state, response);
-               if (length == 0) {
-                  return length;
-               }
-               callback(custom);
-               return length;
-            };
-         }
-         else {
-            methods.at(name).user_data = [this, custom, callback](auto&& state) mutable {
-               // no need to lock locals
-               const auto length = read_params<Opts>(custom, state, response);
-               if (length == 0) {
-                  return length;
-               }
-               callback(custom);
-               return length;
-            };
          }
       }
       
@@ -344,25 +312,8 @@ namespace glz::repe
          }
          
          if (auto it = methods.find(h.method); it != methods.end()) {
-            if (h.user_data) {
-               const auto length = it->second.user_data(state{msg, h, response, error}); // consume the user data
-               if (length == 0) {
-                  return;
-               }
-               
-               b += length;
-               
-               if (*b == ',') {
-                  ++b;
-               }
-               else {
-                  handle_error();
-                  return;
-               }
-            }
-            
             const sv body = msg.substr(size_t(std::distance(start, b)));
-            it->second.call(state{body, h, response, error}); // handle the body
+            it->second(state{body, h, response, error}); // handle the body
          }
          else {
             write_json(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
