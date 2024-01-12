@@ -183,7 +183,7 @@ namespace glz::repe
    // You can register object memory as the input parameter and the output parameter, which can improve performance or may be required for hardware interfaces or restricted memory interfaces
    // Access to this registered memory is thread safe across server instances
    // No thread locks are needed if you don't pass input and output parameters by reference
-   template <opts Opts = opts{}, class UserHeader = void>
+   template <opts Opts = opts{}>
    struct server
    {
       using procedure = std::function<void(state&&)>; // RPC method
