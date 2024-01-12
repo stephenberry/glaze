@@ -20,6 +20,7 @@ namespace glz::repe
       
       struct glaze {
          using T = header;
+         static constexpr sv name = "glz::repe::header"; // Hack to fix MSVC (shouldn't be needed)
          static constexpr auto value = glz::array(&T::version, &T::error, &T::notification, &T::method, &T::id);
       };
    };
