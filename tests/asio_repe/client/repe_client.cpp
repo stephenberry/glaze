@@ -13,66 +13,65 @@ using namespace boost::ut;
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/repe.hpp"
 
-namespace glz
+struct looper_client
 {
-   struct asio_client
+   asio::io_context ctx;
+   asio::ip::tcp::socket socket{ctx};
+   asio::ip::tcp::resolver resolver{ctx};
+
+   std::string buffer{};
+
+   void run()
    {
-      asio::io_context ctx;
-      asio::ip::tcp::socket socket{ctx};
-      asio::ip::tcp::resolver resolver{ctx};
+      asio::co_spawn(ctx, startup(), asio::detached);
+      ctx.run();
+   }
 
-      std::string buffer{};
+   asio::awaitable<void> startup()
+   {
+      using namespace glz;
+      
+      try {
+         auto endpoints = co_await resolver.async_resolve("localhost", "1234", asio::use_awaitable);
+         co_await asio::async_connect(socket, endpoints, asio::use_awaitable);
+         std::cerr << "Connected to server.\n";
 
-      void run()
-      {
-         asio::co_spawn(ctx, startup(), asio::detached);
-         ctx.run();
-      }
+         std::vector<int> data{};
 
-      asio::awaitable<void> startup()
-      {
-         try {
-            auto endpoints = co_await resolver.async_resolve("localhost", "1234", asio::use_awaitable);
-            co_await asio::async_connect(socket, endpoints, asio::use_awaitable);
-            std::cerr << "Connected to server.\n";
+         int i = 0;
 
-            std::vector<int> data{};
+         while (true) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            data.emplace_back(i);
 
-            int i = 0;
+            repe::request_json({"sum", uint64_t(i)}, data, buffer);
+            co_await call_rpc(socket, buffer);
 
-            while (true) {
-               std::this_thread::sleep_for(std::chrono::milliseconds(500));
-               data.emplace_back(i);
+            std::cerr << buffer << '\n';
+            
+            repe::request_json({"max"}, data, buffer);
+            co_await call_rpc(socket, buffer);
 
-               repe::request_json({"sum", uint64_t(i)}, data, buffer);
-               co_await call_rpc(socket, buffer);
+            std::cerr << buffer << '\n';
 
-               std::cerr << buffer << '\n';
-               
-               repe::request_json({"max"}, data, buffer);
-               co_await call_rpc(socket, buffer);
-
-               std::cerr << buffer << '\n';
-
-               ++i;
-            }
-         }
-         catch (std::exception& e) {
-            std::cerr << "Exception: " << e.what() << '\n';
+            ++i;
          }
       }
-   };
-}
+      catch (std::exception& e) {
+         std::cerr << "Exception: " << e.what() << '\n';
+      }
+   }
+};
 
-void run_client()
+void looper_test()
 {
-   glz::asio_client client{};
+   looper_client client{};
    client.run();
 }
 
 int main()
 {
-   run_client();
+   looper_test();
 
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
    return result;
