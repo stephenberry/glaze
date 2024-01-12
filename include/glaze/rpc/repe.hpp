@@ -279,6 +279,16 @@ namespace glz::repe
       }
    };
    
+   template <opts Opts, class Value>
+   inline auto request(const header& header, Value&& value) {
+      return glz::write<Opts>(std::forward_as_tuple(header, std::forward<Value>(value)));
+   }
+   
+   template <opts Opts, class Value>
+   inline auto request(const header& header, Value&& value, auto& buffer) {
+      return glz::write<Opts>(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
+   }
+   
    template <class Value>
    inline auto request_json(const header& header, Value&& value) {
       return glz::write_json(std::forward_as_tuple(header, std::forward<Value>(value)));

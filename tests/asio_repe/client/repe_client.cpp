@@ -13,89 +13,6 @@ using namespace boost::ut;
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/repe.hpp"
 
-struct looper_client
-{
-   asio::io_context ctx;
-   asio::ip::tcp::socket socket{ctx};
-   asio::ip::tcp::resolver resolver{ctx};
-
-   std::string buffer{};
-
-   void run()
-   {
-      asio::co_spawn(ctx, startup(), asio::detached);
-      ctx.run();
-   }
-
-   asio::awaitable<void> startup()
-   {
-      using namespace glz;
-      
-      try {
-         auto endpoints = co_await resolver.async_resolve("localhost", "1234", asio::use_awaitable);
-         co_await asio::async_connect(socket, endpoints, asio::use_awaitable);
-         std::cerr << "Connected to server.\n";
-
-         std::vector<int> data{};
-
-         int i = 0;
-
-         while (true) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            data.emplace_back(i);
-
-            repe::request_json({"sum", uint64_t(i)}, data, buffer);
-            co_await call_rpc(socket, buffer);
-
-            std::cerr << buffer << '\n';
-            
-            repe::request_json({"max"}, data, buffer);
-            co_await call_rpc(socket, buffer);
-
-            std::cerr << buffer << '\n';
-
-            ++i;
-         }
-      }
-      catch (std::exception& e) {
-         std::cerr << "Exception: " << e.what() << '\n';
-      }
-   }
-};
-
-void looper_test()
-{
-   looper_client client{};
-   client.run();
-}
-
-namespace glz
-{
-   struct asio_client
-   {
-      asio::io_context ctx;
-      asio::ip::tcp::socket socket{ctx};
-      asio::ip::tcp::resolver resolver{ctx};
-      
-      std::string buffer{};
-      
-      asio_client() {
-         auto endpoints = resolver.resolve("localhost", "1234");
-         asio::connect(socket, endpoints);
-         std::cerr << "Connected to server.\n";
-      }
-      
-      template <class Value>
-      std::string& call(const repe::header& header, Value&& value) {
-         repe::request_json(header, std::forward<Value>(value), buffer);
-         
-         send_string(socket, buffer);
-         receive_string(socket, buffer);
-         return buffer;
-      }
-   };
-}
-
 void asio_client_test()
 {
    glz::asio_client client{};
@@ -109,7 +26,6 @@ void asio_client_test()
 
 int main()
 {
-   //looper_test();
    asio_client_test();
 
    const auto result = boost::ut::cfg<>.run({.report_errors = true});

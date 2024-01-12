@@ -6,6 +6,8 @@
 #include <asio.hpp>
 #include <coroutine>
 
+#include "glaze/rpc/repe.hpp"
+
 namespace glz
 {
    inline void send_string(asio::ip::tcp::socket& socket, const std::string_view str)
@@ -42,6 +44,32 @@ namespace glz
       co_await send_buffer(socket, buffer);
       co_await receive_buffer(socket, buffer);
    }
+   
+   struct asio_client
+   {
+      std::string_view host{"localhost"};
+      std::string_view service{"1234"};
+      asio::io_context ctx;
+      asio::ip::tcp::socket socket{ctx};
+      asio::ip::tcp::resolver resolver{ctx};
+      
+      std::string buffer{};
+      
+      asio_client() {
+         auto endpoints = resolver.resolve(host, service);
+         asio::connect(socket, endpoints);
+         std::cerr << "Connected to server.\n";
+      }
+      
+      template <opts Opts = opts{}, class Value>
+      std::string& call(const repe::header& header, Value&& value) {
+         repe::request<Opts>(header, std::forward<Value>(value), buffer);
+         
+         send_string(socket, buffer);
+         receive_string(socket, buffer);
+         return buffer;
+      }
+   };
    
    template <class Server>
    struct asio_server
