@@ -131,13 +131,20 @@ namespace glz::repe
       }
    }
    
+   // DESIGN NOTE: It might appear that we are locking ourselves into a poor design choice by using a runtime std::unordered_map.
+   // However, we can actually improve this in the future by allowing glz::meta specialization on the server to
+   // list out the method names and allow us to build a compile time map prior to function registration.
+   // This is made possible by constinit, and the same approach used for compile time maps and struct reflection.
+   // This will then be an opt-in performance improvement where a bit more code must be written by the user to
+   // list the method names.
+   
    // This server is designed to be lightweight, so that it is easily constructed on a per client basis
    // This server does not support adding methods from RPC calls or adding methods once the RPC calls can be made
    // Each instance of this server is expected to be accessed on a single thread basis, so a single std::string response buffer is used
    // You can register object memory as the input parameter and the output parameter, which improves efficiency in some cases, or may be required for hardware interfaces or restricted memory interfaces
    // Access to this registered memory is thread safe across server instances
    // No thread locks are needed if you don't pass input and output parameters by reference
-   template <opts Opts = opts{}>
+   template <class UserHeader = void, opts Opts = opts{}>
    struct server
    {
       std::unordered_map<std::string_view, procedure, detail::string_hash, std::equal_to<>> methods;
