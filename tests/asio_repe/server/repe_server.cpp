@@ -12,6 +12,8 @@ using namespace boost::ut;
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/repe.hpp"
 
+#include "glaze/asio/glaze_asio.hpp"
+
 int main()
 {
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
