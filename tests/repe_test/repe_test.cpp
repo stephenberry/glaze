@@ -138,13 +138,13 @@ namespace glz::repe
    // This will then be an opt-in performance improvement where a bit more code must be written by the user to
    // list the method names.
    
-   // This server is designed to be lightweight, so that it is easily constructed on a per client basis
-   // This server does not support adding methods from RPC calls or adding methods once the RPC calls can be made
-   // Each instance of this server is expected to be accessed on a single thread basis, so a single std::string response buffer is used
-   // You can register object memory as the input parameter and the output parameter, which improves efficiency in some cases, or may be required for hardware interfaces or restricted memory interfaces
+   // This server is designed to be lightweight, and meant to be constructed on a per client basis
+   // This server does not support adding methods from RPC calls or adding methods once RPC calls can be made
+   // Each instance of this server is expected to be accessed by a single thread, so a single std::string response buffer is used
+   // You can register object memory as the input parameter and the output parameter, which can improve performance or may be required for hardware interfaces or restricted memory interfaces
    // Access to this registered memory is thread safe across server instances
    // No thread locks are needed if you don't pass input and output parameters by reference
-   template <class UserHeader = void, opts Opts = opts{}>
+   template <opts Opts = opts{}, class UserHeader = void>
    struct server
    {
       std::unordered_map<std::string_view, procedure, detail::string_hash, std::equal_to<>> methods;
@@ -152,7 +152,7 @@ namespace glz::repe
       std::string response;
       
       error_t error{};
-      
+            
       template <class Callback>
       void on(const sv name, Callback&& callback) {
          static_assert(is_lambda_concrete<std::remove_cvref_t<Callback>>);
