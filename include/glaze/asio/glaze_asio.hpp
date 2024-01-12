@@ -8,6 +8,21 @@
 
 namespace glz
 {
+   inline void send_string(asio::ip::tcp::socket& socket, const std::string_view str)
+   {
+      uint64_t size = str.size();
+      asio::write(socket, asio::buffer(&size, sizeof(uint64_t)), asio::transfer_exactly(sizeof(uint64_t)));
+      asio::write(socket, asio::buffer(str), asio::transfer_exactly(size));
+   }
+
+   inline void receive_string(asio::ip::tcp::socket& socket, std::string& str)
+   {
+      uint64_t size;
+      asio::read(socket, asio::buffer(&size, sizeof(size)), asio::transfer_exactly(sizeof(uint64_t)));
+      str.resize(size);
+      asio::read(socket, asio::buffer(str), asio::transfer_exactly(size));
+   }
+   
    inline asio::awaitable<void> send_buffer(asio::ip::tcp::socket& socket, const std::string_view str)
    {
       const uint64_t size = str.size();

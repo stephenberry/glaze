@@ -69,9 +69,48 @@ void looper_test()
    client.run();
 }
 
+namespace glz
+{
+   struct asio_client
+   {
+      asio::io_context ctx;
+      asio::ip::tcp::socket socket{ctx};
+      asio::ip::tcp::resolver resolver{ctx};
+      
+      std::string buffer{};
+      
+      asio_client() {
+         auto endpoints = resolver.resolve("localhost", "1234");
+         asio::connect(socket, endpoints);
+         std::cerr << "Connected to server.\n";
+      }
+      
+      template <class Value>
+      std::string& call(const repe::header& header, Value&& value) {
+         repe::request_json(header, std::forward<Value>(value), buffer);
+         
+         send_string(socket, buffer);
+         receive_string(socket, buffer);
+         return buffer;
+      }
+   };
+}
+
+void asio_client_test()
+{
+   glz::asio_client client{};
+   
+   std::vector<int> data{};
+   for (int i = 0; i < 100; ++i) {
+      data.emplace_back(i);
+      std::cerr << client.call({"sum", uint64_t(i)}, data) << '\n';
+   }
+}
+
 int main()
 {
-   looper_test();
+   //looper_test();
+   asio_client_test();
 
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
    return result;
