@@ -137,7 +137,7 @@ namespace glz
         }
         catch (std::exception& e)
         {
-          std::printf("Exception: %s\n", e.what());
+           std::cerr << e.what() << '\n';
         }
       }
 
