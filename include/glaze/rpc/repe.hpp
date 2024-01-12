@@ -125,6 +125,50 @@ namespace glz::repe
       }
    }
    
+   template <opts Opts, class Result>
+   [[nodiscard]] error_t decode_response(Result&& result, auto& buffer)
+   {
+      repe::header h;
+      context ctx{};
+      auto[b, e] = read_iterators<Opts>(ctx, buffer);
+      auto start = b;
+      
+      auto handle_error = [&] {
+         ctx.error = error_code::syntax_error;
+         parse_error pe{ctx.error, size_t(std::distance(start, b))};
+         return error_t{error_e::parse_error, format_error(pe, buffer)};
+      };
+      
+      if (*b == '[') {
+         ++b;
+      }
+      else {
+         return handle_error();
+      }
+      
+      glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
+      
+      if (bool(ctx.error)) {
+         parse_error pe{ctx.error, size_t(std::distance(start, b))};
+         return {error_e::parse_error, format_error(pe, buffer)};
+      }
+      
+      if (*b == ',') {
+         ++b;
+      }
+      else {
+         return handle_error();
+      }
+      
+      glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
+      
+      if (bool(ctx.error)) {
+         parse_error pe{ctx.error, size_t(std::distance(start, b))};
+         return {error_e::parse_error, format_error(pe, buffer)};
+      }
+      return {};
+   }
+   
    // DESIGN NOTE: It might appear that we are locking ourselves into a poor design choice by using a runtime std::unordered_map.
    // However, we can actually improve this in the future by allowing glz::meta specialization on the server to
    // list out the method names and allow us to build a compile time map prior to function registration.

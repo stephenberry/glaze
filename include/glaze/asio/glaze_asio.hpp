@@ -78,45 +78,7 @@ namespace glz
          send_string(socket, buffer);
          receive_string(socket, buffer);
          
-         repe::header h;
-         context ctx{};
-         auto[b, e] = read_iterators<Opts>(ctx, buffer);
-         auto start = b;
-         
-         auto handle_error = [&] {
-            ctx.error = error_code::syntax_error;
-            parse_error pe{ctx.error, size_t(std::distance(start, b))};
-            return error_t{error_e::parse_error, format_error(pe, buffer)};
-         };
-         
-         if (*b == '[') {
-            ++b;
-         }
-         else {
-            return handle_error();
-         }
-         
-         glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
-         
-         if (bool(ctx.error)) {
-            parse_error pe{ctx.error, size_t(std::distance(start, b))};
-            return {error_e::parse_error, format_error(pe, buffer)};
-         }
-         
-         if (*b == ',') {
-            ++b;
-         }
-         else {
-            return handle_error();
-         }
-         
-         glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
-         
-         if (bool(ctx.error)) {
-            parse_error pe{ctx.error, size_t(std::distance(start, b))};
-            return {error_e::parse_error, format_error(pe, buffer)};
-         }
-         return {};
+         return decode_response<Opts>(std::forward<Result>(result), buffer);
       }
    };
    
