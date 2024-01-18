@@ -1067,6 +1067,19 @@ suite early_end = [] {
    };
 };
 
+suite minified_custom_object = [] {
+   using namespace boost::ut;
+
+   "minified_custom_object"_test = [] {
+      Thing obj{};
+      std::string buffer = glz::write_json(obj);
+      std::string prettified = glz::prettify(buffer);
+      std::string minified = glz::minify(prettified);
+      expect(glz::read_json(obj, minified) == glz::error_code::none);
+      expect(buffer == minified);
+   };
+};
+
 suite prettified_custom_object = [] {
    using namespace boost::ut;
 
