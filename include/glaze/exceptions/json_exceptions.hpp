@@ -107,7 +107,7 @@ namespace glz::ex
       return glz::write_jsonc(std::forward<T>(value));
    }
 
-   template <class T>
+   template <auto Opts = opts{}, class T>
    void write_file_json(T&& value, const std::string& file_name, auto&& buffer)
    {
       const auto ec = glz::write_file_json(std::forward<T>(value), file_name, buffer);
