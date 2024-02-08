@@ -405,7 +405,7 @@ namespace glz
 
       template <class T>
       concept readable_array_t = (!custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> && range<T>);
-      
+
       template <class T>
       concept writable_array_t = (!custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> && range<T>);
 

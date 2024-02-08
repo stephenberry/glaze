@@ -464,9 +464,10 @@ namespace glz
             dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
          }
       }
-      
+
       template <opts Opts>
-      GLZ_ALWAYS_INLINE void write_array_to_json(auto&& value, is_context auto&& ctx, auto&&... args) {
+      GLZ_ALWAYS_INLINE void write_array_to_json(auto&& value, is_context auto&& ctx, auto&&... args)
+      {
          dump<'['>(args...);
 
          if (!empty_range(value)) {
@@ -569,13 +570,15 @@ namespace glz
       template <writable_map_t T>
       struct to_json<T>
       {
-         template <glz::opts Opts, class... Args> requires (!Opts.concatenate)
+         template <glz::opts Opts, class... Args>
+            requires(!Opts.concatenate)
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             write_array_to_json<Opts>(value, ctx, args...);
          }
-         
-         template <glz::opts Opts, class... Args> requires (Opts.concatenate)
+
+         template <glz::opts Opts, class... Args>
+            requires(Opts.concatenate)
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if constexpr (!Opts.opening_handled) {
