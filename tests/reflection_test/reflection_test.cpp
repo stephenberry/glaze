@@ -447,7 +447,7 @@ suite v2_wrapper_test = [] {
    "v2_wrapper"_test = [] {
       V2Wrapper obj;
       auto s = glz::write_json(obj);
-      expect(s == "{}") << s;
+      expect(s == R"({"x":{"x":0,"y":0}})") << s;
    };
 };
 
