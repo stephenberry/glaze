@@ -6610,16 +6610,16 @@ suite unicode_keys_test = [] {
    };
 };
 
-struct string_tester {
-  std::string val1 {};
+struct string_tester
+{
+   std::string val1{};
 };
 
-template<>
-struct glz::meta<string_tester> {
-  using T                                = string_tester;
-  static constexpr auto value = object(
-    "val1", &T::val1
-  );
+template <>
+struct glz::meta<string_tester>
+{
+   using T = string_tester;
+   static constexpr auto value = object("val1", &T::val1);
 };
 
 suite address_sanitizer_test = [] {
