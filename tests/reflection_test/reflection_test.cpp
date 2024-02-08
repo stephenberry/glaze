@@ -418,6 +418,39 @@ suite empty_test = [] {
    };
 };
 
+struct V2
+{
+   float x{};
+   float y{};
+
+    V2() = default;
+
+    V2(V2&&) = default;
+    V2(const float* arr) : x(arr[0]), y(arr[1]) {}
+};
+
+template <>
+struct glz::meta<V2>
+{
+    static constexpr auto value = object(&V2::x, &V2::y);
+};
+
+struct V2Wrapper
+{
+    V2 x;
+};
+
+static_assert(glz::detail::reflectable<V2Wrapper>);
+static_assert(glz::detail::count_members<V2Wrapper> == 1);
+
+suite v2_wrapper_test = [] {
+   "v2_wrapper"_test = [] {
+      V2Wrapper obj;
+      auto s = glz::write_json(obj);
+      expect(s == "{}") << s;
+   };
+};
+
 int main()
 { // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
