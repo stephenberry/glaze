@@ -40,7 +40,7 @@ namespace glz::ex
    template <auto Opts = opts{}, class T>
    void read_file_json(T& value, const sv file_name, auto&& buffer)
    {
-      const auto ec = glz::read_file_json(value, file_name, buffer);
+      const auto ec = glz::read_file_json<Opts, T>(value, file_name, buffer);
       if (ec == glz::error_code::file_open_failure) {
          throw std::runtime_error("file failed to open: " + std::string(file_name));
       }
@@ -71,7 +71,7 @@ namespace glz::ex
    template <auto Opts = opts{}, class T>
    void read_file_ndjson(T& value, const sv file_name, auto&& buffer)
    {
-      const auto ec = glz::read_file_ndjson(value, file_name, buffer);
+      const auto ec = glz::read_file_ndjson<Opts, T>(value, file_name, buffer);
       if (ec == glz::error_code::file_open_failure) {
          throw std::runtime_error("file failed to open: " + std::string(file_name));
       }
@@ -107,10 +107,10 @@ namespace glz::ex
       return glz::write_jsonc(std::forward<T>(value));
    }
 
-   template <class T>
+   template <auto Opts = opts{}, class T>
    void write_file_json(T&& value, const std::string& file_name, auto&& buffer)
    {
-      const auto ec = glz::write_file_json(std::forward<T>(value), file_name, buffer);
+      const auto ec = glz::write_file_json<Opts, T>(std::forward<T>(value), file_name, buffer);
       if (ec == glz::error_code::file_open_failure) {
          throw std::runtime_error("file failed to open: " + std::string(file_name));
       }
