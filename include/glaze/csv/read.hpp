@@ -375,7 +375,7 @@ namespace glz
 
             decltype(auto) frozen_map = [&] {
                if constexpr (reflectable<T> && num_members > 0) {
-                  static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+                  static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
                   // We want to run this populate outside of the while loop
                   populate_map(value, cmap); // Function required for MSVC to build
                   return cmap;

@@ -771,7 +771,7 @@ namespace glz
 
             decltype(auto) storage = [&] {
                if constexpr (reflectable<T>) {
-                  static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+                  static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
                   populate_map(value, cmap); // Function required for MSVC to build
                   return cmap;
                }
