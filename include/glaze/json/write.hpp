@@ -564,7 +564,14 @@ namespace glz
       template <writable_map_t T>
       struct to_json<T>
       {
-         template <glz::opts Opts, class... Args>
+         template <glz::opts Opts, class... Args> requires (!Opts.concatenate)
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            using dummy_array_type = std::vector<int>; // bypass concept because of option
+            to_json<dummy_array_type>::template op<Opts>(value, ctx, args...);
+         }
+         
+         template <glz::opts Opts, class... Args> requires (Opts.concatenate)
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if constexpr (!Opts.opening_handled) {

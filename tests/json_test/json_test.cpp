@@ -544,12 +544,16 @@ suite container_types = [] {
    };
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v;
-      
-      using T = decltype(v);
-      static_assert(glz::detail::writable_map_t<T>);
       expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
+      static_assert(glz::detail::writable_map_t<decltype(v)>);
       const auto s = glz::write_json(v);
       expect(s == R"({"1":2,"3":4})") << s;
+   };
+   "vector pair roundtrip"_test = [] {
+      std::vector<std::pair<int, int>> v;
+      expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
+      const auto s = glz::write<glz::opts{.concatenate = false}>(v);
+      expect(s == R"([{"1":2},{"3":4}])") << s;
    };
    "deque roundtrip"_test = [] {
       std::vector<int> deq(100);
