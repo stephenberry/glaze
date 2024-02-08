@@ -437,7 +437,7 @@ struct glz::meta<V2>
 
 struct V2Wrapper
 {
-   V2 x;
+   V2 x{};
 };
 
 static_assert(glz::detail::reflectable<V2Wrapper>);
