@@ -6469,7 +6469,7 @@ suite hostname_include_test = [] {
       obj.str = "";
       obj.i = 0;
 
-      std::string s = R"({"hostname_include": "../{}_config.json", "i": 100})";
+      std::string_view s = R"({"hostname_include": "../{}_config.json", "i": 100})";
       const auto ec = glz::read_json(obj, s);
       expect(ec == glz::error_code::none) << glz::format_error(ec, s);
 
@@ -6480,6 +6480,12 @@ suite hostname_include_test = [] {
 
       std::string buffer{};
       glz::read_file_json(obj, file_name, buffer);
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 55) << obj.i;
+      
+      s = R"({"i": 100, "hostname_include": "../{}_config.json"})";
+      expect(!glz::read_json(obj, s));
+      
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
    };
