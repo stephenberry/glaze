@@ -6482,10 +6482,10 @@ suite hostname_include_test = [] {
       glz::read_file_json(obj, file_name, buffer);
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
-      
+
       s = R"({"i": 100, "hostname_include": "../{}_config.json"})";
       expect(!glz::read_json(obj, s));
-      
+
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
    };
