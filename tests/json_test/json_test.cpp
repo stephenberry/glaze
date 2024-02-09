@@ -6463,12 +6463,12 @@ suite hostname_include_test = [] {
 
       std::string file_name = "../{}_config.json";
       glz::detail::replace_first_braces(file_name, hostname);
-      
+
       const auto config_buffer = R"(
 // testing opening whitespace and comment
 )" + glz::write_json(obj);
       expect(glz::buffer_to_file(config_buffer, file_name) == glz::error_code::none);
-      //expect(glz::write_file_json(obj, file_name, std::string{}) == glz::error_code::none);
+      // expect(glz::write_file_json(obj, file_name, std::string{}) == glz::error_code::none);
 
       obj.str = "";
       obj.i = 0;
