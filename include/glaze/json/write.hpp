@@ -1100,7 +1100,7 @@ namespace glz
                if constexpr (reflectable<T>) {
                   if constexpr (std::is_const_v<std::remove_reference_t<decltype(value)>>) {
 #if ((defined _MSC_VER) && (!defined __clang__))
-                     constinit auto tuple_of_ptrs = make_const_tuple_from_struct<T>();
+                     static constinit auto tuple_of_ptrs = make_const_tuple_from_struct<T>();
 #else
                      static thread_local constinit auto tuple_of_ptrs = make_const_tuple_from_struct<T>();
 #endif
@@ -1109,7 +1109,7 @@ namespace glz
                   }
                   else {
 #if ((defined _MSC_VER) && (!defined __clang__))
-                     constinit auto tuple_of_ptrs = make_tuple_from_struct<T>();
+                     static constinit auto tuple_of_ptrs = make_tuple_from_struct<T>();
 #else
                      static thread_local constinit auto tuple_of_ptrs = make_tuple_from_struct<T>();
 #endif

@@ -1568,7 +1568,7 @@ namespace glz
                decltype(auto) frozen_map = [&] {
                   if constexpr (reflectable<T> && num_members > 0) {
 #if ((defined _MSC_VER) && (!defined __clang__))
-                  constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+                  static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
 #else
                   static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
 #endif
