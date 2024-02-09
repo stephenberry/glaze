@@ -772,7 +772,7 @@ namespace glz
             decltype(auto) storage = [&] {
                if constexpr (reflectable<T>) {
 #if ((defined _MSC_VER) && (!defined __clang__))
-                  static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+                  static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();
 #else
                   static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
 #endif
