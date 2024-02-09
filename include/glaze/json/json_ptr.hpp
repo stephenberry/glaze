@@ -100,7 +100,11 @@ namespace glz
          if constexpr (glaze_object_t<T> || reflectable<T>) {
             decltype(auto) frozen_map = [&] {
                if constexpr (reflectable<T>) {
+#if ((defined _MSC_VER) && (!defined __clang__))
+                  constinit auto cmap = make_map<T>();
+#else
                   static thread_local constinit auto cmap = make_map<T>();
+#endif
                   populate_map(value, cmap); // Function required for MSVC to build
                   return cmap;
                }
