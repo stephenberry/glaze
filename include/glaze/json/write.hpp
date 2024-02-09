@@ -1099,12 +1099,20 @@ namespace glz
             [[maybe_unused]] decltype(auto) t = [&] {
                if constexpr (reflectable<T>) {
                   if constexpr (std::is_const_v<std::remove_reference_t<decltype(value)>>) {
+#if ((defined _MSC_VER) && (!defined __clang__))
                      static constinit auto tuple_of_ptrs = make_const_tuple_from_struct<T>();
+#else
+                     static thread_local constinit auto tuple_of_ptrs = make_const_tuple_from_struct<T>();
+#endif
                      populate_tuple_ptr(value, tuple_of_ptrs);
                      return tuple_of_ptrs;
                   }
                   else {
+#if ((defined _MSC_VER) && (!defined __clang__))
                      static constinit auto tuple_of_ptrs = make_tuple_from_struct<T>();
+#else
+                     static thread_local constinit auto tuple_of_ptrs = make_tuple_from_struct<T>();
+#endif
                      populate_tuple_ptr(value, tuple_of_ptrs);
                      return tuple_of_ptrs;
                   }
