@@ -542,6 +542,19 @@ suite container_types = [] {
       expect(glz::read_json(vec2, buffer) == glz::error_code::none);
       expect(vec == vec2);
    };
+   "vector pair"_test = [] {
+      std::vector<std::pair<int, int>> v;
+      expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
+      static_assert(glz::detail::writable_map_t<decltype(v)>);
+      const auto s = glz::write_json(v);
+      expect(s == R"({"1":2,"3":4})") << s;
+   };
+   "vector pair roundtrip"_test = [] {
+      std::vector<std::pair<int, int>> v;
+      expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
+      const auto s = glz::write<glz::opts{.concatenate = false}>(v);
+      expect(s == R"([{"1":2},{"3":4}])") << s;
+   };
    "deque roundtrip"_test = [] {
       std::vector<int> deq(100);
       for (auto& item : deq) item = rand();
@@ -6594,6 +6607,28 @@ suite unicode_keys_test = [] {
       glz::write_json(obj, buffer);
 
       expect(!glz::read_json(obj, buffer));
+   };
+};
+
+struct string_tester
+{
+   std::string val1{};
+};
+
+template <>
+struct glz::meta<string_tester>
+{
+   using T = string_tester;
+   static constexpr auto value = object("val1", &T::val1);
+};
+
+suite address_sanitizer_test = [] {
+   "address_sanitizer"_test = [] {
+      string_tester obj{};
+      std::string buffer{R"({"val1":"1234567890123456"})"}; // 16 character string value
+      auto res = glz::read_json<string_tester>(buffer);
+      expect(bool(res));
+      [[maybe_unused]] auto parsed = glz::write_json(res.value());
    };
 };
 
