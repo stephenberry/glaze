@@ -6464,12 +6464,18 @@ suite hostname_include_test = [] {
       std::string file_name = "../{}_config.json";
       glz::detail::replace_first_braces(file_name, hostname);
 
-      expect(glz::write_file_json(obj, file_name, std::string{}) == glz::error_code::none);
+      const auto config_buffer = R"(
+// testing opening whitespace and comment
+)" + glz::write_json(obj);
+      expect(glz::buffer_to_file(config_buffer, file_name) == glz::error_code::none);
+      // expect(glz::write_file_json(obj, file_name, std::string{}) == glz::error_code::none);
 
       obj.str = "";
       obj.i = 0;
 
-      std::string s = R"({"hostname_include": "../{}_config.json", "i": 100})";
+      std::string_view s = R"(
+// testing opening whitespace and comment
+{"hostname_include": "../{}_config.json", "i": 100})";
       const auto ec = glz::read_json(obj, s);
       expect(ec == glz::error_code::none) << glz::format_error(ec, s);
 
@@ -6480,6 +6486,12 @@ suite hostname_include_test = [] {
 
       std::string buffer{};
       glz::read_file_json(obj, file_name, buffer);
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 55) << obj.i;
+
+      s = R"({"i": 100, "hostname_include": "../{}_config.json"})";
+      expect(!glz::read_json(obj, s));
+
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
    };
