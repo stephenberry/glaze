@@ -542,6 +542,19 @@ suite container_types = [] {
       expect(glz::read_json(vec2, buffer) == glz::error_code::none);
       expect(vec == vec2);
    };
+   "vector pair"_test = [] {
+      std::vector<std::pair<int, int>> v;
+      expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
+      static_assert(glz::detail::writable_map_t<decltype(v)>);
+      const auto s = glz::write_json(v);
+      expect(s == R"({"1":2,"3":4})") << s;
+   };
+   "vector pair roundtrip"_test = [] {
+      std::vector<std::pair<int, int>> v;
+      expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
+      const auto s = glz::write<glz::opts{.concatenate = false}>(v);
+      expect(s == R"([{"1":2},{"3":4}])") << s;
+   };
    "deque roundtrip"_test = [] {
       std::vector<int> deq(100);
       for (auto& item : deq) item = rand();
@@ -1064,6 +1077,19 @@ suite early_end = [] {
          expect(err != glz::error_code::none);
          expect(err.location <= buffer.size());
       }
+   };
+};
+
+suite minified_custom_object = [] {
+   using namespace boost::ut;
+
+   "minified_custom_object"_test = [] {
+      Thing obj{};
+      std::string buffer = glz::write_json(obj);
+      std::string prettified = glz::prettify(buffer);
+      std::string minified = glz::minify(prettified);
+      expect(glz::read_json(obj, minified) == glz::error_code::none);
+      expect(buffer == minified);
    };
 };
 
@@ -6438,12 +6464,18 @@ suite hostname_include_test = [] {
       std::string file_name = "../{}_config.json";
       glz::detail::replace_first_braces(file_name, hostname);
 
-      expect(glz::write_file_json(obj, file_name, std::string{}) == glz::error_code::none);
+      const auto config_buffer = R"(
+// testing opening whitespace and comment
+)" + glz::write_json(obj);
+      expect(glz::buffer_to_file(config_buffer, file_name) == glz::error_code::none);
+      // expect(glz::write_file_json(obj, file_name, std::string{}) == glz::error_code::none);
 
       obj.str = "";
       obj.i = 0;
 
-      std::string s = R"({"hostname_include": "../{}_config.json", "i": 100})";
+      std::string_view s = R"(
+// testing opening whitespace and comment
+{"hostname_include": "../{}_config.json", "i": 100})";
       const auto ec = glz::read_json(obj, s);
       expect(ec == glz::error_code::none) << glz::format_error(ec, s);
 
@@ -6454,6 +6486,12 @@ suite hostname_include_test = [] {
 
       std::string buffer{};
       glz::read_file_json(obj, file_name, buffer);
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 55) << obj.i;
+
+      s = R"({"i": 100, "hostname_include": "../{}_config.json"})";
+      expect(!glz::read_json(obj, s));
+
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
    };
@@ -6581,6 +6619,28 @@ suite unicode_keys_test = [] {
       glz::write_json(obj, buffer);
 
       expect(!glz::read_json(obj, buffer));
+   };
+};
+
+struct string_tester
+{
+   std::string val1{};
+};
+
+template <>
+struct glz::meta<string_tester>
+{
+   using T = string_tester;
+   static constexpr auto value = object("val1", &T::val1);
+};
+
+suite address_sanitizer_test = [] {
+   "address_sanitizer"_test = [] {
+      string_tester obj{};
+      std::string buffer{R"({"val1":"1234567890123456"})"}; // 16 character string value
+      auto res = glz::read_json<string_tester>(buffer);
+      expect(bool(res));
+      [[maybe_unused]] auto parsed = glz::write_json(res.value());
    };
 };
 

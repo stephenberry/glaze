@@ -32,6 +32,7 @@ namespace glz
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
       bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies to reflectable and
                                       // glaze_object_t concepts
+      bool concatenate = true; // concatenates ranges of std::pair into single objects when writing
 
       // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled

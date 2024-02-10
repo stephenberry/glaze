@@ -11,6 +11,58 @@ namespace glz
    {
       enum class general_state : uint32_t { NORMAL, ESCAPED, STRING, BEFORE_ASTERISK, COMMENT, BEFORE_FSLASH };
 
+      inline void handle_other_states(const char c, general_state& state) noexcept
+      {
+         switch (state) {
+         case general_state::ESCAPED:
+            state = general_state::NORMAL;
+            break;
+         case general_state::STRING:
+            if (c == '"') {
+               state = general_state::NORMAL;
+            }
+            break;
+         case general_state::BEFORE_ASTERISK:
+            state = general_state::COMMENT;
+            break;
+         case general_state::COMMENT:
+            if (c == '*') {
+               state = general_state::BEFORE_FSLASH;
+            }
+            break;
+         case general_state::BEFORE_FSLASH:
+            state = (c == '/' ? general_state::NORMAL : general_state::COMMENT);
+            break;
+         default:
+            break;
+         }
+      }
+
+      inline void minify_normal_state(const char c, auto& out, general_state& state) noexcept
+      {
+         switch (c) {
+         case '\\':
+            out += c;
+            state = general_state::ESCAPED;
+            break;
+         case '\"':
+            out += c;
+            state = general_state::STRING;
+            break;
+         case '/':
+            out += c;
+            state = general_state::BEFORE_ASTERISK;
+         case ' ':
+         case '\n':
+         case '\r':
+         case '\t':
+            break;
+         default:
+            out += c;
+            break;
+         }
+      }
+
       inline void prettify_normal_state(const char c, auto& out, uint32_t& indent, auto nl,
                                         general_state& state) noexcept
       {
@@ -64,39 +116,38 @@ namespace glz
             break;
          }
       }
+   }
 
-      inline void prettify_other_states(const char c, general_state& state) noexcept
-      {
-         switch (state) {
-         case general_state::ESCAPED:
-            state = general_state::NORMAL;
-            break;
-         case general_state::STRING:
-            if (c == '"') {
-               state = general_state::NORMAL;
-            }
-            break;
-         case general_state::BEFORE_ASTERISK:
-            state = general_state::COMMENT;
-            break;
-         case general_state::COMMENT:
-            if (c == '*') {
-               state = general_state::BEFORE_FSLASH;
-            }
-            break;
-         case general_state::BEFORE_FSLASH:
-            if (c == '/') {
-               state = general_state::NORMAL;
-            }
-            else {
-               state = general_state::COMMENT;
-            }
-            break;
-         case general_state::NORMAL:
-         default:
-            break;
+   /// <summary>
+   /// Minify a JSON string
+   /// </summary>
+   inline void minify(const auto& in, auto& out) noexcept
+   {
+      out.reserve(in.size());
+
+      using namespace detail;
+      general_state state{general_state::NORMAL};
+
+      for (auto c : in) {
+         if (state == general_state::NORMAL) {
+            minify_normal_state(c, out, state);
+            continue;
+         }
+         else {
+            out += c;
+            handle_other_states(c, state);
          }
       }
+   }
+
+   /// <summary>
+   /// allocating version of minify
+   /// </summary>
+   inline std::string minify(const auto& in) noexcept
+   {
+      std::string out{};
+      minify(in, out);
+      return out;
    }
 
    /// <summary>
@@ -125,7 +176,7 @@ namespace glz
          }
          else {
             out += c;
-            prettify_other_states(c, state);
+            handle_other_states(c, state);
          }
       }
    }

@@ -34,4 +34,4 @@ jobs:
       working-directory: build
       #run: ctest -C ${{env.BUILD_TYPE}} --parallel --output-on-failure
       #--output-on-failure seems to be causing issues
-      run: ctest -C ${{env.BUILD_TYPE}} --parallel
+      run: ctest -C ${{env.BUILD_TYPE}} --parallel -V

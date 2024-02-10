@@ -1240,18 +1240,18 @@ namespace glz
       template <class T>
       struct from_json<includer<T>>
       {
-         template <auto Opts>
+         template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            std::string& path = string_buffer();
-            read<json>::op<Opts>(path, ctx, it, end);
+            constexpr auto Opts = ws_handled_off<Options>();
+            std::string& buffer = string_buffer();
+            read<json>::op<Opts>(buffer, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
             const auto file_path = relativize_if_not_absolute(std::filesystem::path(ctx.current_file).parent_path(),
-                                                              std::filesystem::path{path});
+                                                              std::filesystem::path{buffer});
 
-            std::string& buffer = path;
             const auto string_file_path = file_path.string();
             const auto ec = file_to_buffer(buffer, string_file_path);
 
@@ -1553,7 +1553,7 @@ namespace glz
                   return std::tuple_size_v<meta_t<T>>;
                }
             }();
-            if constexpr (glaze_object_t<T> && num_members == 0 && Opts.error_on_unknown_keys) {
+            if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
                if (*it == '}') [[likely]] {
                   ++it;
                   return;
@@ -1567,7 +1567,11 @@ namespace glz
 
                decltype(auto) frozen_map = [&] {
                   if constexpr (reflectable<T> && num_members > 0) {
-                     static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+#if ((defined _MSC_VER) && (!defined __clang__))
+                     static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();
+#else
+                     static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+#endif
                      // We want to run this populate outside of the while loop
                      populate_map(value, cmap); // Function required for MSVC to build
                      return cmap;
