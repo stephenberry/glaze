@@ -6644,11 +6644,13 @@ suite address_sanitizer_test = [] {
    };
 };
 
-struct Sinks {
+struct Sinks
+{
    bool file = false;
    bool console = false;
 
-   struct glaze {
+   struct glaze
+   {
       using T = Sinks;
       static constexpr auto value = glz::flags("file", &T::file, "console", &T::console);
    };
