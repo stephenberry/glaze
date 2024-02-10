@@ -1212,7 +1212,7 @@ namespace glz
             static constexpr auto flag_map = make_map<T>();
 
             while (true) {
-               read<json>::op<Opts>(s, ctx, it, end);
+               read<json>::op<ws_handled_off<Opts>()>(s, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
@@ -1233,6 +1233,8 @@ namespace glz
                   return;
                }
                match<','>(ctx, it);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
          }
       };

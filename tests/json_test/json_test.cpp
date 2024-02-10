@@ -6644,6 +6644,22 @@ suite address_sanitizer_test = [] {
    };
 };
 
+struct Sinks {
+   bool file = false;
+   bool console = false;
+
+   struct glaze {
+      using T = Sinks;
+      static constexpr auto value = glz::flags("file", &T::file, "console", &T::console);
+   };
+};
+
+suite flags_test = [] {
+   const auto opt = glz::read_json<Sinks>(R"([  "file"])");
+   expect(opt.has_value());
+   expect(opt.value().file);
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
