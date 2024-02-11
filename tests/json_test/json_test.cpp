@@ -6734,7 +6734,8 @@ suite partial_read_tests = [] {
       Header h{};
       std::string buf = R"({"id":"51e2affb",""unknown key":"value"})";
 
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = false}>(h, buf) != glz::error_code::none);
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = false}>(h, buf) !=
+             glz::error_code::none);
       expect(h.id == "51e2affb");
       expect(h.type.empty());
    };
@@ -6745,7 +6746,8 @@ suite nested_partial_read_tests = [] {
 
    "nested object partial read"_test = [] {
       NestedPartialRead n{};
-      std::string buf = R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value"},"number":51})";
+      std::string buf =
+         R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value"},"number":51})";
 
       expect(glz::read_json(n, buf) == glz::error_code::unknown_key);
       expect(n.method == "m1");
@@ -6756,7 +6758,8 @@ suite nested_partial_read_tests = [] {
 
    "nested object partial read 2"_test = [] {
       NestedPartialRead n{};
-      std::string buf = R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value"},"number":51})";
+      std::string buf =
+         R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value"},"number":51})";
 
       expect(glz::read<glz::opts{.partial_read_nested = true}>(n, buf) == glz::error_code::none);
       expect(n.method == "m1");

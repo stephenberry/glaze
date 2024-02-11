@@ -1819,7 +1819,7 @@ namespace glz
       };
 
       template <class T>
-         requires (glaze_object_t<T> || reflectable<T>) && partial_read<T>
+         requires(glaze_object_t<T> || reflectable<T>) && partial_read<T>
       struct from_json<T>
       {
          template <auto Options, string_literal tag = "">
@@ -1871,13 +1871,13 @@ namespace glz
             while (true) {
                if ((all_fields & fields) == all_fields) [[unlikely]] {
                   if constexpr (Opts.partial_read_nested) {
-                     while(it != end) {
+                     while (it != end) {
                         if (*it == '}') [[unlikely]]
                            --opening_counter;
                         if (*it == '{') [[unlikely]]
                            ++opening_counter;
                         ++it;
-                        if(opening_counter == 0) [[unlikely]]
+                        if (opening_counter == 0) [[unlikely]]
                            return;
                      }
                   }
@@ -1906,8 +1906,8 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
-                      // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
-                      // whitespace and the colon must run after checking if the key exists
+               // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
+               // whitespace and the colon must run after checking if the key exists
 
                if constexpr (Opts.error_on_unknown_keys) {
                   if (*it != '"') [[unlikely]] {
@@ -1921,9 +1921,9 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
-                            // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
-                            // At the very least if we are going to do this add a get_index method to the maps and
-                            // call that
+                     // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
+                     // At the very least if we are going to do this add a get_index method to the maps and
+                     // call that
                      auto index = member_it - frozen_map.begin();
                      fields[index] = true;
 
@@ -1968,9 +1968,9 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
-                            // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
-                            // At the very least if we are going to do this add a get_index method to the maps and
-                            // call that
+                     // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
+                     // At the very least if we are going to do this add a get_index method to the maps and
+                     // call that
                      auto index = member_it - frozen_map.begin();
                      fields[index] = true;
 
@@ -1985,8 +1985,8 @@ namespace glz
                   else [[unlikely]] {
                      it -= key.size(); // rewind to skip the potentially escaped key
 
-                            // Unknown key handler does not unescape keys or want unescaped keys. Unknown escaped keys
-                            // are handled by the user.
+                     // Unknown key handler does not unescape keys or want unescaped keys. Unknown escaped keys
+                     // are handled by the user.
 
                      const auto start = it;
                      while (true) {
@@ -2007,7 +2007,7 @@ namespace glz
                         }
                      }
 
-                            // We duplicate this code to avoid generating unreachable code
+                     // We duplicate this code to avoid generating unreachable code
                      parse_object_entry_sep<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
