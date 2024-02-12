@@ -13,7 +13,7 @@
 namespace glz
 {
    template <opts Opts>
-   inline decltype(auto) read_iterators(is_context auto&& ctx, detail::contiguous auto&& buffer) noexcept
+   inline auto read_iterators(is_context auto&& ctx, detail::contiguous auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
