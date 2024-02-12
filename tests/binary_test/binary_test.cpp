@@ -1441,6 +1441,27 @@ namespace variants
    };
 }
 
+struct empty_t
+{
+   struct glaze
+   {
+      using T = empty_t;
+      static constexpr auto value = glz::object();
+   };
+};
+
+suite empty_object_test = [] {
+   "empty_object"_test = [] {
+      std::string s;
+      empty_t empty{};
+      glz::write_binary(empty, s);
+
+      empty_t obj;
+      expect(!glz::read_binary(obj, s));
+   };
+};
+
+
 int main()
 {
    write_tests();
