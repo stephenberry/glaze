@@ -766,7 +766,7 @@ namespace glz
             }
 
             ++it;
-            
+
             constexpr auto N = [] {
                if constexpr (reflectable<T>) {
                   return count_members<T>;
@@ -800,7 +800,7 @@ namespace glz
                const std::string_view key{it, length};
 
                std::advance(it, length);
-               
+
                if constexpr (N > 0) {
                   if (const auto& p = storage.find(key); p != storage.end()) [[likely]] {
                      std::visit(

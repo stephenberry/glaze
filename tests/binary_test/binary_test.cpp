@@ -1461,7 +1461,6 @@ suite empty_object_test = [] {
    };
 };
 
-
 int main()
 {
    write_tests();
