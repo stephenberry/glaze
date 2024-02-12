@@ -15,10 +15,9 @@ using namespace boost::ut;
 
 void asio_client_test()
 {
-   try
-   {
+   try {
       glz::asio_client client{};
-      
+
       std::vector<int> data{};
       for (int i = 1; i < 100; ++i) {
          data.emplace_back(i);
