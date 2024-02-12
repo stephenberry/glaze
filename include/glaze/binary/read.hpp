@@ -767,6 +767,15 @@ namespace glz
 
             ++it;
 
+            constexpr auto N = [] {
+               if constexpr (reflectable<T>) {
+                  return count_members<T>;
+               }
+               else {
+                  return std::tuple_size_v<meta_t<T>>;
+               }
+            }();
+
             const auto n_keys = int_from_compressed(it, end);
 
             decltype(auto) storage = [&] {
@@ -792,25 +801,36 @@ namespace glz
 
                std::advance(it, length);
 
-               if (const auto& p = storage.find(key); p != storage.end()) [[likely]] {
-                  std::visit(
-                     [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
-                     p->second);
+               if constexpr (N > 0) {
+                  if (const auto& p = storage.find(key); p != storage.end()) [[likely]] {
+                     std::visit(
+                        [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
+                        p->second);
 
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                  }
+                  else [[unlikely]] {
+                     if constexpr (Opts.error_on_unknown_keys) {
+                        ctx.error = error_code::unknown_key;
+                        return;
+                     }
+                     else {
+                        skip_value_binary<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
                   }
                }
-               else [[unlikely]] {
-                  if constexpr (Opts.error_on_unknown_keys) {
-                     ctx.error = error_code::unknown_key;
+               else if constexpr (Opts.error_on_unknown_keys) {
+                  ctx.error = error_code::unknown_key;
+                  return;
+               }
+               else {
+                  skip_value_binary<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
                      return;
-                  }
-                  else {
-                     skip_value_binary<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
                }
             }
          }

@@ -6644,6 +6644,130 @@ suite address_sanitizer_test = [] {
    };
 };
 
+struct Sinks
+{
+   bool file = false;
+   bool console = false;
+
+   struct glaze
+   {
+      using T = Sinks;
+      static constexpr auto value = glz::flags("file", &T::file, "console", &T::console);
+   };
+};
+
+suite flags_test = [] {
+   const auto opt = glz::read_json<Sinks>(R"([  "file"])");
+   expect(opt.has_value());
+   expect(opt.value().file);
+};
+
+struct Header
+{
+   std::string id{};
+   std::string type{};
+};
+
+template <>
+struct glz::meta<Header>
+{
+   static constexpr auto partial_read = true;
+};
+
+struct NestedPartialRead
+{
+   std::string method{};
+   Header header{};
+   int number{};
+};
+
+suite partial_read_tests = [] {
+   using namespace boost::ut;
+
+   "partial read"_test = [] {
+      Header h{};
+      std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value"})";
+
+      expect(glz::read_json(h, buf) == glz::error_code::none);
+      expect(h.id == "51e2affb");
+      expect(h.type == "message_type");
+   };
+
+   "partial read 2"_test = [] {
+      Header h{};
+      // closing curly bracket is missing
+      std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value"})";
+
+      expect(glz::read_json(h, buf) == glz::error_code::none);
+      expect(h.id == "51e2affb");
+      expect(h.type == "message_type");
+   };
+
+   "partial read unknown key"_test = [] {
+      Header h{};
+      std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"})";
+
+      expect(glz::read_json(h, buf) == glz::error_code::unknown_key);
+      expect(h.id == "51e2affb");
+      expect(h.type.empty());
+   };
+
+   "partial read unknown key 2"_test = [] {
+      Header h{};
+      std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"})";
+
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(h, buf) == glz::error_code::none);
+      expect(h.id == "51e2affb");
+      expect(h.type == "message_type");
+   };
+
+   "partial read missing key"_test = [] {
+      Header h{};
+      std::string buf = R"({"id":"51e2affb","unknown key":"value"})";
+
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(h, buf) != glz::error_code::missing_key);
+      expect(h.id == "51e2affb");
+      expect(h.type.empty());
+   };
+
+   "partial read missing key 2"_test = [] {
+      Header h{};
+      std::string buf = R"({"id":"51e2affb",""unknown key":"value"})";
+
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = false}>(h, buf) !=
+             glz::error_code::none);
+      expect(h.id == "51e2affb");
+      expect(h.type.empty());
+   };
+};
+
+suite nested_partial_read_tests = [] {
+   using namespace boost::ut;
+
+   "nested object partial read"_test = [] {
+      NestedPartialRead n{};
+      std::string buf =
+         R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value"},"number":51})";
+
+      expect(glz::read_json(n, buf) == glz::error_code::unknown_key);
+      expect(n.method == "m1");
+      expect(n.header.id == "51e2affb");
+      expect(n.header.type == "message_type");
+      expect(n.number == 0);
+   };
+
+   "nested object partial read 2"_test = [] {
+      NestedPartialRead n{};
+      std::string buf =
+         R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value"},"number":51})";
+
+      expect(glz::read<glz::opts{.partial_read_nested = true}>(n, buf) == glz::error_code::none);
+      expect(n.method == "m1");
+      expect(n.header.id == "51e2affb");
+      expect(n.header.type == "message_type");
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors

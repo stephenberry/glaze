@@ -44,6 +44,9 @@ namespace glz
    template <class T>
    concept custom_write = requires { meta<T>::custom_write == true; };
 
+   template <class T>
+   concept partial_read = requires { meta<T>::partial_read == true; };
+
    template <class... T>
    struct obj final
    {
