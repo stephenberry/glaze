@@ -564,6 +564,15 @@ Simplified prettify definition below, which allows the use of tabs or changing t
 string prettify(auto& in, bool tabs = false, uint32_t indent_size = 3)
 ```
 
+# Minify JSON
+
+To minify JSON:
+
+```c++
+glz::write<glz::opts{.prettify = true}>(obj, buffer);
+std::string minified = glz::minify(buffer);
+```
+
 ## Boolean Flags
 
 Glaze supports registering a set of boolean flags that behave as an array of string options:
