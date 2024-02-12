@@ -1713,9 +1713,19 @@ namespace glz
                      }
                      else {
                         if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
-                           match<'"'>(ctx, it);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
+                           // This code should not error on valid unknown keys
+                           // We arrived here because the key was perhaps found, but if the quote does not exist
+                           // then this does not necessarily mean have a syntax error.
+                           // We may have just found the prefix of a longer, unknown key.
+                           if (*it != '"') [[unlikely]] {
+                              auto* start = key.data();
+                              skip_till_quote(ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+                              key = {start, size_t(it - start)};
+                              
+                           }
+                           ++it; // skip the quote
 
                            parse_object_entry_sep<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
@@ -1960,9 +1970,19 @@ namespace glz
                }
                else {
                   if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
-                     match<'"'>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
+                     // This code should not error on valid unknown keys
+                     // We arrived here because the key was perhaps found, but if the quote does not exist
+                     // then this does not necessarily mean have a syntax error.
+                     // We may have just found the prefix of a longer, unknown key.
+                     if (*it != '"') [[unlikely]] {
+                        auto* start = key.data();
+                        skip_till_quote(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        key = {start, size_t(it - start)};
+                        
+                     }
+                     ++it; // skip the quote
 
                      parse_object_entry_sep<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
