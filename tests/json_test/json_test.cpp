@@ -6664,8 +6664,8 @@ suite flags_test = [] {
 
 struct Header
 {
-   std::string id;
-   std::string type;
+   std::string id{};
+   std::string type{};
 };
 
 template <>
@@ -6676,9 +6676,9 @@ struct glz::meta<Header>
 
 struct NestedPartialRead
 {
-   std::string method;
-   Header header;
-   int number;
+   std::string method{};
+   Header header{};
+   int number{};
 };
 
 suite partial_read_tests = [] {
