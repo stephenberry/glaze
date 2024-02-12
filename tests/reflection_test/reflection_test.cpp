@@ -427,11 +427,10 @@ suite prefix_key_name_test = [] {
    "prefix_key_name"_test = [] {
       port_struct obj;
       std::string buffer = R"({"portmanteau":14,"port":17})";
-      auto err = glz::read<glz::opts{.error_on_unknown_keys=false}>(obj, buffer);
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, buffer);
       expect(!err) << glz::format_error(err, buffer);
    };
 };
-
 
 int main()
 { // Explicitly run registered test suites and report errors

@@ -1723,7 +1723,6 @@ namespace glz
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
                               key = {start, size_t(it - start)};
-                              
                            }
                            ++it; // skip the quote
 
@@ -1980,7 +1979,6 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         key = {start, size_t(it - start)};
-                        
                      }
                      ++it; // skip the quote
 
