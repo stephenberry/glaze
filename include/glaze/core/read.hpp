@@ -90,7 +90,7 @@ namespace glz
          }
       }
 
-      return {ctx.error, static_cast<size_t>(std::distance(start, b))};
+      return {ctx.error, static_cast<size_t>(std::distance(start, b)), ctx.includer_error};
    }
 
    template <opts Opts>
