@@ -40,7 +40,7 @@ namespace glz
          static thread_local std::string buffer(256, ' ');
          return buffer;
       }
-      
+
       // We use an error buffer to avoid multiple allocations in the case that errors occur multiple times.
       GLZ_ALWAYS_INLINE std::string& error_buffer() noexcept
       {
