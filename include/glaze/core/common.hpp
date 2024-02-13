@@ -1189,14 +1189,12 @@ namespace glz
       if (info) {
          auto error_str = detail::generate_error_string(error_type_str, *info);
          if (pe.includer_error.size()) {
-            error_str += "\n";
             error_str += pe.includer_error;
          }
          return error_str;
       }
       auto error_str = std::string(error_type_str);
       if (pe.includer_error.size()) {
-         error_str += "\n";
          error_str += pe.includer_error;
       }
       return error_str;
