@@ -33,10 +33,16 @@ namespace glz
 
    namespace detail
    {
-      // Unless we can mutate the input buffer we need somewhere to store escaped strings for key lookup and such
-      // Could put this in the context but tls overhead isnt that bad. Will need to figure out when heap allocations are
-      // not allowed or restricted
+      // Unless we can mutate the input buffer we need somewhere to store escaped strings for key lookup, etc.
+      // We don't put this in the context because we don't want to continually reallocate.
       GLZ_ALWAYS_INLINE std::string& string_buffer() noexcept
+      {
+         static thread_local std::string buffer(256, ' ');
+         return buffer;
+      }
+      
+      // We use an error buffer to avoid multiple allocations in the case that errors occur multiple times.
+      GLZ_ALWAYS_INLINE std::string& error_buffer() noexcept
       {
          static thread_local std::string buffer(256, ' ');
          return buffer;
