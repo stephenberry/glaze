@@ -2935,6 +2935,36 @@ suite file_include_test = [] {
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
    };
+   
+   "file_include error handling"_test = [] {
+      includer_struct obj{};
+      
+      auto output = glz::write_json(obj);
+      output.erase(0, 1); // create an error
+
+      expect(glz::buffer_to_file(output, "../alabastar.json") == glz::error_code::none);
+
+      obj.str = "";
+
+      std::string s = R"({"include": "../alabastar.json", "i": 100})";
+      const auto ec = glz::read_json(obj, s);
+      expect(bool(ec));
+   };
+   
+   "file_include error handling"_test = [] {
+      includer_struct obj{};
+      
+      auto output = glz::write_json(obj);
+      
+      expect(glz::buffer_to_file(output, "../alabastar.json") == glz::error_code::none);
+
+      obj.str = "";
+      
+      // make the path incorrect
+      std::string s = R"({"include": "../abs.json", "i": 100})";
+      const auto ec = glz::read_json(obj, s);
+      expect(bool(ec));
+   };
 };
 
 suite file_include_test_auto = [] {

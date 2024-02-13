@@ -91,7 +91,7 @@ namespace glz::repe
          glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
 
          if (bool(ctx.error)) {
-            parse_error ec{ctx.error, size_t(std::distance(start, b))};
+            parse_error ec{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
             write_json(std::forward_as_tuple(header{.error = true},
                                              error_t{error_e::parse_error, format_error(ec, state.message)}),
                        response);
@@ -137,7 +137,7 @@ namespace glz::repe
       // clang 14 won't build when capturing from structured binding
       auto handle_error = [&](auto& it) {
          ctx.error = error_code::syntax_error;
-         parse_error pe{ctx.error, size_t(std::distance(start, it))};
+         parse_error pe{ctx.error, size_t(std::distance(start, it)), ctx.includer_error};
          return error_t{error_e::parse_error, format_error(pe, buffer)};
       };
 
@@ -151,7 +151,7 @@ namespace glz::repe
       glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
 
       if (bool(ctx.error)) {
-         parse_error pe{ctx.error, size_t(std::distance(start, b))};
+         parse_error pe{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
          return {error_e::parse_error, format_error(pe, buffer)};
       }
 
@@ -171,7 +171,7 @@ namespace glz::repe
       }
 
       if (bool(ctx.error)) {
-         parse_error pe{ctx.error, size_t(std::distance(start, b))};
+         parse_error pe{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
          return {error_e::parse_error, format_error(pe, buffer)};
       }
       return {};
@@ -310,7 +310,7 @@ namespace glz::repe
 
          auto handle_error = [&](auto& it) {
             ctx.error = error_code::syntax_error;
-            parse_error pe{ctx.error, size_t(std::distance(start, it))};
+            parse_error pe{ctx.error, size_t(std::distance(start, it)), ctx.includer_error};
             write_json(
                std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(pe, msg)}),
                response);
@@ -327,7 +327,7 @@ namespace glz::repe
          glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
 
          if (bool(ctx.error)) {
-            parse_error pe{ctx.error, size_t(std::distance(start, b))};
+            parse_error pe{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
             response = format_error(pe, msg);
             return !h.notification;
          }

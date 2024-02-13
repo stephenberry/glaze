@@ -58,13 +58,15 @@ namespace glz
       unknown_distribution,
       invalid_distribution_elements,
       missing_key,
-      hostname_failure
+      hostname_failure,
+      includer_error
    };
 
    struct parse_error final
    {
       error_code ec{};
       size_t location{};
+      std::string_view includer_error{}; // error from a nested file includer
 
       operator bool() const { return ec != error_code::none; }
 
@@ -87,6 +89,7 @@ namespace glz
       // INTERNAL USE
       uint32_t indentation_level{};
       std::string current_file; // top level file path
+      std::string_view includer_error{}; // error from a nested file includer
       error_code error{};
    };
 

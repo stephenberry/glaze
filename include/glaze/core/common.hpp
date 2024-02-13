@@ -1159,7 +1159,8 @@ struct glz::meta<glz::error_code>
                 "unknown_distribution", glz::error_code::unknown_distribution, //
                 "invalid_distribution_elements", glz::error_code::invalid_distribution_elements, //
                 "missing_key", glz::error_code::missing_key, //
-                "hostname_failure", glz::error_code::hostname_failure //
+                "hostname_failure", glz::error_code::hostname_failure, //
+                "includer_error", glz::error_code::includer_error //
       );
 };
 
@@ -1186,9 +1187,17 @@ namespace glz
 
       const auto info = detail::get_source_info(buffer, pe.location);
       if (info) {
-         return detail::generate_error_string(error_type_str, *info);
+         auto error_str = detail::generate_error_string(error_type_str, *info);
+         if (pe.includer_error.size()) {
+            error_str += pe.includer_error;
+         }
+         return error_str;
       }
-      return std::string(error_type_str);
+      auto error_str = std::string(error_type_str);
+      if (pe.includer_error.size()) {
+         error_str += pe.includer_error;
+      }
+      return error_str;
    }
 }
 
