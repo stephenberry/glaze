@@ -6821,9 +6821,12 @@ suite meta_schema_tests = [] {
       std::string buffer{};
       glz::write_json(obj, buffer);
       expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
-      
+
       const auto json_schema = glz::write_json_schema<meta_schema_t>();
-      expect(json_schema == R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"]},"std::string":{"type":["string"]}}})") << json_schema;
+      expect(
+         json_schema ==
+         R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"]},"std::string":{"type":["string"]}}})")
+         << json_schema;
    };
 };
 

@@ -124,63 +124,65 @@ namespace glz
    namespace detail
    {
       template <class Tuple>
-      consteval size_t count_schema_elements() {
+      consteval size_t count_schema_elements()
+      {
          constexpr auto N = std::tuple_size_v<Tuple>;
-         
+
          size_t i{};
          for_each<N>([&](auto I) {
             if constexpr (std::same_as<std::decay_t<std::tuple_element_t<I, Tuple>>, schema>) {
                ++i;
             }
          });
-         
+
          return i;
       }
-      
+
       template <class T>
-      consteval auto make_reflection_schema_array() {
+      consteval auto make_reflection_schema_array()
+      {
          glz::meta<T> meta_instance{};
          auto tuple = to_tuple(meta_instance);
          using V = std::decay_t<decltype(tuple)>;
          constexpr auto N = std::tuple_size_v<V>;
          if constexpr (N > 0) {
             constexpr auto names = member_names<glz::meta<T>>;
-            
+
             constexpr auto n_schema_elements = count_schema_elements<V>();
             std::array<std::pair<sv, schema>, n_schema_elements> ret{};
-            
+
             size_t i{};
             for_each<N>([&](auto I) {
                if constexpr (std::same_as<std::decay_t<std::tuple_element_t<I, V>>, schema>) {
-                  ret[i] = std::pair{ names[I], std::get<I>(tuple) };
+                  ret[i] = std::pair{names[I], std::get<I>(tuple)};
                }
                ++i;
             });
-            
+
             return ret;
          }
          else {
             return std::array<std::pair<sv, schema>, 0>{};
          }
       };
-      
+
       template <size_t N, size_t... I>
       constexpr auto make_reflection_schema_map_impl(auto& arr, std::index_sequence<I...>)
       {
-         return glz::detail::normal_map<sv, schema, N>(
-            {std::get<I>(arr)...});
+         return glz::detail::normal_map<sv, schema, N>({std::get<I>(arr)...});
       }
-      
+
       // The reflection schema map makes a map of all schema types within a glz::meta
       // and returns a map of these schemas with their reflected names.
       template <class T>
-      constexpr auto make_reflection_schema_map() {
+      constexpr auto make_reflection_schema_map()
+      {
          constexpr auto arr = make_reflection_schema_array<T>();
          constexpr auto N = arr.size();
          constexpr auto indices = std::make_index_sequence<N>{};
          return make_reflection_schema_map_impl<N>(arr, indices);
       }
-      
+
       template <class T = void>
       struct to_json_schema
       {
@@ -394,9 +396,9 @@ namespace glz
                   return std::tuple_size_v<meta_t<T>>;
                }
             }();
-            
+
             [[maybe_unused]] static constexpr auto schema_map = make_reflection_schema_map<T>();
-            
+
             s.properties = std::map<sv, schema, std::less<>>();
             for_each<N>([&](auto I) {
                using Element = glaze_tuple_element<I, N, T>;
@@ -407,9 +409,9 @@ namespace glz
                if (!def.type) {
                   to_json_schema<val_t>::template op<Opts>(def, defs);
                }
-               
+
                constexpr sv key = key_name<I, T, Element::use_reflection>;
-               
+
                schema ref_val{};
                if constexpr (schema_map.size()) {
                   static constexpr auto it = schema_map.find(key);
@@ -423,7 +425,7 @@ namespace glz
                if (ref_val.ref == "") {
                   ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
                }
-               
+
                static constexpr size_t comment_index = member_index + 1;
                static constexpr auto Size = std::tuple_size_v<typename Element::Item>;
 
@@ -438,7 +440,7 @@ namespace glz
                      ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
                   }
                }
-                             
+
                (*s.properties)[key] = ref_val;
             });
             s.additionalProperties = false;
