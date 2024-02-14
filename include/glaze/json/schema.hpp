@@ -141,7 +141,7 @@ namespace glz
       consteval auto make_reflection_schema_array() {
          glz::meta<T> meta_instance{};
          auto tuple = to_tuple(meta_instance);
-         using V = decltype(tuple);
+         using V = std::decay_t<decltype(tuple)>;
          constexpr auto N = std::tuple_size_v<V>;
          if constexpr (N > 0) {
             constexpr auto names = member_names<glz::meta<T>>;
