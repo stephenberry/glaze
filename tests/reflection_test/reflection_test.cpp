@@ -432,6 +432,33 @@ suite prefix_key_name_test = [] {
    };
 };
 
+struct meta_schema_t
+{
+   int x{};
+   std::string file_name{};
+   bool is_valid{};
+};
+
+template <>
+struct glz::meta<meta_schema_t>
+{
+   schema x{.description = "x is a special integer"};
+   schema file_name{.description = "provide a file name to load"};
+   schema boolean{.description = "for validation"};
+};
+
+static_assert(glz::detail::reflectable<glz::meta<meta_schema_t>>);
+static_assert(glz::detail::count_members<glz::meta<meta_schema_t>> == 3);
+
+suite meta_schema_reflection_tests = [] {
+   "meta_schema_reflection"_test = [] {
+      meta_schema_t obj;
+      std::string buffer{};
+      glz::write_json(obj, buffer);
+      expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
+   };
+};
+
 int main()
 { // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
