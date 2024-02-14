@@ -412,8 +412,12 @@ namespace glz
                
                schema ref_val{};
                if constexpr (schema_map.size()) {
-                  if (const auto& it = schema_map.find(key); it != schema_map.end()) {
+                  static constexpr auto it = schema_map.find(key);
+                  if constexpr (it != schema_map.end()) {
                      ref_val = it->second;
+                  }
+                  else {
+                     static_assert(it != schema_map.end(), "schema value's name in glz::meta<T> is unmmatched");
                   }
                }
                if (ref_val.ref == "") {
