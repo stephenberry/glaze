@@ -516,24 +516,7 @@ namespace glz
                   }
                }
                else if constexpr (std::is_same_v<T, wchar_t>) {
-                  wchar_t bufferw[MB_LEN_MAX];
-                  std::mbstate_t statew{};
-                  auto buffer_ptr = reinterpret_cast<const char*>(buffer);
-                  auto n = std::mbsrtowcs(bufferw, &buffer_ptr, MB_LEN_MAX, &statew);
-                  if (n == (std::numeric_limits<std::size_t>::max)()) [[unlikely]] {
-                     ctx.error = error_code::unicode_escape_conversion_failure;
-                     return;
-                  }
-                  if constexpr (char_t<Val>) {
-                     if (n != 1) [[unlikely]] {
-                        ctx.error = error_code::unicode_escape_conversion_failure;
-                        return;
-                     }
-                     value = bufferw[0];
-                  }
-                  else {
-                     value.append(bufferw, n);
-                  }
+                  static_assert(false_v<T>, "wchar_t is unsupported, JSON requires UTF8");
                }
             }
          }
