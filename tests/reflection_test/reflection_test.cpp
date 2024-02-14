@@ -442,7 +442,7 @@ struct meta_schema_t
 template <>
 struct glz::meta<meta_schema_t>
 {
-   schema x{.description = "x is a special integer"};
+   schema x{.description = "x is a special integer", .minimum = 1};
    schema file_name{.description = "provide a file name to load"};
    schema is_valid{.description = "for validation"};
 };
@@ -460,7 +460,7 @@ suite meta_schema_reflection_tests = [] {
       const auto json_schema = glz::write_json_schema<meta_schema_t>();
       expect(
          json_schema ==
-         R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"]},"std::string":{"type":["string"]}}})")
+         R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer","minimum":1}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"]},"std::string":{"type":["string"]}}})")
          << json_schema;
    };
 };
