@@ -4,6 +4,7 @@
 #pragma once
 
 #include <asio.hpp>
+#include <cassert>
 #include <coroutine>
 
 #include "glaze/rpc/repe.hpp"
