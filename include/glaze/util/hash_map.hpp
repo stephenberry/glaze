@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <array>
 #include <bit>
-#include <cassert>
 #include <cmath>
 #include <concepts>
 #include <cstddef>
@@ -514,7 +513,9 @@ namespace glz::detail
    {
       constexpr auto N = D.N;
       static_assert(N < 256);
-      assert(pairs.size() == N);
+      if (pairs.size() != N) {
+         std::abort();
+      }
       single_char_map<T, D> ht{};
 
       uint8_t i = 0;

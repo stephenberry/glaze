@@ -269,9 +269,7 @@ namespace glz::rpc
             }
          });
 
-         assert(return_ptr != nullptr); // static_assert above should guarantee this
-
-         return *return_ptr;
+         return *return_ptr; // static_assert above should guarantee return_ptr is never null
       }
    }
 

@@ -19,7 +19,6 @@ namespace glz
    {
       GLZ_ALWAYS_INLINE void dump_type(auto&& value, auto&& b, auto&& ix) noexcept
       {
-         assert(ix <= b.size());
          constexpr auto n = sizeof(std::decay_t<decltype(value)>);
          if (ix + n > b.size()) [[unlikely]] {
             b.resize((std::max)(b.size() * 2, ix + n));
@@ -309,7 +308,6 @@ namespace glz
             const auto n = value.size();
             dump_compressed_int<Opts>(n, b, ix);
 
-            assert(ix <= b.size());
             if (ix + n > b.size()) [[unlikely]] {
                b.resize((std::max)(b.size() * 2, ix + n));
             }
@@ -323,7 +321,6 @@ namespace glz
          {
             dump_compressed_int<Opts>(value.size(), b, ix);
 
-            assert(ix <= b.size());
             const auto n = value.size();
             if (ix + n > b.size()) [[unlikely]] {
                b.resize((std::max)(b.size() * 2, ix + n));
@@ -382,7 +379,6 @@ namespace glz
 
                if constexpr (contiguous<T>) {
                   auto dump_array = [&](auto&& b, auto&& ix) {
-                     assert(ix <= b.size());
                      const auto n = value.size() * sizeof(V);
                      if (ix + n > b.size()) [[unlikely]] {
                         b.resize((std::max)(b.size() * 2, ix + n));
@@ -411,7 +407,6 @@ namespace glz
                   dump_compressed_int<Opts>(x.size(), args...);
 
                   auto dump_array = [&](auto&& b, auto&& ix) {
-                     assert(ix <= b.size());
                      const auto n = x.size();
                      if (ix + n > b.size()) [[unlikely]] {
                         b.resize((std::max)(b.size() * 2, ix + n));
