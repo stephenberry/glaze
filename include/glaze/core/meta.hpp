@@ -96,7 +96,7 @@ namespace glz
    };
 
    template <class T>
-   inline constexpr auto meta_wrapper_v = [] {
+   inline constexpr decltype(auto) meta_wrapper_v = [] {
       if constexpr (detail::local_meta_t<T>) {
          return T::glaze::value;
       }
