@@ -81,10 +81,10 @@ namespace glz
       concept has_unknown_reader = requires { meta<T>::unknown_read; } || requires { T::glaze::unknown_read; };
       
       template <class T>
-      concept local_json_schema_t = requires { std::decay_t<T>::glaze_json_schema; };
+      concept local_json_schema_t = requires { typename std::decay_t<T>::glaze_json_schema; };
 
       template <class T>
-      concept global_json_schema_t = requires { sizeof(json_schema<std::decay_t<T>>) > 1; };
+      concept global_json_schema_t = requires { is_specialization_v<std::decay_t<T>, json_schema>; };
 
       template <class T>
       concept json_schema_t = requires { local_json_schema_t<T>; } || requires { global_json_schema_t<T>; };

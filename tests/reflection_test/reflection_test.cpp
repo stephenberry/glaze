@@ -450,6 +450,22 @@ struct glz::json_schema<meta_schema_t>
 static_assert(glz::detail::reflectable<glz::json_schema<meta_schema_t>>);
 static_assert(glz::detail::count_members<glz::json_schema<meta_schema_t>> == 3);
 
+struct local_schema_t
+{
+   int x{};
+   std::string file_name{};
+   bool is_valid{};
+   
+   struct glaze_json_schema
+   {
+      glz::schema x{.description = "x is a special integer", .minimum = 1};
+      glz::schema file_name{.description = "provide a file name to load"};
+      glz::schema is_valid{.description = "for validation"};
+   };
+};
+
+static_assert(glz::detail::local_json_schema_t<local_schema_t>);
+
 suite meta_schema_reflection_tests = [] {
    "meta_schema_reflection"_test = [] {
       meta_schema_t obj;
@@ -458,6 +474,19 @@ suite meta_schema_reflection_tests = [] {
       expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
 
       const auto json_schema = glz::write_json_schema<meta_schema_t>();
+      expect(
+         json_schema ==
+         R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer","minimum":1}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"]},"std::string":{"type":["string"]}}})")
+         << json_schema;
+   };
+   
+   "local_schema"_test = [] {
+      local_schema_t obj;
+      std::string buffer{};
+      glz::write_json(obj, buffer);
+      expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
+
+      const auto json_schema = glz::write_json_schema<local_schema_t>();
       expect(
          json_schema ==
          R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer","minimum":1}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"]},"std::string":{"type":["string"]}}})")

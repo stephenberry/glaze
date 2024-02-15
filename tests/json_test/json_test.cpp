@@ -6808,11 +6808,16 @@ struct meta_schema_t
 template <>
 struct glz::meta<meta_schema_t>
 {
+   using T = meta_schema_t;
+   static constexpr auto value = object(&T::x, &T::file_name, &T::is_valid);
+};
+
+template <>
+struct glz::json_schema<meta_schema_t>
+{
    schema x{.description = "x is a special integer"};
    schema file_name{.description = "provide a file name to load"};
    schema is_valid{.description = "for validation"};
-   using T = meta_schema_t;
-   static constexpr auto value = object(&T::x, &T::file_name, &T::is_valid);
 };
 
 suite meta_schema_tests = [] {
