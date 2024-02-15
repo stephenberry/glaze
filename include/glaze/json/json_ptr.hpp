@@ -179,6 +179,17 @@ namespace glz
          if (!value) return false;
          return seek_impl(std::forward<F>(func), *value, json_ptr);
       }
+      
+      template <class F, class T>
+         requires glaze_value_t<T>
+      bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
+      {
+         if (json_ptr.empty()) {
+            func(get_member(std::forward<T>(value), meta_wrapper_v<std::remove_cvref_t<T>>));
+            return true;
+         }
+         return seek_impl(std::forward<F>(func), get_member(std::forward<T>(value), meta_wrapper_v<std::remove_cvref_t<T>>), json_ptr);
+      }
    } // namespace detail
 
    // Call a function on an value at the location of a json_ptr

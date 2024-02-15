@@ -137,6 +137,15 @@ struct Thing
    std::map<std::string, int> map{{"eleven", 11}, {"twelve", 12}};
 };
 
+struct thing_wrapper
+{
+   Thing thing{};
+   
+   struct glaze {
+      static constexpr auto value{ &thing_wrapper::thing };
+   };
+};
+
 suite user_types = [] {
    "complex user obect"_test = [] {
       Thing obj{};
@@ -184,6 +193,14 @@ suite user_types = [] {
 
       expect(glz::seek([&](auto& value) { glz::write_json(value, out); }, obj, "/thing_ptr/b"));
 
+      expect(out == R"("stuff")");
+   };
+   
+   "thing_wrapper seek"_test = [] {
+      thing_wrapper obj{};
+      std::string out;
+      expect(glz::seek([&](auto& value) { glz::write_json(value, out); }, obj, "/thing_ptr/b"));
+      
       expect(out == R"("stuff")");
    };
 };
