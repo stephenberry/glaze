@@ -184,11 +184,12 @@ namespace glz
          requires glaze_value_t<T>
       bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
       {
+         decltype(auto) member = get_member(value, meta_wrapper_v<std::remove_cvref_t<T>>);
          if (json_ptr.empty()) {
-            func(get_member(std::forward<T>(value), meta_wrapper_v<std::remove_cvref_t<T>>));
+            func(member);
             return true;
          }
-         return seek_impl(std::forward<F>(func), get_member(std::forward<T>(value), meta_wrapper_v<std::remove_cvref_t<T>>), json_ptr);
+         return seek_impl(std::forward<F>(func), member, json_ptr);
       }
    } // namespace detail
 
