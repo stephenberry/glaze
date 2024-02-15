@@ -396,9 +396,7 @@ namespace glz
                   if constexpr (it != schema_map.end()) {
                      ref_val = it->second;
                   }
-                  else {
-                     static_assert(it != schema_map.end(), "schema value's name in glz::meta<T> is unmmatched");
-                  }
+                  // TODO: Implement compile time name checking from schema_map to the reflected names
                }
                if (ref_val.ref == "") {
                   ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
