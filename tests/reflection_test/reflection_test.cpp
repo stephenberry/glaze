@@ -196,6 +196,10 @@ suite user_types = [] {
       expect(out == R"("stuff")");
    };
    
+#if ((defined _MSC_VER) && (!defined __clang__))
+   // The "thing_wrapper seek" test is broken in MSVC, because MSVC has internal compiler errors for seeking glaze_value_t
+   // Uncomment this when MSVC is fixed
+#else
    "thing_wrapper seek"_test = [] {
       thing_wrapper obj{};
       std::string out;
@@ -203,6 +207,7 @@ suite user_types = [] {
       
       expect(out == R"("stuff")");
    };
+#endif
 };
 
 struct single_t
