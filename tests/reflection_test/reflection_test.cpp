@@ -455,7 +455,7 @@ struct local_schema_t
    int x{};
    std::string file_name{};
    bool is_valid{};
-   
+
    struct glaze_json_schema
    {
       glz::schema x{.description = "x is a special integer", .minimum = 1};
@@ -479,7 +479,7 @@ suite meta_schema_reflection_tests = [] {
          R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer","minimum":1}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"]},"std::string":{"type":["string"]}}})")
          << json_schema;
    };
-   
+
    "local_schema"_test = [] {
       local_schema_t obj;
       std::string buffer{};

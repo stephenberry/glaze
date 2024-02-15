@@ -135,9 +135,7 @@ namespace glz
 
             std::array<std::pair<sv, schema>, N> ret{};
 
-            for_each<N>([&](auto I) {
-               ret[I] = std::pair{names[I], std::get<I>(tuple)};
-            });
+            for_each<N>([&](auto I) { ret[I] = std::pair{names[I], std::get<I>(tuple)}; });
 
             return ret;
          }

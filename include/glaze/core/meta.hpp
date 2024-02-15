@@ -16,7 +16,7 @@ namespace glz
    template <class T>
    struct meta
    {};
-   
+
    template <class T>
    struct json_schema
    {};
@@ -79,7 +79,7 @@ namespace glz
 
       template <class T>
       concept has_unknown_reader = requires { meta<T>::unknown_read; } || requires { T::glaze::unknown_read; };
-      
+
       template <class T>
       concept local_json_schema_t = requires { typename std::decay_t<T>::glaze_json_schema; };
 
@@ -260,7 +260,7 @@ namespace glz
          return {0, 0, 1};
       }
    }();
-   
+
    template <class T>
    inline constexpr auto json_schema_v = [] {
       if constexpr (detail::local_json_schema_t<T>) {
@@ -270,7 +270,7 @@ namespace glz
          return json_schema<std::decay_t<T>>{};
       }
    }();
-   
+
    template <class T>
    using json_schema_type = std::decay_t<decltype(json_schema_v<T>)>;
 }
