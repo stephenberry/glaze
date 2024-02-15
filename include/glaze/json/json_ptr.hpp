@@ -22,7 +22,7 @@ namespace glz
       template <class F, class T>
          requires glaze_value_t<T>
       bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept;
-      
+
       template <class F, class T>
          requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
                   is_std_tuple<std::decay_t<T>>
@@ -183,7 +183,7 @@ namespace glz
          if (!value) return false;
          return seek_impl(std::forward<F>(func), *value, json_ptr);
       }
-      
+
       template <class F, class T>
          requires glaze_value_t<T>
       bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
