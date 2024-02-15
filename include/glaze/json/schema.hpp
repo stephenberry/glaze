@@ -123,40 +123,20 @@ namespace glz
 {
    namespace detail
    {
-      template <class Tuple>
-      consteval size_t count_schema_elements()
-      {
-         constexpr auto N = std::tuple_size_v<Tuple>;
-
-         size_t i{};
-         for_each<N>([&](auto I) {
-            if constexpr (std::same_as<std::decay_t<std::tuple_element_t<I, Tuple>>, schema>) {
-               ++i;
-            }
-         });
-
-         return i;
-      }
-
       template <class T>
       consteval auto make_reflection_schema_array()
       {
-         glz::meta<T> meta_instance{};
-         auto tuple = to_tuple(meta_instance);
+         auto schema_instance = json_schema_v<T>;
+         auto tuple = to_tuple(schema_instance);
          using V = std::decay_t<decltype(tuple)>;
          constexpr auto N = std::tuple_size_v<V>;
          if constexpr (N > 0) {
-            constexpr auto names = member_names<glz::meta<T>>;
+            constexpr auto names = member_names<json_schema_type<T>>; // TODO: use a reference
 
-            constexpr auto n_schema_elements = count_schema_elements<V>();
-            std::array<std::pair<sv, schema>, n_schema_elements> ret{};
+            std::array<std::pair<sv, schema>, N> ret{};
 
-            size_t i{};
             for_each<N>([&](auto I) {
-               if constexpr (std::same_as<std::decay_t<std::tuple_element_t<I, V>>, schema>) {
-                  ret[i] = std::pair{names[I], std::get<I>(tuple)};
-               }
-               ++i;
+               ret[I] = std::pair{names[I], std::get<I>(tuple)};
             });
 
             return ret;
