@@ -184,7 +184,8 @@ namespace glz
          requires glaze_value_t<T>
       bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
       {
-         decltype(auto) member = get_member(value, meta_wrapper_v<std::remove_cvref_t<T>>);
+         constexpr auto wrapper = meta_wrapper_v<std::remove_cvref_t<T>>;
+         decltype(auto) member = get_member(value, wrapper);
          if (json_ptr.empty()) {
             func(member);
             return true;
