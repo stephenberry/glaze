@@ -440,15 +440,15 @@ struct meta_schema_t
 };
 
 template <>
-struct glz::meta<meta_schema_t>
+struct glz::json_schema<meta_schema_t>
 {
    schema x{.description = "x is a special integer", .minimum = 1};
    schema file_name{.description = "provide a file name to load"};
    schema is_valid{.description = "for validation"};
 };
 
-static_assert(glz::detail::reflectable<glz::meta<meta_schema_t>>);
-static_assert(glz::detail::count_members<glz::meta<meta_schema_t>> == 3);
+static_assert(glz::detail::reflectable<glz::json_schema<meta_schema_t>>);
+static_assert(glz::detail::count_members<glz::json_schema<meta_schema_t>> == 3);
 
 suite meta_schema_reflection_tests = [] {
    "meta_schema_reflection"_test = [] {
