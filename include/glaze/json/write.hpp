@@ -346,7 +346,9 @@ namespace glz
                      if constexpr (string_t<T> && !std::is_const_v<std::remove_reference_t<decltype(value)>>) {
                         // we know the output buffer has enough space, but we must ensure the string buffer has space
                         // for swar as well
-                        value.reserve(round_up_to_multiple<8>(n));
+                        // say a string is of length 16, then the null character sits at index 16, which means we need another 8 bytes to read
+                        // so we add one to the length to include the null character and round this up to the nearest multiple of 8
+                        value.reserve(round_up_to_multiple<8>(n + 1));
                         serialize_string<8>(value.data(), data_ptr(b), ix);
                      }
                      else {
