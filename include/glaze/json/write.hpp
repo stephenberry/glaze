@@ -346,9 +346,9 @@ namespace glz
                      // IMPORTANT: This code breaks address sanitizers (GCC and MSVC), because they don't like
                      // string memory being read beyond the length of the string, even if there is properly
                      // allocated memory.
-                     // Also, this is only valid if Small String Optimization also has enough aligned memory when parsing
-                     // reserving extra space does nothing for SSO and we must rely on padded alignment,
-                     // which has always worked but is risky
+                     // Also, this is only valid if Small String Optimization also has enough aligned memory when
+                     // parsing reserving extra space does nothing for SSO and we must rely on padded alignment, which
+                     // has always worked but is risky
                      /*if constexpr (string_t<T> && !std::is_const_v<std::remove_reference_t<decltype(value)>>) {
                         // we know the output buffer has enough space, but we must ensure the string buffer has space
                         // for swar as well
@@ -358,7 +358,8 @@ namespace glz
                         value.reserve(round_up_to_multiple<8>(n + 1));
                         serialize_string<8>(value.data(), data_ptr(b), ix);
                      }
-                     else*/ {
+                     else*/
+                     {
                         const auto* c = str.data();
                         const auto* const e = c + n;
 
