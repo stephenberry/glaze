@@ -388,7 +388,7 @@ namespace glz
 
                         // Tail end of buffer. Uncommon for long strings.
                         for (; c < e; ++c) {
-                           if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) [[likely]] {
+                           if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
                               std::memcpy(data_ptr(b) + ix, &escaped, 2);
                               ix += 2;
                            }
