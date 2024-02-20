@@ -50,15 +50,27 @@ namespace glz
             for_each<N>([&](auto I) {
                using Element = glaze_tuple_element<I, N, T>;
                
-               //using E = typename Element::type;
-               //if constexpr (detail::glaze_)
-               
-               if (I == item_number - 1) {
-                  if constexpr (detail::reflectable<T>) {
-                     std::get<I>(t)();
+               using E = typename Element::type;
+               if constexpr (glaze_object_t<E> || reflectable<E>) {
+                  if (I == item_number - 1) {
+                     std::atomic<bool> menu_boolean = true;
+                     if constexpr (reflectable<E>) {
+                        run_cli_menu(std::get<I>(t), menu_boolean);
+                     }
+                     else {
+                        decltype(auto) v = get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
+                        run_cli_menu(v, menu_boolean);
+                     }
                   }
-                  else {
-                     get_member(value, get<Element::member_index>(get<I>(meta_v<T>)))();
+               }
+               else {
+                  if (I == item_number - 1) {
+                     if constexpr (reflectable<T>) {
+                        std::get<I>(t)();
+                     }
+                     else {
+                        get_member(value, get<Element::member_index>(get<I>(meta_v<T>)))();
+                     }
                   }
                }
             });
