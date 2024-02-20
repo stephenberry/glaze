@@ -1461,6 +1461,37 @@ suite empty_object_test = [] {
    };
 };
 
+enum class sub : uint8_t
+{
+   START,
+   END,
+   UPDATE_ITEM,
+   UPDATE_PRICE
+};
+
+struct A {
+   sub b;
+   
+   struct glaze {
+      using T = A;
+      static constexpr auto value = glz::object(
+         "b", &T::b
+      );
+   };
+};
+
+suite sub_enum = [] {
+   "sub_enum"_test = [] {
+      A obj{.b = sub::END};
+      std::string s{};
+      glz::write_binary(obj, s);
+
+      obj = {};
+      expect(!glz::read_binary(obj, s));
+      expect(obj.b == sub::END);
+   };
+};
+
 int main()
 {
    write_tests();

@@ -159,6 +159,38 @@ namespace glz
             }
          }
       };
+      
+      template <class T>
+         requires(std::is_enum_v<T> && !glaze_enum_t<T>)
+      struct from_binary<T>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
+         {
+            using V = std::underlying_type_t<std::decay_t<T>>;
+            
+            if constexpr (Opts.no_header) {
+               std::memcpy(&value, &(*it), sizeof(V));
+               std::advance(it, sizeof(V));
+            }
+            else {
+               constexpr uint8_t type =
+                  std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+               constexpr uint8_t header = tag::number | type | (byte_count<V> << 5);
+
+               const auto tag = uint8_t(*it);
+               if (tag != header) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               ++it;
+
+               std::memcpy(&value, &(*it), sizeof(V));
+               std::advance(it, sizeof(V));
+            }
+         }
+      };
 
       template <class T>
          requires complex_t<T>
