@@ -505,42 +505,55 @@ namespace glz
 
                size_t row = 0;
 
-               while (it != end) {
-                  for (size_t i = 0; i < n_keys; ++i) {
-                     const auto& member_it = frozen_map.find(keys[i].first);
-                     if (member_it != frozen_map.end()) [[likely]] {
-                        std::visit(
-                           [&](auto&& member_ptr) {
-                              auto&& member = get_member(value, member_ptr);
-                              using M = std::decay_t<decltype(member)>;
-                              if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
-                                 const auto index = keys[i].second;
-                                 if (row < member.size()) [[likely]] {
-                                    read<csv>::op<Opts>(member[row][index], ctx, it, end);
+               bool at_end{it == end};
+               if (!at_end) {
+                  while (true) {
+                     for (size_t i = 0; i < n_keys; ++i) {
+                        const auto& member_it = frozen_map.find(keys[i].first);
+                        if (member_it != frozen_map.end()) [[likely]] {
+                           std::visit(
+                              [&](auto&& member_ptr) {
+                                 auto&& member = get_member(value, member_ptr);
+                                 using M = std::decay_t<decltype(member)>;
+                                 if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
+                                    const auto index = keys[i].second;
+                                    if (row < member.size()) [[likely]] {
+                                       read<csv>::op<Opts>(member[row][index], ctx, it, end);
+                                    }
+                                    else [[unlikely]] {
+                                       read<csv>::op<Opts>(member.emplace_back()[index], ctx, it, end);
+                                    }
                                  }
-                                 else [[unlikely]] {
-                                    read<csv>::op<Opts>(member.emplace_back()[index], ctx, it, end);
+                                 else {
+                                    read<csv>::op<Opts>(member, ctx, it, end);
                                  }
-                              }
-                              else {
-                                 read<csv>::op<Opts>(member, ctx, it, end);
-                              }
-                           },
-                           member_it->second);
+                              },
+                              member_it->second);
+                        }
+                        else [[unlikely]] {
+                           ctx.error = error_code::unknown_key;
+                           return;
+                        }
+                        at_end = it == end;
+                        if (!at_end && *it == ',') {
+                           ++it;
+                           at_end = it == end;
+                        }
                      }
-                     else [[unlikely]] {
-                        ctx.error = error_code::unknown_key;
-                        return;
+                     if (!at_end) [[likely]] {
+                        if (*it == '\n') [[likely]] {
+                           ++it; // skip new line
+                           ++row;
+                           at_end = it == end;
+                           if (at_end) break;
+                        }
+                        else {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
                      }
-
-                     if (*it == ',') {
-                        ++it;
-                     }
-                  }
-
-                  if (*it == '\n') {
-                     ++it; // skip new line
-                     ++row;
+                     else
+                        break;
                   }
                }
             }
