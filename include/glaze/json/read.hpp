@@ -572,7 +572,7 @@ namespace glz
                   if (escaped) {
                      static constexpr auto Bytes = 8;
 
-                     const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
+                     const auto length = round_up_to_multiple<Bytes>(size_t(it - start)) + Bytes;
                      value.resize(length);
 
                      const char* c;
