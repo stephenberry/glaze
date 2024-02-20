@@ -52,7 +52,7 @@ namespace glz
       };
       
       while (show_menu) {
-         std::printf("********************************\n");
+         std::printf("================================\n");
          for_each<N>([&](auto I) {
             using Element = detail::glaze_tuple_element<I, N, T>;
             constexpr sv key = detail::key_name<I, T, Element::use_reflection>;
@@ -60,7 +60,7 @@ namespace glz
             std::printf("  %d -- %.*s\n", uint32_t(I + 1), int(key.size()), key.data());
          });
          std::printf("  %d -- Exit Menu\n", uint32_t(N + 1));
-         std::printf("********************************\n");
+         std::printf("================================\n");
          
          std::printf("cmd> ");
          std::cin >> cmd;
