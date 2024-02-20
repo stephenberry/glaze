@@ -16,7 +16,16 @@ struct my_struct
    std::vector<bool> maybe{};
    std::vector<std::array<int, 3>> v3s{};
 };
-
+struct issue_768_test_struct
+  {
+  std::vector<int> num1{};
+  std::vector<std::string> str1{};
+  void reserve(std::size_t cap)
+    {
+    num1.reserve(cap);
+    str1.reserve(cap);
+    }
+  };
 template <>
 struct glz::meta<my_struct>
 {
@@ -270,6 +279,46 @@ x,1,2,3,4,5)");
 3,4
 4,5
 )") << s;
+   };
+
+
+   "issue 768 valid_record"_test = [] {
+      constexpr std::string_view valid_record =
+         R"(num1,str1
+11,Warszawa
+33,Krakow)";
+      glz::context ctx{};
+      issue_768_test_struct value;
+      glz::parse_error glaze_err{
+         glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(value, std::string{valid_record}, ctx)};
+      expect(!bool(glaze_err));
+   };
+   "issue 768 invalid_record 1"_test = [] {
+      constexpr std::string_view invalid_record_1 =
+         R"(num1,str1
+11,Warszawa
+33,Krakow,some text,
+55,Gdynia
+77,Reda)";
+      glz::context ctx{};
+      issue_768_test_struct value;
+      glz::parse_error glaze_err{
+         glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(value, std::string{invalid_record_1}, ctx)};
+      expect(bool(glaze_err));
+   };
+
+   "issue 768 invalid_record 2"_test = [] {
+      constexpr std::string_view invalid_record_2 =
+         R"(num1,str1
+11,Warszawa
+33,Krakow,some text
+55,Gdynia
+77,Reda)";
+      glz::context ctx{};
+      issue_768_test_struct value;
+      glz::parse_error glaze_err{
+         glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(value, std::string{invalid_record_2}, ctx)};
+      expect(bool(glaze_err));
    };
 };
 
