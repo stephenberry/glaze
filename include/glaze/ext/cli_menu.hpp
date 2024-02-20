@@ -5,6 +5,8 @@
 
 #include <glaze/glaze.hpp>
 
+#include <iostream>
+
 // The purpose of this command line interface menu is to use reflection to build the menu,
 // but also allow this menu to be registered as an RPC interface.
 // So, either the command line interface can be used or another program can call the same
@@ -13,54 +15,56 @@
 namespace glz
 {
    template <class T>
-   struct cli_menu
+   inline void run_cli_menu(T& value, std::atomic<bool>& show_menu)
    {
-      static constexpr auto size = [] {
-         if constexpr (reflectable<T>) {
-            return count_members<T>;
+      static constexpr auto N = [] {
+         if constexpr (detail::reflectable<T>) {
+            return detail::count_members<T>;
          }
          else {
             return std::tuple_size_v<meta_t<T>>;
          }
       }();
       
-      std::string menu_heading = "CommandList";
-      std::atomic<bool> show_menu = true;
+      int32_t cmd = -1;
       
-      void run()
+      auto execute_menu_item = [&](const int32_t item_number)
       {
-         int32_t cmd = -1;
-
-         while (show_menu) {
-            std::cout << std::format("\n{:*>32}\n", "");
-            std::cout << menu_heading << ":\n";
-            for (auto& menuEntry : menu_items) {
-               menuEntry.printMenuEntry();
-            }
-            std::cout << std::format("  {} -- Exit Menu\n", menu_items.size() + 1);
-            std::cout << std::format("{:*>32}\n", "");
-            
-            std::cout << "cmd> ";
-            std::cin >> cmd;
-            execute_menu_item(cmd);
-         }
-      }
-      
-      void execute_menu_item(const int32_t item_number)
-      {
-         if (item_number == size + 1) {
+         if (item_number == N + 1) {
             show_menu = false;
             return;
          }
+         
+         decltype(auto) t = detail::to_tuple(value);
 
-         if (item_number > 0 && item_number <= size) {
-            menu_items.at(item_number - 1).menu_function();
+         if (item_number > 0 && item_number <= int32_t(N)) {            
+            for_each<N>([&](auto I) {
+               if (I == item_number - 1) {
+                  std::get<I>(t)();
+               }
+            });
          }
          else {
-            std::cerr << "Invalid menu item.\n";
+            std::fprintf(stderr, "Invalid menu item.\n");
             std::cin.clear(); // reset state
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // consume wrong input
          }
+      };
+      
+      while (show_menu) {
+         std::printf("********************************\n");
+         for_each<N>([&](auto I) {
+            using Element = detail::glaze_tuple_element<I, N, T>;
+            constexpr sv key = detail::key_name<I, T, Element::use_reflection>;
+            
+            std::printf("  %d -- %.*s\n", uint32_t(I + 1), int(key.size()), key.data());
+         });
+         std::printf("  %d -- Exit Menu\n", uint32_t(N + 1));
+         std::printf("********************************\n");
+         
+         std::printf("cmd> ");
+         std::cin >> cmd;
+         execute_menu_item(cmd);
       }
-   };
+   }
 }
