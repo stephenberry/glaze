@@ -35,12 +35,25 @@ namespace glz
             return;
          }
          
-         decltype(auto) t = detail::to_tuple(value);
+         [[maybe_unused]] decltype(auto) t = [&] {
+            if constexpr (detail::reflectable<T>) {
+               return detail::to_tuple(value);
+            }
+            else {
+               return nullptr;
+            }
+         }();
 
          if (item_number > 0 && item_number <= int32_t(N)) {            
             for_each<N>([&](auto I) {
                if (I == item_number - 1) {
-                  std::get<I>(t)();
+                  if constexpr (detail::reflectable<T>) {
+                     std::get<I>(t)();
+                  }
+                  else {
+                     using Element = detail::glaze_tuple_element<I, N, T>;
+                     detail::get_member(value, get<Element::member_index>(get<I>(meta_v<T>)))();
+                  }
                }
             });
          }

@@ -9,6 +9,13 @@ struct my_functions
    std::function<void()> world;
 };
 
+/*template <>
+struct glz::meta<my_functions>
+{
+   using T = my_functions;
+   static constexpr auto value = object(&T::hello, &T::world);
+};*/
+
 void run_menu()
 {
    my_functions obj{[]{ std::cout << "Hello\n"; },
