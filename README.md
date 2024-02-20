@@ -184,8 +184,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze)
 
 ### [Conan](https://conan.io)
 
-- [Glaze Conan recipe](https://github.com/Ahajha/glaze-conan)
-- Also included in [Conan Center](https://conan.io/center/) ![Conan Center](https://img.shields.io/conan/v/glaze)
+- Included in [Conan Center](https://conan.io/center/) ![Conan Center](https://img.shields.io/conan/v/glaze)
 
 ```
 find_package(glaze REQUIRED)
