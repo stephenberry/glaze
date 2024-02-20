@@ -558,7 +558,7 @@ namespace glz
    [[nodiscard]] inline auto read_csv(Buffer&& buffer) noexcept
    {
       T value{};
-      read<opts{.format = csv, .layout = rowwise}>(value, std::forward<Buffer>(buffer));
+      read<opts{.format = csv, .layout = layout}>(value, std::forward<Buffer>(buffer));
       return value;
    }
 
@@ -575,6 +575,6 @@ namespace glz
          return {ec};
       }
 
-      return read<opts{.format = csv, .layout = rowwise}>(value, buffer, ctx);
+      return read<opts{.format = csv, .layout = layout}>(value, buffer, ctx);
    }
 }
