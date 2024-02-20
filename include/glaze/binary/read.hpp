@@ -159,7 +159,7 @@ namespace glz
             }
          }
       };
-      
+
       template <class T>
          requires(std::is_enum_v<T> && !glaze_enum_t<T>)
       struct from_binary<T>
@@ -168,7 +168,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
          {
             using V = std::underlying_type_t<std::decay_t<T>>;
-            
+
             if constexpr (Opts.no_header) {
                std::memcpy(&value, &(*it), sizeof(V));
                std::advance(it, sizeof(V));

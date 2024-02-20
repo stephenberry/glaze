@@ -268,7 +268,7 @@ namespace glz
             dump_type(value, args...);
          }
       };
-      
+
       template <class T>
          requires(std::is_enum_v<T> && !glaze_enum_t<T>)
       struct to_binary<T> final
@@ -277,7 +277,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
             using V = std::underlying_type_t<std::decay_t<T>>;
-            
+
             constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
             constexpr uint8_t tag = tag::number | type | (byte_count<V> << 5);
             dump_type(tag, args...);

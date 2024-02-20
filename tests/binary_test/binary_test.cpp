@@ -1461,22 +1461,16 @@ suite empty_object_test = [] {
    };
 };
 
-enum class sub : uint8_t
-{
-   START,
-   END,
-   UPDATE_ITEM,
-   UPDATE_PRICE
-};
+enum class sub : uint8_t { START, END, UPDATE_ITEM, UPDATE_PRICE };
 
-struct A {
+struct A
+{
    sub b;
-   
-   struct glaze {
+
+   struct glaze
+   {
       using T = A;
-      static constexpr auto value = glz::object(
-         "b", &T::b
-      );
+      static constexpr auto value = glz::object("b", &T::b);
    };
 };
 
