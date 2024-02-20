@@ -17,15 +17,15 @@ struct my_struct
    std::vector<std::array<int, 3>> v3s{};
 };
 struct issue_768_test_struct
-  {
-  std::vector<int> num1{};
-  std::vector<std::string> str1{};
-  void reserve(std::size_t cap)
-    {
-    num1.reserve(cap);
-    str1.reserve(cap);
-    }
-  };
+{
+   std::vector<int> num1{};
+   std::vector<std::string> str1{};
+   void reserve(std::size_t cap)
+   {
+      num1.reserve(cap);
+      str1.reserve(cap);
+   }
+};
 template <>
 struct glz::meta<my_struct>
 {
@@ -280,7 +280,6 @@ x,1,2,3,4,5)");
 4,5
 )") << s;
    };
-
 
    "issue 768 valid_record"_test = [] {
       constexpr std::string_view valid_record =
