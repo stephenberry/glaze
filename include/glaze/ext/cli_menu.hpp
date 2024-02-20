@@ -14,12 +14,14 @@
 
 namespace glz
 {
-   template <class T>
+   template <class T> requires (detail::glaze_object_t<T> || detail::reflectable<T>)
    inline void run_cli_menu(T& value, std::atomic<bool>& show_menu)
    {
+      using namespace detail;
+      
       static constexpr auto N = [] {
-         if constexpr (detail::reflectable<T>) {
-            return detail::count_members<T>;
+         if constexpr (reflectable<T>) {
+            return count_members<T>;
          }
          else {
             return std::tuple_size_v<meta_t<T>>;
@@ -36,8 +38,8 @@ namespace glz
          }
          
          [[maybe_unused]] decltype(auto) t = [&] {
-            if constexpr (detail::reflectable<T>) {
-               return detail::to_tuple(value);
+            if constexpr (reflectable<T>) {
+               return to_tuple(value);
             }
             else {
                return nullptr;
@@ -46,13 +48,17 @@ namespace glz
 
          if (item_number > 0 && item_number <= int32_t(N)) {            
             for_each<N>([&](auto I) {
+               using Element = glaze_tuple_element<I, N, T>;
+               
+               //using E = typename Element::type;
+               //if constexpr (detail::glaze_)
+               
                if (I == item_number - 1) {
                   if constexpr (detail::reflectable<T>) {
                      std::get<I>(t)();
                   }
                   else {
-                     using Element = detail::glaze_tuple_element<I, N, T>;
-                     detail::get_member(value, get<Element::member_index>(get<I>(meta_v<T>)))();
+                     get_member(value, get<Element::member_index>(get<I>(meta_v<T>)))();
                   }
                }
             });
@@ -67,8 +73,8 @@ namespace glz
       while (show_menu) {
          std::printf("================================\n");
          for_each<N>([&](auto I) {
-            using Element = detail::glaze_tuple_element<I, N, T>;
-            constexpr sv key = detail::key_name<I, T, Element::use_reflection>;
+            using Element = glaze_tuple_element<I, N, T>;
+            constexpr sv key = key_name<I, T, Element::use_reflection>;
             
             std::printf("  %d -- %.*s\n", uint32_t(I + 1), int(key.size()), key.data());
          });
