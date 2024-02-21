@@ -9,12 +9,12 @@ struct my_functions
    std::function<void()> world = [] { std::printf("World\n"); };
 };
 
-/*template <>
+template <>
 struct glz::meta<my_functions>
 {
    using T = my_functions;
    static constexpr auto value = object(&T::hello, &T::world);
-};*/
+};
 
 void run_menu()
 {

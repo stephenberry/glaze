@@ -58,7 +58,7 @@ namespace glz
                if constexpr (glaze_object_t<E> || reflectable<E>) {
                   if (I == item_number - 1) {
                      std::atomic<bool> menu_boolean = true;
-                     if constexpr (reflectable<E>) {
+                     if constexpr (reflectable<T>) {
                         run_cli_menu(std::get<I>(t), menu_boolean);
                      }
                      else {
