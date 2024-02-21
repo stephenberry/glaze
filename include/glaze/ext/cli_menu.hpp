@@ -3,8 +3,8 @@
 
 #pragma once
 
+#include <cstdio>
 #include <glaze/glaze.hpp>
-#include <iostream>
 
 // The purpose of this command line interface menu is to use reflection to build the menu,
 // but also allow this menu to be registered as an RPC interface.
@@ -76,8 +76,8 @@ namespace glz
          }
          else {
             std::fprintf(stderr, "Invalid menu item.\n");
-            std::cin.clear(); // reset state
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // consume wrong input
+            while (std::getchar() != '\n')
+               ; // clear the input buffer
          }
       };
 
@@ -87,14 +87,20 @@ namespace glz
             using Element = glaze_tuple_element<I, N, T>;
             constexpr sv key = key_name<I, T, Element::use_reflection>;
 
-            std::printf("  %d -- %.*s\n", uint32_t(I + 1), int(key.size()), key.data());
+            std::printf("  %d   %.*s\n", uint32_t(I + 1), int(key.size()), key.data());
          });
-         std::printf("  %d -- Exit Menu\n", uint32_t(N + 1));
-         std::printf("================================\n");
+         std::printf("  %d   Exit Menu\n", uint32_t(N + 1));
+         std::printf("--------------------------------\n");
 
          std::printf("cmd> ");
-         std::cin >> cmd;
-         execute_menu_item(cmd);
+         if (std::scanf("%d", &cmd) == 1) {
+            execute_menu_item(cmd);
+         }
+         else {
+            std::fprintf(stderr, "Invalid input. Please enter an integer.\n");
+            while (std::getchar() != '\n')
+               ; // clear the input buffer
+         }
       }
    }
 }
