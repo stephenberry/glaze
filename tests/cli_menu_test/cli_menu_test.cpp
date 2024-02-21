@@ -25,9 +25,9 @@ void run_menu()
 
 struct more_functions
 {
-   std::function<void()> one = [] { std::printf("one\n"); };
+   std::function<std::string()> one = [] { return "one\n"; };
    std::function<void()> two = [] { std::printf("two\n"); };
-   std::function<void()> three = [] { std::printf("three\n"); };
+   std::function<std::string_view()> three = [] { return "three\n"; };
 };
 
 struct my_nested_menu
