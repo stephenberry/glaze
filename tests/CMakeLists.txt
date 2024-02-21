@@ -31,8 +31,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     endif()
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-      target_compile_options(glz_test_common INTERFACE -fsanitize=address)
-      target_link_options(glz_test_common INTERFACE -fsanitize=address)
+      target_compile_options(glz_test_common INTERFACE -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined)
+      target_link_options(glz_test_common INTERFACE -lasan -lubsan)
     endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test_common INTERFACE /GR- /bigobj) #/fsanitize=address
@@ -51,8 +51,8 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     endif()
 
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-      target_compile_options(glz_test23_common INTERFACE -fsanitize=address)
-      target_link_options(glz_test23_common INTERFACE -fsanitize=address)
+      target_compile_options(glz_test23_common INTERFACE -fsanitize=address -fsanitize-address-use-after-scope -fsanitize=undefined)
+      target_link_options(glz_test23_common INTERFACE -lasan -lubsan)
     endif()
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(glz_test23_common INTERFACE /GR- /bigobj) #/fsanitize=address
