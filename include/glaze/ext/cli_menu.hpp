@@ -72,32 +72,25 @@ namespace glz
                      if constexpr (reflectable<T>) {
                         using Func = decltype(std::get<I>(t));
                         using R = std::invoke_result_t<Func>;
-                        if constexpr (std::is_convertible_v<R, sv>) {
-                           const auto result = std::get<I>(t)();
-                           std::printf("%.*s", int(result.size()), result.data());
-                        }
-                        else if constexpr (std::same_as<R, void>) {
+                        if constexpr (std::same_as<R, void>) {
                            std::get<I>(t)();
                         }
                         else {
-                           static_assert(false_v<R>,
-                                         "Function return must be convertible to a std::string_view or be void");
+                           const auto result = glz::write_json(std::get<I>(t)());
+                           std::printf("%.*s\n", int(result.size()), result.data());
                         }
                      }
                      else {
                         decltype(auto) func = get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
                         using Func = decltype(func);
                         using R = std::invoke_result_t<Func>;
-                        if constexpr (std::is_convertible_v<R, sv>) {
-                           const auto result = func();
-                           std::printf("%.*s", int(result.size()), result.data());
-                        }
-                        else if constexpr (std::same_as<R, void>) {
+                        
+                        if constexpr (std::same_as<R, void>) {
                            func();
                         }
                         else {
-                           static_assert(false_v<R>,
-                                         "Function return must be convertible to a std::string_view or be void");
+                           const auto result = glz::write_json(func());
+                           std::printf("%.*s\n", int(result.size()), result.data());
                         }
                      }
                   }

@@ -13,7 +13,7 @@ template <>
 struct glz::meta<my_functions>
 {
    using T = my_functions;
-   static constexpr auto value = object(&T::hello, &T::world);
+   static constexpr auto value = object("hi", &T::hello, &T::world);
 };
 
 void run_menu()
@@ -24,9 +24,9 @@ void run_menu()
 
 struct more_functions
 {
-   std::function<std::string()> one = [] { return "one\n"; };
-   std::function<void()> two = [] { std::printf("two\n"); };
-   std::function<std::string_view()> three = [] { return "three\n"; };
+   std::function<std::string()> one = [] { return "one"; };
+   std::function<int()> two = [] { return 2; };
+   std::function<std::string_view()> three = [] { return "three"; };
 };
 
 struct my_nested_menu
