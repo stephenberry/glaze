@@ -1209,7 +1209,7 @@ namespace glz::detail
       using V = std::decay_t<T>;
       using Item = tuplet::tuple<>;
       using T0 = T;
-      static constexpr bool use_reflection = false;
+      static constexpr bool use_reflection = false; // for member object reflection
       static constexpr size_t member_index = 0;
       using mptr_t = T;
       using type = T;
@@ -1223,7 +1223,7 @@ namespace glz::detail
       using V = std::decay_t<T>;
       using Item = std::decay_t<decltype(glz::get<I>(meta_v<V>))>;
       using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
-      static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+      static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>; // for member object reflection
       static constexpr size_t member_index = use_reflection ? 0 : 1;
       using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
       using type = member_t<V, mptr_t>;
@@ -1234,7 +1234,7 @@ namespace glz::detail
    struct glaze_tuple_element<I, N, T>
    {
       using V = std::decay_t<T>;
-      static constexpr bool use_reflection = false;
+      static constexpr bool use_reflection = false; // for member object reflection
       static constexpr size_t member_index = 0;
       using Item = decltype(to_tuple(std::declval<T>()));
       using mptr_t = std::tuple_element_t<I, Item>;
