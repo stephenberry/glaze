@@ -248,7 +248,7 @@ namespace glz::repe
             }
             else {
                if constexpr (reflectable<T>) {
-                  using Func = decltype(std::get<I>(t));
+                  using Func = typename Element::mptr_t;
                   using Result = std::invoke_result_t<Func>;
                   
                   methods.emplace(full_key, [result = Result{}, callback = std::get<I>(t)](repe::state&& state) mutable {
