@@ -5,8 +5,8 @@
 
 struct my_functions
 {
-   std::function<void()> hello = []{ std::cout << "Hello\n"; };
-   std::function<void()> world = []{ std::cout << "World\n"; };
+   std::function<void()> hello = [] { std::cout << "Hello\n"; };
+   std::function<void()> world = [] { std::cout << "World\n"; };
 };
 
 /*template <>
@@ -25,8 +25,8 @@ void run_menu()
 
 struct more_functions
 {
-   std::function<void()> one = []{ std::cout << "one\n"; };
-   std::function<void()> two= []{ std::cout << "two\n"; };
+   std::function<void()> one = [] { std::cout << "one\n"; };
+   std::function<void()> two = [] { std::cout << "two\n"; };
 };
 
 struct my_nested_menu
@@ -44,8 +44,8 @@ void nested_menu()
 
 int main()
 {
-   //run_menu();
+   // run_menu();
    nested_menu();
-   
+
    return 0;
 }
