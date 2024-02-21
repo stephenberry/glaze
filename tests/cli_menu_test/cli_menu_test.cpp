@@ -38,9 +38,9 @@ struct my_nested_menu
 
 void nested_menu()
 {
-   my_nested_menu obj{};
+   my_nested_menu menu{};
    std::atomic<bool> show_menu = true;
-   glz::run_cli_menu(obj, show_menu);
+   glz::run_cli_menu(menu, show_menu);
 }
 
 int main()

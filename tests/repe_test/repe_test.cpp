@@ -162,14 +162,14 @@ suite structs_of_functions = [] {
          server.call(request);
       }
       
-      expect(server.response == R"([[0,0,0,"/hello",null],"Hello"])") << server.response;
+      expect(server.response == R"([[0,0,0,"/hello",null],"Hello"])");
       
       {
          auto request = repe::request_json({"/get_number"});
          server.call(request);
       }
       
-      expect(server.response == R"([[0,0,0,"/get_number",null],42])") << server.response;
+      expect(server.response == R"([[0,0,0,"/get_number",null],42])");
    };
    
    "nested_structs_of_functions"_test = [] {
@@ -184,7 +184,7 @@ suite structs_of_functions = [] {
          server.call(request);
       }
       
-      expect(server.response == R"([[0,0,0,"/menu_1/hello",null],"Hello"])") << server.response;
+      expect(server.response == R"([[0,0,0,"/menu_1/hello",null],"Hello"])");
    };
 };
 
