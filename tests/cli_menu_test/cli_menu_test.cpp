@@ -33,6 +33,8 @@ struct my_nested_menu
 {
    my_functions first_menu{};
    more_functions second_menu{};
+   std::function<int(int)> user_number = [](int x){ return x; };
+   std::function<std::string(const std::string&)> user_string = [](const auto& str){ return str; };
 };
 
 void nested_menu()

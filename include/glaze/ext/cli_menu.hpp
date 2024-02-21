@@ -69,22 +69,18 @@ namespace glz
                }
                else {
                   if (I == item_number - 1) {
-                     if constexpr (reflectable<T>) {
-                        using Func = decltype(std::get<I>(t));
-                        using R = std::invoke_result_t<Func>;
-                        if constexpr (std::same_as<R, void>) {
-                           std::get<I>(t)();
+                     decltype(auto) func = [&]{
+                        if constexpr (reflectable<T>) {
+                           return std::get<I>(t);
                         }
                         else {
-                           const auto result = glz::write_json(std::get<I>(t)());
-                           std::printf("%.*s\n", int(result.size()), result.data());
+                           return get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
                         }
-                     }
-                     else {
-                        decltype(auto) func = get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
-                        using Func = decltype(func);
+                     }();
+                     
+                     using Func = decltype(func);
+                     if constexpr (std::is_invocable_v<Func>) {
                         using R = std::invoke_result_t<Func>;
-                        
                         if constexpr (std::same_as<R, void>) {
                            func();
                         }
@@ -92,6 +88,43 @@ namespace glz
                            const auto result = glz::write_json(func());
                            std::printf("%.*s\n", int(result.size()), result.data());
                         }
+                     }
+                     else if constexpr (is_lambda_concrete<std::remove_cvref_t<Func>>) {
+                        using Tuple = lambda_args_t<std::remove_cvref_t<Func>>;
+                        constexpr auto N = std::tuple_size_v<Tuple>;
+                        static_assert(N == 1, "Only one input is allowed for your function");
+                        static thread_local std::array<char, 256> input{};
+                         std::printf("json> ");
+                         if (fgets(input.data(), input.size(), stdin))
+                         {
+                            std::string_view input_sv{input.data()};
+                            if (input_sv.back() == '\n') {
+                               input_sv = input_sv.substr(0, input_sv.size() - 1);
+                            }
+                            using Params = std::decay_t<std::tuple_element_t<0, Tuple>>;
+                            using R = std::invoke_result_t<Func, Params>;
+                            Params params{};
+                            const auto ec = glz::read_json(params, input_sv);
+                            if (ec) {
+                               const auto error = glz::format_error(ec, input_sv);
+                               std::printf("%.*s\n", int(error.size()), error.data());
+                            }
+                            else {
+                               if constexpr (std::same_as<R, void>) {
+                                  func(params);
+                               }
+                               else {
+                                  const auto result = glz::write_json(func(params));
+                                  std::printf("%.*s\n", int(result.size()), result.data());
+                               }
+                            }
+                         }
+                         else {
+                            std::fprintf(stderr, "Invalid input.\n");
+                         }
+                     }
+                     else {
+                        static_assert(false_v<Func>, "Your function is not invocable or not concrete");
                      }
                   }
                }
