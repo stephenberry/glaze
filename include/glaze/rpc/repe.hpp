@@ -201,7 +201,9 @@ namespace glz::repe
 
       error_t error{};
       
-      template <class T>
+      static constexpr std::string_view default_parent = "";
+      
+      template <class T, const std::string_view& parent = default_parent>
          requires (glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
       void on(T& value)
       {
@@ -225,19 +227,31 @@ namespace glz::repe
          }();
          
          for_each<N>([&](auto I) {
-            using Element = glaze_tuple_element<I, N, T>;
-            constexpr sv key = key_name<I, T, Element::use_reflection>;
+            using Element = glaze_tuple_element<I, N, T>;            
+            static constexpr std::string_view full_key = [&]{
+               if constexpr (parent == "") {
+                  return join_v<chars<"/">, key_name<I, T, Element::use_reflection>>;
+               }
+               else {
+                  return join_v<parent, chars<"/">, key_name<I, T, Element::use_reflection>>;
+               }
+            }();
             
             using E = typename Element::type;
             if constexpr (glaze_object_t<E> || reflectable<E>) {
-               // TODO: nested functions
+               if constexpr (reflectable<T>) {
+                  on<std::decay_t<E>, full_key>(std::get<I>(t));
+               }
+               else {
+                  
+               }
             }
             else {
                if constexpr (reflectable<T>) {
                   using Func = decltype(std::get<I>(t));
                   using Result = std::invoke_result_t<Func>;
                   
-                  methods.emplace(key, [result = Result{}, callback = std::get<I>(t)](repe::state&& state) mutable {
+                  methods.emplace(full_key, [result = Result{}, callback = std::get<I>(t)](repe::state&& state) mutable {
                      result = callback();
                      if (state.header.notification) {
                         return;

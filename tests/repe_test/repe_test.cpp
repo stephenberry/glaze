@@ -144,6 +144,11 @@ struct my_functions
    std::function<int()> get_number = [] { return 42; };
 };
 
+struct my_nested_functions
+{
+   my_functions menu_1{};
+};
+
 suite structs_of_functions = [] {
    "structs_of_functions"_test = [] {
       repe::server server{};
@@ -153,18 +158,33 @@ suite structs_of_functions = [] {
       server.on(obj);
       
       {
-         auto request = repe::request_json({"hello"});
+         auto request = repe::request_json({"/hello"});
          server.call(request);
       }
       
-      expect(server.response == R"([[0,0,0,"hello",null],"Hello"])");
+      expect(server.response == R"([[0,0,0,"/hello",null],"Hello"])") << server.response;
       
       {
-         auto request = repe::request_json({"get_number"});
+         auto request = repe::request_json({"/get_number"});
          server.call(request);
       }
       
-      expect(server.response == R"([[0,0,0,"get_number",null],42])");
+      expect(server.response == R"([[0,0,0,"/get_number",null],42])") << server.response;
+   };
+   
+   "nested_structs_of_functions"_test = [] {
+      repe::server server{};
+      
+      my_nested_functions obj{};
+      
+      server.on(obj);
+      
+      {
+         auto request = repe::request_json({"/menu_1/hello"});
+         server.call(request);
+      }
+      
+      expect(server.response == R"([[0,0,0,"/menu_1/hello",null],"Hello"])") << server.response;
    };
 };
 

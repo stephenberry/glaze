@@ -1286,7 +1286,7 @@ namespace glz::detail
    };
 
    template <size_t I, class T, bool use_reflection>
-   constexpr auto key_name = [] {
+   static constexpr auto key_name = [] {
       if constexpr (reflectable<T>) {
          return get<I>(member_names<T>);
       }
