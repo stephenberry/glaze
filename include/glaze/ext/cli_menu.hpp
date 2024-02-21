@@ -35,9 +35,7 @@ namespace glz
          }
       }();
 
-      int32_t cmd = -1;
-
-      auto execute_menu_item = [&](const int32_t item_number) {
+      auto execute_menu_item = [&](const auto item_number) {
          if (item_number == N + 1) {
             show_menu = false;
             return;
@@ -52,7 +50,7 @@ namespace glz
             }
          }();
 
-         if (item_number > 0 && item_number <= int32_t(N)) {
+         if (item_number > 0 && item_number <= long(N)) {
             for_each<N>([&](auto I) {
                using Element = glaze_tuple_element<I, N, T>;
 
@@ -108,11 +106,9 @@ namespace glz
          }
          else {
             std::fprintf(stderr, "Invalid menu item.\n");
-            while (std::getchar() != '\n') {
-            }; // clear the input buffer
          }
       };
-
+      
       while (show_menu) {
          std::printf("================================\n");
          for_each<N>([&](auto I) {
@@ -125,14 +121,22 @@ namespace glz
          std::printf("--------------------------------\n");
 
          std::printf("cmd> ");
-         if (std::scanf("%d", &cmd) == 1) {
-            execute_menu_item(cmd);
+         // https://web.archive.org/web/20201112034702/http://sekrit.de/webdocs/c/beginners-guide-away-from-scanf.html
+         long cmd = -1;
+         char buf[128];
+         if (fgets(buf, 1024, stdin)) {
+           char *endptr;
+
+           errno = 0; // reset error number
+           cmd = strtol(buf, &endptr, 10);
+           if ((errno != ERANGE) && (endptr != buf) && (*endptr == '\0' || *endptr == '\n'))
+           {
+              execute_menu_item(cmd);
+              continue;
+           }
          }
-         else {
-            std::fprintf(stderr, "Invalid input. Please enter an integer.\n");
-            while (std::getchar() != '\n') {
-            }; // clear the input buffer
-         }
+         
+         std::fprintf(stderr, "Invalid input.\n");
       }
    }
 }
