@@ -8,8 +8,8 @@
 #include "glaze/rpc/repe.hpp"
 
 #include "boost/ut.hpp"
-#include "glaze/glaze.hpp"
 #include "glaze/ext/cli_menu.hpp"
+#include "glaze/glaze.hpp"
 
 using namespace boost::ut;
 
@@ -152,38 +152,38 @@ struct my_nested_functions
 suite structs_of_functions = [] {
    "structs_of_functions"_test = [] {
       repe::server server{};
-      
+
       my_functions obj{};
-      
+
       server.on(obj);
-      
+
       {
          auto request = repe::request_json({"/hello"});
          server.call(request);
       }
-      
+
       expect(server.response == R"([[0,0,0,"/hello",null],"Hello"])");
-      
+
       {
          auto request = repe::request_json({"/get_number"});
          server.call(request);
       }
-      
+
       expect(server.response == R"([[0,0,0,"/get_number",null],42])");
    };
-   
+
    "nested_structs_of_functions"_test = [] {
       repe::server server{};
-      
+
       my_nested_functions obj{};
-      
+
       server.on(obj);
-      
+
       {
          auto request = repe::request_json({"/menu_1/hello"});
          server.call(request);
       }
-      
+
       expect(server.response == R"([[0,0,0,"/menu_1/hello",null],"Hello"])");
    };
 };

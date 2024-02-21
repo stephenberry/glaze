@@ -200,11 +200,11 @@ namespace glz::repe
       std::string response;
 
       error_t error{};
-      
+
       static constexpr std::string_view default_parent = "";
-      
+
       template <class T, const std::string_view& parent = default_parent>
-         requires (glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
+         requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
       void on(T& value)
       {
          using namespace glz::detail;
@@ -216,7 +216,7 @@ namespace glz::repe
                return std::tuple_size_v<meta_t<T>>;
             }
          }();
-         
+
          [[maybe_unused]] decltype(auto) t = [&] {
             if constexpr (reflectable<T>) {
                return to_tuple(value);
@@ -225,10 +225,10 @@ namespace glz::repe
                return nullptr;
             }
          }();
-         
+
          for_each<N>([&](auto I) {
-            using Element = glaze_tuple_element<I, N, T>;            
-            static constexpr std::string_view full_key = [&]{
+            using Element = glaze_tuple_element<I, N, T>;
+            static constexpr std::string_view full_key = [&] {
                if constexpr (parent == "") {
                   return join_v<chars<"/">, key_name<I, T, Element::use_reflection>>;
                }
@@ -236,31 +236,30 @@ namespace glz::repe
                   return join_v<parent, chars<"/">, key_name<I, T, Element::use_reflection>>;
                }
             }();
-            
+
             using E = typename Element::type;
             if constexpr (glaze_object_t<E> || reflectable<E>) {
                if constexpr (reflectable<T>) {
                   on<std::decay_t<E>, full_key>(std::get<I>(t));
                }
                else {
-                  
                }
             }
             else {
                if constexpr (reflectable<T>) {
                   using Func = typename Element::mptr_t;
                   using Result = std::invoke_result_t<Func>;
-                  
-                  methods.emplace(full_key, [result = Result{}, callback = std::get<I>(t)](repe::state&& state) mutable {
-                     result = callback();
-                     if (state.header.notification) {
-                        return;
-                     }
-                     write_response<Opts>(result, state);
-                  });
+
+                  methods.emplace(full_key,
+                                  [result = Result{}, callback = std::get<I>(t)](repe::state&& state) mutable {
+                                     result = callback();
+                                     if (state.header.notification) {
+                                        return;
+                                     }
+                                     write_response<Opts>(result, state);
+                                  });
                }
                else {
-                  
                }
             }
          });
@@ -428,11 +427,8 @@ namespace glz::repe
    {
       return glz::write<Opts>(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
    }
-   
-   inline auto request_json(const header& header)
-   {
-      return glz::write_json(std::forward_as_tuple(header, nullptr));
-   }
+
+   inline auto request_json(const header& header) { return glz::write_json(std::forward_as_tuple(header, nullptr)); }
 
    template <class Value>
    inline auto request_json(const header& header, Value&& value)

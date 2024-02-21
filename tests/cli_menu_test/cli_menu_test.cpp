@@ -19,10 +19,8 @@ struct glz::meta<my_functions>
 struct four_t
 {
    four_t(glz::make_reflectable) {} // required for reflection since this struct has no members
-   
-   std::pair<std::string, int> operator()() {
-      return {"four", 4};
-   }
+
+   std::pair<std::string, int> operator()() { return {"four", 4}; }
 };
 
 struct more_functions
@@ -36,8 +34,9 @@ struct more_functions
 struct a_special_function
 {
    a_special_function(glz::make_reflectable) {}
-   
-   glz::raw_json operator()(const std::tuple<int, bool>& in) {
+
+   glz::raw_json operator()(const std::tuple<int, bool>& in)
+   {
       return std::to_string(std::get<0>(in)) + " | " + std::to_string(std::get<1>(in));
    }
 };
@@ -46,8 +45,8 @@ struct my_nested_menu
 {
    my_functions first_menu{};
    more_functions second_menu{};
-   std::function<int(int)> user_number = [](int x){ return x; };
-   std::function<std::string(const std::string&)> user_string = [](const auto& str){ return str; };
+   std::function<int(int)> user_number = [](int x) { return x; };
+   std::function<std::string(const std::string&)> user_string = [](const auto& str) { return str; };
    a_special_function special{};
 };
 

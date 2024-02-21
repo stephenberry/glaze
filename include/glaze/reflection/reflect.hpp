@@ -3,18 +3,18 @@
 
 #pragma once
 
+#include <initializer_list>
+
 #include "glaze/core/common.hpp"
 #include "glaze/reflection/get_name.hpp"
 #include "glaze/reflection/to_tuple.hpp"
-
-#include <initializer_list>
 
 namespace glz
 {
    // If you want to make an empty struct reflectable, add this constructor:
    // my_struct(glz::make_reflectable) {}
    using make_reflectable = std::initializer_list<bool>;
-   
+
    namespace detail
    {
       template <class Tuple>
