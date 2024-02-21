@@ -15,9 +15,11 @@ namespace glz
 {
    template <typename T>
    concept boolean_like = requires(T t) {
-       { t } -> std::convertible_to<bool>;
+      {
+         t
+      } -> std::convertible_to<bool>;
    };
-   
+
    template <class T, boolean_like Bool>
       requires(detail::glaze_object_t<T> || detail::reflectable<T>)
    inline void run_cli_menu(T& value, Bool& show_menu)
@@ -70,7 +72,7 @@ namespace glz
                else {
                   if (I == item_number - 1) {
                      if constexpr (reflectable<T>) {
-                        using Func =  decltype(std::get<I>(t));
+                        using Func = decltype(std::get<I>(t));
                         using R = std::invoke_result_t<Func>;
                         if constexpr (std::is_convertible_v<R, sv>) {
                            const auto result = std::get<I>(t)();
@@ -80,7 +82,8 @@ namespace glz
                            std::get<I>(t)();
                         }
                         else {
-                           static_assert(false_v<R>, "Function return must be convertible to a std::string_view or be void");
+                           static_assert(false_v<R>,
+                                         "Function return must be convertible to a std::string_view or be void");
                         }
                      }
                      else {
@@ -95,7 +98,8 @@ namespace glz
                            func();
                         }
                         else {
-                           static_assert(false_v<R>, "Function return must be convertible to a std::string_view or be void");
+                           static_assert(false_v<R>,
+                                         "Function return must be convertible to a std::string_view or be void");
                         }
                      }
                   }
@@ -104,7 +108,8 @@ namespace glz
          }
          else {
             std::fprintf(stderr, "Invalid menu item.\n");
-            while (std::getchar() != '\n') {}; // clear the input buffer
+            while (std::getchar() != '\n') {
+            }; // clear the input buffer
          }
       };
 
@@ -125,7 +130,8 @@ namespace glz
          }
          else {
             std::fprintf(stderr, "Invalid input. Please enter an integer.\n");
-            while (std::getchar() != '\n') {}; // clear the input buffer
+            while (std::getchar() != '\n') {
+            }; // clear the input buffer
          }
       }
    }
