@@ -16,17 +16,30 @@ struct glz::meta<my_functions>
    static constexpr auto value = object("hi", &T::hello, &T::world);
 };
 
-void run_menu()
+struct four_t
 {
-   my_functions obj{};
-   glz::run_cli_menu(obj);
-}
+   four_t(glz::make_reflectable) {} // required for reflection since this struct has no members
+   
+   std::pair<std::string, int> operator()() {
+      return {"four", 4};
+   }
+};
 
 struct more_functions
 {
    std::function<std::string()> one = [] { return "one"; };
    std::function<int()> two = [] { return 2; };
    std::function<std::string_view()> three = [] { return "three"; };
+   four_t four{};
+};
+
+struct a_special_function
+{
+   a_special_function(glz::make_reflectable) {}
+   
+   glz::raw_json operator()(const std::tuple<int, bool>& in) {
+      return std::to_string(std::get<0>(in)) + " | " + std::to_string(std::get<1>(in));
+   }
 };
 
 struct my_nested_menu
@@ -35,6 +48,7 @@ struct my_nested_menu
    more_functions second_menu{};
    std::function<int(int)> user_number = [](int x){ return x; };
    std::function<std::string(const std::string&)> user_string = [](const auto& str){ return str; };
+   a_special_function special{};
 };
 
 void nested_menu()
@@ -45,7 +59,6 @@ void nested_menu()
 
 int main()
 {
-   // run_menu();
    nested_menu();
 
    return 0;
