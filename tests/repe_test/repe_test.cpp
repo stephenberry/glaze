@@ -9,6 +9,7 @@
 
 #include "boost/ut.hpp"
 #include "glaze/glaze.hpp"
+#include "glaze/ext/cli_menu.hpp"
 
 using namespace boost::ut;
 
@@ -133,6 +134,57 @@ suite repe_tests = [] {
       expect(server.response ==
              R"([[0,0,0,"modify",null],{"hello":"a, 5, 3.140000, W","world":"this is a neat place"}])")
          << server.response;
+   };
+};
+
+struct my_functions
+{
+   std::function<std::string_view()> hello = []() -> std::string_view { return "Hello"; };
+   std::function<std::string_view()> world = []() -> std::string_view { return "World"; };
+   std::function<int()> get_number = [] { return 42; };
+};
+
+struct my_nested_functions
+{
+   my_functions menu_1{};
+};
+
+suite structs_of_functions = [] {
+   "structs_of_functions"_test = [] {
+      repe::server server{};
+      
+      my_functions obj{};
+      
+      server.on(obj);
+      
+      {
+         auto request = repe::request_json({"/hello"});
+         server.call(request);
+      }
+      
+      expect(server.response == R"([[0,0,0,"/hello",null],"Hello"])");
+      
+      {
+         auto request = repe::request_json({"/get_number"});
+         server.call(request);
+      }
+      
+      expect(server.response == R"([[0,0,0,"/get_number",null],42])");
+   };
+   
+   "nested_structs_of_functions"_test = [] {
+      repe::server server{};
+      
+      my_nested_functions obj{};
+      
+      server.on(obj);
+      
+      {
+         auto request = repe::request_json({"/menu_1/hello"});
+         server.call(request);
+      }
+      
+      expect(server.response == R"([[0,0,0,"/menu_1/hello",null],"Hello"])");
    };
 };
 
