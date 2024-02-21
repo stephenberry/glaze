@@ -35,8 +35,6 @@ namespace glz
          }
       }();
 
-      int32_t cmd = -1;
-
       auto execute_menu_item = [&](const int32_t item_number) {
          if (item_number == N + 1) {
             show_menu = false;
@@ -112,7 +110,7 @@ namespace glz
             }; // clear the input buffer
          }
       };
-
+      
       while (show_menu) {
          std::printf("================================\n");
          for_each<N>([&](auto I) {
@@ -125,6 +123,7 @@ namespace glz
          std::printf("--------------------------------\n");
 
          std::printf("cmd> ");
+         int32_t cmd = -1;
          if (std::scanf("%d", &cmd) == 1) {
             execute_menu_item(cmd);
          }
