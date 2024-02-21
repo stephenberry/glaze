@@ -200,6 +200,57 @@ namespace glz::repe
       std::string response;
 
       error_t error{};
+      
+      template <class T>
+         requires (glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
+      void on(T& value)
+      {
+         using namespace glz::detail;
+         static constexpr auto N = [] {
+            if constexpr (reflectable<T>) {
+               return count_members<T>;
+            }
+            else {
+               return std::tuple_size_v<meta_t<T>>;
+            }
+         }();
+         
+         [[maybe_unused]] decltype(auto) t = [&] {
+            if constexpr (reflectable<T>) {
+               return to_tuple(value);
+            }
+            else {
+               return nullptr;
+            }
+         }();
+         
+         for_each<N>([&](auto I) {
+            using Element = glaze_tuple_element<I, N, T>;
+            constexpr sv key = key_name<I, T, Element::use_reflection>;
+            
+            using E = typename Element::type;
+            if constexpr (glaze_object_t<E> || reflectable<E>) {
+               // TODO: nested functions
+            }
+            else {
+               if constexpr (reflectable<T>) {
+                  using Func = decltype(std::get<I>(t));
+                  using Result = std::invoke_result_t<Func>;
+                  
+                  methods.emplace(key, [result = Result{}, callback = std::get<I>(t)](repe::state&& state) mutable {
+                     result = callback();
+                     if (state.header.notification) {
+                        return;
+                     }
+                     write_response<Opts>(result, state);
+                  });
+               }
+               else {
+                  
+               }
+            }
+         });
+      }
 
       template <class Callback>
       void on(const sv name, Callback&& callback)
@@ -211,7 +262,7 @@ namespace glz::repe
             using Params = std::decay_t<std::tuple_element_t<0, Tuple>>;
             using Result = std::decay_t<std::tuple_element_t<1, Tuple>>;
 
-            methods.emplace(name, [this, params = Params{}, result = Result{}, callback](auto&& state) mutable {
+            methods.emplace(name, [this, params = Params{}, result = Result{}, callback](repe::state&& state) mutable {
                // no need to lock locals
                if (read_params<Opts>(params, state, response) == 0) {
                   return;
@@ -232,7 +283,7 @@ namespace glz::repe
       void on(const sv name, Params&& params, Result&& result, Callback&& callback)
       {
          if constexpr (lvalue<Params> && lvalue<Result>) {
-            methods.emplace(name, procedure{[this, &params, &result, callback](auto&& state) {
+            methods.emplace(name, procedure{[this, &params, &result, callback](repe::state&& state) {
                                // we must lock access to params and result as multiple clients might need to manipulate
                                // them
                                std::unique_lock lock{get_shared_mutex()};
@@ -247,7 +298,7 @@ namespace glz::repe
                             }});
          }
          else if constexpr (lvalue<Params> && !lvalue<Result>) {
-            methods.emplace(name, [this, &params, result, callback](auto&& state) mutable {
+            methods.emplace(name, [this, &params, result, callback](repe::state&& state) mutable {
                {
                   std::unique_lock lock{get_shared_mutex()};
                   if (read_params<Opts>(params, state, response) == 0) {
@@ -263,7 +314,7 @@ namespace glz::repe
             });
          }
          else if constexpr (!lvalue<Params> && lvalue<Result>) {
-            methods.emplace(name, [this, params, &result, callback](auto&& state) mutable {
+            methods.emplace(name, [this, params, &result, callback](repe::state&& state) mutable {
                // no need to lock locals
                if (read_params<Opts>(params, state, response) == 0) {
                   return;
@@ -277,7 +328,7 @@ namespace glz::repe
             });
          }
          else if constexpr (!lvalue<Params> && !lvalue<Result>) {
-            methods.emplace(name, [this, params, result, callback](auto&& state) mutable {
+            methods.emplace(name, [this, params, result, callback](repe::state&& state) mutable {
                // no need to lock locals
                if (read_params<Opts>(params, state, response) == 0) {
                   return;
@@ -362,6 +413,11 @@ namespace glz::repe
    inline auto request(const header& header, Value&& value, auto& buffer)
    {
       return glz::write<Opts>(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
+   }
+   
+   inline auto request_json(const header& header)
+   {
+      return glz::write_json(std::forward_as_tuple(header, nullptr));
    }
 
    template <class Value>
