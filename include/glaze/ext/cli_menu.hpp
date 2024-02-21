@@ -138,4 +138,11 @@ namespace glz
          std::fprintf(stderr, "Invalid input.\n");
       }
    }
+   
+   template <class T>
+      requires(detail::glaze_object_t<T> || detail::reflectable<T>)
+   inline void run_cli_menu(T& value) {
+      std::atomic<bool> menu_boolean = true;
+      run_cli_menu(value, menu_boolean);
+   }
 }

@@ -19,8 +19,7 @@ struct glz::meta<my_functions>
 void run_menu()
 {
    my_functions obj{};
-   std::atomic<bool> show_menu = true;
-   glz::run_cli_menu(obj, show_menu);
+   glz::run_cli_menu(obj);
 }
 
 struct more_functions
@@ -39,8 +38,7 @@ struct my_nested_menu
 void nested_menu()
 {
    my_nested_menu menu{};
-   std::atomic<bool> show_menu = true;
-   glz::run_cli_menu(menu, show_menu);
+   glz::run_cli_menu(menu);
 }
 
 int main()
