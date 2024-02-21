@@ -108,7 +108,7 @@ namespace glz
             std::fprintf(stderr, "Invalid menu item.\n");
          }
       };
-      
+
       while (show_menu) {
          std::printf("================================\n");
          for_each<N>([&](auto I) {
@@ -125,17 +125,16 @@ namespace glz
          long cmd = -1;
          char buf[128];
          if (fgets(buf, 1024, stdin)) {
-           char *endptr;
+            char* endptr;
 
-           errno = 0; // reset error number
-           cmd = strtol(buf, &endptr, 10);
-           if ((errno != ERANGE) && (endptr != buf) && (*endptr == '\0' || *endptr == '\n'))
-           {
-              execute_menu_item(cmd);
-              continue;
-           }
+            errno = 0; // reset error number
+            cmd = strtol(buf, &endptr, 10);
+            if ((errno != ERANGE) && (endptr != buf) && (*endptr == '\0' || *endptr == '\n')) {
+               execute_menu_item(cmd);
+               continue;
+            }
          }
-         
+
          std::fprintf(stderr, "Invalid input.\n");
       }
    }
