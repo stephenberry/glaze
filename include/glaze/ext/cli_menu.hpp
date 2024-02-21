@@ -121,6 +121,7 @@ namespace glz
          std::printf("--------------------------------\n");
 
          std::printf("cmd> ");
+         // https://web.archive.org/web/20201112034702/http://sekrit.de/webdocs/c/beginners-guide-away-from-scanf.html
          long cmd = -1;
          char buf[128];
          if (fgets(buf, 1024, stdin)) {
