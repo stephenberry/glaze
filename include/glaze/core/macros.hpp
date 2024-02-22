@@ -16,6 +16,7 @@
 #define GLZ_META(C, ...) \
    static_assert(false, "GLZ_META macro has been removed with the addition of member object and pure reflection")
 
-#define GLZ_LOCAL_META(C, ...)                                                                               \
-   static_assert(false, "GLZ_LOCAL_META macro has been removed with the addition of member object and pure " \
-                        "reflection")
+#define GLZ_LOCAL_META(C, ...)                                                                        \
+   static_assert(false,                                                                               \
+                 "GLZ_LOCAL_META macro has been removed with the addition of member object and pure " \
+                 "reflection")
