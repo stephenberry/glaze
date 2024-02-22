@@ -9,9 +9,6 @@ namespace glz
 {
    using sv = std::string_view;
 
-   template <class T>
-   concept sv_convertible = std::convertible_to<std::decay_t<T>, std::string_view>;
-
    struct comment final
    {
       std::string_view value{};
