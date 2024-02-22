@@ -37,24 +37,3 @@
 #include "glaze/file/file_ops.hpp"
 #include "glaze/json.hpp"
 #include "glaze/record/recorder.hpp"
-
-namespace glz
-{
-   template <class T>
-   [[deprecated(
-      "Use specific read_file_json, etc. This old version was a bad design and would instatiate all "
-      "formats")]] inline parse_error
-   read_file(T&, const sv, auto&&) noexcept
-   {
-      return {};
-   }
-
-   template <class T>
-   [[deprecated(
-      "Use specific write_file_json, etc. This old version was a bad design and would instatiate all "
-      "formats")]] [[nodiscard]] inline write_error
-   write_file(T&, const sv, auto&&) noexcept
-   {
-      return {};
-   }
-}
