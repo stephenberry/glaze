@@ -60,6 +60,6 @@ namespace glz
    template <size_t N, class Func>
    constexpr auto for_each_ex(Func&& f)
    {
-      return indexer<N>()([&](auto&&... i) { (std::forward<Func>(f)(i), ...); });
+      return indexer_ex<N>()([&](auto&&... i) { (std::forward<Func>(f)(i), ...); });
    }
 }
