@@ -1,10 +1,8 @@
 #pragma once
 
 #include <deque>
-#include <map>
 #include <string>
 #include <variant>
-#include <vector>
 
 #include "glaze/core/common.hpp"
 #include "glaze/csv.hpp" // TODO: split out recorder specializations so this isn't necessary
