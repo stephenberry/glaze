@@ -61,7 +61,7 @@ namespace glz
                using Element = glaze_tuple_element<I, N, T>;
 
                using E = typename Element::type;
-               
+
                if (I == item_number - 1) {
                   decltype(auto) func = [&] {
                      if constexpr (reflectable<T>) {
