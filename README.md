@@ -786,6 +786,8 @@ glz::read_ndjson(x, s);
 
 ### [Data Recorder](./docs/recorder.md)
 
+### [Command Line Interface Menu](./docs/cli-menu.md)
+
 ### [JSON Include System](./docs/json-include.md)
 
 ### [JSON Pointer Syntax](./docs/json-pointer-syntax.md)

@@ -1,8 +1,10 @@
-// Glaze Library
-// For the license information refer to glaze.hpp
+# Command Line Interface (CLI) Menu
 
-#include "glaze/ext/cli_menu.hpp"
+Glaze makes it easy to generate command line interface menus from nested structs. Make structs of callable and combine them to build your menu hierarchy. The command names will be reflected from the function names or use a `glz::meta` that you provide.
 
+## Example
+
+```c++
 struct my_functions
 {
    std::function<void()> hello = [] { std::printf("Hello\n"); };
@@ -55,10 +57,19 @@ void nested_menu()
    my_nested_menu menu{};
    glz::run_cli_menu(menu); // show the command line interface menu
 }
+```
 
-int main()
-{
-   nested_menu();
+The top menu when printed to console will look like:
 
-   return 0;
-}
+```
+================================
+  1   first_menu
+  2   second_menu
+  3   user_number
+  4   user_string
+  5   special
+  6   Exit Menu
+--------------------------------
+cmd> 
+```
+
