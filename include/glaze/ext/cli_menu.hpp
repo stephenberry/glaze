@@ -26,7 +26,7 @@ namespace glz
       bool hide_non_invocable = true; // hides non-invocable members from the menu
    };
 
-   template <cli_menu_opts Opts, class T>
+   template <cli_menu_opts Opts = cli_menu_opts{}, class T>
       requires(detail::glaze_object_t<T> || detail::reflectable<T>)
    inline void run_cli_menu(T& value, cli_menu_boolean auto& show_menu)
    {
@@ -205,7 +205,7 @@ namespace glz
       }
    }
 
-   template <auto Opts = cli_menu_opts{}, class T>
+   template <cli_menu_opts Opts = cli_menu_opts{}, class T>
       requires(detail::glaze_object_t<T> || detail::reflectable<T>)
    inline void run_cli_menu(T& value)
    {
