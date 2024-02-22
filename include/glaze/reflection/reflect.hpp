@@ -12,8 +12,9 @@
 namespace glz
 {
    // Use a dummy struct for make_reflectable so that we don't conflict with any user defined constructors
-   struct dummy final {};
-   
+   struct dummy final
+   {};
+
    // If you want to make an empty struct or a struct with constructors visible in reflected structs,
    // add the folllwing constructor to your type:
    // my_struct(glz::make_reflectable) {}
