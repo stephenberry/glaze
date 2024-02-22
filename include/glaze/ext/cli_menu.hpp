@@ -20,7 +20,7 @@ namespace glz
          t
       } -> std::convertible_to<bool>;
    };
-   
+
    struct cli_menu_opts
    {
       bool hide_non_invocable = true; // hides non-invocable members from the menu
@@ -129,7 +129,6 @@ namespace glz
                         }
                      }
                      else if constexpr (Opts.hide_non_invocable) {
-                        
                      }
                      else {
                         static_assert(false_v<Func>, "Your function is not invocable or not concrete");
@@ -162,7 +161,7 @@ namespace glz
                      return nullptr;
                   }
                }();
-               
+
                decltype(auto) func = [&] {
                   if constexpr (reflectable<T>) {
                      return std::get<I>(t);
@@ -171,7 +170,7 @@ namespace glz
                      return get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
                   }
                }();
-               
+
                using Func = decltype(func);
                if constexpr (std::is_invocable_v<Func>) {
                   std::printf("  %d   %.*s\n", uint32_t(I + 1), int(key.size()), key.data());
