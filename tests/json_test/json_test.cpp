@@ -5788,15 +5788,17 @@ suite manage_test = [] {
 };
 
 struct varx
-{   
-   struct glaze {
+{
+   struct glaze
+   {
       static constexpr std::string_view name = "varx";
       static constexpr auto value = glz::object();
    };
 };
 struct vary
 {
-   struct glaze {
+   struct glaze
+   {
       static constexpr std::string_view name = "vary";
       static constexpr auto value = glz::object();
    };
