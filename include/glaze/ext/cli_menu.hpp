@@ -148,10 +148,10 @@ namespace glz
          std::printf("cmd> ");
          // https://web.archive.org/web/20201112034702/http://sekrit.de/webdocs/c/beginners-guide-away-from-scanf.html
          long cmd = -1;
-         char buf[128];
-         if (fgets(buf, 1024, stdin)) {
+         constexpr auto buffer_length = 64; // only needed to parse numbers
+         char buf[buffer_length];
+         if (fgets(buf, buffer_length, stdin)) {
             char* endptr;
-
             errno = 0; // reset error number
             cmd = strtol(buf, &endptr, 10);
             if ((errno != ERANGE) && (endptr != buf) && (*endptr == '\0' || *endptr == '\n')) {
