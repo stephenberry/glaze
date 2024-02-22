@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include <cstddef>
 #include <algorithm>
+#include <cstddef>
 #include <variant>
 
 #include "glaze/util/for_each.hpp"

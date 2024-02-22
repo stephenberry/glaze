@@ -100,7 +100,7 @@ namespace glz
             s += " ";
          }
          s += "^\n";
-         
+
          return s;
       }
    }
