@@ -44,6 +44,9 @@ namespace glz
    template <class T>
    concept custom_write = requires { meta<T>::custom_write == true; };
 
+   template <class T>
+   concept partial_read = requires { meta<T>::partial_read == true; };
+
    template <class... T>
    struct obj final
    {
@@ -291,14 +294,13 @@ namespace glz
       static constexpr std::string_view name = "raw_json";
    };
 
-   using basic =
-      std::variant<bool, char, char8_t, unsigned char, signed char, char16_t, short, unsigned short, wchar_t, char32_t,
-                   float, int, unsigned int, long, unsigned long, double, long long, unsigned long long, std::string>;
+   using basic = std::variant<bool, char, char8_t, unsigned char, signed char, short, unsigned short, float, int,
+                              unsigned int, long, unsigned long, double, long long, unsigned long long, std::string>;
 
    // Explicitly defining basic_ptr to avoid additional template instantiations
-   using basic_ptr = std::variant<bool*, char*, char8_t*, unsigned char*, signed char*, char16_t*, short*,
-                                  unsigned short*, wchar_t*, char32_t*, float*, int*, unsigned int*, long*,
-                                  unsigned long*, double*, long long*, unsigned long long*, std::string*>;
+   using basic_ptr =
+      std::variant<bool*, char*, char8_t*, unsigned char*, signed char*, short*, unsigned short*, float*, int*,
+                   unsigned int*, long*, unsigned long*, double*, long long*, unsigned long long*, std::string*>;
 
    namespace detail
    {
@@ -404,10 +406,10 @@ namespace glz
       concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>)&&range<T>);
 
       template <class T>
-      concept readable_array_t = (!custom_read<T> && array_t<T>);
+      concept readable_array_t = (!custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> && range<T>);
 
       template <class T>
-      concept writable_array_t = (!custom_write<T> && array_t<T>);
+      concept writable_array_t = (!custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> && range<T>);
 
       template <class T>
       concept emplace_backable = requires(T container) {
@@ -1156,7 +1158,8 @@ struct glz::meta<glz::error_code>
                 "unknown_distribution", glz::error_code::unknown_distribution, //
                 "invalid_distribution_elements", glz::error_code::invalid_distribution_elements, //
                 "missing_key", glz::error_code::missing_key, //
-                "hostname_failure", glz::error_code::hostname_failure //
+                "hostname_failure", glz::error_code::hostname_failure, //
+                "includer_error", glz::error_code::includer_error //
       );
 };
 
@@ -1183,9 +1186,17 @@ namespace glz
 
       const auto info = detail::get_source_info(buffer, pe.location);
       if (info) {
-         return detail::generate_error_string(error_type_str, *info);
+         auto error_str = detail::generate_error_string(error_type_str, *info);
+         if (pe.includer_error.size()) {
+            error_str += pe.includer_error;
+         }
+         return error_str;
       }
-      return std::string(error_type_str);
+      auto error_str = std::string(error_type_str);
+      if (pe.includer_error.size()) {
+         error_str += pe.includer_error;
+      }
+      return error_str;
    }
 }
 
@@ -1198,7 +1209,7 @@ namespace glz::detail
       using V = std::decay_t<T>;
       using Item = tuplet::tuple<>;
       using T0 = T;
-      static constexpr bool use_reflection = false;
+      static constexpr bool use_reflection = false; // for member object reflection
       static constexpr size_t member_index = 0;
       using mptr_t = T;
       using type = T;
@@ -1212,7 +1223,7 @@ namespace glz::detail
       using V = std::decay_t<T>;
       using Item = std::decay_t<decltype(glz::get<I>(meta_v<V>))>;
       using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
-      static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+      static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>; // for member object reflection
       static constexpr size_t member_index = use_reflection ? 0 : 1;
       using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
       using type = member_t<V, mptr_t>;
@@ -1223,7 +1234,7 @@ namespace glz::detail
    struct glaze_tuple_element<I, N, T>
    {
       using V = std::decay_t<T>;
-      static constexpr bool use_reflection = false;
+      static constexpr bool use_reflection = false; // for member object reflection
       static constexpr size_t member_index = 0;
       using Item = decltype(to_tuple(std::declval<T>()));
       using mptr_t = std::tuple_element_t<I, Item>;
@@ -1275,7 +1286,7 @@ namespace glz::detail
    };
 
    template <size_t I, class T, bool use_reflection>
-   constexpr auto key_name = [] {
+   static constexpr auto key_name = [] {
       if constexpr (reflectable<T>) {
          return get<I>(member_names<T>);
       }

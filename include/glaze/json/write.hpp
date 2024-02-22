@@ -343,13 +343,23 @@ namespace glz
                   else {
                      dump_unchecked<'"'>(b, ix);
 
-                     if constexpr (string_t<T> && !std::is_const_v<std::remove_reference_t<decltype(value)>>) {
+                     // IMPORTANT: This code breaks address sanitizers (GCC and MSVC), because they don't like
+                     // string memory being read beyond the length of the string, even if there is properly
+                     // allocated memory.
+                     // Also, this is only valid if Small String Optimization also has enough aligned memory when
+                     // parsing reserving extra space does nothing for SSO and we must rely on padded alignment, which
+                     // has always worked but is risky
+                     /*if constexpr (string_t<T> && !std::is_const_v<std::remove_reference_t<decltype(value)>>) {
                         // we know the output buffer has enough space, but we must ensure the string buffer has space
                         // for swar as well
-                        value.reserve(round_up_to_multiple<8>(n));
+                        // say a string is of length 16, then the null character sits at index 16, which means we need
+                        // another 8 bytes to read so we add one to the length to include the null character and round
+                        // this up to the nearest multiple of 8
+                        value.reserve(round_up_to_multiple<8>(n + 1));
                         serialize_string<8>(value.data(), data_ptr(b), ix);
                      }
-                     else {
+                     else*/
+                     {
                         const auto* c = str.data();
                         const auto* const e = c + n;
 
@@ -379,7 +389,7 @@ namespace glz
 
                         // Tail end of buffer. Uncommon for long strings.
                         for (; c < e; ++c) {
-                           if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) [[likely]] {
+                           if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
                               std::memcpy(data_ptr(b) + ix, &escaped, 2);
                               ix += 2;
                            }
@@ -465,36 +475,42 @@ namespace glz
          }
       }
 
+      template <opts Opts>
+      GLZ_ALWAYS_INLINE void write_array_to_json(auto&& value, is_context auto&& ctx, auto&&... args)
+      {
+         dump<'['>(args...);
+
+         if (!empty_range(value)) {
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level += Opts.indentation_width;
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            }
+
+            auto it = std::begin(value);
+            write<json>::op<Opts>(*it, ctx, args...);
+            ++it;
+            for (const auto fin = std::end(value); it != fin; ++it) {
+               write_entry_separator<Opts>(ctx, args...);
+               write<json>::op<Opts>(*it, ctx, args...);
+            }
+            if constexpr (Opts.prettify) {
+               ctx.indentation_level -= Opts.indentation_width;
+               dump<'\n'>(args...);
+               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            }
+         }
+
+         dump<']'>(args...);
+      }
+
       template <writable_array_t T>
       struct to_json<T>
       {
-         template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            dump<'['>(args...);
-
-            if (!empty_range(value)) {
-               if constexpr (Opts.prettify) {
-                  ctx.indentation_level += Opts.indentation_width;
-                  dump<'\n'>(args...);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
-               }
-
-               auto it = std::begin(value);
-               write<json>::op<Opts>(*it, ctx, args...);
-               ++it;
-               for (const auto fin = std::end(value); it != fin; ++it) {
-                  write_entry_separator<Opts>(ctx, args...);
-                  write<json>::op<Opts>(*it, ctx, args...);
-               }
-               if constexpr (Opts.prettify) {
-                  ctx.indentation_level -= Opts.indentation_width;
-                  dump<'\n'>(args...);
-                  dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
-               }
-            }
-
-            dump<']'>(args...);
+            write_array_to_json<Opts>(value, ctx, args...);
          }
       };
 
@@ -565,6 +581,14 @@ namespace glz
       struct to_json<T>
       {
          template <glz::opts Opts, class... Args>
+            requires(!Opts.concatenate)
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            write_array_to_json<Opts>(value, ctx, args...);
+         }
+
+         template <glz::opts Opts, class... Args>
+            requires(Opts.concatenate)
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if constexpr (!Opts.opening_handled) {
@@ -1085,12 +1109,20 @@ namespace glz
             [[maybe_unused]] decltype(auto) t = [&] {
                if constexpr (reflectable<T>) {
                   if constexpr (std::is_const_v<std::remove_reference_t<decltype(value)>>) {
-                     static constinit auto tuple_of_ptrs = make_const_tuple_from_struct<T>();
+#if ((defined _MSC_VER) && (!defined __clang__))
+                     static thread_local auto tuple_of_ptrs = make_const_tuple_from_struct<T>();
+#else
+                     static thread_local constinit auto tuple_of_ptrs = make_const_tuple_from_struct<T>();
+#endif
                      populate_tuple_ptr(value, tuple_of_ptrs);
                      return tuple_of_ptrs;
                   }
                   else {
-                     static constinit auto tuple_of_ptrs = make_tuple_from_struct<T>();
+#if ((defined _MSC_VER) && (!defined __clang__))
+                     static thread_local auto tuple_of_ptrs = make_tuple_from_struct<T>();
+#else
+                     static thread_local constinit auto tuple_of_ptrs = make_tuple_from_struct<T>();
+#endif
                      populate_tuple_ptr(value, tuple_of_ptrs);
                      return tuple_of_ptrs;
                   }

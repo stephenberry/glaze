@@ -93,7 +93,7 @@ namespace glz
          return iter != object.end();
       }
 
-      operator bool() const { return !std::holds_alternative<null_t>(data); }
+      explicit operator bool() const { return !std::holds_alternative<null_t>(data); }
 
       val_t* operator->() noexcept { return &data; }
 

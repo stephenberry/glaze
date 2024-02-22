@@ -20,6 +20,10 @@ namespace glz
    namespace detail
    {
       template <class F, class T>
+         requires glaze_value_t<T>
+      bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept;
+
+      template <class F, class T>
          requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
                   is_std_tuple<std::decay_t<T>>
       bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept;
@@ -100,7 +104,11 @@ namespace glz
          if constexpr (glaze_object_t<T> || reflectable<T>) {
             decltype(auto) frozen_map = [&] {
                if constexpr (reflectable<T>) {
-                  static constinit auto cmap = make_map<T>();
+#if ((defined _MSC_VER) && (!defined __clang__))
+                  static thread_local auto cmap = make_map<T>();
+#else
+                  static thread_local constinit auto cmap = make_map<T>();
+#endif
                   populate_map(value, cmap); // Function required for MSVC to build
                   return cmap;
                }
@@ -174,6 +182,18 @@ namespace glz
          }
          if (!value) return false;
          return seek_impl(std::forward<F>(func), *value, json_ptr);
+      }
+
+      template <class F, class T>
+         requires glaze_value_t<T>
+      bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
+      {
+         decltype(auto) member = get_member(value, meta_wrapper_v<std::remove_cvref_t<T>>);
+         if (json_ptr.empty()) {
+            func(member);
+            return true;
+         }
+         return seek_impl(std::forward<F>(func), member, json_ptr);
       }
    } // namespace detail
 

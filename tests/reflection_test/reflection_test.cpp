@@ -137,6 +137,16 @@ struct Thing
    std::map<std::string, int> map{{"eleven", 11}, {"twelve", 12}};
 };
 
+struct thing_wrapper
+{
+   Thing thing{};
+
+   struct glaze
+   {
+      static constexpr auto value{&thing_wrapper::thing};
+   };
+};
+
 suite user_types = [] {
    "complex user obect"_test = [] {
       Thing obj{};
@@ -186,6 +196,19 @@ suite user_types = [] {
 
       expect(out == R"("stuff")");
    };
+
+#if ((defined _MSC_VER) && (!defined __clang__))
+   // The "thing_wrapper seek" test is broken in MSVC, because MSVC has internal compiler errors for seeking
+   // glaze_value_t Uncomment this when MSVC is fixed
+#else
+   "thing_wrapper seek"_test = [] {
+      thing_wrapper obj{};
+      std::string out;
+      expect(glz::seek([&](auto& value) { glz::write_json(value, out); }, obj, "/thing_ptr/b"));
+
+      expect(out == R"("stuff")");
+   };
+#endif
 };
 
 struct single_t
@@ -448,6 +471,79 @@ suite v2_wrapper_test = [] {
       V2Wrapper obj;
       auto s = glz::write_json(obj);
       expect(s == R"({"x":{"x":0,"y":0}})") << s;
+struct port_struct
+{
+   int port{};
+};
+
+suite prefix_key_name_test = [] {
+   "prefix_key_name"_test = [] {
+      port_struct obj;
+      std::string buffer = R"({"portmanteau":14,"port":17})";
+      auto err = glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, buffer);
+      expect(!err) << glz::format_error(err, buffer);
+   };
+};
+
+struct meta_schema_t
+{
+   int x{};
+   std::string file_name{};
+   bool is_valid{};
+};
+
+template <>
+struct glz::json_schema<meta_schema_t>
+{
+   schema x{.description = "x is a special integer", .minimum = 1};
+   schema file_name{.description = "provide a file name to load"};
+   schema is_valid{.description = "for validation"};
+};
+
+static_assert(glz::detail::reflectable<glz::json_schema<meta_schema_t>>);
+static_assert(glz::detail::count_members<glz::json_schema<meta_schema_t>> == 3);
+
+struct local_schema_t
+{
+   int x{};
+   std::string file_name{};
+   bool is_valid{};
+
+   struct glaze_json_schema
+   {
+      glz::schema x{.description = "x is a special integer", .minimum = 1};
+      glz::schema file_name{.description = "provide a file name to load"};
+      glz::schema is_valid{.description = "for validation"};
+   };
+};
+
+static_assert(glz::detail::local_json_schema_t<local_schema_t>);
+
+suite meta_schema_reflection_tests = [] {
+   "meta_schema_reflection"_test = [] {
+      meta_schema_t obj;
+      std::string buffer{};
+      glz::write_json(obj, buffer);
+      expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
+
+      const auto json_schema = glz::write_json_schema<meta_schema_t>();
+      expect(
+         json_schema ==
+         R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer","minimum":1}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"]},"std::string":{"type":["string"]}}})")
+         << json_schema;
+   };
+
+   "local_schema"_test = [] {
+      local_schema_t obj;
+      std::string buffer{};
+      glz::write_json(obj, buffer);
+      expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
+
+      const auto json_schema = glz::write_json_schema<local_schema_t>();
+      expect(
+         json_schema ==
+         R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer","minimum":1}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"]},"std::string":{"type":["string"]}}})")
+         << json_schema;
    };
 };
 

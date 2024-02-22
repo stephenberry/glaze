@@ -19,7 +19,6 @@ namespace glz
    {
       GLZ_ALWAYS_INLINE void dump_type(auto&& value, auto&& b, auto&& ix) noexcept
       {
-         assert(ix <= b.size());
          constexpr auto n = sizeof(std::decay_t<decltype(value)>);
          if (ix + n > b.size()) [[unlikely]] {
             b.resize((std::max)(b.size() * 2, ix + n));
@@ -271,6 +270,28 @@ namespace glz
       };
 
       template <class T>
+         requires(std::is_enum_v<T> && !glaze_enum_t<T>)
+      struct to_binary<T> final
+      {
+         template <auto Opts, class... Args>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
+         {
+            using V = std::underlying_type_t<std::decay_t<T>>;
+
+            constexpr uint8_t type = std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+            constexpr uint8_t tag = tag::number | type | (byte_count<V> << 5);
+            dump_type(tag, args...);
+            dump_type(value, args...);
+         }
+
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void no_header(auto&& value, is_context auto&&, auto&&... args) noexcept
+         {
+            dump_type(value, args...);
+         }
+      };
+
+      template <class T>
          requires complex_t<T>
       struct to_binary<T> final
       {
@@ -309,7 +330,6 @@ namespace glz
             const auto n = value.size();
             dump_compressed_int<Opts>(n, b, ix);
 
-            assert(ix <= b.size());
             if (ix + n > b.size()) [[unlikely]] {
                b.resize((std::max)(b.size() * 2, ix + n));
             }
@@ -323,7 +343,6 @@ namespace glz
          {
             dump_compressed_int<Opts>(value.size(), b, ix);
 
-            assert(ix <= b.size());
             const auto n = value.size();
             if (ix + n > b.size()) [[unlikely]] {
                b.resize((std::max)(b.size() * 2, ix + n));
@@ -382,7 +401,6 @@ namespace glz
 
                if constexpr (contiguous<T>) {
                   auto dump_array = [&](auto&& b, auto&& ix) {
-                     assert(ix <= b.size());
                      const auto n = value.size() * sizeof(V);
                      if (ix + n > b.size()) [[unlikely]] {
                         b.resize((std::max)(b.size() * 2, ix + n));
@@ -411,7 +429,6 @@ namespace glz
                   dump_compressed_int<Opts>(x.size(), args...);
 
                   auto dump_array = [&](auto&& b, auto&& ix) {
-                     assert(ix <= b.size());
                      const auto n = x.size();
                      if (ix + n > b.size()) [[unlikely]] {
                         b.resize((std::max)(b.size() * 2, ix + n));

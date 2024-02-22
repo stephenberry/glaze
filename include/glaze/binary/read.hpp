@@ -161,6 +161,38 @@ namespace glz
       };
 
       template <class T>
+         requires(std::is_enum_v<T> && !glaze_enum_t<T>)
+      struct from_binary<T>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
+         {
+            using V = std::underlying_type_t<std::decay_t<T>>;
+
+            if constexpr (Opts.no_header) {
+               std::memcpy(&value, &(*it), sizeof(V));
+               std::advance(it, sizeof(V));
+            }
+            else {
+               constexpr uint8_t type =
+                  std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
+               constexpr uint8_t header = tag::number | type | (byte_count<V> << 5);
+
+               const auto tag = uint8_t(*it);
+               if (tag != header) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               ++it;
+
+               std::memcpy(&value, &(*it), sizeof(V));
+               std::advance(it, sizeof(V));
+            }
+         }
+      };
+
+      template <class T>
          requires complex_t<T>
       struct from_binary<T>
       {
@@ -767,11 +799,24 @@ namespace glz
 
             ++it;
 
+            constexpr auto N = [] {
+               if constexpr (reflectable<T>) {
+                  return count_members<T>;
+               }
+               else {
+                  return std::tuple_size_v<meta_t<T>>;
+               }
+            }();
+
             const auto n_keys = int_from_compressed(it, end);
 
             decltype(auto) storage = [&] {
                if constexpr (reflectable<T>) {
-                  static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+#if ((defined _MSC_VER) && (!defined __clang__))
+                  static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();
+#else
+                  static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+#endif
                   populate_map(value, cmap); // Function required for MSVC to build
                   return cmap;
                }
@@ -788,25 +833,36 @@ namespace glz
 
                std::advance(it, length);
 
-               if (const auto& p = storage.find(key); p != storage.end()) [[likely]] {
-                  std::visit(
-                     [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
-                     p->second);
+               if constexpr (N > 0) {
+                  if (const auto& p = storage.find(key); p != storage.end()) [[likely]] {
+                     std::visit(
+                        [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
+                        p->second);
 
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                  }
+                  else [[unlikely]] {
+                     if constexpr (Opts.error_on_unknown_keys) {
+                        ctx.error = error_code::unknown_key;
+                        return;
+                     }
+                     else {
+                        skip_value_binary<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
                   }
                }
-               else [[unlikely]] {
-                  if constexpr (Opts.error_on_unknown_keys) {
-                     ctx.error = error_code::unknown_key;
+               else if constexpr (Opts.error_on_unknown_keys) {
+                  ctx.error = error_code::unknown_key;
+                  return;
+               }
+               else {
+                  skip_value_binary<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
                      return;
-                  }
-                  else {
-                     skip_value_binary<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
                }
             }
          }

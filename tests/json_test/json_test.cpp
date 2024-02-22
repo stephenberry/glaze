@@ -542,6 +542,19 @@ suite container_types = [] {
       expect(glz::read_json(vec2, buffer) == glz::error_code::none);
       expect(vec == vec2);
    };
+   "vector pair"_test = [] {
+      std::vector<std::pair<int, int>> v;
+      expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
+      static_assert(glz::detail::writable_map_t<decltype(v)>);
+      const auto s = glz::write_json(v);
+      expect(s == R"({"1":2,"3":4})") << s;
+   };
+   "vector pair roundtrip"_test = [] {
+      std::vector<std::pair<int, int>> v;
+      expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
+      const auto s = glz::write<glz::opts{.concatenate = false}>(v);
+      expect(s == R"([{"1":2},{"3":4}])") << s;
+   };
    "deque roundtrip"_test = [] {
       std::vector<int> deq(100);
       for (auto& item : deq) item = rand();
@@ -2921,6 +2934,36 @@ suite file_include_test = [] {
       glz::read_file_json(obj, "../alabastar.json", buffer);
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
+   };
+
+   "file_include error handling"_test = [] {
+      includer_struct obj{};
+
+      auto output = glz::write_json(obj);
+      output.erase(0, 1); // create an error
+
+      expect(glz::buffer_to_file(output, "../alabastar.json") == glz::error_code::none);
+
+      obj.str = "";
+
+      std::string s = R"({"include": "../alabastar.json", "i": 100})";
+      const auto ec = glz::read_json(obj, s);
+      expect(bool(ec));
+   };
+
+   "file_include error handling"_test = [] {
+      includer_struct obj{};
+
+      auto output = glz::write_json(obj);
+
+      expect(glz::buffer_to_file(output, "../alabastar.json") == glz::error_code::none);
+
+      obj.str = "";
+
+      // make the path incorrect
+      std::string s = R"({"include": "../abs.json", "i": 100})";
+      const auto ec = glz::read_json(obj, s);
+      expect(bool(ec));
    };
 };
 
@@ -6451,12 +6494,18 @@ suite hostname_include_test = [] {
       std::string file_name = "../{}_config.json";
       glz::detail::replace_first_braces(file_name, hostname);
 
-      expect(glz::write_file_json(obj, file_name, std::string{}) == glz::error_code::none);
+      const auto config_buffer = R"(
+// testing opening whitespace and comment
+)" + glz::write_json(obj);
+      expect(glz::buffer_to_file(config_buffer, file_name) == glz::error_code::none);
+      // expect(glz::write_file_json(obj, file_name, std::string{}) == glz::error_code::none);
 
       obj.str = "";
       obj.i = 0;
 
-      std::string s = R"({"hostname_include": "../{}_config.json", "i": 100})";
+      std::string_view s = R"(
+// testing opening whitespace and comment
+{"hostname_include": "../{}_config.json", "i": 100})";
       const auto ec = glz::read_json(obj, s);
       expect(ec == glz::error_code::none) << glz::format_error(ec, s);
 
@@ -6467,6 +6516,12 @@ suite hostname_include_test = [] {
 
       std::string buffer{};
       glz::read_file_json(obj, file_name, buffer);
+      expect(obj.str == "Hello") << obj.str;
+      expect(obj.i == 55) << obj.i;
+
+      s = R"({"i": 100, "hostname_include": "../{}_config.json"})";
+      expect(!glz::read_json(obj, s));
+
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
    };
@@ -6594,6 +6649,189 @@ suite unicode_keys_test = [] {
       glz::write_json(obj, buffer);
 
       expect(!glz::read_json(obj, buffer));
+   };
+};
+
+struct string_tester
+{
+   std::string val1{};
+};
+
+template <>
+struct glz::meta<string_tester>
+{
+   using T = string_tester;
+   static constexpr auto value = object("val1", &T::val1);
+};
+
+suite address_sanitizer_test = [] {
+   "address_sanitizer"_test = [] {
+      string_tester obj{};
+      std::string buffer{R"({"val1":"1234567890123456"})"}; // 16 character string value
+      auto res = glz::read_json<string_tester>(buffer);
+      expect(bool(res));
+      [[maybe_unused]] auto parsed = glz::write_json(res.value());
+   };
+};
+
+struct Sinks
+{
+   bool file = false;
+   bool console = false;
+
+   struct glaze
+   {
+      using T = Sinks;
+      static constexpr auto value = glz::flags("file", &T::file, "console", &T::console);
+   };
+};
+
+suite flags_test = [] {
+   const auto opt = glz::read_json<Sinks>(R"([  "file"])");
+   expect(opt.has_value());
+   expect(opt.value().file);
+};
+
+struct Header
+{
+   std::string id{};
+   std::string type{};
+};
+
+template <>
+struct glz::meta<Header>
+{
+   static constexpr auto partial_read = true;
+};
+
+struct NestedPartialRead
+{
+   std::string method{};
+   Header header{};
+   int number{};
+};
+
+suite partial_read_tests = [] {
+   using namespace boost::ut;
+
+   "partial read"_test = [] {
+      Header h{};
+      std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value"})";
+
+      expect(glz::read_json(h, buf) == glz::error_code::none);
+      expect(h.id == "51e2affb");
+      expect(h.type == "message_type");
+   };
+
+   "partial read 2"_test = [] {
+      Header h{};
+      // closing curly bracket is missing
+      std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value"})";
+
+      expect(glz::read_json(h, buf) == glz::error_code::none);
+      expect(h.id == "51e2affb");
+      expect(h.type == "message_type");
+   };
+
+   "partial read unknown key"_test = [] {
+      Header h{};
+      std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"})";
+
+      expect(glz::read_json(h, buf) == glz::error_code::unknown_key);
+      expect(h.id == "51e2affb");
+      expect(h.type.empty());
+   };
+
+   "partial read unknown key 2"_test = [] {
+      Header h{};
+      std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"})";
+
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(h, buf) == glz::error_code::none);
+      expect(h.id == "51e2affb");
+      expect(h.type == "message_type");
+   };
+
+   "partial read missing key"_test = [] {
+      Header h{};
+      std::string buf = R"({"id":"51e2affb","unknown key":"value"})";
+
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(h, buf) != glz::error_code::missing_key);
+      expect(h.id == "51e2affb");
+      expect(h.type.empty());
+   };
+
+   "partial read missing key 2"_test = [] {
+      Header h{};
+      std::string buf = R"({"id":"51e2affb",""unknown key":"value"})";
+
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = false}>(h, buf) !=
+             glz::error_code::none);
+      expect(h.id == "51e2affb");
+      expect(h.type.empty());
+   };
+};
+
+suite nested_partial_read_tests = [] {
+   using namespace boost::ut;
+
+   "nested object partial read"_test = [] {
+      NestedPartialRead n{};
+      std::string buf =
+         R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value"},"number":51})";
+
+      expect(glz::read_json(n, buf) == glz::error_code::unknown_key);
+      expect(n.method == "m1");
+      expect(n.header.id == "51e2affb");
+      expect(n.header.type == "message_type");
+      expect(n.number == 0);
+   };
+
+   "nested object partial read 2"_test = [] {
+      NestedPartialRead n{};
+      std::string buf =
+         R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value"},"number":51})";
+
+      expect(glz::read<glz::opts{.partial_read_nested = true}>(n, buf) == glz::error_code::none);
+      expect(n.method == "m1");
+      expect(n.header.id == "51e2affb");
+      expect(n.header.type == "message_type");
+   };
+};
+
+struct meta_schema_t
+{
+   int x{};
+   std::string file_name{};
+   bool is_valid{};
+};
+
+template <>
+struct glz::meta<meta_schema_t>
+{
+   using T = meta_schema_t;
+   static constexpr auto value = object(&T::x, &T::file_name, &T::is_valid);
+};
+
+template <>
+struct glz::json_schema<meta_schema_t>
+{
+   schema x{.description = "x is a special integer"};
+   schema file_name{.description = "provide a file name to load"};
+   schema is_valid{.description = "for validation"};
+};
+
+suite meta_schema_tests = [] {
+   "meta_schema"_test = [] {
+      meta_schema_t obj;
+      std::string buffer{};
+      glz::write_json(obj, buffer);
+      expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
+
+      const auto json_schema = glz::write_json_schema<meta_schema_t>();
+      expect(
+         json_schema ==
+         R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"]},"std::string":{"type":["string"]}}})")
+         << json_schema;
    };
 };
 

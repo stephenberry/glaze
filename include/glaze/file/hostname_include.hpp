@@ -85,36 +85,44 @@ namespace glz
       template <class T>
       struct from_json<hostname_includer<T>>
       {
-         template <auto Opts>
+         template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            std::string& path = string_buffer();
-            read<json>::op<Opts>(path, ctx, it, end);
+            constexpr auto Opts = ws_handled_off<Options>();
+            std::string& buffer = string_buffer();
+            read<json>::op<Opts>(buffer, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            replace_first_braces(path, get_hostname(ctx));
+            replace_first_braces(buffer, get_hostname(ctx));
             if (bool(ctx.error)) [[unlikely]]
                return;
 
             const auto file_path = relativize_if_not_absolute(std::filesystem::path(ctx.current_file).parent_path(),
-                                                              std::filesystem::path{path});
+                                                              std::filesystem::path{buffer});
 
-            std::string& buffer = path;
             const auto string_file_path = file_path.string();
             const auto ec = file_to_buffer(buffer, string_file_path);
 
             if (bool(ec)) [[unlikely]] {
-               ctx.error = ec;
+               ctx.error = error_code::includer_error;
+               auto& error_msg = error_buffer();
+               error_msg = "file failed to open: " + string_file_path;
+               ctx.includer_error = error_msg;
                return;
             }
 
             const auto current_file = ctx.current_file;
             ctx.current_file = string_file_path;
 
-            std::ignore = glz::read<Opts>(value.value, buffer, ctx);
-            if (bool(ctx.error)) [[unlikely]]
+            const auto ecode = glz::read<Opts>(value.value, buffer, ctx);
+            if (bool(ctx.error)) [[unlikely]] {
+               ctx.error = error_code::includer_error;
+               auto& error_msg = error_buffer();
+               error_msg = glz::format_error(ecode, buffer);
+               ctx.includer_error = error_msg;
                return;
+            }
 
             ctx.current_file = current_file;
          }

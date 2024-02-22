@@ -33,10 +33,16 @@ namespace glz
 
    namespace detail
    {
-      // Unless we can mutate the input buffer we need somewhere to store escaped strings for key lookup and such
-      // Could put this in the context but tls overhead isnt that bad. Will need to figure out when heap allocations are
-      // not allowed or restricted
+      // Unless we can mutate the input buffer we need somewhere to store escaped strings for key lookup, etc.
+      // We don't put this in the context because we don't want to continually reallocate.
       GLZ_ALWAYS_INLINE std::string& string_buffer() noexcept
+      {
+         static thread_local std::string buffer(256, ' ');
+         return buffer;
+      }
+
+      // We use an error buffer to avoid multiple allocations in the case that errors occur multiple times.
+      GLZ_ALWAYS_INLINE std::string& error_buffer() noexcept
       {
          static thread_local std::string buffer(256, ' ');
          return buffer;
@@ -510,24 +516,7 @@ namespace glz
                   }
                }
                else if constexpr (std::is_same_v<T, wchar_t>) {
-                  wchar_t bufferw[MB_LEN_MAX];
-                  std::mbstate_t statew{};
-                  auto buffer_ptr = reinterpret_cast<const char*>(buffer);
-                  auto n = std::mbsrtowcs(bufferw, &buffer_ptr, MB_LEN_MAX, &statew);
-                  if (n == (std::numeric_limits<std::size_t>::max)()) [[unlikely]] {
-                     ctx.error = error_code::unicode_escape_conversion_failure;
-                     return;
-                  }
-                  if constexpr (char_t<Val>) {
-                     if (n != 1) [[unlikely]] {
-                        ctx.error = error_code::unicode_escape_conversion_failure;
-                        return;
-                     }
-                     value = bufferw[0];
-                  }
-                  else {
-                     value.append(bufferw, n);
-                  }
+                  static_assert(false_v<T>, "wchar_t is unsupported, JSON requires UTF8");
                }
             }
          }
@@ -583,7 +572,9 @@ namespace glz
                   if (escaped) {
                      static constexpr auto Bytes = 8;
 
-                     const auto length = round_up_to_multiple<Bytes>(size_t(it - start));
+                     // The null character may be the first byte of an 8 byte uint64_t SWAR chunk
+                     // so we need to at least add 7 bytes. We add 8 here, because why not.
+                     const auto length = round_up_to_multiple<Bytes>(size_t(it - start)) + Bytes;
                      value.resize(length);
 
                      const char* c;
@@ -1212,7 +1203,7 @@ namespace glz
             static constexpr auto flag_map = make_map<T>();
 
             while (true) {
-               read<json>::op<Opts>(s, ctx, it, end);
+               read<json>::op<ws_handled_off<Opts>()>(s, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
@@ -1233,6 +1224,8 @@ namespace glz
                   return;
                }
                match<','>(ctx, it);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
             }
          }
       };
@@ -1240,32 +1233,40 @@ namespace glz
       template <class T>
       struct from_json<includer<T>>
       {
-         template <auto Opts>
+         template <auto Options>
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            std::string& path = string_buffer();
-            read<json>::op<Opts>(path, ctx, it, end);
+            constexpr auto Opts = ws_handled_off<Options>();
+            std::string& buffer = string_buffer();
+            read<json>::op<Opts>(buffer, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
             const auto file_path = relativize_if_not_absolute(std::filesystem::path(ctx.current_file).parent_path(),
-                                                              std::filesystem::path{path});
+                                                              std::filesystem::path{buffer});
 
-            std::string& buffer = path;
             const auto string_file_path = file_path.string();
             const auto ec = file_to_buffer(buffer, string_file_path);
 
             if (bool(ec)) [[unlikely]] {
-               ctx.error = ec;
+               ctx.error = error_code::includer_error;
+               auto& error_msg = error_buffer();
+               error_msg = "file failed to open: " + string_file_path;
+               ctx.includer_error = error_msg;
                return;
             }
 
             const auto current_file = ctx.current_file;
             ctx.current_file = string_file_path;
 
-            std::ignore = glz::read<Opts>(value.value, buffer, ctx);
-            if (bool(ctx.error)) [[unlikely]]
+            const auto ecode = glz::read<Opts>(value.value, buffer, ctx);
+            if (bool(ctx.error)) [[unlikely]] {
+               ctx.error = error_code::includer_error;
+               auto& error_msg = error_buffer();
+               error_msg = glz::format_error(ecode, buffer);
+               ctx.includer_error = error_msg;
                return;
+            }
 
             ctx.current_file = current_file;
          }
@@ -1567,7 +1568,11 @@ namespace glz
 
                decltype(auto) frozen_map = [&] {
                   if constexpr (reflectable<T> && num_members > 0) {
-                     static constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+#if ((defined _MSC_VER) && (!defined __clang__))
+                     static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();
+#else
+                     static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+#endif
                      // We want to run this populate outside of the while loop
                      populate_map(value, cmap); // Function required for MSVC to build
                      return cmap;
@@ -1707,9 +1712,18 @@ namespace glz
                      }
                      else {
                         if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
-                           match<'"'>(ctx, it);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
+                           // This code should not error on valid unknown keys
+                           // We arrived here because the key was perhaps found, but if the quote does not exist
+                           // then this does not necessarily mean have a syntax error.
+                           // We may have just found the prefix of a longer, unknown key.
+                           if (*it != '"') [[unlikely]] {
+                              auto* start = key.data();
+                              skip_till_quote(ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+                              key = {start, size_t(it - start)};
+                           }
+                           ++it; // skip the quote
 
                            parse_object_entry_sep<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
@@ -1807,6 +1821,222 @@ namespace glz
                   skip_ws<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
+               }
+            }
+         }
+      };
+
+      template <class T>
+         requires(glaze_object_t<T> || reflectable<T>) && partial_read<T>
+      struct from_json<T>
+      {
+         template <auto Options, string_literal tag = "">
+         GLZ_FLATTEN static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
+         {
+            static constexpr auto num_members = [] {
+               if constexpr (reflectable<T>) {
+                  return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
+               }
+               else {
+                  return std::tuple_size_v<meta_t<T>>;
+               }
+            }();
+
+            if constexpr (num_members == 0) {
+               static_assert(false_v<T>, "No members to read for partial read");
+            }
+
+            parse_object_opening<Options>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+
+            static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+
+            // Only used if partial_read_nested = true
+            [[maybe_unused]] uint32_t opening_counter = 1;
+
+            bit_array<num_members> fields{};
+            bit_array<num_members> all_fields{};
+            for_each<num_members>([&](auto I) constexpr { all_fields[I] = true; });
+
+            decltype(auto) frozen_map = [&] {
+               if constexpr (reflectable<T> && num_members > 0) {
+#if ((defined _MSC_VER) && (!defined __clang__))
+                  static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();
+#else
+                  static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+#endif
+                  // We want to run this populate outside of the while loop
+                  populate_map(value, cmap); // Function required for MSVC to build
+                  return cmap;
+               }
+               else if constexpr (glaze_object_t<T> && num_members > 0) {
+                  static constexpr auto cmap = make_map<T, Opts.use_hash_comparison>();
+                  return cmap;
+               }
+               else {
+                  return nullptr;
+               }
+            }();
+
+            bool first = true;
+            while (true) {
+               if ((all_fields & fields) == all_fields) [[unlikely]] {
+                  if constexpr (Opts.partial_read_nested) {
+                     while (it != end) {
+                        if (*it == '}') [[unlikely]]
+                           --opening_counter;
+                        if (*it == '{') [[unlikely]]
+                           ++opening_counter;
+                        ++it;
+                        if (opening_counter == 0) [[unlikely]]
+                           return;
+                     }
+                  }
+                  else
+                     return;
+               }
+               else if (*it == '}') [[unlikely]] {
+                  if constexpr (Opts.error_on_missing_keys) {
+                     ctx.error = error_code::missing_key;
+                  }
+                  return;
+               }
+               else if (first) [[unlikely]]
+                  first = false;
+               else [[likely]] {
+                  match<','>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  skip_ws_no_pre_check<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+               }
+
+               std::conditional_t<Opts.error_on_unknown_keys, const sv, sv> key =
+                  parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+
+               // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
+               // whitespace and the colon must run after checking if the key exists
+
+               if constexpr (Opts.error_on_unknown_keys) {
+                  if (*it != '"') [[unlikely]] {
+                     ctx.error = error_code::unknown_key;
+                     return;
+                  }
+                  ++it;
+
+                  if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
+                     parse_object_entry_sep<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+
+                     // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
+                     // At the very least if we are going to do this add a get_index method to the maps and
+                     // call that
+                     auto index = member_it - frozen_map.begin();
+                     fields[index] = true;
+
+                     std::visit(
+                        [&](auto&& member_ptr) {
+                           read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
+                        },
+                        member_it->second);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
+                  else [[unlikely]] {
+                     if constexpr (tag.sv().empty()) {
+                        std::advance(it, -int64_t(key.size()));
+                        ctx.error = error_code::unknown_key;
+                        return;
+                     }
+                     else if (key != tag.sv()) {
+                        std::advance(it, -int64_t(key.size()));
+                        ctx.error = error_code::unknown_key;
+                        return;
+                     }
+                     else {
+                        // We duplicate this code to avoid generating unreachable code
+                        parse_object_entry_sep<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+
+                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                  }
+               }
+               else {
+                  if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
+                     // This code should not error on valid unknown keys
+                     // We arrived here because the key was perhaps found, but if the quote does not exist
+                     // then this does not necessarily mean have a syntax error.
+                     // We may have just found the prefix of a longer, unknown key.
+                     if (*it != '"') [[unlikely]] {
+                        auto* start = key.data();
+                        skip_till_quote(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        key = {start, size_t(it - start)};
+                     }
+                     ++it; // skip the quote
+
+                     parse_object_entry_sep<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+
+                     // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
+                     // At the very least if we are going to do this add a get_index method to the maps and
+                     // call that
+                     auto index = member_it - frozen_map.begin();
+                     fields[index] = true;
+
+                     std::visit(
+                        [&](auto&& member_ptr) {
+                           read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
+                        },
+                        member_it->second);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
+                  else [[unlikely]] {
+                     it -= key.size(); // rewind to skip the potentially escaped key
+
+                     // Unknown key handler does not unescape keys or want unescaped keys. Unknown escaped keys
+                     // are handled by the user.
+
+                     const auto start = it;
+                     while (true) {
+                        skip_till_escape_or_quote(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+
+                        if (*it == '"') [[likely]] {
+                           key = {start, size_t(it - start)};
+                           ++it;
+                           break;
+                        }
+                        else {
+                           ++it; // skip the escape
+                           if (*it == '"') {
+                              ++it; // skip the escaped quote
+                           }
+                        }
+                     }
+
+                     // We duplicate this code to avoid generating unreachable code
+                     parse_object_entry_sep<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+
+                     read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
                }
             }
          }

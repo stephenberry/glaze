@@ -9,6 +9,7 @@ Glaze also supports:
 ## With compile time reflection for MSVC, Clang, and GCC!
 
 - Read/write aggregate initializable structs without writing any metadata or macros!
+- See [example on Compiler Explorer](https://gcc.godbolt.org/z/jbGKb38a8)
 
 ## Highlights
 
@@ -159,7 +160,7 @@ auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 - Requires C++20
 - Only designed and tested for 64bit little-endian systems
 
-[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (14+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (2022), and [GCC](https://gcc.gnu.org) (11+) on apple, windows, and linux.
+[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (15+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (2022), and [GCC](https://gcc.gnu.org) (11+) on apple, windows, and linux.
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
 
@@ -183,8 +184,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze)
 
 ### [Conan](https://conan.io)
 
-- [Glaze Conan recipe](https://github.com/Ahajha/glaze-conan)
-- Also included in [Conan Center](https://conan.io/center/) ![Conan Center](https://img.shields.io/conan/v/glaze)
+- Included in [Conan Center](https://conan.io/center/) ![Conan Center](https://img.shields.io/conan/v/glaze)
 
 ```
 find_package(glaze REQUIRED)
@@ -564,6 +564,15 @@ Simplified prettify definition below, which allows the use of tabs or changing t
 string prettify(auto& in, bool tabs = false, uint32_t indent_size = 3)
 ```
 
+# Minify JSON
+
+To minify JSON:
+
+```c++
+glz::write<glz::opts{.prettify = true}>(obj, buffer);
+std::string minified = glz::minify(buffer);
+```
+
 ## Boolean Flags
 
 Glaze supports registering a set of boolean flags that behave as an array of string options:
@@ -776,6 +785,8 @@ glz::read_ndjson(x, s);
 # More Features
 
 ### [Data Recorder](./docs/recorder.md)
+
+### [Command Line Interface Menu](./docs/cli-menu.md)
 
 ### [JSON Include System](./docs/json-include.md)
 
