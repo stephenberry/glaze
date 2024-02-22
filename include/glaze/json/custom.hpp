@@ -104,10 +104,10 @@ namespace glz
                }
             }
             else {
-               if constexpr (is_lambda_concrete<From>) {
-                  using Ret = lambda_result_t<From>;
+               if constexpr (is_invocable_concrete<From>) {
+                  using Ret = invocable_result_t<From>;
                   if constexpr (std::is_void_v<Ret>) {
-                     using Tuple = lambda_args_t<From>;
+                     using Tuple = invocable_args_t<From>;
                      constexpr auto N = std::tuple_size_v<Tuple>;
                      if constexpr (N == 0) {
                         static_assert(false_v<T>, "lambda must take in the class as the first argument");

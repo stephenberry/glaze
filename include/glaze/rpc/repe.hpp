@@ -268,8 +268,8 @@ namespace glz::repe
       template <class Callback>
       void on(const sv name, Callback&& callback)
       {
-         static_assert(is_lambda_concrete<std::remove_cvref_t<Callback>>);
-         using Tuple = lambda_args_t<std::remove_cvref_t<Callback>>;
+         static_assert(is_invocable_concrete<std::remove_cvref_t<Callback>>);
+         using Tuple = invocable_args_t<std::remove_cvref_t<Callback>>;
          constexpr auto N = std::tuple_size_v<Tuple>;
          if constexpr (N == 2) {
             using Params = std::decay_t<std::tuple_element_t<0, Tuple>>;

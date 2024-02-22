@@ -43,6 +43,7 @@ struct a_special_function
 
 struct my_nested_menu
 {
+   int ignore_me{};
    my_functions first_menu{};
    more_functions second_menu{};
    std::function<int(int)> user_number = [](int x) { return x; };
