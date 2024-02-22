@@ -57,7 +57,7 @@ namespace glz
          }();
 
          if (item_number > 0 && item_number <= long(N)) {
-            for_each<N>([&](auto I) {
+            for_each_ex<N>([&](auto I) {
                using Element = glaze_tuple_element<I, N, T>;
 
                using E = typename Element::type;
