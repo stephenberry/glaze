@@ -11,9 +11,13 @@
 
 namespace glz
 {
-   // If you want to make an empty struct reflectable, add this constructor:
+   // Use a dummy struct for make_reflectable so that we don't conflict with any user defined constructors
+   struct dummy final {};
+   
+   // If you want to make an empty struct or a struct with constructors visible in reflected structs,
+   // add the folllwing constructor to your type:
    // my_struct(glz::make_reflectable) {}
-   using make_reflectable = std::initializer_list<bool>;
+   using make_reflectable = std::initializer_list<dummy>;
 
    namespace detail
    {
