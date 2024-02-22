@@ -200,11 +200,11 @@ namespace glz
    }
 
    template <class>
-   struct lambda_traits : std::false_type
+   struct invocable_traits : std::false_type
    {};
 
    template <class R, class T, class... Args>
-   struct lambda_traits<R (T::*)(Args...) const> : std::true_type
+   struct invocable_traits<R (T::*)(Args...) const> : std::true_type
    {
       using result_type = R;
       using arguments = std::tuple<Args...>;
@@ -212,7 +212,7 @@ namespace glz
    };
 
    template <class R, class T, class... Args>
-   struct lambda_traits<R (T::*)(Args...)> : std::true_type
+   struct invocable_traits<R (T::*)(Args...)> : std::true_type
    {
       using result_type = R;
       using arguments = std::tuple<Args...>;
@@ -220,12 +220,12 @@ namespace glz
    };
 
    template <class T>
-   using lambda_args_t = typename lambda_traits<decltype(&T::operator())>::arguments;
+   using invocable_args_t = typename invocable_traits<decltype(&T::operator())>::arguments;
 
    template <class T>
-   using lambda_result_t = typename lambda_traits<decltype(&T::operator())>::result_type;
+   using invocable_result_t = typename invocable_traits<decltype(&T::operator())>::result_type;
 
    // checks if type is a lambda with all known arguments
    template <class T>
-   concept is_lambda_concrete = requires { typename lambda_traits<decltype(&T::operator())>::result_type; };
+   concept is_invocable_concrete = requires { typename invocable_traits<decltype(&T::operator())>::result_type; };
 }

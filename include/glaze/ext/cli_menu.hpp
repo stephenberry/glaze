@@ -95,8 +95,8 @@ namespace glz
                            std::printf("%.*s\n", int(result.size()), result.data());
                         }
                      }
-                     else if constexpr (is_lambda_concrete<std::remove_cvref_t<Func>>) {
-                        using Tuple = lambda_args_t<std::remove_cvref_t<Func>>;
+                     else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
+                        using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
                         constexpr auto N = std::tuple_size_v<Tuple>;
                         static_assert(N == 1, "Only one input is allowed for your function");
                         static thread_local std::array<char, 256> input{};
@@ -176,7 +176,7 @@ namespace glz
                if constexpr (std::is_invocable_v<Func>) {
                   std::printf("  %d   %.*s\n", uint32_t(I + 1), int(key.size()), key.data());
                }
-               else if constexpr (is_lambda_concrete<std::remove_cvref_t<Func>>) {
+               else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
                   std::printf("  %d   %.*s\n", uint32_t(I + 1), int(key.size()), key.data());
                }
                else if constexpr (Opts.hide_non_invocable) {
