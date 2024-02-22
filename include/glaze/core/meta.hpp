@@ -87,7 +87,7 @@ namespace glz
       concept global_json_schema_t = requires { is_specialization_v<std::decay_t<T>, json_schema>; };
 
       template <class T>
-      concept json_schema_t = requires { local_json_schema_t<T>; } || requires { global_json_schema_t<T>; };
+      concept json_schema_t = local_json_schema_t<T> || global_json_schema_t<T>;
    }
 
    struct empty
