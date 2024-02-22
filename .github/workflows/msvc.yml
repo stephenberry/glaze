@@ -14,6 +14,7 @@ on:
   workflow_dispatch:
 
 env:
+  CTEST_OUTPUT_ON_FAILURE: 1
   BUILD_TYPE: Debug
 
 jobs:
@@ -32,4 +33,4 @@ jobs:
 
     - name: Test
       working-directory: build
-      run: ctest -C ${{env.BUILD_TYPE}} --parallel --output-on-failure
+      run: ctest --build-config ${{env.BUILD_TYPE}}
