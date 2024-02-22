@@ -41,9 +41,4 @@ namespace glz
       template <const std::string_view&... Strs>
       constexpr auto join_v = join<Strs...>();
    }
-
-   /*template <class T>
-   concept has_glaze_name = requires {
-       T::glaze_name;
-   };*/
 }

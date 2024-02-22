@@ -100,17 +100,7 @@ namespace glz
             s += " ";
          }
          s += "^\n";
-
-         // TODO: use std::format when available
-         /*
-         auto it = std::back_inserter(s);
-         if (!filename.empty()) {
-            fmt::format_to(it, FMT_COMPILE("{}:"), filename);
-         }
-
-         fmt::format_to(it, FMT_COMPILE("{}:{}: {}\n"), info.line, info.column, error);
-         fmt::format_to(it, FMT_COMPILE("   {}\n   "), info.context);
-         fmt::format_to(it, FMT_COMPILE("{: <{}}^\n"), "", info.column - 1);*/
+         
          return s;
       }
    }
