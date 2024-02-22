@@ -3,10 +3,10 @@
 
 #pragma once
 
+#include <bit>
 #include <span>
 
 #include "glaze/core/write.hpp"
-// #include <bit>
 
 namespace glz::detail
 {
@@ -188,16 +188,13 @@ namespace glz::detail
    template <std::byte c, class B>
    GLZ_ALWAYS_INLINE void dump(B&& b) noexcept
    {
-      // TODO use std::bit_cast when apple clang supports it
       using value_t = range_value_t<std::decay_t<B>>;
       if constexpr (std::same_as<value_t, std::byte>) {
          b.emplace_back(c);
       }
       else {
-         static constexpr std::byte chr = c;
          static_assert(sizeof(value_t) == sizeof(std::byte));
-         b.push_back(*reinterpret_cast<value_t*>(const_cast<std::byte*>(&chr)));
-         // b.push_back(std::bit_cast<value_t>(c));
+         b.push_back(std::bit_cast<value_t>(c));
       }
    }
 
@@ -213,11 +210,8 @@ namespace glz::detail
          b[ix] = c;
       }
       else {
-         static constexpr std::byte chr = c;
          static_assert(sizeof(value_t) == sizeof(std::byte));
-         b[ix] = *reinterpret_cast<value_t*>(const_cast<std::byte*>(&chr));
-         // TODO use std::bit_cast when apple clang supports it
-         // b[ix] = std::bit_cast<value_t>(c);
+         b[ix] = std::bit_cast<value_t>(c);
       }
       ++ix;
    }
@@ -225,15 +219,13 @@ namespace glz::detail
    template <class B>
    GLZ_ALWAYS_INLINE void dump(std::byte c, B&& b) noexcept
    {
-      // TODO use std::bit_cast when apple clang supports it
       using value_t = range_value_t<std::decay_t<B>>;
       if constexpr (std::same_as<value_t, std::byte>) {
          b.emplace_back(c);
       }
       else {
          static_assert(sizeof(value_t) == sizeof(std::byte));
-         b.push_back(*reinterpret_cast<value_t*>(const_cast<std::byte*>(&c)));
-         // b.push_back(std::bit_cast<value_t>(c));
+         b.push_back(std::bit_cast<value_t>(c));
       }
    }
 
@@ -250,9 +242,7 @@ namespace glz::detail
       }
       else {
          static_assert(sizeof(value_t) == sizeof(std::byte));
-         b[ix] = *reinterpret_cast<value_t*>(const_cast<std::byte*>(&c));
-         // TODO use std::bit_cast when apple clang supports it
-         // b[ix] = std::bit_cast<value_t>(c);
+         b[ix] = std::bit_cast<value_t>(c);
       }
       ++ix;
    }
