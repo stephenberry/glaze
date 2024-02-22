@@ -17,7 +17,6 @@
 #include "boost/ut.hpp"
 #include "glaze/binary/read.hpp"
 #include "glaze/binary/write.hpp"
-#include "glaze/core/macros.hpp"
 
 struct my_struct
 {

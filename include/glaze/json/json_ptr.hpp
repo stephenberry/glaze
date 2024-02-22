@@ -12,7 +12,6 @@
 #include "glaze/core/read.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/util/parse.hpp"
-#include "glaze/util/poly.hpp"
 #include "glaze/util/string_view.hpp"
 
 namespace glz

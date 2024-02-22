@@ -22,7 +22,6 @@
 
 #include "boost/ut.hpp"
 #include "glaze/api/impl.hpp"
-#include "glaze/core/macros.hpp"
 #include "glaze/file/hostname_include.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/prettify.hpp"
@@ -31,6 +30,7 @@
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/record/recorder.hpp"
+#include "glaze/util/poly.hpp"
 #include "glaze/util/progress_bar.hpp"
 
 using namespace boost::ut;

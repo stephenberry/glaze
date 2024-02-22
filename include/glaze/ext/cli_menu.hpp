@@ -95,7 +95,7 @@ namespace glz
                         static_assert(N == 1, "Only one input is allowed for your function");
                         static thread_local std::array<char, 256> input{};
                         std::printf("json> ");
-                        if (fgets(input.data(), input.size(), stdin)) {
+                        if (fgets(input.data(), int(input.size()), stdin)) {
                            std::string_view input_sv{input.data()};
                            if (input_sv.back() == '\n') {
                               input_sv = input_sv.substr(0, input_sv.size() - 1);
