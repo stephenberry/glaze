@@ -471,6 +471,9 @@ suite v2_wrapper_test = [] {
       V2Wrapper obj;
       auto s = glz::write_json(obj);
       expect(s == R"({"x":{"x":0,"y":0}})") << s;
+   };
+};
+
 struct port_struct
 {
    int port{};
