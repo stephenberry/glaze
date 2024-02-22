@@ -190,7 +190,7 @@ namespace glz
          // https://web.archive.org/web/20201112034702/http://sekrit.de/webdocs/c/beginners-guide-away-from-scanf.html
          long cmd = -1;
          constexpr auto buffer_length = 64; // only needed to parse numbers
-         char buf[buffer_length];
+         char buf[buffer_length]{};
          if (fgets(buf, buffer_length, stdin)) {
             char* endptr;
             errno = 0; // reset error number
