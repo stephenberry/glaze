@@ -446,6 +446,7 @@ struct V2
    float x{};
    float y{};
 
+   V2(glz::make_reflectable) {}
    V2() = default;
 
    V2(V2&&) = default;
