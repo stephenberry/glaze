@@ -2193,13 +2193,11 @@ struct error_comma_obj
    struct error_comma_data
    {
       std::string instId;
-      GLZ_LOCAL_META(error_comma_data, instId);
    };
 
    std::string code;
    std::string msg;
    std::vector<error_comma_data> data;
-   GLZ_LOCAL_META(error_comma_obj, data, code, msg);
 };
 
 suite error_outputs = [] {
@@ -2831,42 +2829,6 @@ suite array_of_objects = [] {
       std::string s = R"({"vec": [{"a": {"i":5}}, {"a":{ "i":2 }}]})";
       holder2_t arr{};
       expect(glz::read_json(arr, s) == glz::error_code::none);
-   };
-};
-
-struct macro_t
-{
-   double x = 5.0;
-   std::string y = "yay!";
-   int z = 55;
-};
-
-GLZ_META(macro_t, x, y, z);
-
-struct local_macro_t
-{
-   double x = 5.0;
-   std::string y = "yay!";
-   int z = 55;
-
-   GLZ_LOCAL_META(local_macro_t, x, y, z);
-};
-
-suite macro_tests = [] {
-   "macro test"_test = [] {
-      macro_t obj{};
-      std::string b{};
-      glz::write_json(obj, b);
-
-      expect(b == R"({"x":5,"y":"yay!","z":55})");
-   };
-
-   "local macro test"_test = [] {
-      local_macro_t obj{};
-      std::string b{};
-      glz::write_json(obj, b);
-
-      expect(b == R"({"x":5,"y":"yay!","z":55})");
    };
 };
 
@@ -4353,14 +4315,12 @@ suite bit_field_test = []
 struct StructE
 {
    std::string e;
-   GLZ_LOCAL_META(StructE, e);
 };
 
 struct Sample
 {
    int a;
    StructE d;
-   GLZ_LOCAL_META(Sample, a, d);
 };
 
 suite invalid_keys = [] {
@@ -4482,10 +4442,6 @@ struct OKX_OrderBook_Data
    std::string stk;
    std::string tickSz;
    std::string uly;
-
-   GLZ_LOCAL_META(OKX_OrderBook_Data, alias, baseCcy, category, ctMult, ctType, ctVal, ctValCcy, expTime, instFamily,
-                  instId, instType, lever, listTime, lotSz, maxIcebergSz, maxLmtSz, maxMktSz, maxStopSz, maxTriggerSz,
-                  maxTwapSz, minSz, optType, quoteCcy, settleCcy, state, stk, tickSz, uly);
 };
 
 struct OKX_OrderBook
@@ -5484,8 +5440,6 @@ struct name_t
 {
    std::string first{};
    std::string last{};
-
-   GLZ_LOCAL_META(name_t, first, last);
 };
 
 suite error_message_test = [] {
@@ -5834,12 +5788,18 @@ suite manage_test = [] {
 };
 
 struct varx
-{
-   GLZ_LOCAL_META(varx);
+{   
+   struct glaze {
+      static constexpr std::string_view name = "varx";
+      static constexpr auto value = glz::object();
+   };
 };
 struct vary
 {
-   GLZ_LOCAL_META(vary);
+   struct glaze {
+      static constexpr std::string_view name = "vary";
+      static constexpr auto value = glz::object();
+   };
 };
 
 using vari = std::variant<varx, vary>;
@@ -5906,9 +5866,6 @@ struct QuoteData
 };
 
 typedef request_t<QuoteData> SaveQuote;
-
-GLZ_META(QuoteData, time, action, quote, account, uid, session_id, request_id, state, order_id, exchange, type, tif,
-         offset, side, symbol, price, quantity, traded);
 
 suite trade_quote_test = [] {
    "trade_quote"_test = [] {
@@ -5983,8 +5940,13 @@ struct updater
       square = [&] { x *= x; };
       add_one = [&] { x += 1; };
    }
+};
 
-   GLZ_LOCAL_META(updater, x, square, add_one);
+template <>
+struct glz::meta<updater>
+{
+   using T = updater;
+   static constexpr auto value = object(&T::x, &T::square, &T::add_one);
 };
 
 suite invoke_updater_test = [] {
@@ -6100,7 +6062,6 @@ World)");
 struct Update
 {
    int64_t time;
-   GLZ_LOCAL_META(Update, time);
 };
 
 suite ndjson_error_test = [] {

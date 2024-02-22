@@ -181,7 +181,7 @@ namespace glz
    template <class T, bool fail_on_unknown = false>
    inline constexpr std::string_view name_v = [] {
       if constexpr (named<T>) {
-         if constexpr (detail::local_meta_t<T>) {
+         if constexpr (requires { T::glaze::name; }) {
             if constexpr (fail_on_unknown) {
                static_assert(T::glaze::name.find("glz::unknown") == std::string_view::npos,
                              "name_v used on unnamed type");
