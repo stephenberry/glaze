@@ -30,6 +30,7 @@
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/record/recorder.hpp"
+#include "glaze/util/poly.hpp"
 #include "glaze/util/progress_bar.hpp"
 
 using namespace boost::ut;
