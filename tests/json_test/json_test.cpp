@@ -3291,7 +3291,6 @@ struct complex_function_call_t
 template <>
 struct glz::meta<complex_function_call_t>
 {
-   static constexpr std::string_view name = "complex_function_call_t";
    using T = complex_function_call_t;
    static constexpr auto value = object("string", &T::string);
 };
@@ -3304,7 +3303,6 @@ struct string_t
 template <>
 struct glz::meta<string_t>
 {
-   static constexpr std::string_view name = "string_t";
    using T = string_t;
    static constexpr auto value = object("string", &T::string);
 };
@@ -3432,7 +3430,6 @@ struct obj_t
 template <>
 struct glz::meta<fixed_object_t>
 {
-   static constexpr std::string_view name = "fixed_object_t";
    using T = fixed_object_t;
    static constexpr auto value =
       object("int_array", &T::int_array, "float_array", &T::float_array, "double_array", &T::double_array);
@@ -3441,7 +3438,6 @@ struct glz::meta<fixed_object_t>
 template <>
 struct glz::meta<fixed_name_object_t>
 {
-   static constexpr std::string_view name = "fixed_name_object_t";
    using T = fixed_name_object_t;
    static constexpr auto value =
       object("name0", &T::name0, "name1", &T::name1, "name2", &T::name2, "name3", &T::name3, "name4", &T::name4);
@@ -3450,7 +3446,6 @@ struct glz::meta<fixed_name_object_t>
 template <>
 struct glz::meta<nested_object_t>
 {
-   static constexpr std::string_view name = "nested_object_t";
    using T = nested_object_t;
    static constexpr auto value = object("v3s", &T::v3s, "id", &T::id);
 };
@@ -3458,7 +3453,6 @@ struct glz::meta<nested_object_t>
 template <>
 struct glz::meta<another_object_t>
 {
-   static constexpr std::string_view name = "another_object_t";
    using T = another_object_t;
    static constexpr auto value = object("string", &T::string, "another_string", &T::another_string, "boolean",
                                         &T::boolean, "nested_object", &T::nested_object);
@@ -3467,7 +3461,6 @@ struct glz::meta<another_object_t>
 template <>
 struct glz::meta<obj_t>
 {
-   static constexpr std::string_view name = "obj_t";
    using T = obj_t;
    static constexpr auto value =
       object("fixed_object", &T::fixed_object, "fixed_name_object", &T::fixed_name_object, "another_object",
