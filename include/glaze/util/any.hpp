@@ -65,6 +65,10 @@ inline constexpr const void *fallback_typeid() {
 inline static constexpr void *void_get(storage *, const void *) {
     return nullptr;
 }
+   
+inline static constexpr void *void_data(storage *) {
+    return nullptr;
+}
 
 inline static constexpr void void_copy(storage *, const storage *) {}
 
@@ -74,16 +78,18 @@ inline static constexpr void void_drop(storage *) {}
 
 struct any_actions {
     using Get = void *(*)(storage *s, const void *type);
+   using Data = void *(*)(storage *s);
     using Copy = void (*)(storage *dst, const storage *src);
     using Move = void (*)(storage *dst, storage *src);
     using Drop = void (*)(storage *s);
 
     constexpr any_actions() noexcept {}
 
-    constexpr any_actions(Get g, Copy c, Move m, Drop d, const void *t) noexcept
-        : get(g), copy(c), move(m), drop(d), type(t) {}
+    constexpr any_actions(Get g, Data dat, Copy c, Move m, Drop d, const void *t) noexcept
+        : get(g), data(dat), copy(c), move(m), drop(d), type(t) {}
 
     Get get = void_get;
+   Data data = void_data;
     Copy copy = void_copy;
     Move move = void_move;
     Drop drop = void_drop;
@@ -145,6 +151,27 @@ struct any_traits {
         }
         return nullptr;
     }
+   
+   //
+   // data
+   //
+   template <class X = T>
+       requires std::same_as<X, void>
+   inline static void *data(storage *) {
+       return nullptr;
+   }
+
+   template <class X = T>
+       requires is_storage_sized<X>
+   inline static void *data(storage *s) {
+      return static_cast<void *>(&s->buf);
+   }
+
+   template <class X = T>
+       requires(!is_storage_sized<X>)
+   inline static void *data(storage *s) {
+      return s->ptr;
+   }
 
     //
     // copy
@@ -213,7 +240,7 @@ struct any_traits {
 
    public:
     static constexpr any_actions actions =
-        any_actions(get<T>, copy<T>, move<T>, drop<T>, fallback_typeid<T>());
+        any_actions(get<T>, data<T>, copy<T>, move<T>, drop<T>, fallback_typeid<T>());
 };
 
 struct any;
@@ -314,15 +341,8 @@ struct any {
         actions = void_any_actions;
     }
    
-   template <class V>
    inline void* data() {
-      using U = std::decay_t<V>;
-      return actions->get(&storage, fallback_typeid<U>()); }
-   
-   template <class V>
-   inline const void* data() const {
-      using U = std::decay_t<V>;
-      return actions->get(&storage, fallback_typeid<U>()); }
+      return actions->data(&storage); }
 
     inline void swap(any &rhs) noexcept {
         if (this == &rhs) {

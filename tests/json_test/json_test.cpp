@@ -3240,7 +3240,6 @@ struct dog
 template <>
 struct glz::meta<dog>
 {
-   static constexpr std::string_view name = "dog";
    using T = dog;
    static constexpr auto value = object("age", &T::age, "eat", &T::eat);
 };
@@ -3256,7 +3255,6 @@ struct cat
 template <>
 struct glz::meta<cat>
 {
-   static constexpr std::string_view name = "cat";
    using T = cat;
    static constexpr auto value = object("age", &T::age, "eat", &T::eat, "purr", &T::purr);
 };
@@ -3269,7 +3267,6 @@ struct person
 template <>
 struct glz::meta<person>
 {
-   static constexpr std::string_view name = "person";
    static constexpr auto value = object("eat", &person::eat);
 };
 
@@ -3282,7 +3279,6 @@ struct animal
 template <>
 struct glz::meta<animal>
 {
-   static constexpr std::string_view name = "animal";
    using T = animal;
    static constexpr auto value = object("age", &T::age, "eat", &T::eat);
 };
@@ -3351,7 +3347,7 @@ suite any_tests = [] {
 
       expect(glz::any_cast<double>(a) == 5.5);
 
-      auto* data = a.data<double>();
+      auto* data = a.data();
       *static_cast<double*>(data) = 6.6;
 
       expect(glz::any_cast<double>(a) == 6.6);
