@@ -1,9 +1,9 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#pragma once
+// originally from: https://github.com/kocienda/Any
 
-// originally from: https://codereview.stackexchange.com/questions/219075/implementation-of-stdany
+#pragma once
 
 #include <concepts>
 #include <cstdlib>
@@ -420,6 +420,8 @@ remove_cvref_t<V> *any_cast(any *a) noexcept {
 }
 
 }
+
+// originally from: https://codereview.stackexchange.com/questions/219075/implementation-of-stdany
 
 /*namespace glz
 {
