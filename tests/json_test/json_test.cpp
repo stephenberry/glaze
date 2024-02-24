@@ -3351,7 +3351,7 @@ suite any_tests = [] {
 
       expect(glz::any_cast<double>(a) == 5.5);
 
-      auto* data = a.data();
+      auto* data = a.data<double>();
       *static_cast<double*>(data) = 6.6;
 
       expect(glz::any_cast<double>(a) == 6.6);
