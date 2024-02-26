@@ -464,6 +464,16 @@ namespace glz
             dump(value.str, b, ix);
          }
       };
+      
+      template <class T>
+      struct to_json<basic_text<T>>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
+         {
+            dump(value.str, b, ix);
+         }
+      };
 
       template <glz::opts Opts>
       GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, auto&&... args) noexcept

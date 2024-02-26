@@ -215,6 +215,16 @@ namespace glz
             write<binary>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
          }
       };
+      
+      template <class T>
+      struct to_binary<basic_text<T>> final
+      {
+         template <auto Opts, class... Args>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            write<binary>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
+         }
+      };
 
       template <class T, class V, size_t... Is>
       constexpr std::size_t variant_index_impl(std::index_sequence<Is...>)

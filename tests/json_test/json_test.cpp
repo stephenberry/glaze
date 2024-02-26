@@ -6798,6 +6798,19 @@ suite meta_schema_tests = [] {
    };
 };
 
+suite glz_text_tests = [] {
+   "glz_text"_test = [] {
+      glz::text text = "Hello World";
+      std::string out{};
+      glz::write_json(text, out);
+      expect(out == "Hello World");
+      
+      text.str.clear();
+      expect(!glz::read_json(text, out));
+      expect(text.str == "Hello World");
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors

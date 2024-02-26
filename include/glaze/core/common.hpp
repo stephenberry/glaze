@@ -291,6 +291,29 @@ namespace glz
    {
       static constexpr std::string_view name = "raw_json";
    };
+   
+   // glz::text (i.e. glz::basic_text<std::string>) just reads in the entire contents of the message or writes out whatever contents it holds
+   // it avoids JSON reading/writing and is a pass through mechanism
+   template <class string_type>
+   struct basic_text
+   {
+      string_type str;
+
+      basic_text() = default;
+
+      template <class T>
+         requires(!std::same_as<std::decay_t<T>, basic_text>)
+      basic_text(T&& s) : str(std::forward<T>(s))
+      {}
+
+      basic_text(const basic_text&) = default;
+      basic_text(basic_text&&) = default;
+      basic_text& operator=(const basic_text&) = default;
+      basic_text& operator=(basic_text&&) = default;
+   };
+   
+   using text = basic_text<std::string>;
+   using text_view = basic_text<std::string_view>;
 
    using basic = std::variant<bool, char, char8_t, unsigned char, signed char, short, unsigned short, float, int,
                               unsigned int, long, unsigned long, double, long long, unsigned long long, std::string>;

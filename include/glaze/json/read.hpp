@@ -870,7 +870,18 @@ namespace glz
             skip_value<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            value.str = {it_start, static_cast<std::size_t>(it - it_start)};
+            value.str = {it_start, static_cast<size_t>(it - it_start)};
+         }
+      };
+      
+      template <class T>
+      struct from_json<basic_text<T>>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto&& end) noexcept
+         {
+            value.str = {it, static_cast<size_t>(end - it)}; // read entire contents as string
+            it = end;
          }
       };
 
