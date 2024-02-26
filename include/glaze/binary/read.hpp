@@ -277,7 +277,7 @@ namespace glz
             read<binary>::op<Opts>(value.str, ctx, it, end);
          }
       };
-      
+
       template <class T>
       struct from_binary<basic_text<T>>
       {

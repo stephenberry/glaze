@@ -1490,13 +1490,12 @@ suite glz_text_tests = [] {
       glz::text text = "Hello World";
       std::string out{};
       glz::write_binary(text, out);
-      
+
       text.str.clear();
       expect(!glz::read_binary(text, out));
       expect(text.str == "Hello World");
    };
 };
-
 
 int main()
 {

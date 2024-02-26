@@ -873,7 +873,7 @@ namespace glz
             value.str = {it_start, static_cast<size_t>(it - it_start)};
          }
       };
-      
+
       template <class T>
       struct from_json<basic_text<T>>
       {

@@ -215,7 +215,7 @@ namespace glz
             write<binary>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
          }
       };
-      
+
       template <class T>
       struct to_binary<basic_text<T>> final
       {

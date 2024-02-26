@@ -464,7 +464,7 @@ namespace glz
             dump(value.str, b, ix);
          }
       };
-      
+
       template <class T>
       struct to_json<basic_text<T>>
       {

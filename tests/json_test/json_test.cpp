@@ -6804,7 +6804,7 @@ suite glz_text_tests = [] {
       std::string out{};
       glz::write_json(text, out);
       expect(out == "Hello World");
-      
+
       text.str.clear();
       expect(!glz::read_json(text, out));
       expect(text.str == "Hello World");
