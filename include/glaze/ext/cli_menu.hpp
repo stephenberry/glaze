@@ -95,9 +95,9 @@ namespace glz
                         if (input_sv.back() == '\n') {
                            input_sv = input_sv.substr(0, input_sv.size() - 1);
                         }
-                        using Params = std::decay_t<std::tuple_element_t<0, Tuple>>;
+                        using Params = std::tuple_element_t<0, Tuple>;
                         using R = std::invoke_result_t<Func, Params>;
-                        Params params{};
+                        std::decay_t<Params> params{};
                         const auto ec = glz::read<Opts.opts>(params, input_sv);
                         if (ec) {
                            const auto error = glz::format_error(ec, input_sv);
