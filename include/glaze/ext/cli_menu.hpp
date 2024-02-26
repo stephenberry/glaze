@@ -193,7 +193,7 @@ namespace glz
          constexpr auto buffer_length = 64; // only needed to parse numbers
          char buf[buffer_length]{};
          if (fgets(buf, buffer_length, stdin)) {
-            char* endptr;
+            char* endptr{};
             errno = 0; // reset error number
             cmd = strtol(buf, &endptr, 10);
             if ((errno != ERANGE) && (endptr != buf) && (*endptr == '\0' || *endptr == '\n')) {
