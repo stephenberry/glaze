@@ -95,9 +95,9 @@ namespace glz
                         if (input_sv.back() == '\n') {
                            input_sv = input_sv.substr(0, input_sv.size() - 1);
                         }
-                        using Params = std::decay_t<std::tuple_element_t<0, Tuple>>;
+                        using Params = std::tuple_element_t<0, Tuple>;
                         using R = std::invoke_result_t<Func, Params>;
-                        Params params{};
+                        std::decay_t<Params> params{};
                         const auto ec = glz::read<Opts.opts>(params, input_sv);
                         if (ec) {
                            const auto error = glz::format_error(ec, input_sv);
@@ -188,14 +188,20 @@ namespace glz
          std::printf("--------------------------------\n");
 
          std::printf("cmd> ");
+         std::fflush(stdout);
+         restart_input: // needed to support std::cin within user functions
          // https://web.archive.org/web/20201112034702/http://sekrit.de/webdocs/c/beginners-guide-away-from-scanf.html
          long cmd = -1;
          constexpr auto buffer_length = 64; // only needed to parse numbers
          char buf[buffer_length]{};
-         if (fgets(buf, buffer_length, stdin)) {
-            char* endptr;
+         if (std::fgets(buf, buffer_length, stdin)) {
+            if (buf[0] == '\n') {
+               goto restart_input;
+            }
+            
+            char* endptr{};
             errno = 0; // reset error number
-            cmd = strtol(buf, &endptr, 10);
+            cmd = std::strtol(buf, &endptr, 10);
             if ((errno != ERANGE) && (endptr != buf) && (*endptr == '\0' || *endptr == '\n')) {
                execute_menu_item(cmd);
                continue;
