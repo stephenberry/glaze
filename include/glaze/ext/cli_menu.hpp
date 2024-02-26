@@ -188,14 +188,20 @@ namespace glz
          std::printf("--------------------------------\n");
 
          std::printf("cmd> ");
+         std::fflush(stdout);
+         restart_input: // needed to support std::cin within user functions
          // https://web.archive.org/web/20201112034702/http://sekrit.de/webdocs/c/beginners-guide-away-from-scanf.html
          long cmd = -1;
          constexpr auto buffer_length = 64; // only needed to parse numbers
          char buf[buffer_length]{};
-         if (fgets(buf, buffer_length, stdin)) {
+         if (std::fgets(buf, buffer_length, stdin)) {
+            if (buf[0] == '\n') {
+               goto restart_input;
+            }
+            
             char* endptr{};
             errno = 0; // reset error number
-            cmd = strtol(buf, &endptr, 10);
+            cmd = std::strtol(buf, &endptr, 10);
             if ((errno != ERANGE) && (endptr != buf) && (*endptr == '\0' || *endptr == '\n')) {
                execute_menu_item(cmd);
                continue;
