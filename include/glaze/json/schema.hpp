@@ -425,20 +425,20 @@ namespace glz
 
    }
 
-   template <class T, class Buffer>
+   template <class T, opts Opts = opts{}, class Buffer>
    inline void write_json_schema(Buffer&& buffer) noexcept
    {
       detail::schematic s{};
       s.defs.emplace();
-      detail::to_json_schema<std::decay_t<T>>::template op<opts{}>(s, *s.defs);
-      write<opts{.write_type_info = false}>(std::move(s), std::forward<Buffer>(buffer));
+      detail::to_json_schema<std::decay_t<T>>::template op<Opts>(s, *s.defs);
+      write<opt_false<Opts, &opts::write_type_info>>(std::move(s), std::forward<Buffer>(buffer));
    }
 
-   template <class T>
+   template <class T, opts Opts = opts{}>
    [[nodiscard]] inline auto write_json_schema() noexcept
    {
       std::string buffer{};
-      write_json_schema<T>(buffer);
+      write_json_schema<T, Opts>(buffer);
       return buffer;
    }
 }
