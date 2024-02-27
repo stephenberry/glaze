@@ -139,7 +139,7 @@ suite repe_tests = [] {
 
 struct my_functions
 {
-   //int a{};
+   int i{};
    std::function<std::string_view()> hello = []() -> std::string_view { return "Hello"; };
    std::function<std::string_view()> world = []() -> std::string_view { return "World"; };
    std::function<int()> get_number = [] { return 42; };
@@ -172,6 +172,15 @@ suite structs_of_functions = [] {
       my_functions obj{};
 
       server.on(obj);
+      
+      obj.i = 55;
+      
+      {
+         auto request = repe::request_json({"/i"});
+         server.call(request);
+      }
+
+      expect(server.response == R"([[0,0,0,"/i",null],55])") << server.response;
 
       {
          auto request = repe::request_json({"/hello"});

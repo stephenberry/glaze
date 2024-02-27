@@ -177,6 +177,32 @@ namespace glz::repe
       }
       return {};
    }
+   
+   template <opts Opts, class Value>
+   inline auto request(const header& header, Value&& value)
+   {
+      return glz::write<Opts>(std::forward_as_tuple(header, std::forward<Value>(value)));
+   }
+
+   template <opts Opts, class Value>
+   inline auto request(const header& header, Value&& value, auto& buffer)
+   {
+      return glz::write<Opts>(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
+   }
+
+   inline auto request_json(const header& header) { return glz::write_json(std::forward_as_tuple(header, nullptr)); }
+
+   template <class Value>
+   inline auto request_json(const header& header, Value&& value)
+   {
+      return glz::write_json(std::forward_as_tuple(header, std::forward<Value>(value)));
+   }
+
+   template <class Value>
+   inline void request_json(const header& header, Value&& value, auto& buffer)
+   {
+      glz::write_json(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
+   }
 
    // DESIGN NOTE: It might appear that we are locking ourselves into a poor design choice by using a runtime
    // std::unordered_map. However, we can actually improve this in the future by allowing glz::meta specialization on
@@ -303,8 +329,24 @@ namespace glz::repe
                }
             }
             else {
-               // this is a variable an not a function, so we build RPC read/write calls
-               static_assert(false_v<Func>, "To implement");
+               decltype(auto) member = [&] {
+                  if constexpr (reflectable<T>) {
+                     return std::get<I>(t);
+                  }
+                  else {
+                     return get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
+                  }
+               }();
+               
+               // this is a variable and not a function, so we build RPC read/write calls
+               methods.emplace(full_key, [&member](repe::state&& state) {
+                  if (state.header.notification) {
+                     return;
+                  }
+                  
+                  
+                  write_response<Opts>(member, state);
+               });
             }
          });
       }
@@ -407,6 +449,18 @@ namespace glz::repe
       void on(const sv name, Params&& params, Result&& result, Callback&& callback) {
 
       }*/
+      
+      template <class Value>
+      bool call(const header& header, Value&& value)
+      {
+         return request<Opts>(header, std::forward<Value>(value));
+      }
+
+      template <class Value>
+      bool call(const header& header, Value&& value, auto& buffer)
+      {
+         return request<Opts>(header, std::forward<Value>(value), buffer);
+      }
 
       // returns true if there is a result to send (not a notification)
       bool call(const sv msg)
@@ -459,30 +513,4 @@ namespace glz::repe
          return !h.notification;
       }
    };
-
-   template <opts Opts, class Value>
-   inline auto request(const header& header, Value&& value)
-   {
-      return glz::write<Opts>(std::forward_as_tuple(header, std::forward<Value>(value)));
-   }
-
-   template <opts Opts, class Value>
-   inline auto request(const header& header, Value&& value, auto& buffer)
-   {
-      return glz::write<Opts>(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
-   }
-
-   inline auto request_json(const header& header) { return glz::write_json(std::forward_as_tuple(header, nullptr)); }
-
-   template <class Value>
-   inline auto request_json(const header& header, Value&& value)
-   {
-      return glz::write_json(std::forward_as_tuple(header, std::forward<Value>(value)));
-   }
-
-   template <class Value>
-   inline void request_json(const header& header, Value&& value, auto& buffer)
-   {
-      glz::write_json(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
-   }
 }
