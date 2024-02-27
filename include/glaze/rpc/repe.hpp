@@ -243,6 +243,8 @@ namespace glz::repe
                   on<std::decay_t<E>, full_key>(std::get<I>(t));
                }
                else {
+                  decltype(auto) member = get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
+                  on<std::decay_t<E>, full_key>(member);
                }
             }
             else {
@@ -260,6 +262,19 @@ namespace glz::repe
                                   });
                }
                else {
+                  using Func = typename Element::type;
+                  using Result = std::invoke_result_t<Func>;
+                  
+                  decltype(auto) member = get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
+                  
+                  methods.emplace(full_key,
+                                  [result = Result{}, callback = member](repe::state&& state) mutable {
+                                     result = callback();
+                                     if (state.header.notification) {
+                                        return;
+                                     }
+                                     write_response<Opts>(result, state);
+                                  });
                }
             }
          });

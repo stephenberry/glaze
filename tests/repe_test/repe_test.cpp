@@ -144,9 +144,22 @@ struct my_functions
    std::function<int()> get_number = [] { return 42; };
 };
 
+struct meta_functions
+{
+   std::function<std::string_view()> hello = []() -> std::string_view { return "Hello"; };
+   std::function<std::string_view()> world = []() -> std::string_view { return "World"; };
+   std::function<int()> get_number = [] { return 42; };
+   
+   struct glaze {
+      using T = meta_functions;
+      static constexpr auto value = glz::object(&T::hello, &T::world, &T::get_number);
+   };
+};
+
 struct my_nested_functions
 {
-   my_functions menu_1{};
+   my_functions my_functions{};
+   meta_functions meta_functions{};
 };
 
 suite structs_of_functions = [] {
@@ -180,11 +193,18 @@ suite structs_of_functions = [] {
       server.on(obj);
 
       {
-         auto request = repe::request_json({"/menu_1/hello"});
+         auto request = repe::request_json({"/my_functions/hello"});
          server.call(request);
       }
 
-      expect(server.response == R"([[0,0,0,"/menu_1/hello",null],"Hello"])");
+      expect(server.response == R"([[0,0,0,"/my_functions/hello",null],"Hello"])");
+      
+      {
+         auto request = repe::request_json({"/meta_functions/hello"});
+         server.call(request);
+      }
+      
+      expect(server.response == R"([[0,0,0,"/meta_functions/hello",null],"Hello"])");
    };
 };
 
