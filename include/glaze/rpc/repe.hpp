@@ -238,7 +238,46 @@ namespace glz::repe
             }();
 
             using E = typename Element::type;
-            if constexpr (glaze_object_t<E> || reflectable<E>) {
+            decltype(auto) func = [&] {
+               if constexpr (reflectable<T>) {
+                  return std::get<I>(t);
+               }
+               else {
+                  return get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
+               }
+            }();
+            
+            using Func = decltype(func);
+            if constexpr (std::is_invocable_v<Func>) {
+               if constexpr (reflectable<T>) {
+                  using Result = std::invoke_result_t<Func>;
+
+                  methods.emplace(full_key,
+                                  [result = Result{}, callback = func](repe::state&& state) mutable {
+                                     result = callback();
+                                     if (state.header.notification) {
+                                        return;
+                                     }
+                                     write_response<Opts>(result, state);
+                                  });
+               }
+               else {
+                  using Result = std::invoke_result_t<Func>;
+                  
+                  methods.emplace(full_key,
+                                  [result = Result{}, callback = func](repe::state&& state) mutable {
+                                     result = callback();
+                                     if (state.header.notification) {
+                                        return;
+                                     }
+                                     write_response<Opts>(result, state);
+                                  });
+               }
+            }
+            else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
+               static_assert(false_v<Func>, "To implement");
+            }
+            else if constexpr (glaze_object_t<E> || reflectable<E>) {
                if constexpr (reflectable<T>) {
                   on<std::decay_t<E>, full_key>(std::get<I>(t));
                }
@@ -248,34 +287,8 @@ namespace glz::repe
                }
             }
             else {
-               if constexpr (reflectable<T>) {
-                  using Func = typename Element::mptr_t;
-                  using Result = std::invoke_result_t<Func>;
-
-                  methods.emplace(full_key,
-                                  [result = Result{}, callback = std::get<I>(t)](repe::state&& state) mutable {
-                                     result = callback();
-                                     if (state.header.notification) {
-                                        return;
-                                     }
-                                     write_response<Opts>(result, state);
-                                  });
-               }
-               else {
-                  using Func = typename Element::type;
-                  using Result = std::invoke_result_t<Func>;
-                  
-                  decltype(auto) member = get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
-                  
-                  methods.emplace(full_key,
-                                  [result = Result{}, callback = member](repe::state&& state) mutable {
-                                     result = callback();
-                                     if (state.header.notification) {
-                                        return;
-                                     }
-                                     write_response<Opts>(result, state);
-                                  });
-               }
+               // this is a variable an not a function, so we build RPC read/write calls
+               static_assert(false_v<Func>, "To implement");
             }
          });
       }

@@ -139,6 +139,7 @@ suite repe_tests = [] {
 
 struct my_functions
 {
+   //int a{};
    std::function<std::string_view()> hello = []() -> std::string_view { return "Hello"; };
    std::function<std::string_view()> world = []() -> std::string_view { return "World"; };
    std::function<int()> get_number = [] { return 42; };
