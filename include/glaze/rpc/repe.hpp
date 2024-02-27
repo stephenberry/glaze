@@ -80,6 +80,7 @@ namespace glz::repe
       return mtx;
    }
 
+   // returns 0 on error
    template <opts Opts, class Value>
    size_t read_params(Value&& value, auto&& state, auto&& response)
    {
@@ -273,7 +274,24 @@ namespace glz::repe
                }
             }
             else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
-               static_assert(false_v<Func>, "To implement");
+               using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
+               constexpr auto N = std::tuple_size_v<Tuple>;
+               static_assert(N == 1, "Only one input is allowed for your function");
+               
+               using Params = std::tuple_element_t<0, Tuple>;
+               using Result = std::invoke_result_t<Func, Params>;
+               
+               methods.emplace(full_key, [this, params = std::decay_t<Params>{}, result = std::decay_t<Result>{}, callback = func](repe::state&& state) mutable {
+                  // no need to lock locals
+                  if (read_params<Opts>(params, state, response) == 0) {
+                     return;
+                  }
+                  result = callback(params);
+                  if (state.header.notification) {
+                     return;
+                  }
+                  write_response<Opts>(result, state);
+               });
             }
             else if constexpr (glaze_object_t<E> || reflectable<E>) {
                if constexpr (reflectable<T>) {

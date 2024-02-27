@@ -162,6 +162,7 @@ struct my_nested_functions
 {
    my_functions my_functions{};
    meta_functions meta_functions{};
+   std::function<std::string(const std::string&)> append_awesome = [](const std::string& in) { return in + " awesome!"; };
 };
 
 suite structs_of_functions = [] {
@@ -214,6 +215,13 @@ suite structs_of_functions = [] {
       }
       
       expect(server.response == R"([[0,0,0,"/meta_functions/hello",null],"Hello"])");
+      
+      {
+         auto request = repe::request_json({"/append_awesome"}, "you are");
+         server.call(request);
+      }
+      
+      expect(server.response == R"([[0,0,0,"/append_awesome",null],"you are awesome!"])");
    };
 };
 
