@@ -143,6 +143,7 @@ struct my_functions
    std::function<std::string_view()> hello = []() -> std::string_view { return "Hello"; };
    std::function<std::string_view()> world = []() -> std::string_view { return "World"; };
    std::function<int()> get_number = [] { return 42; };
+   std::function<void()> void_func = []{};
 };
 
 struct meta_functions
@@ -192,6 +193,13 @@ suite structs_of_functions = [] {
       my_nested_functions obj{};
 
       server.on(obj);
+      
+      {
+         auto request = repe::request_json({"/my_functions/void_func"});
+         server.call(request);
+      }
+
+      expect(server.response == R"([[0,0,0,"/my_functions/void_func",null],null])");
 
       {
          auto request = repe::request_json({"/my_functions/hello"});

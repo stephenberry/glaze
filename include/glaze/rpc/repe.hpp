@@ -247,23 +247,21 @@ namespace glz::repe
                }
             }();
             
+            // This logic chain should match glz::cli_menu
             using Func = decltype(func);
             if constexpr (std::is_invocable_v<Func>) {
-               if constexpr (reflectable<T>) {
-                  using Result = std::invoke_result_t<Func>;
-
+               using Result = std::invoke_result_t<Func>;
+               if constexpr (std::same_as<Result, void>) {                  
                   methods.emplace(full_key,
-                                  [result = Result{}, callback = func](repe::state&& state) mutable {
-                                     result = callback();
+                                  [callback = func](repe::state&& state) mutable {
+                                     callback();
                                      if (state.header.notification) {
                                         return;
                                      }
-                                     write_response<Opts>(result, state);
+                     write_response<Opts>(std::nullptr_t{}, state);
                                   });
                }
                else {
-                  using Result = std::invoke_result_t<Func>;
-                  
                   methods.emplace(full_key,
                                   [result = Result{}, callback = func](repe::state&& state) mutable {
                                      result = callback();
