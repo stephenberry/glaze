@@ -264,6 +264,20 @@ suite structs_of_functions = [] {
       }
       
       expect(server.response == R"([[0,0,0,"/my_functions/max",null],3.3])") << server.response;
+      
+      {
+         auto request = repe::request_json({"/my_functions"});
+         server.call(request);
+      }
+      
+      expect(server.response == R"([[0,0,0,"/my_functions",null],{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"}])") << server.response;
+      
+      {
+         auto request = repe::request_json({""});
+         server.call(request);
+      }
+      
+      expect(server.response == R"([[0,0,0,"",null],3.3])") << server.response;
    };
 };
 

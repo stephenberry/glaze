@@ -293,6 +293,23 @@ namespace glz::repe
                return nullptr;
             }
          }();
+         
+         if constexpr (parent == "" && (glaze_object_t<T> || reflectable<T>)) {
+            // build read/write calls to the top level object
+            methods.emplace("", [this, &value](repe::state&& state) {
+               if (!(state.header.action & empty)) {
+                  if (read_params<Opts>(value, state, response) == 0) {
+                     return;
+                  }
+               }
+               
+               if (state.header.action & notify) {
+                  return;
+               }
+               
+               write_response<Opts>(value, state);
+            });
+         }
 
          for_each<N>([&](auto I) {
             using Element = glaze_tuple_element<I, N, T>;
