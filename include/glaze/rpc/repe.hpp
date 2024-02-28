@@ -225,6 +225,12 @@ namespace glz::repe
    inline auto request_json(header&& header) {
       header.action |= empty; // because no value provided
       return glz::write_json(std::forward_as_tuple(header, nullptr)); }
+   
+   inline auto request_json(const header& h) {
+      repe::header copy = h;
+      copy.action |= empty; // because no value provided
+      return request_json(std::move(copy));
+   }
 
    template <class Value>
    inline auto request_json(const header& header, Value&& value)

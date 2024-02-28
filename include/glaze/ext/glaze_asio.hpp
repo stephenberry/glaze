@@ -64,10 +64,9 @@ namespace glz
       }
 
       template <opts Opts = opts{}, class Params>
-      void notify(const repe::header& header, Params&& params)
+      void notify(repe::header&& header, Params&& params)
       {
-         assert(header.notification);
-
+         header.action |= repe::notify;
          using namespace repe;
          request<Opts>(header, std::forward<Params>(params), buffer);
 
@@ -75,10 +74,9 @@ namespace glz
       }
 
       template <opts Opts = opts{}, class Params, class Result>
-      [[nodiscard]] repe::error_t call(const repe::header& header, Params&& params, Result&& result)
+      [[nodiscard]] repe::error_t call(repe::header&& header, Params&& params, Result&& result)
       {
-         assert(!header.notification);
-
+         header.action &= ~repe::notify; // clear invalid notify
          using namespace repe;
          request<Opts>(header, std::forward<Params>(params), buffer);
 
@@ -89,10 +87,9 @@ namespace glz
       }
 
       template <opts Opts = opts{}, class Params>
-      [[nodiscard]] std::string& call_raw(const repe::header& header, Params&& params)
+      [[nodiscard]] std::string& call_raw(repe::header&& header, Params&& params)
       {
-         assert(!header.notification);
-
+         header.action &= ~repe::notify; // clear invalid notify
          using namespace repe;
          request<Opts>(header, std::forward<Params>(params), buffer);
 
