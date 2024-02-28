@@ -49,11 +49,19 @@ namespace glz
    
    template <class>
     struct func_traits;
+   
+   template <class Result>
+   struct func_traits<Result()> {
+       using result_type = Result;
+      using params_type = void;
+      using std_func_sig = std::function<Result()>;
+   };
 
     template <class Result, class Params>
     struct func_traits<Result(Params)> {
         using result_type = Result;
        using params_type = Params;
+       using std_func_sig = std::function<Result(Params)>;
     };
 
     template <class T>
@@ -61,6 +69,9 @@ namespace glz
 
     template <class T>
     using func_params_t = typename func_traits<T>::params_type;
+   
+   template <class T>
+   using std_func_sig_t = typename func_traits<T>::std_func_sig;
    
    template <opts Opts = opts{}>
    struct asio_client
@@ -114,7 +125,7 @@ namespace glz
       }
       
       template <class Func>
-      [[nodiscard]] std::function<func_result_t<Func>(func_params_t<Func>)> callable(repe::header&& header) {
+      [[nodiscard]] std_func_sig_t<Func> callable(repe::header&& header) {
          using Params = func_params_t<Func>;
          using Result = func_result_t<Func>;
          if constexpr (std::same_as<Params, void>) {
