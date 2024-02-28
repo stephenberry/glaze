@@ -137,7 +137,7 @@ suite repe_tests = [] {
    };
 };
 
-struct my_functions
+struct my_functions_t
 {
    int i{};
    std::function<std::string_view()> hello = []() -> std::string_view { return "Hello"; };
@@ -146,22 +146,22 @@ struct my_functions
    std::function<void()> void_func = []{};
 };
 
-struct meta_functions
+struct meta_functions_t
 {
    std::function<std::string_view()> hello = []() -> std::string_view { return "Hello"; };
    std::function<std::string_view()> world = []() -> std::string_view { return "World"; };
    std::function<int()> get_number = [] { return 42; };
    
    struct glaze {
-      using T = meta_functions;
+      using T = meta_functions_t;
       static constexpr auto value = glz::object(&T::hello, &T::world, &T::get_number);
    };
 };
 
-struct my_nested_functions
+struct my_nested_functions_t
 {
-   my_functions my_functions{};
-   meta_functions meta_functions{};
+   my_functions_t my_functions{};
+   meta_functions_t meta_functions{};
    std::function<std::string(const std::string&)> append_awesome = [](const std::string& in) { return in + " awesome!"; };
    std::string my_string{};
 };
@@ -170,7 +170,7 @@ suite structs_of_functions = [] {
    "structs_of_functions"_test = [] {
       repe::server server{};
 
-      my_functions obj{};
+      my_functions_t obj{};
 
       server.on(obj);
       
@@ -208,7 +208,7 @@ suite structs_of_functions = [] {
    "nested_structs_of_functions"_test = [] {
       repe::server server{};
 
-      my_nested_functions obj{};
+      my_nested_functions_t obj{};
 
       server.on(obj);
       
