@@ -181,6 +181,13 @@ suite structs_of_functions = [] {
       }
 
       expect(server.response == R"([[0,0,0,"/i",null],55])") << server.response;
+      
+      {
+         auto request = repe::request_json({.method = "/i"}, 42);
+         server.call(request);
+      }
+
+      expect(server.response == R"([[0,0,0,"/i",null],42])") << server.response;
 
       {
          auto request = repe::request_json({"/hello"});

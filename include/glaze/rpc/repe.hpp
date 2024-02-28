@@ -331,7 +331,13 @@ namespace glz::repe
             else {
                static_assert(std::is_lvalue_reference_v<decltype(func)>);
                // this is a variable and not a function, so we build RPC read/write calls
-               methods.emplace(full_key, [&func](repe::state&& state) {
+               methods.emplace(full_key, [this, &func](repe::state&& state) {
+                  if (!state.message.starts_with("null")) {
+                     if (read_params<Opts>(func, state, response) == 0) {
+                        return;
+                     }
+                  }
+                  
                   if (state.header.notification) {
                      return;
                   }
