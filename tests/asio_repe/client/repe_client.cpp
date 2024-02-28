@@ -19,7 +19,7 @@ void asio_client_test()
       glz::asio_client client{};
 
       std::vector<int> data{};
-      for (int i = 1; i < 100; ++i) {
+      for (int i = 1; i < 10; ++i) {
          data.emplace_back(i);
          int sum{};
          if (auto ec = client.call({"/sum"}, data, sum); ec) {
@@ -27,6 +27,10 @@ void asio_client_test()
          }
          std::cerr << sum << '\n';
       }
+      
+      auto sum = client.callable<int, const std::vector<int>&>({"/sum"});
+      
+      std::cerr << "callable result: " << sum(std::vector<int>{1, 2, 3}) << '\n';
    }
    catch (const std::exception& e) {
       std::cerr << e.what() << '\n';

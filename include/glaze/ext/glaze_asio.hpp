@@ -17,7 +17,7 @@ namespace glz
       asio::write(socket, asio::buffer(&size, sizeof(uint64_t)), asio::transfer_exactly(sizeof(uint64_t)));
       asio::write(socket, asio::buffer(str), asio::transfer_exactly(size));
    }
-
+   
    inline void receive_buffer(asio::ip::tcp::socket& socket, std::string& str)
    {
       uint64_t size;
@@ -25,14 +25,14 @@ namespace glz
       str.resize(size);
       asio::read(socket, asio::buffer(str), asio::transfer_exactly(size));
    }
-
+   
    inline asio::awaitable<void> co_send_buffer(asio::ip::tcp::socket& socket, const std::string_view str)
    {
       const uint64_t size = str.size();
       co_await asio::async_write(socket, asio::buffer(&size, sizeof(uint64_t)), asio::use_awaitable);
       co_await asio::async_write(socket, asio::buffer(str), asio::use_awaitable);
    }
-
+   
    inline asio::awaitable<void> co_receive_buffer(asio::ip::tcp::socket& socket, std::string& str)
    {
       uint64_t size;
@@ -40,13 +40,14 @@ namespace glz
       str.resize(size);
       co_await asio::async_read(socket, asio::buffer(str), asio::use_awaitable);
    }
-
+   
    inline asio::awaitable<void> call_rpc(asio::ip::tcp::socket& socket, std::string& buffer)
    {
       co_await co_send_buffer(socket, buffer);
       co_await co_receive_buffer(socket, buffer);
    }
-
+   
+   template <opts Opts = opts{}>
    struct asio_client
    {
       std::string_view host{"localhost"};
@@ -63,35 +64,71 @@ namespace glz
          asio::connect(socket, endpoints);
       }
 
-      template <opts Opts = opts{}, class Params>
+      template <class Params>
       void notify(repe::header&& header, Params&& params)
       {
          header.action |= repe::notify;
-         using namespace repe;
-         request<Opts>(header, std::forward<Params>(params), buffer);
+         repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
          send_buffer(socket, buffer);
       }
-
-      template <opts Opts = opts{}, class Params, class Result>
-      [[nodiscard]] repe::error_t call(repe::header&& header, Params&& params, Result&& result)
+      
+      template <class Result>
+      [[nodiscard]] repe::error_t call(repe::header&& header, Result&& result)
       {
          header.action &= ~repe::notify; // clear invalid notify
-         using namespace repe;
-         request<Opts>(header, std::forward<Params>(params), buffer);
+         header.action |= repe::empty; // no params
+         repe::request<Opts>(std::move(header), nullptr, buffer);
 
          send_buffer(socket, buffer);
          receive_buffer(socket, buffer);
 
-         return decode_response<Opts>(std::forward<Result>(result), buffer);
+         return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
       }
 
-      template <opts Opts = opts{}, class Params>
+      template <class Params, class Result>
+      [[nodiscard]] repe::error_t call(repe::header&& header, Params&& params, Result&& result)
+      {
+         header.action &= ~repe::notify; // clear invalid notify
+         repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
+
+         send_buffer(socket, buffer);
+         receive_buffer(socket, buffer);
+
+         return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
+      }
+      
+      template <class Result, class Params>
+      [[nodiscard]] std::function<Result(Params)> callable(repe::header&& header) {
+         if constexpr (std::same_as<Params, void>) {
+            header.action |= repe::empty;
+            return [this, h = std::move(header)]() mutable -> Result {
+               std::decay_t<Result> result{};
+               const auto e = call(repe::header{h}, result);
+               if (e) {
+                  throw std::runtime_error(e.message);
+               }
+               return result;
+            };
+         }
+         else {
+            header.action &= ~repe::empty;
+            return [this, h = std::move(header)](Params params) mutable -> Result {
+               std::decay_t<Result> result{};
+               const auto e = call(repe::header{h}, params, result);
+               if (e) {
+                  throw std::runtime_error(e.message);
+               }
+               return result;
+            };
+         }
+      }
+
+      template <class Params>
       [[nodiscard]] std::string& call_raw(repe::header&& header, Params&& params)
       {
          header.action &= ~repe::notify; // clear invalid notify
-         using namespace repe;
-         request<Opts>(header, std::forward<Params>(params), buffer);
+         repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
          send_buffer(socket, buffer);
          receive_buffer(socket, buffer);
