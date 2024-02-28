@@ -198,6 +198,7 @@ namespace glz::repe
       if (h.error) {
          error_t error{};
          glz::detail::read<Opts.format>::template op<Opts>(error, ctx, b, e);
+         return error;
       }
       else {
          glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
