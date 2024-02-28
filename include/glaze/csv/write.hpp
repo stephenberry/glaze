@@ -210,7 +210,7 @@ namespace glz
 
                   static constexpr sv key = key_name<I, T, Element::use_reflection>;
 
-                  decltype(auto) mem = [&] {
+                  decltype(auto) mem = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
                         return std::get<I>(t);
                      }
@@ -259,7 +259,7 @@ namespace glz
 
                   static constexpr sv key = key_name<I, T, Element::use_reflection>;
 
-                  decltype(auto) member = [&] {
+                  decltype(auto) member = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
                         return std::get<I>(t);
                      }
@@ -300,7 +300,7 @@ namespace glz
                      static constexpr size_t member_index = Element::member_index;
                      using X = std::decay_t<typename Element::type>;
 
-                     decltype(auto) mem = [&] {
+                     decltype(auto) mem = [&]() -> decltype(auto) {
                         if constexpr (reflectable<T>) {
                            return std::get<I>(t);
                         }

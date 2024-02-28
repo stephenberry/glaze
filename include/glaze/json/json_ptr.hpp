@@ -101,7 +101,7 @@ namespace glz
          }
 
          if constexpr (glaze_object_t<T> || reflectable<T>) {
-            decltype(auto) frozen_map = [&] {
+            decltype(auto) frozen_map = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
 #if ((defined _MSC_VER) && (!defined __clang__))
                   static thread_local auto cmap = make_map<T>();
