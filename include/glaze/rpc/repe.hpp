@@ -558,3 +558,12 @@ namespace glz::repe
       }
    };
 }
+
+template <>
+struct glz::meta<glz::repe::error_e>
+{
+   using enum repe::error_e;
+   static constexpr auto value = enumerate(no_error, server_error_lower, server_error_upper,
+                                           invalid_request, method_not_found, invalid_params,
+                                           internal, parse_error);
+};

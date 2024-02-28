@@ -134,7 +134,7 @@ namespace glz
                std::decay_t<Result> result{};
                const auto e = call(repe::header{h}, result);
                if (e) {
-                  throw std::runtime_error(e.message);
+                  throw std::runtime_error(glz::write_json(e));
                }
                return result;
             };
