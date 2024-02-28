@@ -99,21 +99,21 @@ namespace glz
       }
    };
    
-   template <class Server>
-   concept is_server = requires(Server s) {
+   template <class T>
+   concept is_registry = requires(T t) {
       {
-         s.call(std::declval<std::string&>())
+         t.call(std::declval<std::string&>())
       };
    };
 
-   template <is_server Server>
+   template <is_registry Registry>
    struct asio_server
    {
       asio::io_context ctx{1}; // number of background threads
 
       asio::signal_set signals{ctx, SIGINT, SIGTERM};
 
-      std::function<void(Server&)> init{};
+      std::function<void(Registry&)> init{};
 
       void run()
       {
@@ -126,7 +126,7 @@ namespace glz
 
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {
-         Server server{};
+         Registry server{};
          std::string buffer{};
 
          try {
