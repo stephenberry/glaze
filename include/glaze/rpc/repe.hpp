@@ -307,7 +307,12 @@ namespace glz::repe
                   return;
                }
                
-               write_response<Opts>(value, state);
+               if (state.header.action & empty) {
+                  write_response<Opts>(value, state);
+               }
+               else {
+                  write_response<Opts>(state);
+               }
             });
          }
 
@@ -398,7 +403,12 @@ namespace glz::repe
                      return;
                   }
                   
-                  write_response<Opts>(func, state);
+                  if (state.header.action & empty) {
+                     write_response<Opts>(func, state);
+                  }
+                  else {
+                     write_response<Opts>(state);
+                  }
                });
             }
             else {
@@ -415,7 +425,12 @@ namespace glz::repe
                      return;
                   }
                   
-                  write_response<Opts>(func, state);
+                  if (state.header.action & empty) {
+                     write_response<Opts>(func, state);
+                  }
+                  else {
+                     write_response<Opts>(state);
+                  }
                });
             }
          });

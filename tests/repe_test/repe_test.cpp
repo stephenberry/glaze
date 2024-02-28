@@ -189,7 +189,7 @@ suite structs_of_functions = [] {
          server.call(request);
       }
 
-      expect(server.response == R"([[0,0,0,"/i",null],42])") << server.response;
+      expect(server.response == R"([[0,0,2,"/i",null],null])") << server.response;
 
       {
          auto request = repe::request_json({"/hello"});
@@ -246,7 +246,14 @@ suite structs_of_functions = [] {
          server.call(request);
       }
       
-      expect(server.response == R"([[0,0,0,"/my_string",null],"Howdy!"])");
+      expect(server.response == R"([[0,0,2,"/my_string",null],null])");
+      
+      {
+         auto request = repe::request_json({"/my_string"});
+         server.call(request);
+      }
+      
+      expect(server.response == R"([[0,0,0,"/my_string",null],"Howdy!"])") << server.response;
       
       obj.my_string.clear();
       
