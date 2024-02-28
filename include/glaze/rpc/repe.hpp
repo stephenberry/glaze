@@ -368,6 +368,21 @@ namespace glz::repe
                   decltype(auto) member = get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
                   on<std::decay_t<E>, full_key>(member);
                }
+               
+               // build read/write calls to the object as a variable
+               methods.emplace(full_key, [this, &func](repe::state&& state) {
+                  if (!(state.header.action & empty)) {
+                     if (read_params<Opts>(func, state, response) == 0) {
+                        return;
+                     }
+                  }
+                  
+                  if (state.header.action & notify) {
+                     return;
+                  }
+                  
+                  write_response<Opts>(func, state);
+               });
             }
             else {
                static_assert(std::is_lvalue_reference_v<decltype(func)>);
@@ -559,11 +574,11 @@ namespace glz::repe
    };
 }
 
-template <>
+/*template <>
 struct glz::meta<glz::repe::error_e>
 {
    using enum repe::error_e;
    static constexpr auto value = enumerate(no_error, server_error_lower, server_error_upper,
                                            invalid_request, method_not_found, invalid_params,
                                            internal, parse_error);
-};
+};*/
