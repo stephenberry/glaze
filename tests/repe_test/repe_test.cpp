@@ -277,7 +277,7 @@ suite structs_of_functions = [] {
          server.call(request);
       }
       
-      expect(server.response == R"([[0,0,0,"",null],3.3])") << server.response;
+      expect(server.response == R"([[0,0,0,"",null],{"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""}])") << server.response;
    };
 };
 
