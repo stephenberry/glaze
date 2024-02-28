@@ -86,7 +86,7 @@ suite repe_tests = [] {
       {
          my_struct client_params{"Hello", "World"};
 
-         auto request = repe::request_json({.method = "concat", .id = 5ul, .notification = true}, client_params);
+         auto request = repe::request_json({.method = "concat", .id = 5ul, .action = repe::notify}, client_params);
 
          server.call(request);
       }
@@ -217,7 +217,7 @@ suite structs_of_functions = [] {
          server.call(request);
       }
 
-      expect(server.response == R"([[0,0,0,"/my_functions/void_func",null],null])");
+      expect(server.response == R"([[0,0,2,"/my_functions/void_func",null],null])") << server.response;
 
       {
          auto request = repe::request_json({"/my_functions/hello"});

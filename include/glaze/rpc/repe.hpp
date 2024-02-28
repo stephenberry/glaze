@@ -9,6 +9,9 @@
 
 namespace glz::repe
 {
+   constexpr uint8_t notify = 0b00000001;
+   constexpr uint8_t empty = 0b00000010;
+   
    // we put the method and id at the top of the class for easier initialization
    // the order in the actual message is not the same
    struct header final
@@ -17,15 +20,18 @@ namespace glz::repe
       std::variant<std::monostate, uint64_t, std::string_view> id{}; // an identifier
       static constexpr uint8_t version = 0; // the REPE version
       uint8_t error = 0; // 0 denotes no error
-      uint8_t notification = 0; // whether this RPC is a notification (no response returned)
+      uint8_t action = 0; // how the RPC is to be handled (supports notifications and more)
 
       struct glaze
       {
          using T = header;
          static constexpr sv name = "glz::repe::header"; // Hack to fix MSVC (shouldn't be needed)
-         static constexpr auto value = glz::array(&T::version, &T::error, &T::notification, &T::method, &T::id);
+         static constexpr auto value = glz::array(&T::version, &T::error, &T::action, &T::method, &T::id);
       };
    };
+   
+   template <class T>
+   concept is_header = std::same_as<std::decay_t<T>, header>;
 
    enum struct error_e : int32_t {
       no_error = 0,
@@ -55,10 +61,13 @@ namespace glz::repe
    struct state final
    {
       const std::string_view message{};
-      const repe::header& header;
+      repe::header& header;
       std::string& buffer;
       error_t& error;
    };
+   
+   template <class T>
+   concept is_state = std::same_as<std::decay_t<T>, state>;
 
    template <class T>
    constexpr auto lvalue = std::is_lvalue_reference_v<T>;
@@ -107,7 +116,7 @@ namespace glz::repe
    }
 
    template <opts Opts, class Value>
-   void write_response(Value&& value, auto&& state)
+   void write_response(Value&& value, is_state auto&& state)
    {
       if (state.error) {
          if constexpr (Opts.format == json) {
@@ -119,10 +128,33 @@ namespace glz::repe
       }
       else {
          if constexpr (Opts.format == json) {
+            state.header.action &= ~empty; // clear empty bit because we are writing a response
             write_json(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.buffer);
          }
          else {
             static_assert(false_v<Value>, "TODO: implement BEVE");
+         }
+      }
+   }
+   
+   template <opts Opts>
+   void write_response(is_state auto&& state)
+   {
+      if (state.error) {
+         if constexpr (Opts.format == json) {
+            write_json(std::forward_as_tuple(header{.error = true}, state.error), state.buffer);
+         }
+         else {
+            static_assert(false_v<decltype(Opts)>, "TODO: implement BEVE");
+         }
+      }
+      else {
+         if constexpr (Opts.format == json) {
+            state.header.action = empty;
+            write_json(std::forward_as_tuple(state.header, nullptr), state.buffer);
+         }
+         else {
+            static_assert(false_v<decltype(Opts)>, "TODO: implement BEVE");
          }
       }
    }
@@ -189,8 +221,10 @@ namespace glz::repe
    {
       return glz::write<Opts>(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
    }
-
-   inline auto request_json(const header& header) { return glz::write_json(std::forward_as_tuple(header, nullptr)); }
+   
+   inline auto request_json(header&& header) {
+      header.action |= empty; // because no value provided
+      return glz::write_json(std::forward_as_tuple(header, nullptr)); }
 
    template <class Value>
    inline auto request_json(const header& header, Value&& value)
@@ -282,17 +316,17 @@ namespace glz::repe
                   methods.emplace(full_key,
                                   [callback = func](repe::state&& state) mutable {
                                      callback();
-                                     if (state.header.notification) {
+                                     if (state.header.action & notify) {
                                         return;
                                      }
-                     write_response<Opts>(std::nullptr_t{}, state);
+                     write_response<Opts>(state);
                                   });
                }
                else {
                   methods.emplace(full_key,
                                   [result = Result{}, callback = func](repe::state&& state) mutable {
                                      result = callback();
-                                     if (state.header.notification) {
+                                     if (state.header.action & notify) {
                                         return;
                                      }
                                      write_response<Opts>(result, state);
@@ -313,7 +347,7 @@ namespace glz::repe
                      return;
                   }
                   result = callback(params);
-                  if (state.header.notification) {
+                  if (state.header.action & notify) {
                      return;
                   }
                   write_response<Opts>(result, state);
@@ -332,13 +366,13 @@ namespace glz::repe
                static_assert(std::is_lvalue_reference_v<decltype(func)>);
                // this is a variable and not a function, so we build RPC read/write calls
                methods.emplace(full_key, [this, &func](repe::state&& state) {
-                  if (!state.message.starts_with("null")) {
+                  if (!(state.header.action & empty)) {
                      if (read_params<Opts>(func, state, response) == 0) {
                         return;
                      }
                   }
                   
-                  if (state.header.notification) {
+                  if (state.header.action & notify) {
                      return;
                   }
                   
@@ -364,7 +398,7 @@ namespace glz::repe
                   return;
                }
                callback(params, result);
-               if (state.header.notification) {
+               if (state.header.action & notify) {
                   return;
                }
                write_response<Opts>(result, state);
@@ -387,7 +421,7 @@ namespace glz::repe
                                   return;
                                }
                                callback(params, result);
-                               if (state.header.notification) {
+                               if (state.header.action & notify) {
                                   return;
                                }
                                write_response<Opts>(result, state);
@@ -403,7 +437,7 @@ namespace glz::repe
                   callback(params, result);
                }
                // no need to lock local result writing
-               if (state.header.notification) {
+               if (state.header.action & notify) {
                   return;
                }
                write_response<Opts>(result, state);
@@ -417,7 +451,7 @@ namespace glz::repe
                }
                std::unique_lock lock{get_shared_mutex()};
                callback(params, result);
-               if (state.header.notification) {
+               if (state.header.action & notify) {
                   return;
                }
                write_response<Opts>(result, state);
@@ -430,7 +464,7 @@ namespace glz::repe
                   return;
                }
                callback(params, result);
-               if (state.header.notification) {
+               if (state.header.action & notify) {
                   return;
                }
                write_response<Opts>(result, state);
@@ -448,15 +482,21 @@ namespace glz::repe
       }*/
       
       template <class Value>
+      bool call(const header& header)
+      {
+         return call(request<Opts>(header));
+      }
+            
+      template <class Value>
       bool call(const header& header, Value&& value)
       {
-         return request<Opts>(header, std::forward<Value>(value));
+         return call(request<Opts>(header, std::forward<Value>(value)));
       }
 
       template <class Value>
       bool call(const header& header, Value&& value, auto& buffer)
       {
-         return request<Opts>(header, std::forward<Value>(value), buffer);
+         return call(request<Opts>(header, std::forward<Value>(value), buffer));
       }
 
       // returns true if there is a result to send (not a notification)
@@ -480,7 +520,7 @@ namespace glz::repe
          }
          else {
             handle_error(b);
-            return !h.notification;
+            return !(h.action & notify);
          }
 
          glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
@@ -488,7 +528,7 @@ namespace glz::repe
          if (bool(ctx.error)) {
             parse_error pe{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
             response = format_error(pe, msg);
-            return !h.notification;
+            return !(h.action & notify);
          }
 
          if (*b == ',') {
@@ -496,7 +536,7 @@ namespace glz::repe
          }
          else {
             handle_error(b);
-            return !h.notification;
+            return !(h.action & notify);
          }
 
          if (auto it = methods.find(h.method); it != methods.end()) {
@@ -507,7 +547,7 @@ namespace glz::repe
             write_json(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
          }
 
-         return !h.notification;
+         return !(h.action & notify);
       }
    };
 }
