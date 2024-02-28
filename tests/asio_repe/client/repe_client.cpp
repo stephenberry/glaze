@@ -17,9 +17,11 @@ void asio_client_test()
          data.emplace_back(i);
          int sum{};
          if (auto ec = client.call({"/sum"}, data, sum); ec) {
-            std::cout << ec.message << '\n';
+            std::cerr << glz::write_json(ec) << '\n';
          }
-         std::cout << sum << '\n';
+         else {
+            std::cout << sum << '\n';
+         }
       }
       
       auto sum = client.callable<int(const std::vector<int>&)>({"/sum"});
