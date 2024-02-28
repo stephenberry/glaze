@@ -51,7 +51,7 @@ namespace glz
    {
       std::string_view host{"localhost"};
       std::string_view service{"1234"};
-      asio::io_context ctx;
+      asio::io_context ctx{1};
       asio::ip::tcp::socket socket{ctx};
       asio::ip::tcp::resolver resolver{ctx};
 
@@ -98,8 +98,15 @@ namespace glz
          return buffer;
       }
    };
-
+   
    template <class Server>
+   concept is_server = requires(Server s) {
+      {
+         s.call(std::declval<std::string&>())
+      };
+   };
+
+   template <is_server Server>
    struct asio_server
    {
       asio::io_context ctx{1}; // number of background threads
