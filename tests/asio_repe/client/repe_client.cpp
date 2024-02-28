@@ -11,6 +11,7 @@ void asio_client_test()
 {
    try {
       glz::asio_client client{};
+      client.init();
 
       std::vector<int> data{};
       for (int i = 1; i < 10; ++i) {

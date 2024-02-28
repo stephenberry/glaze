@@ -76,38 +76,59 @@ namespace glz
    template <opts Opts = opts{}>
    struct asio_client
    {
-      std::string_view host{"localhost"};
-      std::string_view service{"1234"};
-      asio::io_context ctx{1};
-      asio::ip::tcp::socket socket{ctx};
-      asio::ip::tcp::resolver resolver{ctx};
-
+      std::string host{"localhost"};
+      std::string service{"1234"};
+      uint32_t concurrency{1};
+      bool initialized = false;
+      
+      struct glaze {
+         using T = asio_client;
+         static constexpr auto value = glz::object(&T::host, &T::service, &T::concurrency);
+      };
+      
+      std::shared_ptr<asio::io_context> ctx{};
+      std::shared_ptr<asio::ip::tcp::socket> socket{};
+      
       std::string buffer{};
-
-      asio_client()
+      
+      void init()
       {
-         auto endpoints = resolver.resolve(host, service);
-         asio::connect(socket, endpoints);
+         if (!initialized) {
+            ctx = std::make_shared<asio::io_context>(concurrency);
+            socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
+            asio::ip::tcp::resolver resolver{*ctx};
+            auto endpoints = resolver.resolve(host, service);
+            asio::connect(*socket, endpoints);
+         }
+         initialized = true;
       }
 
       template <class Params>
       void notify(repe::header&& header, Params&& params)
       {
+         if (!initialized) {
+            throw std::runtime_error("client never initialized");
+         }
+         
          header.action |= repe::notify;
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
-         send_buffer(socket, buffer);
+         send_buffer(*socket, buffer);
       }
       
       template <class Result>
       [[nodiscard]] repe::error_t call(repe::header&& header, Result&& result)
       {
+         if (!initialized) {
+            throw std::runtime_error("client never initialized");
+         }
+         
          header.action &= ~repe::notify; // clear invalid notify
          header.action |= repe::empty; // no params
          repe::request<Opts>(std::move(header), nullptr, buffer);
 
-         send_buffer(socket, buffer);
-         receive_buffer(socket, buffer);
+         send_buffer(*socket, buffer);
+         receive_buffer(*socket, buffer);
 
          return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
       }
@@ -115,11 +136,15 @@ namespace glz
       template <class Params, class Result>
       [[nodiscard]] repe::error_t call(repe::header&& header, Params&& params, Result&& result)
       {
+         if (!initialized) {
+            throw std::runtime_error("client never initialized");
+         }
+         
          header.action &= ~repe::notify; // clear invalid notify
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
-         send_buffer(socket, buffer);
-         receive_buffer(socket, buffer);
+         send_buffer(*socket, buffer);
+         receive_buffer(*socket, buffer);
 
          return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
       }
@@ -155,11 +180,15 @@ namespace glz
       template <class Params>
       [[nodiscard]] std::string& call_raw(repe::header&& header, Params&& params)
       {
+         if (!initialized) {
+            throw std::runtime_error("client never initialized");
+         }
+         
          header.action &= ~repe::notify; // clear invalid notify
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
-         send_buffer(socket, buffer);
-         receive_buffer(socket, buffer);
+         send_buffer(*socket, buffer);
+         receive_buffer(*socket, buffer);
          return buffer;
       }
    };
