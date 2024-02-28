@@ -47,6 +47,21 @@ namespace glz
       co_await co_receive_buffer(socket, buffer);
    }
    
+   template <class>
+    struct func_traits;
+
+    template <class Result, class Params>
+    struct func_traits<Result(Params)> {
+        using result_type = Result;
+       using params_type = Params;
+    };
+
+    template <class T>
+    using func_result_t = typename func_traits<T>::result_type;
+
+    template <class T>
+    using func_params_t = typename func_traits<T>::params_type;
+   
    template <opts Opts = opts{}>
    struct asio_client
    {
@@ -98,8 +113,10 @@ namespace glz
          return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
       }
       
-      template <class Result, class Params>
-      [[nodiscard]] std::function<Result(Params)> callable(repe::header&& header) {
+      template <class Func>
+      [[nodiscard]] std::function<func_result_t<Func>(func_params_t<Func>)> callable(repe::header&& header) {
+         using Params = func_params_t<Func>;
+         using Result = func_result_t<Func>;
          if constexpr (std::same_as<Params, void>) {
             header.action |= repe::empty;
             return [this, h = std::move(header)]() mutable -> Result {

@@ -28,7 +28,7 @@ void asio_client_test()
          std::cerr << sum << '\n';
       }
       
-      auto sum = client.callable<int, const std::vector<int>&>({"/sum"});
+      auto sum = client.callable<int(const std::vector<int>&)>({"/sum"});
       
       std::cerr << "callable result: " << sum(std::vector<int>{1, 2, 3}) << '\n';
    }
