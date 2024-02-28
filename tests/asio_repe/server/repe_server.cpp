@@ -13,11 +13,11 @@ using namespace boost::ut;
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/repe.hpp"
 
-inline void init_server(glz::repe::server<>& server)
+struct api
 {
-   server.on("sum", [](std::vector<int>& vec, int& sum) { sum = std::reduce(vec.begin(), vec.end()); });
-   server.on("max", [](std::vector<double>& vec, double& max) { max = std::ranges::max(vec); });
-}
+   std::function<int(std::vector<int>& vec)> sum = [](std::vector<int>& vec) { return std::reduce(vec.begin(), vec.end()); };
+   std::function<double(std::vector<double>& vec)> max = [](std::vector<double>& vec) { return std::ranges::max(vec); };
+};
 
 void run_server()
 {
@@ -25,7 +25,10 @@ void run_server()
 
    try {
       glz::asio_server<glz::repe::server<>> server{};
-      server.init = init_server;
+      api methods{};
+      server.init = [&](glz::repe::server<>& server) {
+         server.on(methods);
+      };
       server.run();
    }
    catch (std::exception& e) {

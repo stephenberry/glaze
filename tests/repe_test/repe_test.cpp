@@ -144,6 +144,7 @@ struct my_functions_t
    std::function<std::string_view()> world = []() -> std::string_view { return "World"; };
    std::function<int()> get_number = [] { return 42; };
    std::function<void()> void_func = []{};
+   std::function<double(std::vector<double>& vec)> max = [](std::vector<double>& vec) { return std::ranges::max(vec); };
 };
 
 struct meta_functions_t
@@ -256,6 +257,13 @@ suite structs_of_functions = [] {
       
       // we expect an empty string returned because we cleared it
       expect(server.response == R"([[0,0,0,"/my_string",null],""])");
+      
+      {
+         auto request = repe::request_json({"/my_functions/max"}, std::vector<double>{1.1, 3.3, 2.25});
+         server.call(request);
+      }
+      
+      expect(server.response == R"([[0,0,0,"/my_functions/max",null],3.3])") << server.response;
    };
 };
 

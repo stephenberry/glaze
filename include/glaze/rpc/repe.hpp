@@ -254,7 +254,7 @@ namespace glz::repe
    // This server is designed to be lightweight, and meant to be constructed on a per client basis
    // This server does not support adding methods from RPC calls or adding methods once RPC calls can be made
    // Each instance of this server is expected to be accessed by a single thread, so a single std::string response
-   // buffer is used You can register object memory as the input parameter and the output parameter, which can improve
+   // buffer is used. You can register object memory as the input parameter and the output parameter, which can improve
    // performance or may be required for hardware interfaces or restricted memory interfaces Access to this registered
    // memory is thread safe across server instances No thread locks are needed if you don't pass input and output
    // parameters by reference

@@ -110,16 +110,11 @@ namespace glz
 
       void run()
       {
-         if (init) {
-            signals.async_wait([&](auto, auto) { ctx.stop(); });
+         signals.async_wait([&](auto, auto) { ctx.stop(); });
 
-            asio::co_spawn(ctx, listener(), asio::detached);
+         asio::co_spawn(ctx, listener(), asio::detached);
 
-            ctx.run();
-         }
-         else {
-            std::cerr << "init was never supplied\n";
-         }
+         ctx.run();
       }
 
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
@@ -128,7 +123,9 @@ namespace glz
          std::string buffer{};
 
          try {
-            init(server);
+            if (init) {
+               init(server);
+            }
 
             while (true) {
                co_await co_receive_buffer(socket, buffer);
@@ -138,7 +135,7 @@ namespace glz
             }
          }
          catch (std::exception& e) {
-            std::cerr << e.what() << '\n';
+            std::fprintf(stderr, "%s\n", e.what());
          }
       }
 

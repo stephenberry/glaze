@@ -22,7 +22,7 @@ void asio_client_test()
       for (int i = 1; i < 100; ++i) {
          data.emplace_back(i);
          int sum{};
-         if (auto ec = client.call({"sum"}, data, sum); ec) {
+         if (auto ec = client.call({"/sum"}, data, sum); ec) {
             std::cerr << ec.message << '\n';
          }
          std::cerr << sum << '\n';
