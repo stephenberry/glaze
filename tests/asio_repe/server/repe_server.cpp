@@ -24,10 +24,10 @@ void run_server()
    std::cerr << "Server active...\n";
 
    try {
-      glz::asio_server<glz::repe::server<>> server{};
+      glz::asio_server<glz::repe::registry<>> server{};
       api methods{};
-      server.init = [&](glz::repe::server<>& server) {
-         server.on(methods);
+      server.init = [&](glz::repe::registry<>& registry) {
+         registry.on(methods);
       };
       server.run();
    }

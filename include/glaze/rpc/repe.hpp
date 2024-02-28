@@ -259,7 +259,7 @@ namespace glz::repe
    // memory is thread safe across server instances No thread locks are needed if you don't pass input and output
    // parameters by reference
    template <opts Opts = opts{}>
-   struct server
+   struct registry
    {
       using procedure = std::function<void(state&&)>; // RPC method
       std::unordered_map<std::string_view, procedure, detail::string_hash, std::equal_to<>> methods;

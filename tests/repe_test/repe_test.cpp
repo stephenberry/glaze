@@ -31,7 +31,7 @@ struct thing
 
 suite repe_tests = [] {
    "references"_test = [] {
-      repe::server server{};
+      repe::registry server{};
 
       my_struct params{};
       std::string result{};
@@ -53,7 +53,7 @@ suite repe_tests = [] {
    };
 
    "concrete internal storage"_test = [] {
-      repe::server server{};
+      repe::registry server{};
 
       server.on("concat", [](my_struct& params, std::string& result) {
          params.hello = "Aha";
@@ -72,7 +72,7 @@ suite repe_tests = [] {
    };
 
    "notification"_test = [] {
-      repe::server server{};
+      repe::registry server{};
 
       my_struct params{};
       std::string result{};
@@ -95,7 +95,7 @@ suite repe_tests = [] {
    };
 
    "error support"_test = [] {
-      repe::server server{};
+      repe::registry server{};
 
       server.on("concat", [&](my_struct& params, std::string& result) {
          params.hello = "Aha";
@@ -115,7 +115,7 @@ suite repe_tests = [] {
    };
 
    "thing"_test = [] {
-      repe::server server{};
+      repe::registry server{};
 
       server.on("modify", [&](thing& params, my_struct& result) {
          result.hello =
@@ -169,7 +169,7 @@ struct my_nested_functions_t
 
 suite structs_of_functions = [] {
    "structs_of_functions"_test = [] {
-      repe::server server{};
+      repe::registry server{};
 
       my_functions_t obj{};
 
@@ -207,7 +207,7 @@ suite structs_of_functions = [] {
    };
 
    "nested_structs_of_functions"_test = [] {
-      repe::server server{};
+      repe::registry server{};
 
       my_nested_functions_t obj{};
 
