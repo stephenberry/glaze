@@ -265,7 +265,7 @@ namespace glz::repe
             }();
 
             using E = typename Element::type;
-            decltype(auto) func = [&] {
+            decltype(auto) func = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
                   return std::get<I>(t);
                }
@@ -329,23 +329,14 @@ namespace glz::repe
                }
             }
             else {
-               decltype(auto) member = [&] {
-                  if constexpr (reflectable<T>) {
-                     return std::get<I>(t);
-                  }
-                  else {
-                     return get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
-                  }
-               }();
-               
+               static_assert(std::is_lvalue_reference_v<decltype(func)>);
                // this is a variable and not a function, so we build RPC read/write calls
-               methods.emplace(full_key, [&member](repe::state&& state) {
+               methods.emplace(full_key, [&func](repe::state&& state) {
                   if (state.header.notification) {
                      return;
                   }
                   
-                  
-                  write_response<Opts>(member, state);
+                  write_response<Opts>(func, state);
                });
             }
          });
