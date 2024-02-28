@@ -163,6 +163,7 @@ struct my_nested_functions
    my_functions my_functions{};
    meta_functions meta_functions{};
    std::function<std::string(const std::string&)> append_awesome = [](const std::string& in) { return in + " awesome!"; };
+   std::string my_string{};
 };
 
 suite structs_of_functions = [] {
@@ -238,6 +239,23 @@ suite structs_of_functions = [] {
       }
       
       expect(server.response == R"([[0,0,0,"/append_awesome",null],"you are awesome!"])");
+      
+      {
+         auto request = repe::request_json({"/my_string"}, "Howdy!");
+         server.call(request);
+      }
+      
+      expect(server.response == R"([[0,0,0,"/my_string",null],"Howdy!"])");
+      
+      obj.my_string.clear();
+      
+      {
+         auto request = repe::request_json({"/my_string"});
+         server.call(request);
+      }
+      
+      // we expect an empty string returned because we cleared it
+      expect(server.response == R"([[0,0,0,"/my_string",null],""])");
    };
 };
 
