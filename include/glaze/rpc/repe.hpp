@@ -217,7 +217,7 @@ namespace glz::repe
    
    template <opts Opts>
    [[nodiscard]] error_t decode_response(auto& buffer) {
-      return decode_response(ignore_result{}, buffer);
+      return decode_response<Opts>(ignore_result{}, buffer);
    }
    
    template <opts Opts, class Value>
