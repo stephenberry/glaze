@@ -135,6 +135,30 @@ namespace glz
 
          return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
       }
+      
+      template <class Result = glz::raw_json>
+      [[nodiscard]] glz::expected<Result, repe::error_t> get(repe::header&& header)
+      {
+         if (!initialized) {
+            throw std::runtime_error("client never initialized");
+         }
+
+         header.action &= ~repe::notify; // clear invalid notify
+         header.action |= repe::empty; // no params
+         repe::request<Opts>(std::move(header), nullptr, buffer);
+
+         send_buffer(*socket, buffer);
+         receive_buffer(*socket, buffer);
+         
+         std::decay_t<Result> result{};
+         const auto error = repe::decode_response<Opts>(result, buffer);
+         if (error) {
+            return {error};
+         }
+         else {
+            return result;
+         }
+      }
 
       template <class Params>
       [[nodiscard]] repe::error_t set(repe::header&& header, Params&& params)
