@@ -17,7 +17,7 @@ namespace glz
       asio::write(socket, asio::buffer(&size, sizeof(uint64_t)), asio::transfer_exactly(sizeof(uint64_t)));
       asio::write(socket, asio::buffer(str), asio::transfer_exactly(size));
    }
-   
+
    inline void receive_buffer(asio::ip::tcp::socket& socket, std::string& str)
    {
       uint64_t size;
@@ -25,14 +25,14 @@ namespace glz
       str.resize(size);
       asio::read(socket, asio::buffer(str), asio::transfer_exactly(size));
    }
-   
+
    inline asio::awaitable<void> co_send_buffer(asio::ip::tcp::socket& socket, const std::string_view str)
    {
       const uint64_t size = str.size();
       co_await asio::async_write(socket, asio::buffer(&size, sizeof(uint64_t)), asio::use_awaitable);
       co_await asio::async_write(socket, asio::buffer(str), asio::use_awaitable);
    }
-   
+
    inline asio::awaitable<void> co_receive_buffer(asio::ip::tcp::socket& socket, std::string& str)
    {
       uint64_t size;
@@ -40,39 +40,41 @@ namespace glz
       str.resize(size);
       co_await asio::async_read(socket, asio::buffer(str), asio::use_awaitable);
    }
-   
+
    inline asio::awaitable<void> call_rpc(asio::ip::tcp::socket& socket, std::string& buffer)
    {
       co_await co_send_buffer(socket, buffer);
       co_await co_receive_buffer(socket, buffer);
    }
-   
+
    template <class>
-    struct func_traits;
-   
+   struct func_traits;
+
    template <class Result>
-   struct func_traits<Result()> {
-       using result_type = Result;
+   struct func_traits<Result()>
+   {
+      using result_type = Result;
       using params_type = void;
       using std_func_sig = std::function<Result()>;
    };
 
-    template <class Result, class Params>
-    struct func_traits<Result(Params)> {
-        using result_type = Result;
-       using params_type = Params;
-       using std_func_sig = std::function<Result(Params)>;
-    };
+   template <class Result, class Params>
+   struct func_traits<Result(Params)>
+   {
+      using result_type = Result;
+      using params_type = Params;
+      using std_func_sig = std::function<Result(Params)>;
+   };
 
-    template <class T>
-    using func_result_t = typename func_traits<T>::result_type;
+   template <class T>
+   using func_result_t = typename func_traits<T>::result_type;
 
-    template <class T>
-    using func_params_t = typename func_traits<T>::params_type;
-   
+   template <class T>
+   using func_params_t = typename func_traits<T>::params_type;
+
    template <class T>
    using std_func_sig_t = typename func_traits<T>::std_func_sig;
-   
+
    template <opts Opts = opts{}>
    struct asio_client
    {
@@ -80,17 +82,18 @@ namespace glz
       std::string service{"1234"};
       uint32_t concurrency{1};
       bool initialized = false;
-      
-      struct glaze {
+
+      struct glaze
+      {
          using T = asio_client;
          static constexpr auto value = glz::object(&T::host, &T::service, &T::concurrency);
       };
-      
+
       std::shared_ptr<asio::io_context> ctx{};
       std::shared_ptr<asio::ip::tcp::socket> socket{};
-      
+
       std::string buffer{};
-      
+
       void init()
       {
          if (!initialized) {
@@ -109,20 +112,20 @@ namespace glz
          if (!initialized) {
             throw std::runtime_error("client never initialized");
          }
-         
+
          header.action |= repe::notify;
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
          send_buffer(*socket, buffer);
       }
-      
+
       template <class Result>
       [[nodiscard]] repe::error_t get(repe::header&& header, Result&& result)
       {
          if (!initialized) {
             throw std::runtime_error("client never initialized");
          }
-         
+
          header.action &= ~repe::notify; // clear invalid notify
          header.action |= repe::empty; // no params
          repe::request<Opts>(std::move(header), nullptr, buffer);
@@ -132,14 +135,14 @@ namespace glz
 
          return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
       }
-      
+
       template <class Params>
       [[nodiscard]] repe::error_t set(repe::header&& header, Params&& params)
       {
          if (!initialized) {
             throw std::runtime_error("client never initialized");
          }
-         
+
          header.action &= ~repe::notify; // clear invalid notify
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
@@ -155,7 +158,7 @@ namespace glz
          if (!initialized) {
             throw std::runtime_error("client never initialized");
          }
-         
+
          header.action &= ~repe::notify; // clear invalid notify
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
@@ -164,9 +167,10 @@ namespace glz
 
          return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
       }
-      
+
       template <class Func>
-      [[nodiscard]] std_func_sig_t<Func> callable(repe::header&& header) {
+      [[nodiscard]] std_func_sig_t<Func> callable(repe::header&& header)
+      {
          using Params = func_params_t<Func>;
          using Result = func_result_t<Func>;
          if constexpr (std::same_as<Params, void>) {
@@ -199,7 +203,7 @@ namespace glz
          if (!initialized) {
             throw std::runtime_error("client never initialized");
          }
-         
+
          header.action &= ~repe::notify; // clear invalid notify
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
@@ -208,7 +212,7 @@ namespace glz
          return buffer;
       }
    };
-   
+
    template <class T>
    concept is_registry = requires(T t) {
       {

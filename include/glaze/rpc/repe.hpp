@@ -11,7 +11,7 @@ namespace glz::repe
 {
    constexpr uint8_t notify = 0b00000001;
    constexpr uint8_t empty = 0b00000010;
-   
+
    // we put the method and id at the top of the class for easier initialization
    // the order in the actual message is not the same
    struct header final
@@ -29,7 +29,7 @@ namespace glz::repe
          static constexpr auto value = glz::array(&T::version, &T::error, &T::action, &T::method, &T::id);
       };
    };
-   
+
    template <class T>
    concept is_header = std::same_as<std::decay_t<T>, header>;
 
@@ -65,7 +65,7 @@ namespace glz::repe
       std::string& buffer;
       error_t& error;
    };
-   
+
    template <class T>
    concept is_state = std::same_as<std::decay_t<T>, state>;
 
@@ -136,7 +136,7 @@ namespace glz::repe
          }
       }
    }
-   
+
    template <opts Opts>
    void write_response(is_state auto&& state)
    {
@@ -158,8 +158,9 @@ namespace glz::repe
          }
       }
    }
-   
-   struct ignore_result final {};
+
+   struct ignore_result final
+   {};
 
    template <opts Opts, class Result>
    [[nodiscard]] error_t decode_response(Result&& result, auto& buffer)
@@ -202,24 +203,25 @@ namespace glz::repe
          glz::detail::read<Opts.format>::template op<Opts>(error, ctx, b, e);
          return error;
       }
-      
+
       if constexpr (!std::same_as<std::decay_t<Result>, ignore_result>) {
          glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
-         
+
          if (bool(ctx.error)) {
             parse_error pe{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
             return {error_e::parse_error, format_error(pe, buffer)};
          }
       }
-      
+
       return {};
    }
-   
+
    template <opts Opts>
-   [[nodiscard]] error_t decode_response(auto& buffer) {
+   [[nodiscard]] error_t decode_response(auto& buffer)
+   {
       return decode_response<Opts>(ignore_result{}, buffer);
    }
-   
+
    template <opts Opts, class Value>
    inline auto request(const header& header, Value&& value)
    {
@@ -231,12 +233,15 @@ namespace glz::repe
    {
       return glz::write<Opts>(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
    }
-   
-   inline auto request_json(header&& header) {
+
+   inline auto request_json(header&& header)
+   {
       header.action |= empty; // because no value provided
-      return glz::write_json(std::forward_as_tuple(header, nullptr)); }
-   
-   inline auto request_json(const header& h) {
+      return glz::write_json(std::forward_as_tuple(header, nullptr));
+   }
+
+   inline auto request_json(const header& h)
+   {
       repe::header copy = h;
       copy.action |= empty; // because no value provided
       return request_json(std::move(copy));
@@ -302,7 +307,7 @@ namespace glz::repe
                return nullptr;
             }
          }();
-         
+
          if constexpr (parent == "" && (glaze_object_t<T> || reflectable<T>)) {
             // build read/write calls to the top level object
             methods.emplace("", [this, &value](repe::state&& state) {
@@ -311,11 +316,11 @@ namespace glz::repe
                      return;
                   }
                }
-               
+
                if (state.header.action & notify) {
                   return;
                }
-               
+
                if (state.header.action & empty) {
                   write_response<Opts>(value, state);
                }
@@ -345,41 +350,40 @@ namespace glz::repe
                   return get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
                }
             }();
-            
+
             // This logic chain should match glz::cli_menu
             using Func = decltype(func);
             if constexpr (std::is_invocable_v<Func>) {
                using Result = std::invoke_result_t<Func>;
-               if constexpr (std::same_as<Result, void>) {                  
-                  methods.emplace(full_key,
-                                  [callback = func](repe::state&& state) mutable {
-                                     callback();
-                                     if (state.header.action & notify) {
-                                        return;
-                                     }
+               if constexpr (std::same_as<Result, void>) {
+                  methods.emplace(full_key, [callback = func](repe::state&& state) mutable {
+                     callback();
+                     if (state.header.action & notify) {
+                        return;
+                     }
                      write_response<Opts>(state);
-                                  });
+                  });
                }
                else {
-                  methods.emplace(full_key,
-                                  [result = Result{}, callback = func](repe::state&& state) mutable {
-                                     result = callback();
-                                     if (state.header.action & notify) {
-                                        return;
-                                     }
-                                     write_response<Opts>(result, state);
-                                  });
+                  methods.emplace(full_key, [result = Result{}, callback = func](repe::state&& state) mutable {
+                     result = callback();
+                     if (state.header.action & notify) {
+                        return;
+                     }
+                     write_response<Opts>(result, state);
+                  });
                }
             }
             else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
                using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
                constexpr auto N = std::tuple_size_v<Tuple>;
                static_assert(N == 1, "Only one input is allowed for your function");
-               
+
                using Params = std::tuple_element_t<0, Tuple>;
                using Result = std::invoke_result_t<Func, Params>;
-               
-               methods.emplace(full_key, [this, params = std::decay_t<Params>{}, result = std::decay_t<Result>{}, callback = func](repe::state&& state) mutable {
+
+               methods.emplace(full_key, [this, params = std::decay_t<Params>{}, result = std::decay_t<Result>{},
+                                          callback = func](repe::state&& state) mutable {
                   // no need to lock locals
                   if (read_params<Opts>(params, state, response) == 0) {
                      return;
@@ -399,7 +403,7 @@ namespace glz::repe
                   decltype(auto) member = get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
                   on<std::decay_t<E>, full_key>(member);
                }
-               
+
                // build read/write calls to the object as a variable
                methods.emplace(full_key, [this, &func](repe::state&& state) {
                   if (!(state.header.action & empty)) {
@@ -407,11 +411,11 @@ namespace glz::repe
                         return;
                      }
                   }
-                  
+
                   if (state.header.action & notify) {
                      return;
                   }
-                  
+
                   if (state.header.action & empty) {
                      write_response<Opts>(func, state);
                   }
@@ -429,11 +433,11 @@ namespace glz::repe
                         return;
                      }
                   }
-                  
+
                   if (state.header.action & notify) {
                      return;
                   }
-                  
+
                   if (state.header.action & empty) {
                      write_response<Opts>(func, state);
                   }
@@ -543,13 +547,13 @@ namespace glz::repe
       void on(const sv name, Params&& params, Result&& result, Callback&& callback) {
 
       }*/
-      
+
       template <class Value>
       bool call(const header& header)
       {
          return call(request<Opts>(header));
       }
-            
+
       template <class Value>
       bool call(const header& header, Value&& value)
       {

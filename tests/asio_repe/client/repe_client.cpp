@@ -1,11 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#include <iostream>
+
 #include "glaze/ext/glaze_asio.hpp"
 #include "glaze/glaze.hpp"
 #include "glaze/rpc/repe.hpp"
-
-#include <iostream>
 
 void asio_client_test()
 {
@@ -24,9 +24,9 @@ void asio_client_test()
             std::cout << sum << '\n';
          }
       }
-      
+
       auto sum = client.callable<int(const std::vector<int>&)>({"/sum"});
-      
+
       std::cout << "callable result: " << sum(std::vector<int>{1, 2, 3}) << '\n';
    }
    catch (const std::exception& e) {

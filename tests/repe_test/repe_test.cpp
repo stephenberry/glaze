@@ -143,7 +143,7 @@ struct my_functions_t
    std::function<std::string_view()> hello = []() -> std::string_view { return "Hello"; };
    std::function<std::string_view()> world = []() -> std::string_view { return "World"; };
    std::function<int()> get_number = [] { return 42; };
-   std::function<void()> void_func = []{};
+   std::function<void()> void_func = [] {};
    std::function<double(std::vector<double>& vec)> max = [](std::vector<double>& vec) { return std::ranges::max(vec); };
 };
 
@@ -152,8 +152,9 @@ struct meta_functions_t
    std::function<std::string_view()> hello = []() -> std::string_view { return "Hello"; };
    std::function<std::string_view()> world = []() -> std::string_view { return "World"; };
    std::function<int()> get_number = [] { return 42; };
-   
-   struct glaze {
+
+   struct glaze
+   {
       using T = meta_functions_t;
       static constexpr auto value = glz::object(&T::hello, &T::world, &T::get_number);
    };
@@ -163,7 +164,9 @@ struct my_nested_functions_t
 {
    my_functions_t my_functions{};
    meta_functions_t meta_functions{};
-   std::function<std::string(const std::string&)> append_awesome = [](const std::string& in) { return in + " awesome!"; };
+   std::function<std::string(const std::string&)> append_awesome = [](const std::string& in) {
+      return in + " awesome!";
+   };
    std::string my_string{};
 };
 
@@ -174,16 +177,16 @@ suite structs_of_functions = [] {
       my_functions_t obj{};
 
       server.on(obj);
-      
+
       obj.i = 55;
-      
+
       {
          auto request = repe::request_json({"/i"});
          server.call(request);
       }
 
       expect(server.response == R"([[0,0,0,"/i",null],55])") << server.response;
-      
+
       {
          auto request = repe::request_json({.method = "/i"}, 42);
          server.call(request);
@@ -212,7 +215,7 @@ suite structs_of_functions = [] {
       my_nested_functions_t obj{};
 
       server.on(obj);
-      
+
       {
          auto request = repe::request_json({"/my_functions/void_func"});
          server.call(request);
@@ -226,65 +229,71 @@ suite structs_of_functions = [] {
       }
 
       expect(server.response == R"([[0,0,0,"/my_functions/hello",null],"Hello"])");
-      
+
       {
          auto request = repe::request_json({"/meta_functions/hello"});
          server.call(request);
       }
-      
+
       expect(server.response == R"([[0,0,0,"/meta_functions/hello",null],"Hello"])");
-      
+
       {
          auto request = repe::request_json({"/append_awesome"}, "you are");
          server.call(request);
       }
-      
+
       expect(server.response == R"([[0,0,0,"/append_awesome",null],"you are awesome!"])");
-      
+
       {
          auto request = repe::request_json({"/my_string"}, "Howdy!");
          server.call(request);
       }
-      
+
       expect(server.response == R"([[0,0,2,"/my_string",null],null])");
-      
+
       {
          auto request = repe::request_json({"/my_string"});
          server.call(request);
       }
-      
+
       expect(server.response == R"([[0,0,0,"/my_string",null],"Howdy!"])") << server.response;
-      
+
       obj.my_string.clear();
-      
+
       {
          auto request = repe::request_json({"/my_string"});
          server.call(request);
       }
-      
+
       // we expect an empty string returned because we cleared it
       expect(server.response == R"([[0,0,0,"/my_string",null],""])");
-      
+
       {
          auto request = repe::request_json({"/my_functions/max"}, std::vector<double>{1.1, 3.3, 2.25});
          server.call(request);
       }
-      
+
       expect(server.response == R"([[0,0,0,"/my_functions/max",null],3.3])") << server.response;
-      
+
       {
          auto request = repe::request_json({"/my_functions"});
          server.call(request);
       }
-      
-      expect(server.response == R"([[0,0,0,"/my_functions",null],{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"}])") << server.response;
-      
+
+      expect(
+         server.response ==
+         R"([[0,0,0,"/my_functions",null],{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"}])")
+         << server.response;
+
       {
          auto request = repe::request_json({""});
          server.call(request);
       }
-      
-      expect(server.response == R"([[0,0,0,"",null],{"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""}])") << server.response;
+
+      expect(
+         server.response ==
+         R"([[0,0,0,"",null],{"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""}])")
+         << server.response;
    };
 };
 

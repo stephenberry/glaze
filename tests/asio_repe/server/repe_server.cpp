@@ -7,7 +7,9 @@
 
 struct api
 {
-   std::function<int(std::vector<int>& vec)> sum = [](std::vector<int>& vec) { return std::reduce(vec.begin(), vec.end()); };
+   std::function<int(std::vector<int>& vec)> sum = [](std::vector<int>& vec) {
+      return std::reduce(vec.begin(), vec.end());
+   };
    std::function<double(std::vector<double>& vec)> max = [](std::vector<double>& vec) { return std::ranges::max(vec); };
 };
 
@@ -20,9 +22,7 @@ void run_server()
    try {
       glz::asio_server<glz::repe::registry<>> server{};
       api methods{};
-      server.init = [&](glz::repe::registry<>& registry) {
-         registry.on(methods);
-      };
+      server.init = [&](glz::repe::registry<>& registry) { registry.on(methods); };
       server.run();
    }
    catch (std::exception& e) {
