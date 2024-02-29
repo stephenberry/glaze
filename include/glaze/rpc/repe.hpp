@@ -158,6 +158,8 @@ namespace glz::repe
          }
       }
    }
+   
+   struct ignore_result final {};
 
    template <opts Opts, class Result>
    [[nodiscard]] error_t decode_response(Result&& result, auto& buffer)
@@ -200,15 +202,22 @@ namespace glz::repe
          glz::detail::read<Opts.format>::template op<Opts>(error, ctx, b, e);
          return error;
       }
-      else {
+      
+      if constexpr (!std::same_as<std::decay_t<Result>, ignore_result>) {
          glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
+         
+         if (bool(ctx.error)) {
+            parse_error pe{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
+            return {error_e::parse_error, format_error(pe, buffer)};
+         }
       }
-
-      if (bool(ctx.error)) {
-         parse_error pe{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
-         return {error_e::parse_error, format_error(pe, buffer)};
-      }
+      
       return {};
+   }
+   
+   template <opts Opts, class Result>
+   [[nodiscard]] error_t decode_response(auto& buffer) {
+      return decode_response(ignore_result{}, buffer);
    }
    
    template <opts Opts, class Value>

@@ -117,7 +117,7 @@ namespace glz
       }
       
       template <class Result>
-      [[nodiscard]] repe::error_t call(repe::header&& header, Result&& result)
+      [[nodiscard]] repe::error_t get(repe::header&& header, Result&& result)
       {
          if (!initialized) {
             throw std::runtime_error("client never initialized");
@@ -131,6 +131,22 @@ namespace glz
          receive_buffer(*socket, buffer);
 
          return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
+      }
+      
+      template <class Params>
+      [[nodiscard]] repe::error_t set(repe::header&& header, Params&& params)
+      {
+         if (!initialized) {
+            throw std::runtime_error("client never initialized");
+         }
+         
+         header.action &= ~repe::notify; // clear invalid notify
+         repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
+
+         send_buffer(*socket, buffer);
+         receive_buffer(*socket, buffer);
+
+         return repe::decode_response<Opts>(buffer);
       }
 
       template <class Params, class Result>
