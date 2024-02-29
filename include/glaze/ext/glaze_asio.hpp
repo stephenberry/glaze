@@ -135,7 +135,7 @@ namespace glz
 
          return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
       }
-      
+
       template <class Result = glz::raw_json>
       [[nodiscard]] glz::expected<Result, repe::error_t> get(repe::header&& header)
       {
@@ -149,7 +149,7 @@ namespace glz
 
          send_buffer(*socket, buffer);
          receive_buffer(*socket, buffer);
-         
+
          std::decay_t<Result> result{};
          const auto error = repe::decode_response<Opts>(result, buffer);
          if (error) {
