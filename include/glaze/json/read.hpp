@@ -1577,7 +1577,7 @@ namespace glz
                // Only used if error_on_missing_keys = true
                [[maybe_unused]] bit_array<num_members> fields{};
 
-               decltype(auto) frozen_map = [&] {
+               decltype(auto) frozen_map = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T> && num_members > 0) {
 #if ((defined _MSC_VER) && (!defined __clang__))
                      static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();
@@ -1870,7 +1870,7 @@ namespace glz
             bit_array<num_members> all_fields{};
             for_each<num_members>([&](auto I) constexpr { all_fields[I] = true; });
 
-            decltype(auto) frozen_map = [&] {
+            decltype(auto) frozen_map = [&]() -> decltype(auto) {
                if constexpr (reflectable<T> && num_members > 0) {
 #if ((defined _MSC_VER) && (!defined __clang__))
                   static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();

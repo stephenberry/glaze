@@ -819,7 +819,7 @@ namespace glz
 
             const auto n_keys = int_from_compressed(it, end);
 
-            decltype(auto) storage = [&] {
+            decltype(auto) storage = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
 #if ((defined _MSC_VER) && (!defined __clang__))
                   static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();

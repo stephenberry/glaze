@@ -64,7 +64,7 @@ namespace glz
                using E = typename Element::type;
 
                if (I == item_number - 1) {
-                  decltype(auto) func = [&] {
+                  decltype(auto) func = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
                         return std::get<I>(t);
                      }
@@ -160,7 +160,7 @@ namespace glz
                   }
                }();
 
-               decltype(auto) func = [&] {
+               decltype(auto) func = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
                      return std::get<I>(t);
                   }
