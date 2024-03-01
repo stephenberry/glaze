@@ -141,7 +141,7 @@ namespace glz
 #endif
 
    template <auto P>
-      requires(std::is_member_object_pointer_v<decltype(P)>)
+      requires(std::is_member_pointer_v<decltype(P)>)
    consteval std::string_view get_name() noexcept
    {
 #if defined(_MSC_VER) && !defined(__clang__)

@@ -62,7 +62,7 @@ namespace glz
       size_t i = 0;
       for_each<n>([&](auto I) {
          using V = std::decay_t<std::tuple_element_t<I, Tuple>>;
-         if constexpr (std::is_member_object_pointer_v<V>) {
+         if constexpr (std::is_member_pointer_v<V>) {
             if constexpr (I == 0) {
                indices[i++] = 0;
             }

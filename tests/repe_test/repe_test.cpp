@@ -182,7 +182,7 @@ struct example_functions_t
    
    struct glaze {
       using T = example_functions_t;
-      static constexpr auto value = glz::object(&T::name, "get_name", &T::get_name, "set_name", &T::set_name);
+      static constexpr auto value = glz::object(&T::name, &T::get_name, &T::set_name);
    };
 };
 

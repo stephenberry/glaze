@@ -649,7 +649,7 @@ namespace glz
       struct member_type
       {
          using T0 = std::decay_t<std::tuple_element_t<0, std::tuple_element_t<I, Tuple>>>;
-         using type = std::tuple_element_t<std::is_member_object_pointer_v<T0> ? 0 : 1, std::tuple_element_t<I, Tuple>>;
+         using type = std::tuple_element_t<std::is_member_pointer_v<T0> ? 0 : 1, std::tuple_element_t<I, Tuple>>;
       };
 
       template <class Tuple, size_t... I>
@@ -707,7 +707,7 @@ namespace glz
          using value_t = value_tuple_variant_t<meta_t<T>>;
          constexpr auto first = get<0>(get<I>(meta_v<T>));
          using T0 = std::decay_t<decltype(first)>;
-         if constexpr (std::is_member_object_pointer_v<T0>) {
+         if constexpr (std::is_member_pointer_v<T0>) {
             return std::pair<sv, value_t>{get_name<first>(), first};
          }
          else {
@@ -720,7 +720,7 @@ namespace glz
       {
          constexpr auto first = get<0>(get<I>(meta_v<T>));
          using T0 = std::decay_t<decltype(first)>;
-         if constexpr (std::is_member_object_pointer_v<T0>) {
+         if constexpr (std::is_member_pointer_v<T0>) {
             return get_name<first>();
          }
          else {
@@ -929,7 +929,7 @@ namespace glz
                   constexpr auto item = get<J>(meta_v<V>);
                   using T0 = std::decay_t<decltype(get<0>(item))>;
                   auto key_getter = [&] {
-                     if constexpr (std::is_member_object_pointer_v<T0>) {
+                     if constexpr (std::is_member_pointer_v<T0>) {
                         return get_name<get<0>(get<J>(meta_v<V>))>();
                      }
                      else {
@@ -975,7 +975,7 @@ namespace glz
                   constexpr auto item = get<J>(meta_v<V>);
                   using T0 = std::decay_t<decltype(get<0>(item))>;
                   auto key_getter = [&] {
-                     if constexpr (std::is_member_object_pointer_v<T0>) {
+                     if constexpr (std::is_member_pointer_v<T0>) {
                         return get_name<get<0>(get<J>(meta_v<V>))>();
                      }
                      else {
@@ -1242,7 +1242,7 @@ namespace glz::detail
       using V = std::decay_t<T>;
       using Item = std::decay_t<decltype(glz::get<I>(meta_v<V>))>;
       using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
-      static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>; // for member object reflection
+      static constexpr bool use_reflection = std::is_member_pointer_v<T0>; // for member object reflection
       static constexpr size_t member_index = use_reflection ? 0 : 1;
       using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
       using type = member_t<V, mptr_t>;
