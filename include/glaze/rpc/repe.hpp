@@ -279,7 +279,7 @@ namespace glz::repe
       using procedure = std::function<void(state&&)>; // RPC method
       std::unordered_map<std::string_view, procedure, detail::string_hash, std::equal_to<>> methods;
 
-      std::string response;
+      std::string response{};
 
       error_t error{};
 
@@ -428,23 +428,90 @@ namespace glz::repe
                static_assert(std::is_lvalue_reference_v<Func>);
                
                if constexpr (std::is_member_function_pointer_v<std::decay_t<Func>>) {
-                  // this is a variable and not a function, so we build RPC read/write calls
-                  methods.emplace(full_key, [&value, &func](repe::state&& state) {
-                     if (!(state.header.action & empty)) {
-                        state.error = {error_e::invalid_params};
+                  using F = std::decay_t<Func>;
+                  using Ret = typename return_type<F>::type;
+                  using Tuple = typename inputs_as_tuple<F>::type;
+                  constexpr auto n_args = std::tuple_size_v<Tuple>;
+                  if constexpr (std::is_void_v<Ret>) {
+                     if constexpr (n_args == 0) {
+                        methods.emplace(full_key, [&value, &func](repe::state&& state) {
+                           (value.*func)();
+                           
+                           if (state.header.action & notify) {
+                              return;
+                           }
+                           
+                           state.header.action &= ~empty;
+                           write_response<Opts>(state);
+                        });
                      }
-
-                     if (state.header.action & notify) {
-                        return;
-                     }
-
-                     if (state.header.action & empty) {
-                        write_response<Opts>((value.*func)(), state);
+                     else if constexpr (n_args == 1) {
+                        using Input = std::decay_t<std::tuple_element_t<0, Tuple>>;
+                        methods.emplace(full_key, [this, &value, &func, input = Input{}](repe::state&& state) mutable {
+                           if (!(state.header.action & empty)) {
+                              if (read_params<Opts>(input, state, response) == 0) {
+                                 return;
+                              }
+                           }
+                           
+                           (value.*func)(input);
+                           
+                           if (state.header.action & notify) {
+                              return;
+                           }
+                           
+                           state.header.action &= ~empty;
+                           write_response<Opts>(state);
+                        });
                      }
                      else {
-                        write_response<Opts>(state);
+                        static_assert(false_v<Func>, "function cannot have more than one input");
                      }
-                  });
+                  }
+                  else {
+                     if constexpr (n_args == 0) {
+                        methods.emplace(full_key, [&value, &func](repe::state&& state) {
+                           auto result = (value.*func)();
+
+                           if (state.header.action & notify) {
+                              return;
+                           }
+
+                           if (state.header.action & empty) {
+                              write_response<Opts>(result, state);
+                           }
+                           else {
+                              write_response<Opts>(state);
+                           }
+                        });
+                     }
+                     else if constexpr (n_args == 1) {
+                        using Input = std::decay_t<std::tuple_element_t<0, Tuple>>;
+                        methods.emplace(full_key, [this, &value, &func, input = Input{}](repe::state&& state) mutable {
+                           if (!(state.header.action & empty)) {
+                              if (read_params<Opts>(input, state, response) == 0) {
+                                 return;
+                              }
+                           }
+                           
+                           auto result = (value.*func)(input);
+
+                           if (state.header.action & notify) {
+                              return;
+                           }
+
+                           if (state.header.action & empty) {
+                              write_response<Opts>(result, state);
+                           }
+                           else {
+                              write_response<Opts>(state);
+                           }
+                        });
+                     }
+                     else {
+                        static_assert(false_v<Func>, "function cannot have more than one input");
+                     }
+                  }
                }
                else {
                   // this is a variable and not a function, so we build RPC read/write calls

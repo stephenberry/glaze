@@ -176,10 +176,13 @@ struct example_functions_t
    std::string get_name() {
       return name;
    }
+   void set_name(const std::string& new_name) {
+      name = new_name;
+   }
    
    struct glaze {
       using T = example_functions_t;
-      static constexpr auto value = glz::object(&T::name, "get_name", &T::get_name);
+      static constexpr auto value = glz::object(&T::name, "get_name", &T::get_name, "set_name", &T::set_name);
    };
 };
 
@@ -330,13 +333,21 @@ suite structs_of_functions = [] {
 
       expect(server.response == R"([[0,0,0,"/get_name",null],"Susan"])") << server.response;
       
-      // TODO: Support params with member function pointers
       {
-         auto request = repe::request_json({"/get_name"}, "Susan");
+         auto request = repe::request_json({"/get_name"}, "Bob");
          server.call(request);
       }
-
-      expect(server.response == R"([[0,1,0,"",null],[-32602,""]])") << server.response;
+      
+      expect(obj.name == "Susan"); // we expect the name to not have changed because this function take no inputs
+      expect(server.response == R"([[0,0,2,"/get_name",null],null])") << server.response;
+      
+      {
+         auto request = repe::request_json({"/set_name"}, "Bob");
+         server.call(request);
+      }
+      
+      expect(obj.name == "Bob"); // we expect the name to not have changed because this function take no inputs
+      expect(server.response == R"([[0,0,2,"/set_name",null],null])") << server.response;
    };
 };
 
