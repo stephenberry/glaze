@@ -124,6 +124,11 @@ namespace glz
    {
       using type = C;
    };
+   
+   template <class C, class R, class... Args>
+   struct remove_member_pointer<R (C::*)(Args...)> {
+      using type = C;
+   };
 
    template <class T, auto P>
    consteval std::string_view get_name_msvc() noexcept
