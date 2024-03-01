@@ -170,6 +170,19 @@ struct my_nested_functions_t
    std::string my_string{};
 };
 
+struct example_functions_t
+{
+   std::string name{};
+   std::string get_name() {
+      return name;
+   }
+   
+   struct glaze {
+      using T = example_functions_t;
+      static constexpr auto value = glz::object(&T::name, "get_name", &T::get_name);
+   };
+};
+
 suite structs_of_functions = [] {
    "structs_of_functions"_test = [] {
       repe::registry server{};
@@ -294,6 +307,36 @@ suite structs_of_functions = [] {
          server.response ==
          R"([[0,0,0,"",null],{"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""}])")
          << server.response;
+   };
+   
+   "example_functions"_test = [] {
+      repe::registry server{};
+      
+      example_functions_t obj{};
+
+      server.on(obj);
+
+      {
+         auto request = repe::request_json({"/name"}, "Susan");
+         server.call(request);
+      }
+
+      expect(server.response == R"([[0,0,2,"/name",null],null])") << server.response;
+      
+      {
+         auto request = repe::request_json({"/get_name"});
+         server.call(request);
+      }
+
+      expect(server.response == R"([[0,0,0,"/get_name",null],"Susan"])") << server.response;
+      
+      // TODO: Support params with member function pointers
+      {
+         auto request = repe::request_json({"/get_name"}, "Susan");
+         server.call(request);
+      }
+
+      expect(server.response == R"([[0,1,0,"",null],[-32602,""]])") << server.response;
    };
 };
 

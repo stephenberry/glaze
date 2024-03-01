@@ -425,26 +425,48 @@ namespace glz::repe
                });
             }
             else {
-               static_assert(std::is_lvalue_reference_v<decltype(func)>);
-               // this is a variable and not a function, so we build RPC read/write calls
-               methods.emplace(full_key, [this, &func](repe::state&& state) {
-                  if (!(state.header.action & empty)) {
-                     if (read_params<Opts>(func, state, response) == 0) {
+               static_assert(std::is_lvalue_reference_v<Func>);
+               
+               if constexpr (std::is_member_function_pointer_v<std::decay_t<Func>>) {
+                  // this is a variable and not a function, so we build RPC read/write calls
+                  methods.emplace(full_key, [&value, &func](repe::state&& state) {
+                     if (!(state.header.action & empty)) {
+                        state.error = {error_e::invalid_params};
+                     }
+
+                     if (state.header.action & notify) {
                         return;
                      }
-                  }
 
-                  if (state.header.action & notify) {
-                     return;
-                  }
+                     if (state.header.action & empty) {
+                        write_response<Opts>((value.*func)(), state);
+                     }
+                     else {
+                        write_response<Opts>(state);
+                     }
+                  });
+               }
+               else {
+                  // this is a variable and not a function, so we build RPC read/write calls
+                  methods.emplace(full_key, [this, &func](repe::state&& state) {
+                     if (!(state.header.action & empty)) {
+                        if (read_params<Opts>(func, state, response) == 0) {
+                           return;
+                        }
+                     }
 
-                  if (state.header.action & empty) {
-                     write_response<Opts>(func, state);
-                  }
-                  else {
-                     write_response<Opts>(state);
-                  }
-               });
+                     if (state.header.action & notify) {
+                        return;
+                     }
+
+                     if (state.header.action & empty) {
+                        write_response<Opts>(func, state);
+                     }
+                     else {
+                        write_response<Opts>(state);
+                     }
+                  });
+               }
             }
          });
       }
