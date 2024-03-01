@@ -346,7 +346,7 @@ suite structs_of_functions = [] {
          server.call(request);
       }
       
-      expect(obj.name == "Bob"); // we expect the name to not have changed because this function take no inputs
+      expect(obj.name == "Bob");
       expect(server.response == R"([[0,0,2,"/set_name",null],null])") << server.response;
    };
 };

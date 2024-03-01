@@ -9,6 +9,8 @@
 
 #include "glaze/reflection/to_tuple.hpp"
 #include "glaze/tuplet/tuple.hpp"
+#include "glaze/api/name.hpp"
+#include "glaze/util/string_literal.hpp"
 
 #if defined(__clang__) || defined(__GNUC__)
 #define GLZ_PRETTY_FUNCTION __PRETTY_FUNCTION__
@@ -138,11 +140,12 @@ namespace glz
       return str.substr(0, str.find(">"));
    }
    
-   template <auto P>
+   template <class T, auto P>
    consteval std::string_view func_name_msvc()
    {
       std::string_view str = GLZ_PRETTY_FUNCTION;
-      str = str.substr(str.find_last_of("::") + 1);
+      str = str.substr(str.rfind(type_name<T>) + type_name<T>.size());
+      str = str.substr(str.find("::") + 2);
       return str.substr(0, str.find("("));
    }
 
@@ -164,7 +167,8 @@ namespace glz
          return get_name_msvc<T, &(detail::external<T>.*p)>();
       }
       else {
-         return func_name_msvc<P>();
+         using T = remove_member_pointer<std::decay_t<decltype(P)>>::type;
+         return func_name_msvc<T, P>();
       }
 #else
       // TODO: Use std::source_location when deprecating clang 14
