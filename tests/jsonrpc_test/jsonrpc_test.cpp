@@ -38,7 +38,7 @@ ut::suite valid_vector_test_cases_server = [] {
       std::tie(raw_json, resulting_request) = pair;
       auto stripped{std::make_shared<std::string>(resulting_request)};
       stripped->erase(std::remove_if(stripped->begin(), stripped->end(), ::isspace), stripped->end());
-      
+
       test_name = "response:" + *stripped;
       ut::test(test_name) = [&server, &raw_json, stripped]() {
          std::string response = server.call(raw_json);

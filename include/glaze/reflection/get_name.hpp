@@ -7,9 +7,9 @@
 // #include <source_location>
 #include <string_view>
 
+#include "glaze/api/name.hpp"
 #include "glaze/reflection/to_tuple.hpp"
 #include "glaze/tuplet/tuple.hpp"
-#include "glaze/api/name.hpp"
 #include "glaze/util/string_literal.hpp"
 
 #if defined(__clang__) || defined(__GNUC__)
@@ -126,9 +126,10 @@ namespace glz
    {
       using type = C;
    };
-   
+
    template <class C, class R, class... Args>
-   struct remove_member_pointer<R (C::*)(Args...)> {
+   struct remove_member_pointer<R (C::*)(Args...)>
+   {
       using type = C;
    };
 
@@ -139,7 +140,7 @@ namespace glz
       str = str.substr(str.find("->") + 2);
       return str.substr(0, str.find(">"));
    }
-   
+
    template <class T, auto P>
    consteval std::string_view func_name_msvc()
    {

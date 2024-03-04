@@ -426,7 +426,7 @@ namespace glz::repe
             }
             else {
                static_assert(std::is_lvalue_reference_v<Func>);
-               
+
                if constexpr (std::is_member_function_pointer_v<std::decay_t<Func>>) {
                   using F = std::decay_t<Func>;
                   using Ret = typename return_type<F>::type;
@@ -436,11 +436,11 @@ namespace glz::repe
                      if constexpr (n_args == 0) {
                         methods.emplace(full_key, [&value, &func](repe::state&& state) {
                            (value.*func)();
-                           
+
                            if (state.header.action & notify) {
                               return;
                            }
-                           
+
                            state.header.action &= ~empty;
                            write_response<Opts>(state);
                         });
@@ -453,13 +453,13 @@ namespace glz::repe
                                  return;
                               }
                            }
-                           
+
                            (value.*func)(input);
-                           
+
                            if (state.header.action & notify) {
                               return;
                            }
-                           
+
                            state.header.action &= ~empty;
                            write_response<Opts>(state);
                         });
@@ -493,7 +493,7 @@ namespace glz::repe
                                  return;
                               }
                            }
-                           
+
                            auto result = (value.*func)(input);
 
                            if (state.header.action & notify) {
