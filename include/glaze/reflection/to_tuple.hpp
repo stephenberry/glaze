@@ -10,24 +10,37 @@
 #include <utility>
 
 #include "glaze/util/type_traits.hpp"
+#include "glaze/util/for_each.hpp"
 
 namespace glz
 {
+   // If you want to make an empty struct or a struct with constructors visible in reflected structs,
+   // add the folllwing constructor to your type:
+   // my_struct(glz::make_reflectable) {}
+   struct make_reflectable final
+   {};
+   
    namespace detail
    {
+      template <class T>
+      concept is_optional = requires {
+          typename std::decay_t<T>::value_type;
+          requires std::same_as<std::decay_t<T>, std::optional<typename std::decay_t<T>::value_type>>;
+      };
+      
       struct any_t final
       {
 #if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
          template <class T>
-            requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
-         [[maybe_unused]] constexpr operator T();
+            requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t> && !is_optional<T>)
+         [[maybe_unused]] constexpr operator T&();
 #pragma clang diagnostic pop
 #elif defined(_MSC_VER)
          template <class T>
-            requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
-         [[maybe_unused]] constexpr operator T();
+            requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t> && !is_optional<T>)
+         [[maybe_unused]] constexpr operator T&();
 
          template <class T>
             requires(is_specialization_v<T, std::optional>)
@@ -39,24 +52,41 @@ namespace glz
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-declarations"
          template <class T>
-            requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
-         [[maybe_unused]] constexpr operator T();
+            requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t> && !is_optional<T>)
+         [[maybe_unused]] constexpr operator T&();
 #pragma GCC diagnostic pop
 #endif
-
+         
+         [[maybe_unused]] operator make_reflectable() { return {}; }
+         
+         [[maybe_unused]] operator std::string() { return {}; }
          [[maybe_unused]] constexpr operator std::string_view() { return {}; }
       };
+      
+      template <class I>
+      using any_template = any_t;
+
+      template <class T, size_t... I>
+      consteval bool is_constructible(std::index_sequence<I...>) {
+          if constexpr (requires { T{any_template<decltype(I)>{}...}; }) {
+              return true;
+          } else {
+              return false;
+          }
+      }
 
       template <class T, class... Args>
-         requires(std::is_aggregate_v<std::remove_cvref_t<T>>)
+          requires(std::is_aggregate_v<std::remove_cvref_t<T>>)
       inline constexpr auto count_members = [] {
-         using V = std::remove_cvref_t<T>;
-         if constexpr (requires { V{{Args{}}..., {any_t{}}}; } == false) {
-            return sizeof...(Args);
-         }
-         else {
-            return count_members<V, Args..., any_t>;
-         }
+          using V = std::remove_cvref_t<T>;
+         // Supports references in structs
+          size_t size{};
+          for_each<128>([&size](auto I) {
+              if constexpr (is_constructible<V>(std::make_index_sequence<I>{})) {
+                  size = I;
+              }
+          });
+          return size;
       }();
 
       template <class T, size_t N = count_members<T>>

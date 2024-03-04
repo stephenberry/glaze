@@ -449,6 +449,7 @@ struct V2
    V2(glz::make_reflectable) {}
    V2() = default;
 
+   V2(const V2&) = default;
    V2(V2&&) = default;
    V2(const float* arr) : x(arr[0]), y(arr[1]) {}
 };
@@ -465,6 +466,8 @@ struct V2Wrapper
 };
 
 static_assert(glz::detail::reflectable<V2Wrapper>);
+static_assert(std::is_constructible_v<V2, glz::make_reflectable>);
+static_assert(requires { V2Wrapper{ glz::detail::any_t{} }; });
 static_assert(glz::detail::count_members<V2Wrapper> == 1);
 
 suite v2_wrapper_test = [] {
@@ -548,6 +551,29 @@ suite meta_schema_reflection_tests = [] {
          json_schema ==
          R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer","minimum":1}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"]},"std::string":{"type":["string"]}}})")
          << json_schema;
+   };
+};
+
+struct reference_t
+{
+   int& integer;
+   std::string& str;
+   bool& boolean;
+};
+
+static_assert(glz::detail::count_members<reference_t> == 3);
+
+suite reference_tests = [] {
+   "reference"_test = [] {
+      int integer{};
+      std::string str{};
+      bool boolean{};
+      reference_t obj{integer, str, boolean};
+      std::string buffer = R"({"integer":42,"str":"hello","boolean":true})";
+      auto err = glz::read_json(obj, buffer);
+      expect(!err) << glz::format_error(err, buffer);
+      
+      expect(buffer == glz::write_json(obj));
    };
 };
 
