@@ -4,6 +4,7 @@
 #pragma once
 
 #include <optional>
+#include <string>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
@@ -17,8 +18,10 @@ namespace glz
    // If you want to make an empty struct or a struct with constructors visible in reflected structs,
    // add the folllwing constructor to your type:
    // my_struct(glz::make_reflectable) {}
-   struct make_reflectable final
+   struct dummy final
    {};
+   
+   using make_reflectable = std::initializer_list<dummy>;
    
    namespace detail
    {
