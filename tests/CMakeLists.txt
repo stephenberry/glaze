@@ -5,8 +5,12 @@ set(BOOST_UT_DISABLE_MODULE ON CACHE INTERNAL "")
 
 FetchContent_Declare(
   ut
-  URL https://github.com/boost-ext/ut/archive/refs/tags/v2.0.1.zip
+  GIT_REPOSITORY https://github.com/boost-ext/ut
+  GIT_TAG master
+  GIT_SHALLOW TRUE
 )
+
+FetchContent_MakeAvailable(ut)
 
 message(STATUS "Fetching dependencies...")
 set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL TRUE)

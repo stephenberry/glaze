@@ -33,12 +33,14 @@ ut::suite valid_vector_test_cases_server = [] {
    std::string raw_json;
    std::string resulting_request;
 
+   std::string test_name{};
    for (const auto& pair : valid_requests) {
       std::tie(raw_json, resulting_request) = pair;
       auto stripped{std::make_shared<std::string>(resulting_request)};
       stripped->erase(std::remove_if(stripped->begin(), stripped->end(), ::isspace), stripped->end());
-
-      ut::test("response:" + *stripped) = [&server, &raw_json, stripped]() {
+      
+      test_name = "response:" + *stripped;
+      ut::test(test_name) = [&server, &raw_json, stripped]() {
          std::string response = server.call(raw_json);
          if (stripped->empty()) { // if no id is supplied expected response should be none
             ut::expect(response.empty());

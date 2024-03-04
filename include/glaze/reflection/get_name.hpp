@@ -9,6 +9,8 @@
 
 #include "glaze/reflection/to_tuple.hpp"
 #include "glaze/tuplet/tuple.hpp"
+#include "glaze/api/name.hpp"
+#include "glaze/util/string_literal.hpp"
 
 #if defined(__clang__) || defined(__GNUC__)
 #define GLZ_PRETTY_FUNCTION __PRETTY_FUNCTION__
@@ -124,13 +126,27 @@ namespace glz
    {
       using type = C;
    };
+   
+   template <class C, class R, class... Args>
+   struct remove_member_pointer<R (C::*)(Args...)> {
+      using type = C;
+   };
 
    template <class T, auto P>
-   consteval std::string_view get_name_msvc() noexcept
+   consteval std::string_view get_name_msvc()
    {
       std::string_view str = GLZ_PRETTY_FUNCTION;
       str = str.substr(str.find("->") + 2);
       return str.substr(0, str.find(">"));
+   }
+   
+   template <class T, auto P>
+   consteval std::string_view func_name_msvc()
+   {
+      std::string_view str = GLZ_PRETTY_FUNCTION;
+      str = str.substr(str.rfind(type_name<T>) + type_name<T>.size());
+      str = str.substr(str.find("::") + 2);
+      return str.substr(0, str.find("("));
    }
 
 #if defined(__clang__)
@@ -141,13 +157,19 @@ namespace glz
 #endif
 
    template <auto P>
-      requires(std::is_member_object_pointer_v<decltype(P)>)
-   consteval std::string_view get_name() noexcept
+      requires(std::is_member_pointer_v<decltype(P)>)
+   consteval std::string_view get_name()
    {
 #if defined(_MSC_VER) && !defined(__clang__)
-      using T = remove_member_pointer<std::decay_t<decltype(P)>>::type;
-      constexpr auto p = P;
-      return get_name_msvc<T, &(detail::external<T>.*p)>();
+      if constexpr (std::is_member_object_pointer_v<decltype(P)>) {
+         using T = remove_member_pointer<std::decay_t<decltype(P)>>::type;
+         constexpr auto p = P;
+         return get_name_msvc<T, &(detail::external<T>.*p)>();
+      }
+      else {
+         using T = remove_member_pointer<std::decay_t<decltype(P)>>::type;
+         return func_name_msvc<T, P>();
+      }
 #else
       // TODO: Use std::source_location when deprecating clang 14
       // std::string_view str = std::source_location::current().function_name();
