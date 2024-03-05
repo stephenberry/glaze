@@ -2962,7 +2962,7 @@ struct glz::meta<nested0>
 {
    static constexpr std::string_view name = "nested0";
    using T = nested0;
-   static constexpr auto value = object("#include", glz::file_include{}, "a", &T::a, "b", &T::b);
+   static constexpr auto value = object("include", glz::file_include{}, "a", &T::a, "b", &T::b);
 };
 
 suite nested_file_include_test = [] {
