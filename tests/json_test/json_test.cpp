@@ -6874,6 +6874,46 @@ suite raw_or_file_tests = [] {
       std::string s{};
       glz::write_json(obj, s);
       expect(s == R"({"input":"","name":""})");
+      
+      const std::string secondary_file = "./secondary.json";
+      glz::obj primary{ "input", secondary_file, "name", "Edward" };
+      const auto primary_json = glz::write_json(primary);
+      
+      {
+         std::vector<int> x{1, 2, 3};
+         const auto ec = glz::write_file_json(x, secondary_file, std::string{});
+         expect(!bool(ec));
+      }
+      
+      expect(!glz::read_json(obj, primary_json));
+      expect(obj.input.str == R"([1,2,3])");
+      expect(obj.name == "Edward");
+      
+      glz::write_json(obj, s);
+      expect(s == R"({"input":[1,2,3],"name":"Edward"})");
+      
+      obj = {};
+      expect(!glz::read_json(obj, s));
+      expect(obj.input.str == R"([1,2,3])");
+      expect(obj.name == "Edward");
+      
+      {
+         std::string hello = "Hello from Mars";
+         const auto ec = glz::write_file_json(hello, secondary_file, std::string{});
+         expect(!bool(ec));
+      }
+      
+      expect(!glz::read_json(obj, primary_json));
+      expect(obj.input.str == R"("Hello from Mars")");
+      expect(obj.name == "Edward");
+      
+      glz::write_json(obj, s);
+      expect(s == R"({"input":"Hello from Mars","name":"Edward"})");
+      
+      obj = {};
+      expect(!glz::read_json(obj, s));
+      expect(obj.input.str == R"("Hello from Mars")");
+      expect(obj.name == "Edward");
    };
 };
 

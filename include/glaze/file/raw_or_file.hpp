@@ -14,8 +14,7 @@ namespace glz
    // This enables file including of unknown structures that will be decoded in the future when state is known
    struct raw_or_file final
    {
-      bool reflection_helper{};
-      raw_json value = R"("")";
+      std::string str = R"("")";
    };
 
    namespace detail
@@ -27,7 +26,7 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr auto Opts = ws_handled_off<Options>();
-            auto& v = value.value;
+            auto& v = value;
             // check if we are decoding a string, which could be a file path
             if (*it == '"') {
                read<json>::op<Opts>(v.str, ctx, it, end);
@@ -59,11 +58,19 @@ namespace glz
                      return;
                   }
                }
+               else {
+                  // The file path doesn't exist, so we want a string with quotes
+                  // But, we skipped the quotes when first reading
+                  // So, now we add back the quotes
+                  v.str = "\"" + v.str + "\"";
+               }
             }
             else {
-               read<json>::op<Opts>(v, ctx, it, end);
+               auto it_start = it;
+               skip_value<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
+               value.str = {it_start, static_cast<size_t>(it - it_start)};
             }
          }
       };
@@ -74,7 +81,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
-            dump(value.value.str, b, ix);
+            dump(value.str, b, ix);
          }
       };
    }
