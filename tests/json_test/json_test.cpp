@@ -23,6 +23,7 @@
 #include "boost/ut.hpp"
 #include "glaze/api/impl.hpp"
 #include "glaze/file/hostname_include.hpp"
+#include "glaze/file/raw_or_file.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/prettify.hpp"
 #include "glaze/json/ptr.hpp"
@@ -6855,6 +6856,24 @@ suite glz_text_tests = [] {
       text.str.clear();
       expect(!glz::read_json(text, out));
       expect(text.str == "Hello World");
+   };
+};
+
+struct raw_or_file_tester
+{
+   glz::raw_or_file input{};
+   std::string name{};
+};
+
+static_assert(glz::detail::count_members<raw_or_file_tester> == 2);
+
+suite raw_or_file_tests = [] {
+   "raw_or_file"_test = [] {
+      raw_or_file_tester obj{};
+      
+      std::string s{};
+      glz::write_json(obj, s);
+      expect(s == R"({"input":"","name":""})");
    };
 };
 
