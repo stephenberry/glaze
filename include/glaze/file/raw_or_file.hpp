@@ -3,9 +3,9 @@
 
 #pragma once
 
-#include "glaze/core/common.hpp"
-
 #include <filesystem>
+
+#include "glaze/core/common.hpp"
 
 namespace glz
 {
@@ -32,11 +32,10 @@ namespace glz
                read<json>::op<Opts>(v.str, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               
+
                namespace fs = std::filesystem;
-               const auto path = relativize_if_not_absolute(fs::path(ctx.current_file).parent_path(),
-                                                                 fs::path{v.str});
-               
+               const auto path = relativize_if_not_absolute(fs::path(ctx.current_file).parent_path(), fs::path{v.str});
+
                if (fs::exists(path) && fs::is_regular_file(path)) {
                   const auto string_path = path.string();
                   const auto ec = file_to_buffer(v.str, string_path);
@@ -48,7 +47,7 @@ namespace glz
                      ctx.includer_error = error_msg;
                      return;
                   }
-                  
+
                   const auto ecode = validate_json(v.str);
                   if (ecode) [[unlikely]] {
                      ctx.error = error_code::includer_error;
@@ -74,7 +73,7 @@ namespace glz
             }
          }
       };
-      
+
       template <>
       struct to_json<raw_or_file>
       {
