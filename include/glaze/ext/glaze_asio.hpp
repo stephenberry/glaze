@@ -249,20 +249,20 @@ namespace glz
    {
       uint16_t port{};
       uint32_t concurrency{1};
-      
+
       struct glaze
       {
          using T = asio_server;
          static constexpr auto value = glz::object(&T::port, &T::concurrency);
       };
-      
+
       std::shared_ptr<asio::io_context> ctx{};
       std::shared_ptr<asio::signal_set> signals{};
 
       std::function<void(Registry&)> init_registry{};
-      
+
       bool initialized = false;
-      
+
       void init()
       {
          if (!initialized) {
@@ -277,7 +277,7 @@ namespace glz
          if (!initialized) {
             init();
          }
-         
+
          signals->async_wait([&](auto, auto) { ctx->stop(); });
 
          asio::co_spawn(*ctx, listener(), asio::detached);
