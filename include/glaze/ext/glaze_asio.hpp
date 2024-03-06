@@ -79,7 +79,7 @@ namespace glz
    struct asio_client
    {
       std::string host{"localhost"};
-      std::string service{"1234"};
+      std::string service{""};
       uint32_t concurrency{1};
       bool initialized = false;
 
@@ -247,19 +247,42 @@ namespace glz
    template <is_registry Registry>
    struct asio_server
    {
-      asio::io_context ctx{1}; // number of background threads
+      uint16_t port{};
+      uint32_t concurrency{1};
+      
+      struct glaze
+      {
+         using T = asio_server;
+         static constexpr auto value = glz::object(&T::port, &T::concurrency);
+      };
+      
+      std::shared_ptr<asio::io_context> ctx{};
+      std::shared_ptr<asio::signal_set> signals{};
 
-      asio::signal_set signals{ctx, SIGINT, SIGTERM};
-
-      std::function<void(Registry&)> init{};
+      std::function<void(Registry&)> init_registry{};
+      
+      bool initialized = false;
+      
+      void init()
+      {
+         if (!initialized) {
+            ctx = std::make_shared<asio::io_context>(concurrency);
+            signals = std::make_shared<asio::signal_set>(*ctx, SIGINT, SIGTERM);
+         }
+         initialized = true;
+      }
 
       void run()
       {
-         signals.async_wait([&](auto, auto) { ctx.stop(); });
+         if (!initialized) {
+            init();
+         }
+         
+         signals->async_wait([&](auto, auto) { ctx->stop(); });
 
-         asio::co_spawn(ctx, listener(), asio::detached);
+         asio::co_spawn(*ctx, listener(), asio::detached);
 
-         ctx.run();
+         ctx->run();
       }
 
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
@@ -268,8 +291,8 @@ namespace glz
          std::string buffer{};
 
          try {
-            if (init) {
-               init(server);
+            if (init_registry) {
+               init_registry(server);
             }
 
             while (true) {
@@ -287,7 +310,7 @@ namespace glz
       asio::awaitable<void> listener()
       {
          auto executor = co_await asio::this_coro::executor;
-         asio::ip::tcp::acceptor acceptor(executor, {asio::ip::tcp::v4(), 1234});
+         asio::ip::tcp::acceptor acceptor(executor, {asio::ip::tcp::v6(), port});
          while (true) {
             auto socket = co_await acceptor.async_accept(asio::use_awaitable);
             asio::co_spawn(executor, run_instance(std::move(socket)), asio::detached);

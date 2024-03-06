@@ -10,7 +10,7 @@
 void asio_client_test()
 {
    try {
-      glz::asio_client client{};
+      glz::asio_client<> client{"localhost", "8080"};
       client.init();
 
       std::vector<int> data{};
