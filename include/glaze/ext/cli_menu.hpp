@@ -109,7 +109,7 @@ namespace glz
                      else {
                         std::printf("json> ");
                      }
-                     
+
                      if (fgets(input.data(), int(input.size()), stdin)) {
                         std::string_view input_sv{input.data()};
                         if (input_sv.back() == '\n') {
