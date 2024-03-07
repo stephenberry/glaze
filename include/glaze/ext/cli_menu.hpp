@@ -86,16 +86,35 @@ namespace glz
                   }
                   else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
                      using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
+                     using Params = std::tuple_element_t<0, Tuple>;
+                     using P = std::decay_t<Params>;
                      constexpr auto N = std::tuple_size_v<Tuple>;
                      static_assert(N == 1, "Only one input is allowed for your function");
                      static thread_local std::array<char, 256> input{};
-                     std::printf("json> ");
+                     if constexpr (string_t<P>) {
+                        std::printf("json string> ");
+                     }
+                     else if constexpr (num_t<P>) {
+                        std::printf("json number> ");
+                     }
+                     else if constexpr (readable_array_t<P> || tuple_t<P> || is_std_tuple<P>) {
+                        std::printf("json array> ");
+                     }
+                     else if constexpr (boolean_like<P>) {
+                        std::printf("json bool> ");
+                     }
+                     else if constexpr (glaze_object_t<P> || reflectable<P> || writable_map_t<P>) {
+                        std::printf("json object> ");
+                     }
+                     else {
+                        std::printf("json> ");
+                     }
+                     
                      if (fgets(input.data(), int(input.size()), stdin)) {
                         std::string_view input_sv{input.data()};
                         if (input_sv.back() == '\n') {
                            input_sv = input_sv.substr(0, input_sv.size() - 1);
                         }
-                        using Params = std::tuple_element_t<0, Tuple>;
                         using R = std::invoke_result_t<Func, Params>;
                         std::decay_t<Params> params{};
                         const auto ec = glz::read<Opts.opts>(params, input_sv);
