@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <cstdio>
+
 #include "glaze/glaze.hpp"
 
 // The purpose of this command line interface menu is to use reflection to build the menu,
