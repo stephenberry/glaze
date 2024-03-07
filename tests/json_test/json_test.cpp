@@ -30,6 +30,7 @@
 #include "glaze/json/quoted.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
+#include "glaze/json/study.hpp"
 #include "glaze/record/recorder.hpp"
 #include "glaze/util/poly.hpp"
 #include "glaze/util/progress_bar.hpp"
