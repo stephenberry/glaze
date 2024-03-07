@@ -3,8 +3,9 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdio>
-#include <glaze/glaze.hpp>
+#include "glaze/glaze.hpp"
 
 // The purpose of this command line interface menu is to use reflection to build the menu,
 // but also allow this menu to be registered as an RPC interface.

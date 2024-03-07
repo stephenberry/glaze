@@ -14,5 +14,4 @@
 #include "glaze/json/raw_string.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/schema.hpp"
-#include "glaze/json/study.hpp"
 #include "glaze/json/write.hpp"

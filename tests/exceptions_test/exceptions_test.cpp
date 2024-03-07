@@ -3,6 +3,7 @@
 
 #include "boost/ut.hpp"
 #include "glaze/glaze_exceptions.hpp"
+#include "glaze/thread/threadpool.hpp"
 
 using namespace boost::ut;
 
