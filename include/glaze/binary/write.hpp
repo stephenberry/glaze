@@ -704,7 +704,7 @@ namespace glz
       struct to_binary_partial<T> final
       {
          template <auto& Partial, auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static write_error op(auto&& value, is_context auto&& ctx,auto&& b, auto&& ix) noexcept
+         GLZ_FLATTEN static write_error op(auto&& value, is_context auto&& ctx,auto&& b, auto&& ix) noexcept
          {
             write_error we{};
 
