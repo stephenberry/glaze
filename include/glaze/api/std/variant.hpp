@@ -15,10 +15,7 @@ namespace glz
       constexpr std::string_view variant_name_impl(std::index_sequence<I...>)
       {
          return join_v<chars<"std::variant<">,
-                       ((I != sizeof...(T) - 1)
-                           ? join_v<name_v<T>, chars<",">>
-                           : join_v<name_v<T>>)...,
-                       chars<">">>;
+                       ((I != sizeof...(T) - 1) ? join_v<name_v<T>, chars<",">> : join_v<name_v<T>>)..., chars<">">>;
       }
    }
 
