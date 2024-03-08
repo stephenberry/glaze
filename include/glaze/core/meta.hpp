@@ -178,29 +178,18 @@ namespace glz
    template <class T>
    concept named = requires { meta<T>::name; } || requires { T::glaze::name; };
 
-   template <class T, bool fail_on_unknown = false>
+   template <class T>
    inline constexpr std::string_view name_v = [] {
       if constexpr (named<T>) {
          if constexpr (requires { T::glaze::name; }) {
-            if constexpr (fail_on_unknown) {
-               static_assert(T::glaze::name.find("glz::unknown") == std::string_view::npos,
-                             "name_v used on unnamed type");
-            }
             return T::glaze::name;
          }
          else {
-            if constexpr (fail_on_unknown) {
-               static_assert(meta<T>::name.find("glz::unknown") == std::string_view::npos,
-                             "name_v used on unnamed type");
-            }
             return meta<T>::name;
          }
       }
       else if constexpr (std::is_void_v<T>) {
          return "void";
-      }
-      else if constexpr (fail_on_unknown) {
-         static_assert(false_v<T>, "name_v used on unnamed type");
       }
       else {
          return type_name<std::decay_t<T>>;
