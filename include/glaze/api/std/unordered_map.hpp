@@ -9,15 +9,10 @@
 
 namespace glz
 {
-   template <class T>
-   concept unordered_map = is_specialization_v<T, std::unordered_map>;
-
-   template <unordered_map T>
-   struct meta<T>
+   template <class Key, class Mapped>
+   struct meta<std::unordered_map<Key, Mapped>>
    {
-      using Key = typename T::key_type;
-      using V = typename T::mapped_type;
       static constexpr std::string_view name =
-         detail::join_v<chars<"std::unordered_map<">, name_v<Key>, chars<",">, name_v<V>, chars<">">>;
+         detail::join_v<chars<"std::unordered_map<">, name_v<Key>, chars<",">, name_v<Mapped>, chars<">">>;
    };
 }
