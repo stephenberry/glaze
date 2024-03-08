@@ -465,6 +465,16 @@ namespace glz
          }
       };
 
+      template <class T>
+      struct to_json<basic_text<T>>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
+         {
+            dump(value.str, b, ix);
+         }
+      };
+
       template <glz::opts Opts>
       GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, auto&&... args) noexcept
       {
@@ -1106,7 +1116,7 @@ namespace glz
             using V = std::decay_t<T>;
             static constexpr auto N = Info::N;
 
-            [[maybe_unused]] decltype(auto) t = [&] {
+            [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
                   if constexpr (std::is_const_v<std::remove_reference_t<decltype(value)>>) {
 #if ((defined _MSC_VER) && (!defined __clang__))
@@ -1142,7 +1152,7 @@ namespace glz
                static constexpr bool use_reflection = Element::use_reflection;
                using val_t = typename Element::type;
 
-               decltype(auto) member = [&] {
+               decltype(auto) member = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
                      return std::get<I>(t);
                   }

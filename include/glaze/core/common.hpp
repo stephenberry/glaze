@@ -4,11 +4,9 @@
 #pragma once
 
 #include <cstddef>
-#include <functional>
 #include <iterator>
 #include <optional>
 #include <string>
-#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -291,6 +289,29 @@ namespace glz
    {
       static constexpr std::string_view name = "raw_json";
    };
+
+   // glz::text (i.e. glz::basic_text<std::string>) just reads in the entire contents of the message or writes out
+   // whatever contents it holds it avoids JSON reading/writing and is a pass through mechanism
+   template <class string_type>
+   struct basic_text
+   {
+      string_type str;
+
+      basic_text() = default;
+
+      template <class T>
+         requires(!std::same_as<std::decay_t<T>, basic_text>)
+      basic_text(T&& s) : str(std::forward<T>(s))
+      {}
+
+      basic_text(const basic_text&) = default;
+      basic_text(basic_text&&) = default;
+      basic_text& operator=(const basic_text&) = default;
+      basic_text& operator=(basic_text&&) = default;
+   };
+
+   using text = basic_text<std::string>;
+   using text_view = basic_text<std::string_view>;
 
    using basic = std::variant<bool, char, char8_t, unsigned char, signed char, short, unsigned short, float, int,
                               unsigned int, long, unsigned long, double, long long, unsigned long long, std::string>;
@@ -628,7 +649,7 @@ namespace glz
       struct member_type
       {
          using T0 = std::decay_t<std::tuple_element_t<0, std::tuple_element_t<I, Tuple>>>;
-         using type = std::tuple_element_t<std::is_member_object_pointer_v<T0> ? 0 : 1, std::tuple_element_t<I, Tuple>>;
+         using type = std::tuple_element_t<std::is_member_pointer_v<T0> ? 0 : 1, std::tuple_element_t<I, Tuple>>;
       };
 
       template <class Tuple, size_t... I>
@@ -686,7 +707,7 @@ namespace glz
          using value_t = value_tuple_variant_t<meta_t<T>>;
          constexpr auto first = get<0>(get<I>(meta_v<T>));
          using T0 = std::decay_t<decltype(first)>;
-         if constexpr (std::is_member_object_pointer_v<T0>) {
+         if constexpr (std::is_member_pointer_v<T0>) {
             return std::pair<sv, value_t>{get_name<first>(), first};
          }
          else {
@@ -699,7 +720,7 @@ namespace glz
       {
          constexpr auto first = get<0>(get<I>(meta_v<T>));
          using T0 = std::decay_t<decltype(first)>;
-         if constexpr (std::is_member_object_pointer_v<T0>) {
+         if constexpr (std::is_member_pointer_v<T0>) {
             return get_name<first>();
          }
          else {
@@ -908,7 +929,7 @@ namespace glz
                   constexpr auto item = get<J>(meta_v<V>);
                   using T0 = std::decay_t<decltype(get<0>(item))>;
                   auto key_getter = [&] {
-                     if constexpr (std::is_member_object_pointer_v<T0>) {
+                     if constexpr (std::is_member_pointer_v<T0>) {
                         return get_name<get<0>(get<J>(meta_v<V>))>();
                      }
                      else {
@@ -954,7 +975,7 @@ namespace glz
                   constexpr auto item = get<J>(meta_v<V>);
                   using T0 = std::decay_t<decltype(get<0>(item))>;
                   auto key_getter = [&] {
-                     if constexpr (std::is_member_object_pointer_v<T0>) {
+                     if constexpr (std::is_member_pointer_v<T0>) {
                         return get_name<get<0>(get<J>(meta_v<V>))>();
                      }
                      else {
@@ -1221,7 +1242,7 @@ namespace glz::detail
       using V = std::decay_t<T>;
       using Item = std::decay_t<decltype(glz::get<I>(meta_v<V>))>;
       using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
-      static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>; // for member object reflection
+      static constexpr bool use_reflection = std::is_member_pointer_v<T0>; // for member object reflection
       static constexpr size_t member_index = use_reflection ? 0 : 1;
       using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
       using type = member_t<V, mptr_t>;

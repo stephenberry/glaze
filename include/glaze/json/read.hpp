@@ -870,7 +870,18 @@ namespace glz
             skip_value<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            value.str = {it_start, static_cast<std::size_t>(it - it_start)};
+            value.str = {it_start, static_cast<size_t>(it - it_start)};
+         }
+      };
+
+      template <class T>
+      struct from_json<basic_text<T>>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& it, auto&& end) noexcept
+         {
+            value.str = {it, static_cast<size_t>(end - it)}; // read entire contents as string
+            it = end;
          }
       };
 
@@ -1283,7 +1294,7 @@ namespace glz
          for_each<N>([&](auto I) {
             constexpr auto first = get<0>(get<I>(meta_v<T>));
             using T0 = std::decay_t<decltype(first)>;
-            if constexpr (std::is_member_object_pointer_v<T0>) {
+            if constexpr (std::is_member_pointer_v<T0>) {
                constexpr auto s = get_name<first>();
                for (auto& c : s) {
                   if (c == '\\' || c == '"' || is_unicode(c)) {
@@ -1566,7 +1577,7 @@ namespace glz
                // Only used if error_on_missing_keys = true
                [[maybe_unused]] bit_array<num_members> fields{};
 
-               decltype(auto) frozen_map = [&] {
+               decltype(auto) frozen_map = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T> && num_members > 0) {
 #if ((defined _MSC_VER) && (!defined __clang__))
                      static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();
@@ -1859,7 +1870,7 @@ namespace glz
             bit_array<num_members> all_fields{};
             for_each<num_members>([&](auto I) constexpr { all_fields[I] = true; });
 
-            decltype(auto) frozen_map = [&] {
+            decltype(auto) frozen_map = [&]() -> decltype(auto) {
                if constexpr (reflectable<T> && num_members > 0) {
 #if ((defined _MSC_VER) && (!defined __clang__))
                   static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();

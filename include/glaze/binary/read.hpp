@@ -269,8 +269,17 @@ namespace glz
       };
 
       template <class T>
-         requires std::same_as<std::decay_t<T>, raw_json>
-      struct from_binary<T>
+      struct from_binary<basic_raw_json<T>>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            read<binary>::op<Opts>(value.str, ctx, it, end);
+         }
+      };
+
+      template <class T>
+      struct from_binary<basic_text<T>>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -777,7 +786,7 @@ namespace glz
                for_each<N>([&](auto I) {
                   static constexpr auto item = get<I>(meta_v<V>);
                   using T0 = std::decay_t<decltype(get<0>(item))>;
-                  static constexpr bool use_reflection = std::is_member_object_pointer_v<T0>;
+                  static constexpr bool use_reflection = std::is_member_pointer_v<T0>;
                   static constexpr auto member_index = use_reflection ? 0 : 1;
                   read<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, it, end);
                });
@@ -810,7 +819,7 @@ namespace glz
 
             const auto n_keys = int_from_compressed(it, end);
 
-            decltype(auto) storage = [&] {
+            decltype(auto) storage = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
 #if ((defined _MSC_VER) && (!defined __clang__))
                   static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();

@@ -34,7 +34,7 @@ struct glz::meta<my_struct>
                                         "d", &T::d, //
                                         "hello", &T::hello, //
                                         "arr", &T::arr, //
-                                        "#include", glz::file_include{} //
+                                        "include", glz::file_include{} //
    );
 };
 
@@ -71,7 +71,7 @@ struct glz::meta<sub_thing2>
 {
    using T = sub_thing2;
    static constexpr std::string_view name = "sub_thing2";
-   static constexpr auto value = object("#include", glz::file_include{}, //
+   static constexpr auto value = object("include", glz::file_include{}, //
                                         "a", &T::a, "Test comment 1", //
                                         "b", &T::b, "Test comment 2", //
                                         "c", &T::c, //
@@ -560,7 +560,7 @@ template <>
 struct glz::meta<includer_struct>
 {
    using T = includer_struct;
-   static constexpr auto value = object("#include", glz::file_include{}, "str", &T::str, "i", &T::i, "j", &T::j);
+   static constexpr auto value = object("include", glz::file_include{}, "str", &T::str, "i", &T::i, "j", &T::j);
 };
 
 static_assert(glz::is_includer<glz::includer<includer_struct>>);
@@ -1482,6 +1482,18 @@ suite sub_enum = [] {
       obj = {};
       expect(!glz::read_binary(obj, s));
       expect(obj.b == sub::END);
+   };
+};
+
+suite glz_text_tests = [] {
+   "glz_text"_test = [] {
+      glz::text text = "Hello World";
+      std::string out{};
+      glz::write_binary(text, out);
+
+      text.str.clear();
+      expect(!glz::read_binary(text, out));
+      expect(text.str == "Hello World");
    };
 };
 

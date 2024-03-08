@@ -3,8 +3,10 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstdio>
-#include <glaze/glaze.hpp>
+
+#include "glaze/glaze.hpp"
 
 // The purpose of this command line interface menu is to use reflection to build the menu,
 // but also allow this menu to be registered as an RPC interface.
@@ -24,6 +26,7 @@ namespace glz
    struct cli_menu_opts
    {
       bool hide_non_invocable = true; // hides non-invocable members from the menu
+      glz::opts opts{.prettify = true};
    };
 
    template <cli_menu_opts Opts = cli_menu_opts{}, class T>
@@ -63,7 +66,7 @@ namespace glz
                using E = typename Element::type;
 
                if (I == item_number - 1) {
-                  decltype(auto) func = [&] {
+                  decltype(auto) func = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
                         return std::get<I>(t);
                      }
@@ -79,25 +82,44 @@ namespace glz
                         func();
                      }
                      else {
-                        const auto result = glz::write_json(func());
+                        const auto result = glz::write<Opts.opts>(func());
                         std::printf("%.*s\n", int(result.size()), result.data());
                      }
                   }
                   else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
                      using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
+                     using Params = std::tuple_element_t<0, Tuple>;
+                     using P = std::decay_t<Params>;
                      constexpr auto N = std::tuple_size_v<Tuple>;
                      static_assert(N == 1, "Only one input is allowed for your function");
                      static thread_local std::array<char, 256> input{};
-                     std::printf("json> ");
+                     if constexpr (string_t<P>) {
+                        std::printf("json string> ");
+                     }
+                     else if constexpr (num_t<P>) {
+                        std::printf("json number> ");
+                     }
+                     else if constexpr (readable_array_t<P> || tuple_t<P> || is_std_tuple<P>) {
+                        std::printf("json array> ");
+                     }
+                     else if constexpr (boolean_like<P>) {
+                        std::printf("json bool> ");
+                     }
+                     else if constexpr (glaze_object_t<P> || reflectable<P> || writable_map_t<P>) {
+                        std::printf("json object> ");
+                     }
+                     else {
+                        std::printf("json> ");
+                     }
+
                      if (fgets(input.data(), int(input.size()), stdin)) {
                         std::string_view input_sv{input.data()};
                         if (input_sv.back() == '\n') {
                            input_sv = input_sv.substr(0, input_sv.size() - 1);
                         }
-                        using Params = std::decay_t<std::tuple_element_t<0, Tuple>>;
                         using R = std::invoke_result_t<Func, Params>;
-                        Params params{};
-                        const auto ec = glz::read_json(params, input_sv);
+                        std::decay_t<Params> params{};
+                        const auto ec = glz::read<Opts.opts>(params, input_sv);
                         if (ec) {
                            const auto error = glz::format_error(ec, input_sv);
                            std::printf("%.*s\n", int(error.size()), error.data());
@@ -107,7 +129,7 @@ namespace glz
                               func(params);
                            }
                            else {
-                              const auto result = glz::write_json(func(params));
+                              const auto result = glz::write<Opts.opts>(func(params));
                               std::printf("%.*s\n", int(result.size()), result.data());
                            }
                         }
@@ -159,7 +181,7 @@ namespace glz
                   }
                }();
 
-               decltype(auto) func = [&] {
+               decltype(auto) func = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
                      return std::get<I>(t);
                   }
@@ -187,14 +209,20 @@ namespace glz
          std::printf("--------------------------------\n");
 
          std::printf("cmd> ");
+         std::fflush(stdout);
+      restart_input: // needed to support std::cin within user functions
          // https://web.archive.org/web/20201112034702/http://sekrit.de/webdocs/c/beginners-guide-away-from-scanf.html
          long cmd = -1;
          constexpr auto buffer_length = 64; // only needed to parse numbers
          char buf[buffer_length]{};
-         if (fgets(buf, buffer_length, stdin)) {
-            char* endptr;
+         if (std::fgets(buf, buffer_length, stdin)) {
+            if (buf[0] == '\n') {
+               goto restart_input;
+            }
+
+            char* endptr{};
             errno = 0; // reset error number
-            cmd = strtol(buf, &endptr, 10);
+            cmd = std::strtol(buf, &endptr, 10);
             if ((errno != ERANGE) && (endptr != buf) && (*endptr == '\0' || *endptr == '\n')) {
                execute_menu_item(cmd);
                continue;

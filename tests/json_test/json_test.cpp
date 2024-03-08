@@ -23,11 +23,13 @@
 #include "boost/ut.hpp"
 #include "glaze/api/impl.hpp"
 #include "glaze/file/hostname_include.hpp"
+#include "glaze/file/raw_or_file.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/prettify.hpp"
 #include "glaze/json/ptr.hpp"
 #include "glaze/json/quoted.hpp"
 #include "glaze/json/read.hpp"
+#include "glaze/json/study.hpp"
 #include "glaze/json/write.hpp"
 #include "glaze/record/recorder.hpp"
 #include "glaze/util/poly.hpp"
@@ -2962,7 +2964,7 @@ struct glz::meta<nested0>
 {
    static constexpr std::string_view name = "nested0";
    using T = nested0;
-   static constexpr auto value = object("#include", glz::file_include{}, "a", &T::a, "b", &T::b);
+   static constexpr auto value = object("include", glz::file_include{}, "a", &T::a, "b", &T::b);
 };
 
 suite nested_file_include_test = [] {
@@ -6784,6 +6786,124 @@ suite meta_schema_tests = [] {
          json_schema ==
          R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"]},"std::string":{"type":["string"]}}})")
          << json_schema;
+   };
+
+   "meta_schema prettified"_test = [] {
+      meta_schema_t obj;
+      std::string buffer{};
+      glz::write_json(obj, buffer);
+      expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
+
+      const auto json_schema = glz::write_json_schema<meta_schema_t, glz::opts{.prettify = true}>();
+      expect(json_schema ==
+             R"({
+   "type": [
+      "object"
+   ],
+   "properties": {
+      "file_name": {
+         "$ref": "#/$defs/std::string",
+         "description": "provide a file name to load"
+      },
+      "is_valid": {
+         "$ref": "#/$defs/bool",
+         "description": "for validation"
+      },
+      "x": {
+         "$ref": "#/$defs/int32_t",
+         "description": "x is a special integer"
+      }
+   },
+   "additionalProperties": false,
+   "$defs": {
+      "bool": {
+         "type": [
+            "boolean"
+         ]
+      },
+      "int32_t": {
+         "type": [
+            "integer"
+         ]
+      },
+      "std::string": {
+         "type": [
+            "string"
+         ]
+      }
+   }
+})") << json_schema;
+   };
+};
+
+suite glz_text_tests = [] {
+   "glz_text"_test = [] {
+      glz::text text = "Hello World";
+      std::string out{};
+      glz::write_json(text, out);
+      expect(out == "Hello World");
+
+      text.str.clear();
+      expect(!glz::read_json(text, out));
+      expect(text.str == "Hello World");
+   };
+};
+
+struct raw_or_file_tester
+{
+   glz::raw_or_file input{};
+   std::string name{};
+};
+
+static_assert(glz::detail::count_members<raw_or_file_tester> == 2);
+
+suite raw_or_file_tests = [] {
+   "raw_or_file"_test = [] {
+      raw_or_file_tester obj{};
+
+      std::string s{};
+      glz::write_json(obj, s);
+      expect(s == R"({"input":"","name":""})");
+
+      const std::string secondary_file = "./secondary.json";
+      glz::obj primary{"input", secondary_file, "name", "Edward"};
+      const auto primary_json = glz::write_json(primary);
+
+      {
+         std::vector<int> x{1, 2, 3};
+         const auto ec = glz::write_file_json(x, secondary_file, std::string{});
+         expect(!bool(ec));
+      }
+
+      expect(!glz::read_json(obj, primary_json));
+      expect(obj.input.str == R"([1,2,3])");
+      expect(obj.name == "Edward");
+
+      glz::write_json(obj, s);
+      expect(s == R"({"input":[1,2,3],"name":"Edward"})");
+
+      obj = {};
+      expect(!glz::read_json(obj, s));
+      expect(obj.input.str == R"([1,2,3])");
+      expect(obj.name == "Edward");
+
+      {
+         std::string hello = "Hello from Mars";
+         const auto ec = glz::write_file_json(hello, secondary_file, std::string{});
+         expect(!bool(ec));
+      }
+
+      expect(!glz::read_json(obj, primary_json));
+      expect(obj.input.str == R"("Hello from Mars")");
+      expect(obj.name == "Edward");
+
+      glz::write_json(obj, s);
+      expect(s == R"({"input":"Hello from Mars","name":"Edward"})");
+
+      obj = {};
+      expect(!glz::read_json(obj, s));
+      expect(obj.input.str == R"("Hello from Mars")");
+      expect(obj.name == "Edward");
    };
 };
 
