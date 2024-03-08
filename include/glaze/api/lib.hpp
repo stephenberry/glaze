@@ -99,8 +99,9 @@ namespace glz
      private:
       bool load_lib(const std::string& path) noexcept
       {
-#ifdef GLAZE_API_ON_WINDOWS
-         lib_t loaded_lib = LoadLibrary(path.c_str());
+#ifdef GLAZE_API_ON_WINDOWS         
+         std::filesystem::path file_path(path);
+         lib_t loaded_lib = LoadLibraryW(file_path.native().c_str());
 #else
          lib_t loaded_lib = dlopen(path.c_str(), RTLD_LAZY);
 #endif
