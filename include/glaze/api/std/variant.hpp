@@ -11,25 +11,22 @@ namespace glz
 {
    namespace detail
    {
-      template <class Variant, size_t... I>
+      template <class... T, size_t... I>
       constexpr std::string_view variant_name_impl(std::index_sequence<I...>)
       {
          return join_v<chars<"std::variant<">,
-                       ((I != std::variant_size_v<Variant> - 1)
-                           ? join_v<name_v<std::variant_alternative_t<I, Variant>>, chars<",">>
-                           : join_v<name_v<std::variant_alternative_t<I, Variant>>>)...,
+                       ((I != sizeof...(T) - 1)
+                           ? join_v<name_v<T>, chars<",">>
+                           : join_v<name_v<T>>)...,
                        chars<">">>;
       }
    }
 
-   template <class T>
-   concept variant_specialization = is_specialization_v<T, std::variant>;
-
-   template <variant_specialization T>
-   struct meta<T>
+   template <class... T>
+   struct meta<std::variant<T...>>
    {
       static constexpr std::string_view name =
-         detail::variant_name_impl<T>(std::make_index_sequence<std::variant_size_v<T>>());
+         detail::variant_name_impl<T...>(std::make_index_sequence<sizeof...(T)>());
    };
 
    template <>

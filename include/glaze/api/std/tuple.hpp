@@ -11,23 +11,20 @@ namespace glz
 {
    namespace detail
    {
-      template <class Tuple, size_t... I>
+      template <class... T, size_t... I>
       constexpr std::string_view tuple_name_impl(std::index_sequence<I...>)
       {
          return join_v<chars<"std::tuple<">,
-                       ((I != std::tuple_size_v<Tuple> - 1) ? join_v<name_v<std::tuple_element_t<I, Tuple>>, chars<",">>
-                                                            : join_v<name_v<std::tuple_element_t<I, Tuple>>>)...,
+                       ((I != sizeof...(T) - 1) ? join_v<name_v<T>, chars<",">>
+                                                            : join_v<name_v<T>>)...,
                        chars<">">>;
       }
    }
 
-   template <class T>
-   concept tuple = is_specialization_v<T, std::tuple>;
-
-   template <tuple T>
-   struct meta<T>
+   template <class... T>
+   struct meta<std::tuple<T...>>
    {
       static constexpr std::string_view name =
-         detail::tuple_name_impl<T>(std::make_index_sequence<std::tuple_size_v<T>>());
+         detail::tuple_name_impl<T...>(std::make_index_sequence<sizeof...(T)>());
    };
 }

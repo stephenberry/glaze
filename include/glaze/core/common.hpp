@@ -1194,7 +1194,7 @@ namespace glz
          return detail::get_enum_key<T, static_cast<U>(Enum)>();
       }
       else {
-         return "glz::unknown";
+         static_assert(false_v<decltype(Enum)>, "Enum requires glaze metadata for name");
       }
    }();
 
