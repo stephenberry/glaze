@@ -194,6 +194,9 @@ namespace glz
       }
 #endif
    }
+   
+   template <class Map, class Key>
+   concept findable = requires(Map& map, const Key& key) { map.find(key); };
 
    template <class T>
    concept is_member_function_pointer = std::is_member_function_pointer_v<T>;
@@ -259,6 +262,10 @@ namespace glz
 
       template <uint32_t Format>
       struct write
+      {};
+      
+      template <uint32_t Format>
+      struct write_partial
       {};
    } // namespace detail
 
