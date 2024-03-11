@@ -191,6 +191,23 @@ namespace glz
 
          return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
       }
+      
+      template <class Params, class Result>
+      [[nodiscard]] repe::error_t call(repe::header&& header)
+      {
+         if (!initialized) {
+            throw std::runtime_error("client never initialized");
+         }
+
+         header.action &= ~repe::notify; // clear invalid notify
+         header.action |= repe::empty; // because no value provided
+         glz::write_json(std::forward_as_tuple(std::move(header), nullptr), buffer);
+
+         send_buffer(*socket, buffer);
+         receive_buffer(*socket, buffer);
+
+         return repe::decode_response<Opts>(buffer);
+      }
 
       template <class Func>
       [[nodiscard]] std_func_sig_t<Func> callable(repe::header&& header)
