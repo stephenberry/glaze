@@ -1343,6 +1343,8 @@ namespace glz
 #endif
                   populate_map(value, cmap); // Function required for MSVC to build
                   
+                  static constexpr auto members = member_names<T>;
+                  
                   for_each<N>([&](auto I) {
                      if (we) {
                         return;
@@ -1351,25 +1353,35 @@ namespace glz
                      static constexpr auto group = glz::get<I>(groups);
 
                      static constexpr auto key = std::get<0>(group);
+                     static constexpr auto mem_it = std::find(members.begin(), members.end(), key);
+                     static_assert(mem_it != members.end(), "Invalid key passed to partial write");
+                     
                      static constexpr auto quoted_key = join_v < chars<"\"">, key,
                                            Opts.prettify ? chars<"\": "> : chars < "\":" >>
                         ;
                      dump<quoted_key>(b, ix);
                      
                      static constexpr auto sub_partial = std::get<1>(group);
-                     auto member_it = cmap.find(key);
-                     if (member_it != cmap.end()) {
-                        we.ec = error_code::invalid_partial_key;
-                     }
-                     else {
-                        std::visit(
-                           [&](auto&& member_ptr) {
-                              we = write_partial<json>::op<sub_partial, Opts>(get_member(value, member_ptr), ctx, b, ix);
-                           },
-                           member_it->second);
-                        if constexpr (I != N - 1) {
-                           write_entry_separator<Opts>(ctx, b, ix);
-                        }
+                     auto member_it = cmap.find(key); // we verified at compile time that this exists
+                     std::visit(
+                        [&](auto&& member_ptr) {
+                           if constexpr (std::count(sub_partial.begin(), sub_partial.end(), "") > 0) {
+                              detail::write<json>::op<Opts>(get_member(value, member_ptr), ctx, b, ix);
+                           }
+                           else {
+                              decltype(auto) member = get_member(value, member_ptr);
+                              using M = std::decay_t<decltype(member)>;
+                              if constexpr (glaze_object_t<M> || writable_map_t<M> || reflectable<M>) {
+                                 we = write_partial<json>::op<sub_partial, Opts>(member, ctx, b, ix);
+                              }
+                              else {
+                                 // unreachable
+                              }
+                           }
+                        },
+                        member_it->second);
+                     if constexpr (I != N - 1) {
+                        write_entry_separator<Opts>(ctx, b, ix);
                      }
                   });
                }

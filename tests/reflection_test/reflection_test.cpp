@@ -551,6 +551,31 @@ suite meta_schema_reflection_tests = [] {
    };
 };
 
+struct animals_t
+{
+   std::string lion = "Lion";
+   std::string tiger = "Tiger";
+   std::string panda = "Panda";
+};
+
+struct zoo_t
+{
+   animals_t animals{};
+   std::string name{"My Awesome Zoo"};
+};
+
+suite partial_write_tests = [] {
+   "partial write"_test = [] {
+      static constexpr auto partial = glz::json_ptrs("/name", "/animals/tiger");
+      
+      zoo_t obj{};
+      std::string s{};
+      const auto ec = glz::write_json<partial>(obj, s);
+      expect(!ec);
+      expect(s == R"({"animals":{"tiger":"Tiger"},"name":"My Awesome Zoo"})") << s;
+   };
+};
+
 int main()
 { // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
