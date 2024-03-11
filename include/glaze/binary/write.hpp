@@ -667,17 +667,17 @@ namespace glz
             for_each<std::tuple_size_v<V>>([&](auto I) { write<binary>::op<Opts>(std::get<I>(value), ctx, args...); });
          }
       };
-      
+
       template <class T = void>
       struct to_binary_partial
       {};
 
       template <auto& Partial, auto Opts, class T, class Ctx, class B, class IX>
       concept write_binary_partial_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-         to_binary_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                              std::forward<B>(b), std::forward<IX>(ix));
+         to_binary_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(
+            std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
       };
-      
+
       template <>
       struct write_partial<binary>
       {
@@ -689,22 +689,22 @@ namespace glz
                return {};
             }
             else if constexpr (write_binary_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
-               return to_binary_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                    std::forward<B>(b), std::forward<IX>(ix));
+               return to_binary_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(
+                  std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
             }
             else {
                static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
             }
          }
       };
-      
+
       // Only object types are supported for partial
       template <class T>
-         requires (glaze_object_t<T> || writable_map_t<T> || reflectable<T>)
+         requires(glaze_object_t<T> || writable_map_t<T> || reflectable<T>)
       struct to_binary_partial<T> final
       {
          template <auto& Partial, auto Opts, class... Args>
-         GLZ_FLATTEN static write_error op(auto&& value, is_context auto&& ctx,auto&& b, auto&& ix) noexcept
+         GLZ_FLATTEN static write_error op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             write_error we{};
 
@@ -723,7 +723,7 @@ namespace glz
                   if (we) {
                      return;
                   }
-                  
+
                   static constexpr auto group = glz::get<I>(groups);
 
                   static constexpr auto key = std::get<0>(group);
@@ -735,7 +735,8 @@ namespace glz
                   static constexpr decltype(auto) member_ptr = std::get<index>(member_it->second);
 
                   detail::write<binary>::no_header<Opts>(key, ctx, b, ix);
-                  we = write_partial<binary>::op<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), ctx, b, ix);
+                  we = write_partial<binary>::op<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), ctx, b,
+                                                                    ix);
                });
             }
             else if constexpr (writable_map_t<T>) {
@@ -743,7 +744,7 @@ namespace glz
                   if (we) {
                      return;
                   }
-                  
+
                   static constexpr auto group = glz::get<I>(groups);
 
                   static constexpr auto key_value = std::get<0>(group);

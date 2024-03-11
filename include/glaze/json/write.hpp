@@ -1244,17 +1244,17 @@ namespace glz
             }
          }
       };
-      
+
       template <class T = void>
       struct to_json_partial
       {};
 
       template <auto& Partial, auto Opts, class T, class Ctx, class B, class IX>
       concept write_json_partial_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-         to_json_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                              std::forward<B>(b), std::forward<IX>(ix));
+         to_json_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(
+            std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
       };
-      
+
       template <>
       struct write_partial<json>
       {
@@ -1266,22 +1266,22 @@ namespace glz
                return {};
             }
             else if constexpr (write_json_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
-               return to_json_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                    std::forward<B>(b), std::forward<IX>(ix));
+               return to_json_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(
+                  std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
             }
             else {
                static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
             }
          }
       };
-      
+
       // Only object types are supported for partial
       template <class T>
-         requires (glaze_object_t<T> || writable_map_t<T> || reflectable<T>)
+         requires(glaze_object_t<T> || writable_map_t<T> || reflectable<T>)
       struct to_json_partial<T> final
       {
          template <auto& Partial, auto Opts, class... Args>
-         GLZ_FLATTEN static write_error op(auto&& value, is_context auto&& ctx,auto&& b, auto&& ix) noexcept
+         GLZ_FLATTEN static write_error op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             if constexpr (!Opts.opening_handled) {
                dump<'{'>(b, ix);
@@ -1291,13 +1291,13 @@ namespace glz
                   dumpn<Opts.indentation_char>(ctx.indentation_level, b, ix);
                }
             }
-            
+
             write_error we{};
 
             static constexpr auto sorted = sort_json_ptrs(Partial);
             static constexpr auto groups = glz::group_json_ptrs<sorted>();
             static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
-            
+
             static constexpr auto num_members = [] {
                if constexpr (reflectable<T>) {
                   return count_members<T>;
@@ -1306,14 +1306,14 @@ namespace glz
                   return std::tuple_size_v<meta_t<T>>;
                }
             }();
-            
+
             if constexpr ((num_members > 0) && (glaze_object_t<T> || reflectable<T>)) {
                if constexpr (glaze_object_t<T>) {
                   for_each<N>([&](auto I) {
                      if (we) {
                         return;
                      }
-                     
+
                      static constexpr auto group = glz::get<I>(groups);
 
                      static constexpr auto key = std::get<0>(group);
@@ -1321,14 +1321,14 @@ namespace glz
                                            Opts.prettify ? chars<"\": "> : chars < "\":" >>
                         ;
                      dump<quoted_key>(b, ix);
-                     
+
                      static constexpr auto sub_partial = std::get<1>(group);
                      static constexpr auto frozen_map = make_map<T>();
                      static constexpr auto member_it = frozen_map.find(key);
                      static_assert(member_it != frozen_map.end(), "Invalid key passed to partial write");
                      static constexpr auto index = member_it->second.index();
                      static constexpr decltype(auto) member_ptr = std::get<index>(member_it->second);
-                     
+
                      we = write_partial<json>::op<sub_partial, Opts>(get_member(value, member_ptr), ctx, b, ix);
                      if constexpr (I != N - 1) {
                         write_entry_separator<Opts>(ctx, b, ix);
@@ -1342,25 +1342,25 @@ namespace glz
                   static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
 #endif
                   populate_map(value, cmap); // Function required for MSVC to build
-                  
+
                   static constexpr auto members = member_names<T>;
-                  
+
                   for_each<N>([&](auto I) {
                      if (we) {
                         return;
                      }
-                     
+
                      static constexpr auto group = glz::get<I>(groups);
 
                      static constexpr auto key = std::get<0>(group);
                      static constexpr auto mem_it = std::find(members.begin(), members.end(), key);
                      static_assert(mem_it != members.end(), "Invalid key passed to partial write");
-                     
+
                      static constexpr auto quoted_key = join_v < chars<"\"">, key,
                                            Opts.prettify ? chars<"\": "> : chars < "\":" >>
                         ;
                      dump<quoted_key>(b, ix);
-                     
+
                      static constexpr auto sub_partial = std::get<1>(group);
                      auto member_it = cmap.find(key); // we verified at compile time that this exists
                      std::visit(
@@ -1391,7 +1391,7 @@ namespace glz
                   if (we) {
                      return;
                   }
-                  
+
                   static constexpr auto group = glz::get<I>(groups);
 
                   static constexpr auto key = std::get<0>(group);
@@ -1399,7 +1399,7 @@ namespace glz
                                         Opts.prettify ? chars<"\": "> : chars < "\":" >>
                      ;
                   dump<key>(b, ix);
-                  
+
                   static constexpr auto sub_partial = std::get<1>(group);
                   if constexpr (findable<std::decay_t<T>, decltype(key)>) {
                      auto it = value.find(key);
@@ -1411,8 +1411,7 @@ namespace glz
                      }
                   }
                   else {
-                     static thread_local auto k =
-                        typename std::decay_t<T>::key_type(key);
+                     static thread_local auto k = typename std::decay_t<T>::key_type(key);
                      auto it = value.find(k);
                      if (it != value.end()) {
                         we = write_partial<json>::op<sub_partial, Opts>(it->second, ctx, b, ix);
@@ -1426,7 +1425,7 @@ namespace glz
                   }
                });
             }
-            
+
             if (!we) [[likely]] {
                dump<'}'>(b, ix);
             }
@@ -1449,7 +1448,7 @@ namespace glz
       write<opts{}>(std::forward<T>(value), buffer);
       return buffer;
    }
-   
+
    template <auto& Partial, class T, class Buffer>
    [[nodiscard]] inline auto write_json(T&& value, Buffer&& buffer) noexcept
    {

@@ -567,7 +567,7 @@ struct zoo_t
 suite partial_write_tests = [] {
    "partial write"_test = [] {
       static constexpr auto partial = glz::json_ptrs("/name", "/animals/tiger");
-      
+
       zoo_t obj{};
       std::string s{};
       const auto ec = glz::write_json<partial>(obj, s);

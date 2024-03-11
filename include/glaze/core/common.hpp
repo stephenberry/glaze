@@ -194,7 +194,7 @@ namespace glz
       }
 #endif
    }
-   
+
    template <class Map, class Key>
    concept findable = requires(Map& map, const Key& key) { map.find(key); };
 
@@ -263,7 +263,7 @@ namespace glz
       template <uint32_t Format>
       struct write
       {};
-      
+
       template <uint32_t Format>
       struct write_partial
       {};
