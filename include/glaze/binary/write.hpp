@@ -667,6 +667,115 @@ namespace glz
             for_each<std::tuple_size_v<V>>([&](auto I) { write<binary>::op<Opts>(std::get<I>(value), ctx, args...); });
          }
       };
+      
+      template <class T = void>
+      struct to_binary_partial
+      {};
+
+      template <auto& Partial, auto Opts, class T, class Ctx, class B, class IX>
+      concept write_binary_partial_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
+         to_binary_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                              std::forward<B>(b), std::forward<IX>(ix));
+      };
+      
+      template <>
+      struct write_partial<binary>
+      {
+         template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
+         [[nodiscard]] GLZ_ALWAYS_INLINE static write_error op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
+         {
+            if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
+               detail::write<binary>::op<Opts>(value, ctx, b, ix);
+               return {};
+            }
+            else if constexpr (write_binary_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
+               return to_binary_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                                    std::forward<B>(b), std::forward<IX>(ix));
+            }
+            else {
+               static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
+            }
+         }
+      };
+      
+      // Only object types are supported for partial
+      template <class T>
+         requires (glaze_object_t<T> || writable_map_t<T> || reflectable<T>)
+      struct to_binary_partial<T> final
+      {
+         template <auto& Partial, auto Opts, class... Args>
+         GLZ_FLATTEN static write_error op(auto&& value, is_context auto&& ctx,auto&& b, auto&& ix) noexcept
+         {
+            write_error we{};
+
+            static constexpr auto sorted = sort_json_ptrs(Partial);
+            static constexpr auto groups = glz::group_json_ptrs<sorted>();
+            static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
+
+            constexpr uint8_t type = 0; // string
+            constexpr uint8_t tag = tag::object | type;
+            detail::dump_type(tag, b, ix);
+
+            detail::dump_compressed_int<N>(b, ix);
+
+            if constexpr (glaze_object_t<T>) {
+               for_each<N>([&](auto I) {
+                  if (we) {
+                     return;
+                  }
+                  
+                  static constexpr auto group = glz::get<I>(groups);
+
+                  static constexpr auto key = std::get<0>(group);
+                  static constexpr auto sub_partial = std::get<1>(group);
+                  static constexpr auto frozen_map = detail::make_map<T>();
+                  static constexpr auto member_it = frozen_map.find(key);
+                  static_assert(member_it != frozen_map.end(), "Invalid key passed to partial write");
+                  static constexpr auto index = member_it->second.index();
+                  static constexpr decltype(auto) member_ptr = std::get<index>(member_it->second);
+
+                  detail::write<binary>::no_header<Opts>(key, ctx, b, ix);
+                  we = write_partial<binary>::op<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), ctx, b, ix);
+               });
+            }
+            else if constexpr (writable_map_t<T>) {
+               for_each<N>([&](auto I) {
+                  if (we) {
+                     return;
+                  }
+                  
+                  static constexpr auto group = glz::get<I>(groups);
+
+                  static constexpr auto key_value = std::get<0>(group);
+                  static constexpr auto sub_partial = std::get<1>(group);
+                  if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
+                     detail::write<binary>::no_header<Opts>(key_value, ctx, b, ix);
+                     auto it = value.find(key_value);
+                     if (it != value.end()) {
+                        we = write_partial<binary>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                     }
+                     else {
+                        we.ec = error_code::invalid_partial_key;
+                     }
+                  }
+                  else {
+                     static thread_local auto key =
+                        typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
+                     detail::write<binary>::no_header<Opts>(key, ctx, b, ix);
+                     auto it = value.find(key);
+                     if (it != value.end()) {
+                        we = write_partial<binary>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                     }
+                     else {
+                        we.ec = error_code::invalid_partial_key;
+                     }
+                  }
+               });
+            }
+
+            return we;
+         }
+      };
    }
 
    template <class T, class Buffer>
@@ -681,99 +790,6 @@ namespace glz
       std::string buffer{};
       write<set_binary<Opts>()>(std::forward<T>(value), buffer);
       return buffer;
-   }
-
-   template <class Map, class Key>
-   concept findable = requires(Map& map, const Key& key) { map.find(key); };
-
-   template <auto& Partial, opts Opts, class T, output_buffer Buffer>
-   [[nodiscard]] inline write_error write(T&& value, is_context auto&& ctx, Buffer& buffer, auto& ix) noexcept
-   {
-      write_error we{};
-
-      if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
-         detail::write<binary>::op<Opts>(value, ctx, buffer, ix);
-      }
-      else {
-         using V = std::decay_t<T>;
-         static_assert(detail::glaze_object_t<V> || detail::writable_map_t<V>,
-                       "Only object types are supported for partial.");
-         static constexpr auto sorted = sort_json_ptrs(Partial);
-         static constexpr auto groups = glz::group_json_ptrs<sorted>();
-         static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
-
-         constexpr uint8_t type = 0; // string
-         constexpr uint8_t tag = tag::object | type;
-         detail::dump_type(tag, buffer, ix);
-
-         detail::dump_compressed_int<N>(buffer, ix);
-
-         if constexpr (detail::glaze_object_t<std::decay_t<T>>) {
-            for_each<N>([&](auto I) {
-               static constexpr auto group = glz::get<I>(groups);
-
-               static constexpr auto key = std::get<0>(group);
-               static constexpr auto sub_partial = std::get<1>(group);
-               static constexpr auto frozen_map = detail::make_map<T>();
-               static constexpr auto member_it = frozen_map.find(key);
-               static_assert(member_it != frozen_map.end(), "Invalid key passed to partial write");
-               static constexpr auto index = member_it->second.index();
-               static constexpr decltype(auto) member_ptr = std::get<index>(member_it->second);
-
-               detail::write<binary>::no_header<Opts>(key, ctx, buffer, ix);
-               std::ignore = write<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), ctx, buffer, ix);
-            });
-         }
-         else if constexpr (detail::writable_map_t<std::decay_t<T>>) {
-            for_each<N>([&](auto I) {
-               static constexpr auto group = glz::get<I>(groups);
-
-               static constexpr auto key_value = std::get<0>(group);
-               static constexpr auto sub_partial = std::get<1>(group);
-               if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
-                  detail::write<binary>::no_header<Opts>(key_value, ctx, buffer, ix);
-                  auto it = value.find(key_value);
-                  if (it != value.end()) {
-                     std::ignore = write<sub_partial, Opts>(it->second, ctx, buffer, ix);
-                  }
-                  else {
-                     we.ec = error_code::invalid_partial_key;
-                  }
-               }
-               else {
-                  static thread_local auto key =
-                     typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
-                  detail::write<binary>::no_header<Opts>(key, ctx, buffer, ix);
-                  auto it = value.find(key);
-                  if (it != value.end()) {
-                     std::ignore = write<sub_partial, Opts>(it->second, ctx, buffer, ix);
-                  }
-                  else {
-                     we.ec = error_code::invalid_partial_key;
-                  }
-               }
-            });
-         }
-      }
-
-      return we;
-   }
-
-   template <auto& Partial, opts Opts, class T, output_buffer Buffer>
-   [[nodiscard]] inline write_error write(T&& value, Buffer& buffer) noexcept
-   {
-      if constexpr (detail::resizeable<Buffer>) {
-         if (buffer.empty()) {
-            buffer.resize(128);
-         }
-      }
-      context ctx{};
-      size_t ix = 0;
-      const auto error = write<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
-      if constexpr (detail::resizeable<Buffer>) {
-         buffer.resize(ix);
-      }
-      return error;
    }
 
    template <auto& Partial, class T, class Buffer>

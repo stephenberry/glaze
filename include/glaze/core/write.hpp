@@ -43,6 +43,23 @@ namespace glz
          buffer.resize(ix);
       }
    }
+   
+   template <auto& Partial, opts Opts, class T, output_buffer Buffer>
+   [[nodiscard]] inline write_error write(T&& value, Buffer& buffer) noexcept
+   {
+      if constexpr (detail::resizeable<Buffer>) {
+         if (buffer.empty()) {
+            buffer.resize(128);
+         }
+      }
+      context ctx{};
+      size_t ix = 0;
+      const auto error = detail::write_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
+      if constexpr (detail::resizeable<Buffer>) {
+         buffer.resize(ix);
+      }
+      return error;
+   }
 
    template <opts Opts, class T, output_buffer Buffer>
    inline void write(T&& value, Buffer& buffer) noexcept
