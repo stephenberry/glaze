@@ -1375,7 +1375,7 @@ namespace glz
                                  we = write_partial<json>::op<sub_partial, Opts>(member, ctx, b, ix);
                               }
                               else {
-                                 // unreachable
+                                 detail::write<json>::op<Opts>(member, ctx, b, ix);
                               }
                            }
                         },
