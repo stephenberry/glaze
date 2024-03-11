@@ -48,7 +48,7 @@ namespace glz
                      return;
                   }
 
-                  const auto ecode = validate_json(v.str);
+                  const auto ecode = validate_jsonc(v.str);
                   if (ecode) [[unlikely]] {
                      ctx.error = error_code::includer_error;
                      auto& error_msg = error_buffer();

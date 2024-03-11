@@ -17,6 +17,15 @@ namespace glz::ex
          throw std::runtime_error("validate_json error: " + glz::format_error(ec, buffer));
       }
    }
+   
+   template <class Buffer>
+   void validate_jsonc(Buffer&& buffer)
+   {
+      const auto ec = glz::validate_jsonc(std::forward<Buffer>(buffer));
+      if (ec) {
+         throw std::runtime_error("validate_json error: " + glz::format_error(ec, buffer));
+      }
+   }
 
    template <class T, class Buffer>
    void read_json(T& value, Buffer&& buffer)
