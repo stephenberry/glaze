@@ -17,7 +17,7 @@ namespace glz::ex
          throw std::runtime_error("validate_json error: " + glz::format_error(ec, buffer));
       }
    }
-   
+
    template <class Buffer>
    void validate_jsonc(Buffer&& buffer)
    {

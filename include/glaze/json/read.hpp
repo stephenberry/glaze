@@ -2506,7 +2506,7 @@ namespace glz
       glz::skip skip_value{};
       return read<opts{.force_conformance = true}>(skip_value, std::forward<Buffer>(buffer), ctx);
    }
-   
+
    template <class Buffer>
    [[nodiscard]] inline parse_error validate_jsonc(Buffer&& buffer) noexcept
    {
