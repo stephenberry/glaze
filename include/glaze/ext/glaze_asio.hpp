@@ -191,7 +191,7 @@ namespace glz
 
          return repe::decode_response<Opts>(std::forward<Result>(result), buffer);
       }
-      
+
       template <class Params, class Result>
       [[nodiscard]] repe::error_t call(repe::header&& header)
       {
