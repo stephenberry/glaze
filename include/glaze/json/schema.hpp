@@ -131,7 +131,7 @@ namespace glz
          using V = std::decay_t<decltype(tuple)>;
          constexpr auto N = std::tuple_size_v<V>;
          if constexpr (N > 0) {
-            constexpr auto names = member_names<json_schema_type<T>>; // TODO: use a reference
+            constexpr auto& names = member_names<json_schema_type<T>>;
 
             std::array<std::pair<sv, schema>, N> ret{};
 
