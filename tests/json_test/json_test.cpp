@@ -2580,6 +2580,11 @@ suite tagged_variant_tests = [] {
       expect(glz::read_json(parsed_var, s) == glz::error_code::none);
       expect(parsed_var == var);
    };
+   
+   "tagged_variant_schema_tests"_test = [] {
+      auto s = glz::write_json_schema<tagged_variant>();
+      expect(s == R"({"type":["number","string","boolean","object","array","null"],"$defs":{"int32_t":{"type":["integer"]},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"action":{"$ref":"#/$defs/std::string","enum":["PUT","DELETE"]},"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"}},"additionalProperties":false},{"type":["object"],"properties":{"action":{"$ref":"#/$defs/std::string","enum":["PUT","DELETE"]},"data":{"$ref":"#/$defs/std::string"}},"additionalProperties":false}]})") << s;
+   };
 
    "array_variant_tests"_test = [] {
       // Test array based variant (experimental, not meant for external usage since api might change)
