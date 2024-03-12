@@ -319,8 +319,7 @@ namespace glz
                auto& schema_val = (*s.oneOf)[I.value];
                // TODO use ref to avoid duplication in schema
                to_json_schema<V>::template op<Opts>(schema_val, defs);
-               constexpr bool glaze_object = glaze_object_t<V>;
-               if constexpr (glaze_object) {
+               if constexpr (glaze_object_t<V>) {
                   auto& def = defs[name_v<std::string>];
                   if (!def.type) {
                      to_json_schema<std::string>::template op<Opts>(def, defs);
