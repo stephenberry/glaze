@@ -311,7 +311,7 @@ namespace glz::repe
 
          if constexpr (parent == "" && (glaze_object_t<T> || reflectable<T>)) {
             // build read/write calls to the top level object
-            methods.emplace("", [this, &value](repe::state&& state) {
+            methods[""] = [this, &value](repe::state&& state) {
                if (!(state.header.action & empty)) {
                   if (read_params<Opts>(value, state, response) == 0) {
                      return;
@@ -328,7 +328,7 @@ namespace glz::repe
                else {
                   write_response<Opts>(state);
                }
-            });
+            };
          }
 
          for_each<N>([&](auto I) {
@@ -357,22 +357,22 @@ namespace glz::repe
             if constexpr (std::is_invocable_v<Func>) {
                using Result = std::invoke_result_t<Func>;
                if constexpr (std::same_as<Result, void>) {
-                  methods.emplace(full_key, [callback = func](repe::state&& state) mutable {
+                  methods[full_key] = [callback = func](repe::state&& state) mutable {
                      callback();
                      if (state.header.action & notify) {
                         return;
                      }
                      write_response<Opts>(state);
-                  });
+                  };
                }
                else {
-                  methods.emplace(full_key, [result = Result{}, callback = func](repe::state&& state) mutable {
+                  methods[full_key] = [result = Result{}, callback = func](repe::state&& state) mutable {
                      result = callback();
                      if (state.header.action & notify) {
                         return;
                      }
                      write_response<Opts>(result, state);
-                  });
+                  };
                }
             }
             else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
@@ -552,7 +552,7 @@ namespace glz::repe
             using Params = std::decay_t<std::tuple_element_t<0, Tuple>>;
             using Result = std::decay_t<std::tuple_element_t<1, Tuple>>;
 
-            methods.emplace(name, [this, params = Params{}, result = Result{}, callback](repe::state&& state) mutable {
+            methods[name] = [this, params = Params{}, result = Result{}, callback](repe::state&& state) mutable {
                // no need to lock locals
                if (read_params<Opts>(params, state, response) == 0) {
                   return;
@@ -562,7 +562,7 @@ namespace glz::repe
                   return;
                }
                write_response<Opts>(result, state);
-            });
+            };
          }
          else {
             static_assert(false_v<Callback>, "Requires params and results inputs");
@@ -573,7 +573,7 @@ namespace glz::repe
       void on(const sv name, Params&& params, Result&& result, Callback&& callback)
       {
          if constexpr (lvalue<Params> && lvalue<Result>) {
-            methods.emplace(name, procedure{[this, &params, &result, callback](repe::state&& state) {
+            methods[name] = procedure{[this, &params, &result, callback](repe::state&& state) {
                                // we must lock access to params and result as multiple clients might need to manipulate
                                // them
                                std::unique_lock lock{get_shared_mutex()};
@@ -585,10 +585,10 @@ namespace glz::repe
                                   return;
                                }
                                write_response<Opts>(result, state);
-                            }});
+                            }};
          }
          else if constexpr (lvalue<Params> && !lvalue<Result>) {
-            methods.emplace(name, [this, &params, result, callback](repe::state&& state) mutable {
+            methods[name] = [this, &params, result, callback](repe::state&& state) mutable {
                {
                   std::unique_lock lock{get_shared_mutex()};
                   if (read_params<Opts>(params, state, response) == 0) {
@@ -601,10 +601,10 @@ namespace glz::repe
                   return;
                }
                write_response<Opts>(result, state);
-            });
+            };
          }
          else if constexpr (!lvalue<Params> && lvalue<Result>) {
-            methods.emplace(name, [this, params, &result, callback](repe::state&& state) mutable {
+            methods[name] = [this, params, &result, callback](repe::state&& state) mutable {
                // no need to lock locals
                if (read_params<Opts>(params, state, response) == 0) {
                   return;
@@ -615,10 +615,10 @@ namespace glz::repe
                   return;
                }
                write_response<Opts>(result, state);
-            });
+            };
          }
          else if constexpr (!lvalue<Params> && !lvalue<Result>) {
-            methods.emplace(name, [this, params, result, callback](repe::state&& state) mutable {
+            methods[name] = [this, params, result, callback](repe::state&& state) mutable {
                // no need to lock locals
                if (read_params<Opts>(params, state, response) == 0) {
                   return;
@@ -628,7 +628,7 @@ namespace glz::repe
                   return;
                }
                write_response<Opts>(result, state);
-            });
+            };
          }
          else {
             static_assert(false_v<Result>, "unsupported");
