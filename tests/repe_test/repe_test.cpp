@@ -353,6 +353,7 @@ struct wrapper_t
 {
    T* sub{};
    
+   // TODO: support meta wrappers and not only reflectable wrappers (I don't know why this isn't working)
    /*struct glaze {
       static constexpr auto value = glz::object(&wrapper_t::sub);
    };*/
