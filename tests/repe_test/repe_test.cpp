@@ -348,7 +348,7 @@ suite structs_of_functions = [] {
    };
 };
 
-/*template <class T>
+template <class T>
 struct wrapper_t
 {
    T* sub{};
@@ -358,8 +358,8 @@ suite wrapper_tests = [] {
    "wrapper"_test = [] {
       repe::registry server{};
       
-      my_functions_t instance{};
-      wrapper_t<my_functions_t> obj{&instance};
+      my_nested_functions_t instance{};
+      wrapper_t<my_nested_functions_t> obj{&instance};
       
       server.on(obj);
 
@@ -377,7 +377,7 @@ suite wrapper_tests = [] {
 
       expect(server.response == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
    };
-};*/
+};
 
 int main()
 {
