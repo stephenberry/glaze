@@ -44,6 +44,8 @@ namespace glz
       std::optional<std::uint64_t> min_contains{};
       std::optional<std::uint64_t> max_contains{};
       std::optional<bool> unique_items{};
+      // properties
+      std::optional<std::span<const std::string_view>> enumeration{}; // enum
 
       static constexpr auto schema_attributes{true}; // allowance flag to indicate metadata within glz::object(...)
 
@@ -77,7 +79,8 @@ namespace glz
                                                    "maxItems", &T::max_items, //
                                                    "minContains", &T::min_contains, //
                                                    "maxContains", &T::max_contains, //
-                                                   "uniqueItems", &T::unique_items //
+                                                   "uniqueItems", &T::unique_items, //
+                                                   "enum", &T::enumeration
          );
       };
    };
@@ -325,8 +328,8 @@ namespace glz
                      to_json_schema<std::string>::template op<Opts>(def, defs);
                   }
                   if constexpr (!tag_v<T>.empty()) {
-                     (*schema_val.properties)[tag_v<T>] = schema{join_v<chars<"#/$defs/">, name_v<std::string>>};
-                     // TODO use enum or oneOf to get the ids_v to validate type name
+                     auto& properties = (*schema_val.properties)[tag_v<T>] = schema{join_v<chars<"#/$defs/">, name_v<std::string>>};
+                     properties.enumeration = ids_v<T>;
                   }
                }
             });
