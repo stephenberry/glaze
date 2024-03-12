@@ -318,7 +318,7 @@ namespace glz
                }
             }
          }
-         catch (std::exception& e) {
+         catch (const std::exception& e) {
             std::fprintf(stderr, "%s\n", e.what());
          }
       }
