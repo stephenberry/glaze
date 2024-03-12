@@ -25,7 +25,7 @@ void run_server()
       server.init_registry = [&](glz::repe::registry<>& registry) { registry.on(methods); };
       server.run();
    }
-   catch (std::exception& e) {
+   catch (const std::exception& e) {
       std::cerr << "Exception: " << e.what();
    }
 
