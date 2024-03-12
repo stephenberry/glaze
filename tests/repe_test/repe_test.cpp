@@ -352,6 +352,10 @@ template <class T>
 struct wrapper_t
 {
    T* sub{};
+   
+   /*struct glaze {
+      static constexpr auto value = glz::object(&wrapper_t::sub);
+   };*/
 };
 
 suite wrapper_tests = [] {
