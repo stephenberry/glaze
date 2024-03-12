@@ -384,7 +384,7 @@ namespace glz::repe
                using Result = std::invoke_result_t<Func, Params>;
 
                methods[full_key] = [this, params = std::decay_t<Params>{}, result = std::decay_t<Result>{},
-                                          callback = func](repe::state&& state) mutable {
+                                    callback = func](repe::state&& state) mutable {
                   // no need to lock locals
                   if (read_params<Opts>(params, state, response) == 0) {
                      return;
@@ -565,18 +565,18 @@ namespace glz::repe
       {
          if constexpr (lvalue<Params> && lvalue<Result>) {
             methods[name] = procedure{[this, &params, &result, callback](repe::state&& state) {
-                               // we must lock access to params and result as multiple clients might need to manipulate
-                               // them
-                               std::unique_lock lock{get_shared_mutex()};
-                               if (read_params<Opts>(params, state, response) == 0) {
-                                  return;
-                               }
-                               callback(params, result);
-                               if (state.header.action & notify) {
-                                  return;
-                               }
-                               write_response<Opts>(result, state);
-                            }};
+               // we must lock access to params and result as multiple clients might need to manipulate
+               // them
+               std::unique_lock lock{get_shared_mutex()};
+               if (read_params<Opts>(params, state, response) == 0) {
+                  return;
+               }
+               callback(params, result);
+               if (state.header.action & notify) {
+                  return;
+               }
+               write_response<Opts>(result, state);
+            }};
          }
          else if constexpr (lvalue<Params> && !lvalue<Result>) {
             methods[name] = [this, &params, result, callback](repe::state&& state) mutable {
