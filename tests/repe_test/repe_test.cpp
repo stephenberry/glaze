@@ -348,6 +348,37 @@ suite structs_of_functions = [] {
    };
 };
 
+/*template <class T>
+struct wrapper_t
+{
+   T* sub{};
+};
+
+suite wrapper_tests = [] {
+   "wrapper"_test = [] {
+      repe::registry server{};
+      
+      my_functions_t instance{};
+      wrapper_t<my_functions_t> obj{&instance};
+      
+      server.on(obj);
+
+      {
+         auto request = repe::request_json({"/sub/my_functions/void_func"});
+         server.call(request);
+      }
+
+      expect(server.response == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << server.response;
+
+      {
+         auto request = repe::request_json({"/sub/my_functions/hello"});
+         server.call(request);
+      }
+
+      expect(server.response == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
+   };
+};*/
+
 int main()
 {
    const auto result = boost::ut::cfg<>.run({.report_errors = true});

@@ -397,13 +397,16 @@ namespace glz::repe
                });
             }
             else if constexpr (glaze_object_t<E> || reflectable<E>) {
-               if constexpr (reflectable<T>) {
-                  on<std::decay_t<E>, full_key>(std::get<I>(t));
-               }
-               else {
-                  decltype(auto) member = get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
-                  on<std::decay_t<E>, full_key>(member);
-               }
+               decltype(auto) member = [&]() -> decltype(auto) {
+                  if constexpr (reflectable<T>) {
+                     return std::get<I>(t);
+                  }
+                  else {
+                     return get<Element::member_index>(get<I>(meta_v<T>));
+                  }
+               }();
+               
+               on<std::decay_t<E>, full_key>(get_member(value, member));
 
                // build read/write calls to the object as a variable
                methods.emplace(full_key, [this, &func](repe::state&& state) {
