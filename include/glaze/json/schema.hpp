@@ -45,7 +45,7 @@ namespace glz
       std::optional<std::uint64_t> max_contains{};
       std::optional<bool> unique_items{};
 
-      static constexpr auto schema_attributes{true}; // allowance flag to indicate metadata within glz::Object
+      static constexpr auto schema_attributes{true}; // allowance flag to indicate metadata within glz::object(...)
 
       // TODO switch to using variants when we have write support to get rid of nulls
       // TODO We should be able to generate the json schema compiletime
@@ -150,7 +150,7 @@ namespace glz
          return glz::detail::normal_map<sv, schema, N>({std::get<I>(arr)...});
       }
 
-      // The reflection schema map makes a map of all schema types within a glz::meta
+      // The reflection schema map makes a map of all schema types within a glz::json_schema
       // and returns a map of these schemas with their reflected names.
       template <class T>
       constexpr auto make_reflection_schema_map()
