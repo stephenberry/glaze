@@ -176,7 +176,7 @@ namespace glz
    using meta_unknown_read_t = std::decay_t<decltype(meta_unknown_read_v<std::decay_t<T>>)>;
 
    template <class T>
-   concept named = requires { meta<std::decay_t<T>>::name; } || requires { std::decay_t<T>::glaze::name; };
+   concept named = requires { meta<T>::name; } || requires { std::decay_t<T>::glaze::name; };
 
    template <class T>
    inline constexpr std::string_view name_v = [] {
@@ -185,7 +185,7 @@ namespace glz
             return std::decay_t<T>::glaze::name;
          }
          else {
-            return meta<std::decay_t<T>>::name;
+            return meta<T>::name;
          }
       }
       else if constexpr (std::is_void_v<T>) {
