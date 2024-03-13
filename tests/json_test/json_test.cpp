@@ -5817,8 +5817,12 @@ using vari = std::variant<varx, vary>;
 template <>
 struct glz::meta<vari>
 {
+   static constexpr std::string_view name = "vari";
    static constexpr std::string_view tag = "type";
 };
+
+static_assert(glz::named<vari>);
+static_assert(glz::name_v<vari> == "vari");
 
 struct var_schema
 {
@@ -5846,7 +5850,7 @@ suite empty_variant_objects = [] {
    
    "empty_variant_objects schema"_test = [] {
       const auto s = glz::write_json_schema<var_schema>();
-      expect(s == R"({"type":["object"],"properties":{"$schema":{"$ref":"#/$defs/std::string"},"variant":{"$ref":"#/$defs/std::variant<varx, vary>"}},"additionalProperties":false,"$defs":{"std::string":{"type":["string"]},"std::variant<varx, vary>":{"type":["number","string","boolean","object","array","null"],"oneOf":[{"type":["object"],"properties":{"type":{"$ref":"#/$defs/std::string","enum":["varx","vary"]}},"additionalProperties":false},{"type":["object"],"properties":{"type":{"$ref":"#/$defs/std::string","enum":["varx","vary"]}},"additionalProperties":false}]}}})") << s;
+      expect(s == R"({"type":["object"],"properties":{"$schema":{"$ref":"#/$defs/std::string"},"variant":{"$ref":"#/$defs/vari"}},"additionalProperties":false,"$defs":{"std::string":{"type":["string"]},"vari":{"type":["number","string","boolean","object","array","null"],"oneOf":[{"type":["object"],"properties":{"type":{"$ref":"#/$defs/std::string","enum":["varx","vary"]}},"additionalProperties":false},{"type":["object"],"properties":{"type":{"$ref":"#/$defs/std::string","enum":["varx","vary"]}},"additionalProperties":false}]}}})") << s;
    };
 };
 
