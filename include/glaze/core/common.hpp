@@ -258,15 +258,15 @@ namespace glz
          return concat(a1, a2, gen_seq<N1 - 1>{}, gen_seq<N2>{});
       }
 
-      template <uint32_t Format>
+      template <format Format>
       struct read
       {};
 
-      template <uint32_t Format>
+      template <format Format>
       struct write
       {};
 
-      template <uint32_t Format>
+      template <format Format>
       struct write_partial
       {};
    } // namespace detail

@@ -18,7 +18,7 @@ namespace glz
       {};
 
       template <>
-      struct write<csv>
+      struct write<format::csv>
       {
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
@@ -75,7 +75,7 @@ namespace glz
                if constexpr (Opts.layout == rowwise) {
                   const auto n = value.size();
                   for (size_t i = 0; i < n; ++i) {
-                     write<csv>::op<Opts>(value[i], ctx, b, ix);
+                     write<format::csv>::op<Opts>(value[i], ctx, b, ix);
 
                      if (i != (n - 1)) {
                         dump<','>(b, ix);
@@ -89,7 +89,7 @@ namespace glz
             else {
                const auto n = value.size();
                for (size_t i = 0; i < n; ++i) {
-                  write<csv>::op<Opts>(value[i], ctx, b, ix);
+                  write<format::csv>::op<Opts>(value[i], ctx, b, ix);
 
                   if (i != (n - 1)) {
                      dump<','>(b, ix);
@@ -122,7 +122,7 @@ namespace glz
                   dump<','>(b, ix);
                   const auto n = data.size();
                   for (size_t i = 0; i < n; ++i) {
-                     write<csv>::op<Opts>(data[i], ctx, b, ix);
+                     write<format::csv>::op<Opts>(data[i], ctx, b, ix);
                      if (i < n - 1) {
                         dump<','>(b, ix);
                      }
@@ -154,7 +154,7 @@ namespace glz
                         break;
                      }
 
-                     write<csv>::op<Opts>(data[row], ctx, b, ix);
+                     write<format::csv>::op<Opts>(data[row], ctx, b, ix);
                      ++i;
                      if (i < n) {
                         dump<','>(b, ix);
@@ -231,7 +231,7 @@ namespace glz
                         dump<','>(b, ix);
 
                         for (size_t j = 0; j < count; ++j) {
-                           write<csv>::op<Opts>(member[j][i], ctx, b, ix);
+                           write<format::csv>::op<Opts>(member[j][i], ctx, b, ix);
                            if (j != count - 1) {
                               dump<','>(b, ix);
                            }
@@ -245,7 +245,7 @@ namespace glz
                   else {
                      dump<key>(b, ix);
                      dump<','>(b, ix);
-                     write<csv>::op<Opts>(get_member(value, mem), ctx, b, ix);
+                     write<format::csv>::op<Opts>(get_member(value, mem), ctx, b, ix);
                      dump<'\n'>(b, ix);
                   }
                });
@@ -281,7 +281,7 @@ namespace glz
                      }
                   }
                   else {
-                     write<csv>::op<Opts>(key, ctx, b, ix);
+                     write<format::csv>::op<Opts>(key, ctx, b, ix);
                   }
 
                   if (I != N - 1) {
@@ -318,7 +318,7 @@ namespace glz
 
                         const auto n = member[0].size();
                         for (size_t i = 0; i < n; ++i) {
-                           write<csv>::op<Opts>(member[row][i], ctx, b, ix);
+                           write<format::csv>::op<Opts>(member[row][i], ctx, b, ix);
                            if (i != n - 1) {
                               dump<','>(b, ix);
                            }
@@ -331,7 +331,7 @@ namespace glz
                            return;
                         }
 
-                        write<csv>::op<Opts>(member[row], ctx, b, ix);
+                        write<format::csv>::op<Opts>(member[row], ctx, b, ix);
 
                         if (I != N - 1) {
                            dump<','>(b, ix);
@@ -355,21 +355,21 @@ namespace glz
    template <uint32_t layout = rowwise, class T, class Buffer>
    GLZ_ALWAYS_INLINE auto write_csv(T&& value, Buffer&& buffer) noexcept
    {
-      return write<opts{.format = csv, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<opts{format::csv, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <uint32_t layout = rowwise, class T>
    GLZ_ALWAYS_INLINE auto write_csv(T&& value) noexcept
    {
       std::string buffer{};
-      write<opts{.format = csv, .layout = layout}>(std::forward<T>(value), buffer);
+      write<opts{format::csv, .layout = layout}>(std::forward<T>(value), buffer);
       return buffer;
    }
 
    template <uint32_t layout = rowwise, class T>
    [[nodiscard]] inline write_error write_file_csv(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
-      write<opts{.format = csv, .layout = layout}>(std::forward<T>(value), buffer);
+      write<opts{format::csv, .layout = layout}>(std::forward<T>(value), buffer);
       return {buffer_to_file(buffer, file_name)};
    }
 }

@@ -22,7 +22,7 @@ namespace glz
    struct opts
    {
       // USER CONFIGURABLE
-      glz::format format = glz::format::json;
+      glz::format format{glz::format::json};
       bool comments = false; // Write out comments
       bool error_on_unknown_keys = true; // Error when an unknown key is encountered
       bool skip_null_members = true; // Skip writing out params in an object if the value is null
@@ -55,14 +55,6 @@ namespace glz
       bool write_unknown = true; // whether to write unkwown fields
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
-   };
-   
-   // TODO: Implement strongly typed options
-   /*struct opts
-   {
-      format format_{format::json};
-      comments comments_{};
-      error_on_unknown_keys error_on_unknown_keys_{};
       
       constexpr opts() = default;
       
@@ -71,10 +63,8 @@ namespace glz
          (set(args), ...);
       }
       
-      constexpr void set(format f) { format_ = f; }
-      constexpr void set(comments c) { comments_ = c; }
-      constexpr void set(error_on_unknown_keys e) { error_on_unknown_keys_ = e; }
-   };*/
+      constexpr void set(glz::format f) { format = f; }
+   };
 
    template <opts Opts>
    constexpr auto opening_handled()
@@ -168,7 +158,7 @@ namespace glz
    constexpr auto set_binary()
    {
       opts ret = Opts;
-      ret.format = binary;
+      ret.format = format::binary;
       return ret;
    }
 
@@ -176,7 +166,7 @@ namespace glz
    constexpr auto set_json()
    {
       opts ret = Opts;
-      ret.format = json;
+      ret.format = format::json;
       return ret;
    }
 }

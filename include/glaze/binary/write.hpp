@@ -87,7 +87,7 @@ namespace glz
       };
 
       template <>
-      struct write<binary>
+      struct write<format::binary>
       {
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
@@ -212,7 +212,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            write<binary>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
+            write<format::binary>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
          }
       };
 
@@ -222,7 +222,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            write<binary>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
+            write<format::binary>::op<Opts>(value.str, ctx, std::forward<Args>(args)...);
          }
       };
 
@@ -253,7 +253,7 @@ namespace glz
 
                   dump_type(tag, args...);
                   dump_compressed_int<index>(args...);
-                  write<binary>::op<Opts>(v, ctx, args...);
+                  write<format::binary>::op<Opts>(v, ctx, args...);
                },
                value);
          }
@@ -465,7 +465,7 @@ namespace glz
                dump_compressed_int<Opts>(value.size(), args...);
 
                for (auto&& x : value) {
-                  write<binary>::no_header<Opts>(x, ctx, args...);
+                  write<format::binary>::no_header<Opts>(x, ctx, args...);
                }
             }
             else {
@@ -474,7 +474,7 @@ namespace glz
                dump_compressed_int<Opts>(value.size(), args...);
 
                for (auto&& x : value) {
-                  write<binary>::op<Opts>(x, ctx, args...);
+                  write<format::binary>::op<Opts>(x, ctx, args...);
                }
             }
          }
@@ -495,8 +495,8 @@ namespace glz
 
             dump_compressed_int<Opts>(1, args...);
             const auto& [k, v] = value;
-            write<binary>::no_header<Opts>(k, ctx, args...);
-            write<binary>::op<Opts>(v, ctx, args...);
+            write<format::binary>::no_header<Opts>(k, ctx, args...);
+            write<format::binary>::op<Opts>(v, ctx, args...);
          }
       };
 
@@ -515,8 +515,8 @@ namespace glz
 
             dump_compressed_int<Opts>(value.size(), args...);
             for (auto&& [k, v] : value) {
-               write<binary>::no_header<Opts>(k, ctx, args...);
-               write<binary>::op<Opts>(v, ctx, args...);
+               write<format::binary>::no_header<Opts>(k, ctx, args...);
+               write<format::binary>::op<Opts>(v, ctx, args...);
             }
          }
       };
@@ -528,7 +528,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if (value) {
-               write<binary>::op<Opts>(*value, ctx, args...);
+               write<format::binary>::op<Opts>(*value, ctx, args...);
             }
             else {
                dump<std::byte(tag::null)>(args...);
@@ -552,8 +552,8 @@ namespace glz
             dump_compressed_int<N>(args...);
 
             for_each<N>([&](auto I) {
-               write<binary>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
-               write<binary>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
+               write<format::binary>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
+               write<format::binary>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
             });
          }
       };
@@ -568,7 +568,7 @@ namespace glz
          {
             if constexpr (reflectable<T>) {
                const auto t = to_tuple(value);
-               write<binary>::op<Opts>(t, ctx, args...);
+               write<format::binary>::op<Opts>(t, ctx, args...);
             }
             else {
                dump<std::byte(tag::generic_array)>(args...);
@@ -582,7 +582,7 @@ namespace glz
                   using T0 = std::decay_t<decltype(get<0>(item))>;
                   static constexpr bool use_reflection = std::is_member_pointer_v<T0>;
                   static constexpr auto member_index = use_reflection ? 0 : 1;
-                  write<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, args...);
+                  write<format::binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, args...);
                });
             }
          }
@@ -611,8 +611,8 @@ namespace glz
                static constexpr auto members = member_names<T>;
                const auto t = to_tuple(value);
                for_each<N>([&](auto I) {
-                  write<binary>::no_header<Opts>(get<I>(members), ctx, args...);
-                  write<binary>::op<Opts>(std::get<I>(t), ctx, args...);
+                  write<format::binary>::no_header<Opts>(get<I>(members), ctx, args...);
+                  write<format::binary>::op<Opts>(std::get<I>(t), ctx, args...);
                });
             }
             else {
@@ -622,12 +622,12 @@ namespace glz
                   static constexpr bool use_reflection = std::is_member_pointer_v<T0>;
                   static constexpr auto member_index = use_reflection ? 0 : 1;
                   if constexpr (use_reflection) {
-                     write<binary>::no_header<Opts>(get_name<get<0>(item)>(), ctx, args...);
+                     write<format::binary>::no_header<Opts>(get_name<get<0>(item)>(), ctx, args...);
                   }
                   else {
-                     write<binary>::no_header<Opts>(get<0>(item), ctx, args...);
+                     write<format::binary>::no_header<Opts>(get<0>(item), ctx, args...);
                   }
-                  write<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, args...);
+                  write<format::binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, args...);
                });
             }
          }
@@ -647,7 +647,7 @@ namespace glz
 
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>(
-               [&](auto I) { write<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, args...); });
+               [&](auto I) { write<format::binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, args...); });
          }
       };
 
@@ -664,7 +664,7 @@ namespace glz
             dump_compressed_int<N>(args...);
 
             using V = std::decay_t<T>;
-            for_each<std::tuple_size_v<V>>([&](auto I) { write<binary>::op<Opts>(std::get<I>(value), ctx, args...); });
+            for_each<std::tuple_size_v<V>>([&](auto I) { write<format::binary>::op<Opts>(std::get<I>(value), ctx, args...); });
          }
       };
 
@@ -679,13 +679,13 @@ namespace glz
       };
 
       template <>
-      struct write_partial<binary>
+      struct write_partial<format::binary>
       {
          template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
          [[nodiscard]] GLZ_ALWAYS_INLINE static write_error op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
-               detail::write<binary>::op<Opts>(value, ctx, b, ix);
+               detail::write<format::binary>::op<Opts>(value, ctx, b, ix);
                return {};
             }
             else if constexpr (write_binary_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
@@ -734,8 +734,8 @@ namespace glz
                   static constexpr auto index = member_it->second.index();
                   static constexpr decltype(auto) member_ptr = std::get<index>(member_it->second);
 
-                  detail::write<binary>::no_header<Opts>(key, ctx, b, ix);
-                  we = write_partial<binary>::op<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), ctx, b,
+                  detail::write<format::binary>::no_header<Opts>(key, ctx, b, ix);
+                  we = write_partial<format::binary>::op<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), ctx, b,
                                                                     ix);
                });
             }
@@ -750,10 +750,10 @@ namespace glz
                   static constexpr auto key_value = std::get<0>(group);
                   static constexpr auto sub_partial = std::get<1>(group);
                   if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
-                     detail::write<binary>::no_header<Opts>(key_value, ctx, b, ix);
+                     detail::write<format::binary>::no_header<Opts>(key_value, ctx, b, ix);
                      auto it = value.find(key_value);
                      if (it != value.end()) {
-                        we = write_partial<binary>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                        we = write_partial<format::binary>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                      }
                      else {
                         we.ec = error_code::invalid_partial_key;
@@ -762,10 +762,10 @@ namespace glz
                   else {
                      static thread_local auto key =
                         typename std::decay_t<T>::key_type(key_value); // TODO handle numeric keys
-                     detail::write<binary>::no_header<Opts>(key, ctx, b, ix);
+                     detail::write<format::binary>::no_header<Opts>(key, ctx, b, ix);
                      auto it = value.find(key);
                      if (it != value.end()) {
-                        we = write_partial<binary>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                        we = write_partial<format::binary>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                      }
                      else {
                         we.ec = error_code::invalid_partial_key;
@@ -782,7 +782,7 @@ namespace glz
    template <class T, class Buffer>
    inline void write_binary(T&& value, Buffer&& buffer) noexcept
    {
-      write<opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      write<opts{format::binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <opts Opts = opts{}, class T>
@@ -796,7 +796,7 @@ namespace glz
    template <auto& Partial, class T, class Buffer>
    inline auto write_binary(T&& value, Buffer&& buffer) noexcept
    {
-      return write<Partial, opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<Partial, opts{format::binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    // std::string file_name needed for std::ofstream
@@ -822,7 +822,7 @@ namespace glz
    template <class T, class Buffer>
    inline void write_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
-      write<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      write<opts{format::binary, .structs_as_arrays = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>

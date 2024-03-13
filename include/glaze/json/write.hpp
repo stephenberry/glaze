@@ -8,7 +8,6 @@
 #include <ostream>
 #include <variant>
 
-#include "glaze/core/format.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/core/write_chars.hpp"
 #include "glaze/json/ptr.hpp"
@@ -32,7 +31,7 @@ namespace glz
       };
 
       template <>
-      struct write<json>
+      struct write<format::json>
       {
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
@@ -149,9 +148,9 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             dump<'['>(b, ix);
-            write<json>::op<Opts>(value.real(), ctx, b, ix);
+            write<format::json>::op<Opts>(value.real(), ctx, b, ix);
             dump<','>(b, ix);
-            write<json>::op<Opts>(value.imag(), ctx, b, ix);
+            write<format::json>::op<Opts>(value.imag(), ctx, b, ix);
             dump<']'>(b, ix);
          }
       };
@@ -426,7 +425,7 @@ namespace glz
             }
             else [[unlikely]] {
                // What do we want to happen if the value doesnt have a mapped string
-               write<json>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
+               write<format::json>::op<Opts>(static_cast<std::underlying_type_t<T>>(value), ctx, std::forward<Args>(args)...);
             }
          }
       };
@@ -438,7 +437,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            write<json>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
+            write<format::json>::op<Opts>(static_cast<std::underlying_type_t<std::decay_t<T>>>(value), ctx,
                                   std::forward<Args>(args)...);
          }
       };
@@ -498,11 +497,11 @@ namespace glz
             }
 
             auto it = std::begin(value);
-            write<json>::op<Opts>(*it, ctx, args...);
+            write<format::json>::op<Opts>(*it, ctx, args...);
             ++it;
             for (const auto fin = std::end(value); it != fin; ++it) {
                write_entry_separator<Opts>(ctx, args...);
-               write<json>::op<Opts>(*it, ctx, args...);
+               write<format::json>::op<Opts>(*it, ctx, args...);
             }
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
@@ -528,10 +527,10 @@ namespace glz
       GLZ_ALWAYS_INLINE void write_pair_content(const Key& key, Value&& value, Ctx& ctx, auto&&... args) noexcept
       {
          if constexpr (str_t<Key> || char_t<Key> || glaze_enum_t<Key> || Opts.quoted_num) {
-            write<json>::op<Opts>(key, ctx, args...);
+            write<format::json>::op<Opts>(key, ctx, args...);
          }
          else {
-            write<json>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<const Key>{key}, ctx, args...);
+            write<format::json>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<const Key>{key}, ctx, args...);
          }
          if constexpr (Opts.prettify) {
             dump<": ">(args...);
@@ -540,7 +539,7 @@ namespace glz
             dump<':'>(args...);
          }
 
-         write<json>::op<opening_and_closing_handled_off<Opts>()>(std::forward<Value>(value), ctx, args...);
+         write<format::json>::op<opening_and_closing_handled_off<Opts>()>(std::forward<Value>(value), ctx, args...);
       }
 
       template <opts Opts, class Value>
@@ -711,7 +710,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if (value)
-               write<json>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
+               write<format::json>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
             else {
                dump<"null">(std::forward<Args>(args)...);
             }
@@ -770,10 +769,10 @@ namespace glz
                            dump<R"(",)">(args...);
                         }
                      }
-                     write<json>::op<opening_handled<Opts>()>(val, ctx, args...);
+                     write<format::json>::op<opening_handled<Opts>()>(val, ctx, args...);
                   }
                   else {
-                     write<json>::op<Opts>(val, ctx, args...);
+                     write<format::json>::op<Opts>(val, ctx, args...);
                   }
                },
                value);
@@ -800,7 +799,7 @@ namespace glz
                dump<'\n'>(args...);
                dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
             }
-            std::visit([&](auto&& v) { write<json>::op<Opts>(v, ctx, args...); }, value);
+            std::visit([&](auto&& v) { write<format::json>::op<Opts>(v, ctx, args...); }, value);
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
                dump<'\n'>(args...);
@@ -828,10 +827,10 @@ namespace glz
             }
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value.value, glz::get<I>(meta_v<T>)), ctx, args...);
+                  write<format::json>::op<Opts>(get_member(value.value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
                else {
-                  write<json>::op<Opts>(glz::get<I>(value.value), ctx, args...);
+                  write<format::json>::op<Opts>(glz::get<I>(value.value), ctx, args...);
                }
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
@@ -872,10 +871,10 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
+                  write<format::json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
                else {
-                  write<json>::op<Opts>(glz::get<I>(value), ctx, args...);
+                  write<format::json>::op<Opts>(glz::get<I>(value), ctx, args...);
                }
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
@@ -924,10 +923,10 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, args...);
+                  write<format::json>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, args...);
                }
                else {
-                  write<json>::op<Opts>(std::get<I>(value), ctx, args...);
+                  write<format::json>::op<Opts>(std::get<I>(value), ctx, args...);
                }
                constexpr bool needs_comma = I < N - 1;
                if constexpr (needs_comma) {
@@ -1009,7 +1008,7 @@ namespace glz
 
                   if constexpr (str_t<Key> || char_t<Key>) {
                      const sv key = glz::get<2 * I>(value.value);
-                     write<json>::op<Opts>(key, ctx, b, ix);
+                     write<format::json>::op<Opts>(key, ctx, b, ix);
                      dump<':'>(b, ix);
                      if constexpr (Opts.prettify) {
                         dump<' '>(b, ix);
@@ -1017,11 +1016,11 @@ namespace glz
                   }
                   else {
                      dump<'"'>(b, ix);
-                     write<json>::op<Opts>(item, ctx, b, ix);
+                     write<format::json>::op<Opts>(item, ctx, b, ix);
                      dump(Opts.prettify ? "\": " : "\":", b, ix);
                   }
 
-                  write<json>::op<Opts>(item, ctx, b, ix);
+                  write<format::json>::op<Opts>(item, ctx, b, ix);
                }
             });
 
@@ -1056,7 +1055,7 @@ namespace glz
             static constexpr auto N = std::tuple_size_v<V>;
 
             for_each<N>([&](auto I) {
-               write<json>::op<opening_and_closing_handled<Options>()>(glz::get<I>(value.value), ctx, b, ix);
+               write<format::json>::op<opening_and_closing_handled<Options>()>(glz::get<I>(value.value), ctx, b, ix);
                if constexpr (I < N - 1) {
                   dump<','>(b, ix);
                }
@@ -1084,10 +1083,10 @@ namespace glz
 
                using WriterType = meta_unknown_write_t<ValueType>;
                if constexpr (std::is_member_object_pointer_v<WriterType>) {
-                  write<json>::op<write_unknown_off<Options>()>(glz::merge{value, value.*writer}, ctx, b, ix);
+                  write<format::json>::op<write_unknown_off<Options>()>(glz::merge{value, value.*writer}, ctx, b, ix);
                }
                else if constexpr (std::is_member_function_pointer_v<WriterType>) {
-                  write<json>::op<write_unknown_off<Options>()>(glz::merge{value, (value.*writer)()}, ctx, b, ix);
+                  write<format::json>::op<write_unknown_off<Options>()>(glz::merge{value, (value.*writer)()}, ctx, b, ix);
                }
                else {
                   static_assert(false_v<T>, "unknown_write type not handled");
@@ -1201,7 +1200,7 @@ namespace glz
 
                   static constexpr sv key = key_name<I, T, use_reflection>;
                   if constexpr (needs_escaping(key)) {
-                     write<json>::op<Opts>(key, ctx, b, ix);
+                     write<format::json>::op<Opts>(key, ctx, b, ix);
                      dump<':'>(b, ix);
                      if constexpr (Opts.prettify) {
                         dump<' '>(b, ix);
@@ -1214,7 +1213,7 @@ namespace glz
                      dump<quoted_key>(b, ix);
                   }
 
-                  write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
+                  write<format::json>::op<Opts>(get_member(value, member), ctx, b, ix);
 
                   static constexpr size_t comment_index = member_index + 1;
                   static constexpr auto S = std::tuple_size_v<typename Element::Item>;
@@ -1256,13 +1255,13 @@ namespace glz
       };
 
       template <>
-      struct write_partial<json>
+      struct write_partial<format::json>
       {
          template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
          [[nodiscard]] GLZ_ALWAYS_INLINE static write_error op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
-               detail::write<json>::op<Opts>(value, ctx, b, ix);
+               detail::write<format::json>::op<Opts>(value, ctx, b, ix);
                return {};
             }
             else if constexpr (write_json_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
@@ -1329,7 +1328,7 @@ namespace glz
                      static constexpr auto index = member_it->second.index();
                      static constexpr decltype(auto) member_ptr = std::get<index>(member_it->second);
 
-                     we = write_partial<json>::op<sub_partial, Opts>(get_member(value, member_ptr), ctx, b, ix);
+                     we = write_partial<format::json>::op<sub_partial, Opts>(get_member(value, member_ptr), ctx, b, ix);
                      if constexpr (I != N - 1) {
                         write_entry_separator<Opts>(ctx, b, ix);
                      }
@@ -1366,16 +1365,16 @@ namespace glz
                      std::visit(
                         [&](auto&& member_ptr) {
                            if constexpr (std::count(sub_partial.begin(), sub_partial.end(), "") > 0) {
-                              detail::write<json>::op<Opts>(get_member(value, member_ptr), ctx, b, ix);
+                              detail::write<format::json>::op<Opts>(get_member(value, member_ptr), ctx, b, ix);
                            }
                            else {
                               decltype(auto) member = get_member(value, member_ptr);
                               using M = std::decay_t<decltype(member)>;
                               if constexpr (glaze_object_t<M> || writable_map_t<M> || reflectable<M>) {
-                                 we = write_partial<json>::op<sub_partial, Opts>(member, ctx, b, ix);
+                                 we = write_partial<format::json>::op<sub_partial, Opts>(member, ctx, b, ix);
                               }
                               else {
-                                 detail::write<json>::op<Opts>(member, ctx, b, ix);
+                                 detail::write<format::json>::op<Opts>(member, ctx, b, ix);
                               }
                            }
                         },
@@ -1404,7 +1403,7 @@ namespace glz
                   if constexpr (findable<std::decay_t<T>, decltype(key)>) {
                      auto it = value.find(key);
                      if (it != value.end()) {
-                        we = write_partial<json>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                        we = write_partial<format::json>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                      }
                      else {
                         we.ec = error_code::invalid_partial_key;
@@ -1414,7 +1413,7 @@ namespace glz
                      static thread_local auto k = typename std::decay_t<T>::key_type(key);
                      auto it = value.find(k);
                      if (it != value.end()) {
-                        we = write_partial<json>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                        we = write_partial<format::json>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                      }
                      else {
                         we.ec = error_code::invalid_partial_key;

@@ -5,7 +5,6 @@
 
 #include "glaze/binary/header.hpp"
 #include "glaze/binary/skip.hpp"
-#include "glaze/core/format.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/reflection/reflect.hpp"
@@ -26,7 +25,7 @@ namespace glz
       };
 
       template <>
-      struct read<binary>
+      struct read<format::binary>
       {
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
@@ -274,7 +273,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            read<binary>::op<Opts>(value.str, ctx, it, end);
+            read<format::binary>::op<Opts>(value.str, ctx, it, end);
          }
       };
 
@@ -284,7 +283,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            read<binary>::op<Opts>(value.str, ctx, it, end);
+            read<format::binary>::op<Opts>(value.str, ctx, it, end);
          }
       };
 
@@ -306,7 +305,7 @@ namespace glz
             if (value.index() != type_index) {
                value = runtime_variant_map<T>()[type_index];
             }
-            std::visit([&](auto&& v) { read<binary>::op<Opts>(v, ctx, it, end); }, value);
+            std::visit([&](auto&& v) { read<format::binary>::op<Opts>(v, ctx, it, end); }, value);
          }
       };
 
@@ -446,7 +445,7 @@ namespace glz
 
                for (size_t i = 0; i < n; ++i) {
                   V v;
-                  read<binary>::op<Opts>(v, ctx, it, end);
+                  read<format::binary>::op<Opts>(v, ctx, it, end);
                   value.emplace(std::move(v));
                }
             }
@@ -619,7 +618,7 @@ namespace glz
                }
 
                for (auto&& item : value) {
-                  read<binary>::op<Opts>(item, ctx, it, end);
+                  read<format::binary>::op<Opts>(item, ctx, it, end);
                }
             }
          }
@@ -651,8 +650,8 @@ namespace glz
                return;
             }
 
-            read<binary>::op<opt_true<Opts, &opts::no_header>>(value.first, ctx, it, end);
-            read<binary>::op<Opts>(value.second, ctx, it, end);
+            read<format::binary>::op<opt_true<Opts, &opts::no_header>>(value.first, ctx, it, end);
+            read<format::binary>::op<Opts>(value.second, ctx, it, end);
          }
       };
 
@@ -681,15 +680,15 @@ namespace glz
             if constexpr (std::is_arithmetic_v<std::decay_t<Key>>) {
                Key key;
                for (size_t i = 0; i < n; ++i) {
-                  read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
-                  read<binary>::op<Opts>(value[key], ctx, it, end);
+                  read<format::binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
+                  read<format::binary>::op<Opts>(value[key], ctx, it, end);
                }
             }
             else {
                static thread_local Key key;
                for (size_t i = 0; i < n; ++i) {
-                  read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
-                  read<binary>::op<Opts>(value[key], ctx, it, end);
+                  read<format::binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
+                  read<format::binary>::op<Opts>(value[key], ctx, it, end);
                }
             }
          }
@@ -729,7 +728,7 @@ namespace glz
                      // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or std::shared_ptr
                   }
                }
-               read<binary>::op<Opts>(*value, ctx, it, end);
+               read<format::binary>::op<Opts>(*value, ctx, it, end);
             }
          }
       };
@@ -769,7 +768,7 @@ namespace glz
          {
             if constexpr (reflectable<T>) {
                auto t = to_tuple(value);
-               read<binary>::op<Opts>(t, ctx, it, end);
+               read<format::binary>::op<Opts>(t, ctx, it, end);
             }
             else {
                const auto tag = uint8_t(*it);
@@ -788,7 +787,7 @@ namespace glz
                   using T0 = std::decay_t<decltype(get<0>(item))>;
                   static constexpr bool use_reflection = std::is_member_pointer_v<T0>;
                   static constexpr auto member_index = use_reflection ? 0 : 1;
-                  read<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, it, end);
+                  read<format::binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, it, end);
                });
             }
          }
@@ -845,7 +844,7 @@ namespace glz
                if constexpr (N > 0) {
                   if (const auto& p = storage.find(key); p != storage.end()) [[likely]] {
                      std::visit(
-                        [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
+                        [&](auto&& member_ptr) { read<format::binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
                         p->second);
 
                      if (bool(ctx.error)) [[unlikely]] {
@@ -895,7 +894,7 @@ namespace glz
 
             using V = std::decay_t<T>;
             for_each<std::tuple_size_v<meta_t<V>>>(
-               [&](auto I) { read<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, it, end); });
+               [&](auto I) { read<format::binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, it, end); });
          }
       };
 
@@ -916,7 +915,7 @@ namespace glz
             skip_compressed_int(it, end);
 
             using V = std::decay_t<T>;
-            for_each<std::tuple_size_v<V>>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+            for_each<std::tuple_size_v<V>>([&](auto I) { read<format::binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
          }
       };
    }
@@ -924,14 +923,14 @@ namespace glz
    template <class T, class Buffer>
    [[nodiscard]] inline parse_error read_binary(T&& value, Buffer&& buffer) noexcept
    {
-      return read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
+      return read<opts{format::binary}>(value, std::forward<Buffer>(buffer));
    }
 
    template <class T, class Buffer>
    [[nodiscard]] inline expected<T, parse_error> read_binary(Buffer&& buffer) noexcept
    {
       T value{};
-      const auto pe = read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
+      const auto pe = read<opts{format::binary}>(value, std::forward<Buffer>(buffer));
       if (pe) [[unlikely]] {
          return unexpected(pe);
       }
@@ -956,7 +955,7 @@ namespace glz
    template <class T, class Buffer>
    [[nodiscard]] inline parse_error read_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
-      return read<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value),
+      return read<opts{format::binary, .structs_as_arrays = true}>(std::forward<T>(value),
                                                                      std::forward<Buffer>(buffer));
    }
 
@@ -964,7 +963,7 @@ namespace glz
    [[nodiscard]] inline expected<T, parse_error> read_binary_untagged(Buffer&& buffer) noexcept
    {
       T value{};
-      const auto pe = read<opts{.format = binary, .structs_as_arrays = true}>(value, std::forward<Buffer>(buffer));
+      const auto pe = read<opts{format::binary, .structs_as_arrays = true}>(value, std::forward<Buffer>(buffer));
       if (pe) [[unlikely]] {
          return unexpected(pe);
       }

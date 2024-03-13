@@ -13,7 +13,6 @@
 #include <type_traits>
 
 #include "glaze/core/common.hpp"
-#include "glaze/core/format.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/json/json_t.hpp"
@@ -59,7 +58,7 @@ namespace glz
       };
 
       template <>
-      struct read<json>
+      struct read<format::json>
       {
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
@@ -96,7 +95,7 @@ namespace glz
                if constexpr (std::is_member_object_pointer_v<ReaderType>) {
                   using MemberType = typename member_value<ReaderType>::type;
                   if constexpr (detail::map_subscriptable<MemberType>) {
-                     read<json>::op<Opts>((value.*reader)[key], ctx, it, end);
+                     read<format::json>::op<Opts>((value.*reader)[key], ctx, it, end);
                   }
                   else {
                      static_assert(false_v<T>, "target must have subscript operator");
@@ -108,7 +107,7 @@ namespace glz
                      using TupleType = typename inputs_as_tuple<ReaderType>::type;
                      if constexpr (std::tuple_size_v<TupleType> == 2) {
                         std::decay_t<std::tuple_element_t<1, TupleType>> input{};
-                        read<json>::op<Opts>(input, ctx, it, end);
+                        read<format::json>::op<Opts>(input, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         (value.*reader)(key, input);
@@ -239,7 +238,7 @@ namespace glz
 
             auto* ptr = reinterpret_cast<typename T::value_type*>(&v);
             static_assert(sizeof(T) == sizeof(typename T::value_type) * 2);
-            read<json>::op<Opts>(ptr[0], ctx, args...);
+            read<format::json>::op<Opts>(ptr[0], ctx, args...);
 
             skip_ws<Opts>(ctx, args...);
             if (bool(ctx.error)) [[unlikely]]
@@ -249,7 +248,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            read<json>::op<Opts>(ptr[1], ctx, args...);
+            read<format::json>::op<Opts>(ptr[1], ctx, args...);
 
             skip_ws<Opts>(ctx, args...);
             if (bool(ctx.error)) [[unlikely]]
@@ -829,10 +828,10 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            // read<json>::op<Opts>(*reinterpret_cast<std::underlying_type_t<std::decay_t<decltype(value)>>*>(&value),
+            // read<format::json>::op<Opts>(*reinterpret_cast<std::underlying_type_t<std::decay_t<decltype(value)>>*>(&value),
             // ctx, it, end);
             std::underlying_type_t<std::decay_t<T>> x{};
-            read<json>::op<Opts>(x, ctx, it, end);
+            read<format::json>::op<Opts>(x, ctx, it, end);
             value = static_cast<std::decay_t<T>>(x);
          }
       };
@@ -916,7 +915,7 @@ namespace glz
             while (true) {
                using V = range_value_t<T>;
                V v;
-               read<json>::op<Opts>(v, ctx, it, end);
+               read<format::json>::op<Opts>(v, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                value.emplace(std::move(v));
@@ -972,7 +971,7 @@ namespace glz
             auto value_it = value.begin();
 
             for (size_t i = 0; i < n; ++i) {
-               read<json>::op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
+               read<format::json>::op<ws_handled<Opts>()>(*value_it++, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -1005,7 +1004,7 @@ namespace glz
             // growing
             if constexpr (emplace_backable<T>) {
                while (it < end) {
-                  read<json>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
+                  read<format::json>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                   skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -1115,7 +1114,7 @@ namespace glz
             value.resize(n);
             size_t i = 0;
             for (auto& x : value) {
-               read<json>::op<Opts>(x, ctx, it, end);
+               read<format::json>::op<Opts>(x, ctx, it, end);
                skip_ws<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
@@ -1170,17 +1169,17 @@ namespace glz
                      return;
                }
                if constexpr (is_std_tuple<T>) {
-                  read<json>::op<ws_handled<Opts>()>(std::get<I>(value), ctx, it, end);
+                  read<format::json>::op<ws_handled<Opts>()>(std::get<I>(value), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
                else if constexpr (glaze_array_t<T>) {
-                  read<json>::op<ws_handled<Opts>()>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
+                  read<format::json>::op<ws_handled<Opts>()>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
                else {
-                  read<json>::op<ws_handled<Opts>()>(glz::get<I>(value), ctx, it, end);
+                  read<format::json>::op<ws_handled<Opts>()>(glz::get<I>(value), ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
@@ -1214,7 +1213,7 @@ namespace glz
             static constexpr auto flag_map = make_map<T>();
 
             while (true) {
-               read<json>::op<ws_handled_off<Opts>()>(s, ctx, it, end);
+               read<format::json>::op<ws_handled_off<Opts>()>(s, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
 
@@ -1249,7 +1248,7 @@ namespace glz
          {
             constexpr auto Opts = ws_handled_off<Options>();
             std::string& buffer = string_buffer();
-            read<json>::op<Opts>(buffer, ctx, it, end);
+            read<format::json>::op<Opts>(buffer, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -1469,7 +1468,7 @@ namespace glz
 
          if constexpr (keys_may_contain_escape<T>()) {
             std::string& static_key = string_buffer();
-            read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
+            read<format::json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
             --it; // reveal the quote
             return static_key;
          }
@@ -1514,16 +1513,16 @@ namespace glz
             }
 
             if constexpr (str_t<typename T::first_type>) {
-               read<json>::op<Opts>(value.first, ctx, it, end);
+               read<format::json>::op<Opts>(value.first, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
             else {
                std::string_view key;
-               read<json>::op<Opts>(key, ctx, it, end);
+               read<format::json>::op<Opts>(key, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               read<json>::op<Opts>(value.first, ctx, key.data(), key.data() + key.size());
+               read<format::json>::op<Opts>(value.first, ctx, key.data(), key.data() + key.size());
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
@@ -1532,7 +1531,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            read<json>::op<Opts>(value.second, ctx, it, end);
+            read<format::json>::op<Opts>(value.second, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -1658,7 +1657,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
-                     read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                     read<format::json>::handle_unknown<Opts>(key, value, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
@@ -1692,7 +1691,7 @@ namespace glz
                            }
                            std::visit(
                               [&](auto&& member_ptr) {
-                                 read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
+                                 read<format::json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
                               },
                               member_it->second);
                            if (bool(ctx.error)) [[unlikely]]
@@ -1715,7 +1714,7 @@ namespace glz
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
 
-                              read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                              read<format::json>::handle_unknown<Opts>(key, value, ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
                            }
@@ -1749,7 +1748,7 @@ namespace glz
                            }
                            std::visit(
                               [&](auto&& member_ptr) {
-                                 read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
+                                 read<format::json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
                               },
                               member_it->second);
                            if (bool(ctx.error)) [[unlikely]]
@@ -1770,7 +1769,7 @@ namespace glz
                            if (bool(ctx.error)) [[unlikely]]
                               return;
 
-                           read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                           read<format::json>::handle_unknown<Opts>(key, value, ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                         }
@@ -1781,19 +1780,19 @@ namespace glz
                      using k_t = typename T::key_type;
                      if constexpr (std::is_same_v<k_t, std::string>) {
                         static thread_local k_t key;
-                        read<json>::op<Opts>(key, ctx, it, end);
+                        read<format::json>::op<Opts>(key, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
                         parse_object_entry_sep<Opts>(ctx, it, end);
 
-                        read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
+                        read<format::json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }
                      else if constexpr (str_t<k_t>) {
                         k_t key;
-                        read<json>::op<Opts>(key, ctx, it, end);
+                        read<format::json>::op<Opts>(key, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
@@ -1801,21 +1800,21 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
+                        read<format::json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }
                      else {
                         k_t key_value{};
                         if constexpr (glaze_enum_t<k_t>) {
-                           read<json>::op<Opts>(key_value, ctx, it, end);
+                           read<format::json>::op<Opts>(key_value, ctx, it, end);
                         }
                         else if constexpr (std::is_arithmetic_v<k_t>) {
                            // prefer over quoted_t below to avoid double parsing of quoted_t
-                           read<json>::op<opt_true<Opts, &opts::quoted_num>>(key_value, ctx, it, end);
+                           read<format::json>::op<opt_true<Opts, &opts::quoted_num>>(key_value, ctx, it, end);
                         }
                         else {
-                           read<json>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<k_t>{key_value}, ctx, it, end);
+                           read<format::json>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<k_t>{key_value}, ctx, it, end);
                         }
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -1824,7 +1823,7 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        read<json>::op<Opts>(value[key_value], ctx, it, end);
+                        read<format::json>::op<Opts>(value[key_value], ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }
@@ -1952,7 +1951,7 @@ namespace glz
 
                      std::visit(
                         [&](auto&& member_ptr) {
-                           read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
+                           read<format::json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
                         },
                         member_it->second);
                      if (bool(ctx.error)) [[unlikely]]
@@ -1975,7 +1974,7 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                        read<format::json>::handle_unknown<Opts>(key, value, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }
@@ -2008,7 +2007,7 @@ namespace glz
 
                      std::visit(
                         [&](auto&& member_ptr) {
-                           read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
+                           read<format::json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
                         },
                         member_it->second);
                      if (bool(ctx.error)) [[unlikely]]
@@ -2044,7 +2043,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
 
-                     read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                     read<format::json>::handle_unknown<Opts>(key, value, ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                   }
@@ -2138,7 +2137,7 @@ namespace glz
                   // run time substitute to compare to const value
                   std::remove_const_t<std::remove_pointer_t<std::remove_const_t<meta_wrapper_t<V>>>> substitute{};
                   auto copy_it{it};
-                  read<json>::op<ws_handled<Options>()>(substitute, ctx, it, end);
+                  read<format::json>::op<ws_handled<Options>()>(substitute, ctx, it, end);
                   static constexpr auto const_value{*meta_wrapper_v<V>};
                   if (substitute == const_value) {
                      found_match = true;
@@ -2156,7 +2155,7 @@ namespace glz
                if constexpr (std::tuple_size_v < non_const_types >> 0) {
                   using V = std::tuple_element_t<0, non_const_types>;
                   if (!std::holds_alternative<V>(value)) value = V{};
-                  read<json>::op<ws_handled<Options>()>(std::get<V>(value), ctx, it, end);
+                  read<format::json>::op<ws_handled<Options>()>(std::get<V>(value), ctx, it, end);
                }
                else {
                   ctx.error = error_code::no_matching_variant_type;
@@ -2193,7 +2192,7 @@ namespace glz
                   else if constexpr (std::tuple_size_v<object_types> == 1) {
                      using V = std::tuple_element_t<0, object_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
-                     read<json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
+                     read<format::json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
                      return;
                   }
                   else {
@@ -2229,7 +2228,7 @@ namespace glz
                                     if (bool(ctx.error)) [[unlikely]]
                                        return;
                                     std::string_view type_id{};
-                                    read<json>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                                    read<format::json>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
                                     if (bool(ctx.error)) [[unlikely]]
                                        return;
                                     skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -2282,7 +2281,7 @@ namespace glz
                                  return;
 
                               std::string_view type_id{};
-                              read<json>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                              read<format::json>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
                               skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -2381,7 +2380,7 @@ namespace glz
                }
             }
             else {
-               std::visit([&](auto&& v) { read<json>::op<Options>(v, ctx, it, end); }, value);
+               std::visit([&](auto&& v) { read<format::json>::op<Options>(v, ctx, it, end); }, value);
             }
          }
       };
@@ -2432,7 +2431,7 @@ namespace glz
                   return;
                const auto type_index = id_it->second;
                if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
-               std::visit([&](auto&& v) { read<json>::op<Opts>(v, ctx, it, end); }, value);
+               std::visit([&](auto&& v) { read<format::json>::op<Opts>(v, ctx, it, end); }, value);
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
@@ -2493,7 +2492,7 @@ namespace glz
                      // Cannot read into unset nullable that is not std::optional, std::unique_ptr, or std::shared_ptr
                   }
                }
-               read<json>::op<Opts>(*value, ctx, it, end);
+               read<format::json>::op<Opts>(*value, ctx, it, end);
             }
          }
       };

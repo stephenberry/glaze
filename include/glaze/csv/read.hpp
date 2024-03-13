@@ -5,7 +5,6 @@
 
 #include <charconv>
 
-#include "glaze/core/format.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/reflection/reflect.hpp"
@@ -21,7 +20,7 @@ namespace glz
       {};
 
       template <>
-      struct read<csv>
+      struct read<format::csv>
       {
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
          static void op(T&& value, Ctx&& ctx, It0&& it, It1 end) noexcept
@@ -169,7 +168,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
-            read<csv>::op<Opts>(value.emplace_back(), ctx, it, end);
+            read<format::csv>::op<Opts>(value.emplace_back(), ctx, it, end);
          }
       };
 
@@ -263,10 +262,10 @@ namespace glz
                      size_t col = 0;
                      while (it != end) {
                         if (col < member.size()) [[likely]] {
-                           read<csv>::op<Opts>(member[col][csv_index], ctx, it, end);
+                           read<format::csv>::op<Opts>(member[col][csv_index], ctx, it, end);
                         }
                         else [[unlikely]] {
-                           read<csv>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
+                           read<format::csv>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
                         }
 
                         if (*it == '\n') {
@@ -287,7 +286,7 @@ namespace glz
                   }
                   else {
                      while (it != end) {
-                        read<csv>::op<Opts>(member, ctx, it, end);
+                        read<format::csv>::op<Opts>(member, ctx, it, end);
 
                         if (*it == '\n') {
                            ++it;
@@ -333,14 +332,14 @@ namespace glz
                      if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
                         const auto index = keys[i].second;
                         if (row < member.size()) [[likely]] {
-                           read<csv>::op<Opts>(member[row][index], ctx, it, end);
+                           read<format::csv>::op<Opts>(member[row][index], ctx, it, end);
                         }
                         else [[unlikely]] {
-                           read<csv>::op<Opts>(member.emplace_back()[index], ctx, it, end);
+                           read<format::csv>::op<Opts>(member.emplace_back()[index], ctx, it, end);
                         }
                      }
                      else {
-                        read<csv>::op<Opts>(member, ctx, it, end);
+                        read<format::csv>::op<Opts>(member, ctx, it, end);
                      }
 
                      if (*it == ',') {
@@ -429,10 +428,10 @@ namespace glz
                               size_t col = 0;
                               while (it != end) {
                                  if (col < member.size()) [[likely]] {
-                                    read<csv>::op<Opts>(member[col][csv_index], ctx, it, end);
+                                    read<format::csv>::op<Opts>(member[col][csv_index], ctx, it, end);
                                  }
                                  else [[unlikely]] {
-                                    read<csv>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
+                                    read<format::csv>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
                                  }
 
                                  if (*it == '\n') {
@@ -456,7 +455,7 @@ namespace glz
                            }
                            else {
                               while (it != end) {
-                                 read<csv>::op<Opts>(member, ctx, it, end);
+                                 read<format::csv>::op<Opts>(member, ctx, it, end);
 
                                  if (*it == '\n') {
                                     ++it;
@@ -518,14 +517,14 @@ namespace glz
                                  if constexpr (fixed_array_value_t<M> && emplace_backable<M>) {
                                     const auto index = keys[i].second;
                                     if (row < member.size()) [[likely]] {
-                                       read<csv>::op<Opts>(member[row][index], ctx, it, end);
+                                       read<format::csv>::op<Opts>(member[row][index], ctx, it, end);
                                     }
                                     else [[unlikely]] {
-                                       read<csv>::op<Opts>(member.emplace_back()[index], ctx, it, end);
+                                       read<format::csv>::op<Opts>(member.emplace_back()[index], ctx, it, end);
                                     }
                                  }
                                  else {
-                                    read<csv>::op<Opts>(member, ctx, it, end);
+                                    read<format::csv>::op<Opts>(member, ctx, it, end);
                                  }
                               },
                               member_it->second);
@@ -564,14 +563,14 @@ namespace glz
    template <uint32_t layout = rowwise, class T, class Buffer>
    [[nodiscard]] inline auto read_csv(T&& value, Buffer&& buffer) noexcept
    {
-      return read<opts{.format = csv, .layout = layout}>(value, std::forward<Buffer>(buffer));
+      return read<opts{format::csv, .layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
    template <uint32_t layout = rowwise, class T, class Buffer>
    [[nodiscard]] inline auto read_csv(Buffer&& buffer) noexcept
    {
       T value{};
-      read<opts{.format = csv, .layout = layout}>(value, std::forward<Buffer>(buffer));
+      read<opts{format::csv, .layout = layout}>(value, std::forward<Buffer>(buffer));
       return value;
    }
 
@@ -588,6 +587,6 @@ namespace glz
          return {ec};
       }
 
-      return read<opts{.format = csv, .layout = layout}>(value, buffer, ctx);
+      return read<opts{format::csv, .layout = layout}>(value, buffer, ctx);
    }
 }

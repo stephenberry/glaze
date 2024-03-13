@@ -84,14 +84,14 @@ namespace glz
             const size_t n = value.data.size();
             for (size_t i = 0; i < n; ++i) {
                auto& [name, v] = value.data[i];
-               write<json>::op<Opts>(name, ctx, std::forward<Args>(args)...); // write name as key
+               write<format::json>::op<Opts>(name, ctx, std::forward<Args>(args)...); // write name as key
 
                dump<':'>(std::forward<Args>(args)...);
                if constexpr (Opts.prettify) {
                   dump<' '>(args...);
                }
 
-               write<json>::op<Opts>(v.first, ctx, std::forward<Args>(args)...); // write deque
+               write<format::json>::op<Opts>(v.first, ctx, std::forward<Args>(args)...); // write deque
                if (i < n - 1) {
                   dump<','>(std::forward<Args>(args)...);
                }
@@ -151,7 +151,7 @@ namespace glz
                match<':'>(ctx, it);
                skip_ws<Opts>(ctx, it, end);
 
-               std::visit([&](auto&& deq) { read<json>::op<Opts>(deq, ctx, it, end); }, v.first);
+               std::visit([&](auto&& deq) { read<format::json>::op<Opts>(deq, ctx, it, end); }, v.first);
 
                if (i < n - 1) {
                   skip_ws<Opts>(ctx, it, end);
@@ -181,7 +181,7 @@ namespace glz
 
                   std::visit(
                      [&](auto& x) {
-                        write<csv>::op<Opts>(x, ctx, args...); // write deque
+                        write<format::csv>::op<Opts>(x, ctx, args...); // write deque
                      },
                      v.first);
 
@@ -217,7 +217,7 @@ namespace glz
                               breakout = true;
                               return;
                            }
-                           write<csv>::op<Opts>(v[row], ctx, args...); // write deque
+                           write<format::csv>::op<Opts>(v[row], ctx, args...); // write deque
                         },
                         data.first);
 
