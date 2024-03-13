@@ -396,7 +396,7 @@ namespace glz::detail
       }
    };
 
-   template <std::floating_point T, bool force_conformance = false>
+   template <std::floating_point T, force_conformance ForceConformance = force_conformance::no>
       requires(sizeof(T) <= 8)
    inline bool parse_float(T& val, const uint8_t*& cur) noexcept
    {
@@ -440,7 +440,7 @@ namespace glz::detail
    if ((num_tmp = cur[i] - zero) <= 9) [[likely]] \
       sig = num_tmp + sig * 10;                   \
    else {                                         \
-      if constexpr (force_conformance && i > 1) { \
+      if constexpr (bool(ForceConformance) && i > 1) { \
          if (*cur == zero) return false;          \
       }                                           \
       goto digi_sepr_##i;                         \
@@ -558,7 +558,7 @@ namespace glz::detail
    digi_frac_end:
       sig_end = cur;
       exp_sig = -int32_t((cur - dot_pos) - 1);
-      if constexpr (force_conformance) {
+      if constexpr (bool(ForceConformance)) {
          if (exp_sig == 0) return false;
       }
       if ((e_bit | *cur) != 'e') [[likely]] {
@@ -577,7 +577,7 @@ namespace glz::detail
       exp_sign = (*++cur == '-');
       cur += (*cur == '+' || *cur == '-');
       if (uint8_t(*cur - zero) > 9) [[unlikely]] {
-         if constexpr (force_conformance) {
+         if constexpr (bool(ForceConformance)) {
             return false;
          }
          else {
@@ -745,13 +745,13 @@ namespace glz::detail
       return true;
    }
 
-   template <std::floating_point T, bool force_conformance = false>
+   template <std::floating_point T, force_conformance ForceConformance = force_conformance::no>
       requires(sizeof(T) <= 8)
    inline bool parse_float(T& val, auto& itr) noexcept
    {
       const uint8_t* cur = reinterpret_cast<const uint8_t*>(&*itr);
       const uint8_t* beg = cur;
-      if (parse_float<T, force_conformance>(val, cur)) {
+      if (parse_float<T, ForceConformance>(val, cur)) {
          itr += (cur - beg);
          return true;
       }

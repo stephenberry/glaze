@@ -90,7 +90,7 @@ namespace glz
          {
             constexpr auto Opts = ws_handled_off<Options>();
             std::string& buffer = string_buffer();
-            read<json>::op<Opts>(buffer, ctx, it, end);
+            read<format::json>::op<Opts>(buffer, ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 

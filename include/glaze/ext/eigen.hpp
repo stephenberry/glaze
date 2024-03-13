@@ -48,10 +48,10 @@ namespace glz
             }
             ++it;
             std::array<Eigen::Index, 2> extents;
-            detail::read<binary>::op<Opts>(extents, ctx, it, end);
+            detail::read<format::binary>::op<Opts>(extents, ctx, it, end);
 
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::read<binary>::op<Opts>(view, ctx, it, end);
+            detail::read<format::binary>::op<Opts>(view, ctx, it, end);
          }
       };
 
@@ -69,10 +69,10 @@ namespace glz
             }
             ++it;
             std::array<Eigen::Index, 2> extents;
-            detail::read<binary>::op<Opts>(extents, ctx, it, end);
+            detail::read<format::binary>::op<Opts>(extents, ctx, it, end);
 
             std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
-            detail::read<binary>::op<Opts>(view, ctx, it, end);
+            detail::read<format::binary>::op<Opts>(view, ctx, it, end);
          }
       };
 
@@ -91,10 +91,10 @@ namespace glz
             dump_type(layout, args...);
 
             std::array<Eigen::Index, 2> extents{T::RowsAtCompileTime, T::ColsAtCompileTime};
-            detail::write<binary>::op<Opts>(extents, ctx, args...);
+            detail::write<format::binary>::op<Opts>(extents, ctx, args...);
 
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::write<binary>::op<Opts>(view, ctx, args...);
+            detail::write<format::binary>::op<Opts>(view, ctx, args...);
          }
       };
 
@@ -113,10 +113,10 @@ namespace glz
             dump_type(layout, args...);
 
             std::array<Eigen::Index, 2> extents{value.rows(), value.cols()};
-            detail::write<binary>::op<Opts>(extents, ctx, args...);
+            detail::write<format::binary>::op<Opts>(extents, ctx, args...);
 
             std::span<typename T::Scalar> view(value.data(), extents[0] * extents[1]);
-            detail::write<binary>::op<Opts>(view, ctx, args...);
+            detail::write<format::binary>::op<Opts>(view, ctx, args...);
          }
       };
 
@@ -128,7 +128,7 @@ namespace glz
          static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::read<json>::op<Opts>(view, ctx, it, end);
+            detail::read<format::json>::op<Opts>(view, ctx, it, end);
          }
       };
 
@@ -140,7 +140,7 @@ namespace glz
          static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             std::span<typename T::Scalar, T::RowsAtCompileTime * T::ColsAtCompileTime> view(value.data(), value.size());
-            detail::write<json>::op<Opts>(view, ctx, b, ix);
+            detail::write<format::json>::op<Opts>(view, ctx, b, ix);
          }
       };
    } // namespace detail

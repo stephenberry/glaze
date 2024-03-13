@@ -258,15 +258,15 @@ namespace glz
          return concat(a1, a2, gen_seq<N1 - 1>{}, gen_seq<N2>{});
       }
 
-      template <uint32_t Format>
+      template <format Format>
       struct read
       {};
 
-      template <uint32_t Format>
+      template <format Format>
       struct write
       {};
 
-      template <uint32_t Format>
+      template <format Format>
       struct write_partial
       {};
    } // namespace detail
@@ -1292,7 +1292,7 @@ namespace glz::detail
          if constexpr (N > 0) {
             using val_t = glaze_tuple_element_t<0, N, T>;
 
-            if constexpr (null_t<val_t> && Opts.skip_null_members) {
+            if constexpr (null_t<val_t> && bool(Opts.skip_null_members)) {
                return false;
             }
 

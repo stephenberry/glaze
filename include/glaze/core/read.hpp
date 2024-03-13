@@ -22,7 +22,7 @@ namespace glz
 
       using Buffer = std::decay_t<decltype(buffer)>;
       if constexpr (is_specialization_v<Buffer, std::basic_string> ||
-                    is_specialization_v<Buffer, std::basic_string_view> || span<Buffer> || Opts.format == binary) {
+                    is_specialization_v<Buffer, std::basic_string_view> || span<Buffer> || Opts.format == format::binary) {
          e += buffer.size();
 
          if (b == e) {
@@ -57,7 +57,7 @@ namespace glz
 
       using Buffer = std::decay_t<decltype(buffer)>;
       if constexpr (is_specialization_v<Buffer, std::basic_string> ||
-                    is_specialization_v<Buffer, std::basic_string_view> || span<Buffer> || Opts.format == binary) {
+                    is_specialization_v<Buffer, std::basic_string_view> || span<Buffer> || Opts.format == format::binary) {
          e += buffer.size();
 
          if (b == e) {
@@ -81,7 +81,7 @@ namespace glz
 
       detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
 
-      if constexpr (Opts.force_conformance) {
+      if constexpr (bool(Opts.force_conformance)) {
          if (b < e) {
             detail::skip_ws<Opts>(ctx, b, e);
             if (b != e) {

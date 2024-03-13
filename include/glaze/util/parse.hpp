@@ -158,7 +158,7 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws_no_pre_check(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.force_conformance) {
+      if constexpr (!bool(Opts.force_conformance)) {
          while (true) {
             switch (*it) {
             case '\t':
@@ -248,7 +248,7 @@ namespace glz::detail
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
-      if constexpr (!Opts.force_conformance) {
+      if constexpr (!bool(Opts.force_conformance)) {
          bool escaped = false;
          for (const auto fin = end - 7; it < fin;) {
             uint64_t chunk;
@@ -582,7 +582,7 @@ namespace glz::detail
          ++it;
       }
 
-      if constexpr (Opts.force_conformance) {
+      if constexpr (bool(Opts.force_conformance)) {
          while (true) {
             if (*it < 16) [[unlikely]] {
                ctx.error = error_code::syntax_error;
@@ -794,7 +794,7 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.force_conformance) {
+      if constexpr (!bool(Opts.force_conformance)) {
          it = std::find_if_not(it + 1, end, is_numeric<char>);
       }
       else {

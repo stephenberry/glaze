@@ -108,7 +108,7 @@ inline void should_fail()
       }
    };
 
-   if constexpr (Opts.force_conformance) {
+   if constexpr (bool(Opts.force_conformance)) {
       // TODO: Add force_conformance testing after parse
       skip / "comma after close"_test = [] {
          constexpr sv s = R"(["Comma after the close"],)";

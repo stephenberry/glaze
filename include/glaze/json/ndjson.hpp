@@ -15,7 +15,7 @@ namespace glz
       {};
 
       template <>
-      struct read<ndjson>
+      struct read<format::ndjson>
       {
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
          static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end)
@@ -67,7 +67,7 @@ namespace glz
             };
 
             for (size_t i = 0; i < n; ++i) {
-               read<json>::op<Opts>(*value_it++, ctx, it, end);
+               read<format::json>::op<Opts>(*value_it++, ctx, it, end);
                if (it == end) {
                   if constexpr (erasable<T>) {
                      value.erase(value_it,
@@ -86,7 +86,7 @@ namespace glz
             // growing
             if constexpr (emplace_backable<T>) {
                while (it < end) {
-                  read<json>::op<Opts>(value.emplace_back(), ctx, it, end);
+                  read<format::json>::op<Opts>(value.emplace_back(), ctx, it, end);
                   if (bool(ctx.error)) {
                      return;
                   }
@@ -144,13 +144,13 @@ namespace glz
                   read_new_lines();
                }
                if constexpr (is_std_tuple<T>) {
-                  read<json>::op<Opts>(std::get<I>(value), ctx, it, end);
+                  read<format::json>::op<Opts>(std::get<I>(value), ctx, it, end);
                }
                else if constexpr (glaze_array_t<T>) {
-                  read<json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
+                  read<format::json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, it, end);
                }
                else {
-                  read<json>::op<Opts>(glz::get<I>(value), ctx, it, end);
+                  read<format::json>::op<Opts>(glz::get<I>(value), ctx, it, end);
                }
             });
          }
@@ -161,7 +161,7 @@ namespace glz
       {};
 
       template <>
-      struct write<ndjson>
+      struct write<format::ndjson>
       {
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix)
@@ -188,12 +188,12 @@ namespace glz
 
             if (!is_empty) {
                auto it = value.begin();
-               write<json>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
+               write<format::json>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
                ++it;
                const auto end = value.end();
                for (; it != end; ++it) {
                   dump<'\n'>(std::forward<Args>(args)...);
-                  write<json>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
+                  write<format::json>::op<Opts>(*it, ctx, std::forward<Args>(args)...);
                }
             }
          }
@@ -218,10 +218,10 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, std::forward<Args>(args)...);
+                  write<format::json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, std::forward<Args>(args)...);
                }
                else {
-                  write<json>::op<Opts>(glz::get<I>(value), ctx, std::forward<Args>(args)...);
+                  write<format::json>::op<Opts>(glz::get<I>(value), ctx, std::forward<Args>(args)...);
                }
                constexpr bool needs_new_line = I < N - 1;
                if constexpr (needs_new_line) {
@@ -250,10 +250,10 @@ namespace glz
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
+                  write<format::json>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, std::forward<Args>(args)...);
                }
                else {
-                  write<json>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...);
+                  write<format::json>::op<Opts>(std::get<I>(value), ctx, std::forward<Args>(args)...);
                }
                constexpr bool needs_new_line = I < N - 1;
                if constexpr (needs_new_line) {
@@ -268,7 +268,7 @@ namespace glz
    [[nodiscard]] inline auto read_ndjson(T& value, Buffer&& buffer)
    {
       context ctx{};
-      return read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
+      return read<opts{format::ndjson}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <class T, class Buffer>
@@ -276,14 +276,14 @@ namespace glz
    {
       T value{};
       context ctx{};
-      const auto ec = read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
+      const auto ec = read<opts{format::ndjson}>(value, std::forward<Buffer>(buffer), ctx);
       if (ec == error_code::none) {
          return value;
       }
       return unexpected(ec);
    }
 
-   template <auto Opts = opts{.format = ndjson}, class T>
+   template <auto Opts = opts{format::ndjson}, class T>
    [[nodiscard]] inline parse_error read_file_ndjson(T& value, const sv file_name)
    {
       context ctx{};
@@ -303,21 +303,21 @@ namespace glz
    template <class T, class Buffer>
    [[nodiscard]] inline auto write_ndjson(T&& value, Buffer&& buffer)
    {
-      return write<opts{.format = ndjson}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<opts{format::ndjson}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
    [[nodiscard]] inline auto write_ndjson(T&& value)
    {
       std::string buffer{};
-      write<opts{.format = ndjson}>(std::forward<T>(value), buffer);
+      write<opts{format::ndjson}>(std::forward<T>(value), buffer);
       return buffer;
    }
 
    template <class T>
    [[nodiscard]] inline write_error write_file_ndjson(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
-      write<opts{.format = ndjson}>(std::forward<T>(value), buffer);
+      write<opts{format::ndjson}>(std::forward<T>(value), buffer);
       return {buffer_to_file(buffer, file_name)};
    }
 }
