@@ -173,4 +173,11 @@ namespace glz
          return make_groups_impl<starts, sizes>(std::forward<Tuple>(t), std::make_index_sequence<n_groups>{});
       }
    };
+   
+   template <class Tuple, class Type>
+   consteval bool tuple_has_type() {
+       return std::apply([](auto&&... v) {
+           return (std::same_as<std::remove_cvref_t<decltype(v)>, Type> || ...);
+       }, Tuple{});
+   }
 }

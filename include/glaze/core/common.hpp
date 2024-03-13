@@ -1292,7 +1292,7 @@ namespace glz::detail
          if constexpr (N > 0) {
             using val_t = glaze_tuple_element_t<0, N, T>;
 
-            if constexpr (null_t<val_t> && Opts.skip_null_members) {
+            if constexpr (null_t<val_t> && bool(Opts.skip_null_members)) {
                return false;
             }
 

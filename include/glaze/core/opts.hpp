@@ -12,10 +12,22 @@ namespace glz
       binary,
       json,
       ndjson, // new line delimited JSON
-      csv,
+      csv
    };
    
    enum struct comments : bool
+   {
+      no,
+      yes
+   };
+   
+   enum struct error_on_unknown_keys : bool
+   {
+      no,
+      yes
+   };
+   
+   enum struct skip_null_members : bool
    {
       no,
       yes
@@ -45,7 +57,7 @@ namespace glz
       glz::format format = glz::format::json;
       glz::comments comments{}; // Write out comments
       bool error_on_unknown_keys = true; // Error when an unknown key is encountered
-      bool skip_null_members = true; // Skip writing out params in an object if the value is null
+      glz::skip_null_members skip_null_members = glz::skip_null_members::yes; // Skip writing out params in an object if the value is null
       bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
       bool prettify = false; // Write out prettified JSON
       char indentation_char = ' '; // Prettified JSON indentation char
@@ -62,7 +74,7 @@ namespace glz
       bool number = false; // read numbers as strings and write these string as numbers
       bool raw = false; // write out string like values without quotes
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
-      structs_as_arrays structs_as_arrays{}; // Handle structs (reading/writing) without keys, which applies to reflectable and
+      glz::structs_as_arrays structs_as_arrays{}; // Handle structs (reading/writing) without keys, which applies to reflectable and
                                       // glaze_object_t concepts
       bool partial_read_nested = false; // Rewind forward the partially readed struct to the end of the struct
       bool concatenate = true; // concatenates ranges of std::pair into single objects when writing
@@ -76,6 +88,13 @@ namespace glz
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
       
+      // We pack opts so that compilation errors don't display huge template argument lists
+      /*constexpr std::array<uint64_t, N> pack() const {
+         std::array<uint64_t, N> ret{};
+         // convert this to the array
+         return ret;
+      }*/
+      
       constexpr opts() = default;
       
       template <class... Args>
@@ -85,6 +104,7 @@ namespace glz
       
       constexpr void set(glz::format v) { format = v; }
       constexpr void set(glz::comments v) { comments = v; }
+      constexpr void set(glz::skip_null_members v) { skip_null_members = v; }
       constexpr void set(glz::force_conformance v) { force_conformance = v; }
       constexpr void set(glz::layout v) { layout = v; }
       constexpr void set(glz::structs_as_arrays v) { structs_as_arrays = v; }
