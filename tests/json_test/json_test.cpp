@@ -5802,6 +5802,7 @@ struct varx
       static constexpr auto value = glz::object();
    };
 };
+static_assert(glz::name_v<varx> == "varx");
 struct vary
 {
    struct glaze
