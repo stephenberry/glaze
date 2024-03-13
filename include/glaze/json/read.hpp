@@ -659,7 +659,7 @@ namespace glz
             };
 
             while (it < end) {
-               if constexpr (!Opts.force_conformance) {
+               if constexpr (!bool(Opts.force_conformance)) {
                   skip_till_escape_or_quote(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
@@ -2503,7 +2503,7 @@ namespace glz
    {
       context ctx{};
       glz::skip skip_value{};
-      return read<opts{.force_conformance = true}>(skip_value, std::forward<Buffer>(buffer), ctx);
+      return read<opts{force_conformance::yes}>(skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <class Buffer>

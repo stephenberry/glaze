@@ -822,14 +822,14 @@ namespace glz
    template <class T, class Buffer>
    inline void write_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
-      write<opts{format::binary, .structs_as_arrays = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      write<opts{format::binary, structs_as_arrays::yes}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
    inline auto write_binary_untagged(T&& value) noexcept
    {
       std::string buffer{};
-      write<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value), buffer);
+      write<opts{format::binary, structs_as_arrays::yes}>(std::forward<T>(value), buffer);
       return buffer;
    }
 

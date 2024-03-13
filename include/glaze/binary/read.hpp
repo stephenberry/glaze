@@ -955,7 +955,7 @@ namespace glz
    template <class T, class Buffer>
    [[nodiscard]] inline parse_error read_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
-      return read<opts{format::binary, .structs_as_arrays = true}>(std::forward<T>(value),
+      return read<opts{format::binary, structs_as_arrays::yes}>(std::forward<T>(value),
                                                                      std::forward<Buffer>(buffer));
    }
 
@@ -963,7 +963,7 @@ namespace glz
    [[nodiscard]] inline expected<T, parse_error> read_binary_untagged(Buffer&& buffer) noexcept
    {
       T value{};
-      const auto pe = read<opts{format::binary, .structs_as_arrays = true}>(value, std::forward<Buffer>(buffer));
+      const auto pe = read<opts{format::binary, structs_as_arrays::yes}>(value, std::forward<Buffer>(buffer));
       if (pe) [[unlikely]] {
          return unexpected(pe);
       }

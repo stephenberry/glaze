@@ -1217,7 +1217,7 @@ namespace glz
 
                   static constexpr size_t comment_index = member_index + 1;
                   static constexpr auto S = std::tuple_size_v<typename Element::Item>;
-                  if constexpr (Opts.comments && S > comment_index) {
+                  if constexpr (bool(Opts.comments) && S > comment_index) {
                      static constexpr auto i = glz::get<I>(meta_v<V>);
                      if constexpr (std::is_convertible_v<decltype(get<comment_index>(i)), sv>) {
                         static constexpr sv comment = get<comment_index>(i);
@@ -1457,14 +1457,14 @@ namespace glz
    template <class T, class Buffer>
    inline void write_jsonc(T&& value, Buffer&& buffer) noexcept
    {
-      write<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      write<opts{comments::yes}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
    [[nodiscard]] inline auto write_jsonc(T&& value) noexcept
    {
       std::string buffer{};
-      write<opts{.comments = true}>(std::forward<T>(value), buffer);
+      write<opts{comments::yes}>(std::forward<T>(value), buffer);
       return buffer;
    }
 

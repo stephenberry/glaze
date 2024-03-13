@@ -171,7 +171,7 @@ namespace glz
          template <auto Opts>
          static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            if constexpr (Opts.layout == rowwise) {
+            if constexpr (Opts.layout == layout::rowwise) {
                const size_t n = value.data.size();
                for (size_t i = 0; i < n; ++i) {
                   auto& [name, v] = value.data[i];

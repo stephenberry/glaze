@@ -81,7 +81,7 @@ namespace glz
 
       detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
 
-      if constexpr (Opts.force_conformance) {
+      if constexpr (bool(Opts.force_conformance)) {
          if (b < e) {
             detail::skip_ws<Opts>(ctx, b, e);
             if (b != e) {
