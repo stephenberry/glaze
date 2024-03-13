@@ -1733,27 +1733,38 @@ namespace glz
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
                               key = {start, size_t(it - start)};
-                           }
-                           ++it; // skip the quote
+                              ++it; // skip the quote
+                              
+                              parse_object_entry_sep<Opts>(ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
 
-                           parse_object_entry_sep<Opts>(ctx, it, end);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
-
-                           if constexpr (Opts.error_on_missing_keys) {
-                              // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
-                              // At the very least if we are going to do this add a get_index method to the maps and
-                              // call that
-                              auto index = member_it - frozen_map.begin();
-                              fields[index] = true;
+                              read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
                            }
-                           std::visit(
-                              [&](auto&& member_ptr) {
-                                 read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
-                              },
-                              member_it->second);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
+                           else {
+                              ++it; // skip the quote
+
+                              parse_object_entry_sep<Opts>(ctx, it, end);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+
+                              if constexpr (Opts.error_on_missing_keys) {
+                                 // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
+                                 // At the very least if we are going to do this add a get_index method to the maps and
+                                 // call that
+                                 auto index = member_it - frozen_map.begin();
+                                 fields[index] = true;
+                              }
+                              std::visit(
+                                 [&](auto&& member_ptr) {
+                                    read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
+                                 },
+                                 member_it->second);
+                              if (bool(ctx.error)) [[unlikely]]
+                                 return;
+                           }
                         }
                         else [[unlikely]] {
                            if (*it != '"') {
