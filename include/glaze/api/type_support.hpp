@@ -80,7 +80,7 @@ namespace glz
       static constexpr std::string_view name = detail::join_v<name_v<V>, chars<"*">>;
    };
 
-   template <typename Ret, typename Obj, class... Args>
+   template <class Ret, class Obj, class... Args>
    struct meta<Ret (Obj::*)(Args...)>
    {
       static constexpr std::string_view name =
