@@ -102,7 +102,6 @@ namespace glz
          const auto endpoint = resolver.resolve(host, service);
          asio::error_code ec{};
          asio::connect(*socket, endpoint, ec);
-         ctx->run();
          return ec;
       }
 
