@@ -2580,10 +2580,13 @@ suite tagged_variant_tests = [] {
       expect(glz::read_json(parsed_var, s) == glz::error_code::none);
       expect(parsed_var == var);
    };
-   
+
    "tagged_variant_schema_tests"_test = [] {
       auto s = glz::write_json_schema<tagged_variant>();
-      expect(s == R"({"type":["number","string","boolean","object","array","null"],"$defs":{"int32_t":{"type":["integer"]},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"action":{"$ref":"#/$defs/std::string","enum":["PUT","DELETE"]},"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"}},"additionalProperties":false},{"type":["object"],"properties":{"action":{"$ref":"#/$defs/std::string","enum":["PUT","DELETE"]},"data":{"$ref":"#/$defs/std::string"}},"additionalProperties":false}]})") << s;
+      expect(
+         s ==
+         R"({"type":["number","string","boolean","object","array","null"],"$defs":{"int32_t":{"type":["integer"]},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"action":{"$ref":"#/$defs/std::string","enum":["PUT","DELETE"]},"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"}},"additionalProperties":false},{"type":["object"],"properties":{"action":{"$ref":"#/$defs/std::string","enum":["PUT","DELETE"]},"data":{"$ref":"#/$defs/std::string"}},"additionalProperties":false}]})")
+         << s;
    };
 
    "array_variant_tests"_test = [] {
@@ -5828,8 +5831,9 @@ struct var_schema
 {
    std::string schema{};
    vari variant{};
-   
-   struct glaze {
+
+   struct glaze
+   {
       using T = var_schema;
       static constexpr auto value = glz::object("$schema", &T::schema, &T::variant);
    };
@@ -5847,10 +5851,13 @@ suite empty_variant_objects = [] {
       expect(!glz::read_json(v, s));
       expect(std::holds_alternative<varx>(v));
    };
-   
+
    "empty_variant_objects schema"_test = [] {
       const auto s = glz::write_json_schema<var_schema>();
-      expect(s == R"({"type":["object"],"properties":{"$schema":{"$ref":"#/$defs/std::string"},"variant":{"$ref":"#/$defs/vari"}},"additionalProperties":false,"$defs":{"std::string":{"type":["string"]},"vari":{"type":["number","string","boolean","object","array","null"],"oneOf":[{"type":["object"],"properties":{"type":{"$ref":"#/$defs/std::string","enum":["varx","vary"]}},"additionalProperties":false},{"type":["object"],"properties":{"type":{"$ref":"#/$defs/std::string","enum":["varx","vary"]}},"additionalProperties":false}]}}})") << s;
+      expect(
+         s ==
+         R"({"type":["object"],"properties":{"$schema":{"$ref":"#/$defs/std::string"},"variant":{"$ref":"#/$defs/vari"}},"additionalProperties":false,"$defs":{"std::string":{"type":["string"]},"vari":{"type":["number","string","boolean","object","array","null"],"oneOf":[{"type":["object"],"properties":{"type":{"$ref":"#/$defs/std::string","enum":["varx","vary"]}},"additionalProperties":false},{"type":["object"],"properties":{"type":{"$ref":"#/$defs/std::string","enum":["varx","vary"]}},"additionalProperties":false}]}}})")
+         << s;
    };
 };
 

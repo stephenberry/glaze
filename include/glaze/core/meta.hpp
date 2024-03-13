@@ -216,16 +216,17 @@ namespace glz
          return "";
       }
    }();
-   
+
    namespace detail
    {
       template <class T, size_t N>
-      inline constexpr std::array<std::string_view, N> convert_ids_to_array_of_sv(const std::array<T, N>& arr) {
-          std::array<std::string_view, N> result;
-          for (size_t i = 0; i < N; ++i) {
-              result[i] = arr[i];
-          }
-          return result;
+      inline constexpr std::array<std::string_view, N> convert_ids_to_array_of_sv(const std::array<T, N>& arr)
+      {
+         std::array<std::string_view, N> result;
+         for (size_t i = 0; i < N; ++i) {
+            result[i] = arr[i];
+         }
+         return result;
       }
    }
 

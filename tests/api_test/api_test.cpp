@@ -108,8 +108,8 @@ void tests()
       auto my_struct_i = io->get_fn<std::function<int(const my_struct&)>>("/my_struct_i");
       expect(my_struct_i.value()(obj) == 42);
       // TODO: Fix this
-      //expect(42 == io->call<int>("/func", obj));
-      
+      // expect(42 == io->call<int>("/func", obj));
+
       auto func = io->get_fn<std::function<int()>>("/func");
       expect(func.value()() == 5);
       expect(5 == io->call<int>("/func"));
@@ -231,7 +231,7 @@ void tests()
    "function type name"_test = [] {
       std::string_view f = glz::name_v<std::function<double(const int&, const double&)>>;
       expect(f == "std::function<double(const int32_t&,const double&)>");
-      
+
       f = glz::name_v<std::function<int(const my_struct&)>>;
       expect(f == R"(std::function<int32_t(const my_struct&)>)") << f;
    };

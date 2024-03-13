@@ -95,8 +95,7 @@ namespace glz
                                                    "minContains", &T::min_contains, //
                                                    "maxContains", &T::max_contains, //
                                                    "uniqueItems", &T::unique_items, //
-                                                   "enum", &T::enumeration
-         );
+                                                   "enum", &T::enumeration);
       };
    };
 
@@ -343,7 +342,8 @@ namespace glz
                      to_json_schema<std::string>::template op<Opts>(def, defs);
                   }
                   if constexpr (!tag_v<T>.empty()) {
-                     auto& properties = (*schema_val.properties)[tag_v<T>] = schema{join_v<chars<"#/$defs/">, name_v<std::string>>};
+                     auto& properties = (*schema_val.properties)[tag_v<T>] =
+                        schema{join_v<chars<"#/$defs/">, name_v<std::string>>};
                      properties.enumeration = ids_v<T>;
                   }
                }
