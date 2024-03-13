@@ -10,6 +10,11 @@
 #include "glaze/api/std/span.hpp"
 #include "glaze/api/std/unordered_set.hpp"
 
+struct my_struct
+{
+   int i = 42;
+};
+
 struct my_api
 {
    int x = 7;
@@ -20,6 +25,7 @@ struct my_api
    std::span<double> s = z;
    std::function<double(const int&, const double&)> f = [](const auto& i, const auto& d) { return i * d; };
    std::function<void()> init = [] { std::cout << "init!\n"; };
+   std::function<int(const my_struct&)> my_struct_i = [](const my_struct& s) { return s.i; };
    int func() { return 5; };
    const int& func_ref()
    {
@@ -44,7 +50,9 @@ struct glz::meta<my_api>
                                              "s", &T::s, //
                                              "f", &T::f, //
                                              "init", &T::init, //
-                                             "func", &T::func, "func_ref", &T::func_ref, //
+                                             &T::my_struct_i, //
+                                             "func", &T::func, //
+                                             "func_ref", &T::func_ref, //
                                              "inc", &T::inc, //
                                              "sum", &T::sum, //
                                              "sum_lref", &T::sum_lref, //
@@ -96,6 +104,12 @@ void tests()
    auto io2 = (*iface)["my_api2"]();
 
    "calling functions"_test = [&] {
+      my_struct obj{};
+      auto my_struct_i = io->get_fn<std::function<int(const my_struct&)>>("/my_struct_i");
+      expect(my_struct_i.value()(obj) == 42);
+      // TODO: Fix this
+      //expect(42 == io->call<int>("/func", obj));
+      
       auto func = io->get_fn<std::function<int()>>("/func");
       expect(func.value()() == 5);
       expect(5 == io->call<int>("/func"));
