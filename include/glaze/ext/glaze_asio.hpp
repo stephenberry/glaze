@@ -94,7 +94,7 @@ namespace glz
 
       std::string buffer{};
 
-      asio::error_code init()
+      [[nodiscard]] asio::error_code init()
       {
          ctx = std::make_shared<asio::io_context>(concurrency);
          socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
@@ -102,23 +102,7 @@ namespace glz
          const auto endpoint = resolver.resolve(host, service);
          asio::error_code ec{};
          asio::connect(*socket, endpoint, ec);
-         
-         
-         //asio::connect(*socket, endpoint);
-         
          ctx->run();
-         
-         /*asio::async_connect(*socket, resolver.resolve(host, service),
-                     [&](const asio::error_code& ec, const asio::ip::tcp::endpoint& endpoint) {
-                        if (!ec) {
-                            std::cout << "Connected to server: " << endpoint << std::endl;
-                        } else {
-                            std::cerr << "Error: " << ec.message() << std::endl;
-                        }
-                     });
-         
-         ctx->run();*/
-         
          return ec;
       }
 
