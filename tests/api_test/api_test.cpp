@@ -231,6 +231,9 @@ void tests()
    "function type name"_test = [] {
       std::string_view f = glz::name_v<std::function<double(const int&, const double&)>>;
       expect(f == "std::function<double(const int32_t&,const double&)>");
+      
+      f = glz::name_v<std::function<int(const my_struct&)>>;
+      expect(f == R"(std::function<int32_t(const my_struct&)>)") << f;
    };
 
    "function type io"_test = [&] {
