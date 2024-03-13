@@ -2071,7 +2071,7 @@ namespace glz
             objects += pair_t<V>;
             objects += (writable_map_t<V> || readable_map_t<V>);
             objects += glaze_object_t<V>;
-            meta_objects += glaze_object_t<V>;
+            meta_objects += glaze_object_t<V> || reflectable<V>;
             arrays += glaze_array_t<V>;
             arrays += array_t<V>;
             // TODO null
