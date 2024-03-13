@@ -6,6 +6,7 @@
 #include <asio.hpp>
 #include <cassert>
 #include <coroutine>
+#include <iostream>
 
 #include "glaze/rpc/repe.hpp"
 
@@ -81,7 +82,6 @@ namespace glz
       std::string host{"localhost"};
       std::string service{""};
       uint32_t concurrency{1};
-      bool initialized = false;
 
       struct glaze
       {
@@ -94,25 +94,20 @@ namespace glz
 
       std::string buffer{};
 
-      void init()
+      [[nodiscard]] asio::error_code init()
       {
-         if (!initialized) {
-            ctx = std::make_shared<asio::io_context>(concurrency);
-            socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
-            asio::ip::tcp::resolver resolver{*ctx};
-            auto endpoints = resolver.resolve(host, service);
-            asio::connect(*socket, endpoints);
-         }
-         initialized = true;
+         ctx = std::make_shared<asio::io_context>(concurrency);
+         socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
+         asio::ip::tcp::resolver resolver{*ctx};
+         const auto endpoint = resolver.resolve(host, service);
+         asio::error_code ec{};
+         asio::connect(*socket, endpoint, ec);
+         return ec;
       }
 
       template <class Params>
       void notify(repe::header&& header, Params&& params)
       {
-         if (!initialized) {
-            throw std::runtime_error("client never initialized");
-         }
-
          header.action |= repe::notify;
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
@@ -122,10 +117,6 @@ namespace glz
       template <class Result>
       [[nodiscard]] repe::error_t get(repe::header&& header, Result&& result)
       {
-         if (!initialized) {
-            throw std::runtime_error("client never initialized");
-         }
-
          header.action &= ~repe::notify; // clear invalid notify
          header.action |= repe::empty; // no params
          repe::request<Opts>(std::move(header), nullptr, buffer);
@@ -139,10 +130,6 @@ namespace glz
       template <class Result = glz::raw_json>
       [[nodiscard]] glz::expected<Result, repe::error_t> get(repe::header&& header)
       {
-         if (!initialized) {
-            throw std::runtime_error("client never initialized");
-         }
-
          header.action &= ~repe::notify; // clear invalid notify
          header.action |= repe::empty; // no params
          repe::request<Opts>(std::move(header), nullptr, buffer);
@@ -163,10 +150,6 @@ namespace glz
       template <class Params>
       [[nodiscard]] repe::error_t set(repe::header&& header, Params&& params)
       {
-         if (!initialized) {
-            throw std::runtime_error("client never initialized");
-         }
-
          header.action &= ~repe::notify; // clear invalid notify
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
@@ -179,10 +162,6 @@ namespace glz
       template <class Params, class Result>
       [[nodiscard]] repe::error_t call(repe::header&& header, Params&& params, Result&& result)
       {
-         if (!initialized) {
-            throw std::runtime_error("client never initialized");
-         }
-
          header.action &= ~repe::notify; // clear invalid notify
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
@@ -194,10 +173,6 @@ namespace glz
 
       [[nodiscard]] repe::error_t call(repe::header&& header)
       {
-         if (!initialized) {
-            throw std::runtime_error("client never initialized");
-         }
-
          header.action &= ~repe::notify; // clear invalid notify
          header.action |= repe::empty; // because no value provided
          glz::write_json(std::forward_as_tuple(std::move(header), nullptr), buffer);
@@ -240,10 +215,6 @@ namespace glz
       template <class Params>
       [[nodiscard]] std::string& call_raw(repe::header&& header, Params&& params)
       {
-         if (!initialized) {
-            throw std::runtime_error("client never initialized");
-         }
-
          header.action &= ~repe::notify; // clear invalid notify
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
@@ -303,18 +274,18 @@ namespace glz
 
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {
-         Registry server{};
+         Registry registry{};
          std::string buffer{};
 
          try {
             if (init_registry) {
-               init_registry(server);
+               init_registry(registry);
             }
 
             while (true) {
                co_await co_receive_buffer(socket, buffer);
-               if (server.call(buffer)) {
-                  co_await co_send_buffer(socket, server.response);
+               if (registry.call(buffer)) {
+                  co_await co_send_buffer(socket, registry.response);
                }
             }
          }
