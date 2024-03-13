@@ -3,14 +3,26 @@
 
 #pragma once
 
-#include "glaze/core/format.hpp"
+#include <cstdint>
 
 namespace glz
 {
+   enum struct format : uint32_t
+   {
+      binary,
+      json,
+      ndjson, // new line delimited JSON
+      csv,
+   };
+
+   // layout
+   constexpr uint32_t rowwise = 0;
+   constexpr uint32_t colwise = 1;
+   
    struct opts
    {
       // USER CONFIGURABLE
-      uint32_t format = json;
+      glz::format format = glz::format::json;
       bool comments = false; // Write out comments
       bool error_on_unknown_keys = true; // Error when an unknown key is encountered
       bool skip_null_members = true; // Skip writing out params in an object if the value is null
@@ -44,6 +56,25 @@ namespace glz
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
+   
+   // TODO: Implement strongly typed options
+   /*struct opts
+   {
+      format format_{format::json};
+      comments comments_{};
+      error_on_unknown_keys error_on_unknown_keys_{};
+      
+      constexpr opts() = default;
+      
+      template <class... Args>
+      constexpr opts(Args... args) {
+         (set(args), ...);
+      }
+      
+      constexpr void set(format f) { format_ = f; }
+      constexpr void set(comments c) { comments_ = c; }
+      constexpr void set(error_on_unknown_keys e) { error_on_unknown_keys_ = e; }
+   };*/
 
    template <opts Opts>
    constexpr auto opening_handled()
