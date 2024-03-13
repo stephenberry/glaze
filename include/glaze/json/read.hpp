@@ -1734,7 +1734,7 @@ namespace glz
                                  return;
                               key = {start, size_t(it - start)};
                               ++it; // skip the quote
-                              
+
                               parse_object_entry_sep<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
@@ -1751,9 +1751,9 @@ namespace glz
                                  return;
 
                               if constexpr (Opts.error_on_missing_keys) {
-                                 // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
-                                 // At the very least if we are going to do this add a get_index method to the maps and
-                                 // call that
+                                 // TODO: Kludge/hack. Should work but could easily cause memory issues with small
+                                 // changes. At the very least if we are going to do this add a get_index method to the
+                                 // maps and call that
                                  auto index = member_it - frozen_map.begin();
                                  fields[index] = true;
                               }

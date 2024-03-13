@@ -6988,16 +6988,19 @@ suite partial_write_tests = [] {
    };
 };
 
-struct S0{ std::string f1{}; /*, f1misc is ignored*/ };
+struct S0
+{
+   std::string f1{}; /*, f1misc is ignored*/
+};
 
 suite error_on_unknown_keys_test = [] {
    "error_on_unknown_keys"_test = [] {
       auto input = R"({"f1":"main","f1misc":"this should be dropped silently"})";
       S0 obj{};
-      expect( !glz::read<glz::opts{.error_on_unknown_keys = false}>( obj, input ) );
-      const auto s = glz::write_json( obj );
+      expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, input));
+      const auto s = glz::write_json(obj);
       expect(s == R"({"f1":"main"})") << s;
-      expect( obj.f1 == "main");
+      expect(obj.f1 == "main");
    };
 };
 
