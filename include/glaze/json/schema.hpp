@@ -2,7 +2,22 @@
 // For the license information refer to glaze.hpp
 #pragma once
 
-#include "glaze/api/impl.hpp"
+// We include naming metas for standard types for consistency across compilers
+#include "glaze/api/std/array.hpp"
+#include "glaze/api/std/deque.hpp"
+#include "glaze/api/std/functional.hpp"
+#include "glaze/api/std/list.hpp"
+#include "glaze/api/std/map.hpp"
+#include "glaze/api/std/optional.hpp"
+#include "glaze/api/std/shared_ptr.hpp"
+#include "glaze/api/std/string.hpp"
+#include "glaze/api/std/tuple.hpp"
+#include "glaze/api/std/unique_ptr.hpp"
+#include "glaze/api/std/unordered_map.hpp"
+#include "glaze/api/std/variant.hpp"
+#include "glaze/api/std/vector.hpp"
+#include "glaze/api/tuplet.hpp"
+#include "glaze/api/type_support.hpp"
 #include "glaze/json/quoted.hpp"
 #include "glaze/json/write.hpp"
 
@@ -44,8 +59,10 @@ namespace glz
       std::optional<std::uint64_t> min_contains{};
       std::optional<std::uint64_t> max_contains{};
       std::optional<bool> unique_items{};
+      // properties
+      std::optional<std::span<const std::string_view>> enumeration{}; // enum
 
-      static constexpr auto schema_attributes{true}; // allowance flag to indicate metadata within glz::Object
+      static constexpr auto schema_attributes{true}; // allowance flag to indicate metadata within glz::object(...)
 
       // TODO switch to using variants when we have write support to get rid of nulls
       // TODO We should be able to generate the json schema compiletime
@@ -77,7 +94,8 @@ namespace glz
                                                    "maxItems", &T::max_items, //
                                                    "minContains", &T::min_contains, //
                                                    "maxContains", &T::max_contains, //
-                                                   "uniqueItems", &T::unique_items //
+                                                   "uniqueItems", &T::unique_items, //
+                                                   "enum", &T::enumeration
          );
       };
    };
@@ -131,7 +149,7 @@ namespace glz
          using V = std::decay_t<decltype(tuple)>;
          constexpr auto N = std::tuple_size_v<V>;
          if constexpr (N > 0) {
-            constexpr auto names = member_names<json_schema_type<T>>; // TODO: use a reference
+            constexpr auto& names = member_names<json_schema_type<T>>;
 
             std::array<std::pair<sv, schema>, N> ret{};
 
@@ -150,7 +168,7 @@ namespace glz
          return glz::detail::normal_map<sv, schema, N>({std::get<I>(arr)...});
       }
 
-      // The reflection schema map makes a map of all schema types within a glz::meta
+      // The reflection schema map makes a map of all schema types within a glz::json_schema
       // and returns a map of these schemas with their reflected names.
       template <class T>
       constexpr auto make_reflection_schema_map()
@@ -319,15 +337,14 @@ namespace glz
                auto& schema_val = (*s.oneOf)[I.value];
                // TODO use ref to avoid duplication in schema
                to_json_schema<V>::template op<Opts>(schema_val, defs);
-               constexpr bool glaze_object = glaze_object_t<V>;
-               if constexpr (glaze_object) {
+               if constexpr (glaze_object_t<V>) {
                   auto& def = defs[name_v<std::string>];
                   if (!def.type) {
                      to_json_schema<std::string>::template op<Opts>(def, defs);
                   }
                   if constexpr (!tag_v<T>.empty()) {
-                     (*schema_val.properties)[tag_v<T>] = schema{join_v<chars<"#/$defs/">, name_v<std::string>>};
-                     // TODO use enum or oneOf to get the ids_v to validate type name
+                     auto& properties = (*schema_val.properties)[tag_v<T>] = schema{join_v<chars<"#/$defs/">, name_v<std::string>>};
+                     properties.enumeration = ids_v<T>;
                   }
                }
             });

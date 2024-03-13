@@ -192,39 +192,51 @@ namespace glz
          return "void";
       }
       else {
-         return type_name<std::decay_t<T>>;
+         return type_name<T>;
       }
    }();
 
    template <class T>
-   concept tagged = requires { meta<T>::tag; } || requires { T::glaze::tag; };
+   concept tagged = requires { meta<std::decay_t<T>>::tag; } || requires { std::decay_t<T>::glaze::tag; };
 
    template <class T>
-   concept ided = requires { meta<T>::ids; } || requires { T::glaze::ids; };
+   concept ided = requires { meta<std::decay_t<T>>::ids; } || requires { std::decay_t<T>::glaze::ids; };
 
    template <class T>
    inline constexpr std::string_view tag_v = [] {
       if constexpr (tagged<T>) {
          if constexpr (detail::local_meta_t<T>) {
-            return T::glaze::tag;
+            return std::decay_t<T>::glaze::tag;
          }
          else {
-            return meta<T>::tag;
+            return meta<std::decay_t<T>>::tag;
          }
       }
       else {
          return "";
       }
    }();
+   
+   namespace detail
+   {
+      template <class T, size_t N>
+      inline constexpr std::array<std::string_view, N> convert_ids_to_array_of_sv(const std::array<T, N>& arr) {
+          std::array<std::string_view, N> result;
+          for (size_t i = 0; i < N; ++i) {
+              result[i] = arr[i];
+          }
+          return result;
+      }
+   }
 
    template <is_variant T>
    inline constexpr auto ids_v = [] {
       if constexpr (ided<T>) {
          if constexpr (detail::local_meta_t<T>) {
-            return T::glaze::ids;
+            return detail::convert_ids_to_array_of_sv(std::decay_t<T>::glaze::ids);
          }
          else {
-            return meta<T>::ids;
+            return detail::convert_ids_to_array_of_sv(meta<std::decay_t<T>>::ids);
          }
       }
       else {

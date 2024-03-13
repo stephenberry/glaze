@@ -2054,7 +2054,7 @@ namespace glz
       };
 
       template <is_variant T>
-      GLZ_ALWAYS_INLINE constexpr auto variant_is_auto_deducible()
+      consteval auto variant_is_auto_deducible()
       {
          // Contains at most one each of the basic json types bool, numeric, string, object, array
          // If all objects are meta-objects then we can attempt to deduce them as well either through a type tag or
@@ -2071,7 +2071,7 @@ namespace glz
             objects += pair_t<V>;
             objects += (writable_map_t<V> || readable_map_t<V>);
             objects += glaze_object_t<V>;
-            meta_objects += glaze_object_t<V>;
+            meta_objects += glaze_object_t<V> || reflectable<V>;
             arrays += glaze_array_t<V>;
             arrays += array_t<V>;
             // TODO null
@@ -2079,13 +2079,13 @@ namespace glz
          return bools < 2 && numbers < 2 && strings < 2 && (objects < 2 || meta_objects == objects) && arrays < 2;
       }
 
-      template <typename>
+      template <class>
       struct variant_types;
 
-      template <typename... Ts>
+      template <class... Ts>
       struct variant_types<std::variant<Ts...>>
       {
-         // TODO this way of filtering types is compile time intensive.
+         // TODO: this way of filtering types is compile time intensive.
          using bool_types = decltype(tuplet::tuple_cat(
             std::conditional_t<bool_t<remove_meta_wrapper_t<Ts>>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
          using number_types = decltype(tuplet::tuple_cat(
@@ -2106,10 +2106,10 @@ namespace glz
       };
 
       // post process output of variant_types
-      template <typename>
+      template <class>
       struct tuple_types;
 
-      template <typename... Ts>
+      template <class... Ts>
       struct tuple_types<tuplet::tuple<Ts...>>
       {
          using glaze_const_types = decltype(tuplet::tuple_cat(
@@ -2118,17 +2118,17 @@ namespace glz
             std::conditional_t<!glaze_const_value_t<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
       };
 
-      template <typename tuple_types_t>
+      template <class Tuple>
       struct process_arithmetic_boolean_string_or_array
       {
          template <auto Options>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            if constexpr (std::tuple_size_v<tuple_types_t> < 1) {
+            if constexpr (std::tuple_size_v<Tuple> < 1) {
                ctx.error = error_code::no_matching_variant_type;
             }
             else {
-               using const_glaze_types = typename tuple_types<tuple_types_t>::glaze_const_types;
+               using const_glaze_types = typename tuple_types<Tuple>::glaze_const_types;
                bool found_match{};
                for_each<std::tuple_size_v<const_glaze_types>>([&]([[maybe_unused]] auto I) mutable {
                   if (found_match) {
@@ -2152,7 +2152,7 @@ namespace glz
                   return;
                }
 
-               using non_const_types = typename tuple_types<tuple_types_t>::glaze_non_const_types;
+               using non_const_types = typename tuple_types<Tuple>::glaze_non_const_types;
                if constexpr (std::tuple_size_v < non_const_types >> 0) {
                   using V = std::tuple_element_t<0, non_const_types>;
                   if (!std::holds_alternative<V>(value)) value = V{};

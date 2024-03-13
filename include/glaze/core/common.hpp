@@ -14,12 +14,14 @@
 #include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/util/bit_array.hpp"
+#include "glaze/util/comment.hpp"
 #include "glaze/util/expected.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/hash_map.hpp"
 #include "glaze/util/string_view.hpp"
 #include "glaze/util/tuple.hpp"
 #include "glaze/util/type_traits.hpp"
+#include "glaze/util/utility.hpp"
 #include "glaze/util/variant.hpp"
 
 namespace glz
