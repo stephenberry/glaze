@@ -364,14 +364,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            static constexpr auto num_members = [] {
-               if constexpr (reflectable<T>) {
-                  return count_members<T>;
-               }
-               else {
-                  return std::tuple_size_v<meta_t<T>>;
-               }
-            }();
+            static constexpr auto num_members = reflection_count<T>;
 
             decltype(auto) frozen_map = [&]() -> decltype(auto) {
                if constexpr (reflectable<T> && num_members > 0) {

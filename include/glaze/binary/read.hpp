@@ -808,14 +808,7 @@ namespace glz
 
             ++it;
 
-            constexpr auto N = [] {
-               if constexpr (reflectable<T>) {
-                  return count_members<T>;
-               }
-               else {
-                  return std::tuple_size_v<meta_t<T>>;
-               }
-            }();
+            constexpr auto N = reflection_count<T>;
 
             const auto n_keys = int_from_compressed(it, end);
 

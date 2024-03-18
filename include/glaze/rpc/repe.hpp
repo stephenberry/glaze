@@ -291,14 +291,7 @@ namespace glz::repe
       void on(T& value)
       {
          using namespace glz::detail;
-         static constexpr auto N = [] {
-            if constexpr (reflectable<T>) {
-               return count_members<T>;
-            }
-            else {
-               return std::tuple_size_v<meta_t<T>>;
-            }
-         }();
+         static constexpr auto N = reflection_count<T>;
 
          [[maybe_unused]] decltype(auto) t = [&] {
             if constexpr (reflectable<T>) {

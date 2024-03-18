@@ -1352,14 +1352,7 @@ namespace glz
             stats.min_length = tag_size;
          }
 
-         constexpr auto N = [] {
-            if constexpr (reflectable<T>) {
-               return count_members<T>;
-            }
-            else {
-               return std::tuple_size_v<meta_t<T>>;
-            }
-         }();
+         constexpr auto N = reflection_count<T>;
 
          for_each<N>([&](auto I) {
             using Element = glaze_tuple_element<I, N, T>;
@@ -1458,14 +1451,7 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return {};
 
-         constexpr auto N = [] {
-            if constexpr (reflectable<T>) {
-               return count_members<T>;
-            }
-            else {
-               return std::tuple_size_v<meta_t<T>>;
-            }
-         }();
+         constexpr auto N = reflection_count<T>;
 
          if constexpr (keys_may_contain_escape<T>()) {
             std::string& static_key = string_buffer();
@@ -1557,14 +1543,7 @@ namespace glz
 
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
-            static constexpr auto num_members = [] {
-               if constexpr (reflectable<T>) {
-                  return count_members<T>;
-               }
-               else {
-                  return std::tuple_size_v<meta_t<T>>;
-               }
-            }();
+            static constexpr auto num_members = reflection_count<T>;
             if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
                if (*it == '}') [[likely]] {
                   ++it;

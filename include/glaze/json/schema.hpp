@@ -383,14 +383,7 @@ namespace glz
                s.examples = meta<V>::examples;
             }
 
-            static constexpr auto N = [] {
-               if constexpr (reflectable<T>) {
-                  return count_members<T>;
-               }
-               else {
-                  return std::tuple_size_v<meta_t<T>>;
-               }
-            }();
+            static constexpr auto N = reflection_count<T>;
 
             [[maybe_unused]] static constexpr auto schema_map = make_reflection_schema_map<T>();
 
