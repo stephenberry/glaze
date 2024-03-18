@@ -32,34 +32,34 @@ namespace glz
       // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
       std::optional<std::string_view> title{};
       std::optional<std::string_view> description{};
-      std::optional<schema_any> default_value{};
+      std::optional<schema_any> defaultValue{};
       std::optional<bool> deprecated{};
       std::optional<std::span<const std::string_view>> examples{};
-      std::optional<bool> read_only{};
-      std::optional<bool> write_only{};
+      std::optional<bool> readOnly{};
+      std::optional<bool> writeOnly{};
       // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
       std::optional<std::variant<bool, std::string_view>> constant{};
       // string only keywords
-      std::optional<std::uint64_t> min_length{};
-      std::optional<std::uint64_t> max_length{};
+      std::optional<std::uint64_t> minLength{};
+      std::optional<std::uint64_t> maxLength{};
       std::optional<std::string_view> pattern{};
       // number only keywords
       schema_number minimum{};
       schema_number maximum{};
-      schema_number exclusive_minimum{};
-      schema_number exclusive_maximum{};
-      schema_number multiple_of{};
+      schema_number exclusiveMinimum{};
+      schema_number exclusiveMaximum{};
+      schema_number multipleOf{};
       // object only keywords
-      std::optional<std::uint64_t> min_properties{};
-      std::optional<std::uint64_t> max_properties{};
+      std::optional<std::uint64_t> minProperties{};
+      std::optional<std::uint64_t> maxProperties{};
       //      std::optional<std::map<std::string_view, std::vector<std::string_view>>> dependent_required{};
       std::optional<std::span<const std::string_view>> required{};
       // array only keywords
-      std::optional<std::uint64_t> min_items{};
-      std::optional<std::uint64_t> max_items{};
-      std::optional<std::uint64_t> min_contains{};
-      std::optional<std::uint64_t> max_contains{};
-      std::optional<bool> unique_items{};
+      std::optional<std::uint64_t> minItems{};
+      std::optional<std::uint64_t> maxItems{};
+      std::optional<std::uint64_t> minContains{};
+      std::optional<std::uint64_t> maxContains{};
+      std::optional<bool> uniqueItems{};
       // properties
       std::optional<std::span<const std::string_view>> enumeration{}; // enum
 
@@ -73,29 +73,29 @@ namespace glz
          static constexpr auto value = glz::object("$ref", &T::ref, //
                                                    "title", &T::title, //
                                                    "description", &T::description, //
-                                                   "default", &T::default_value, //
+                                                   "default", &T::defaultValue, //
                                                    "deprecated", &T::deprecated, //
                                                    "examples", raw<&T::examples>, //
-                                                   "readOnly", &T::read_only, //
-                                                   "writeOnly", &T::write_only, //
+                                                   "readOnly", &T::readOnly, //
+                                                   "writeOnly", &T::writeOnly, //
                                                    "const", &T::constant, //
-                                                   "minLength", &T::min_length, //
-                                                   "maxLength", &T::max_length, //
+                                                   "minLength", &T::minLength, //
+                                                   "maxLength", &T::maxLength, //
                                                    "pattern", &T::pattern, //
                                                    "minimum", &T::minimum, //
                                                    "maximum", &T::maximum, //
-                                                   "exclusiveMinimum", &T::exclusive_minimum, //
-                                                   "exclusiveMaximum", &T::exclusive_maximum, //
-                                                   "multipleOf", &T::multiple_of, //
-                                                   "minProperties", &T::min_properties, //
-                                                   "maxProperties", &T::max_properties, //
+                                                   "exclusiveMinimum", &T::exclusiveMinimum, //
+                                                   "exclusiveMaximum", &T::exclusiveMaximum, //
+                                                   "multipleOf", &T::multipleOf, //
+                                                   "minProperties", &T::minProperties, //
+                                                   "maxProperties", &T::maxProperties, //
                                                    //               "dependentRequired", &T::dependent_required, //
                                                    "required", &T::required, //
-                                                   "minItems", &T::min_items, //
-                                                   "maxItems", &T::max_items, //
-                                                   "minContains", &T::min_contains, //
-                                                   "maxContains", &T::max_contains, //
-                                                   "uniqueItems", &T::unique_items, //
+                                                   "minItems", &T::minItems, //
+                                                   "maxItems", &T::maxItems, //
+                                                   "minContains", &T::minContains, //
+                                                   "maxContains", &T::maxContains, //
+                                                   "uniqueItems", &T::uniqueItems, //
                                                    "enum", &T::enumeration);
       };
    };
