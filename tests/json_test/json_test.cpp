@@ -2615,6 +2615,11 @@ suite tagged_variant_tests = [] {
       glz::write_json(obj, s);
       expect(s == R"({"num":["int8_t",-5]})");
    };
+   
+   "shared_ptr variant schema"_test = [] {
+      const auto schema = glz::write_json_schema<std::shared_ptr<tagged_variant2>>();
+      expect(schema == R"({"type":["number","string","boolean","object","array","null"],"$defs":{"int32_t":{"type":["integer"]},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"},"type":{"$ref":"#/$defs/std::string","enum":["put_action","delete_action","std::monostate"]}},"additionalProperties":false},{"type":["object"],"properties":{"data":{"$ref":"#/$defs/std::string"},"type":{"$ref":"#/$defs/std::string","enum":["put_action","delete_action","std::monostate"]}},"additionalProperties":false},{"type":["null"]}]})") << schema;
+   };
 };
 
 struct variant_obj
