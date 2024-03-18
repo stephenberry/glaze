@@ -358,18 +358,16 @@ namespace glz
             for_each<N>([&](auto I) {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I.value];
-               // TODO: use ref to avoid duplication in schema
                to_json_schema<V>::template op<Opts>(schema_val, defs);
-               if constexpr (glaze_object_t<V> || reflectable<V>) {
+               if constexpr ((glaze_object_t<V> || reflectable<V>) && !tag_v<T>.empty()) {
                   auto& def = defs[name_v<std::string>];
                   if (!def.type) {
                      to_json_schema<std::string>::template op<Opts>(def, defs);
                   }
-                  if constexpr (!tag_v<T>.empty()) {
-                     auto& properties = (*schema_val.properties)[tag_v<T>] =
-                        schema{join_v<chars<"#/$defs/">, name_v<std::string>>};
-                     properties.constant = ids_v<T>[I];
-                  }
+                  
+                  auto& properties = (*schema_val.properties)[tag_v<T>] =
+                     schema{join_v<chars<"#/$defs/">, name_v<std::string>>};
+                  properties.constant = ids_v<T>[I];
                }
             });
          }
