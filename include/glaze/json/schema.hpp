@@ -384,10 +384,9 @@ namespace glz
             s.type = {"array"};
          }
       };
-      
+
       template <class T>
-      inline constexpr auto glaze_names = []()
-      {
+      inline constexpr auto glaze_names = []() {
          constexpr auto N = reflection_count<T>;
          std::array<sv, N> names{};
          for_each<N>([&](auto I) {
@@ -396,20 +395,21 @@ namespace glz
          });
          return names;
       }();
-      
+
       template <class T>
-      consteval bool json_schema_matches_object_keys() {
+      consteval bool json_schema_matches_object_keys()
+      {
          if constexpr (json_schema_t<T> && (count_members<json_schema_type<T>> > 0)) {
             constexpr auto& json_schema_names = member_names<json_schema_type<T>>;
             auto fields = glaze_names<T>;
             std::sort(fields.begin(), fields.end());
-            
+
             for (const auto& key : json_schema_names) {
-                 if (!std::binary_search(fields.begin(), fields.end(), key)) {
-                     return false;
-                 }
-             }
-             return true;
+               if (!std::binary_search(fields.begin(), fields.end(), key)) {
+                  return false;
+               }
+            }
+            return true;
          }
          else {
             return true;
@@ -424,7 +424,7 @@ namespace glz
          static void op(auto& s, auto& defs) noexcept
          {
             static_assert(json_schema_matches_object_keys<T>());
-            
+
             s.type = {"object"};
 
             using V = std::decay_t<T>;
