@@ -6835,8 +6835,6 @@ suite meta_schema_tests = [] {
       
       static_assert(glz::detail::make_reflection_schema_map<meta_schema_t>().size() == 3);
 
-      static_assert(glz::detail::make_reflection_schema_map<meta_schema_t>().size() == 3);
-
       const auto json_schema = glz::write_json_schema<meta_schema_t>();
       expect(
          json_schema ==
