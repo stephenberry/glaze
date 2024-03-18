@@ -37,7 +37,7 @@ namespace glz
       std::optional<bool> read_only{};
       std::optional<bool> write_only{};
       // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
-      std::optional<bool> constant{};
+      std::optional<std::variant<bool, std::string_view>> constant{};
       // string only keywords
       std::optional<std::uint64_t> min_length{};
       std::optional<std::uint64_t> max_length{};
@@ -354,6 +354,7 @@ namespace glz
                (*s.type).emplace_back("null");
             }
             s.oneOf = std::vector<schematic>(N);
+            
             for_each<N>([&](auto I) {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I.value];
@@ -367,7 +368,7 @@ namespace glz
                   if constexpr (!tag_v<T>.empty()) {
                      auto& properties = (*schema_val.properties)[tag_v<T>] =
                         schema{join_v<chars<"#/$defs/">, name_v<std::string>>};
-                     properties.enumeration = ids_v<T>;
+                     properties.constant = ids_v<T>[I];
                   }
                }
             });

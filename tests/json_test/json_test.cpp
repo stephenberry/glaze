@@ -2585,7 +2585,7 @@ suite tagged_variant_tests = [] {
       auto s = glz::write_json_schema<tagged_variant>();
       expect(
          s ==
-         R"({"type":["object"],"$defs":{"int32_t":{"type":["integer"]},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"action":{"$ref":"#/$defs/std::string","enum":["PUT","DELETE"]},"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"}},"additionalProperties":false},{"type":["object"],"properties":{"action":{"$ref":"#/$defs/std::string","enum":["PUT","DELETE"]},"data":{"$ref":"#/$defs/std::string"}},"additionalProperties":false}]})")
+         R"({"type":["object"],"$defs":{"int32_t":{"type":["integer"]},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"action":{"$ref":"#/$defs/std::string","const":"PUT"},"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"}},"additionalProperties":false},{"type":["object"],"properties":{"action":{"$ref":"#/$defs/std::string","const":"DELETE"},"data":{"$ref":"#/$defs/std::string"}},"additionalProperties":false}]})")
          << s;
    };
 
@@ -2620,7 +2620,7 @@ suite tagged_variant_tests = [] {
       const auto schema = glz::write_json_schema<std::shared_ptr<tagged_variant2>>();
       expect(
          schema ==
-         R"({"type":["object","null"],"$defs":{"int32_t":{"type":["integer"]},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"},"type":{"$ref":"#/$defs/std::string","enum":["put_action","delete_action","std::monostate"]}},"additionalProperties":false},{"type":["object"],"properties":{"data":{"$ref":"#/$defs/std::string"},"type":{"$ref":"#/$defs/std::string","enum":["put_action","delete_action","std::monostate"]}},"additionalProperties":false},{"type":["null"]}]})")
+         R"({"type":["object","null"],"$defs":{"int32_t":{"type":["integer"]},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"},"type":{"$ref":"#/$defs/std::string","const":"put_action"}},"additionalProperties":false},{"type":["object"],"properties":{"data":{"$ref":"#/$defs/std::string"},"type":{"$ref":"#/$defs/std::string","const":"delete_action"}},"additionalProperties":false},{"type":["null"]}]})")
          << schema;
    };
 };
@@ -5864,7 +5864,7 @@ suite empty_variant_objects = [] {
       const auto s = glz::write_json_schema<var_schema>();
       expect(
          s ==
-         R"({"type":["object"],"properties":{"$schema":{"$ref":"#/$defs/std::string"},"variant":{"$ref":"#/$defs/vari"}},"additionalProperties":false,"$defs":{"std::string":{"type":["string"]},"vari":{"type":["object"],"oneOf":[{"type":["object"],"properties":{"type":{"$ref":"#/$defs/std::string","enum":["varx","vary"]}},"additionalProperties":false},{"type":["object"],"properties":{"type":{"$ref":"#/$defs/std::string","enum":["varx","vary"]}},"additionalProperties":false}]}}})")
+         R"({"type":["object"],"properties":{"$schema":{"$ref":"#/$defs/std::string"},"variant":{"$ref":"#/$defs/vari"}},"additionalProperties":false,"$defs":{"std::string":{"type":["string"]},"vari":{"type":["object"],"oneOf":[{"type":["object"],"properties":{"type":{"$ref":"#/$defs/std::string","const":"varx"}},"additionalProperties":false},{"type":["object"],"properties":{"type":{"$ref":"#/$defs/std::string","const":"vary"}},"additionalProperties":false}]}}})")
          << s;
    };
 };
