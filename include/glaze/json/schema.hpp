@@ -25,7 +25,8 @@ namespace glz
 {
    struct schema final
    {
-      std::string_view ref{};
+      bool reflection_helper{}; // needed to support automatic reflection, because ref is a std::optional
+      std::optional<std::string_view> ref{};
       using schema_number = std::optional<std::variant<std::int64_t, std::uint64_t, double>>;
       using schema_any = std::variant<bool, std::int64_t, std::uint64_t, double, std::string_view>;
       // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
@@ -290,7 +291,7 @@ namespace glz
             if (!def.type) {
                to_json_schema<V>::template op<Opts>(def, defs);
             }
-            s.items = schema{join_v<chars<"#/$defs/">, name_v<V>>};
+            s.items = schema{true, join_v<chars<"#/$defs/">, name_v<V>>};
          }
       };
 
@@ -306,7 +307,7 @@ namespace glz
             if (!def.type) {
                to_json_schema<V>::template op<Opts>(def, defs);
             }
-            s.additionalProperties = schema{join_v<chars<"#/$defs/">, name_v<V>>};
+            s.additionalProperties = schema{true, join_v<chars<"#/$defs/">, name_v<V>>};
          }
       };
 
@@ -360,14 +361,8 @@ namespace glz
                auto& schema_val = (*s.oneOf)[I.value];
                to_json_schema<V>::template op<Opts>(schema_val, defs);
                if constexpr ((glaze_object_t<V> || reflectable<V>)&&!tag_v<T>.empty()) {
-                  auto& def = defs[name_v<std::string>];
-                  if (!def.type) {
-                     to_json_schema<std::string>::template op<Opts>(def, defs);
-                  }
-
-                  auto& properties = (*schema_val.properties)[tag_v<T>] =
-                     schema{join_v<chars<"#/$defs/">, name_v<std::string>>};
-                  properties.constant = ids_v<T>[I];
+                  auto& tag = (*schema_val.properties)[tag_v<T>];
+                  tag.constant = ids_v<T>[I];
                }
             });
          }
@@ -407,7 +402,7 @@ namespace glz
 
             static constexpr auto N = reflection_count<T>;
 
-            [[maybe_unused]] static constexpr auto schema_map = make_reflection_schema_map<T>();
+            static constexpr auto schema_map = make_reflection_schema_map<T>();
 
             s.properties = std::map<sv, schema, std::less<>>();
             for_each<N>([&](auto I) {
@@ -430,7 +425,7 @@ namespace glz
                   }
                   // TODO: Implement compile time name checking from schema_map to the reflected names
                }
-               if (ref_val.ref == "") {
+               if (!ref_val.ref) {
                   ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
                }
 
