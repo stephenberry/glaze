@@ -2107,7 +2107,7 @@ namespace glz
          using glaze_non_const_types = decltype(tuplet::tuple_cat(
             std::conditional_t<!glaze_const_value_t<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
       };
-      
+
       template <class>
       struct variant_type_count;
 

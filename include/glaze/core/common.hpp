@@ -1135,7 +1135,8 @@ namespace glz
    }
 }
 
-namespace glz {
+namespace glz
+{
    template <class T>
    inline constexpr auto reflection_count = [] {
       if constexpr (detail::reflectable<T>) {
