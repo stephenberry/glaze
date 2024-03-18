@@ -1135,6 +1135,18 @@ namespace glz
    }
 }
 
+namespace glz {
+   template <class T>
+   inline constexpr auto reflection_count = [] {
+      if constexpr (detail::reflectable<T>) {
+         return detail::count_members<T>;
+      }
+      else {
+         return std::tuple_size_v<meta_t<T>>;
+      }
+   }();
+}
+
 template <>
 struct glz::meta<glz::error_code>
 {
@@ -1276,16 +1288,7 @@ namespace glz::detail
    template <auto Opts, class T>
    struct object_type_info
    {
-      using V = std::decay_t<T>;
-
-      static constexpr auto N = [] {
-         if constexpr (reflectable<T>) {
-            return count_members<T>;
-         }
-         else {
-            return std::tuple_size_v<meta_t<V>>;
-         }
-      }();
+      static constexpr auto N = reflection_count<T>;
 
       // Allows us to remove a branch if the first item will always be written
       static constexpr bool first_will_be_written = [] {
@@ -1332,14 +1335,7 @@ namespace glz::detail
    template <class T, auto Opts>
    constexpr auto required_fields()
    {
-      constexpr auto N = [] {
-         if constexpr (reflectable<T>) {
-            return count_members<T>;
-         }
-         else {
-            return std::tuple_size_v<meta_t<T>>;
-         }
-      }();
+      constexpr auto N = reflection_count<T>;
 
       bit_array<N> fields{};
       if constexpr (Opts.error_on_missing_keys) {
