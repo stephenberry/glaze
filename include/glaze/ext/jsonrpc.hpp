@@ -209,13 +209,19 @@ namespace glz::rpc
                using result_t = typename M::result_t;
                using params_t = typename M::params_t;
                using expected_t = expected<result_t, rpc::error>;
-               if constexpr (std::is_invocable_r_v<result_t, decltype(callback), const params_t&>) {
-                  method.callback = [=](const params_t& params) -> expected_t { return callback(params); };
-               }
-               else if constexpr (std::is_invocable_r_v<rpc::error, decltype(callback), const params_t&>) {
-                  method.callback = [=](const params_t& params) -> expected_t {
-                     return glz::unexpected{callback(params)};
-                  };
+               if constexpr (std::is_invocable_v<decltype(callback), const params_t&>) {
+                  using invoke_result_t = std::invoke_result_t<decltype(callback), const params_t&>;
+                  if constexpr (std::same_as<std::decay_t<invoke_result_t>, rpc::error>) {
+                     method.callback = [=](const params_t& params) -> expected_t {
+                                          return glz::unexpected{callback(params)};
+                                       };
+                  }
+                  else if constexpr (std::is_constructible_v<expected_t, invoke_result_t>) {
+                     method.callback = [=](const params_t& params) -> expected_t { return callback(params); };
+                  }
+                  else {
+                     static_assert(false_v<result_t>, "Method return cannot construct expected<result_t, rpc::error>");
+                  }
                }
                else {
                   static_assert(false_v<M>, "Method supplied is not invocable with registered types");
