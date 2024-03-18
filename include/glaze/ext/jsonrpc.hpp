@@ -213,8 +213,8 @@ namespace glz::rpc
                   using invoke_result_t = std::invoke_result_t<decltype(callback), const params_t&>;
                   if constexpr (std::same_as<std::decay_t<invoke_result_t>, rpc::error>) {
                      method.callback = [=](const params_t& params) -> expected_t {
-                                          return glz::unexpected{callback(params)};
-                                       };
+                        return glz::unexpected{callback(params)};
+                     };
                   }
                   else if constexpr (std::is_constructible_v<expected_t, invoke_result_t>) {
                      method.callback = [=](const params_t& params) -> expected_t { return callback(params); };
