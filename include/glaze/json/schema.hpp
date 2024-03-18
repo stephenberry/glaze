@@ -384,14 +384,47 @@ namespace glz
             s.type = {"array"};
          }
       };
+      
+      template <class T>
+      inline constexpr auto glaze_names = []()
+      {
+         constexpr auto N = reflection_count<T>;
+         std::array<sv, N> names{};
+         for_each<N>([&](auto I) {
+            using Element = glaze_tuple_element<I, N, T>;
+            names[I] = key_name<I, T, Element::use_reflection>;
+         });
+         return names;
+      }();
+      
+      template <class T>
+      consteval bool json_schema_matches_object_keys() {
+         if constexpr (json_schema_t<T> && (count_members<json_schema_type<T>> > 0)) {
+            constexpr auto& json_schema_names = member_names<json_schema_type<T>>;
+            constexpr auto& fields = glaze_names<T>;
+            
+            for (size_t i = 0; i < json_schema_names.size(); ++i) {
+               const auto key = json_schema_names[i];
+               if (std::find(fields.begin(), fields.end(), key) == fields.end()) {
+                  return false;
+               }
+            }
+            return true;
+         }
+         else {
+            return true;
+         }
+      }
 
       template <class T>
-         requires(glaze_object_t<T> || reflectable<T>)
+         requires((glaze_object_t<T> || reflectable<T>))
       struct to_json_schema<T>
       {
          template <auto Opts>
          static void op(auto& s, auto& defs) noexcept
          {
+            static_assert(json_schema_matches_object_keys<T>());
+            
             s.type = {"object"};
 
             using V = std::decay_t<T>;
@@ -437,7 +470,6 @@ namespace glz
                   if constexpr (it != schema_map.end()) {
                      ref_val = it->second;
                   }
-                  // TODO: Implement compile time name checking from schema_map to the reflected names
                }
                if (!ref_val.ref) {
                   ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
