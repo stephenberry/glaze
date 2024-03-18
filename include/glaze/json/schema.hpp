@@ -113,8 +113,8 @@ namespace glz
          std::optional<std::map<std::string_view, schematic, std::less<>>> defs{};
          std::optional<std::vector<std::string_view>> enumeration{}; // enum
          std::optional<std::vector<schematic>> oneOf{};
-         std::optional<std::span<const std::string_view>> required{};
-         std::optional<std::span<const std::string_view>> examples{};
+         std::optional<std::vector<std::string_view>> required{};
+         std::optional<std::vector<std::string_view>> examples{};
       };
    }
 }
@@ -361,6 +361,10 @@ namespace glz
                auto& schema_val = (*s.oneOf)[I.value];
                to_json_schema<V>::template op<Opts>(schema_val, defs);
                if constexpr ((glaze_object_t<V> || reflectable<V>)&&!tag_v<T>.empty()) {
+                  if (!schema_val.required) {
+                     schema_val.required = std::vector<sv>{};
+                  }
+                  schema_val.required->emplace_back(tag_v<T>);
                   auto& tag = (*schema_val.properties)[tag_v<T>];
                   tag.constant = ids_v<T>[I];
                }
@@ -393,11 +397,21 @@ namespace glz
             using V = std::decay_t<T>;
 
             if constexpr (requires { meta<V>::required; }) {
-               s.required = meta<V>::required;
+               if (!s.required) {
+                  s.required = std::vector<sv>{};
+               }
+               for (auto& v : meta<V>::required) {
+                  s.required->emplace_back(v);
+               }
             }
 
             if constexpr (requires { meta<V>::examples; }) {
-               s.examples = meta<V>::examples;
+               if (!s.examples) {
+                  s.examples = std::vector<sv>{};
+               }
+               for (auto& v : meta<V>::examples) {
+                  s.examples->emplace_back(v);
+               }
             }
 
             static constexpr auto N = reflection_count<T>;
