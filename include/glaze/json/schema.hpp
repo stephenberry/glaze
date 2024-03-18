@@ -401,15 +401,15 @@ namespace glz
       consteval bool json_schema_matches_object_keys() {
          if constexpr (json_schema_t<T> && (count_members<json_schema_type<T>> > 0)) {
             constexpr auto& json_schema_names = member_names<json_schema_type<T>>;
-            constexpr auto& fields = glaze_names<T>;
+            auto fields = glaze_names<T>;
+            std::sort(fields.begin(), fields.end());
             
-            for (size_t i = 0; i < json_schema_names.size(); ++i) {
-               const auto key = json_schema_names[i];
-               if (std::find(fields.begin(), fields.end(), key) == fields.end()) {
-                  return false;
-               }
-            }
-            return true;
+            for (const auto& key : json_schema_names) {
+                 if (!std::binary_search(fields.begin(), fields.end(), key)) {
+                     return false;
+                 }
+             }
+             return true;
          }
          else {
             return true;
