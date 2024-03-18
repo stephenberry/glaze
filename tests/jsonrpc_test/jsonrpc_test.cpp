@@ -363,6 +363,27 @@ ut::suite struct_test_cases = [] {
          ut::expect(response.error->code == glz::rpc::error_e::invalid_request);
       }
    };
+   
+   ut::test("server valid or error return") = [&server] {
+      server.on<"foo">(
+          [](const foo_params& params) -> glz::expected<foo_result, glz::rpc::error>
+          {
+              if (params.foo_a == 10) // dummy invalid param case
+              {
+                  return glz::unexpected(glz::rpc::error{glz::rpc::error_e::invalid_params, "my error"});
+              }
+              else
+              {
+                  return foo_result{.foo_c = true, .foo_d = "new world"};
+              }
+          }
+      );
+      
+      const std::string request = R"({"jsonrpc":"2.0","method":"foo","params":{"foo_a":1337,"foo_b":"hello world"},"id":"42"})";
+      std::string response = server.call(request);
+      ut::expect(response == R"({"jsonrpc":"2.0","result":{"foo_c":true,"foo_d":"new world"},"id":"42"})");
+   };
+   
    "client request map"_test = [&client] {
       bool first_call{};
       std::ignore = client.request<"foo">("first_call", foo_params{}, [&first_call](auto, auto) { first_call = true; });
