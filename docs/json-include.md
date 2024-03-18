@@ -41,6 +41,8 @@ Note how the provided path contains `{}`, which will be replaced with the hostna
 
 ## glz::raw_or_file
 
+> Note that his approach only allows a single layer of includes. It does not allow infinitely deep includes like `glz::file_include` and `glz::hostname_include` support.
+
 `glz::raw_or_file` is somewhat like a `glz::file_include`, but also handles serialization. The purpose is to allow JSON files to be optionally referred to within higher level configuration files, but once loaded, the files behave as glz::raw_json, where the format does not need to be understood until deserialized.
 
 **How glz::raw_or_file behaves:**
