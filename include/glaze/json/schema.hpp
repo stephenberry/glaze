@@ -292,6 +292,7 @@ namespace glz
                to_json_schema<V>::template op<Opts>(def, defs);
             }
             s.items = schema{true, join_v<chars<"#/$defs/">, name_v<V>>};
+            s.items = schema{true, join_v<chars<"#/$defs/">, name_v<V>>};
          }
       };
 
