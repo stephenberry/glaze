@@ -365,8 +365,7 @@ namespace glz
                      to_json_schema<std::string>::template op<Opts>(def, defs);
                   }
 
-                  auto& properties = (*schema_val.properties)[tag_v<T>] =
-                     schema{join_v<chars<"#/$defs/">, name_v<std::string>>};
+                  auto& properties = (*schema_val.properties)[tag_v<T>];
                   properties.constant = ids_v<T>[I];
                }
             });
