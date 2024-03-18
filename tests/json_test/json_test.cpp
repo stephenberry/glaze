@@ -6832,7 +6832,7 @@ suite meta_schema_tests = [] {
       std::string buffer{};
       glz::write_json(obj, buffer);
       expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
-      
+
       static_assert(glz::detail::make_reflection_schema_map<meta_schema_t>().size() == 3);
 
       const auto json_schema = glz::write_json_schema<meta_schema_t>();
