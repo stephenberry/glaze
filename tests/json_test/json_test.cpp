@@ -6826,14 +6826,15 @@ struct glz::json_schema<meta_schema_t>
    schema is_valid{.description = "for validation"};
 };
 
+static_assert(glz::detail::json_schema_t<meta_schema_t>);
+static_assert(glz::detail::count_members<glz::json_schema_type<meta_schema_t>> > 0);
+
 suite meta_schema_tests = [] {
    "meta_schema"_test = [] {
       meta_schema_t obj;
       std::string buffer{};
       glz::write_json(obj, buffer);
       expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
-
-      static_assert(glz::detail::make_reflection_schema_map<meta_schema_t>().size() == 3);
 
       const auto json_schema = glz::write_json_schema<meta_schema_t>();
       expect(

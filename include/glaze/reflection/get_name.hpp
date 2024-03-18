@@ -108,7 +108,7 @@ namespace glz
    }
 
    template <class T>
-   static constexpr auto member_names =
+   inline constexpr auto member_names =
       [] { return member_names_impl<T>(std::make_index_sequence<detail::count_members<T>>{}); }();
 }
 
