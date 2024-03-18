@@ -596,14 +596,7 @@ namespace glz
             dump_type(tag, args...);
 
             using V = std::decay_t<T>;
-            static constexpr auto N = [] {
-               if constexpr (reflectable<T>) {
-                  return count_members<T>;
-               }
-               else {
-                  return std::tuple_size_v<meta_t<V>>;
-               }
-            }();
+            static constexpr auto N = reflection_count<T>;
 
             dump_compressed_int<N>(args...);
 

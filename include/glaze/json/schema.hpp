@@ -318,7 +318,11 @@ namespace glz
          {
             using V = std::decay_t<decltype(*std::declval<std::decay_t<T>>())>;
             to_json_schema<V>::template op<Opts>(s, defs);
-            (*s.type).emplace_back("null");
+            auto& type = *s.type;
+            auto it = std::find_if(type.begin(), type.end(), [&](const auto& str) { return str == "null"; });
+            if (it == type.end()) {
+               type.emplace_back("null");
+            }
          }
       };
 
@@ -329,12 +333,31 @@ namespace glz
          static void op(auto& s, auto& defs) noexcept
          {
             static constexpr auto N = std::variant_size_v<T>;
-            s.type = {"number", "string", "boolean", "object", "array", "null"};
+            using type_counts = variant_type_count<T>;
+            s.type = std::vector<sv>{};
+            if constexpr (type_counts::n_number) {
+               (*s.type).emplace_back("number");
+            }
+            if constexpr (type_counts::n_string) {
+               (*s.type).emplace_back("string");
+            }
+            if constexpr (type_counts::n_bool) {
+               (*s.type).emplace_back("boolean");
+            }
+            if constexpr (type_counts::n_object) {
+               (*s.type).emplace_back("object");
+            }
+            if constexpr (type_counts::n_array) {
+               (*s.type).emplace_back("array");
+            }
+            if constexpr (type_counts::n_null) {
+               (*s.type).emplace_back("null");
+            }
             s.oneOf = std::vector<schematic>(N);
             for_each<N>([&](auto I) {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I.value];
-               // TODO use ref to avoid duplication in schema
+               // TODO: use ref to avoid duplication in schema
                to_json_schema<V>::template op<Opts>(schema_val, defs);
                if constexpr (glaze_object_t<V>) {
                   auto& def = defs[name_v<std::string>];
@@ -383,14 +406,7 @@ namespace glz
                s.examples = meta<V>::examples;
             }
 
-            static constexpr auto N = [] {
-               if constexpr (reflectable<T>) {
-                  return count_members<T>;
-               }
-               else {
-                  return std::tuple_size_v<meta_t<T>>;
-               }
-            }();
+            static constexpr auto N = reflection_count<T>;
 
             [[maybe_unused]] static constexpr auto schema_map = make_reflection_schema_map<T>();
 

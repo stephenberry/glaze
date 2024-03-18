@@ -1352,14 +1352,7 @@ namespace glz
             stats.min_length = tag_size;
          }
 
-         constexpr auto N = [] {
-            if constexpr (reflectable<T>) {
-               return count_members<T>;
-            }
-            else {
-               return std::tuple_size_v<meta_t<T>>;
-            }
-         }();
+         constexpr auto N = reflection_count<T>;
 
          for_each<N>([&](auto I) {
             using Element = glaze_tuple_element<I, N, T>;
@@ -1458,14 +1451,7 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return {};
 
-         constexpr auto N = [] {
-            if constexpr (reflectable<T>) {
-               return count_members<T>;
-            }
-            else {
-               return std::tuple_size_v<meta_t<T>>;
-            }
-         }();
+         constexpr auto N = reflection_count<T>;
 
          if constexpr (keys_may_contain_escape<T>()) {
             std::string& static_key = string_buffer();
@@ -1557,14 +1543,7 @@ namespace glz
 
             static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
-            static constexpr auto num_members = [] {
-               if constexpr (reflectable<T>) {
-                  return count_members<T>;
-               }
-               else {
-                  return std::tuple_size_v<meta_t<T>>;
-               }
-            }();
+            static constexpr auto num_members = reflection_count<T>;
             if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
                if (*it == '}') [[likely]] {
                   ++it;
@@ -2127,6 +2106,21 @@ namespace glz
             std::conditional_t<glaze_const_value_t<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
          using glaze_non_const_types = decltype(tuplet::tuple_cat(
             std::conditional_t<!glaze_const_value_t<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
+      };
+
+      template <class>
+      struct variant_type_count;
+
+      template <class... Ts>
+      struct variant_type_count<std::variant<Ts...>>
+      {
+         using V = variant_types<std::variant<Ts...>>;
+         static constexpr auto n_bool = std::tuple_size_v<typename V::bool_types>;
+         static constexpr auto n_number = std::tuple_size_v<typename V::number_types>;
+         static constexpr auto n_string = std::tuple_size_v<typename V::string_types>;
+         static constexpr auto n_object = std::tuple_size_v<typename V::object_types>;
+         static constexpr auto n_array = std::tuple_size_v<typename V::array_types>;
+         static constexpr auto n_null = std::tuple_size_v<typename V::nullable_types>;
       };
 
       template <class Tuple>

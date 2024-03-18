@@ -35,14 +35,7 @@ namespace glz
    {
       using namespace detail;
 
-      static constexpr auto N = [] {
-         if constexpr (reflectable<T>) {
-            return count_members<T>;
-         }
-         else {
-            return std::tuple_size_v<meta_t<T>>;
-         }
-      }();
+      static constexpr auto N = reflection_count<T>;
 
       auto execute_menu_item = [&](const auto item_number) {
          if (item_number == N + 1) {
