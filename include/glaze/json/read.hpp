@@ -2107,6 +2107,21 @@ namespace glz
          using glaze_non_const_types = decltype(tuplet::tuple_cat(
             std::conditional_t<!glaze_const_value_t<Ts>, tuplet::tuple<Ts>, tuplet::tuple<>>{}...));
       };
+      
+      template <class>
+      struct variant_type_count;
+
+      template <class... Ts>
+      struct variant_type_count<std::variant<Ts...>>
+      {
+         using V = variant_types<std::variant<Ts...>>;
+         static constexpr auto n_bool = std::tuple_size_v<typename V::bool_types>;
+         static constexpr auto n_number = std::tuple_size_v<typename V::number_types>;
+         static constexpr auto n_string = std::tuple_size_v<typename V::string_types>;
+         static constexpr auto n_object = std::tuple_size_v<typename V::object_types>;
+         static constexpr auto n_array = std::tuple_size_v<typename V::array_types>;
+         static constexpr auto n_null = std::tuple_size_v<typename V::nullable_types>;
+      };
 
       template <class Tuple>
       struct process_arithmetic_boolean_string_or_array

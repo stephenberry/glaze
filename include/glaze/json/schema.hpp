@@ -335,12 +335,31 @@ namespace glz
          static void op(auto& s, auto& defs) noexcept
          {
             static constexpr auto N = std::variant_size_v<T>;
-            s.type = {"number", "string", "boolean", "object", "array", "null"};
+            using type_counts = variant_type_count<T>;
+            s.type = std::vector<sv>{};
+            if constexpr (type_counts::n_number) {
+               (*s.type).emplace_back("number");
+            }
+            if constexpr (type_counts::n_string) {
+               (*s.type).emplace_back("string");
+            }
+            if constexpr (type_counts::n_bool) {
+               (*s.type).emplace_back("boolean");
+            }
+            if constexpr (type_counts::n_object) {
+               (*s.type).emplace_back("object");
+            }
+            if constexpr (type_counts::n_array) {
+               (*s.type).emplace_back("array");
+            }
+            if constexpr (type_counts::n_null) {
+               (*s.type).emplace_back("null");
+            }
             s.oneOf = std::vector<schematic>(N);
             for_each<N>([&](auto I) {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
                auto& schema_val = (*s.oneOf)[I.value];
-               // TODO use ref to avoid duplication in schema
+               // TODO: use ref to avoid duplication in schema
                to_json_schema<V>::template op<Opts>(schema_val, defs);
                if constexpr (glaze_object_t<V>) {
                   auto& def = defs[name_v<std::string>];
