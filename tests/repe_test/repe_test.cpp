@@ -57,7 +57,7 @@ struct example_functions_t
    struct glaze
    {
       using T = example_functions_t;
-      static constexpr auto value = glz::object(&T::name, &T::get_name, &T::set_name);
+      static constexpr auto value = glz::object(&T::name, &T::get_name, &T::set_name, "custom_name", glz::custom<&T::set_name, &T::get_name>);
    };
 };
 
@@ -223,6 +223,14 @@ suite structs_of_functions = [] {
 
       expect(obj.name == "Bob");
       expect(server.response == R"([[0,0,2,"/set_name",null],null])") << server.response;
+      
+      {
+         auto request = repe::request_json({"/custom_name"}, "Alice");
+         server.call(request);
+      }
+      
+      expect(obj.name == "Alice");
+      expect(server.response == R"([[0,0,2,"/custom_name",null],null])") << server.response;
    };
 };
 

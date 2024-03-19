@@ -412,6 +412,27 @@ namespace glz::repe
                   }
                };
             }
+            else if constexpr (!std::is_lvalue_reference_v<Func>) {
+               // For glz::custom, glz::manage, etc.
+               methods[full_key] = [this, func](repe::state&& state) mutable {
+                  if (!(state.header.action & empty)) {
+                     if (read_params<Opts>(func, state, response) == 0) {
+                        return;
+                     }
+                  }
+
+                  if (state.header.action & notify) {
+                     return;
+                  }
+
+                  if (state.header.action & empty) {
+                     write_response<Opts>(func, state);
+                  }
+                  else {
+                     write_response<Opts>(state);
+                  }
+               };
+            }
             else {
                static_assert(std::is_lvalue_reference_v<Func>);
 
@@ -457,6 +478,7 @@ namespace glz::repe
                      }
                   }
                   else {
+                     // Member function pointers
                      if constexpr (n_args == 0) {
                         methods[full_key] = [&value, &func](repe::state&& state) {
                            auto result = (value.*func)();
