@@ -18,7 +18,11 @@ namespace repe = glz::repe;
 struct my_functions_t
 {
    int i{};
+#if ((defined _MSC_VER) && (!defined __clang__))
+   // MSVC internal compiler error
+#else
    int* i_ptr{&i};
+#endif
    std::function<std::string_view()> hello = []() -> std::string_view { return "Hello"; };
    std::function<std::string_view()> world = []() -> std::string_view { return "World"; };
    std::function<int()> get_number = [] { return 42; };
@@ -84,12 +88,16 @@ suite structs_of_functions = [] {
 
       expect(server.response == R"([[0,0,0,"/i",null],55])") << server.response;
       
+#if ((defined _MSC_VER) && (!defined __clang__))
+   // MSVC internal compiler error
+#else
       {
          auto request = repe::request_json({"/i_ptr"});
          server.call(request);
       }
 
       expect(server.response == R"([[0,0,0,"/i_ptr",null],55])") << server.response;
+#endif
 
       {
          auto request = repe::request_json({.method = "/i"}, 42);
