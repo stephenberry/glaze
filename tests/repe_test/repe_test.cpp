@@ -58,7 +58,12 @@ struct example_functions_t
    struct glaze
    {
       using T = example_functions_t;
+#if ((defined _MSC_VER) && (!defined __clang__))
+    // MSVC internal compiler error if glz::custom is included
+      static constexpr auto value = glz::object(&T::name, &T::get_name, &T::set_name);
+#else
       static constexpr auto value = glz::object(&T::name, &T::get_name, &T::set_name, "custom_name", glz::custom<&T::set_name, &T::get_name>);
+#endif
    };
 };
 
