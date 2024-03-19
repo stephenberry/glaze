@@ -232,6 +232,9 @@ suite structs_of_functions = [] {
       expect(obj.name == "Bob");
       expect(server.response == R"([[0,0,2,"/set_name",null],null])") << server.response;
       
+#if ((defined _MSC_VER) && (!defined __clang__))
+    // MSVC internal compiler error
+#else
       {
          auto request = repe::request_json({"/custom_name"}, "Alice");
          server.call(request);
@@ -239,6 +242,7 @@ suite structs_of_functions = [] {
       
       expect(obj.name == "Alice");
       expect(server.response == R"([[0,0,2,"/custom_name",null],null])") << server.response;
+#endif
    };
 };
 
