@@ -59,7 +59,7 @@ struct example_functions_t
    {
       using T = example_functions_t;
 #if ((defined _MSC_VER) && (!defined __clang__))
-    // MSVC internal compiler error if glz::custom is included
+      // MSVC internal compiler error if glz::custom is included
       static constexpr auto value = glz::object(&T::name, &T::get_name, &T::set_name);
 #else
       static constexpr auto value = glz::object(&T::name, &T::get_name, &T::set_name, "custom_name", glz::custom<&T::set_name, &T::get_name>);
@@ -238,7 +238,7 @@ suite structs_of_functions = [] {
       expect(server.response == R"([[0,0,2,"/set_name",null],null])") << server.response;
       
 #if ((defined _MSC_VER) && (!defined __clang__))
-    // MSVC internal compiler error
+      // MSVC internal compiler error
 #else
       {
          auto request = repe::request_json({"/custom_name"}, "Alice");

@@ -412,7 +412,11 @@ namespace glz::repe
                   }
                };
             }
+#if ((defined _MSC_VER) && (!defined __clang__))
+      // MSVC internal compiler error with glz::custom
+#else
             else if constexpr (!std::is_lvalue_reference_v<Func>) {
+               // For glz::custom, glz::manage, etc.
                methods[full_key] = [this, func](repe::state&& state) mutable {
                   if (!(state.header.action & empty)) {
                      if (read_params<Opts>(func, state, response) == 0) {
@@ -432,6 +436,7 @@ namespace glz::repe
                   }
                };
             }
+#endif
             else {
                static_assert(std::is_lvalue_reference_v<Func>);
 
