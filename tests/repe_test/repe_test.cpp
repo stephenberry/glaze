@@ -18,6 +18,7 @@ namespace repe = glz::repe;
 struct my_functions_t
 {
    int i{};
+   int* i_ptr{&i};
    std::function<std::string_view()> hello = []() -> std::string_view { return "Hello"; };
    std::function<std::string_view()> world = []() -> std::string_view { return "World"; };
    std::function<int()> get_number = [] { return 42; };
@@ -57,7 +58,7 @@ struct example_functions_t
    struct glaze
    {
       using T = example_functions_t;
-      static constexpr auto value = glz::object(&T::name, &T::get_name, &T::set_name);
+      static constexpr auto value = glz::object(&T::name, &T::get_name, &T::set_name, "custom_name", glz::custom<&T::set_name, &T::get_name>);
    };
 };
 
@@ -77,6 +78,13 @@ suite structs_of_functions = [] {
       }
 
       expect(server.response == R"([[0,0,0,"/i",null],55])") << server.response;
+      
+      {
+         auto request = repe::request_json({"/i_ptr"});
+         server.call(request);
+      }
+
+      expect(server.response == R"([[0,0,0,"/i_ptr",null],55])") << server.response;
 
       {
          auto request = repe::request_json({.method = "/i"}, 42);
@@ -173,7 +181,7 @@ suite structs_of_functions = [] {
 
       expect(
          server.response ==
-         R"([[0,0,0,"/my_functions",null],{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"}])")
+         R"([[0,0,0,"/my_functions",null],{"i":0,"i_ptr":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"}])")
          << server.response;
 
       {
@@ -183,7 +191,7 @@ suite structs_of_functions = [] {
 
       expect(
          server.response ==
-         R"([[0,0,0,"",null],{"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""}])")
+         R"([[0,0,0,"",null],{"my_functions":{"i":0,"i_ptr":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""}])")
          << server.response;
    };
 
@@ -223,6 +231,14 @@ suite structs_of_functions = [] {
 
       expect(obj.name == "Bob");
       expect(server.response == R"([[0,0,2,"/set_name",null],null])") << server.response;
+      
+      {
+         auto request = repe::request_json({"/custom_name"}, "Alice");
+         server.call(request);
+      }
+      
+      expect(obj.name == "Alice");
+      expect(server.response == R"([[0,0,2,"/custom_name",null],null])") << server.response;
    };
 };
 
