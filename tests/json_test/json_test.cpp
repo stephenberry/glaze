@@ -5717,6 +5717,35 @@ suite complex_test = [] {
       s.clear();
       glz::write_json(cx, s);
       expect(s == R"([1,2])");
+      
+      cx = {};
+      s = R"([
+1,
+2
+])";
+      expect(!glz::read_json(cx, s));
+      expect(cx.real() == 1.0);
+      expect(cx.imag() == 2.0);
+   };
+   
+   "vector_complex"_test = [] {
+      constexpr std::string_view s = //
+R"([
+  [
+    1,
+    2
+  ],
+  [
+    3,
+    4
+  ]
+])";
+      std::vector<std::complex<int16_t>> cx{};
+      expect(!glz::read_json(cx, s));
+      expect(cx[0].real() == 1);
+      expect(cx[0].imag() == 2);
+      expect(cx[1].real() == 3);
+      expect(cx[1].imag() == 4);
    };
 };
 
