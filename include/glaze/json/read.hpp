@@ -2452,8 +2452,38 @@ namespace glz
             match<']'>(ctx, it);
          }
       };
+      
+      template <is_expected T>
+      struct from_json<T>
+      {
+         template <auto Opts, class... Args>
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            if constexpr (!Opts.ws_handled) {
+               skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+            
+            auto start = it;
+            if (*it == '{') {
+               // either we have an unexpected value or we are decoding an object
+               
+               
+            }
+            
+            /*using value_type = typename std::decay_t<decltype(value)>::value_type;
+            if constexpr () {
+               
+            }
+            else {
+               
+            }*/
+         }
+      };
 
       template <nullable_t T>
+         requires (!is_expected<T>)
       struct from_json<T>
       {
          template <auto Options>
