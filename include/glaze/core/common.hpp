@@ -1205,6 +1205,25 @@ struct glz::meta<glz::error_code>
 
 namespace glz
 {
+   // This wraps glz::expected error (unexpected) values in an object with an "error" key
+   // This makes them discernable from the expected value
+   template <class T>
+   struct unexpected_wrapper
+   {
+      T* unexpected;
+      
+      struct glaze {
+         using V = unexpected_wrapper;
+         static constexpr auto value = glz::object("unexpected", &V::unexpected);
+      };
+   };
+   
+   template <class T>
+   unexpected_wrapper(T*) -> unexpected_wrapper<T>;
+}
+
+namespace glz
+{
    template <auto Enum>
       requires(std::is_enum_v<decltype(Enum)>)
    constexpr sv enum_name_v = []() -> std::string_view {

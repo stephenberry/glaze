@@ -2452,8 +2452,98 @@ namespace glz
             match<']'>(ctx, it);
          }
       };
+      
+      template <is_expected T>
+      struct from_json<T>
+      {
+         template <auto Opts, class... Args>
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            if constexpr (!Opts.ws_handled) {
+               skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+            }
+            
+            if (*it == '{') {
+               auto start = it;
+               ++it;
+               skip_ws<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               if (*it == '}') {
+                  it = start;
+                  // empty object
+                  if (value) {
+                     read<json>::op<Opts>(*value, ctx, it, end);
+                  }
+                  else {
+                     value.emplace();
+                     read<json>::op<Opts>(*value, ctx, it, end);
+                  }
+               }
+               else {
+                  // either we have an unexpected value or we are decoding an object
+                  auto& key = string_buffer();
+                  read<json>::op<Opts>(key, ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+                  if (key == "unexpected") {
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     match<':'>(ctx, it);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     // read in unexpected value
+                     if (!value) {
+                        read<json>::op<Opts>(value.error(), ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                     else {
+                        // set value to unexpected
+                        using error_type = typename std::decay_t<decltype(value)>::error_type;
+                        std::decay_t<error_type> error{};
+                        read<json>::op<Opts>(error, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        value = glz::unexpected(error);
+                     }
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     match<'}'>(ctx, it);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
+                  else {
+                     it = start;
+                     if (value) {
+                        read<json>::op<Opts>(*value, ctx, it, end);
+                     }
+                     else {
+                        value.emplace();
+                        read<json>::op<Opts>(*value, ctx, it, end);
+                     }
+                  }
+               }
+            }
+            else {
+               // this is not an object and therefore cannot be an unexpected value
+               if (value) {
+                  read<json>::op<Opts>(*value, ctx, it, end);
+               }
+               else {
+                  value.emplace();
+                  read<json>::op<Opts>(*value, ctx, it, end);
+               }
+            }
+         }
+      };
 
       template <nullable_t T>
+         requires (!is_expected<T>)
       struct from_json<T>
       {
          template <auto Options>

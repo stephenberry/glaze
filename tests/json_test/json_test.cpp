@@ -7010,6 +7010,29 @@ suite error_on_unknown_keys_test = [] {
    };
 };
 
+suite expected_tests = [] {
+   "expected<std::string, int>"_test = [] {
+      glz::expected<std::string, int> obj = "hello";
+      std::string s{};
+      glz::write_json(obj, s);
+      expect(s == R"("hello")") << s;
+      
+      obj = glz::unexpected(5);
+      glz::write_json(obj, s);
+      expect(s == R"({"unexpected":5})") << s;
+      
+      obj = "hello";
+      expect(!glz::read_json(obj, s));
+      expect(!obj);
+      expect(obj.error() == 5);
+      
+      s = R"("hello")";
+      expect(!glz::read_json(obj, s));
+      expect(bool(obj));
+      expect(obj.value() == "hello");
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors

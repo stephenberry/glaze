@@ -703,15 +703,32 @@ namespace glz
             }
          }
       };
-
-      template <nullable_t T>
+      
+      template <is_expected T>
       struct to_json<T>
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            if (value)
+            if (value) {
                write<json>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
+            }
+            else {
+               write<json>::op<Opts>(unexpected_wrapper{&value.error()}, ctx, std::forward<Args>(args)...);
+            }
+         }
+      };
+
+      template <nullable_t T>
+         requires (!is_expected<T>)
+      struct to_json<T>
+      {
+         template <auto Opts, class... Args>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            if (value) {
+               write<json>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
+            }
             else {
                dump<"null">(std::forward<Args>(args)...);
             }
