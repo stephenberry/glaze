@@ -22,7 +22,7 @@ namespace glz
          specialize(int64_t) specialize(uint64_t) specialize(float) specialize(double) specialize(std::string_view)
 #undef specialize
 
-   template <std::same_as<long long> long_long_t>
+            template <std::same_as<long long> long_long_t>
       requires requires { !std::same_as<long long, int64_t>; }
    struct meta<long_long_t>
    {
@@ -41,7 +41,7 @@ namespace glz
    static_assert(glz::name_v<uint64_t> == glz::name_v<unsigned long long>);
 
    template <class T>
-      requires (std::is_lvalue_reference_v<T>)
+      requires(std::is_lvalue_reference_v<T>)
    struct meta<T>
    {
       using V = std::remove_reference_t<T>;
@@ -49,7 +49,7 @@ namespace glz
    };
 
    template <class T>
-      requires (std::is_rvalue_reference_v<T>)
+      requires(std::is_rvalue_reference_v<T>)
    struct meta<T>
    {
       using V = std::remove_reference_t<T>;
@@ -57,7 +57,7 @@ namespace glz
    };
 
    template <class T>
-      requires (std::is_const_v<T>)
+      requires(std::is_const_v<T>)
    struct meta<T>
    {
       using V = std::remove_const_t<T>;
@@ -65,7 +65,7 @@ namespace glz
    };
 
    template <class T>
-      requires (std::is_pointer_v<T>)
+      requires(std::is_pointer_v<T>)
    struct meta<T>
    {
       using V = std::remove_pointer_t<T>;

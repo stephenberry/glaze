@@ -8,7 +8,7 @@
 namespace glz
 {
    using sv = std::string_view;
-   
+
    template <size_t N>
    struct string_literal
    {
@@ -68,7 +68,7 @@ namespace glz
 
    template <size_t N>
    fixed_string(const char (&str)[N]) -> fixed_string<N - 1>;
-   
+
    namespace detail
    {
       template <std::array V>
@@ -94,7 +94,7 @@ namespace glz
          return {static_arr.data(), static_arr.size() - 1};
       }
    }
-   
+
    // Helper to get the value out
    template <const std::string_view&... Strs>
    constexpr auto join_v = detail::join<Strs...>();

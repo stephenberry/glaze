@@ -5,8 +5,8 @@
 
 #include <functional>
 
-#include "glaze/core/meta.hpp"
 #include "glaze/core/common.hpp"
+#include "glaze/core/meta.hpp"
 
 namespace glz
 {
@@ -25,8 +25,7 @@ namespace glz
                return expander<join_v<Str, name_v<std::tuple_element_t<I, Tuple>>>, Tuple, I + 1>::value;
             }
             else {
-               return expander<join_v<Str, name_v<std::tuple_element_t<I, Tuple>>, chars<",">>, Tuple,
-                               I + 1>::value;
+               return expander<join_v<Str, name_v<std::tuple_element_t<I, Tuple>>, chars<",">>, Tuple, I + 1>::value;
             }
          }
 
@@ -55,7 +54,7 @@ namespace glz
          }
          else {
             return join_v<chars<"std::function<">, name_v<R>, chars<"(">,
-                                  detail::expander_v<chars<"">, typename fun::arguments>, chars<")>">>;
+                          detail::expander_v<chars<"">, typename fun::arguments>, chars<")>">>;
          }
       }
 

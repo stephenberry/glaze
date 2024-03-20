@@ -69,36 +69,36 @@ namespace glz
       static constexpr sv to_hash =
          join_v<type_name_hash,
 
-                        type_size_hash,
+                type_size_hash,
 
-                        major_version, minor_version, revision,
+                major_version, minor_version, revision,
 
-                        is_trivial, is_standard_layout,
+                is_trivial, is_standard_layout,
 
-                        is_default_constructible, is_trivially_default_constructible, is_nothrow_default_constructible,
+                is_default_constructible, is_trivially_default_constructible, is_nothrow_default_constructible,
 
-                        is_trivially_copyable,
+                is_trivially_copyable,
 
-                        is_move_constructible, is_trivially_move_constructible, is_nothrow_move_constructible,
+                is_move_constructible, is_trivially_move_constructible, is_nothrow_move_constructible,
 
-                        is_destructible, is_trivially_destructible, is_nothrow_destructible,
+                is_destructible, is_trivially_destructible, is_nothrow_destructible,
 
-                        has_unique_object_representations,
+                has_unique_object_representations,
 
-                        is_polymorphic, has_virtual_destructor, is_aggregate,
+                is_polymorphic, has_virtual_destructor, is_aggregate,
 
 #ifdef __clang__
-                        clang,
+                clang,
 #endif
 #ifdef __GNUC__
-                        gnuc,
+                gnuc,
 #endif
 #ifdef _MSC_VER
-                        msvc,
+                msvc,
 #endif
-                        blank,
+                blank,
 
-                        members>;
+                members>;
 
      private:
       static constexpr sv v = "v";
