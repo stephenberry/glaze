@@ -5,13 +5,13 @@
 
 #include <optional>
 
-#include "glaze/api/name.hpp"
+#include "glaze/core/meta.hpp"
 
 namespace glz
 {
    template <class T>
    struct meta<std::optional<T>>
    {
-      static constexpr std::string_view name = detail::join_v<chars<"std::optional<">, name_v<T>, chars<">">>;
+      static constexpr std::string_view name = join_v<chars<"std::optional<">, name_v<T>, chars<">">>;
    };
 }

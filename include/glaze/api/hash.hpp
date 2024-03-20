@@ -5,9 +5,8 @@
 
 #include <climits>
 
-#include "glaze/api/name.hpp"
+#include "glaze/core/meta.hpp"
 #include "glaze/api/xxh64.hpp"
-#include "glaze/util/string_view.hpp"
 
 // Collision calculations done with the formula: e^((-k * (k - 1)/(2 * N)))
 // The approximation error tends to zero as N increases, and we are dealing with a large N
@@ -110,7 +109,7 @@ namespace glz
       static constexpr sv str = to_sv<I>();
       static constexpr sv h0 = int_to_sv_v<uint64_t, xxh64::hash(str.data(), str.size(), 0)>;
       static constexpr sv h1 = int_to_sv_v<uint64_t, xxh64::hash(str.data(), str.size(), 1)>;
-      static constexpr sv value = detail::join_v<h0, h1>;
+      static constexpr sv value = join_v<h0, h1>;
    };
 
    template <size_t I>
@@ -121,7 +120,7 @@ namespace glz
    {
       static constexpr sv h0 = int_to_sv_v<uint64_t, xxh64::hash(Str.data(), Str.size(), 0)>;
       static constexpr sv h1 = int_to_sv_v<uint64_t, xxh64::hash(Str.data(), Str.size(), 1)>;
-      static constexpr sv value = detail::join_v<h0, h1>;
+      static constexpr sv value = join_v<h0, h1>;
    };
 
    template <const std::string_view& Str>

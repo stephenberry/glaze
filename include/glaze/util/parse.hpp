@@ -9,14 +9,13 @@
 #include <locale>
 #include <span>
 
-#include "glaze/api/name.hpp"
 #include "glaze/core/context.hpp"
+#include "glaze/core/meta.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/expected.hpp"
 #include "glaze/util/inline.hpp"
 #include "glaze/util/stoui64.hpp"
 #include "glaze/util/string_literal.hpp"
-#include "glaze/util/string_view.hpp"
 
 namespace glz::detail
 {

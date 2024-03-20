@@ -29,7 +29,7 @@ namespace glz
    template <class T>
    struct meta<detail::hostname_includer<T>>
    {
-      static constexpr std::string_view name = detail::join_v<chars<"hostname_includer<">, name_v<T>, chars<">">>;
+      static constexpr std::string_view name = join_v<chars<"hostname_includer<">, name_v<T>, chars<">">>;
    };
 
    // Register this with an object to allow file including based on the hostname

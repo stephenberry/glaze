@@ -10,7 +10,6 @@
 #include <type_traits>
 #include <vector>
 
-#include "glaze/api/name.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/util/bit_array.hpp"
@@ -18,7 +17,7 @@
 #include "glaze/util/expected.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/hash_map.hpp"
-#include "glaze/util/string_view.hpp"
+#include "glaze/util/string_literal.hpp"
 #include "glaze/util/tuple.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/utility.hpp"
@@ -137,7 +136,7 @@ namespace glz
    template <class T>
    struct meta<includer<T>>
    {
-      static constexpr std::string_view name = detail::join_v<chars<"includer<">, name_v<T>, chars<">">>;
+      static constexpr std::string_view name = join_v<chars<"includer<">, name_v<T>, chars<">">>;
    };
 
    // Register this with an object to allow file including (direct writes) to the meta object

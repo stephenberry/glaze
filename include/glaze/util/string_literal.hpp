@@ -3,10 +3,12 @@
 
 #pragma once
 
-#include "glaze/util/string_view.hpp"
+#include <string_view>
 
 namespace glz
 {
+   using sv = std::string_view;
+   
    template <size_t N>
    struct string_literal
    {
@@ -66,4 +68,34 @@ namespace glz
 
    template <size_t N>
    fixed_string(const char (&str)[N]) -> fixed_string<N - 1>;
+   
+   namespace detail
+   {
+      template <std::array V>
+      struct make_static
+      {
+         static constexpr auto value = V;
+      };
+
+      template <const std::string_view&... Strs>
+      inline constexpr std::string_view join()
+      {
+         constexpr auto joined_arr = []() {
+            constexpr size_t len = (Strs.size() + ... + 0);
+            std::array<char, len + 1> arr{};
+            auto append = [i = 0, &arr](const auto& s) mutable {
+               for (auto c : s) arr[i++] = c;
+            };
+            (append(Strs), ...);
+            arr[len] = 0;
+            return arr;
+         }();
+         auto& static_arr = make_static<joined_arr>::value;
+         return {static_arr.data(), static_arr.size() - 1};
+      }
+   }
+   
+   // Helper to get the value out
+   template <const std::string_view&... Strs>
+   constexpr auto join_v = detail::join<Strs...>();
 }

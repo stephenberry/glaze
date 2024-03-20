@@ -5,7 +5,7 @@
 
 #include <array>
 
-#include "glaze/api/name.hpp"
+#include "glaze/core/meta.hpp"
 
 namespace glz
 {
@@ -34,6 +34,6 @@ namespace glz
    struct meta<std::array<T, N>>
    {
       static constexpr std::string_view name =
-         detail::join_v<chars<"std::array<">, name_v<T>, chars<",">, chars<num_to_string<N>::value>, chars<">">>;
+         join_v<chars<"std::array<">, name_v<T>, chars<",">, chars<num_to_string<N>::value>, chars<">">>;
    };
 }

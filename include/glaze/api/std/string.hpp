@@ -4,8 +4,9 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 
-#include "glaze/api/name.hpp"
+#include "glaze/core/meta.hpp"
 
 namespace glz
 {
