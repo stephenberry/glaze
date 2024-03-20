@@ -110,7 +110,7 @@ namespace glz
       static constexpr sv str = to_sv<I>();
       static constexpr sv h0 = int_to_sv_v<uint64_t, xxh64::hash(str.data(), str.size(), 0)>;
       static constexpr sv h1 = int_to_sv_v<uint64_t, xxh64::hash(str.data(), str.size(), 1)>;
-      static constexpr sv value = detail::join_v<h0, h1>;
+      static constexpr sv value = join_v<h0, h1>;
    };
 
    template <size_t I>
@@ -121,7 +121,7 @@ namespace glz
    {
       static constexpr sv h0 = int_to_sv_v<uint64_t, xxh64::hash(Str.data(), Str.size(), 0)>;
       static constexpr sv h1 = int_to_sv_v<uint64_t, xxh64::hash(Str.data(), Str.size(), 1)>;
-      static constexpr sv value = detail::join_v<h0, h1>;
+      static constexpr sv value = join_v<h0, h1>;
    };
 
    template <const std::string_view& Str>

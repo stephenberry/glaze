@@ -13,6 +13,6 @@ namespace glz
    struct meta<std::map<Key, Mapped>>
    {
       static constexpr std::string_view name =
-         detail::join_v<chars<"std::map<">, name_v<Key>, chars<",">, name_v<Mapped>, chars<">">>;
+         join_v<chars<"std::map<">, name_v<Key>, chars<",">, name_v<Mapped>, chars<">">>;
    };
 }

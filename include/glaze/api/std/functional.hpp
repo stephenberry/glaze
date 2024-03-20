@@ -22,10 +22,10 @@ namespace glz
                return Str;
             }
             else if constexpr (I == N - 1) {
-               return expander<detail::join_v<Str, name_v<std::tuple_element_t<I, Tuple>>>, Tuple, I + 1>::value;
+               return expander<join_v<Str, name_v<std::tuple_element_t<I, Tuple>>>, Tuple, I + 1>::value;
             }
             else {
-               return expander<detail::join_v<Str, name_v<std::tuple_element_t<I, Tuple>>, chars<",">>, Tuple,
+               return expander<join_v<Str, name_v<std::tuple_element_t<I, Tuple>>, chars<",">>, Tuple,
                                I + 1>::value;
             }
          }
@@ -48,13 +48,13 @@ namespace glz
          using fun = function_traits<T>;
          using R = typename fun::result_type;
          if constexpr (fun::N == 0 && named<R>) {
-            return detail::join_v<chars<"std::function<">, name_v<R>, chars<"()>">>;
+            return join_v<chars<"std::function<">, name_v<R>, chars<"()>">>;
          }
          else if constexpr (fun::N == 0) {
             return chars<"std::function<void()>">;
          }
          else {
-            return detail::join_v<chars<"std::function<">, name_v<R>, chars<"(">,
+            return join_v<chars<"std::function<">, name_v<R>, chars<"(">,
                                   detail::expander_v<chars<"">, typename fun::arguments>, chars<")>">>;
          }
       }

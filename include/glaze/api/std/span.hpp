@@ -24,6 +24,6 @@ namespace glz
       using V = typename T::element_type;
       static constexpr std::string_view extent = to_sv<T::extent>();
       static constexpr std::string_view name =
-         detail::join_v<chars<"std::span<">, name_v<V>, chars<",">, extent, chars<">">>;
+         join_v<chars<"std::span<">, name_v<V>, chars<",">, extent, chars<">">>;
    };
 }

@@ -13,6 +13,6 @@ namespace glz
    struct meta<std::unordered_map<Key, Mapped>>
    {
       static constexpr std::string_view name =
-         detail::join_v<chars<"std::unordered_map<">, name_v<Key>, chars<",">, name_v<Mapped>, chars<">">>;
+         join_v<chars<"std::unordered_map<">, name_v<Key>, chars<",">, name_v<Mapped>, chars<">">>;
    };
 }

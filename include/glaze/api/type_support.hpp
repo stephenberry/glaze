@@ -45,7 +45,7 @@ namespace glz
    struct meta<T>
    {
       using V = std::remove_reference_t<T>;
-      static constexpr std::string_view name = detail::join_v<name_v<V>, chars<"&">>;
+      static constexpr std::string_view name = join_v<name_v<V>, chars<"&">>;
    };
 
    template <class T>
@@ -53,7 +53,7 @@ namespace glz
    struct meta<T>
    {
       using V = std::remove_reference_t<T>;
-      static constexpr std::string_view name = detail::join_v<name_v<V>, chars<"&&">>;
+      static constexpr std::string_view name = join_v<name_v<V>, chars<"&&">>;
    };
 
    template <class T>
@@ -61,7 +61,7 @@ namespace glz
    struct meta<T>
    {
       using V = std::remove_const_t<T>;
-      static constexpr std::string_view name = detail::join_v<chars<"const ">, name_v<V>>;
+      static constexpr std::string_view name = join_v<chars<"const ">, name_v<V>>;
    };
 
    template <class T>
@@ -69,13 +69,13 @@ namespace glz
    struct meta<T>
    {
       using V = std::remove_pointer_t<T>;
-      static constexpr std::string_view name = detail::join_v<name_v<V>, chars<"*">>;
+      static constexpr std::string_view name = join_v<name_v<V>, chars<"*">>;
    };
 
    template <class Ret, class Obj, class... Args>
    struct meta<Ret (Obj::*)(Args...)>
    {
       static constexpr std::string_view name =
-         detail::join_v<name_v<Ret>, chars<" (">, name_v<Obj>, chars<"::*)(">, name_v<Args>..., chars<")">>;
+         join_v<name_v<Ret>, chars<" (">, name_v<Obj>, chars<"::*)(">, name_v<Args>..., chars<")">>;
    };
 }

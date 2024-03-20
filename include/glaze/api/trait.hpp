@@ -67,7 +67,7 @@ namespace glz
       static constexpr sv members = glz::name_v<glz::detail::member_tuple_t<T>>;
 
       static constexpr sv to_hash =
-         detail::join_v<type_name_hash,
+         join_v<type_name_hash,
 
                         type_size_hash,
 
@@ -105,7 +105,7 @@ namespace glz
       static constexpr sv comma = ",";
 
      public:
-      static constexpr sv version_sv = detail::join_v<v, major_version, comma, minor_version, comma, revision>;
+      static constexpr sv version_sv = join_v<v, major_version, comma, minor_version, comma, revision>;
       static constexpr version_t version = ::glz::version<T>;
 
       static constexpr sv hash = hash128_v<to_hash>;
