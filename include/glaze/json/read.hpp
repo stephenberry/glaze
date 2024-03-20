@@ -236,7 +236,7 @@ namespace glz
             match<"[">(ctx, args...);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            
+
             constexpr auto Opts = ws_handled_off<Options>();
 
             auto* ptr = reinterpret_cast<typename T::value_type*>(&v);

@@ -5717,7 +5717,7 @@ suite complex_test = [] {
       s.clear();
       glz::write_json(cx, s);
       expect(s == R"([1,2])");
-      
+
       cx = {};
       s = R"([
 1,
@@ -5727,10 +5727,10 @@ suite complex_test = [] {
       expect(cx.real() == 1.0);
       expect(cx.imag() == 2.0);
    };
-   
+
    "vector_complex"_test = [] {
       constexpr std::string_view s = //
-R"([
+         R"([
   [
     1,
     2
