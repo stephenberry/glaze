@@ -29,14 +29,6 @@ namespace glz
    {
       return indexer<N>()([&](auto&&... i) noexcept { (std::forward<Func>(f)(i), ...); });
    }
-
-   template <size_t N, size_t I = 0, class Func, class Value>
-   constexpr void for_each_value(Func&& f, Value&& v) noexcept
-   {
-      if constexpr (I != N) {
-         for_each_value<N, I + 1>(f, f(std::integral_constant<size_t, I>{}, v));
-      }
-   }
 }
 
 // versions that allow exceptions to propagate, for when users implement functions that throw
