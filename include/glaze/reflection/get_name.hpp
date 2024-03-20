@@ -7,7 +7,6 @@
 // #include <source_location>
 #include <string_view>
 
-#include "glaze/api/name.hpp"
 #include "glaze/reflection/to_tuple.hpp"
 #include "glaze/tuplet/tuple.hpp"
 #include "glaze/util/string_literal.hpp"

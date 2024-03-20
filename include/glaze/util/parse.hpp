@@ -16,7 +16,6 @@
 #include "glaze/util/inline.hpp"
 #include "glaze/util/stoui64.hpp"
 #include "glaze/util/string_literal.hpp"
-#include "glaze/util/string_view.hpp"
 
 namespace glz::detail
 {
