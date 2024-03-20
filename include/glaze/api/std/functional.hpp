@@ -5,7 +5,7 @@
 
 #include <functional>
 
-#include "glaze/api/name.hpp"
+#include "glaze/core/meta.hpp"
 #include "glaze/core/common.hpp"
 
 namespace glz

@@ -6,7 +6,7 @@
 #include <Eigen/Core> //Note: You are expected to provide eigen if including this header
 #include <span>
 
-#include "glaze/api/name.hpp"
+#include "glaze/core/meta.hpp"
 #include "glaze/api/std/array.hpp"
 #include "glaze/binary/read.hpp"
 #include "glaze/binary/write.hpp"

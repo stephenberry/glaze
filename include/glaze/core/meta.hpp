@@ -8,6 +8,7 @@
 #include "glaze/reflection/get_name.hpp"
 #include "glaze/tuplet/tuple.hpp"
 #include "glaze/util/for_each.hpp"
+#include "glaze/util/string_literal.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/variant.hpp"
 

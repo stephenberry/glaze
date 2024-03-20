@@ -5,9 +5,8 @@
 
 #include <climits>
 
-#include "glaze/api/name.hpp"
+#include "glaze/core/meta.hpp"
 #include "glaze/api/xxh64.hpp"
-#include "glaze/util/string_literal.hpp"
 
 // Collision calculations done with the formula: e^((-k * (k - 1)/(2 * N)))
 // The approximation error tends to zero as N increases, and we are dealing with a large N

@@ -10,7 +10,6 @@
 #include <type_traits>
 #include <vector>
 
-#include "glaze/api/name.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/util/bit_array.hpp"
