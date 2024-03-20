@@ -225,17 +225,19 @@ namespace glz
       template <complex_t T>
       struct from_json<T>
       {
-         template <auto Opts>
+         template <auto Options>
          GLZ_ALWAYS_INLINE static void op(auto&& v, is_context auto&& ctx, auto&&... args) noexcept
          {
-            if constexpr (!Opts.ws_handled) {
-               skip_ws<Opts>(ctx, args...);
+            if constexpr (!Options.ws_handled) {
+               skip_ws<Options>(ctx, args...);
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
             match<"[">(ctx, args...);
             if (bool(ctx.error)) [[unlikely]]
                return;
+            
+            constexpr auto Opts = ws_handled_off<Options>();
 
             auto* ptr = reinterpret_cast<typename T::value_type*>(&v);
             static_assert(sizeof(T) == sizeof(typename T::value_type) * 2);
@@ -898,7 +900,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            static constexpr auto Opts = ws_handled_off<Options>();
+            constexpr auto Opts = ws_handled_off<Options>();
 
             match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
@@ -946,7 +948,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            static constexpr auto Opts = ws_handled_off<Options>();
+            constexpr auto Opts = ws_handled_off<Options>();
 
             match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
@@ -1104,7 +1106,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            static constexpr auto Opts = ws_handled_off<Options>();
+            constexpr auto Opts = ws_handled_off<Options>();
 
             match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
@@ -1487,7 +1489,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+            constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
             // Only used if error_on_missing_keys = true
             [[maybe_unused]] bit_array<1> fields{};
@@ -1541,7 +1543,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+            constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
             static constexpr auto num_members = reflection_count<T>;
             if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
@@ -1851,7 +1853,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+            constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
             // Only used if partial_read_nested = true
             [[maybe_unused]] uint32_t opening_counter = 1;
@@ -2183,7 +2185,7 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
                }
-               static constexpr auto Opts = ws_handled_off<Options>();
+               constexpr auto Opts = ws_handled_off<Options>();
                switch (*it) {
                case '\0':
                   ctx.error = error_code::unexpected_end;
@@ -2404,7 +2406,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            static constexpr auto Opts = ws_handled_off<Options>();
+            constexpr auto Opts = ws_handled_off<Options>();
 
             match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
@@ -2554,7 +2556,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            static constexpr auto Opts = ws_handled_off<Options>();
+            constexpr auto Opts = ws_handled_off<Options>();
 
             if (*it == 'n') {
                ++it;
