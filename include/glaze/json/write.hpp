@@ -703,7 +703,7 @@ namespace glz
             }
          }
       };
-      
+
       template <is_expected T>
       struct to_json<T>
       {
@@ -720,7 +720,7 @@ namespace glz
       };
 
       template <nullable_t T>
-         requires (!is_expected<T>)
+         requires(!is_expected<T>)
       struct to_json<T>
       {
          template <auto Opts, class... Args>

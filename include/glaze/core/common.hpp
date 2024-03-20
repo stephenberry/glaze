@@ -1211,13 +1211,14 @@ namespace glz
    struct unexpected_wrapper
    {
       T* unexpected;
-      
-      struct glaze {
+
+      struct glaze
+      {
          using V = unexpected_wrapper;
          static constexpr auto value = glz::object("unexpected", &V::unexpected);
       };
    };
-   
+
    template <class T>
    unexpected_wrapper(T*) -> unexpected_wrapper<T>;
 }

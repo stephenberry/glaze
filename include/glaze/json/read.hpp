@@ -2452,7 +2452,7 @@ namespace glz
             match<']'>(ctx, it);
          }
       };
-      
+
       template <is_expected T>
       struct from_json<T>
       {
@@ -2464,7 +2464,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            
+
             if (*it == '{') {
                auto start = it;
                ++it;
@@ -2543,7 +2543,7 @@ namespace glz
       };
 
       template <nullable_t T>
-         requires (!is_expected<T>)
+         requires(!is_expected<T>)
       struct from_json<T>
       {
          template <auto Options>
