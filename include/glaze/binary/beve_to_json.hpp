@@ -124,8 +124,8 @@ namespace glz
             case tag::string: {
                ++it;
                const auto n = detail::int_from_compressed(it, end);
-               const std::string_view value{ &(*it), n };
-               to_json<std::string_view>::template op<Opts>(value, ctx, out, ix);
+               const sv value{ &(*it), n };
+               to_json<sv>::template op<Opts>(value, ctx, out, ix);
                std::advance(it, n);
                break;
             }
@@ -143,8 +143,8 @@ namespace glz
                      for (size_t i = 0; i < n_fields; ++i) {
                         // convert the key
                         const auto n = detail::int_from_compressed(it, end);
-                        const std::string_view key{ &(*it), n };
-                        to_json<std::string_view>::template op<Opts>(key, ctx, out, ix);
+                        const sv key{ &(*it), n };
+                        to_json<sv>::template op<Opts>(key, ctx, out, ix);
                         dump<':'>(out, ix);
                         std::advance(it, n);
                         // convert the value
@@ -162,6 +162,107 @@ namespace glz
                }
                
                dump<'}'>(out, ix);
+               break;
+            }
+            case tag::typed_array: {
+               ++it;
+               const auto number_type = (tag & 0b000'11'000) >> 3;
+               const uint8_t byte_count = detail::byte_count_lookup[tag >> 5];
+               
+               auto write_array = [&]<class T>(T&& value){
+                  const auto n = int_from_compressed(it, end);
+                  for (size_t i = 0; i < n; ++i) {
+                     std::memcpy(&value, &(*it), sizeof(T));
+                     to_json<T>::template op<Opts>(value, ctx, out, ix);
+                     std::advance(it, sizeof(T));
+                     if (i != n - 1) {
+                        dump<','>(out, ix);
+                     }
+                  }
+               };
+               
+               dump<'['>(out, ix);
+               
+               switch (number_type)
+               {
+                  case 0: {
+                     // floating point
+                     switch (byte_count) {
+                        case 4: {
+                           write_array(float{});
+                           break;
+                        }
+                        case 8: {
+                           write_array(double{});
+                           break;
+                        }
+                        default: {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                     }
+                     break;
+                  }
+                  case 1: {
+                     // signed integer
+                     switch (byte_count) {
+                        case 1: {
+                           write_array(int8_t{});
+                           break;
+                        }
+                        case 2: {
+                           write_array(int16_t{});
+                           break;
+                        }
+                        case 4: {
+                           write_array(int32_t{});
+                           break;
+                        }
+                        case 8: {
+                           write_array(int64_t{});
+                           break;
+                        }
+                        default: {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                     }
+                     break;
+                  }
+                  case 2: {
+                     // unsigned integer
+                     switch (byte_count) {
+                        case 1: {
+                           write_array(uint8_t{});
+                           break;
+                        }
+                        case 2: {
+                           write_array(uint16_t{});
+                           break;
+                        }
+                        case 4: {
+                           write_array(uint32_t{});
+                           break;
+                        }
+                        case 8: {
+                           write_array(uint64_t{});
+                           break;
+                        }
+                        default: {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                     }
+                     break;
+                  }
+                  default: {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
+               }
+               
+               dump<']'>(out, ix);
+               
                break;
             }
             default: {

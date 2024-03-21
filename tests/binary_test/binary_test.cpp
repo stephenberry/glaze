@@ -1540,6 +1540,26 @@ suite beve_to_json_tests = [] {
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"({"first":1,"second":2,"third":3})") << json;
    };
+   
+   "beve_to_json std::vector<int32_t>"_test = [] {
+      std::vector<int32_t> v = {1,2,3,4,5};
+      std::string buffer{};
+      glz::write_binary(v, buffer);
+      
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"([1,2,3,4,5])") << json;
+   };
+   
+   "beve_to_json std::vector<double>"_test = [] {
+      std::vector<double> v = {1.0,2.0,3.0,4.0,5.0};
+      std::string buffer{};
+      glz::write_binary(v, buffer);
+      
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"([1,2,3,4,5])") << json;
+   };
 };
 
 int main()
