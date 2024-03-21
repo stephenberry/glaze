@@ -166,7 +166,7 @@ namespace glz
             }
             case tag::typed_array: {
                ++it;
-               const auto number_type = (tag & 0b000'11'000) >> 3;
+               const auto value_type = (tag & 0b000'11'000) >> 3;
                const uint8_t byte_count = detail::byte_count_lookup[tag >> 5];
                
                auto write_array = [&]<class T>(T&& value){
@@ -183,7 +183,7 @@ namespace glz
                
                dump<'['>(out, ix);
                
-               switch (number_type)
+               switch (value_type)
                {
                   case 0: {
                      // floating point
@@ -246,6 +246,36 @@ namespace glz
                         }
                         case 8: {
                            write_array(uint64_t{});
+                           break;
+                        }
+                        default: {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                     }
+                     break;
+                  }
+                  case 3: {
+                     // string or boolean
+                     const auto string_or_boolean = (tag & 0b001'00'000) >> 5;
+                     switch (string_or_boolean)
+                     {
+                        case 0: {
+                           // boolean array (bit packed)
+                           break;
+                        }
+                        case 1: {
+                           // array of strings
+                           const auto n_strings = int_from_compressed(it, end);
+                           for (size_t i = 0; i < n_strings; ++i) {
+                              const auto n = detail::int_from_compressed(it, end);
+                              const sv value{ &(*it), n };
+                              to_json<sv>::template op<Opts>(value, ctx, out, ix);
+                              std::advance(it, n);
+                              if (i != n_strings - 1) {
+                                 dump<','>(out, ix);
+                              }
+                           }
                            break;
                         }
                         default: {

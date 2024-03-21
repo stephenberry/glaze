@@ -1560,6 +1560,16 @@ suite beve_to_json_tests = [] {
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"([1,2,3,4,5])") << json;
    };
+   
+   "beve_to_json std::vector<std::string>"_test = [] {
+      std::vector<std::string> v = {"one", "two", "three"};
+      std::string buffer{};
+      glz::write_binary(v, buffer);
+      
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"(["one","two","three"])") << json;
+   };
 };
 
 int main()
