@@ -6,8 +6,8 @@
 #include <cstdint>
 #include <string_view>
 
-#include "glaze/util/for_each.hpp"
 #include "glaze/core/meta.hpp"
+#include "glaze/util/for_each.hpp"
 
 namespace glz
 {

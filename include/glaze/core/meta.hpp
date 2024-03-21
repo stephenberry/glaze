@@ -17,13 +17,13 @@ namespace glz
    template <class T>
    struct meta
    {};
-   
+
    template <>
    struct meta<std::string_view>
    {
       static constexpr std::string_view name = "std::string_view";
    };
-   
+
    template <class T>
    struct json_schema
    {};

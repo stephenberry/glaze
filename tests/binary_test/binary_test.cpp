@@ -1502,17 +1502,17 @@ suite beve_to_json_tests = [] {
       bool b = true;
       std::string buffer{};
       glz::write_binary(b, buffer);
-      
+
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"(true)");
    };
-   
+
    "beve_to_json float"_test = [] {
       float v = 3.14f;
       std::string buffer{};
       glz::write_binary(v, buffer);
-      
+
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"(3.14)") << json;
@@ -1520,70 +1520,70 @@ suite beve_to_json_tests = [] {
       expect(!glz::read_json(res, json));
       expect(v == res);
    };
-   
+
    "beve_to_json string"_test = [] {
       std::string v = "Hello World";
       std::string buffer{};
       glz::write_binary(v, buffer);
-      
+
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"("Hello World")") << json;
    };
-   
+
    "beve_to_json std::map"_test = [] {
       std::map<std::string, int> v = {{"first", 1}, {"second", 2}, {"third", 3}};
       std::string buffer{};
       glz::write_binary(v, buffer);
-      
+
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"({"first":1,"second":2,"third":3})") << json;
-      
+
       expect(!glz::beve_to_json<glz::opts{.prettify = true}>(buffer, json));
       expect(json == //
-R"({
+             R"({
    "first": 1,
    "second": 2,
    "third": 3
 })") << json;
    };
-   
+
    "beve_to_json std::vector<int32_t>"_test = [] {
-      std::vector<int32_t> v = {1,2,3,4,5};
+      std::vector<int32_t> v = {1, 2, 3, 4, 5};
       std::string buffer{};
       glz::write_binary(v, buffer);
-      
+
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"([1,2,3,4,5])") << json;
    };
-   
+
    "beve_to_json std::vector<double>"_test = [] {
-      std::vector<double> v = {1.0,2.0,3.0,4.0,5.0};
+      std::vector<double> v = {1.0, 2.0, 3.0, 4.0, 5.0};
       std::string buffer{};
       glz::write_binary(v, buffer);
-      
+
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"([1,2,3,4,5])") << json;
    };
-   
+
    "beve_to_json std::vector<std::string>"_test = [] {
       std::vector<std::string> v = {"one", "two", "three"};
       std::string buffer{};
       glz::write_binary(v, buffer);
-      
+
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"(["one","two","three"])") << json;
    };
-   
+
    "beve_to_json std::tuple<int, std::string>"_test = [] {
       std::tuple<int, std::string> v = {99, "spiders"};
       std::string buffer{};
       glz::write_binary(v, buffer);
-      
+
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"([99,"spiders"])") << json;
