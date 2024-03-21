@@ -1530,6 +1530,16 @@ suite beve_to_json_tests = [] {
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"("Hello World")") << json;
    };
+   
+   "beve_to_json std::map"_test = [] {
+      std::map<std::string, int> v = {{"first", 1}, {"second", 2}, {"third", 3}};
+      std::string buffer{};
+      glz::write_binary(v, buffer);
+      
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"({"first":1,"second":2,"third":3})") << json;
+   };
 };
 
 int main()
