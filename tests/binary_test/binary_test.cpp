@@ -1498,7 +1498,7 @@ suite glz_text_tests = [] {
 };
 
 suite beve_to_json_tests = [] {
-   "beve_to_json"_test = [] {
+   "beve_to_json bool"_test = [] {
       bool b = true;
       std::string buffer{};
       glz::write_binary(b, buffer);
@@ -1506,6 +1506,29 @@ suite beve_to_json_tests = [] {
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"(true)");
+   };
+   
+   "beve_to_json float"_test = [] {
+      float v = 3.14f;
+      std::string buffer{};
+      glz::write_binary(v, buffer);
+      
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"(3.14)") << json;
+      float res{};
+      expect(!glz::read_json(res, json));
+      expect(v == res);
+   };
+   
+   "beve_to_json string"_test = [] {
+      std::string v = "Hello World";
+      std::string buffer{};
+      glz::write_binary(v, buffer);
+      
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"("Hello World")") << json;
    };
 };
 
