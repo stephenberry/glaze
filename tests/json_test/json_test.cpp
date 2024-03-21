@@ -5795,22 +5795,20 @@ struct glz::meta<manage_x_lambda>
    [[maybe_unused]] static constexpr auto value = object("x", manage<&T::x, read_x, write_x>);
 };
 
-struct manage_test_struct {
+struct manage_test_struct
+{
    std::string a{};
    std::string b{};
 
-  bool read_a() { return true; }
-  bool write_a() { return false; }
+   bool read_a() { return true; }
+   bool write_a() { return false; }
 };
 
 template <>
 struct glz::meta<manage_test_struct>
 {
    using T = manage_test_struct;
-   static constexpr auto value = object(
-      "a", manage<&T::a, &T::read_a, &T::write_a>,
-      "b", &T::b
-   );
+   static constexpr auto value = object("a", manage<&T::a, &T::read_a, &T::write_a>, "b", &T::b);
 };
 
 suite manage_test = [] {
@@ -5845,13 +5843,13 @@ suite manage_test = [] {
       expect(obj.x[1] == 2);
       expect(obj.x[2] == 3);
    };
-   
+
    "manage_test_struct"_test = [] {
-      //manage_test_struct obj{.a="aaa", .b="bbb"};
-      //std::string s{};
-      // TODO: We need write error support
-      //glz::write<glz::opts{}>(obj, s);
-      //expect(s == R"({"a":"aaa","b":"bbb"})") << s;
+      // manage_test_struct obj{.a="aaa", .b="bbb"};
+      // std::string s{};
+      //  TODO: We need write error support
+      // glz::write<glz::opts{}>(obj, s);
+      // expect(s == R"({"a":"aaa","b":"bbb"})") << s;
    };
 };
 
