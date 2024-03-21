@@ -295,6 +295,22 @@ namespace glz
                
                break;
             }
+            case tag::generic_array: {
+               ++it;
+               const auto n = int_from_compressed(it, end);
+               dump<'['>(out, ix);
+               for (size_t i = 0; i < n; ++i) {
+                  beve_to_json_value(ctx, it, end, out, ix);
+                  if (i != n - 1) {
+                     dump<','>(out, ix);
+                  }
+               }
+               dump<']'>(out, ix);
+               break;
+            }
+            case tag::extensions: {
+               break;
+            }
             default: {
                ctx.error = error_code::syntax_error;
                return;

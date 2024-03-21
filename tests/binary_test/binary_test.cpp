@@ -1570,6 +1570,16 @@ suite beve_to_json_tests = [] {
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"(["one","two","three"])") << json;
    };
+   
+   "beve_to_json std::tuple<int, std::string>"_test = [] {
+      std::tuple<int, std::string> v = {99, "spiders"};
+      std::string buffer{};
+      glz::write_binary(v, buffer);
+      
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"([99,"spiders"])") << json;
+   };
 };
 
 int main()
