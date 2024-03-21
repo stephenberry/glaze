@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm> // for std::copy_n
 #include <string_view>
 
 namespace glz
