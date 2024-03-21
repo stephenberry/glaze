@@ -1539,6 +1539,14 @@ suite beve_to_json_tests = [] {
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"({"first":1,"second":2,"third":3})") << json;
+      
+      expect(!glz::beve_to_json<glz::opts{.prettify = true}>(buffer, json));
+      expect(json == //
+R"({
+   "first": 1,
+   "second": 2,
+   "third": 3
+})") << json;
    };
    
    "beve_to_json std::vector<int32_t>"_test = [] {

@@ -10,7 +10,7 @@ namespace glz
 {
    namespace detail
    {
-      template <glz::opts Opts = glz::opts{}, class Buffer>
+      template <glz::opts Opts, class Buffer>
       inline void beve_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix) noexcept {
          const auto tag = uint8_t(*it);
          const auto type = tag & 0b00000'111;
@@ -133,6 +133,11 @@ namespace glz
                ++it;
                
                dump<'{'>(out, ix);
+               if constexpr (Opts.prettify) {
+                  ctx.indentation_level += Opts.indentation_width;
+                  dump<'\n'>(out, ix);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               }
                
                const auto key_type = (tag & 0b000'11'000) >> 3;
                switch (key_type)
@@ -145,12 +150,21 @@ namespace glz
                         const auto n = detail::int_from_compressed(it, end);
                         const sv key{ &(*it), n };
                         to_json<sv>::template op<Opts>(key, ctx, out, ix);
-                        dump<':'>(out, ix);
+                        if constexpr (Opts.prettify) {
+                           dump<": ">(out, ix);
+                        }
+                        else {
+                           dump<':'>(out, ix);
+                        }
                         std::advance(it, n);
                         // convert the value
-                        beve_to_json_value(ctx, it, end, out, ix);
+                        beve_to_json_value<Opts>(ctx, it, end, out, ix);
                         if (i != n_fields - 1) {
                            dump<','>(out, ix);
+                           if constexpr (Opts.prettify) {
+                              dump<'\n'>(out, ix);
+                              dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                           }
                         }
                      }
                      break;
@@ -161,6 +175,11 @@ namespace glz
                   }
                }
                
+               if constexpr (Opts.prettify) {
+                  ctx.indentation_level -= Opts.indentation_width;
+                  dump<'\n'>(out, ix);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               }
                dump<'}'>(out, ix);
                break;
             }
@@ -300,7 +319,7 @@ namespace glz
                const auto n = int_from_compressed(it, end);
                dump<'['>(out, ix);
                for (size_t i = 0; i < n; ++i) {
-                  beve_to_json_value(ctx, it, end, out, ix);
+                  beve_to_json_value<Opts>(ctx, it, end, out, ix);
                   if (i != n - 1) {
                      dump<','>(out, ix);
                   }
@@ -328,7 +347,7 @@ namespace glz
       
       context ctx{};
       
-      detail::beve_to_json_value(ctx, it, end, out, ix);
+      detail::beve_to_json_value<Opts>(ctx, it, end, out, ix);
       if (bool(ctx.error)) {
          return {ctx.error};
       }
