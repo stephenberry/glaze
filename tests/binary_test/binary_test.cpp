@@ -1497,6 +1497,18 @@ suite glz_text_tests = [] {
    };
 };
 
+suite beve_to_json_tests = [] {
+   "beve_to_json"_test = [] {
+      bool b = true;
+      std::string buffer{};
+      glz::write_binary(b, buffer);
+      
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"(true)");
+   };
+};
+
 int main()
 {
    write_tests();
