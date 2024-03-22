@@ -38,6 +38,9 @@ struct glz::meta<my_struct>
    );
 };
 
+static_assert(glz::write_binary_supported<my_struct>);
+static_assert(glz::read_binary_supported<my_struct>);
+
 struct sub_thing
 {
    double a{3.14};

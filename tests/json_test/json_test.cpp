@@ -53,6 +53,9 @@ struct glz::meta<my_struct>
    );
 };
 
+static_assert(glz::write_json_supported<my_struct>);
+static_assert(glz::read_json_supported<my_struct>);
+
 suite starter = [] {
    "example"_test = [] {
       my_struct s{};

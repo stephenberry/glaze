@@ -2636,13 +2636,19 @@ namespace glz
    {
       context ctx{};
       ctx.current_file = file_name;
-
+      
       const auto ec = file_to_buffer(buffer, ctx.current_file);
-
+      
       if (bool(ec)) {
          return {ec};
       }
-
+      
       return read<set_json<Opts>()>(value, buffer, ctx);
    }
+   
+   template <class T>
+   concept read_json_supported = requires {
+      detail::from_json<std::remove_cvref_t<T>>::template op<opts{}>(std::declval<T>(), context{},
+                                                                 std::declval<const char*>(), std::declval<const char*>());
+   };
 }
