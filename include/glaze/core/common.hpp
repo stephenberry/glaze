@@ -10,6 +10,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/util/bit_array.hpp"
@@ -196,9 +197,6 @@ namespace glz
 #endif
    }
 
-   template <class Map, class Key>
-   concept findable = requires(Map& map, const Key& key) { map.find(key); };
-
    template <class T>
    concept is_member_function_pointer = std::is_member_function_pointer_v<T>;
 
@@ -345,31 +343,6 @@ namespace glz
       template <class T>
       concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
 
-      template <typename T>
-      concept complex_t = requires(T a, T b) {
-         {
-            a.real()
-         } -> std::convertible_to<typename T::value_type>;
-         {
-            a.imag()
-         } -> std::convertible_to<typename T::value_type>;
-         {
-            T(a.real(), a.imag())
-         } -> std::same_as<T>;
-         {
-            a + b
-         } -> std::same_as<T>;
-         {
-            a - b
-         } -> std::same_as<T>;
-         {
-            a* b
-         } -> std::same_as<T>;
-         {
-            a / b
-         } -> std::same_as<T>;
-      };
-
       template <class T>
       concept constructible = requires { meta<std::decay_t<T>>::construct; } || local_construct_t<std::decay_t<T>>;
 
@@ -378,12 +351,6 @@ namespace glz
 
       template <class T>
       concept str_t = !std::same_as<std::nullptr_t, T> && std::convertible_to<std::decay_t<T>, std::string_view>;
-
-      template <class T>
-      concept has_push_back = requires(T t, typename T::value_type v) { t.push_back(v); };
-
-      template <class T>
-      concept has_reserve = requires(T t) { t.reserve(size_t(1)); };
 
       // this concept requires that T is string and copies the string in json
       template <class T>
@@ -395,16 +362,6 @@ namespace glz
       // this concept requires that T is just a view
       template <class T>
       concept str_view_t = std::same_as<std::decay_t<T>, std::string_view>;
-
-      template <class T>
-      concept pair_t = requires(T pair) {
-         {
-            pair.first
-         } -> std::same_as<typename T::first_type&>;
-         {
-            pair.second
-         } -> std::same_as<typename T::second_type&>;
-      };
 
       template <class T>
       concept map_subscriptable = requires(T container) {
@@ -446,51 +403,8 @@ namespace glz
       };
 
       template <class T>
-      concept emplaceable = requires(T container) {
-         {
-            container.emplace(std::declval<typename T::value_type>())
-         };
-      };
-
-      template <class T>
-      concept push_backable = requires(T container) {
-         {
-            container.push_back(std::declval<typename T::value_type>())
-         };
-      };
-
-      template <class T>
-      concept resizeable = requires(T container) { container.resize(0); };
-
-      template <class T>
-      concept erasable = requires(T container) { container.erase(container.cbegin(), container.cend()); };
-
-      template <class T>
       concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> &&
                                     !resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
-
-      template <class T>
-      concept has_size = requires(T container) { container.size(); };
-
-      template <class T>
-      concept has_empty = requires(T container) {
-         {
-            container.empty()
-         } -> std::convertible_to<bool>;
-      };
-
-      template <class T>
-      concept has_data = requires(T container) { container.data(); };
-
-      template <class T>
-      concept contiguous = has_size<T> && has_data<T>;
-
-      template <class T>
-      concept accessible = requires(T container) {
-         {
-            container[size_t{}]
-         } -> std::same_as<typename T::reference>;
-      };
 
       template <class T>
       concept boolean_like = std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> ||
@@ -517,18 +431,6 @@ namespace glz
                                       std::bool_constant<(std::decay_t<T>{}.size(), true)>()
                                    } -> std::same_as<std::true_type>;
                                 } && std::decay_t<T>{}.size() > 0);
-
-      template <typename T>
-      concept is_bitset = requires(T bitset) {
-         bitset.flip();
-         bitset.set(0);
-         {
-            bitset.to_string()
-         } -> std::same_as<std::string>;
-         {
-            bitset.count()
-         } -> std::same_as<std::size_t>;
-      };
 
       template <class T>
       concept is_float128 = requires(T x) {
