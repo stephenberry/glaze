@@ -1485,10 +1485,10 @@ namespace glz
       write<set_json<Opts>()>(std::forward<T>(value), buffer);
       return {buffer_to_file(buffer, file_name)};
    }
-   
+
    template <class T>
    concept write_json_supported = requires {
-      detail::to_json<std::remove_cvref_t<T>>::template op<opts{}>(std::declval<T>(), context{},
-                                                                 std::string{}, size_t{});
+      detail::to_json<std::remove_cvref_t<T>>::template op<opts{}>(std::declval<T>(), context{}, std::string{},
+                                                                   size_t{});
    };
 }

@@ -970,10 +970,10 @@ namespace glz
    {
       return read_file_binary<opt_true<Opts, &opts::structs_as_arrays>>(value, file_name, buffer);
    }
-   
+
    template <class T>
    concept read_binary_supported = requires {
-      detail::from_binary<std::remove_cvref_t<T>>::template op<opts{.format = binary}>(std::declval<T>(), context{},
-                                                                 std::declval<const char*>(), std::declval<const char*>());
+      detail::from_binary<std::remove_cvref_t<T>>::template op<opts{.format = binary}>(
+         std::declval<T>(), context{}, std::declval<const char*>(), std::declval<const char*>());
    };
 }

@@ -16,7 +16,7 @@ namespace glz
    // layout
    constexpr uint32_t rowwise = 0;
    constexpr uint32_t colwise = 1;
-   
+
    struct opts
    {
       // USER CONFIGURABLE

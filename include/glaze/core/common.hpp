@@ -1054,56 +1054,55 @@ struct glz::meta<glz::error_code>
 {
    static constexpr sv name = "glz::error_code";
    using enum glz::error_code;
-   static constexpr auto value =
-      enumerate("none", none, //
-                "no_read_input", no_read_input, //
-                "data_must_be_null_terminated", data_must_be_null_terminated, //
-                "parse_number_failure", parse_number_failure, //
-                "expected_brace", expected_brace, //
-                "expected_bracket", expected_bracket, //
-                "expected_quote", expected_quote, //
-                "exceeded_static_array_size", exceeded_static_array_size, //
-                "unexpected_end", unexpected_end, //
-                "expected_end_comment", expected_end_comment, //
-                "syntax_error", syntax_error, //
-                "key_not_found", key_not_found, //
-                "unexpected_enum", unexpected_enum, //
-                "attempt_const_read", attempt_const_read, //
-                "attempt_member_func_read", attempt_member_func_read, //
-                "attempt_read_hidden", attempt_read_hidden, //
-                "invalid_nullable_read", invalid_nullable_read, //
-                "invalid_variant_object", invalid_variant_object, //
-                "invalid_variant_array", invalid_variant_array, //
-                "invalid_variant_string", invalid_variant_string, //
-                "no_matching_variant_type", no_matching_variant_type, //
-                "expected_true_or_false", expected_true_or_false, //
-                "unknown_key", unknown_key, //
-                "invalid_flag_input", invalid_flag_input, //
-                "invalid_escape", invalid_escape, //
-                "u_requires_hex_digits", u_requires_hex_digits, //
-                "file_extension_not_supported", file_extension_not_supported, //
-                "could_not_determine_extension", could_not_determine_extension, //
-                "seek_failure", seek_failure, //
-                "unicode_escape_conversion_failure", unicode_escape_conversion_failure, //
-                "file_open_failure", file_open_failure, //
-                "file_include_error", file_include_error, //
-                "dump_int_error", dump_int_error, //
-                "get_nonexistent_json_ptr", get_nonexistent_json_ptr, //
-                "get_wrong_type", get_wrong_type, //
-                "cannot_be_referenced", cannot_be_referenced, //
-                "invalid_get", invalid_get, //
-                "invalid_get_fn", invalid_get_fn, //
-                "invalid_call", invalid_call, //
-                "invalid_partial_key", invalid_partial_key, //
-                "name_mismatch", name_mismatch, //
-                "array_element_not_found", array_element_not_found, //
-                "elements_not_convertible_to_design", elements_not_convertible_to_design, //
-                "unknown_distribution", unknown_distribution, //
-                "invalid_distribution_elements", invalid_distribution_elements, //
-                "missing_key", missing_key, //
-                "hostname_failure", hostname_failure, //
-                "includer_error", includer_error //
-      );
+   static constexpr auto value = enumerate("none", none, //
+                                           "no_read_input", no_read_input, //
+                                           "data_must_be_null_terminated", data_must_be_null_terminated, //
+                                           "parse_number_failure", parse_number_failure, //
+                                           "expected_brace", expected_brace, //
+                                           "expected_bracket", expected_bracket, //
+                                           "expected_quote", expected_quote, //
+                                           "exceeded_static_array_size", exceeded_static_array_size, //
+                                           "unexpected_end", unexpected_end, //
+                                           "expected_end_comment", expected_end_comment, //
+                                           "syntax_error", syntax_error, //
+                                           "key_not_found", key_not_found, //
+                                           "unexpected_enum", unexpected_enum, //
+                                           "attempt_const_read", attempt_const_read, //
+                                           "attempt_member_func_read", attempt_member_func_read, //
+                                           "attempt_read_hidden", attempt_read_hidden, //
+                                           "invalid_nullable_read", invalid_nullable_read, //
+                                           "invalid_variant_object", invalid_variant_object, //
+                                           "invalid_variant_array", invalid_variant_array, //
+                                           "invalid_variant_string", invalid_variant_string, //
+                                           "no_matching_variant_type", no_matching_variant_type, //
+                                           "expected_true_or_false", expected_true_or_false, //
+                                           "unknown_key", unknown_key, //
+                                           "invalid_flag_input", invalid_flag_input, //
+                                           "invalid_escape", invalid_escape, //
+                                           "u_requires_hex_digits", u_requires_hex_digits, //
+                                           "file_extension_not_supported", file_extension_not_supported, //
+                                           "could_not_determine_extension", could_not_determine_extension, //
+                                           "seek_failure", seek_failure, //
+                                           "unicode_escape_conversion_failure", unicode_escape_conversion_failure, //
+                                           "file_open_failure", file_open_failure, //
+                                           "file_include_error", file_include_error, //
+                                           "dump_int_error", dump_int_error, //
+                                           "get_nonexistent_json_ptr", get_nonexistent_json_ptr, //
+                                           "get_wrong_type", get_wrong_type, //
+                                           "cannot_be_referenced", cannot_be_referenced, //
+                                           "invalid_get", invalid_get, //
+                                           "invalid_get_fn", invalid_get_fn, //
+                                           "invalid_call", invalid_call, //
+                                           "invalid_partial_key", invalid_partial_key, //
+                                           "name_mismatch", name_mismatch, //
+                                           "array_element_not_found", array_element_not_found, //
+                                           "elements_not_convertible_to_design", elements_not_convertible_to_design, //
+                                           "unknown_distribution", unknown_distribution, //
+                                           "invalid_distribution_elements", invalid_distribution_elements, //
+                                           "missing_key", missing_key, //
+                                           "hostname_failure", hostname_failure, //
+                                           "includer_error", includer_error //
+   );
 };
 
 namespace glz

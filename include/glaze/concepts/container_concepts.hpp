@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include <cstdint>
 #include <concepts>
+#include <cstdint>
 #include <utility>
 
 namespace glz::detail
@@ -33,7 +33,7 @@ namespace glz::detail
          a / b
       } -> std::same_as<T>;
    };
-   
+
    template <class T>
    concept pair_t = requires(T pair) {
       {
@@ -43,7 +43,7 @@ namespace glz::detail
          pair.second
       } -> std::same_as<typename T::second_type&>;
    };
-   
+
    template <class T>
    concept emplaceable = requires(T container) {
       {
@@ -57,13 +57,13 @@ namespace glz::detail
          container.push_back(std::declval<typename T::value_type>())
       };
    };
-   
+
    template <class T>
    concept resizeable = requires(T container) { container.resize(0); };
 
    template <class T>
    concept erasable = requires(T container) { container.erase(container.cbegin(), container.cend()); };
-   
+
    template <class T>
    concept has_size = requires(T container) { container.size(); };
 
@@ -73,10 +73,10 @@ namespace glz::detail
          container.empty()
       } -> std::convertible_to<bool>;
    };
-   
+
    template <class T>
    concept has_data = requires(T container) { container.data(); };
-   
+
    template <class T>
    concept has_push_back = requires(T t, typename T::value_type v) { t.push_back(v); };
 
@@ -92,15 +92,23 @@ namespace glz::detail
          container[size_t{}]
       } -> std::same_as<typename T::reference>;
    };
-   
-   template<typename T>
+
+   template <typename T>
    concept string_like = requires(T s) {
-       { s.size() } -> std::integral;
-       { s.data() };
-       { s.empty() } -> std::convertible_to<bool>;
-      { s.substr(0, 1) };
+      {
+         s.size()
+      } -> std::integral;
+      {
+         s.data()
+      };
+      {
+         s.empty()
+      } -> std::convertible_to<bool>;
+      {
+         s.substr(0, 1)
+      };
    };
-   
+
    template <typename T>
    concept is_bitset = requires(T bitset) {
       bitset.flip();
@@ -110,7 +118,7 @@ namespace glz::detail
          bitset.count()
       } -> std::same_as<size_t>;
    };
-   
+
    template <class Map, class Key>
    concept findable = requires(Map& map, const Key& key) { map.find(key); };
 }
