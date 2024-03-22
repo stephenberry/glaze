@@ -7122,7 +7122,7 @@ suite custom_struct_tests = [] {
       std::string s{};
       glz::write_json(obj, s);
       expect(s == R"("write")");
-      
+
       expect(!glz::read_json(obj, s));
       expect(obj.str == R"(writeread)") << obj.str;
    };
