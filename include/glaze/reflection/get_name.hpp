@@ -79,7 +79,7 @@ namespace glz::detail
 namespace glz
 {
    template <auto N, class T>
-   static constexpr auto nameof = [] {
+   constexpr auto nameof = [] {
       constexpr auto name = detail::get_name_impl<N, T>;
       constexpr auto begin = name.find(detail::reflect_field::end);
       constexpr auto tmp = name.substr(0, begin);
@@ -87,7 +87,7 @@ namespace glz
    }();
 
    template <class T>
-   static constexpr auto type_name = [] {
+   constexpr auto type_name = [] {
       constexpr std::string_view name = detail::mangled_name<T>();
       constexpr auto begin = name.find(detail::reflect_type::end);
       constexpr auto tmp = name.substr(0, begin);

@@ -8,7 +8,7 @@
 #include <ostream>
 #include <variant>
 
-#include "glaze/core/format.hpp"
+#include "glaze/core/opts.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/core/write_chars.hpp"
 #include "glaze/json/ptr.hpp"
@@ -1363,7 +1363,7 @@ namespace glz
                      static constexpr auto group = glz::get<I>(groups);
 
                      static constexpr auto key = std::get<0>(group);
-                     static constexpr auto mem_it = std::find(members.begin(), members.end(), key);
+                     constexpr auto mem_it = std::find(members.begin(), members.end(), key);
                      static_assert(mem_it != members.end(), "Invalid key passed to partial write");
 
                      static constexpr auto quoted_key = join_v < chars<"\"">, key,
@@ -1485,4 +1485,10 @@ namespace glz
       write<set_json<Opts>()>(std::forward<T>(value), buffer);
       return {buffer_to_file(buffer, file_name)};
    }
+   
+   template <class T>
+   concept write_json_supported = requires {
+      detail::to_json<std::remove_cvref_t<T>>::template op<opts{}>(std::declval<T>(), context{},
+                                                                 std::string{}, size_t{});
+   };
 }

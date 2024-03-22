@@ -90,7 +90,7 @@ namespace glz::detail
    struct to_json<uuid_t>
    {
       template <auto Opts>
-      static void op(uuid_t& uuid, auto&&... args) noexcept
+      static void op(const uuid_t& uuid, auto&&... args) noexcept
       {
          std::string str = uuid_lib::uuid_to_string(uuid);
          write<json>::op<Opts>(str, args...);

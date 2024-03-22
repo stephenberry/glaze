@@ -21,7 +21,6 @@
 #include "glaze/api/type_support.hpp"
 #include "glaze/binary/read.hpp"
 #include "glaze/binary/write.hpp"
-#include "glaze/core/format.hpp"
 #include "glaze/glaze.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"

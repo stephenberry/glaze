@@ -601,7 +601,7 @@ namespace glz
             dump_compressed_int<N>(args...);
 
             if constexpr (reflectable<T>) {
-               static constexpr auto members = member_names<T>;
+               constexpr auto members = member_names<T>;
                const auto t = to_tuple(value);
                for_each<N>([&](auto I) {
                   write<binary>::no_header<Opts>(get<I>(members), ctx, args...);
@@ -832,4 +832,10 @@ namespace glz
    {
       return write_file_binary<opt_true<Opts, &opts::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);
    }
+   
+   template <class T>
+   concept write_binary_supported = requires {
+      detail::to_binary<std::remove_cvref_t<T>>::template op<opts{.format = binary}>(std::declval<T>(), context{},
+                                                                 std::string{}, size_t{});
+   };
 }

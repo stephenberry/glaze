@@ -5,7 +5,7 @@
 
 #include "glaze/binary/header.hpp"
 #include "glaze/binary/skip.hpp"
-#include "glaze/core/format.hpp"
+#include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/reflection/reflect.hpp"
@@ -970,4 +970,10 @@ namespace glz
    {
       return read_file_binary<opt_true<Opts, &opts::structs_as_arrays>>(value, file_name, buffer);
    }
+   
+   template <class T>
+   concept read_binary_supported = requires {
+      detail::from_binary<std::remove_cvref_t<T>>::template op<opts{.format = binary}>(std::declval<T>(), context{},
+                                                                 std::declval<const char*>(), std::declval<const char*>());
+   };
 }
