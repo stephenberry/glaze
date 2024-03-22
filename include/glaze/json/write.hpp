@@ -1488,5 +1488,5 @@ namespace glz
 
    template <class T>
    concept write_json_supported =
-      detail::write_json_invocable<glz::opts{}, std::add_lvalue_reference<T>, glz::context, std::string, size_t>;
+      detail::write_json_invocable<glz::opts{}, std::add_const_t<std::add_lvalue_reference_t<T>>, glz::context, std::string, size_t>;
 }
