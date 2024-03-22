@@ -1353,7 +1353,7 @@ namespace glz
 #endif
                   populate_map(value, cmap); // Function required for MSVC to build
 
-                  constexpr auto members = member_names<T>;
+                  static constexpr auto members = member_names<T>;
 
                   for_each<N>([&](auto I) {
                      if (we) {
@@ -1363,7 +1363,7 @@ namespace glz
                      static constexpr auto group = glz::get<I>(groups);
 
                      static constexpr auto key = std::get<0>(group);
-                     static constexpr auto mem_it = std::find(members.begin(), members.end(), key);
+                     constexpr auto mem_it = std::find(members.begin(), members.end(), key);
                      static_assert(mem_it != members.end(), "Invalid key passed to partial write");
 
                      static constexpr auto quoted_key = join_v < chars<"\"">, key,
