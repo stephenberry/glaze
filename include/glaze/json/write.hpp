@@ -1487,8 +1487,5 @@ namespace glz
    }
 
    template <class T>
-   concept write_json_supported = requires {
-      detail::to_json<std::remove_cvref_t<T>>::template op<opts{}>(std::declval<T>(), context{}, std::string{},
-                                                                   size_t{});
-   };
+   concept write_json_supported = detail::write_json_invocable<glz::opts{}, std::add_lvalue_reference<T>, glz::context, std::string, size_t>;
 }

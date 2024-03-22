@@ -972,8 +972,6 @@ namespace glz
    }
 
    template <class T>
-   concept read_binary_supported = requires {
-      detail::from_binary<std::remove_cvref_t<T>>::template op<opts{.format = binary}>(
-         std::declval<T>(), context{}, std::declval<const char*>(), std::declval<const char*>());
-   };
+   concept read_binary_supported = detail::read_binary_invocable<glz::opts{}, std::add_lvalue_reference<T>,
+   glz::context, char const *, char const *>;
 }

@@ -2647,8 +2647,6 @@ namespace glz
    }
 
    template <class T>
-   concept read_json_supported = requires {
-      detail::from_json<std::remove_cvref_t<T>>::template op<opts{}>(
-         std::declval<T>(), context{}, std::declval<const char*>(), std::declval<const char*>());
-   };
+   concept read_json_supported = detail::read_json_invocable<glz::opts{}, std::add_lvalue_reference<T>,
+   glz::context, char const *, char const *>;
 }
