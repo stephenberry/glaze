@@ -4,7 +4,7 @@
 #pragma once
 
 #include "glaze/binary/header.hpp"
-#include "glaze/core/format.hpp"
+#include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
 #include "glaze/util/dump.hpp"
