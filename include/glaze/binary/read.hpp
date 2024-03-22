@@ -972,6 +972,6 @@ namespace glz
    }
 
    template <class T>
-   concept read_binary_supported = detail::read_binary_invocable<glz::opts{}, std::add_lvalue_reference<T>,
-   glz::context, char const *, char const *>;
+   concept read_binary_supported =
+      detail::read_binary_invocable<glz::opts{}, std::add_lvalue_reference<T>, glz::context, const char*, const char*>;
 }

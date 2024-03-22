@@ -834,5 +834,6 @@ namespace glz
    }
 
    template <class T>
-   concept write_binary_supported = detail::write_binary_invocable<glz::opts{}, std::add_lvalue_reference<T>, glz::context, std::string, size_t>;
+   concept write_binary_supported =
+      detail::write_binary_invocable<glz::opts{}, std::add_lvalue_reference<T>, glz::context, std::string, size_t>;
 }
