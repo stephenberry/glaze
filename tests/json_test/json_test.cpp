@@ -7086,6 +7086,48 @@ suite expected_tests = [] {
    };
 };
 
+struct custom_struct
+{
+   std::string str{};
+};
+
+namespace glz::detail
+{
+   template <>
+   struct from_json<custom_struct>
+   {
+      template <auto Opts>
+      static void op(custom_struct& value, auto&&... args)
+      {
+         read<json>::op<Opts>(value.str, args...);
+         value.str += "read";
+      }
+   };
+
+   template <>
+   struct to_json<custom_struct>
+   {
+      template <auto Opts>
+      static void op(custom_struct& value, auto&&... args) noexcept
+      {
+         value.str += "write";
+         write<json>::op<Opts>(value.str, args...);
+      }
+   };
+}
+
+suite custom_struct_tests = [] {
+   "custom_struct"_test = [] {
+      custom_struct obj{};
+      std::string s{};
+      glz::write_json(obj, s);
+      expect(s == R"("write")");
+      
+      expect(!glz::read_json(obj, s));
+      expect(obj.str == R"(writeread)") << obj.str;
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
