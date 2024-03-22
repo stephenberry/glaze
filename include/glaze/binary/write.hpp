@@ -601,7 +601,7 @@ namespace glz
             dump_compressed_int<N>(args...);
 
             if constexpr (reflectable<T>) {
-               static constexpr auto members = member_names<T>;
+               constexpr auto members = member_names<T>;
                const auto t = to_tuple(value);
                for_each<N>([&](auto I) {
                   write<binary>::no_header<Opts>(get<I>(members), ctx, args...);

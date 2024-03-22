@@ -1353,7 +1353,7 @@ namespace glz
 #endif
                   populate_map(value, cmap); // Function required for MSVC to build
 
-                  static constexpr auto members = member_names<T>;
+                  constexpr auto members = member_names<T>;
 
                   for_each<N>([&](auto I) {
                      if (we) {
