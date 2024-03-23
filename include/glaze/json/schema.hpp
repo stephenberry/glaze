@@ -251,13 +251,13 @@ namespace glz
             // s.enumeration = std::vector<std::string_view>(N);
             // for_each<N>([&](auto I) {
             //    static constexpr auto item = std::get<I>(meta_v<V>);
-            //    (*s.enumeration)[I.value] = std::get<0>(item);
+            //    (*s.enumeration)[I] = std::get<0>(item);
             // });
             s.oneOf = std::vector<schematic>(N);
             for_each<N>([&](auto I) {
                static constexpr auto item = get<I>(meta_v<V>);
                using T0 = std::decay_t<decltype(get<0>(item))>;
-               auto& enumeration = (*s.oneOf)[I.value];
+               auto& enumeration = (*s.oneOf)[I];
                enumeration.constant = get_enum_key<V, I>();
                static constexpr size_t member_index = std::is_enum_v<T0> ? 0 : 1;
                static constexpr size_t comment_index = member_index + 1;
@@ -358,7 +358,7 @@ namespace glz
 
             for_each<N>([&](auto I) {
                using V = std::decay_t<std::variant_alternative_t<I, T>>;
-               auto& schema_val = (*s.oneOf)[I.value];
+               auto& schema_val = (*s.oneOf)[I];
                to_json_schema<V>::template op<Opts>(schema_val, defs);
                if constexpr ((glaze_object_t<V> || reflectable<V>)&&!tag_v<T>.empty()) {
                   if (!schema_val.required) {
