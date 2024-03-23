@@ -769,7 +769,7 @@ namespace glz
          constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_enum_to_string_map_impl<T>(indices);
       }
-      
+
       template <class T, size_t... I>
       constexpr auto make_enum_to_string_array_impl(std::index_sequence<I...>) noexcept
       {
@@ -788,7 +788,7 @@ namespace glz
       constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>) noexcept
       {
          return normal_map<sv, T, std::tuple_size_v<meta_t<T>>>(
-                                                                {std::pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
+            {std::pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
       }
 
       template <class T>
@@ -1012,7 +1012,10 @@ namespace glz
       }
    }
 
-   constexpr auto array(auto&&... args) noexcept { return detail::Array{glz::tuplet::make_copy_tuple(conv_sv(args)...)}; }
+   constexpr auto array(auto&&... args) noexcept
+   {
+      return detail::Array{glz::tuplet::make_copy_tuple(conv_sv(args)...)};
+   }
 
    constexpr auto object(auto&&... args) noexcept
    {
@@ -1032,19 +1035,21 @@ namespace glz
          group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(conv_sv(args)...))>>::op(
             glz::tuplet::make_copy_tuple(conv_sv(args)...))};
    }
-   
-   namespace detail {
+
+   namespace detail
+   {
       template <size_t... I>
       constexpr auto enumerate_no_reflect_impl(auto&& t, std::index_sequence<I...>) noexcept
       {
-         return glz::detail::Enum{std::array{std::pair{conv_sv(get<2*I>(t)), get<2*I+1>(t)}...}};
+         return glz::detail::Enum{std::array{std::pair{conv_sv(get<2 * I>(t)), get<2 * I + 1>(t)}...}};
       }
    }
-   
+
    // A faster compiling version of enumerate that does not support reflection
    constexpr auto enumerate_no_reflect(auto&&... args) noexcept
    {
-      return detail::enumerate_no_reflect_impl(glz::tuplet::tuple{args...}, std::make_index_sequence<sizeof...(args) / 2>{});
+      return detail::enumerate_no_reflect_impl(glz::tuplet::tuple{args...},
+                                               std::make_index_sequence<sizeof...(args) / 2>{});
    }
 
    constexpr auto flags(auto&&... args) noexcept
@@ -1073,55 +1078,56 @@ struct glz::meta<glz::error_code>
 {
    static constexpr sv name = "glz::error_code";
    using enum glz::error_code;
-   static constexpr auto value = enumerate_no_reflect("none", none, //
-                                           "no_read_input", no_read_input, //
-                                           "data_must_be_null_terminated", data_must_be_null_terminated, //
-                                           "parse_number_failure", parse_number_failure, //
-                                           "expected_brace", expected_brace, //
-                                           "expected_bracket", expected_bracket, //
-                                           "expected_quote", expected_quote, //
-                                           "exceeded_static_array_size", exceeded_static_array_size, //
-                                           "unexpected_end", unexpected_end, //
-                                           "expected_end_comment", expected_end_comment, //
-                                           "syntax_error", syntax_error, //
-                                           "key_not_found", key_not_found, //
-                                           "unexpected_enum", unexpected_enum, //
-                                           "attempt_const_read", attempt_const_read, //
-                                           "attempt_member_func_read", attempt_member_func_read, //
-                                           "attempt_read_hidden", attempt_read_hidden, //
-                                           "invalid_nullable_read", invalid_nullable_read, //
-                                           "invalid_variant_object", invalid_variant_object, //
-                                           "invalid_variant_array", invalid_variant_array, //
-                                           "invalid_variant_string", invalid_variant_string, //
-                                           "no_matching_variant_type", no_matching_variant_type, //
-                                           "expected_true_or_false", expected_true_or_false, //
-                                           "unknown_key", unknown_key, //
-                                           "invalid_flag_input", invalid_flag_input, //
-                                           "invalid_escape", invalid_escape, //
-                                           "u_requires_hex_digits", u_requires_hex_digits, //
-                                           "file_extension_not_supported", file_extension_not_supported, //
-                                           "could_not_determine_extension", could_not_determine_extension, //
-                                           "seek_failure", seek_failure, //
-                                           "unicode_escape_conversion_failure", unicode_escape_conversion_failure, //
-                                           "file_open_failure", file_open_failure, //
-                                           "file_include_error", file_include_error, //
-                                           "dump_int_error", dump_int_error, //
-                                           "get_nonexistent_json_ptr", get_nonexistent_json_ptr, //
-                                           "get_wrong_type", get_wrong_type, //
-                                           "cannot_be_referenced", cannot_be_referenced, //
-                                           "invalid_get", invalid_get, //
-                                           "invalid_get_fn", invalid_get_fn, //
-                                           "invalid_call", invalid_call, //
-                                           "invalid_partial_key", invalid_partial_key, //
-                                           "name_mismatch", name_mismatch, //
-                                           "array_element_not_found", array_element_not_found, //
-                                           "elements_not_convertible_to_design", elements_not_convertible_to_design, //
-                                           "unknown_distribution", unknown_distribution, //
-                                           "invalid_distribution_elements", invalid_distribution_elements, //
-                                           "missing_key", missing_key, //
-                                           "hostname_failure", hostname_failure, //
-                                           "includer_error", includer_error //
-   );
+   static constexpr auto value =
+      enumerate_no_reflect("none", none, //
+                           "no_read_input", no_read_input, //
+                           "data_must_be_null_terminated", data_must_be_null_terminated, //
+                           "parse_number_failure", parse_number_failure, //
+                           "expected_brace", expected_brace, //
+                           "expected_bracket", expected_bracket, //
+                           "expected_quote", expected_quote, //
+                           "exceeded_static_array_size", exceeded_static_array_size, //
+                           "unexpected_end", unexpected_end, //
+                           "expected_end_comment", expected_end_comment, //
+                           "syntax_error", syntax_error, //
+                           "key_not_found", key_not_found, //
+                           "unexpected_enum", unexpected_enum, //
+                           "attempt_const_read", attempt_const_read, //
+                           "attempt_member_func_read", attempt_member_func_read, //
+                           "attempt_read_hidden", attempt_read_hidden, //
+                           "invalid_nullable_read", invalid_nullable_read, //
+                           "invalid_variant_object", invalid_variant_object, //
+                           "invalid_variant_array", invalid_variant_array, //
+                           "invalid_variant_string", invalid_variant_string, //
+                           "no_matching_variant_type", no_matching_variant_type, //
+                           "expected_true_or_false", expected_true_or_false, //
+                           "unknown_key", unknown_key, //
+                           "invalid_flag_input", invalid_flag_input, //
+                           "invalid_escape", invalid_escape, //
+                           "u_requires_hex_digits", u_requires_hex_digits, //
+                           "file_extension_not_supported", file_extension_not_supported, //
+                           "could_not_determine_extension", could_not_determine_extension, //
+                           "seek_failure", seek_failure, //
+                           "unicode_escape_conversion_failure", unicode_escape_conversion_failure, //
+                           "file_open_failure", file_open_failure, //
+                           "file_include_error", file_include_error, //
+                           "dump_int_error", dump_int_error, //
+                           "get_nonexistent_json_ptr", get_nonexistent_json_ptr, //
+                           "get_wrong_type", get_wrong_type, //
+                           "cannot_be_referenced", cannot_be_referenced, //
+                           "invalid_get", invalid_get, //
+                           "invalid_get_fn", invalid_get_fn, //
+                           "invalid_call", invalid_call, //
+                           "invalid_partial_key", invalid_partial_key, //
+                           "name_mismatch", name_mismatch, //
+                           "array_element_not_found", array_element_not_found, //
+                           "elements_not_convertible_to_design", elements_not_convertible_to_design, //
+                           "unknown_distribution", unknown_distribution, //
+                           "invalid_distribution_elements", invalid_distribution_elements, //
+                           "missing_key", missing_key, //
+                           "hostname_failure", hostname_failure, //
+                           "includer_error", includer_error //
+      );
 };
 
 namespace glz
