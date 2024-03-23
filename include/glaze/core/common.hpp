@@ -769,25 +769,30 @@ namespace glz
          constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_enum_to_string_map_impl<T>(indices);
       }
+      
+      template <class T, size_t... I>
+      constexpr auto make_enum_to_string_array_impl(std::index_sequence<I...>) noexcept
+      {
+         return std::array<sv, sizeof...(I)>{get_enum_key<T, I>()...};
+      }
 
       // TODO: This faster approach can be used if the enum has an integer type base and sequential numbering
       template <class T>
-      constexpr auto make_enum_to_string_array()
+      constexpr auto make_enum_to_string_array() noexcept
       {
-         std::array<sv, std::tuple_size_v<meta_t<T>>> arr;
-         for_each<std::tuple_size_v<meta_t<T>>>([&](auto I) { arr[I] = get_enum_key<T, I>(); });
-         return arr;
+         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
+         return make_enum_to_string_array_impl<T>(indices);
       }
 
       template <class T, size_t... I>
-      constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>)
+      constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>) noexcept
       {
          return normal_map<sv, T, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<sv, T>(get_enum_key<T, I>(), T(get_enum_value<T, I>()))...});
+                                                                {std::pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
       }
 
       template <class T>
-      constexpr auto make_string_to_enum_map()
+      constexpr auto make_string_to_enum_map() noexcept
       {
          constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
          return make_string_to_enum_map_impl<T>(indices);
@@ -1007,9 +1012,9 @@ namespace glz
       }
    }
 
-   constexpr auto array(auto&&... args) { return detail::Array{glz::tuplet::make_copy_tuple(conv_sv(args)...)}; }
+   constexpr auto array(auto&&... args) noexcept { return detail::Array{glz::tuplet::make_copy_tuple(conv_sv(args)...)}; }
 
-   constexpr auto object(auto&&... args)
+   constexpr auto object(auto&&... args) noexcept
    {
       if constexpr (sizeof...(args) == 0) {
          return glz::detail::Object{glz::tuplet::tuple{}};
@@ -1021,14 +1026,28 @@ namespace glz
       }
    }
 
-   constexpr auto enumerate(auto&&... args)
+   constexpr auto enumerate(auto&&... args) noexcept
    {
       return glz::detail::Enum{
          group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(conv_sv(args)...))>>::op(
             glz::tuplet::make_copy_tuple(conv_sv(args)...))};
    }
+   
+   namespace detail {
+      template <size_t... I>
+      constexpr auto enumerate_no_reflect_impl(auto&& t, std::index_sequence<I...>) noexcept
+      {
+         return glz::detail::Enum{std::array{std::pair{conv_sv(get<2*I>(t)), get<2*I+1>(t)}...}};
+      }
+   }
+   
+   // A faster compiling version of enumerate that does not support reflection
+   constexpr auto enumerate_no_reflect(auto&&... args) noexcept
+   {
+      return detail::enumerate_no_reflect_impl(glz::tuplet::tuple{args...}, std::make_index_sequence<sizeof...(args) / 2>{});
+   }
 
-   constexpr auto flags(auto&&... args)
+   constexpr auto flags(auto&&... args) noexcept
    {
       return glz::detail::Flags{
          group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(conv_sv(args)...))>>::op(
@@ -1054,7 +1073,7 @@ struct glz::meta<glz::error_code>
 {
    static constexpr sv name = "glz::error_code";
    using enum glz::error_code;
-   static constexpr auto value = enumerate("none", none, //
+   static constexpr auto value = enumerate_no_reflect("none", none, //
                                            "no_read_input", no_read_input, //
                                            "data_must_be_null_terminated", data_must_be_null_terminated, //
                                            "parse_number_failure", parse_number_failure, //

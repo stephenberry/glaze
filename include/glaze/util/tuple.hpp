@@ -126,16 +126,17 @@ namespace glz
    constexpr auto make_group(Tuple&& t, std::index_sequence<Is...>)
    {
       auto get_elem = [&](auto I) {
-         using type = decltype(glz::get<Start + I>(t));
+         constexpr auto Index = Start + I;
+         using type = decltype(glz::get<Index>(t));
          using T = std::decay_t<type>;
          if constexpr (std::convertible_to<type, std::string_view>) {
-            return std::string_view(glz::get<Start + I>(t));
+            return std::string_view(glz::get<Index>(t));
          }
          else if constexpr (std::same_as<T, comment>) {
-            return glz::get<Start + I>(t).value;
+            return glz::get<Index>(t).value;
          }
          else {
-            return glz::get<Start + I>(t);
+            return glz::get<Index>(t);
          }
       };
       return glz::tuplet::make_copy_tuple(get_elem(std::integral_constant<size_t, Is>{})...);
