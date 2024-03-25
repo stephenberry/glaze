@@ -141,8 +141,10 @@ namespace glz
 {
    namespace detail
    {
+      // The reflection schema map makes a map of all schema types within a glz::json_schema
+      // and returns a map of these schemas with their reflected names.
       template <class T>
-      consteval auto make_reflection_schema_array()
+      consteval auto make_reflection_schema_map()
       {
          auto schema_instance = json_schema_v<T>;
          auto tuple = to_tuple(schema_instance);
@@ -150,28 +152,13 @@ namespace glz
          constexpr auto N = std::tuple_size_v<V>;
          if constexpr (N > 0) {
             constexpr auto& names = member_names<json_schema_type<T>>;
-
-            std::array<std::pair<sv, schema>, N> ret{};
-
-            for_each<N>([&](auto I) { ret[I] = std::pair{names[I], std::get<I>(tuple)}; });
-
-            return ret;
+            return [&]<size_t... I>(std::index_sequence<I...>) {
+               return detail::normal_map<sv, schema, N>(std::array<std::pair<sv, schema>, N>{std::pair{names[I], std::get<I>(tuple)}...});
+            }(std::make_index_sequence<N>{});
          }
          else {
-            return std::array<std::pair<sv, schema>, 0>{};
+            return detail::normal_map<sv, schema, 0>(std::array<std::pair<sv, schema>, 0>{});
          }
-      };
-
-      // The reflection schema map makes a map of all schema types within a glz::json_schema
-      // and returns a map of these schemas with their reflected names.
-      template <class T>
-      constexpr auto make_reflection_schema_map()
-      {
-         constexpr auto arr = make_reflection_schema_array<T>();
-         constexpr auto N = arr.size();
-         return [&]<size_t... I>(std::index_sequence<I...>) {
-            return glz::detail::normal_map<sv, schema, N>({std::get<I>(arr)...});
-         }(std::make_index_sequence<N>{});
       }
 
       template <class T = void>
