@@ -57,6 +57,13 @@ namespace glz::detail
          container.push_back(std::declval<typename T::value_type>())
       };
    };
+   
+   template <class T>
+   concept emplace_backable = requires(T container) {
+      {
+         container.emplace_back()
+      } -> std::same_as<typename T::reference>;
+   };
 
    template <class T>
    concept resizeable = requires(T container) { container.resize(0); };
@@ -92,6 +99,13 @@ namespace glz::detail
          container[size_t{}]
       } -> std::same_as<typename T::reference>;
    };
+   
+   template <class T>
+   concept map_subscriptable = requires(T container) {
+      {
+         container[std::declval<typename T::key_type>()]
+      } -> std::same_as<typename T::mapped_type&>;
+   };
 
    template <typename T>
    concept string_like = requires(T s) {
@@ -117,6 +131,12 @@ namespace glz::detail
       {
          bitset.count()
       } -> std::same_as<size_t>;
+   };
+   
+   template <class T>
+   concept is_span = requires(T t) {
+      T::extent;
+      typename T::element_type;
    };
 
    template <class Map, class Key>

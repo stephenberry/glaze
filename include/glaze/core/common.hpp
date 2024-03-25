@@ -364,13 +364,6 @@ namespace glz
       concept str_view_t = std::same_as<std::decay_t<T>, std::string_view>;
 
       template <class T>
-      concept map_subscriptable = requires(T container) {
-         {
-            container[std::declval<typename T::key_type>()]
-         } -> std::same_as<typename T::mapped_type&>;
-      };
-
-      template <class T>
       concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
                                pair_t<range_value_t<T>> && map_subscriptable<T>;
 
@@ -396,13 +389,6 @@ namespace glz
       concept writable_array_t = (!custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> && range<T>);
 
       template <class T>
-      concept emplace_backable = requires(T container) {
-         {
-            container.emplace_back()
-         } -> std::same_as<typename T::reference>;
-      };
-
-      template <class T>
       concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> &&
                                     !resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
 
@@ -412,12 +398,6 @@ namespace glz
 
       template <class T>
       concept vector_like = resizeable<T> && accessible<T> && has_data<T>;
-
-      template <class T>
-      concept is_span = requires(T t) {
-         T::extent;
-         typename T::element_type;
-      };
 
       template <class T>
       concept is_no_reflect = requires(T t) { requires T::glaze_reflect == false; };
