@@ -1030,21 +1030,13 @@ namespace glz
       using Tuple = std::decay_t<decltype(glz::tuplet::tuple{conv_sv(args)...})>;
       return glz::detail::Enum{group_builder<Tuple>::op(glz::tuplet::tuple{conv_sv(args)...})};
    }
-
-   namespace detail
-   {
-      template <size_t... I>
-      constexpr auto enumerate_no_reflect_impl(auto&& t, std::index_sequence<I...>) noexcept
-      {
-         return glz::detail::Enum{std::array{std::pair{conv_sv(get<2 * I>(t)), get<2 * I + 1>(t)}...}};
-      }
-   }
-
+   
    // A faster compiling version of enumerate that does not support reflection
    constexpr auto enumerate_no_reflect(auto&&... args) noexcept
    {
-      return detail::enumerate_no_reflect_impl(glz::tuplet::tuple{args...},
-                                               std::make_index_sequence<sizeof...(args) / 2>{});
+      return [t = glz::tuplet::tuple{args...}]<size_t... I>(std::index_sequence<I...>) noexcept {
+         return glz::detail::Enum{std::array{std::pair{conv_sv(get<2 * I>(t)), get<2 * I + 1>(t)}...}};
+      }(std::make_index_sequence<sizeof...(args) / 2>{});
    }
 
    constexpr auto flags(auto&&... args) noexcept
