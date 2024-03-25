@@ -736,47 +736,34 @@ namespace glz
          return make_int_storage_impl<T>(indices);
       }*/
 
-      template <class T, size_t... I>
-      constexpr auto make_key_int_map_impl(std::index_sequence<I...>)
-      {
-         return normal_map<sv, size_t, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<sv, size_t>(get_enum_key<T, I>(), I)...});
-      }
-
       template <class T>
       constexpr auto make_key_int_map()
       {
-         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_key_int_map_impl<T>(indices);
+         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         return [&]<size_t... I>(std::index_sequence<I...>) {
+            return normal_map<sv, size_t, std::tuple_size_v<meta_t<T>>>(
+               {std::make_pair<sv, size_t>(get_enum_key<T, I>(), I)...});
+         }(std::make_index_sequence<N>{});
       }
-
-      template <class T, size_t... I>
-      constexpr auto make_enum_to_string_map_impl(std::index_sequence<I...>)
-      {
-         using key_t = std::underlying_type_t<T>;
-         return normal_map<key_t, sv, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<key_t, sv>(static_cast<key_t>(get_enum_value<T, I>()), get_enum_key<T, I>())...});
-      }
-
+      
       template <class T>
       constexpr auto make_enum_to_string_map()
       {
-         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_enum_to_string_map_impl<T>(indices);
+         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         return [&]<size_t... I>(std::index_sequence<I...>) {
+            using key_t = std::underlying_type_t<T>;
+            return normal_map<key_t, sv, N>(
+               {std::make_pair<key_t, sv>(static_cast<key_t>(get_enum_value<T, I>()), get_enum_key<T, I>())...});
+         }(std::make_index_sequence<N>{});
       }
-
-      template <class T, size_t... I>
-      constexpr auto make_enum_to_string_array_impl(std::index_sequence<I...>) noexcept
-      {
-         return std::array<sv, sizeof...(I)>{get_enum_key<T, I>()...};
-      }
-
+      
       // TODO: This faster approach can be used if the enum has an integer type base and sequential numbering
       template <class T>
       constexpr auto make_enum_to_string_array() noexcept
       {
-         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_enum_to_string_array_impl<T>(indices);
+         return []<size_t... I>(std::index_sequence<I...>) {
+            return std::array<sv, sizeof...(I)>{get_enum_key<T, I>()...};
+         }(std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{});
       }
 
       template <class T, size_t... I>
