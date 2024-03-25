@@ -432,7 +432,7 @@ namespace glz
       };
 
       template <class T>
-         requires(std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T>)
+         requires(std::is_enum_v<std::decay_t<T>> && !glaze_enum_t<T> && !specialized_with_custom_write<T>)
       struct to_json<T>
       {
          template <auto Opts, class... Args>
