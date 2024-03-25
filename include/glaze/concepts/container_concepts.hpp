@@ -138,6 +138,9 @@ namespace glz::detail
       T::extent;
       typename T::element_type;
    };
+   
+   template <class T>
+   concept is_dynamic_span = T::extent == static_cast<size_t>(-1);
 
    template <class Map, class Key>
    concept findable = requires(Map& map, const Key& key) { map.find(key); };

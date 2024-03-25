@@ -350,9 +350,6 @@ namespace glz
       concept is_no_reflect = requires(T t) { requires T::glaze_reflect == false; };
 
       template <class T>
-      concept is_dynamic_span = T::extent == static_cast<size_t>(-1);
-
-      template <class T>
       concept has_static_size = (is_span<T> && !is_dynamic_span<T>) || (requires(T container) {
                                    {
                                       std::bool_constant<(std::decay_t<T>{}.size(), true)>()
