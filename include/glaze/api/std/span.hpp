@@ -16,9 +16,7 @@ namespace glz
    inline constexpr bool is_span_v<T<Element, Extent>, T> = true;
 
    template <class T>
-   concept span = is_span_v<T, std::span>;
-
-   template <span T>
+      requires (is_span_v<T, std::span>)
    struct meta<T>
    {
       using V = typename T::element_type;
