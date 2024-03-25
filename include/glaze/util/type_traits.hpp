@@ -170,7 +170,7 @@ namespace glz
    template <auto MemPtr, class T, class R, class... Args>
    struct arguments<MemPtr, R (T::*)(Args...)>
    {
-      static constexpr auto op(void* ptr, std::decay_t<Args>&&... args)
+      static constexpr auto op(void* ptr, Args&&... args)
          -> std::invoke_result_t<decltype(std::mem_fn(MemPtr)), T, Args...>
       {
          return (reinterpret_cast<T*>(ptr)->*MemPtr)(std::forward<Args>(args)...);
@@ -180,7 +180,7 @@ namespace glz
    template <auto MemPtr, class T, class R, class... Args>
    struct arguments<MemPtr, R (T::*)(Args...) const>
    {
-      static constexpr auto op(void* ptr, std::decay_t<Args>&&... args)
+      static constexpr auto op(void* ptr, Args&&... args)
          -> std::invoke_result_t<decltype(std::mem_fn(MemPtr)), T, Args...>
       {
          return (reinterpret_cast<T*>(ptr)->*MemPtr)(std::forward<Args>(args)...);

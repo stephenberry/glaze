@@ -22,9 +22,9 @@ namespace glz
       GLZ_ALWAYS_INLINE constexpr auto runtime_variant_map()
       {
          constexpr auto N = std::variant_size_v<T>;
-         std::array<T, N> ret{};
-         for_each<N>([&](auto I) { ret[I] = std::variant_alternative_t<I, T>{}; });
-         return ret;
+         return [&]<size_t... I>(std::index_sequence<I...>) {
+            return std::array<T, N>{std::variant_alternative_t<I, T>{}...};
+         }(std::make_index_sequence<N>{});
       }
    }
 }

@@ -202,59 +202,6 @@ namespace glz
 
    namespace detail
    {
-      template <int... I>
-      using is = std::integer_sequence<int, I...>;
-      template <int N>
-      using make_is = std::make_integer_sequence<int, N>;
-
-      constexpr auto size(const char* s) noexcept
-      {
-         int i = 0;
-         while (*s != 0) {
-            ++i;
-            ++s;
-         }
-         return i;
-      }
-
-      template <const char*, typename, const char*, typename>
-      struct concat_impl;
-
-      template <const char* S1, int... I1, const char* S2, int... I2>
-      struct concat_impl<S1, is<I1...>, S2, is<I2...>>
-      {
-         static constexpr const char value[]{S1[I1]..., S2[I2]..., 0};
-      };
-
-      template <const char* S1, const char* S2>
-      constexpr auto concat_char()
-      {
-         return concat_impl<S1, make_is<size(S1)>, S2, make_is<size(S2)>>::value;
-      }
-
-      template <size_t... Is>
-      struct seq
-      {};
-      template <size_t N, size_t... Is>
-      struct gen_seq : gen_seq<N - 1, N - 1, Is...>
-      {};
-      template <size_t... Is>
-      struct gen_seq<0, Is...> : seq<Is...>
-      {};
-
-      template <size_t N1, size_t... I1, size_t N2, size_t... I2>
-      constexpr std::array<const char, N1 + N2 - 1> concat(const char (&a1)[N1], const char (&a2)[N2], seq<I1...>,
-                                                           seq<I2...>)
-      {
-         return {{a1[I1]..., a2[I2]...}};
-      }
-
-      template <size_t N1, size_t N2>
-      constexpr std::array<const char, N1 + N2 - 1> concat_arrays(const char (&a1)[N1], const char (&a2)[N2])
-      {
-         return concat(a1, a2, gen_seq<N1 - 1>{}, gen_seq<N2>{});
-      }
-
       template <uint32_t Format>
       struct read
       {};
@@ -364,13 +311,6 @@ namespace glz
       concept str_view_t = std::same_as<std::decay_t<T>, std::string_view>;
 
       template <class T>
-      concept map_subscriptable = requires(T container) {
-         {
-            container[std::declval<typename T::key_type>()]
-         } -> std::same_as<typename T::mapped_type&>;
-      };
-
-      template <class T>
       concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
                                pair_t<range_value_t<T>> && map_subscriptable<T>;
 
@@ -396,13 +336,6 @@ namespace glz
       concept writable_array_t = (!custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> && range<T>);
 
       template <class T>
-      concept emplace_backable = requires(T container) {
-         {
-            container.emplace_back()
-         } -> std::same_as<typename T::reference>;
-      };
-
-      template <class T>
       concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> &&
                                     !resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
 
@@ -414,16 +347,7 @@ namespace glz
       concept vector_like = resizeable<T> && accessible<T> && has_data<T>;
 
       template <class T>
-      concept is_span = requires(T t) {
-         T::extent;
-         typename T::element_type;
-      };
-
-      template <class T>
       concept is_no_reflect = requires(T t) { requires T::glaze_reflect == false; };
-
-      template <class T>
-      concept is_dynamic_span = T::extent == static_cast<size_t>(-1);
 
       template <class T>
       concept has_static_size = (is_span<T> && !is_dynamic_span<T>) || (requires(T container) {
@@ -572,18 +496,13 @@ namespace glz
       template <class Tuple>
       using value_tuple_variant_t = typename value_tuple_variant<Tuple>::type;
 
-      template <class T, size_t... I>
-      inline constexpr auto make_array_impl(std::index_sequence<I...>)
-      {
-         using value_t = typename tuple_variant<meta_t<T>>::type;
-         return std::array<value_t, std::tuple_size_v<meta_t<T>>>{glz::get<I>(meta_v<T>)...};
-      }
-
       template <class T>
       inline constexpr auto make_array()
       {
-         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_array_impl<T>(indices);
+         return []<size_t... I>(std::index_sequence<I...>) {
+            using value_t = typename tuple_variant<meta_t<T>>::type;
+            return std::array<value_t, std::tuple_size_v<meta_t<T>>>{glz::get<I>(meta_v<T>)...};
+         }(std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{});
       }
 
       template <class Tuple, std::size_t... Is>
@@ -741,61 +660,44 @@ namespace glz
          return make_int_storage_impl<T>(indices);
       }*/
 
-      template <class T, size_t... I>
-      constexpr auto make_key_int_map_impl(std::index_sequence<I...>)
-      {
-         return normal_map<sv, size_t, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<sv, size_t>(get_enum_key<T, I>(), I)...});
-      }
-
       template <class T>
       constexpr auto make_key_int_map()
       {
-         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_key_int_map_impl<T>(indices);
+         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         return [&]<size_t... I>(std::index_sequence<I...>) {
+            return normal_map<sv, size_t, std::tuple_size_v<meta_t<T>>>(
+               {std::make_pair<sv, size_t>(get_enum_key<T, I>(), I)...});
+         }(std::make_index_sequence<N>{});
       }
-
-      template <class T, size_t... I>
-      constexpr auto make_enum_to_string_map_impl(std::index_sequence<I...>)
-      {
-         using key_t = std::underlying_type_t<T>;
-         return normal_map<key_t, sv, std::tuple_size_v<meta_t<T>>>(
-            {std::make_pair<key_t, sv>(static_cast<key_t>(get_enum_value<T, I>()), get_enum_key<T, I>())...});
-      }
-
+      
       template <class T>
       constexpr auto make_enum_to_string_map()
       {
-         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_enum_to_string_map_impl<T>(indices);
+         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         return [&]<size_t... I>(std::index_sequence<I...>) {
+            using key_t = std::underlying_type_t<T>;
+            return normal_map<key_t, sv, N>(
+               {std::make_pair<key_t, sv>(static_cast<key_t>(get_enum_value<T, I>()), get_enum_key<T, I>())...});
+         }(std::make_index_sequence<N>{});
       }
-
-      template <class T, size_t... I>
-      constexpr auto make_enum_to_string_array_impl(std::index_sequence<I...>) noexcept
-      {
-         return std::array<sv, sizeof...(I)>{get_enum_key<T, I>()...};
-      }
-
+      
       // TODO: This faster approach can be used if the enum has an integer type base and sequential numbering
       template <class T>
       constexpr auto make_enum_to_string_array() noexcept
       {
-         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_enum_to_string_array_impl<T>(indices);
-      }
-
-      template <class T, size_t... I>
-      constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>) noexcept
-      {
-         return normal_map<sv, T, std::tuple_size_v<meta_t<T>>>(
-            {std::pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
+         return []<size_t... I>(std::index_sequence<I...>) {
+            return std::array<sv, sizeof...(I)>{get_enum_key<T, I>()...};
+         }(std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{});
       }
 
       template <class T>
       constexpr auto make_string_to_enum_map() noexcept
       {
-         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_string_to_enum_map_impl<T>(indices);
+         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         return [&]<size_t... I>(std::index_sequence<I...>) {
+            return normal_map<sv, T, N>(
+               {std::pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
+         }(std::make_index_sequence<N>{});
       }
 
       // get a std::string_view from an enum value
@@ -1030,21 +932,13 @@ namespace glz
       using Tuple = std::decay_t<decltype(glz::tuplet::tuple{conv_sv(args)...})>;
       return glz::detail::Enum{group_builder<Tuple>::op(glz::tuplet::tuple{conv_sv(args)...})};
    }
-
-   namespace detail
-   {
-      template <size_t... I>
-      constexpr auto enumerate_no_reflect_impl(auto&& t, std::index_sequence<I...>) noexcept
-      {
-         return glz::detail::Enum{std::array{std::pair{conv_sv(get<2 * I>(t)), get<2 * I + 1>(t)}...}};
-      }
-   }
-
+   
    // A faster compiling version of enumerate that does not support reflection
    constexpr auto enumerate_no_reflect(auto&&... args) noexcept
    {
-      return detail::enumerate_no_reflect_impl(glz::tuplet::tuple{args...},
-                                               std::make_index_sequence<sizeof...(args) / 2>{});
+      return [t = glz::tuplet::tuple{args...}]<size_t... I>(std::index_sequence<I...>) noexcept {
+         return glz::detail::Enum{std::array{std::pair{conv_sv(get<2 * I>(t)), get<2 * I + 1>(t)}...}};
+      }(std::make_index_sequence<sizeof...(args) / 2>{});
    }
 
    constexpr auto flags(auto&&... args) noexcept
