@@ -22,16 +22,12 @@
 
 namespace glz
 {
-   template <class T, T Value, size_t... Is>
-   consteval auto make_array_impl(std::index_sequence<Is...>)
-   {
-      return std::array<char, sizeof(T)>{static_cast<char>(((Value >> (CHAR_BIT * Is)) & 0xff))...};
-   }
-
    template <class T, T Value>
    consteval auto make_array()
-   {
-      return make_array_impl<T, Value>(std::make_index_sequence<sizeof(T)>());
+   {      
+      return []<size_t... I>(std::index_sequence<I...>) {
+         return std::array<char, sizeof(T)>{static_cast<char>(((Value >> (CHAR_BIT * I)) & 0xff))...};
+      }(std::make_index_sequence<sizeof(T)>{});
    }
 
    namespace detail
