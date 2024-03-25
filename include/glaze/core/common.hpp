@@ -202,59 +202,6 @@ namespace glz
 
    namespace detail
    {
-      template <int... I>
-      using is = std::integer_sequence<int, I...>;
-      template <int N>
-      using make_is = std::make_integer_sequence<int, N>;
-
-      constexpr auto size(const char* s) noexcept
-      {
-         int i = 0;
-         while (*s != 0) {
-            ++i;
-            ++s;
-         }
-         return i;
-      }
-
-      template <const char*, typename, const char*, typename>
-      struct concat_impl;
-
-      template <const char* S1, int... I1, const char* S2, int... I2>
-      struct concat_impl<S1, is<I1...>, S2, is<I2...>>
-      {
-         static constexpr const char value[]{S1[I1]..., S2[I2]..., 0};
-      };
-
-      template <const char* S1, const char* S2>
-      constexpr auto concat_char()
-      {
-         return concat_impl<S1, make_is<size(S1)>, S2, make_is<size(S2)>>::value;
-      }
-
-      template <size_t... Is>
-      struct seq
-      {};
-      template <size_t N, size_t... Is>
-      struct gen_seq : gen_seq<N - 1, N - 1, Is...>
-      {};
-      template <size_t... Is>
-      struct gen_seq<0, Is...> : seq<Is...>
-      {};
-
-      template <size_t N1, size_t... I1, size_t N2, size_t... I2>
-      constexpr std::array<const char, N1 + N2 - 1> concat(const char (&a1)[N1], const char (&a2)[N2], seq<I1...>,
-                                                           seq<I2...>)
-      {
-         return {{a1[I1]..., a2[I2]...}};
-      }
-
-      template <size_t N1, size_t N2>
-      constexpr std::array<const char, N1 + N2 - 1> concat_arrays(const char (&a1)[N1], const char (&a2)[N2])
-      {
-         return concat(a1, a2, gen_seq<N1 - 1>{}, gen_seq<N2>{});
-      }
-
       template <uint32_t Format>
       struct read
       {};
