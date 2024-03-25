@@ -669,7 +669,7 @@ namespace glz
                {std::make_pair<sv, size_t>(get_enum_key<T, I>(), I)...});
          }(std::make_index_sequence<N>{});
       }
-      
+
       template <class T>
       constexpr auto make_enum_to_string_map()
       {
@@ -680,7 +680,7 @@ namespace glz
                {std::make_pair<key_t, sv>(static_cast<key_t>(get_enum_value<T, I>()), get_enum_key<T, I>())...});
          }(std::make_index_sequence<N>{});
       }
-      
+
       // TODO: This faster approach can be used if the enum has an integer type base and sequential numbering
       template <class T>
       constexpr auto make_enum_to_string_array() noexcept
@@ -695,8 +695,7 @@ namespace glz
       {
          constexpr auto N = std::tuple_size_v<meta_t<T>>;
          return [&]<size_t... I>(std::index_sequence<I...>) {
-            return normal_map<sv, T, N>(
-               {std::pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
+            return normal_map<sv, T, N>({std::pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
          }(std::make_index_sequence<N>{});
       }
 
@@ -932,7 +931,7 @@ namespace glz
       using Tuple = std::decay_t<decltype(glz::tuplet::tuple{conv_sv(args)...})>;
       return glz::detail::Enum{group_builder<Tuple>::op(glz::tuplet::tuple{conv_sv(args)...})};
    }
-   
+
    // A faster compiling version of enumerate that does not support reflection
    constexpr auto enumerate_no_reflect(auto&&... args) noexcept
    {

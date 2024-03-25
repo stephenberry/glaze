@@ -41,7 +41,7 @@ namespace glz
       void* ptr;
       void (*fptr)();
    };
-   
+
    template <class = void, std::size_t... Is>
    constexpr auto indexer(std::index_sequence<Is...>) noexcept
    {

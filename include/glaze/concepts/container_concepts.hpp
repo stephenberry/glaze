@@ -57,7 +57,7 @@ namespace glz::detail
          container.push_back(std::declval<typename T::value_type>())
       };
    };
-   
+
    template <class T>
    concept emplace_backable = requires(T container) {
       {
@@ -99,7 +99,7 @@ namespace glz::detail
          container[size_t{}]
       } -> std::same_as<typename T::reference>;
    };
-   
+
    template <class T>
    concept map_subscriptable = requires(T container) {
       {
@@ -132,13 +132,13 @@ namespace glz::detail
          bitset.count()
       } -> std::same_as<size_t>;
    };
-   
+
    template <class T>
    concept is_span = requires(T t) {
       T::extent;
       typename T::element_type;
    };
-   
+
    template <class T>
    concept is_dynamic_span = T::extent == static_cast<size_t>(-1);
 
