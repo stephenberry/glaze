@@ -766,18 +766,14 @@ namespace glz
          }(std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{});
       }
 
-      template <class T, size_t... I>
-      constexpr auto make_string_to_enum_map_impl(std::index_sequence<I...>) noexcept
-      {
-         return normal_map<sv, T, std::tuple_size_v<meta_t<T>>>(
-            {std::pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
-      }
-
       template <class T>
       constexpr auto make_string_to_enum_map() noexcept
       {
-         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_string_to_enum_map_impl<T>(indices);
+         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         return [&]<size_t... I>(std::index_sequence<I...>) {
+            return normal_map<sv, T, N>(
+               {std::pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
+         }(std::make_index_sequence<N>{});
       }
 
       // get a std::string_view from an enum value
