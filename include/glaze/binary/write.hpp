@@ -226,14 +226,10 @@ namespace glz
          }
       };
 
-      template <class T, class V, size_t... Is>
-      constexpr std::size_t variant_index_impl(std::index_sequence<Is...>)
-      {
-         return ((std::is_same_v<T, std::variant_alternative_t<Is, V>> * Is) + ...);
-      }
-
       template <class T, class V>
-      constexpr size_t variant_index_v = variant_index_impl<T, V>(std::make_index_sequence<std::variant_size_v<V>>{});
+      constexpr size_t variant_index_v = []<size_t... I>(std::index_sequence<I...>) {
+         return ((std::is_same_v<T, std::variant_alternative_t<I, V>> * I) + ...);
+      }(std::make_index_sequence<std::variant_size_v<V>>{});
 
       template <is_variant T>
       struct to_binary<T> final
