@@ -824,7 +824,6 @@ namespace glz
          }
       };
 
-
       template <class T>
          requires(std::is_enum_v<T> && !glaze_enum_t<T> && !specialized_with_custom_read<T>)
       struct from_json<T>
