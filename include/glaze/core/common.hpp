@@ -1014,7 +1014,7 @@ namespace glz
 
    constexpr auto array(auto&&... args) noexcept
    {
-      return detail::Array{glz::tuplet::make_copy_tuple(conv_sv(args)...)};
+      return detail::Array{glz::tuplet::tuple{conv_sv(args)...}};
    }
 
    constexpr auto object(auto&&... args) noexcept
