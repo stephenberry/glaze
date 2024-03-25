@@ -139,7 +139,7 @@ namespace glz
             return glz::get<Index>(t);
          }
       };
-      return glz::tuplet::make_copy_tuple(get_elem(std::integral_constant<size_t, Is>{})...);
+      return glz::tuplet::tuple{get_elem(std::integral_constant<size_t, Is>{})...};
    }
 
    template <auto& GroupStartArr, auto& GroupSizeArr, class Tuple, size_t... GroupNumber>
