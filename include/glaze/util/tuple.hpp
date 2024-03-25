@@ -145,7 +145,7 @@ namespace glz
    template <auto& GroupStartArr, auto& GroupSizeArr, class Tuple, size_t... GroupNumber>
    constexpr auto make_groups_impl(Tuple&& t, std::index_sequence<GroupNumber...>)
    {
-      return glz::tuplet::make_copy_tuple(make_group<get<GroupNumber>(GroupStartArr)>(
+      return glz::tuplet::make_tuple(make_group<get<GroupNumber>(GroupStartArr)>(
          t, std::make_index_sequence<std::get<GroupNumber>(GroupSizeArr)>{})...);
    }
 
