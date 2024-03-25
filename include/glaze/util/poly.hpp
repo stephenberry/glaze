@@ -41,6 +41,29 @@ namespace glz
       void* ptr;
       void (*fptr)();
    };
+   
+   template <class = void, std::size_t... Is>
+   constexpr auto indexer(std::index_sequence<Is...>) noexcept
+   {
+      return []<class F>(F&& f) noexcept -> decltype(auto) {
+         return std::forward<F>(f)(std::integral_constant<std::size_t, Is>{}...);
+      };
+   }
+
+   // takes a number N
+   // returns a function object that, when passed a function object f
+   // passes it compile-time values from 0 to N-1 inclusive.
+   template <size_t N>
+   constexpr auto indexer() noexcept
+   {
+      return indexer(std::make_index_sequence<N>{});
+   }
+
+   template <size_t N, class Func>
+   constexpr auto for_each_poly(Func&& f) noexcept
+   {
+      return indexer<N>()([&](auto&&... i) noexcept { (std::forward<Func>(f)(i), ...); });
+   }
 
    template <class Spec>
    struct poly
@@ -53,7 +76,7 @@ namespace glz
          static constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
          static constexpr auto frozen_map = detail::make_map<std::remove_pointer_t<T>, false>();
 
-         for_each<N>([&](auto I) {
+         for_each_poly<N>([&](auto I) {
             static constexpr auto spec = meta_v<Spec>;
 
             static constexpr sv key = glz::get<0>(glz::get<I>(spec));
