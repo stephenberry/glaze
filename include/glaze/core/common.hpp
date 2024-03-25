@@ -1023,17 +1023,17 @@ namespace glz
          return glz::detail::Object{glz::tuplet::tuple{}};
       }
       else {
+         using Tuple = std::decay_t<decltype(glz::tuplet::tuple{conv_sv(args)...})>;
          return glz::detail::Object{
-            group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(conv_sv(args)...))>>::op(
-               glz::tuplet::make_copy_tuple(conv_sv(args)...))};
+            group_builder<Tuple>::op(glz::tuplet::tuple{conv_sv(args)...})};
       }
    }
 
    constexpr auto enumerate(auto&&... args) noexcept
    {
+      using Tuple = std::decay_t<decltype(glz::tuplet::tuple{conv_sv(args)...})>;
       return glz::detail::Enum{
-         group_builder<std::decay_t<decltype(glz::tuplet::make_copy_tuple(conv_sv(args)...))>>::op(
-            glz::tuplet::make_copy_tuple(conv_sv(args)...))};
+         group_builder<Tuple>::op(glz::tuplet::tuple{conv_sv(args)...})};
    }
 
    namespace detail
