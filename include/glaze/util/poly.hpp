@@ -41,6 +41,13 @@ namespace glz
       void* ptr;
       void (*fptr)();
    };
+   
+   template <std::size_t N, class Func>
+   constexpr void for_each_poly(Func&& f) {
+       [&]<std::size_t... I>(std::index_sequence<I...>) {
+           (f.template operator()<I>(), ...);
+       }(std::make_index_sequence<N>{});
+   }
 
    template <class Spec>
    struct poly
@@ -53,7 +60,7 @@ namespace glz
          static constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
          static constexpr auto frozen_map = detail::make_map<std::remove_pointer_t<T>, false>();
 
-         for_each<N>([&](auto I) {
+         for_each_poly<N>([&]<size_t I>() {
             static constexpr auto spec = meta_v<Spec>;
 
             static constexpr sv key = glz::get<0>(glz::get<I>(spec));
