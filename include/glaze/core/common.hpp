@@ -572,18 +572,13 @@ namespace glz
       template <class Tuple>
       using value_tuple_variant_t = typename value_tuple_variant<Tuple>::type;
 
-      template <class T, size_t... I>
-      inline constexpr auto make_array_impl(std::index_sequence<I...>)
-      {
-         using value_t = typename tuple_variant<meta_t<T>>::type;
-         return std::array<value_t, std::tuple_size_v<meta_t<T>>>{glz::get<I>(meta_v<T>)...};
-      }
-
       template <class T>
       inline constexpr auto make_array()
       {
-         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_array_impl<T>(indices);
+         return []<size_t... I>(std::index_sequence<I...>) {
+            using value_t = typename tuple_variant<meta_t<T>>::type;
+            return std::array<value_t, std::tuple_size_v<meta_t<T>>>{glz::get<I>(meta_v<T>)...};
+         }(std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{});
       }
 
       template <class Tuple, std::size_t... Is>
