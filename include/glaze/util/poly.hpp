@@ -69,10 +69,8 @@ namespace glz
    struct poly
    {
       template <class T>
-      poly(T&& v) : anything(std::forward<T>(v))
+      poly(T&& v) : anything(std::forward<T>(v)), raw_ptr(anything.data())
       {
-         raw_ptr = anything.data();
-
          static constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
          static constexpr auto frozen_map = detail::make_map<std::remove_pointer_t<T>, false>();
 
