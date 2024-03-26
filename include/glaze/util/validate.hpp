@@ -20,15 +20,16 @@ namespace glz
          size_t front_truncation{};
          size_t rear_truncation{};
       };
-      
+
       // We convert to only single spaces for error messages in order to keep the source info
       // calculation more efficient and avoid needing to allocate more memory.
-      inline void convert_tabs_to_single_spaces(std::string& input) noexcept {
-          for (auto& c : input) {
-              if (c == '\t') {
-                  c = ' ';
-              }
-          }
+      inline void convert_tabs_to_single_spaces(std::string& input) noexcept
+      {
+         for (auto& c : input) {
+            if (c == '\t') {
+               c = ' ';
+            }
+         }
       }
 
       inline std::optional<source_info> get_source_info(const std::string_view buffer, const size_t index)

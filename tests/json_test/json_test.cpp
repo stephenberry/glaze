@@ -2209,14 +2209,15 @@ suite error_outputs = [] {
       auto err = glz::format_error(pe, s);
       expect(err == "1:17: syntax_error\n   {\"Hello\":\"World\"x, \"color\": \"red\"}\n                   ^\n") << err;
    };
-   
+
    "invalid character with tabs in json"_test = [] {
       std::string s = R"({"Hello":	" 	World"x, "color": 	"red"})";
       std::map<std::string, std::string> m;
       auto pe = glz::read_json(m, s);
       expect(pe != glz::error_code::none);
       auto err = glz::format_error(pe, s);
-      expect(err == "1:20: syntax_error\n   {\"Hello\": \"  World\"x, \"color\":  \"red\"}\n                      ^\n") << err;
+      expect(err == "1:20: syntax_error\n   {\"Hello\": \"  World\"x, \"color\":  \"red\"}\n                      ^\n")
+         << err;
    };
 
    "extra comma"_test = [] {
