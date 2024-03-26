@@ -398,8 +398,9 @@ namespace glz::detail
 
    template <std::floating_point T, bool force_conformance = false>
       requires(sizeof(T) <= 8)
-   inline bool parse_float(T& val, const uint8_t*& cur) noexcept
+   inline bool parse_float(auto& val, const uint8_t*& cur) noexcept
    {
+      constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(val)>>;
       const uint8_t* sig_cut = nullptr; /* significant part cutting position for long number */
       [[maybe_unused]] const uint8_t* sig_end = nullptr; /* significant part ending position */
       const uint8_t* dot_pos = nullptr; /* decimal point position */
@@ -454,7 +455,12 @@ namespace glz::detail
       if (!digi_is_digit_or_fp(*cur)) {
          val = static_cast<T>(sig);
          if constexpr (!std::is_unsigned_v<T>) {
-            val *= sign ? -1 : 1;
+            if constexpr (is_volatile) {
+               val = val * (sign ? -1 : 1);
+            }
+            else {
+               val *= sign ? -1 : 1;
+            }
          }
          return true;
       }
@@ -507,7 +513,12 @@ namespace glz::detail
                cur++;
                val = static_cast<T>(sig);
                if constexpr (!std::is_unsigned_v<T>) {
-                  val *= sign ? -1 : 1;
+                  if constexpr (is_volatile) {
+                     val = val * (sign ? -1 : 1);
+                  }
+                  else {
+                     val *= sign ? -1 : 1;
+                  }
                }
                return true;
             }
@@ -629,15 +640,29 @@ namespace glz::detail
          // numbers must be exactly representable in this fast path
          if (sig < (uint64_t(1) << 53) && std::abs(exp) <= 22) {
             val = static_cast<T>(sig);
-            if constexpr (!std::is_unsigned_v<T>) {
-               val *= sign ? -1 : 1;
-            }
-            if (exp >= 0) {
-               val *= powers_of_ten_float[exp];
+            if constexpr (is_volatile) {
+               if constexpr (!std::is_unsigned_v<T>) {
+                  val = val * (sign ? -1 : 1);
+               }
+               if (exp >= 0) {
+                  val = val * powers_of_ten_float[exp];
+               }
+               else {
+                  val = val / powers_of_ten_float[-exp];
+               }
             }
             else {
-               val /= powers_of_ten_float[-exp];
+               if constexpr (!std::is_unsigned_v<T>) {
+                  val *= sign ? -1 : 1;
+               }
+               if (exp >= 0) {
+                  val *= powers_of_ten_float[exp];
+               }
+               else {
+                  val /= powers_of_ten_float[-exp];
+               }
             }
+            
             return true;
          }
       }
@@ -737,17 +762,23 @@ namespace glz::detail
             round = 1;
          }
       }
-
+      
       auto num = raw_t(sign) << (sizeof(raw_t) * 8 - 1) | raw_t(mantisa >> mantisa_shift) |
                  (raw_t(exp2 + std::numeric_limits<T>::max_exponent - 1) << (std::numeric_limits<T>::digits - 1));
-      num += raw_t(round);
-      std::memcpy(&val, &num, sizeof(T));
+      if constexpr (is_volatile) {
+         num = num + raw_t(round);
+         val = std::bit_cast<T>(num);
+      }
+      else {
+         num += raw_t(round);
+         std::memcpy(&val, &num, sizeof(T));
+      }
       return true;
    }
 
    template <std::floating_point T, bool force_conformance = false>
       requires(sizeof(T) <= 8)
-   inline bool parse_float(T& val, auto& itr) noexcept
+   inline bool parse_float(auto& val, auto& itr) noexcept
    {
       const uint8_t* cur = reinterpret_cast<const uint8_t*>(&*itr);
       const uint8_t* beg = cur;
