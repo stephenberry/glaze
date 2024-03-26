@@ -41,14 +41,14 @@ namespace glz::detail
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
    template <auto N, class T>
-   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<T>)>();
+   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<std::remove_volatile_t<T>>)>();
 #pragma clang diagnostic pop
 #elif __GNUC__
    template <auto N, class T>
-   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<T>)>();
+   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<std::remove_volatile_t<T>>)>();
 #else
    template <auto N, class T>
-   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<T>)>();
+   constexpr std::string_view get_name_impl = mangled_name<get_ptr<N>(external<std::remove_volatile_t<T>>)>();
 #endif
 
    struct GLAZE_REFLECTOR

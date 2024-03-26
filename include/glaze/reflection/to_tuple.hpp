@@ -1320,8 +1320,8 @@ namespace glz
       template <size_t N, class T>
       constexpr auto get_ptr(T&& t) noexcept
       {
-         decltype(auto) p = std::get<N>(to_tuple(t));
-         return ptr_t<decay_keep_volatile_t<decltype(p)>>{&p};
+         auto& p = std::get<N>(to_tuple(t));
+         return ptr_t<std::decay_t<decltype(p)>>{&p};
       }
    }
 }
