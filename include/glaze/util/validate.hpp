@@ -70,17 +70,17 @@ namespace glz
                }
             }
          }
-         
+
          std::string context = [&]() -> std::string {
             if constexpr (std::same_as<V, std::byte>) {
                return {reinterpret_cast<const char*>(&(*context_begin)),
-                                   reinterpret_cast<const char*>(&(*context_end))};
+                       reinterpret_cast<const char*>(&(*context_end))};
             }
             else {
                return {context_begin, context_end};
             }
          }();
-         
+
          convert_tabs_to_single_spaces(context);
          return source_info{line, column, context, index, front_truncation, rear_truncation};
       }
