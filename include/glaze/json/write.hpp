@@ -47,8 +47,7 @@ namespace glz
          }
       };
 
-      template <class T>
-         requires (glaze_value_t<T> && !specialized_with_custom_write<T>)
+      template <glaze_value_t T>
       struct to_json<T>
       {
          template <auto Opts, class Value, is_context Ctx, class B, class IX>
@@ -409,7 +408,7 @@ namespace glz
       };
 
       template <class T>
-         requires (glaze_enum_t<T> && !specialized_with_custom_write<T>)
+         requires(glaze_enum_t<T> && !specialized_with_custom_write<T>)
       struct to_json<T>
       {
          template <auto Opts, class... Args>
