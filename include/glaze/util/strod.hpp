@@ -662,7 +662,7 @@ namespace glz::detail
                   val /= powers_of_ten_float[-exp];
                }
             }
-            
+
             return true;
          }
       }
@@ -762,7 +762,7 @@ namespace glz::detail
             round = 1;
          }
       }
-      
+
       auto num = raw_t(sign) << (sizeof(raw_t) * 8 - 1) | raw_t(mantisa >> mantisa_shift) |
                  (raw_t(exp2 + std::numeric_limits<T>::max_exponent - 1) << (std::numeric_limits<T>::digits - 1));
       if constexpr (is_volatile) {

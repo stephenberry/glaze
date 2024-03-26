@@ -7168,7 +7168,7 @@ suite volatile_tests = [] {
       expect(!glz::read_json(i, "42"));
       expect(i == 42);
    };
-   
+
    "basic volatile pointer"_test = [] {
       volatile int i = 5;
       volatile int* ptr = &i;
@@ -7180,19 +7180,19 @@ suite volatile_tests = [] {
       expect(*ptr == 42);
       expect(i == 42);
    };
-   
+
    "volatile struct_for_volatile"_test = [] {
       volatile struct_for_volatile obj{{1, 2, 3, 4}, true, -7, 9.9, 12};
       std::string s{};
       glz::write_json(obj, s);
       expect(s == R"({"a":[1,2,3,4],"b":true,"c":-7,"d":9.9,"e":12})") << s;
-      
+
       obj.a = glz::volatile_array<uint16_t, 4>{};
       obj.b = false;
       obj.c = 0;
       obj.d = 0.0;
       obj.e = 0;
-      
+
       expect(!glz::read_json(obj, s));
       expect(obj.a == glz::volatile_array<uint16_t, 4>{1, 2, 3, 4});
       expect(obj.b == true);
