@@ -61,7 +61,7 @@ namespace glz
                if (I == item_number - 1) {
                   decltype(auto) func = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
-                        return std::get<I>(t);
+                        return glz::get<I>(t);
                      }
                      else {
                         return get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
@@ -134,7 +134,7 @@ namespace glz
                   else if constexpr (glaze_object_t<E> || reflectable<E>) {
                      std::atomic<bool> menu_boolean = true;
                      if constexpr (reflectable<T>) {
-                        run_cli_menu<Opts>(std::get<I>(t), menu_boolean);
+                        run_cli_menu<Opts>(glz::get<I>(t), menu_boolean);
                      }
                      else {
                         decltype(auto) v = get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
@@ -176,7 +176,7 @@ namespace glz
 
                decltype(auto) func = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
-                     return std::get<I>(t);
+                     return glz::get<I>(t);
                   }
                   else {
                      return get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
