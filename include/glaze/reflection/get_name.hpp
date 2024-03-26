@@ -8,7 +8,6 @@
 #include <string_view>
 
 #include "glaze/reflection/to_tuple.hpp"
-#include "glaze/tuplet/tuple.hpp"
 #include "glaze/util/string_literal.hpp"
 
 #if defined(__clang__) || defined(__GNUC__)

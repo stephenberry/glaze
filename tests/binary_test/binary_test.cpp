@@ -15,6 +15,7 @@
 #include <unordered_set>
 
 #include "boost/ut.hpp"
+#include "glaze/binary/beve_to_json.hpp"
 #include "glaze/binary/read.hpp"
 #include "glaze/binary/write.hpp"
 

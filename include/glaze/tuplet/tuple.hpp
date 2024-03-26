@@ -1,7 +1,6 @@
 // source: https://github.com/codeinred/tuplet
 
-#ifndef TUPLET_TUPLET_HPP_IMPLEMENTATION
-#define TUPLET_TUPLET_HPP_IMPLEMENTATION
+#pragma once
 
 #include <compare>
 #include <cstddef>
@@ -653,4 +652,3 @@ namespace std
       using type = std::conditional_t<I == 0, A, B>;
    };
 } // namespace std
-#endif
