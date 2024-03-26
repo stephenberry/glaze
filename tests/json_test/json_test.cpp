@@ -7210,7 +7210,7 @@ suite volatile_tests = [] {
       expect(obj.e == 12);
    };
    
-   /*"volatile my_volatile_struct"_test = [] {
+   "volatile my_volatile_struct"_test = [] {
       volatile my_volatile_struct obj{{1, 2, 3, 4}, true, -7, 9.9, 12};
       std::string s{};
       glz::write_json(obj, s);
@@ -7228,7 +7228,7 @@ suite volatile_tests = [] {
       expect(obj.c == -7);
       expect(obj.d == 9.9);
       expect(obj.e == 12);
-   };*/
+   };
 };
 
 int main()

@@ -1559,13 +1559,14 @@ namespace glz
             else {
                // Only used if error_on_missing_keys = true
                [[maybe_unused]] bit_array<num_members> fields{};
-
+               
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T> && num_members > 0) {
+                     using V = decay_keep_volatile_t<decltype(value)>;
 #if ((defined _MSC_VER) && (!defined __clang__))
-                     static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();
+                     static thread_local auto cmap = make_map<V, Opts.use_hash_comparison>();
 #else
-                     static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+                     static thread_local constinit auto cmap = make_map<V, Opts.use_hash_comparison>();
 #endif
                      // We want to run this populate outside of the while loop
                      populate_map(value, cmap); // Function required for MSVC to build
@@ -1646,6 +1647,7 @@ namespace glz
                         return;
                   }
                   else if constexpr (glaze_object_t<T> || reflectable<T>) {
+                     static_assert(!std::same_as<std::decay_t<decltype(frozen_map)>, std::nullptr_t>);
                      std::conditional_t<Opts.error_on_unknown_keys, const sv, sv> key =
                         parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]

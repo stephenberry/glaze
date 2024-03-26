@@ -103,8 +103,8 @@ namespace glz
          // we have to populate the pointers in the reflection map from the structured binding
          auto t = to_tuple(std::forward<T>(value));
          [&]<size_t... I>(std::index_sequence<I...>) {
-            ((std::get<std::add_pointer_t<decay_keep_volatile_t<decltype(std::get<I>(t))>>>(std::get<I>(cmap.items).second) =
-              &std::get<I>(t)), ...);
+            ((std::get<std::add_pointer_t<decay_keep_volatile_t<decltype(glz::get<I>(t))>>>(glz::get<I>(cmap.items).second) =
+              &glz::get<I>(t)), ...);
          }(std::make_index_sequence<count_members<T>>{});
       }
 
@@ -113,18 +113,18 @@ namespace glz
       struct tuple_ptr;
 
       template <class... Ts>
-      struct tuple_ptr<std::tuple<Ts...>>
+      struct tuple_ptr<glz::tuplet::tuple<Ts...>>
       {
-         using type = std::tuple<std::add_pointer_t<Ts>...>;
+         using type = glz::tuplet::tuple<std::add_pointer_t<Ts>...>;
       };
 
       template <class Tuple>
       struct tuple_ptr_const;
 
       template <class... Ts>
-      struct tuple_ptr_const<std::tuple<Ts...>>
+      struct tuple_ptr_const<glz::tuplet::tuple<Ts...>>
       {
-         using type = std::tuple<std::add_pointer_t<std::add_const_t<std::remove_reference_t<Ts>>>...>;
+         using type = glz::tuplet::tuple<std::add_pointer_t<std::add_const_t<std::remove_reference_t<Ts>>>...>;
       };
 
       // This is needed to hack a fix for MSVC evaluating wrong `if constexpr` branches
@@ -132,7 +132,7 @@ namespace glz
          requires(!reflectable<T>)
       constexpr auto make_tuple_from_struct() noexcept
       {
-         return std::tuple{};
+         return glz::tuplet::tuple{};
       }
 
       // This needs to produce const qualified pointers so that we can write out const structs
@@ -157,7 +157,7 @@ namespace glz
          // we have to populate the pointers in the reflection tuple from the structured binding
          auto t = to_tuple(std::forward<T>(value));
          [&]<size_t... I>(std::index_sequence<I...>) {
-            ((std::get<I>(tuple_of_ptrs) = &std::get<I>(t)), ...);
+            ((glz::get<I>(tuple_of_ptrs) = &glz::get<I>(t)), ...);
          }(std::make_index_sequence<count_members<T>>{});
       }
    }

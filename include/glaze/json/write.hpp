@@ -1173,7 +1173,7 @@ namespace glz
 
                decltype(auto) member = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
-                     return std::get<I>(t);
+                     return glz::get<I>(t);
                   }
                   else {
                      return get<member_index>(get<I>(meta_v<std::decay_t<T>>));
