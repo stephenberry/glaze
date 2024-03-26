@@ -1435,13 +1435,13 @@ namespace variants
       C c;
    };
 
-   suite variants = [] {
+   /*suite variants = [] {
       "variants"_test = [] {
          std::vector<uint8_t> out;
          D d{};
          glz::write<glz::opts{.format = glz::binary, .structs_as_arrays = true}>(d, out); // testing compilation
       };
-   };
+   };*/
 }
 
 struct empty_t

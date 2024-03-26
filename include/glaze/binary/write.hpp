@@ -555,7 +555,7 @@ namespace glz
       };
 
       template <class T>
-         requires ((glaze_object_t<T> || reflectable<T>) && !tuple_t<T>)
+         requires (glaze_object_t<T> || reflectable<T>)
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
@@ -653,10 +653,14 @@ namespace glz
             dump_compressed_int<N>(args...);
 
             if constexpr (is_std_tuple<T>) {
-               for_each<N>([&](auto I) { write<binary>::op<Opts>(std::get<I>(value), ctx, args...); });
+               [&]<size_t... I>(std::index_sequence<I...>) {
+                  (write<binary>::op<Opts>(std::get<I>(value), ctx, args...), ...);
+               }(std::make_index_sequence<N>{});
             }
             else {
-               for_each<N>([&](auto I) { write<binary>::op<Opts>(glz::get<I>(value), ctx, args...); });
+               [&]<size_t... I>(std::index_sequence<I...>) {
+                  (write<binary>::op<Opts>(glz::get<I>(value), ctx, args...), ...);
+               }(std::make_index_sequence<N>{});
             }
          }
       };

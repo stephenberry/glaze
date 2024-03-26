@@ -201,6 +201,7 @@ namespace glz
       template <class... T>
       struct tuple : tuple_base_t<T...>
       {
+         static constexpr auto glaze_reflect = false;
          constexpr static size_t N = sizeof...(T);
          using super = tuple_base_t<T...>;
          using super::operator[];

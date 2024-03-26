@@ -760,7 +760,7 @@ namespace glz
       };
 
       template <class T>
-         requires glaze_object_t<T> || reflectable<T>
+         requires (glaze_object_t<T> || reflectable<T>)
       struct from_binary<T> final
       {
          template <auto Opts>
@@ -893,7 +893,7 @@ namespace glz
       };
 
       template <class T>
-         requires is_std_tuple<T>
+         requires (tuple_t<T> || is_std_tuple<T>)
       struct from_binary<T> final
       {
          template <auto Opts>
@@ -909,7 +909,12 @@ namespace glz
             skip_compressed_int(it, end);
 
             using V = std::decay_t<T>;
-            for_each<std::tuple_size_v<V>>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+            if constexpr (is_std_tuple<T>) {
+               for_each<std::tuple_size_v<V>>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+            }
+            else {
+               for_each<std::tuple_size_v<V>>([&](auto I) { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+            }
          }
       };
    }
