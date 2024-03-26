@@ -781,7 +781,7 @@ namespace glz
 
          constexpr auto N = std::variant_size_v<T>;
          for_each<N>([&](auto I) {
-            using V = std::decay_t<std::variant_alternative_t<I, T>>;
+            using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
             if constexpr (reflectable<V>) {
                for_each<std::tuple_size_v<decltype(member_names<V>)>>(
                   [&](auto J) { deduction_map.find(get<J>(member_names<V>))->second[I] = true; });
