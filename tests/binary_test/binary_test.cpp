@@ -1409,30 +1409,30 @@ namespace variants
 {
    struct A
    {
-      uint8_t a;
+      uint8_t a{};
    };
 
    struct A1
    {
-      std::map<uint8_t, uint64_t> a;
+      std::map<uint8_t, uint64_t> a{};
    };
 
    struct B
    {
-      uint8_t b;
-      A1 a;
+      uint8_t b{};
+      A1 a{};
    };
 
    struct C
    {
-      bool is_a;
-      std::map<uint8_t, std::variant<A, B>> a;
+      bool is_a{};
+      std::map<uint8_t, std::variant<A, B>> a{};
    };
 
    class D
    {
      public:
-      C c;
+      C c{};
    };
 
    /*suite variants = [] {

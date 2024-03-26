@@ -60,7 +60,7 @@ namespace glz
 
       template <class T, size_t N = count_members<T>>
          requires(N <= 128)
-      constexpr decltype(auto) to_tuple(T&& t)
+      constexpr auto to_tuple(T&& t)
       {
          if constexpr (N == 0) {
             return glz::tuplet::tuple{};
