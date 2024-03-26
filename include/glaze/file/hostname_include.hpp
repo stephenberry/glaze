@@ -42,7 +42,7 @@ namespace glz
 
       constexpr decltype(auto) operator()(auto&& value) const noexcept
       {
-         using V = std::decay_t<decltype(value)>;
+         using V = decay_keep_volatile_t<decltype(value)>;
          return detail::hostname_includer<V>{value};
       }
    };

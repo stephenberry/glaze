@@ -1131,26 +1131,26 @@ namespace glz
             }
 
             using Info = object_type_info<Options, T>;
-
-            using V = std::decay_t<T>;
+            
             static constexpr auto N = Info::N;
 
             [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
+                  using V = decay_keep_volatile_t<decltype(value)>;
                   if constexpr (std::is_const_v<std::remove_reference_t<decltype(value)>>) {
 #if ((defined _MSC_VER) && (!defined __clang__))
-                     static thread_local auto tuple_of_ptrs = make_const_tuple_from_struct<T>();
+                     static thread_local auto tuple_of_ptrs = make_const_tuple_from_struct<V>();
 #else
-                     static thread_local constinit auto tuple_of_ptrs = make_const_tuple_from_struct<T>();
+                     static thread_local constinit auto tuple_of_ptrs = make_const_tuple_from_struct<V>();
 #endif
                      populate_tuple_ptr(value, tuple_of_ptrs);
                      return tuple_of_ptrs;
                   }
                   else {
 #if ((defined _MSC_VER) && (!defined __clang__))
-                     static thread_local auto tuple_of_ptrs = make_tuple_from_struct<T>();
+                     static thread_local auto tuple_of_ptrs = make_tuple_from_struct<V>();
 #else
-                     static thread_local constinit auto tuple_of_ptrs = make_tuple_from_struct<T>();
+                     static thread_local constinit auto tuple_of_ptrs = make_tuple_from_struct<V>();
 #endif
                      populate_tuple_ptr(value, tuple_of_ptrs);
                      return tuple_of_ptrs;
@@ -1176,7 +1176,7 @@ namespace glz
                      return std::get<I>(t);
                   }
                   else {
-                     return get<member_index>(get<I>(meta_v<V>));
+                     return get<member_index>(get<I>(meta_v<std::decay_t<T>>));
                   }
                }();
 
@@ -1238,7 +1238,7 @@ namespace glz
                   static constexpr size_t comment_index = member_index + 1;
                   static constexpr auto S = std::tuple_size_v<typename Element::Item>;
                   if constexpr (Opts.comments && S > comment_index) {
-                     static constexpr auto i = glz::get<I>(meta_v<V>);
+                     static constexpr auto i = glz::get<I>(meta_v<std::decay_t<T>>);
                      if constexpr (std::is_convertible_v<decltype(get<comment_index>(i)), sv>) {
                         static constexpr sv comment = get<comment_index>(i);
                         if constexpr (comment.size() > 0) {

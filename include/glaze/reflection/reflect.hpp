@@ -94,7 +94,7 @@ namespace glz
          requires(!glaze_t<T> && !array_t<T> && std::is_aggregate_v<std::remove_cvref_t<T>>)
       {
          constexpr auto indices = std::make_index_sequence<count_members<T>>{};
-         return make_reflection_map_impl<std::decay_t<T>, use_hash_comparison>(indices);
+         return make_reflection_map_impl<decay_keep_volatile_t<T>, use_hash_comparison>(indices);
       }
 
       template <reflectable T>
@@ -102,10 +102,10 @@ namespace glz
       {
          // we have to populate the pointers in the reflection map from the structured binding
          auto t = to_tuple(std::forward<T>(value));
-         for_each<count_members<T>>([&](auto I) {
-            std::get<std::add_pointer_t<std::decay_t<decltype(std::get<I>(t))>>>(std::get<I>(cmap.items).second) =
-               &std::get<I>(t);
-         });
+         [&]<size_t... I>(std::index_sequence<I...>) {
+            ((std::get<std::add_pointer_t<decay_keep_volatile_t<decltype(std::get<I>(t))>>>(std::get<I>(cmap.items).second) =
+              &std::get<I>(t)), ...);
+         }(std::make_index_sequence<count_members<T>>{});
       }
 
       // We create const and not-const versions for when our reflected struct is const or non-const qualified
@@ -132,21 +132,21 @@ namespace glz
          requires(!reflectable<T>)
       constexpr auto make_tuple_from_struct() noexcept
       {
-         return std::tuple{};
+         return glz::tuplet::tuple{};
       }
 
       // This needs to produce const qualified pointers so that we can write out const structs
       template <reflectable T>
       constexpr auto make_tuple_from_struct() noexcept
       {
-         using V = std::decay_t<decltype(to_tuple(std::declval<T>()))>;
+         using V = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
          return typename tuple_ptr<V>::type{};
       }
 
       template <reflectable T>
       constexpr auto make_const_tuple_from_struct() noexcept
       {
-         using V = std::decay_t<decltype(to_tuple(std::declval<T>()))>;
+         using V = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
          return typename tuple_ptr_const<V>::type{};
       }
 
@@ -156,7 +156,9 @@ namespace glz
       {
          // we have to populate the pointers in the reflection tuple from the structured binding
          auto t = to_tuple(std::forward<T>(value));
-         for_each<count_members<T>>([&](auto I) { std::get<I>(tuple_of_ptrs) = &std::get<I>(t); });
+         [&]<size_t... I>(std::index_sequence<I...>) {
+            ((std::get<I>(tuple_of_ptrs) = &std::get<I>(t)), ...);
+         }(std::make_index_sequence<count_members<T>>{});
       }
    }
 }

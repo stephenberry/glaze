@@ -228,4 +228,7 @@ namespace glz
    // checks if type is a lambda with all known arguments
    template <class T>
    concept is_invocable_concrete = requires { typename invocable_traits<decltype(&T::operator())>::result_type; };
+   
+   template <class T>
+   using decay_keep_volatile_t = std::remove_const_t<std::remove_reference_t<T>>;
 }

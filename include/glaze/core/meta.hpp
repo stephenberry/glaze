@@ -129,13 +129,13 @@ namespace glz
    }();
 
    template <class T>
-   inline constexpr auto meta_v = meta_wrapper_v<std::decay_t<T>>.value;
+   inline constexpr auto meta_v = meta_wrapper_v<decay_keep_volatile_t<T>>.value;
 
    template <class T>
-   using meta_t = std::decay_t<decltype(meta_v<T>)>;
+   using meta_t = decay_keep_volatile_t<decltype(meta_v<T>)>;
 
    template <class T>
-   using meta_wrapper_t = std::decay_t<decltype(meta_wrapper_v<std::decay_t<T>>)>;
+   using meta_wrapper_t = decay_keep_volatile_t<decltype(meta_wrapper_v<std::decay_t<T>>)>;
 
    template <class T>
    struct remove_meta_wrapper
