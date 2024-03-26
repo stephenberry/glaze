@@ -7216,7 +7216,7 @@ suite volatile_tests = [] {
       glz::write_json(obj, s);
       expect(s == R"({"a":[1,2,3,4],"b":true,"c":-7,"d":9.9,"e":12})") << s;
 
-      obj.a = glz::volatile_array<uint16_t, 4>{};
+      obj.a.fill(0);
       obj.b = false;
       obj.c = 0;
       obj.d = 0.0;
