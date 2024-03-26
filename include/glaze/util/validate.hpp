@@ -113,7 +113,7 @@ namespace glz
          for (size_t i = 0; i < info.column - 1 - info.front_truncation; ++i) {
             s += " ";
          }
-         s += "^\n";
+         s += "^";
 
          return s;
       }

@@ -2207,7 +2207,7 @@ suite error_outputs = [] {
       auto pe = glz::read_json(m, s);
       expect(pe != glz::error_code::none);
       auto err = glz::format_error(pe, s);
-      expect(err == "1:17: syntax_error\n   {\"Hello\":\"World\"x, \"color\": \"red\"}\n                   ^\n") << err;
+      expect(err == "1:17: syntax_error\n   {\"Hello\":\"World\"x, \"color\": \"red\"}\n                   ^") << err;
    };
 
    "invalid character with tabs in json"_test = [] {
@@ -2216,7 +2216,7 @@ suite error_outputs = [] {
       auto pe = glz::read_json(m, s);
       expect(pe != glz::error_code::none);
       auto err = glz::format_error(pe, s);
-      expect(err == "1:20: syntax_error\n   {\"Hello\": \"  World\"x, \"color\":  \"red\"}\n                      ^\n")
+      expect(err == "1:20: syntax_error\n   {\"Hello\": \"  World\"x, \"color\":  \"red\"}\n                      ^")
          << err;
    };
 
@@ -2235,7 +2235,7 @@ suite error_outputs = [] {
       auto ex = glz::read_json<error_comma_obj>(s);
       expect(!ex.has_value());
       auto err = glz::format_error(ex.error(), s);
-      expect(err == "10:6: syntax_error\n        ]\n        ^\n") << err;
+      expect(err == "10:6: syntax_error\n        ]\n        ^") << err;
    };
 };
 
