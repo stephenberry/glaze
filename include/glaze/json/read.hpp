@@ -798,7 +798,7 @@ namespace glz
       };
 
       template <class T>
-         requires (glaze_enum_t<T> && !specialized_with_custom_read<T>)
+         requires(glaze_enum_t<T> && !specialized_with_custom_read<T>)
       struct from_json<T>
       {
          template <auto Opts>
