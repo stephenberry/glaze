@@ -249,7 +249,7 @@ ut::suite struct_test_cases = [] {
       auto s = glz::write_json(response_vec);
       ut::expect(
          s ==
-         R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:66: syntax_error\n..._method_name\",\"params\":{},\"id:\"uuid\"}\"\n                                  ^\n"},"id":null}])")
+         R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:66: syntax_error\n..._method_name\",\"params\":{},\"id:\"uuid\"}\"\n                                  ^"},"id":null}])")
          << s;
       ut::expect(response_vec.at(0).error.has_value());
       ut::expect(response_vec.at(0).error->code == rpc::error_e::parse_error);
@@ -265,7 +265,7 @@ ut::suite struct_test_cases = [] {
       auto s = glz::write_json(response_vec);
       ut::expect(
          s ==
-         R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:132: syntax_error\n...\"invalid_method_name\",\"params\":]\"\n                                  ^\n"},"id":null}])")
+         R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:132: syntax_error\n...\"invalid_method_name\",\"params\":]\"\n                                  ^"},"id":null}])")
          << s;
       ut::expect(response_vec.at(0).error.has_value());
       ut::expect(response_vec.at(0).error->code == rpc::error_e::parse_error);
@@ -291,7 +291,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(response_vec.size() == 1);
       ut::expect(
          glz::write_json(response_vec) ==
-         R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   1\n   ^\n"},"id":null}])");
+         R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   1\n   ^"},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
       ut::expect(response_vec.at(0).error->code == rpc::error_e::invalid_request);
    };
@@ -304,7 +304,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(response_vec.size() == 3);
       ut::expect(
          glz::write_json(response_vec) ==
-         R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   1\n   ^\n"},"id":null},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   2\n   ^\n"},"id":null},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   3\n   ^\n"},"id":null}])");
+         R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   1\n   ^"},"id":null},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   2\n   ^"},"id":null},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   3\n   ^"},"id":null}])");
       for (auto& response : response_vec) {
          ut::expect(response.error.has_value());
          ut::expect(response.error->code == glz::rpc::error_e::invalid_request);
@@ -329,7 +329,7 @@ ut::suite struct_test_cases = [] {
       // Note one of the requests is a valid notification(no id) a response won't be generated for it
       ut::expect(
          response ==
-         R"([{"jsonrpc":"2.0","result":{"foo_c":false,"foo_d":""},"id":"42"},{"jsonrpc":"2.0","result":{"bar_c":false,"bar_d":""},"id":"bar-uuid"},{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":"Method: 'invalid_method_name' not found"},"id":"2"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:4: unknown_key\n   {\"foo\": \"boo\"}\n      ^\n"},"id":null},{"jsonrpc":"2.0","result":{"foo_c":false,"foo_d":""},"id":"4222222"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:21: unknown_key\n   {\"jsonrpc\":\"2.0\",\"invalid_method_key\":\"foo\",\"params\":{},\"id\":\"42\n                       ^\n"},"id":"4222222"}])")
+         R"([{"jsonrpc":"2.0","result":{"foo_c":false,"foo_d":""},"id":"42"},{"jsonrpc":"2.0","result":{"bar_c":false,"bar_d":""},"id":"bar-uuid"},{"jsonrpc":"2.0","error":{"code":-32601,"message":"Method not found","data":"Method: 'invalid_method_name' not found"},"id":"2"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:4: unknown_key\n   {\"foo\": \"boo\"}\n      ^"},"id":null},{"jsonrpc":"2.0","result":{"foo_c":false,"foo_d":""},"id":"4222222"},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:21: unknown_key\n   {\"jsonrpc\":\"2.0\",\"invalid_method_key\":\"foo\",\"params\":{},\"id\":\"42\n                       ^"},"id":"4222222"}])")
          << response;
    };
 

@@ -70,18 +70,19 @@ namespace glz
                }
             }
          }
-
-         if constexpr (std::same_as<V, std::byte>) {
-            std::string context{reinterpret_cast<const char*>(&(*context_begin)),
-                                reinterpret_cast<const char*>(&(*context_end))};
-            convert_tabs_to_single_spaces(context);
-            return source_info{line, column, context, index, front_truncation, rear_truncation};
-         }
-         else {
-            std::string context{context_begin, context_end};
-            convert_tabs_to_single_spaces(context);
-            return source_info{line, column, context, index, front_truncation, rear_truncation};
-         }
+         
+         std::string context = [&]() -> std::string {
+            if constexpr (std::same_as<V, std::byte>) {
+               return {reinterpret_cast<const char*>(&(*context_begin)),
+                                   reinterpret_cast<const char*>(&(*context_end))};
+            }
+            else {
+               return {context_begin, context_end};
+            }
+         }();
+         
+         convert_tabs_to_single_spaces(context);
+         return source_info{line, column, context, index, front_truncation, rear_truncation};
       }
 
       inline std::string generate_error_string(const std::string_view error, const source_info& info,
@@ -112,7 +113,7 @@ namespace glz
          for (size_t i = 0; i < info.column - 1 - info.front_truncation; ++i) {
             s += " ";
          }
-         s += "^\n";
+         s += "^";
 
          return s;
       }
