@@ -94,7 +94,7 @@ namespace glz
          requires(!glaze_t<T> && !array_t<T> && std::is_aggregate_v<std::remove_cvref_t<T>>)
       {
          constexpr auto indices = std::make_index_sequence<count_members<T>>{};
-         return make_reflection_map_impl<std::decay_t<T>, use_hash_comparison>(indices);
+         return make_reflection_map_impl<decay_keep_volatile_t<T>, use_hash_comparison>(indices);
       }
 
       template <reflectable T>
@@ -139,14 +139,14 @@ namespace glz
       template <reflectable T>
       constexpr auto make_tuple_from_struct() noexcept
       {
-         using V = std::decay_t<decltype(to_tuple(std::declval<T>()))>;
+         using V = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
          return typename tuple_ptr<V>::type{};
       }
 
       template <reflectable T>
       constexpr auto make_const_tuple_from_struct() noexcept
       {
-         using V = std::decay_t<decltype(to_tuple(std::declval<T>()))>;
+         using V = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
          return typename tuple_ptr_const<V>::type{};
       }
 

@@ -149,7 +149,7 @@ namespace glz
 
       constexpr decltype(auto) operator()(auto&& value) const noexcept
       {
-         return includer<std::decay_t<decltype(value)>>{value};
+         return includer<decay_keep_volatile_t<decltype(value)>>{value};
       }
    };
 
@@ -482,7 +482,7 @@ namespace glz
       template <class Tuple, size_t I>
       struct member_type
       {
-         using T0 = std::decay_t<std::tuple_element_t<0, std::tuple_element_t<I, Tuple>>>;
+         using T0 = decay_keep_volatile_t<std::tuple_element_t<0, std::tuple_element_t<I, Tuple>>>;
          using type = std::tuple_element_t<std::is_member_pointer_v<T0> ? 0 : 1, std::tuple_element_t<I, Tuple>>;
       };
 
@@ -643,7 +643,7 @@ namespace glz
       constexpr auto make_map()
       {
          constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_map_impl<std::decay_t<T>, use_hash_comparison>(indices);
+         return make_map_impl<decay_keep_volatile_t<T>, use_hash_comparison>(indices);
       }
 
       /*template <class T, size_t... I>
