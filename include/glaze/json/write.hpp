@@ -407,7 +407,8 @@ namespace glz
          }
       };
 
-      template <glaze_enum_t T>
+      template <class T>
+         requires (glaze_enum_t && !specialized_with_custom_write<T>)
       struct to_json<T>
       {
          template <auto Opts, class... Args>
