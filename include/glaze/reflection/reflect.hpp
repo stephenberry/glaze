@@ -156,7 +156,9 @@ namespace glz
       {
          // we have to populate the pointers in the reflection tuple from the structured binding
          auto t = to_tuple(std::forward<T>(value));
-         for_each<count_members<T>>([&](auto I) { std::get<I>(tuple_of_ptrs) = &std::get<I>(t); });
+         [&]<size_t... I>(std::index_sequence<I...>) {
+            ((std::get<I>(tuple_of_ptrs) = &std::get<I>(t)), ...);
+         }(std::make_index_sequence<count_members<T>>{});
       }
    }
 }
