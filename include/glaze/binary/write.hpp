@@ -555,7 +555,7 @@ namespace glz
       };
 
       template <class T>
-         requires glaze_object_t<T> || reflectable<T>
+         requires ((glaze_object_t<T> || reflectable<T>) && !tuple_t<T>)
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
