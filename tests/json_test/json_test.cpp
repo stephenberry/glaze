@@ -283,7 +283,7 @@ suite escaping_tests = [] {
 
    "escaped_char read"_test = [] {
       std::string in = R"("\b")";
-      char c;
+      char c{};
       expect(glz::read_json(c, in) == glz::error_code::none);
       expect(c == '\b');
 
