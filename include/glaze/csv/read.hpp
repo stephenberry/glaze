@@ -53,7 +53,7 @@ namespace glz
                return;
             }
 
-            using V = std::decay_t<decltype(value)>;
+            using V = decay_keep_volatile_t<decltype(value)>;
             if constexpr (int_t<V>) {
                if constexpr (std::is_unsigned_v<V>) {
                   uint64_t i{};
