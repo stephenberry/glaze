@@ -154,7 +154,7 @@ namespace glz
             constexpr auto& names = member_names<json_schema_type<T>>;
             return [&]<size_t... I>(std::index_sequence<I...>) {
                return detail::normal_map<sv, schema, N>(
-                  std::array<std::pair<sv, schema>, N>{std::pair{names[I], glz::get<I>(tuple)}...});
+                  std::array<std::pair<sv, schema>, N>{std::pair{names[I], std::get<I>(tuple)}...});
             }(std::make_index_sequence<N>{});
          }
          else {

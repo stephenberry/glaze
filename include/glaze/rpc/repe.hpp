@@ -338,7 +338,7 @@ namespace glz::repe
             using E = typename Element::type;
             decltype(auto) func = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
-                  return glz::get<I>(t);
+                  return std::get<I>(t);
                }
                else {
                   return get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
