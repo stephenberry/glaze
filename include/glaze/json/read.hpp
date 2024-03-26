@@ -132,7 +132,7 @@ namespace glz
       };
 
       template <class T>
-         requires (glaze_value_t<T> && !specialized_with_custom_read<T>)
+         requires(glaze_value_t<T> && !specialized_with_custom_read<T>)
       struct from_json<T>
       {
          template <auto Opts, class Value, is_context Ctx, class It0, class It1>
