@@ -1559,7 +1559,7 @@ namespace glz
             else {
                // Only used if error_on_missing_keys = true
                [[maybe_unused]] bit_array<num_members> fields{};
-               
+
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T> && num_members > 0) {
                      using V = decay_keep_volatile_t<decltype(value)>;

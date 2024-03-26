@@ -1131,7 +1131,7 @@ namespace glz
             }
 
             using Info = object_type_info<Options, T>;
-            
+
             static constexpr auto N = Info::N;
 
             [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
