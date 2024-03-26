@@ -205,7 +205,7 @@ namespace glz
 
                   decltype(auto) mem = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
-                        return std::get<I>(t);
+                        return glz::get<I>(t);
                      }
                      else {
                         return get<member_index>(get<I>(meta_v<V>));
@@ -254,7 +254,7 @@ namespace glz
 
                   decltype(auto) member = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
-                        return std::get<I>(t);
+                        return glz::get<I>(t);
                      }
                      else {
                         return get<member_index>(get<I>(meta_v<V>));
@@ -295,7 +295,7 @@ namespace glz
 
                      decltype(auto) mem = [&]() -> decltype(auto) {
                         if constexpr (reflectable<T>) {
-                           return std::get<I>(t);
+                           return glz::get<I>(t);
                         }
                         else {
                            return get<member_index>(get<I>(meta_v<V>));

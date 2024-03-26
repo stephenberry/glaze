@@ -646,20 +646,6 @@ namespace glz
          return make_map_impl<decay_keep_volatile_t<T>, use_hash_comparison>(indices);
       }
 
-      /*template <class T, size_t... I>
-      constexpr auto make_int_storage_impl(std::index_sequence<I...>)
-      {
-         using value_t = value_tuple_variant_t<meta_t<T>>;
-         return std::array<value_t, std::tuple_size_v<meta_t<T>>>({glz::get<1>(glz::get<I>(meta_v<T>))...});
-      }
-
-      template <class T>
-      constexpr auto make_int_storage()
-      {
-         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
-         return make_int_storage_impl<T>(indices);
-      }*/
-
       template <class T>
       constexpr auto make_key_int_map()
       {
