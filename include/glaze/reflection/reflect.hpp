@@ -103,7 +103,7 @@ namespace glz
          // we have to populate the pointers in the reflection map from the structured binding
          auto t = to_tuple(std::forward<T>(value));
          for_each<count_members<T>>([&](auto I) {
-            std::get<std::add_pointer_t<std::decay_t<decltype(std::get<I>(t))>>>(std::get<I>(cmap.items).second) =
+            std::get<std::add_pointer_t<decay_keep_volatile_t<decltype(std::get<I>(t))>>>(std::get<I>(cmap.items).second) =
                &std::get<I>(t);
          });
       }
