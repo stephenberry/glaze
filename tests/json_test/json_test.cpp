@@ -7243,6 +7243,17 @@ suite volatile_tests = [] {
    };
 };
 
+suite filesystem_tests = [] {
+   static_assert(glz::detail::filesystem_path<std::filesystem::path>);
+   
+   "std::filesystem_path"_test = [] {
+      std::filesystem::path p{"."};
+      std::string s = "C:/123";
+      auto ec = glz::read_json(p, "C:/123");
+      expect(!ec) << glz::format_error(ec, s);
+   };
+};
+
 int main()
 {
    // Explicitly run registered test suites and report errors
