@@ -708,6 +708,16 @@ namespace glz
             }
          }
       };
+      
+      template <filesystem_path T>
+      struct to_binary<T>
+      {
+         template <auto Opts, class... Args>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, Args&&... args) noexcept
+         {
+            to_binary<decltype(value.string())>::template op<Opts>(value.string(), std::forward<Args>(args)...);
+         }
+      };
 
       template <class T = void>
       struct to_binary_partial

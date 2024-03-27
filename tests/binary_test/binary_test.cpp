@@ -1606,6 +1606,17 @@ suite merge_tests = [] {
    };
 };
 
+suite filesystem_tests = [] {
+   "std::filesystem_path"_test = [] {
+      std::filesystem::path p{"./my_path"};
+      std::string buffer = glz::write_binary(p);
+      
+      p = "./bogus";
+      expect(!glz::read_binary(p, buffer));
+      expect(p.string() == "./my_path");
+   };
+};
+
 int main()
 {
    write_tests();
