@@ -1602,7 +1602,7 @@ suite merge_tests = [] {
       
       std::string json{};
       expect(!glz::beve_to_json(bin, json));
-      expect(json == R"({"a":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3],"include":""}}{"c":"d"})") << json;
+      expect(json == R"({"a":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3],"include":""},"c":"d"})") << json;
    };
 };
 
