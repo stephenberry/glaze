@@ -919,6 +919,21 @@ namespace glz
             }
          }
       };
+      
+      template <filesystem_path T>
+      struct from_binary<T>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         {
+            static thread_local std::string buffer{};
+            read<binary>::op<Opts>(buffer, ctx, args...);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            value = buffer;
+         }
+      };
    }
 
    template <class T, class Buffer>

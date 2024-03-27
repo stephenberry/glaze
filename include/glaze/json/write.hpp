@@ -407,6 +407,16 @@ namespace glz
             }
          }
       };
+      
+      template <filesystem_path T>
+      struct to_json<T>
+      {
+         template <auto Opts, class... Args>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            to_json<decltype(value.string())>::template op<Opts>(value.string(), ctx, args...);
+         }
+      };
 
       template <class T>
          requires(glaze_enum_t<T> && !specialized_with_custom_write<T>)

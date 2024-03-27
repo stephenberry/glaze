@@ -2624,6 +2624,20 @@ namespace glz
             }
          }
       };
+      
+      template <filesystem_path T>
+      struct from_json<T>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            std::string& buffer = string_buffer();
+            read<json>::op<Opts>(buffer, ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return;
+            value = buffer;
+         }
+      };
    } // namespace detail
 
    template <class Buffer>

@@ -1606,6 +1606,38 @@ suite merge_tests = [] {
    };
 };
 
+struct path_test_struct {
+    uint32_t i{0};
+    std::filesystem::path p{"./my_path"};
+};
+
+template <>
+struct glz::meta<path_test_struct>
+{
+   using T = path_test_struct;
+   static constexpr auto value = object(&T::i, &T::p);
+};
+
+suite filesystem_tests = [] {
+   "std::filesystem::path"_test = [] {
+      std::filesystem::path p{"./my_path"};
+      std::string buffer = glz::write_binary(p);
+      
+      p = "./bogus";
+      expect(!glz::read_binary(p, buffer));
+      expect(p.string() == "./my_path");
+   };
+   
+   "path_test_struct"_test = [] {
+      path_test_struct obj{};
+      std::string buffer = glz::write_binary(obj);
+      
+      obj.p.clear();
+      expect(!glz::read_binary(obj, buffer));
+      expect(obj.p == "./my_path");
+   };
+};
+
 int main()
 {
    write_tests();
