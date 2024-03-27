@@ -343,7 +343,7 @@ namespace glz
       auto* end = it + beve.size();
 
       context ctx{};
-      
+
       while (it < end) {
          detail::beve_to_json_value<Opts>(ctx, it, end, out, ix);
          if (bool(ctx.error)) {

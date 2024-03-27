@@ -541,7 +541,7 @@ namespace glz
          {
             using V = std::decay_t<decltype(value.value)>;
             static constexpr auto N = std::tuple_size_v<V> / 2;
-            
+
             if constexpr (!Options.opening_handled) {
                constexpr uint8_t type = 0; // string key
                constexpr uint8_t tag = tag::object | type;
@@ -556,10 +556,11 @@ namespace glz
             });
          }
       };
-      
+
       template <class T>
          requires is_specialization_v<T, glz::merge>
-      consteval size_t merge_element_count() {
+      consteval size_t merge_element_count()
+      {
          size_t count{};
          using Tuple = std::decay_t<decltype(std::declval<T>().value)>;
          for_each<std::tuple_size_v<Tuple>>([&](auto I) constexpr {
@@ -573,7 +574,7 @@ namespace glz
          });
          return count;
       }
-      
+
       template <class T>
          requires is_specialization_v<T, glz::merge>
       struct to_binary<T>
@@ -583,7 +584,7 @@ namespace glz
          {
             using V = std::decay_t<decltype(value.value)>;
             static constexpr auto N = std::tuple_size_v<V>;
-            
+
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t tag = tag::object | type;
             dump_type(tag, b, ix);
@@ -630,7 +631,7 @@ namespace glz
          {
             using V = std::decay_t<T>;
             static constexpr auto N = reflection_count<T>;
-            
+
             if constexpr (!Options.opening_handled) {
                constexpr uint8_t type = 0; // string key
                constexpr uint8_t tag = tag::object | type;
