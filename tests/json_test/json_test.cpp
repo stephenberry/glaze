@@ -7233,7 +7233,7 @@ suite volatile_tests = [] {
       expect(obj.c == -7);
       expect(obj.d == 9.9);
       expect(obj.e == 12);
-      
+
       expect(glz::get<volatile uint16_t>(obj, "/a/0") == uint16_t(1));
       expect(glz::get<volatile uint16_t>(obj, "/a/1") == uint16_t(2));
       expect(glz::get<volatile bool>(obj, "/b") == true);
