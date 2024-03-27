@@ -282,7 +282,7 @@ namespace glz
 
    template <class T>
    using json_schema_type = std::decay_t<decltype(json_schema_v<T>)>;
-   
+
    // Allows developers to add `static constexpr auto custom_read = true;` to their glz::meta to prevent ambiguous
    // partial specialization for custom parsers
    template <class T>
@@ -293,7 +293,7 @@ namespace glz
 
    template <class T>
    concept partial_read = requires { meta<T>::partial_read == true; };
-   
+
    template <typename T>
    concept specialized_with_custom_write = requires {
       meta<T>::custom_write;
