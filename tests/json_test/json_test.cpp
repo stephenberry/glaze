@@ -7248,6 +7248,13 @@ struct path_test_struct {
     std::filesystem::path p{"./my_path"};
 };
 
+template <>
+struct glz::meta<path_test_struct>
+{
+   using T = path_test_struct;
+   static constexpr auto value = object(&T::i, &T::p);
+};
+
 suite filesystem_tests = [] {
    static_assert(glz::detail::filesystem_path<std::filesystem::path>);
    
