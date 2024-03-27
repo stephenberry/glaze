@@ -144,7 +144,7 @@ namespace glz::detail
 
    template <class Map, class Key>
    concept findable = requires(Map& map, const Key& key) { map.find(key); };
-   
+
    template <class T>
    concept filesystem_path = requires(T path) {
       path.native();
@@ -152,7 +152,11 @@ namespace glz::detail
       path.filename();
       path.extension();
       path.parent_path();
-      { path.has_filename() } -> std::convertible_to<bool>;
-      { path.has_extension() } -> std::convertible_to<bool>;
+      {
+         path.has_filename()
+      } -> std::convertible_to<bool>;
+      {
+         path.has_extension()
+      } -> std::convertible_to<bool>;
    };
 }

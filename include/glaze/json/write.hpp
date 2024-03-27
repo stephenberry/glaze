@@ -407,7 +407,7 @@ namespace glz
             }
          }
       };
-      
+
       template <filesystem_path T>
       struct to_json<T>
       {

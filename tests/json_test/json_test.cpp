@@ -7243,9 +7243,10 @@ suite volatile_tests = [] {
    };
 };
 
-struct path_test_struct {
-    uint32_t i{0};
-    std::filesystem::path p{"./my_path"};
+struct path_test_struct
+{
+   uint32_t i{0};
+   std::filesystem::path p{"./my_path"};
 };
 
 template <>
@@ -7257,20 +7258,20 @@ struct glz::meta<path_test_struct>
 
 suite filesystem_tests = [] {
    static_assert(glz::detail::filesystem_path<std::filesystem::path>);
-   
+
    "std::filesystem::path"_test = [] {
       std::filesystem::path p{"."};
       std::string s = "C:/123";
       expect(!glz::read_json(p, R"("C:/123")"));
-      
+
       expect(glz::write_json(p) == R"("C:/123")");
    };
-   
+
    "path_test_struct"_test = [] {
       path_test_struct obj{};
       std::string buffer = glz::write_json(obj);
       expect(buffer == R"({"i":0,"p":"./my_path"})");
-      
+
       obj.p.clear();
       expect(!glz::read_json(obj, buffer));
       expect(obj.p == "./my_path");
