@@ -7173,9 +7173,14 @@ suite volatile_tests = [] {
       std::string s{};
       glz::write_json(i, s);
       expect(s == "5");
-
       expect(!glz::read_json(i, "42"));
       expect(i == 42);
+      
+      volatile uint64_t u = 99;
+      glz::write_json(u, s);
+      expect(s == "99");
+      expect(!glz::read_json(u, "51"));
+      expect(u == 51);
    };
 
    "basic volatile pointer"_test = [] {

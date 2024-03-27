@@ -148,8 +148,9 @@ namespace glz::detail
 
    template <class T, bool force_conformance, class CharType>
       requires(std::is_unsigned_v<T>)
-   inline bool parse_int(T& val, const CharType*& cur) noexcept
+   inline bool parse_int(auto& val, const CharType*& cur) noexcept
    {
+      constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(val)>>;
       const CharType* sig_cut{}; // significant part cutting position for long number
       [[maybe_unused]] const CharType* sig_end{}; // significant part ending position
       const CharType* dot_pos{}; // decimal point position
@@ -334,12 +335,24 @@ namespace glz::detail
          return true;
       }
       if (exp_sig == 19) {
-         val *= T(powers_of_ten_int[exp_sig - 1]);
-         if (is_safe_multiplication10(val)) [[likely]] {
-            return val *= 10;
+         if constexpr (is_volatile) {
+            val = val * T(powers_of_ten_int[exp_sig - 1]);
+            if (is_safe_multiplication10(val)) [[likely]] {
+               val = val * 10;
+               return val;
+            }
+            else [[unlikely]] {
+               return false;
+            }
          }
-         else [[unlikely]] {
-            return false;
+         else {
+            val *= T(powers_of_ten_int[exp_sig - 1]);
+            if (is_safe_multiplication10(val)) [[likely]] {
+               return val *= 10;
+            }
+            else [[unlikely]] {
+               return false;
+            }
          }
       }
       else if (exp_sig >= 20) [[unlikely]] {
@@ -355,11 +368,21 @@ namespace glz::detail
       }
 
       val = static_cast<T>(sig);
-      if (exp >= 0) {
-         val *= T(powers_of_ten_int[exp]);
+      if constexpr (is_volatile) {
+         if (exp >= 0) {
+            val = val * T(powers_of_ten_int[exp]);
+         }
+         else {
+            val = val / T(powers_of_ten_int[-exp]);
+         }
       }
       else {
-         val /= T(powers_of_ten_int[-exp]);
+         if (exp >= 0) {
+            val *= T(powers_of_ten_int[exp]);
+         }
+         else {
+            val /= T(powers_of_ten_int[-exp]);
+         }
       }
       return true;
    }

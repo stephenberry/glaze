@@ -360,10 +360,22 @@ namespace glz
                      static_assert(sizeof(*it) == sizeof(char));
                      const char* cur = reinterpret_cast<const char*>(&*it);
                      const char* beg = cur;
-                     auto s = parse_int<V, Options.force_conformance>(value, cur);
-                     if (!s) [[unlikely]] {
-                        ctx.error = error_code::parse_number_failure;
-                        return;
+                     if constexpr (std::is_volatile_v<decltype(value)>) {
+                        // Hardware may interact with value changes, so we parse into a temporary and assign in one place
+                        uint64_t i{};
+                        auto s = parse_int<uint64_t, Options.force_conformance>(i, cur);
+                        if (!s) [[unlikely]] {
+                           ctx.error = error_code::parse_number_failure;
+                           return;
+                        }
+                        value = i;
+                     }
+                     else {
+                        auto s = parse_int<decay_keep_volatile_t<decltype(value)>, Options.force_conformance>(value, cur);
+                        if (!s) [[unlikely]] {
+                           ctx.error = error_code::parse_number_failure;
+                           return;
+                        }
                      }
 
                      it += (cur - beg);
@@ -403,7 +415,7 @@ namespace glz
                   static_assert(sizeof(*it) == sizeof(char));
                   const char* cur = reinterpret_cast<const char*>(&*it);
                   const char* beg = cur;
-                  auto s = parse_int<std::decay_t<decltype(i)>, Options.force_conformance>(i, cur);
+                  auto s = parse_int<decay_keep_volatile_t<decltype(i)>, Options.force_conformance>(i, cur);
                   if (!s) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
@@ -437,10 +449,22 @@ namespace glz
                   it += std::distance(it, ptr);
                }
                else {
-                  auto s = parse_float<V, Options.force_conformance>(value, it);
-                  if (!s) [[unlikely]] {
-                     ctx.error = error_code::parse_number_failure;
-                     return;
+                  if constexpr (std::is_volatile_v<decltype(value)>) {
+                     // Hardware may interact with value changes, so we parse into a temporary and assign in one place
+                     V temp;
+                     auto s = parse_float<V, Options.force_conformance>(value, it);
+                     if (!s) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
+                     value = temp;
+                  }
+                  else {
+                     auto s = parse_float<V, Options.force_conformance>(value, it);
+                     if (!s) [[unlikely]] {
+                        ctx.error = error_code::parse_number_failure;
+                        return;
+                     }
                   }
                }
             }
