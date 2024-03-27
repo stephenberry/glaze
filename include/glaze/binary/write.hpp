@@ -536,21 +536,62 @@ namespace glz
          requires is_specialization_v<T, glz::obj> || is_specialization_v<T, glz::obj_copy>
       struct to_binary<T>
       {
-         template <auto Opts>
+         template <auto Options>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            constexpr uint8_t type = 0; // string key
-            constexpr uint8_t tag = tag::object | type;
-            dump_type(tag, args...);
-
             using V = std::decay_t<decltype(value.value)>;
             static constexpr auto N = std::tuple_size_v<V> / 2;
-            dump_compressed_int<N>(args...);
+            
+            if constexpr (!Options.opening_handled) {
+               constexpr uint8_t type = 0; // string key
+               constexpr uint8_t tag = tag::object | type;
+               dump_type(tag, args...);
+               dump_compressed_int<N>(args...);
+            }
+            static constexpr auto Opts = opening_handled_off<Options>();
 
             for_each<N>([&](auto I) {
                write<binary>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
                write<binary>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
             });
+         }
+      };
+      
+      template <class T>
+         requires is_specialization_v<T, glz::merge>
+      consteval size_t merge_element_count() {
+         size_t count{};
+         using Tuple = std::decay_t<decltype(std::declval<T>().value)>;
+         for_each<std::tuple_size_v<Tuple>>([&](auto I) constexpr {
+            using Value = std::decay_t<std::tuple_element_t<I, Tuple>>;
+            if constexpr (is_specialization_v<Value, glz::obj> || is_specialization_v<Value, glz::obj_copy>) {
+               count += std::tuple_size_v<decltype(std::declval<Value>().value)> / 2;
+            }
+            else {
+               count += reflection_count<Value>;
+            }
+         });
+         return count;
+      }
+      
+      template <class T>
+         requires is_specialization_v<T, glz::merge>
+      struct to_binary<T>
+      {
+         template <auto Opts>
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         {
+            using V = std::decay_t<decltype(value.value)>;
+            static constexpr auto N = std::tuple_size_v<V>;
+            
+            constexpr uint8_t type = 0; // string key
+            constexpr uint8_t tag = tag::object | type;
+            dump_type(tag, b, ix);
+            dump_compressed_int<merge_element_count<T>()>(b, ix);
+
+            [&]<size_t... I>(std::index_sequence<I...>) {
+               (write<binary>::op<opening_handled<Opts>()>(glz::get<I>(value.value), ctx, b, ix), ...);
+            }(std::make_index_sequence<N>{});
          }
       };
 
@@ -583,18 +624,20 @@ namespace glz
             }
          }
 
-         template <auto Opts, class... Args>
-            requires(Opts.structs_as_arrays == false)
+         template <auto Options, class... Args>
+            requires(Options.structs_as_arrays == false)
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            constexpr uint8_t type = 0; // string key
-            constexpr uint8_t tag = tag::object | type;
-            dump_type(tag, args...);
-
             using V = std::decay_t<T>;
             static constexpr auto N = reflection_count<T>;
-
-            dump_compressed_int<N>(args...);
+            
+            if constexpr (!Options.opening_handled) {
+               constexpr uint8_t type = 0; // string key
+               constexpr uint8_t tag = tag::object | type;
+               dump_type(tag, args...);
+               dump_compressed_int<N>(args...);
+            }
+            static constexpr auto Opts = opening_handled_off<Options>();
 
             if constexpr (reflectable<T>) {
                constexpr auto members = member_names<T>;
