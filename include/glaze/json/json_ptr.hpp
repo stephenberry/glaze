@@ -151,7 +151,7 @@ namespace glz
          json_ptr = json_ptr.substr(p - json_ptr.data());
 
          if constexpr (glaze_array_t<std::decay_t<T>>) {
-            static constexpr auto member_array = glz::detail::make_array<std::decay_t<T>>();
+            static constexpr auto member_array = glz::detail::make_array<decay_keep_volatile_t<T>>();
             if (index >= member_array.size()) return false;
             return std::visit(
                [&](auto&& member_ptr) {
@@ -273,7 +273,7 @@ namespace glz
       error_code ec{};
       detail::seek_impl(
          [&](auto&& val) {
-            if constexpr (!std::is_same_v<V, std::decay_t<decltype(val)>>) {
+            if constexpr (!std::is_same_v<V, decay_keep_volatile_t<decltype(val)>>) {
                ec = error_code::get_wrong_type;
             }
             else if constexpr (!std::is_lvalue_reference_v<decltype(val)>) {
