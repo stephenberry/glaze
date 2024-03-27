@@ -1594,6 +1594,18 @@ suite beve_to_json_tests = [] {
    };
 };
 
+suite merge_tests = [] {
+   "merge"_test = [] {
+      my_struct v{};
+      
+      const auto bin = glz::write_binary(glz::merge{glz::obj{"a", v}, glz::obj{"c", "d"}});
+      
+      std::string json{};
+      expect(!glz::beve_to_json(bin, json));
+      expect(json == R"({"a":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3],"include":""}}{"c":"d"})") << json;
+   };
+};
+
 int main()
 {
    write_tests();

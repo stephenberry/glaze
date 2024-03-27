@@ -553,6 +553,22 @@ namespace glz
             });
          }
       };
+      
+      template <class T>
+         requires is_specialization_v<T, glz::merge>
+      struct to_binary<T>
+      {
+         template <auto Opts>
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         {
+            using V = std::decay_t<decltype(value.value)>;
+            static constexpr auto N = std::tuple_size_v<V>;
+
+            [&]<size_t... I>(std::index_sequence<I...>) {
+               (write<binary>::op<Opts>(glz::get<I>(value.value), ctx, b, ix), ...);
+            }(std::make_index_sequence<N>{});
+         }
+      };
 
       template <class T>
          requires(glaze_object_t<T> || reflectable<T>)

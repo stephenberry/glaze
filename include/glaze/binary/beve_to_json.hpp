@@ -343,10 +343,12 @@ namespace glz
       auto* end = it + beve.size();
 
       context ctx{};
-
-      detail::beve_to_json_value<Opts>(ctx, it, end, out, ix);
-      if (bool(ctx.error)) {
-         return {ctx.error};
+      
+      while (it < end) {
+         detail::beve_to_json_value<Opts>(ctx, it, end, out, ix);
+         if (bool(ctx.error)) {
+            return {ctx.error};
+         }
       }
 
       if constexpr (detail::resizeable<Buffer>) {
