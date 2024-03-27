@@ -9,6 +9,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "glaze/concepts/container_concepts.hpp"
 #include "glaze/util/type_traits.hpp"
 
 namespace glz
@@ -41,6 +42,9 @@ namespace glz
          template <class T>
             requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
          [[maybe_unused]] constexpr operator T();
+         
+         template <filesystem_path T>
+         [[maybe_unused]] constexpr operator T() { return {}; }
 #pragma GCC diagnostic pop
 #endif
 
