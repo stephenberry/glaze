@@ -7175,7 +7175,7 @@ suite volatile_tests = [] {
       expect(s == "5");
       expect(!glz::read_json(i, "42"));
       expect(i == 42);
-      
+
       volatile uint64_t u = 99;
       glz::write_json(u, s);
       expect(s == "99");

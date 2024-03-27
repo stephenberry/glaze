@@ -361,7 +361,8 @@ namespace glz
                      const char* cur = reinterpret_cast<const char*>(&*it);
                      const char* beg = cur;
                      if constexpr (std::is_volatile_v<decltype(value)>) {
-                        // Hardware may interact with value changes, so we parse into a temporary and assign in one place
+                        // Hardware may interact with value changes, so we parse into a temporary and assign in one
+                        // place
                         uint64_t i{};
                         auto s = parse_int<uint64_t, Options.force_conformance>(i, cur);
                         if (!s) [[unlikely]] {
@@ -371,7 +372,8 @@ namespace glz
                         value = i;
                      }
                      else {
-                        auto s = parse_int<decay_keep_volatile_t<decltype(value)>, Options.force_conformance>(value, cur);
+                        auto s =
+                           parse_int<decay_keep_volatile_t<decltype(value)>, Options.force_conformance>(value, cur);
                         if (!s) [[unlikely]] {
                            ctx.error = error_code::parse_number_failure;
                            return;
