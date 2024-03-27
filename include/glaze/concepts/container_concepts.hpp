@@ -7,11 +7,6 @@
 #include <cstdint>
 #include <utility>
 
-namespace glz
-{
-   template <class T>
-   struct meta;
-}
 namespace glz::detail
 {
    template <typename T>
@@ -149,16 +144,4 @@ namespace glz::detail
 
    template <class Map, class Key>
    concept findable = requires(Map& map, const Key& key) { map.find(key); };
-
-   template <typename T>
-   concept specialized_with_custom_write = requires {
-      meta<T>::custom_write;
-      requires(meta<T>::custom_write == true);
-   };
-
-   template <typename T>
-   concept specialized_with_custom_read = requires {
-      meta<T>::custom_write;
-      requires(meta<T>::custom_read == true);
-   };
 }
