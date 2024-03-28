@@ -93,7 +93,12 @@ namespace glz
                         std::printf("json number> ");
                      }
                      else if constexpr (readable_array_t<P> || tuple_t<P> || is_std_tuple<P>) {
-                        std::printf("json array> ");
+                        if constexpr (tuple_t<P> || is_std_tuple<P>) {
+                           std::printf("json array[%d]>", int(std::tuple_size_v<P>));
+                        }
+                        else {
+                           std::printf("json array> ");
+                        }
                      }
                      else if constexpr (boolean_like<P>) {
                         std::printf("json bool> ");

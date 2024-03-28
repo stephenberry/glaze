@@ -41,6 +41,16 @@ struct a_special_function
    }
 };
 
+struct get_pair_t
+{
+   get_pair_t(glz::make_reflectable) {}
+
+   auto operator()()
+   {
+      return std::pair{ "Key", 51 };
+   }
+};
+
 struct my_nested_menu
 {
    int ignore_me{};
@@ -49,6 +59,7 @@ struct my_nested_menu
    std::function<int(int)> user_number = [](int x) { return x; };
    std::function<std::string(const std::string&)> user_string = [](const auto& str) { return str; };
    a_special_function special{};
+   get_pair_t get_pair;
 };
 
 void nested_menu()
