@@ -22,12 +22,6 @@ namespace glz
          t
       } -> std::convertible_to<bool>;
    };
-
-   struct cli_menu_opts
-   {
-      bool hide_non_invocable = true; // hides non-invocable members from the menu
-      glz::opts opts{.prettify = true};
-   };
    
    namespace detail
    {
@@ -60,7 +54,7 @@ namespace glz
       }
    }
 
-   template <cli_menu_opts Opts = cli_menu_opts{}, class T>
+   template <opts Opts = opts{.prettify = true}, class T>
       requires(detail::glaze_object_t<T> || detail::reflectable<T>)
    inline void run_cli_menu(T& value, cli_menu_boolean auto& show_menu)
    {
@@ -106,7 +100,7 @@ namespace glz
                         func();
                      }
                      else {
-                        const auto result = glz::write<Opts.opts>(func());
+                        const auto result = glz::write<Opts>(func());
                         std::printf("%.*s\n", int(result.size()), result.data());
                      }
                   }
@@ -132,7 +126,7 @@ namespace glz
                         }
                         using R = std::invoke_result_t<Func, Params>;
                         P params{};
-                        const auto ec = glz::read<Opts.opts>(params, input_sv);
+                        const auto ec = glz::read<Opts>(params, input_sv);
                         if (ec) {
                            const auto error = glz::format_error(ec, input_sv);
                            std::printf("%.*s\n", int(error.size()), error.data());
@@ -142,7 +136,7 @@ namespace glz
                               func(params);
                            }
                            else {
-                              const auto result = glz::write<Opts.opts>(func(params));
+                              const auto result = glz::write<Opts>(func(params));
                               std::printf("%.*s\n", int(result.size()), result.data());
                            }
                         }
@@ -246,7 +240,7 @@ namespace glz
       }
    }
 
-   template <cli_menu_opts Opts = cli_menu_opts{}, class T>
+   template <opts Opts = opts{.prettify = true}, class T>
       requires(detail::glaze_object_t<T> || detail::reflectable<T>)
    inline void run_cli_menu(T& value)
    {
