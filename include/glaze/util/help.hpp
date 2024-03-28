@@ -12,9 +12,9 @@
 namespace glz
 {
    template <class T, string_literal HelpMessage>
-   struct input_help
+   struct help
    {
-      static constexpr auto glaze_input_help = true;
+      static constexpr auto glaze_help = true;
       static constexpr sv help_message = HelpMessage.sv();
       using value_type = T;
       T value{};
@@ -29,12 +29,12 @@ namespace glz
    };
    
    template <class T>
-   concept is_input_help = requires {
-      T::glaze_input_help;
-      requires(T::glaze_input_help == true);
+   concept is_help = requires {
+      T::glaze_help;
+      requires(T::glaze_help == true);
    };
    
-   template <is_input_help T>
+   template <is_help T>
    struct meta<T> {
       static constexpr auto value{&T::value};
    };
