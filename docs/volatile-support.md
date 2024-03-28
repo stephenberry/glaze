@@ -7,7 +7,7 @@ Glaze also provides `glz::volatile_array` in `glaze/hardware/volatile_array.hpp`
 Example struct definition using automatic reflection:
 
 ```c++
-struct my_volatile_struct
+struct my_struct
 {
    glz::volatile_array<uint16_t, 4> a{};
    bool b{};
@@ -17,10 +17,10 @@ struct my_volatile_struct
 };
 ```
 
-Unit tests:
+Example unit tests:
 
 ```c++
-volatile my_volatile_struct obj{{1, 2, 3, 4}, true, -7, 9.9, 12};
+volatile my_struct obj{{1, 2, 3, 4}, true, -7, 9.9, 12};
 std::string s{};
 glz::write_json(obj, s);
 expect(s == R"({"a":[1,2,3,4],"b":true,"c":-7,"d":9.9,"e":12})") << s;
