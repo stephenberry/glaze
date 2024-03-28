@@ -61,6 +61,7 @@ struct my_nested_menu
    a_special_function special{};
    get_pair_t get_pair;
    std::function<std::string(const glz::help<std::string, "Enter a JSON pointer:">&)> request_json_pointer = [](const auto& str) { return str.value; };
+   std::function<std::string_view()> help_name = []() { return glz::name_v<glz::help<std::string, "So helpful!">>; };
 };
 
 void nested_menu()
