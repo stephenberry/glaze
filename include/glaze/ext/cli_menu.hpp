@@ -28,6 +28,37 @@ namespace glz
       bool hide_non_invocable = true; // hides non-invocable members from the menu
       glz::opts opts{.prettify = true};
    };
+   
+   namespace detail
+   {
+      template <class T>
+      inline void print_input_type()
+      {
+         if constexpr (string_t<T>) {
+            std::printf("json string> ");
+         }
+         else if constexpr (num_t<T>) {
+            std::printf("json number> ");
+         }
+         else if constexpr (readable_array_t<T> || tuple_t<T> || is_std_tuple<T>) {
+            if constexpr (tuple_t<T> || is_std_tuple<T>) {
+               std::printf("json array[%d]>", int(std::tuple_size_v<T>));
+            }
+            else {
+               std::printf("json array> ");
+            }
+         }
+         else if constexpr (boolean_like<T>) {
+            std::printf("json bool> ");
+         }
+         else if constexpr (glaze_object_t<T> || reflectable<T> || writable_map_t<T>) {
+            std::printf("json object> ");
+         }
+         else {
+            std::printf("json> ");
+         }
+      }
+   }
 
    template <cli_menu_opts Opts = cli_menu_opts{}, class T>
       requires(detail::glaze_object_t<T> || detail::reflectable<T>)
@@ -86,28 +117,12 @@ namespace glz
                      constexpr auto N = std::tuple_size_v<Tuple>;
                      static_assert(N == 1, "Only one input is allowed for your function");
                      static thread_local std::array<char, 256> input{};
-                     if constexpr (string_t<P>) {
-                        std::printf("json string> ");
-                     }
-                     else if constexpr (num_t<P>) {
-                        std::printf("json number> ");
-                     }
-                     else if constexpr (readable_array_t<P> || tuple_t<P> || is_std_tuple<P>) {
-                        if constexpr (tuple_t<P> || is_std_tuple<P>) {
-                           std::printf("json array[%d]>", int(std::tuple_size_v<P>));
-                        }
-                        else {
-                           std::printf("json array> ");
-                        }
-                     }
-                     else if constexpr (boolean_like<P>) {
-                        std::printf("json bool> ");
-                     }
-                     else if constexpr (glaze_object_t<P> || reflectable<P> || writable_map_t<P>) {
-                        std::printf("json object> ");
+                     if constexpr (is_input_help<P>) {
+                        std::printf("%.*s\n", int(P::help_message.size()), P::help_message.data());
+                        print_input_type<typename P::value_type>();
                      }
                      else {
-                        std::printf("json> ");
+                        print_input_type<P>();
                      }
 
                      if (fgets(input.data(), int(input.size()), stdin)) {
@@ -116,7 +131,7 @@ namespace glz
                            input_sv = input_sv.substr(0, input_sv.size() - 1);
                         }
                         using R = std::invoke_result_t<Func, Params>;
-                        std::decay_t<Params> params{};
+                        P params{};
                         const auto ec = glz::read<Opts.opts>(params, input_sv);
                         if (ec) {
                            const auto error = glz::format_error(ec, input_sv);
