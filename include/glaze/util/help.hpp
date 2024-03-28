@@ -11,6 +11,11 @@
 
 namespace glz
 {
+   template <class T>
+   concept is_help = requires {
+      requires(T::glaze_help == true);
+   };
+   
    template <class T, string_literal HelpMessage>
    struct help
    {
@@ -28,14 +33,9 @@ namespace glz
       }
    };
    
-   template <class T>
-   concept is_help = requires {
-      requires(T::glaze_help == true);
+   template <is_help T>
+   struct meta<T> {
+      static constexpr sv name = join_v<chars<"glz::help<">, name_v<typename T::value_type>, chars<",\"">, T::help_message, chars<"\">">>;
+      static constexpr auto value{&T::value};
    };
 }
-
-template <glz::is_help T>
-struct glz::meta<T> {
-   static constexpr sv name = join_v<chars<"glz::help<">, name_v<typename T::value_type>, chars<",\"">, T::help_message, chars<"\">">>;
-   static constexpr auto value{&T::value};
-};
