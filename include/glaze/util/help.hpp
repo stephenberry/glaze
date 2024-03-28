@@ -30,8 +30,8 @@ namespace glz
    
    template <class T>
    concept is_help = requires {
-      T::glaze_help;
-      requires(T::glaze_help == true);
+      std::decay_t<T>::glaze_help;
+      requires(std::decay_t<T>::glaze_help == true);
    };
 }
 
