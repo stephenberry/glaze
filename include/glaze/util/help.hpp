@@ -30,8 +30,7 @@ namespace glz
    
    template <class T>
    concept is_help = requires {
-      std::remove_cvref_t<T>::glaze_help;
-      requires(std::remove_cvref_t<T>::glaze_help == true);
+      requires(T::glaze_help == true);
    };
 }
 
