@@ -964,7 +964,7 @@ namespace glz
             }
          }
       };
-      
+
       // for types like std::vector, std::array, std::deque, etc.
       template <class T>
          requires(readable_array_t<T> && (emplace_backable<T> || !resizeable<T>) && !emplaceable<T>)
@@ -1063,7 +1063,7 @@ namespace glz
                         return;
                      }
                   }
-                  
+
                   std::deque<typename T::value_type> intermediate{};
                   while (it < end) {
                      read<json>::op<ws_handled<Opts>()>(intermediate.emplace_back(), ctx, it, end);
@@ -1087,16 +1087,14 @@ namespace glz
                         return;
                      }
                   }
-                  
+
                   value.reserve(value.size() + intermediate.size());
                   const auto inter_end = intermediate.end();
-                  for (auto inter = intermediate.begin(); inter < inter_end; ++inter)
-                  {
+                  for (auto inter = intermediate.begin(); inter < inter_end; ++inter) {
                      value.emplace_back(std::move(*inter));
                   }
                }
-               else
-               {
+               else {
                   while (it < end) {
                      read<json>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
