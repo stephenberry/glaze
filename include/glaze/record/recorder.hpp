@@ -128,7 +128,7 @@ namespace glz
 
             skip_ws_no_pre_check<Options>(ctx, it, end);
 
-            static constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+            constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
             // we read into available containers, we do not intialize here
             const size_t n = value.data.size();

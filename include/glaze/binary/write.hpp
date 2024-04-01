@@ -550,7 +550,7 @@ namespace glz
             }
 
             for_each<N>([&](auto I) {
-               static constexpr auto Opts = opening_handled_off<Options>();
+               constexpr auto Opts = opening_handled_off<Options>();
                write<binary>::no_header<Opts>(get<2 * I>(value.value), ctx, args...);
                write<binary>::op<Opts>(get<2 * I + 1>(value.value), ctx, args...);
             });
@@ -638,7 +638,7 @@ namespace glz
                dump_type(tag, args...);
                dump_compressed_int<N>(args...);
             }
-            static constexpr auto Opts = opening_handled_off<Options>();
+            constexpr auto Opts = opening_handled_off<Options>();
 
             if constexpr (reflectable<T>) {
                constexpr auto members = member_names<T>;
