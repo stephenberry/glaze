@@ -41,6 +41,16 @@ struct a_special_function
    }
 };
 
+struct get_pair_t
+{
+   get_pair_t(glz::make_reflectable) {}
+
+   auto operator()()
+   {
+      return std::pair{ "Key", 51 };
+   }
+};
+
 struct my_nested_menu
 {
    int ignore_me{};
@@ -49,6 +59,9 @@ struct my_nested_menu
    std::function<int(int)> user_number = [](int x) { return x; };
    std::function<std::string(const std::string&)> user_string = [](const auto& str) { return str; };
    a_special_function special{};
+   get_pair_t get_pair;
+   std::function<std::string(const glz::help<std::string, "Enter a JSON pointer:">&)> request_json_pointer = [](const auto& str) { return str.value; };
+   std::function<std::string_view()> help_name = []() { return glz::name_v<glz::help<std::string, "So helpful!">>; };
 };
 
 void nested_menu()

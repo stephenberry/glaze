@@ -44,6 +44,8 @@ namespace glz
                                       // glaze_object_t concepts
       bool partial_read_nested = false; // Rewind forward the partially readed struct to the end of the struct
       bool concatenate = true; // concatenates ranges of std::pair into single objects when writing
+      
+      bool hide_non_invocable = true; // hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
 
       // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled

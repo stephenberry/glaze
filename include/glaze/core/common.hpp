@@ -18,6 +18,7 @@
 #include "glaze/util/expected.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/hash_map.hpp"
+#include "glaze/util/help.hpp"
 #include "glaze/util/string_literal.hpp"
 #include "glaze/util/tuple.hpp"
 #include "glaze/util/type_traits.hpp"

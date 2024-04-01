@@ -1012,7 +1012,7 @@ namespace glz
 
             bool first = true;
             for_each<N>([&](auto I) {
-               static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
+               constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
                decltype(auto) item = glz::get<2 * I + 1>(value.value);
                using val_t = std::decay_t<decltype(item)>;
 
@@ -1174,7 +1174,7 @@ namespace glz
             [[maybe_unused]] bool first = true;
             static constexpr auto first_is_written = Info::first_will_be_written;
             for_each<N>([&](auto I) {
-               static constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
+               constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
 
                using Element = glaze_tuple_element<I, N, T>;
                static constexpr size_t member_index = Element::member_index;

@@ -22,14 +22,39 @@ namespace glz
          t
       } -> std::convertible_to<bool>;
    };
-
-   struct cli_menu_opts
+   
+   namespace detail
    {
-      bool hide_non_invocable = true; // hides non-invocable members from the menu
-      glz::opts opts{.prettify = true};
-   };
+      template <class T>
+      inline void print_input_type()
+      {
+         if constexpr (string_t<T>) {
+            std::printf("json string> ");
+         }
+         else if constexpr (num_t<T>) {
+            std::printf("json number> ");
+         }
+         else if constexpr (readable_array_t<T> || tuple_t<T> || is_std_tuple<T>) {
+            if constexpr (tuple_t<T> || is_std_tuple<T>) {
+               std::printf("json array[%d]>", int(std::tuple_size_v<T>));
+            }
+            else {
+               std::printf("json array> ");
+            }
+         }
+         else if constexpr (boolean_like<T>) {
+            std::printf("json bool> ");
+         }
+         else if constexpr (glaze_object_t<T> || reflectable<T> || writable_map_t<T>) {
+            std::printf("json object> ");
+         }
+         else {
+            std::printf("json> ");
+         }
+      }
+   }
 
-   template <cli_menu_opts Opts = cli_menu_opts{}, class T>
+   template <opts Opts = opts{.prettify = true}, class T>
       requires(detail::glaze_object_t<T> || detail::reflectable<T>)
    inline void run_cli_menu(T& value, cli_menu_boolean auto& show_menu)
    {
@@ -53,20 +78,22 @@ namespace glz
          }();
 
          if (item_number > 0 && item_number <= long(N)) {
-            for_each<N>([&](auto I) {
-               using Element = glaze_tuple_element<I, N, T>;
-
-               using E = typename Element::type;
-
+            
+            for_each_short_circuit<N>([&](auto I) {
                if (I == item_number - 1) {
-                  decltype(auto) func = [&]() -> decltype(auto) {
+                  using Element = glaze_tuple_element<I, N, T>;
+                  static constexpr size_t member_index = Element::member_index;
+                  using E = typename Element::type;
+                  
+                  // MSVC bug requires Index alias here
+                  decltype(auto) func = [&](auto Index) -> decltype(auto) {
                      if constexpr (reflectable<T>) {
-                        return std::get<I>(t);
+                        return std::get<Index>(t);
                      }
                      else {
-                        return get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
+                        return get_member(value, get<member_index>(get<Index>(meta_v<T>)));
                      }
-                  }();
+                  }(I);
 
                   using Func = decltype(func);
                   if constexpr (std::is_invocable_v<Func>) {
@@ -75,7 +102,7 @@ namespace glz
                         func();
                      }
                      else {
-                        const auto result = glz::write<Opts.opts>(func());
+                        const auto result = glz::write<Opts>(func());
                         std::printf("%.*s\n", int(result.size()), result.data());
                      }
                   }
@@ -86,23 +113,12 @@ namespace glz
                      constexpr auto N = std::tuple_size_v<Tuple>;
                      static_assert(N == 1, "Only one input is allowed for your function");
                      static thread_local std::array<char, 256> input{};
-                     if constexpr (string_t<P>) {
-                        std::printf("json string> ");
-                     }
-                     else if constexpr (num_t<P>) {
-                        std::printf("json number> ");
-                     }
-                     else if constexpr (readable_array_t<P> || tuple_t<P> || is_std_tuple<P>) {
-                        std::printf("json array> ");
-                     }
-                     else if constexpr (boolean_like<P>) {
-                        std::printf("json bool> ");
-                     }
-                     else if constexpr (glaze_object_t<P> || reflectable<P> || writable_map_t<P>) {
-                        std::printf("json object> ");
+                     if constexpr (is_help<P>) {
+                        std::printf("%.*s\n", int(P::help_message.size()), P::help_message.data());
+                        print_input_type<typename P::value_type>();
                      }
                      else {
-                        std::printf("json> ");
+                        print_input_type<P>();
                      }
 
                      if (fgets(input.data(), int(input.size()), stdin)) {
@@ -111,8 +127,8 @@ namespace glz
                            input_sv = input_sv.substr(0, input_sv.size() - 1);
                         }
                         using R = std::invoke_result_t<Func, Params>;
-                        std::decay_t<Params> params{};
-                        const auto ec = glz::read<Opts.opts>(params, input_sv);
+                        P params{};
+                        const auto ec = glz::read<Opts>(params, input_sv);
                         if (ec) {
                            const auto error = glz::format_error(ec, input_sv);
                            std::printf("%.*s\n", int(error.size()), error.data());
@@ -122,7 +138,7 @@ namespace glz
                               func(params);
                            }
                            else {
-                              const auto result = glz::write<Opts.opts>(func(params));
+                              const auto result = glz::write<Opts>(func(params));
                               std::printf("%.*s\n", int(result.size()), result.data());
                            }
                         }
@@ -146,7 +162,9 @@ namespace glz
                   else {
                      static_assert(false_v<Func>, "Your function is not invocable or not concrete");
                   }
+                  return true; // exit
                }
+               return false; // continue
             });
          }
          else {
@@ -226,7 +244,7 @@ namespace glz
       }
    }
 
-   template <cli_menu_opts Opts = cli_menu_opts{}, class T>
+   template <opts Opts = opts{.prettify = true}, class T>
       requires(detail::glaze_object_t<T> || detail::reflectable<T>)
    inline void run_cli_menu(T& value)
    {
