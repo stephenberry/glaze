@@ -12,17 +12,15 @@
 namespace glz
 {
    template <class T>
-   [[nodiscard]] error_code file_to_buffer(T& buffer, std::ifstream& file) noexcept
+   [[nodiscard]] error_code file_to_buffer(T& buffer, std::ifstream& file, const std::string_view path) noexcept
    {
       if (!file) {
          return error_code::file_open_failure;
       }
-
-      file.seekg(0, std::ios::end);
-      buffer.reserve(file.tellg());
-      file.seekg(0, std::ios::beg);
-
-      buffer.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+      
+      const auto n = std::filesystem::file_size(path);
+      buffer.resize(n);
+      file.read(buffer.data(), n);
 
       return {};
    }
@@ -31,14 +29,14 @@ namespace glz
    [[nodiscard]] error_code file_to_buffer(T& buffer, const std::string& file_name) noexcept
    {
       std::ifstream file(file_name, std::ios::binary);
-      return file_to_buffer(buffer, file);
+      return file_to_buffer(buffer, file, file_name);
    }
 
    template <class T>
    [[nodiscard]] error_code file_to_buffer(T& buffer, const std::string_view file_name) noexcept
    {
       std::ifstream file(std::string(file_name), std::ios::binary);
-      return file_to_buffer(buffer, file);
+      return file_to_buffer(buffer, file, file_name);
    }
 
    template <class T>
