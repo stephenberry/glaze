@@ -33,8 +33,10 @@ namespace glz
       }
    };
    
-   template <is_help T>
-   struct meta<T> {
-      static constexpr auto value{&T::value};
+   template <class T, string_literal HelpMessage>
+   struct meta<help<T, HelpMessage>> {
+      using V = help<T, HelpMessage>;
+      static constexpr sv name = join_v<chars<"glz::help<">, name_v<typename V::value_type>, chars<",\"">, V::help_message, chars<"\">">>;
+      static constexpr auto value{&V::value};
    };
 }
