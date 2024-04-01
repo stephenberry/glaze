@@ -6,6 +6,7 @@
 #include <charconv>
 #include <climits>
 #include <cwchar>
+#include <deque>
 #include <filesystem>
 #include <iterator>
 #include <locale>
@@ -964,6 +965,7 @@ namespace glz
          }
       };
 
+      // for types like std::vector, std::array, std::deque, etc.
       template <class T>
          requires(readable_array_t<T> && (emplace_backable<T> || !resizeable<T>) && !emplaceable<T>)
       struct from_json<T>
@@ -1034,26 +1036,86 @@ namespace glz
 
             // growing
             if constexpr (emplace_backable<T>) {
-               while (it < end) {
-                  read<json>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  skip_ws_no_pre_check<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-                  if (*it == ',') [[likely]] {
-                     ++it;
+               if constexpr (has_reserve<T> && has_capacity<T>) {
+                  // If we can reserve memmory, like std::vector, then we want to check the capacity
+                  // and use a temporary buffer if the capacity needs to grow
+                  const auto capacity = value.capacity();
+                  for (size_t i = value.size(); i < capacity; ++i) {
+                     // emplace_back while we have capacity
+                     read<json>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
                      skip_ws_no_pre_check<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
+                     if (*it == ',') [[likely]] {
+                        ++it;
+                        skip_ws_no_pre_check<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                     else if (*it == ']') {
+                        ++it;
+                        return;
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::expected_bracket;
+                        return;
+                     }
                   }
-                  else if (*it == ']') {
-                     ++it;
-                     return;
+
+                  std::deque<typename T::value_type> intermediate{};
+                  while (it < end) {
+                     read<json>::op<ws_handled<Opts>()>(intermediate.emplace_back(), ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     skip_ws_no_pre_check<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     if (*it == ',') [[likely]] {
+                        ++it;
+                        skip_ws_no_pre_check<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                     else if (*it == ']') {
+                        ++it;
+                        break;
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::expected_bracket;
+                        return;
+                     }
                   }
-                  else [[unlikely]] {
-                     ctx.error = error_code::expected_bracket;
-                     return;
+
+                  value.reserve(value.size() + intermediate.size());
+                  const auto inter_end = intermediate.end();
+                  for (auto inter = intermediate.begin(); inter < inter_end; ++inter) {
+                     value.emplace_back(std::move(*inter));
+                  }
+               }
+               else {
+                  while (it < end) {
+                     read<json>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     skip_ws_no_pre_check<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     if (*it == ',') [[likely]] {
+                        ++it;
+                        skip_ws_no_pre_check<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                     else if (*it == ']') {
+                        ++it;
+                        return;
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::expected_bracket;
+                        return;
+                     }
                   }
                }
             }
