@@ -17,7 +17,7 @@ namespace glz
       if (!file) {
          return error_code::file_open_failure;
       }
-      
+
       std::error_code ec{};
       const auto n = std::filesystem::file_size(path, ec);
       if (ec) {
@@ -25,13 +25,12 @@ namespace glz
          return error_code::file_open_failure;
       }
       buffer.resize(n);
-      
-      if (n != std::fread(static_cast<void*>(buffer.data()), 1, n, file))
-      {
+
+      if (n != std::fread(static_cast<void*>(buffer.data()), 1, n, file)) {
          std::fclose(file);
          return error_code::file_open_failure;
       }
-      
+
       std::fclose(file);
 
       return {};
