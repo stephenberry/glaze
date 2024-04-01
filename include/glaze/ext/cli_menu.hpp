@@ -22,7 +22,7 @@ namespace glz
          t
       } -> std::convertible_to<bool>;
    };
-   
+
    namespace detail
    {
       template <class T>
@@ -78,13 +78,12 @@ namespace glz
          }();
 
          if (item_number > 0 && item_number <= long(N)) {
-            
             for_each_short_circuit<N>([&](auto I) {
                if (I == item_number - 1) {
                   using Element = glaze_tuple_element<I, N, T>;
                   static constexpr size_t member_index = Element::member_index;
                   using E = typename Element::type;
-                  
+
                   // MSVC bug requires Index alias here
                   decltype(auto) func = [&](auto Index) -> decltype(auto) {
                      if constexpr (reflectable<T>) {

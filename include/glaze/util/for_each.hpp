@@ -16,7 +16,7 @@ namespace glz
          (f(std::integral_constant<std::size_t, I>{}), ...);
       }(std::make_index_sequence<N>{});
    }
-   
+
    // Runtime short circuiting if function returns true, return false to continue evaluation
    template <std::size_t N, class Func>
    constexpr void for_each_short_circuit(Func&& f)
