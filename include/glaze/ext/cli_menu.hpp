@@ -78,19 +78,21 @@ namespace glz
          }();
 
          if (item_number > 0 && item_number <= long(N)) {
+            
             for_each<N>([&](auto I) {
-               using Element = glaze_tuple_element<I, N, T>;
-               constexpr auto member_index = Element::member_index;
-
-               using E = typename Element::type;
-
+               // TODO: Add short circuiting for this loop when: I == item_number - 1
                if (I == item_number - 1) {
+                  using Element = glaze_tuple_element<I, N, T>;
+
+                  using E = typename Element::type;
+                  
                   decltype(auto) func = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
                         return std::get<I>(t);
                      }
                      else {
-                        return get_member(value, get<member_index>(get<I>(meta_v<T>)));
+                        // MSVC bug: we can't use Element alias here
+                        return get_member(value, get<glaze_tuple_element<I, N, T>::member_index>(get<I>(meta_v<T>)));
                      }
                   }();
 
