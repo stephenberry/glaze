@@ -79,8 +79,7 @@ namespace glz
 
          if (item_number > 0 && item_number <= long(N)) {
             
-            for_each<N>([&](auto I) {
-               // TODO: Add short circuiting for this loop when: I == item_number - 1
+            for_each_short_circuit<N>([&](auto I) {
                if (I == item_number - 1) {
                   using Element = glaze_tuple_element<I, N, T>;
 
@@ -163,7 +162,9 @@ namespace glz
                   else {
                      static_assert(false_v<Func>, "Your function is not invocable or not concrete");
                   }
+                  return true;
                }
+               return false;
             });
          }
          else {
