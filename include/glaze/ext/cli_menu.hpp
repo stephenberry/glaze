@@ -84,15 +84,16 @@ namespace glz
                   using Element = glaze_tuple_element<I, N, T>;
                   static constexpr size_t member_index = Element::member_index;
                   using E = typename Element::type;
-
-                  decltype(auto) func = [&]() -> decltype(auto) {
+                  
+                  // MSVC bug requires Index alias here
+                  decltype(auto) func = [&](auto Index) -> decltype(auto) {
                      if constexpr (reflectable<T>) {
-                        return std::get<I>(t);
+                        return std::get<Index>(t);
                      }
                      else {
-                        return get_member(value, get<member_index>(get<I>(meta_v<T>)));
+                        return get_member(value, get<member_index>(get<Index>(meta_v<T>)));
                      }
-                  }();
+                  }(I);
 
                   using Func = decltype(func);
                   if constexpr (std::is_invocable_v<Func>) {
@@ -161,9 +162,9 @@ namespace glz
                   else {
                      static_assert(false_v<Func>, "Your function is not invocable or not concrete");
                   }
-                  return true;
+                  return true; // exit
                }
-               return false;
+               return false; // continue
             });
          }
          else {
