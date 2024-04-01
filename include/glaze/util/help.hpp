@@ -35,7 +35,6 @@ namespace glz
    
    template <is_help T>
    struct meta<T> {
-      static constexpr sv name = join_v<chars<"glz::help<">, name_v<typename T::value_type>, chars<",\"">, T::help_message, chars<"\">">>;
       static constexpr auto value{&T::value};
    };
 }
