@@ -34,20 +34,21 @@ namespace glz::repe
    template <class T>
    concept is_header = std::same_as<std::decay_t<T>, header>;
 
-   enum struct error_e : int32_t {
-      no_error = 0,
-      server_error_lower = -32000,
-      server_error_upper = -32099,
-      invalid_request = -32600,
-      method_not_found = -32601,
-      invalid_params = -32602,
-      internal = -32603,
-      parse_error = -32700,
+   struct error_e
+   {
+      static constexpr int32_t no_error = 0;
+      static constexpr int32_t server_error_lower = -32000;
+      static constexpr int32_t server_error_upper = -32099;
+      static constexpr int32_t invalid_request = -32600;
+      static constexpr int32_t method_not_found = -32601;
+      static constexpr int32_t invalid_params = -32602;
+      static constexpr int32_t internal = -32603;
+      static constexpr int32_t parse_error = -32700;
    };
 
    struct error_t final
    {
-      error_e code = error_e::no_error;
+      int32_t code = error_e::no_error;
       std::string message = "";
 
       operator bool() const noexcept { return bool(code); }
@@ -624,12 +625,3 @@ namespace glz::repe
       }
    };
 }
-
-/*template <>
-struct glz::meta<glz::repe::error_e>
-{
-   using enum repe::error_e;
-   static constexpr auto value = enumerate(no_error, server_error_lower, server_error_upper,
-                                           invalid_request, method_not_found, invalid_params,
-                                           internal, parse_error);
-};*/

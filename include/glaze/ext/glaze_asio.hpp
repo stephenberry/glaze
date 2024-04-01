@@ -14,9 +14,10 @@ namespace glz
 {
    inline void send_buffer(asio::ip::tcp::socket& socket, const std::string_view str)
    {
-      uint64_t size = str.size();
-      asio::write(socket, asio::buffer(&size, sizeof(uint64_t)), asio::transfer_exactly(sizeof(uint64_t)));
-      asio::write(socket, asio::buffer(str), asio::transfer_exactly(size));
+      const uint64_t size = str.size();
+      std::array<asio::const_buffer, 2> buffers{asio::buffer(&size, sizeof(uint64_t)), asio::buffer(str)};
+
+      asio::write(socket, buffers, asio::transfer_exactly(sizeof(uint64_t) + size));
    }
 
    inline void receive_buffer(asio::ip::tcp::socket& socket, std::string& str)
@@ -30,16 +31,18 @@ namespace glz
    inline asio::awaitable<void> co_send_buffer(asio::ip::tcp::socket& socket, const std::string_view str)
    {
       const uint64_t size = str.size();
-      co_await asio::async_write(socket, asio::buffer(&size, sizeof(uint64_t)), asio::use_awaitable);
-      co_await asio::async_write(socket, asio::buffer(str), asio::use_awaitable);
+      std::array<asio::const_buffer, 2> buffers{asio::buffer(&size, sizeof(uint64_t)), asio::buffer(str)};
+
+      co_await asio::async_write(socket, buffers, asio::transfer_exactly(sizeof(uint64_t) + size), asio::use_awaitable);
    }
 
    inline asio::awaitable<void> co_receive_buffer(asio::ip::tcp::socket& socket, std::string& str)
    {
       uint64_t size;
-      co_await asio::async_read(socket, asio::buffer(&size, sizeof(size)), asio::use_awaitable);
+      co_await asio::async_read(socket, asio::buffer(&size, sizeof(size)), asio::transfer_exactly(sizeof(uint64_t)),
+                                asio::use_awaitable);
       str.resize(size);
-      co_await asio::async_read(socket, asio::buffer(str), asio::use_awaitable);
+      co_await asio::async_read(socket, asio::buffer(str), asio::transfer_exactly(size), asio::use_awaitable);
    }
 
    inline asio::awaitable<void> call_rpc(asio::ip::tcp::socket& socket, std::string& buffer)
@@ -94,13 +97,14 @@ namespace glz
 
       std::string buffer{};
 
-      [[nodiscard]] asio::error_code init()
+      [[nodiscard]] std::error_code init()
       {
          ctx = std::make_shared<asio::io_context>(concurrency);
          socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
+         socket->set_option(asio::ip::tcp::no_delay(true));
          asio::ip::tcp::resolver resolver{*ctx};
          const auto endpoint = resolver.resolve(host, service);
-         asio::error_code ec{};
+         std::error_code ec{};
          asio::connect(*socket, endpoint, ec);
          return ec;
       }
@@ -140,7 +144,7 @@ namespace glz
          std::decay_t<Result> result{};
          const auto error = repe::decode_response<Opts>(result, buffer);
          if (error) {
-            return {error};
+            return glz::unexpected(error);
          }
          else {
             return result;
@@ -274,6 +278,7 @@ namespace glz
 
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {
+         socket.set_option(asio::ip::tcp::no_delay(true));
          Registry registry{};
          std::string buffer{};
 
