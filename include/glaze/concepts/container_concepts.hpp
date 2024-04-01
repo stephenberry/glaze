@@ -89,6 +89,9 @@ namespace glz::detail
 
    template <class T>
    concept has_reserve = requires(T t) { t.reserve(size_t(1)); };
+   
+   template <class T>
+   concept has_capacity = requires(T t) { { t.capacity() } -> std::integral; };
 
    template <class T>
    concept contiguous = has_size<T> && has_data<T>;
