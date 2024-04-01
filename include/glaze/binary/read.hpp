@@ -112,9 +112,9 @@ namespace glz
          template <auto Opts, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&&, It0&& it, It1&&)
          {
-            static constexpr auto N = std::tuple_size_v<meta_t<T>>;
+            constexpr auto N = std::tuple_size_v<meta_t<T>>;
 
-            static constexpr auto Length = byte_length<T>();
+            constexpr auto Length = byte_length<T>();
             uint8_t data[Length];
 
             std::memcpy(data, &(*it), Length);
@@ -780,14 +780,14 @@ namespace glz
                ++it;
 
                using V = std::decay_t<T>;
-               static constexpr auto N = std::tuple_size_v<meta_t<V>>;
+               constexpr auto N = std::tuple_size_v<meta_t<V>>;
                skip_compressed_int(it, end);
 
                for_each<N>([&](auto I) {
                   static constexpr auto item = get<I>(meta_v<V>);
                   using T0 = std::decay_t<decltype(get<0>(item))>;
-                  static constexpr bool use_reflection = std::is_member_pointer_v<T0>;
-                  static constexpr auto member_index = use_reflection ? 0 : 1;
+                  constexpr bool use_reflection = std::is_member_pointer_v<T0>;
+                  constexpr auto member_index = use_reflection ? 0 : 1;
                   read<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, it, end);
                });
             }
