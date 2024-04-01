@@ -324,6 +324,32 @@ namespace glz
             break;
          }
          case tag::extensions: {
+            const uint8_t extension = tag & 0b11111'000;
+            switch (extension)
+            {
+               case 1: {
+                  // variants
+                  // TODO: implement
+                  ctx.error = error_code::syntax_error;
+                  break;
+               }
+               case 2: {
+                  // matrices
+                  // TODO: implement
+                  ctx.error = error_code::syntax_error;
+                  break;
+               }
+               case 3: {
+                  // complex numbers
+                  // TODO: implement
+                  ctx.error = error_code::syntax_error;
+                  break;
+               }
+               default: {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+            }
             break;
          }
          default: {
