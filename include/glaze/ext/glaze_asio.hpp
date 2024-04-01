@@ -12,10 +12,10 @@
 
 namespace glz
 {
-   inline void send_buffer(asio::ip::tcp::socket& socket, const std::string_view str) {
+   inline void send_buffer(asio::ip::tcp::socket& socket, const std::string_view str)
+   {
       const uint64_t size = str.size();
-      std::array<asio::const_buffer, 2> buffers{asio::buffer(&size, sizeof(uint64_t)),
-         asio::buffer(str)};
+      std::array<asio::const_buffer, 2> buffers{asio::buffer(&size, sizeof(uint64_t)), asio::buffer(str)};
 
       asio::write(socket, buffers, asio::transfer_exactly(sizeof(uint64_t) + size));
    }
@@ -31,16 +31,16 @@ namespace glz
    inline asio::awaitable<void> co_send_buffer(asio::ip::tcp::socket& socket, const std::string_view str)
    {
       const uint64_t size = str.size();
-      std::array<asio::const_buffer, 2> buffers{asio::buffer(&size, sizeof(uint64_t)),
-         asio::buffer(str)};
-      
+      std::array<asio::const_buffer, 2> buffers{asio::buffer(&size, sizeof(uint64_t)), asio::buffer(str)};
+
       co_await asio::async_write(socket, buffers, asio::transfer_exactly(sizeof(uint64_t) + size), asio::use_awaitable);
    }
 
    inline asio::awaitable<void> co_receive_buffer(asio::ip::tcp::socket& socket, std::string& str)
    {
       uint64_t size;
-      co_await asio::async_read(socket, asio::buffer(&size, sizeof(size)), asio::transfer_exactly(sizeof(uint64_t)), asio::use_awaitable);
+      co_await asio::async_read(socket, asio::buffer(&size, sizeof(size)), asio::transfer_exactly(sizeof(uint64_t)),
+                                asio::use_awaitable);
       str.resize(size);
       co_await asio::async_read(socket, asio::buffer(str), asio::transfer_exactly(size), asio::use_awaitable);
    }

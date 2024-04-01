@@ -33,7 +33,7 @@ namespace glz::repe
 
    template <class T>
    concept is_header = std::same_as<std::decay_t<T>, header>;
-   
+
    struct error_e
    {
       static constexpr int32_t no_error = 0;
@@ -45,7 +45,7 @@ namespace glz::repe
       static constexpr int32_t internal = -32603;
       static constexpr int32_t parse_error = -32700;
    };
-   
+
    struct error_t final
    {
       int32_t code = error_e::no_error;
