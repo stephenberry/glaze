@@ -80,6 +80,7 @@ namespace glz
          if (item_number > 0 && item_number <= long(N)) {
             for_each<N>([&](auto I) {
                using Element = glaze_tuple_element<I, N, T>;
+               constexpr auto member_index = Element::member_index;
 
                using E = typename Element::type;
 
@@ -89,7 +90,7 @@ namespace glz
                         return std::get<I>(t);
                      }
                      else {
-                        return get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
+                        return get_member(value, get<member_index>(get<I>(meta_v<T>)));
                      }
                   }();
 
