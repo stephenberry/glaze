@@ -5,7 +5,6 @@
 
 #include <cstdio>
 #include <filesystem>
-#include <fstream>
 #include <string>
 
 #include "glaze/core/context.hpp"
