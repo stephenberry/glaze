@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -12,7 +13,7 @@
 namespace glz
 {
    template <class T>
-   [[nodiscard]] error_code file_to_buffer(T& buffer, std::ifstream& file, const std::string_view path) noexcept
+   [[nodiscard]] error_code file_to_buffer(T& buffer, auto* file, const std::string_view path) noexcept
    {
       if (!file) {
          return error_code::file_open_failure;
@@ -20,7 +21,14 @@ namespace glz
       
       const auto n = std::filesystem::file_size(path);
       buffer.resize(n);
-      file.read(buffer.data(), n);
+      
+      if (n != std::fread(static_cast<void*>(buffer.data()), 1, n, file))
+      {
+         std::fclose(file);
+         return error_code::file_open_failure;
+      }
+      
+      std::fclose(file);
 
       return {};
    }
@@ -28,14 +36,14 @@ namespace glz
    template <class T>
    [[nodiscard]] error_code file_to_buffer(T& buffer, const std::string& file_name) noexcept
    {
-      std::ifstream file(file_name, std::ios::binary);
+      auto* file = std::fopen(file_name.data(), "rb");
       return file_to_buffer(buffer, file, file_name);
    }
 
    template <class T>
    [[nodiscard]] error_code file_to_buffer(T& buffer, const std::string_view file_name) noexcept
    {
-      std::ifstream file(std::string(file_name), std::ios::binary);
+      auto* file = std::fopen(file_name.data(), "rb");
       return file_to_buffer(buffer, file, file_name);
    }
 
