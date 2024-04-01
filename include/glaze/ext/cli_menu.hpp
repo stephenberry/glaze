@@ -82,16 +82,15 @@ namespace glz
             for_each_short_circuit<N>([&](auto I) {
                if (I == item_number - 1) {
                   using Element = glaze_tuple_element<I, N, T>;
-
+                  static constexpr size_t member_index = Element::member_index;
                   using E = typename Element::type;
-                  
+
                   decltype(auto) func = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
                         return std::get<I>(t);
                      }
                      else {
-                        // MSVC bug: we can't use Element alias here
-                        return get_member(value, get<glaze_tuple_element<I, N, T>::member_index>(get<I>(meta_v<T>)));
+                        return get_member(value, get<member_index>(get<I>(meta_v<T>)));
                      }
                   }();
 
