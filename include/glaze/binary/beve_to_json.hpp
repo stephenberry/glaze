@@ -123,7 +123,7 @@ namespace glz
          case tag::string: {
             ++it;
             const auto n = detail::int_from_compressed(it, end);
-            const sv value{&(*it), n};
+            const sv value{reinterpret_cast<const char*>(&*it), n};
             to_json<sv>::template op<Opts>(value, ctx, out, ix);
             std::advance(it, n);
             break;
@@ -146,7 +146,7 @@ namespace glz
                for (size_t i = 0; i < n_fields; ++i) {
                   // convert the key
                   const auto n = detail::int_from_compressed(it, end);
-                  const sv key{&(*it), n};
+                  const sv key{reinterpret_cast<const char*>(&*it), n};
                   to_json<sv>::template op<Opts>(key, ctx, out, ix);
                   if constexpr (Opts.prettify) {
                      dump<": ">(out, ix);
@@ -284,7 +284,7 @@ namespace glz
                   const auto n_strings = int_from_compressed(it, end);
                   for (size_t i = 0; i < n_strings; ++i) {
                      const auto n = detail::int_from_compressed(it, end);
-                     const sv value{&(*it), n};
+                     const sv value{reinterpret_cast<const char*>(&*it), n};
                      to_json<sv>::template op<Opts>(value, ctx, out, ix);
                      std::advance(it, n);
                      if (i != n_strings - 1) {
@@ -326,6 +326,12 @@ namespace glz
          case tag::extensions: {
             const uint8_t extension = tag >> 3;
             switch (extension) {
+            case 0: {
+               // delimiter
+               ++it;
+               dump<'\n'>(out, ix);
+               break;
+            }
             case 1: {
                // variants
                ++it;
@@ -372,8 +378,63 @@ namespace glz
             }
             case 2: {
                // matrices
-               // TODO: implement
-               ctx.error = error_code::syntax_error;
+               ++it;
+               const auto matrix_header = uint8_t(*it);
+               ++it;
+               
+               dump<'{'>(out, ix);
+               if constexpr (Opts.prettify) {
+                  ctx.indentation_level += Opts.indentation_width;
+                  dump<'\n'>(out, ix);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               }
+               
+               if constexpr (Opts.prettify) {
+                  dump<R"("layout": )">(out, ix);
+               }
+               else {
+                  dump<R"("layout":)">(out, ix);
+               }
+               
+               const auto layout = matrix_header & 0b0000000'1;
+               layout ? dump<R"("layout_right")">(out, ix) : dump<R"("layout_left")">(out, ix);
+               
+               dump<','>(out, ix);
+               if constexpr (Opts.prettify) {
+                  dump<'\n'>(out, ix);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               }
+               
+               if constexpr (Opts.prettify) {
+                  dump<R"("extents": )">(out, ix);
+               }
+               else {
+                  dump<R"("extents":)">(out, ix);
+               }
+               
+               beve_to_json_value<Opts>(ctx, it, end, out, ix);
+               
+               dump<','>(out, ix);
+               if constexpr (Opts.prettify) {
+                  dump<'\n'>(out, ix);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               }
+               
+               if constexpr (Opts.prettify) {
+                  dump<R"("value": )">(out, ix);
+               }
+               else {
+                  dump<R"("value":)">(out, ix);
+               }
+               
+               beve_to_json_value<Opts>(ctx, it, end, out, ix);
+               
+               if constexpr (Opts.prettify) {
+                  ctx.indentation_level -= Opts.indentation_width;
+                  dump<'\n'>(out, ix);
+                  dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+               }
+               dump<'}'>(out, ix);
                break;
             }
             case 3: {
