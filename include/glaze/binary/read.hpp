@@ -926,19 +926,17 @@ namespace glz
    }
    
    template <class T>
-   concept read_binary_supported = requires(T&& value, glz::context& ctx, const char*& it, const char* end) {
-      detail::from_binary<std::remove_cvref_t<T>>::template op<glz::opts{.format = binary}>(std::forward<T>(value), ctx, it, end);
+   concept read_binary_supported = requires {
+      detail::from_binary<std::remove_cvref_t<T>>{};
    };
 
-   template <class T, class Buffer>
-      requires read_binary_supported<T&>
+   template <read_binary_supported T, class Buffer>
    [[nodiscard]] inline parse_error read_binary(T&& value, Buffer&& buffer) noexcept
    {
       return read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
    }
 
-   template <class T, class Buffer>
-      requires read_binary_supported<T&>
+   template <read_binary_supported T, class Buffer>
    [[nodiscard]] inline expected<T, parse_error> read_binary(Buffer&& buffer) noexcept
    {
       T value{};
@@ -949,8 +947,7 @@ namespace glz
       return value;
    }
 
-   template <opts Opts = opts{}, class T>
-      requires read_binary_supported<T&>
+   template <opts Opts = opts{}, read_binary_supported T>
    [[nodiscard]] inline parse_error read_file_binary(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
@@ -965,16 +962,14 @@ namespace glz
       return read<set_binary<Opts>()>(value, buffer, ctx);
    }
 
-   template <class T, class Buffer>
-      requires read_binary_supported<T&>
+   template <read_binary_supported T, class Buffer>
    [[nodiscard]] inline parse_error read_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
       return read<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value),
                                                                      std::forward<Buffer>(buffer));
    }
 
-   template <class T, class Buffer>
-      requires read_binary_supported<T&>
+   template <read_binary_supported T, class Buffer>
    [[nodiscard]] inline expected<T, parse_error> read_binary_untagged(Buffer&& buffer) noexcept
    {
       T value{};
@@ -985,8 +980,7 @@ namespace glz
       return value;
    }
 
-   template <opts Opts = opts{}, class T>
-      requires read_binary_supported<T&>
+   template <opts Opts = opts{}, read_binary_supported T>
    [[nodiscard]] inline parse_error read_file_binary_untagged(T& value, const std::string& file_name,
                                                               auto&& buffer) noexcept
    {

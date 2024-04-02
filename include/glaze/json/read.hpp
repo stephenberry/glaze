@@ -2743,20 +2743,18 @@ namespace glz
    }
    
    template <class T>
-   concept read_json_supported = requires(T&& value, glz::context& ctx, const char*& it, const char* end) {
-      detail::from_json<std::remove_cvref_t<T>>::template op<glz::opts{}>(std::forward<T>(value), ctx, it, end);
+   concept read_json_supported = requires {
+      detail::from_json<std::remove_cvref_t<T>>{};
    };
 
-   template <class T, class Buffer>
-      requires read_json_supported<T&>
+   template <read_json_supported T, class Buffer>
    [[nodiscard]] inline parse_error read_json(T& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <class T, class Buffer>
-      requires read_json_supported<T&>
+   template <read_json_supported T, class Buffer>
    [[nodiscard]] inline expected<T, parse_error> read_json(Buffer&& buffer) noexcept
    {
       T value{};
@@ -2768,8 +2766,7 @@ namespace glz
       return value;
    }
 
-   template <auto Opts = opts{}, class T>
-      requires read_json_supported<T&>
+   template <auto Opts = opts{}, read_json_supported T>
    inline parse_error read_file_json(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};

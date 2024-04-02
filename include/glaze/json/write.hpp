@@ -1447,19 +1447,17 @@ namespace glz
    } // namespace detail
    
    template <class T>
-   concept write_json_supported = requires(T&& value, glz::context& ctx, std::string& b, size_t& ix) {
-      detail::to_json<std::remove_cvref_t<T>>::template op<glz::opts{}>(std::forward<T>(value), ctx, b, ix);
+   concept write_json_supported = requires {
+      detail::to_json<std::remove_cvref_t<T>>{};
    };
 
-   template <class T, class Buffer>
-      requires write_json_supported<const T&>
+   template <write_json_supported T, class Buffer>
    [[nodiscard]] inline auto write_json(T&& value, Buffer&& buffer) noexcept
    {
       return write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <class T>
-      requires write_json_supported<const T&>
+   template <write_json_supported T>
    [[nodiscard]] inline auto write_json(T&& value) noexcept
    {
       std::string buffer{};
@@ -1467,22 +1465,19 @@ namespace glz
       return buffer;
    }
 
-   template <auto& Partial, class T, class Buffer>
-      requires write_json_supported<const T&>
+   template <auto& Partial, write_json_supported T, class Buffer>
    [[nodiscard]] inline auto write_json(T&& value, Buffer&& buffer) noexcept
    {
       return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <class T, class Buffer>
-      requires write_json_supported<const T&>
+   template <write_json_supported T, class Buffer>
    inline void write_jsonc(T&& value, Buffer&& buffer) noexcept
    {
       write<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <class T>
-      requires write_json_supported<const T&>
+   template <write_json_supported T>
    [[nodiscard]] inline auto write_jsonc(T&& value) noexcept
    {
       std::string buffer{};
@@ -1490,8 +1485,7 @@ namespace glz
       return buffer;
    }
 
-   template <opts Opts = opts{}, class T>
-      requires write_json_supported<const T&>
+   template <opts Opts = opts{}, write_json_supported T>
    [[nodiscard]] inline write_error write_file_json(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
       write<set_json<Opts>()>(std::forward<T>(value), buffer);
