@@ -1066,7 +1066,7 @@ namespace glz
                         return;
                      }
                   }
-                  
+
                   using value_type = typename T::value_type;
 
                   std::vector<std::vector<value_type>> intermediate;
@@ -1080,7 +1080,7 @@ namespace glz
                         active = &intermediate.emplace_back();
                         active->reserve(2 * former_capacity);
                      }
-                     
+
                      read<json>::op<ws_handled<Opts>()>(active->emplace_back(), ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
@@ -1102,14 +1102,14 @@ namespace glz
                         return;
                      }
                   }
-                  
+
                   const auto intermediate_size = intermediate.size();
                   size_t reserve_size = value.size();
                   for (size_t i = 0; i < intermediate_size; ++i) {
                      reserve_size += intermediate[i].size();
                   }
-                  
-                  if constexpr (std::is_trivially_copyable_v<value_type> && ! std::same_as<T, std::vector<bool>>) {
+
+                  if constexpr (std::is_trivially_copyable_v<value_type> && !std::same_as<T, std::vector<bool>>) {
                      const auto original_size = value.size();
                      value.resize(reserve_size);
                      auto* dest = value.data() + original_size;

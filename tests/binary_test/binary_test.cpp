@@ -1592,7 +1592,7 @@ suite beve_to_json_tests = [] {
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"([99,"spiders"])") << json;
    };
-   
+
    "beve_to_json std::variant<int, std::string>"_test = [] {
       std::variant<int, std::string> v = 99;
       std::string buffer{};
@@ -1602,7 +1602,7 @@ suite beve_to_json_tests = [] {
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"({"index":0,"value":99})") << json;
    };
-   
+
    "beve_to_json std::variant<int, std::string> prettify"_test = [] {
       std::variant<int, std::string> v = 99;
       std::string buffer{};

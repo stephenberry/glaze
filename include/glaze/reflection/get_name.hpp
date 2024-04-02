@@ -87,11 +87,9 @@ namespace glz
       // making static memory to stripped to help the compiler optimize away prettified function signature
       static constexpr std::string_view stripped_literal = join_v<stripped>;
    };
-   
+
    template <auto N, class T>
-   constexpr auto nameof = []() constexpr {
-      return nameof_impl<N, T>::stripped_literal;
-   }();
+   constexpr auto nameof = []() constexpr { return nameof_impl<N, T>::stripped_literal; }();
 
    template <class T>
    constexpr auto type_name = [] {
