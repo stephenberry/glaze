@@ -1067,9 +1067,19 @@ namespace glz
                      }
                   }
 
-                  std::deque<typename T::value_type> intermediate{};
+                  std::vector<std::vector<typename T::value_type>> intermediate;
+                  intermediate.reserve(48);
+                  auto* active = &intermediate.emplace_back();
+                  active->reserve(2);
                   while (it < end) {
-                     read<json>::op<ws_handled<Opts>()>(intermediate.emplace_back(), ctx, it, end);
+                     if (active->size() == active->capacity()) {
+                        // we want to populate the next vector
+                        const auto former_capacity = active->capacity();
+                        active = &intermediate.emplace_back();
+                        active->reserve(2 * former_capacity);
+                     }
+                     
+                     read<json>::op<ws_handled<Opts>()>(active->emplace_back(), ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -1090,11 +1100,18 @@ namespace glz
                         return;
                      }
                   }
-
-                  value.reserve(value.size() + intermediate.size());
-                  const auto inter_end = intermediate.end();
-                  for (auto inter = intermediate.begin(); inter < inter_end; ++inter) {
-                     value.emplace_back(std::move(*inter));
+                  
+                  const auto intermediate_size = intermediate.size();
+                  size_t reserve_size = value.size();
+                  for (size_t i = 0; i < intermediate_size; ++i) {
+                     reserve_size += intermediate[i].size();
+                  }
+                  value.reserve(reserve_size);
+                  for (const auto& vector : intermediate) {
+                     const auto inter_end = vector.end();
+                     for (auto inter = vector.begin(); inter < inter_end; ++inter) {
+                        value.emplace_back(std::move(*inter));
+                     }
                   }
                }
                else {
