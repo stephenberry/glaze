@@ -1102,9 +1102,9 @@ namespace glz
                      value.resize(reserve_size);
                      auto* dest = value.data() + original_size;
                      for (const auto& vector : intermediate) {
-                        const auto n = vector.size();
-                        std::memcpy(dest, vector.data(), n * sizeof(value_type));
-                        dest += n;
+                        const auto vector_size = vector.size();
+                        std::memcpy(dest, vector.data(), vector_size * sizeof(value_type));
+                        dest += vector_size;
                      }
                   }
                   else {

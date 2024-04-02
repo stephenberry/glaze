@@ -37,7 +37,9 @@ namespace glz
          return error_code::file_open_failure;
       }
 
-      std::fclose(file);
+      if (std::fclose(file)) {
+         return error_code::file_close_failure;
+      }
 
       return {};
    }
