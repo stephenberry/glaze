@@ -1039,6 +1039,9 @@ namespace glz
                if constexpr (has_reserve<T> && has_capacity<T>) {
                   // If we can reserve memmory, like std::vector, then we want to check the capacity
                   // and use a temporary buffer if the capacity needs to grow
+                  if (value.capacity() == 0) {
+                     value.reserve(1); // we want to directly use our vector for the first element
+                  }
                   const auto capacity = value.capacity();
                   for (size_t i = value.size(); i < capacity; ++i) {
                      // emplace_back while we have capacity
