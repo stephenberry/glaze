@@ -11,6 +11,7 @@
 #include <random>
 
 #include "boost/ut.hpp"
+#include "glaze/binary/beve_to_json.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/ptr.hpp"
 #include "glaze/json/read.hpp"
@@ -56,6 +57,16 @@ int main()
       expect(!glz::read_binary(e, b));
       const bool boolean = m == e;
       expect(boolean);
+   };
+   
+   "beve_to_json"_test = [] {
+      Eigen::MatrixXd m(2, 2);
+      m << 1, 2, 3, 4;
+      std::vector<std::byte> b;
+      glz::write_binary(m, b);
+      std::string json{};
+      expect(!glz::beve_to_json(b, json));
+      expect(json == R"({"layout":"layout_right","extents":[2,2],"value":[1,3,2,4]})") << json;
    };
 
    "array"_test = [] {

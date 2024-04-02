@@ -1616,6 +1616,26 @@ suite beve_to_json_tests = [] {
    "value": 99
 })") << json;
    };
+   
+   "beve_to_json std::complex<float>"_test = [] {
+      std::complex<float> v{1.f, 2.f};
+      std::string buffer{};
+      glz::write_binary(v, buffer);
+
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"([1,2])") << json;
+   };
+   
+   "beve_to_json std::vector<std::complex<float>>"_test = [] {
+      std::vector<std::complex<float>> v{{1.f, 2.f}, {2.f, 3.f}};
+      std::string buffer{};
+      glz::write_binary(v, buffer);
+
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"([[1,2],[2,3]])") << json;
+   };
 };
 
 suite merge_tests = [] {
