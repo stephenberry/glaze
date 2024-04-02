@@ -1066,8 +1066,10 @@ namespace glz
                         return;
                      }
                   }
+                  
+                  using value_type = typename T::value_type;
 
-                  std::vector<std::vector<typename T::value_type>> intermediate;
+                  std::vector<std::vector<value_type>> intermediate;
                   intermediate.reserve(48);
                   auto* active = &intermediate.emplace_back();
                   active->reserve(2);
@@ -1106,11 +1108,24 @@ namespace glz
                   for (size_t i = 0; i < intermediate_size; ++i) {
                      reserve_size += intermediate[i].size();
                   }
-                  value.reserve(reserve_size);
-                  for (const auto& vector : intermediate) {
-                     const auto inter_end = vector.end();
-                     for (auto inter = vector.begin(); inter < inter_end; ++inter) {
-                        value.emplace_back(std::move(*inter));
+                  
+                  if constexpr (std::is_trivially_copyable_v<value_type> && ! std::same_as<T, std::vector<bool>>) {
+                     const auto original_size = value.size();
+                     value.resize(reserve_size);
+                     auto* dest = value.data() + original_size;
+                     for (const auto& vector : intermediate) {
+                        const auto n = vector.size();
+                        std::memcpy(dest, vector.data(), n * sizeof(value_type));
+                        dest += n;
+                     }
+                  }
+                  else {
+                     value.reserve(reserve_size);
+                     for (const auto& vector : intermediate) {
+                        const auto inter_end = vector.end();
+                        for (auto inter = vector.begin(); inter < inter_end; ++inter) {
+                           value.emplace_back(std::move(*inter));
+                        }
                      }
                   }
                }
