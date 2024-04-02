@@ -6,7 +6,7 @@
 #if __has_include(<asio.hpp>)
 #include <asio.hpp>
 #else
-static_assert(false, "asio must be included to use glaze/ext/glaze_asio.hpp");
+static_assert(false, "standalone asio must be included to use glaze/ext/glaze_asio.hpp");
 #endif
 
 #include <cassert>
