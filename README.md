@@ -29,7 +29,7 @@ Glaze also supports:
 
 - No runtime type information necessary (compiles with `-fno-rtti`)
 - Rapid error handling with short circuiting
-- [JSON-RPC 2.0 support](./docs/json-rpc.md)
+- [JSON-RPC 2.0 support](./docs/rpc/json-rpc.md)
 - [JSON Schema generation](./docs/json-schema.md)
 - [CSV Reading/Writing](./docs/csv.md)
 - [Much more!](#more-features)
@@ -794,7 +794,7 @@ glz::read_ndjson(x, s);
 
 ### [JSON Pointer Syntax](./docs/json-pointer-syntax.md)
 
-### [JSON-RPC 2.0](./docs/json-rpc.md)
+### [JSON-RPC 2.0](./docs/rpc/json-rpc.md)
 
 ### [JSON Schema](./docs/json-schema.md)
 
@@ -811,7 +811,8 @@ glz::read_ndjson(x, s);
 See the `ext` directory for extensions.
 
 - [Eigen](https://gitlab.com/libeigen/eigen)
-- [JSON-RPC 2.0](./docs/json-rpc.md)
+- [JSON-RPC 2.0](./docs/rpc/json-rpc.md)
+- [Command Line Interface Menu (cli_menu)](./docs/cli-menu.md)
 
 # License
 
