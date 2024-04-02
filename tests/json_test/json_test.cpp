@@ -7275,9 +7275,6 @@ suite filesystem_tests = [] {
       obj.p.clear();
       expect(!glz::read_json(obj, buffer));
       expect(obj.p == "./my_path");
-      
-      std::ifstream ifstream{};
-      std::ignore = glz::read_json(ifstream, buffer);
    };
 };
 
