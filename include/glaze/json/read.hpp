@@ -1039,6 +1039,9 @@ namespace glz
                if constexpr (has_reserve<T> && has_capacity<T>) {
                   // If we can reserve memmory, like std::vector, then we want to check the capacity
                   // and use a temporary buffer if the capacity needs to grow
+                  if (value.capacity() == 0) {
+                     value.reserve(1); // we want to directly use our vector for the first element
+                  }
                   const auto capacity = value.capacity();
                   for (size_t i = value.size(); i < capacity; ++i) {
                      // emplace_back while we have capacity
@@ -1063,10 +1066,22 @@ namespace glz
                         return;
                      }
                   }
+                  
+                  using value_type = typename T::value_type;
 
-                  std::deque<typename T::value_type> intermediate{};
+                  std::vector<std::vector<value_type>> intermediate;
+                  intermediate.reserve(48);
+                  auto* active = &intermediate.emplace_back();
+                  active->reserve(2);
                   while (it < end) {
-                     read<json>::op<ws_handled<Opts>()>(intermediate.emplace_back(), ctx, it, end);
+                     if (active->size() == active->capacity()) {
+                        // we want to populate the next vector
+                        const auto former_capacity = active->capacity();
+                        active = &intermediate.emplace_back();
+                        active->reserve(2 * former_capacity);
+                     }
+                     
+                     read<json>::op<ws_handled<Opts>()>(active->emplace_back(), ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -1087,11 +1102,31 @@ namespace glz
                         return;
                      }
                   }
-
-                  value.reserve(value.size() + intermediate.size());
-                  const auto inter_end = intermediate.end();
-                  for (auto inter = intermediate.begin(); inter < inter_end; ++inter) {
-                     value.emplace_back(std::move(*inter));
+                  
+                  const auto intermediate_size = intermediate.size();
+                  size_t reserve_size = value.size();
+                  for (size_t i = 0; i < intermediate_size; ++i) {
+                     reserve_size += intermediate[i].size();
+                  }
+                  
+                  if constexpr (std::is_trivially_copyable_v<value_type> && ! std::same_as<T, std::vector<bool>>) {
+                     const auto original_size = value.size();
+                     value.resize(reserve_size);
+                     auto* dest = value.data() + original_size;
+                     for (const auto& vector : intermediate) {
+                        const auto n = vector.size();
+                        std::memcpy(dest, vector.data(), n * sizeof(value_type));
+                        dest += n;
+                     }
+                  }
+                  else {
+                     value.reserve(reserve_size);
+                     for (const auto& vector : intermediate) {
+                        const auto inter_end = vector.end();
+                        for (auto inter = vector.begin(); inter < inter_end; ++inter) {
+                           value.emplace_back(std::move(*inter));
+                        }
+                     }
                   }
                }
                else {
