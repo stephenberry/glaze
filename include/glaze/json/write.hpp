@@ -25,25 +25,14 @@ namespace glz
       struct to_json
       {};
 
-      template <auto Opts, class T, class Ctx, class B, class IX>
-      concept write_json_invocable = requires(T&& value, Ctx&& ctx, B&& b, IX&& ix) {
-         to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                            std::forward<B>(b), std::forward<IX>(ix));
-      };
-
       template <>
       struct write<json>
       {
          template <auto Opts, class T, is_context Ctx, class B, class IX>
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
-            if constexpr (write_json_invocable<Opts, T, Ctx, B, IX>) {
-               to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                  std::forward<B>(b), std::forward<IX>(ix));
-            }
-            else {
-               static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
-            }
+            to_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                               std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 
@@ -1456,14 +1445,21 @@ namespace glz
          }
       };
    } // namespace detail
+   
+   template <class T>
+   concept write_json_supported = requires(T&& value, glz::context& ctx, std::string& b, size_t& ix) {
+      detail::to_json<std::remove_cvref_t<T>>::template op<glz::opts{}>(std::forward<T>(value), ctx, b, ix);
+   };
 
    template <class T, class Buffer>
+      requires write_json_supported<const T&>
    [[nodiscard]] inline auto write_json(T&& value, Buffer&& buffer) noexcept
    {
       return write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
+      requires write_json_supported<const T&>
    [[nodiscard]] inline auto write_json(T&& value) noexcept
    {
       std::string buffer{};
@@ -1472,18 +1468,21 @@ namespace glz
    }
 
    template <auto& Partial, class T, class Buffer>
+      requires write_json_supported<const T&>
    [[nodiscard]] inline auto write_json(T&& value, Buffer&& buffer) noexcept
    {
       return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T, class Buffer>
+      requires write_json_supported<const T&>
    inline void write_jsonc(T&& value, Buffer&& buffer) noexcept
    {
       write<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <class T>
+      requires write_json_supported<const T&>
    [[nodiscard]] inline auto write_jsonc(T&& value) noexcept
    {
       std::string buffer{};
@@ -1492,14 +1491,10 @@ namespace glz
    }
 
    template <opts Opts = opts{}, class T>
+      requires write_json_supported<const T&>
    [[nodiscard]] inline write_error write_file_json(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
       write<set_json<Opts>()>(std::forward<T>(value), buffer);
       return {buffer_to_file(buffer, file_name)};
    }
-
-   template <class T>
-   concept write_json_supported =
-      detail::write_json_invocable<glz::opts{}, std::add_const_t<std::add_lvalue_reference_t<T>>, glz::context&,
-   std::string&, size_t&>;
 }
