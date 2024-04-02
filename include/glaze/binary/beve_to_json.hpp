@@ -10,6 +10,97 @@ namespace glz
 {
    namespace detail
    {
+      template <opts Opts>
+      inline void beve_to_json_number(auto&& tag, auto&& ctx, auto&& it, auto&&, auto& out, auto&& ix) noexcept
+      {
+         ++it;
+         const auto number_type = (tag & 0b000'11'000) >> 3;
+         const uint8_t byte_count = detail::byte_count_lookup[tag >> 5];
+         
+         auto write_number = [&]<class T>(T&& value) {
+            std::memcpy(&value, &(*it), sizeof(T));
+            to_json<T>::template op<Opts>(value, ctx, out, ix);
+            std::advance(it, sizeof(T));
+         };
+         
+         switch (number_type) {
+         case 0: {
+            // floating point
+            switch (byte_count) {
+            case 4: {
+               write_number(float{});
+               break;
+            }
+            case 8: {
+               write_number(double{});
+               break;
+            }
+            default: {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            }
+            break;
+         }
+         case 1: {
+            // signed integer
+            switch (byte_count) {
+            case 1: {
+               write_number(int8_t{});
+               break;
+            }
+            case 2: {
+               write_number(int16_t{});
+               break;
+            }
+            case 4: {
+               write_number(int32_t{});
+               break;
+            }
+            case 8: {
+               write_number(int64_t{});
+               break;
+            }
+            default: {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            }
+            break;
+         }
+         case 2: {
+            // unsigned integer
+            switch (byte_count) {
+            case 1: {
+               write_number(uint8_t{});
+               break;
+            }
+            case 2: {
+               write_number(uint16_t{});
+               break;
+            }
+            case 4: {
+               write_number(uint32_t{});
+               break;
+            }
+            case 8: {
+               write_number(uint64_t{});
+               break;
+            }
+            default: {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            }
+            break;
+         }
+         default: {
+            ctx.error = error_code::syntax_error;
+            return;
+         }
+         }
+      }
+      
       template <glz::opts Opts, class Buffer>
       inline void beve_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix) noexcept
       {
@@ -32,92 +123,9 @@ namespace glz
             break;
          }
          case tag::number: {
-            ++it;
-            const auto number_type = (tag & 0b000'11'000) >> 3;
-            const uint8_t byte_count = detail::byte_count_lookup[tag >> 5];
-
-            auto write_number = [&]<class T>(T&& value) {
-               std::memcpy(&value, &(*it), sizeof(T));
-               to_json<T>::template op<Opts>(value, ctx, out, ix);
-               std::advance(it, sizeof(T));
-            };
-
-            switch (number_type) {
-            case 0: {
-               // floating point
-               switch (byte_count) {
-               case 4: {
-                  write_number(float{});
-                  break;
-               }
-               case 8: {
-                  write_number(double{});
-                  break;
-               }
-               default: {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-               }
-               break;
-            }
-            case 1: {
-               // signed integer
-               switch (byte_count) {
-               case 1: {
-                  write_number(int8_t{});
-                  break;
-               }
-               case 2: {
-                  write_number(int16_t{});
-                  break;
-               }
-               case 4: {
-                  write_number(int32_t{});
-                  break;
-               }
-               case 8: {
-                  write_number(int64_t{});
-                  break;
-               }
-               default: {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-               }
-               break;
-            }
-            case 2: {
-               // unsigned integer
-               switch (byte_count) {
-               case 1: {
-                  write_number(uint8_t{});
-                  break;
-               }
-               case 2: {
-                  write_number(uint16_t{});
-                  break;
-               }
-               case 4: {
-                  write_number(uint32_t{});
-                  break;
-               }
-               case 8: {
-                  write_number(uint64_t{});
-                  break;
-               }
-               default: {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
-               }
-               break;
-            }
-            default: {
-               ctx.error = error_code::syntax_error;
+            beve_to_json_number<Opts>(tag, ctx, it, end, out, ix);
+            if (bool(ctx.error))
                return;
-            }
-            }
             break;
          }
          case tag::string: {
@@ -277,6 +285,8 @@ namespace glz
                switch (string_or_boolean) {
                case 0: {
                   // boolean array (bit packed)
+                  // TODO: implement
+                  ctx.error = error_code::syntax_error;
                   break;
                }
                case 1: {
@@ -439,8 +449,23 @@ namespace glz
             }
             case 3: {
                // complex numbers
-               // TODO: implement
-               ctx.error = error_code::syntax_error;
+               /*++it;
+               const auto complex_header = uint8_t(*it);
+               ++it;
+               
+               const auto complex_type = complex_header & 0b0000000'1;
+               if (complex_type) {
+                  // complex array
+               }
+               else {
+                  // complex number
+                  dump<'['>(out, ix);
+                  beve_to_json_value<Opts>(ctx, it, end, out, ix);
+                  dump<','>(out, ix);
+                  beve_to_json_value<Opts>(ctx, it, end, out, ix);
+                  dump<']'>(out, ix);
+               }*/
+               
                break;
             }
             default: {
