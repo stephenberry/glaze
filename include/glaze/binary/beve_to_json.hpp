@@ -15,13 +15,13 @@ namespace glz
       {
          const auto number_type = (tag & 0b000'11'000) >> 3;
          const uint8_t byte_count = detail::byte_count_lookup[tag >> 5];
-         
+
          auto write_number = [&]<class T>(T&& value) {
             std::memcpy(&value, &(*it), sizeof(T));
             to_json<T>::template op<Opts>(value, ctx, out, ix);
             std::advance(it, sizeof(T));
          };
-         
+
          switch (number_type) {
          case 0: {
             // floating point
@@ -99,7 +99,7 @@ namespace glz
          }
          }
       }
-      
+
       template <glz::opts Opts, class Buffer>
       inline void beve_to_json_value(auto&& ctx, auto&& it, auto&& end, Buffer& out, auto&& ix) noexcept
       {
@@ -124,8 +124,7 @@ namespace glz
          case tag::number: {
             ++it;
             beve_to_json_number<Opts>(tag, ctx, it, end, out, ix);
-            if (bool(ctx.error))
-               return;
+            if (bool(ctx.error)) return;
             break;
          }
          case tag::string: {
@@ -391,54 +390,54 @@ namespace glz
                ++it;
                const auto matrix_header = uint8_t(*it);
                ++it;
-               
+
                dump<'{'>(out, ix);
                if constexpr (Opts.prettify) {
                   ctx.indentation_level += Opts.indentation_width;
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
                }
-               
+
                if constexpr (Opts.prettify) {
                   dump<R"("layout": )">(out, ix);
                }
                else {
                   dump<R"("layout":)">(out, ix);
                }
-               
+
                const auto layout = matrix_header & 0b0000000'1;
                layout ? dump<R"("layout_right")">(out, ix) : dump<R"("layout_left")">(out, ix);
-               
+
                dump<','>(out, ix);
                if constexpr (Opts.prettify) {
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
                }
-               
+
                if constexpr (Opts.prettify) {
                   dump<R"("extents": )">(out, ix);
                }
                else {
                   dump<R"("extents":)">(out, ix);
                }
-               
+
                beve_to_json_value<Opts>(ctx, it, end, out, ix);
-               
+
                dump<','>(out, ix);
                if constexpr (Opts.prettify) {
                   dump<'\n'>(out, ix);
                   dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
                }
-               
+
                if constexpr (Opts.prettify) {
                   dump<R"("value": )">(out, ix);
                }
                else {
                   dump<R"("value":)">(out, ix);
                }
-               
+
                beve_to_json_value<Opts>(ctx, it, end, out, ix);
-               
+
                if constexpr (Opts.prettify) {
                   ctx.indentation_level -= Opts.indentation_width;
                   dump<'\n'>(out, ix);
@@ -452,7 +451,7 @@ namespace glz
                ++it;
                const auto complex_header = uint8_t(*it);
                ++it;
-               
+
                const auto complex_type = complex_header & 0b0000000'1;
                if (complex_type) {
                   // complex array
@@ -480,7 +479,7 @@ namespace glz
                   beve_to_json_number<Opts>(tag, ctx, it, end, out, ix);
                   dump<']'>(out, ix);
                }
-               
+
                break;
             }
             default: {
