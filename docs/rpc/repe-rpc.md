@@ -12,5 +12,5 @@ Glaze provides support for the [REPE](https://github.com/stephenberry/repe) RPC 
 
 > [!NOTE]
 >
-> `glz::asio_server` and `glz::asio_client` require the [standalone asio](https://think-async.com/Asio/AsioStandalone.html) to build. Glaze does not include this dependency within its CMake files. The developer is expected to include this header only library themself.
+> `glz::asio_server` and `glz::asio_client` require the [standalone asio](https://think-async.com/Asio/AsioStandalone.html) to build. Glaze does not include this dependency within its CMake files. The developer is expected to include this header-only library.
 
