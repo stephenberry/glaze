@@ -324,13 +324,51 @@ namespace glz
             break;
          }
          case tag::extensions: {
-            const uint8_t extension = tag & 0b11111'000;
+            const uint8_t extension = tag >> 3;
             switch (extension)
             {
                case 1: {
                   // variants
-                  // TODO: implement
-                  ctx.error = error_code::syntax_error;
+                  ++it;
+                  const auto index = int_from_compressed(it, end);
+                  
+                  dump<'{'>(out, ix);
+                  if constexpr (Opts.prettify) {
+                     ctx.indentation_level += Opts.indentation_width;
+                     dump<'\n'>(out, ix);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  }
+                  
+                  if constexpr (Opts.prettify) {
+                     dump<R"("index": )">(out, ix);
+                  }
+                  else {
+                     dump<R"("index":)">(out, ix);
+                  }
+                  
+                  to_json<std::remove_cvref_t<decltype(index)>>::template op<Opts>(index, ctx, out, ix);
+                  
+                  dump<','>(out, ix);
+                  if constexpr (Opts.prettify) {
+                     dump<'\n'>(out, ix);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  }
+                  
+                  if constexpr (Opts.prettify) {
+                     dump<R"("value": )">(out, ix);
+                  }
+                  else {
+                     dump<R"("value":)">(out, ix);
+                  }
+                  
+                  beve_to_json_value<Opts>(ctx, it, end, out, ix);
+                  
+                  if constexpr (Opts.prettify) {
+                     ctx.indentation_level -= Opts.indentation_width;
+                     dump<'\n'>(out, ix);
+                     dumpn<Opts.indentation_char>(ctx.indentation_level, out, ix);
+                  }
+                  dump<'}'>(out, ix);
                   break;
                }
                case 2: {
@@ -360,8 +398,8 @@ namespace glz
       }
    }
 
-   template <glz::opts Opts = glz::opts{}, class Buffer>
-   inline write_error beve_to_json(const std::string& beve, Buffer& out) noexcept
+   template <glz::opts Opts = glz::opts{}, class BEVEBuffer, class JSONBuffer>
+   inline write_error beve_to_json(const BEVEBuffer& beve, JSONBuffer& out) noexcept
    {
       size_t ix{}; // write index
 
@@ -377,7 +415,7 @@ namespace glz
          }
       }
 
-      if constexpr (detail::resizeable<Buffer>) {
+      if constexpr (detail::resizeable<JSONBuffer>) {
          out.resize(ix);
       }
 
