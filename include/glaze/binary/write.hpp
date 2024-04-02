@@ -77,8 +77,7 @@ namespace glz
       }
 
       template <class T = void>
-      struct to_binary
-      {};
+      struct to_binary;
 
       template <>
       struct write<binary>

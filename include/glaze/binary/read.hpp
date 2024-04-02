@@ -16,8 +16,7 @@ namespace glz
    namespace detail
    {
       template <class T = void>
-      struct from_binary
-      {};
+      struct from_binary;
 
       template <>
       struct read<binary>

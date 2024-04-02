@@ -22,8 +22,7 @@ namespace glz
    namespace detail
    {
       template <class T = void>
-      struct to_json
-      {};
+      struct to_json;
 
       template <>
       struct write<json>
