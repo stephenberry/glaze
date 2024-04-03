@@ -61,7 +61,7 @@ namespace glz
 
       std::optional<std::chrono::time_point<std::chrono::steady_clock>> t0{}; // the time of the first event
 
-      bool disabled = false;
+      std::atomic<bool> disabled = false;
       std::mutex mtx{};
 
       template <class... Args>
@@ -93,12 +93,12 @@ namespace glz
          }
 
          const auto tnow = std::chrono::steady_clock::now();
-         if (!t0) {
-            t0 = tnow;
-         }
          trace_event* event{};
          {
             std::unique_lock lock{mtx};
+            if (!t0) {
+               t0 = tnow;
+            }
             event = &traceEvents.emplace_back();
          }
          event->name = name;
@@ -139,12 +139,12 @@ namespace glz
          }
 
          const auto tnow = std::chrono::steady_clock::now();
-         if (!t0) {
-            t0 = tnow;
-         }
          trace_event* event{};
          {
             std::unique_lock lock{mtx};
+            if (!t0) {
+               t0 = tnow;
+            }
             event = &traceEvents.emplace_back();
          }
          event->name = name;
@@ -163,5 +163,88 @@ namespace glz
    {
       using T = trace;
       static constexpr auto value = object(&T::traceEvents, &T::displayTimeUnit);
+   };
+   
+   // Global approach to user a trace
+   // instead of calling: my_trace.begin("my event");
+   // you can call: glz::trace_begin("my event");
+   template <size_t I>
+   inline trace& global_trace() noexcept {
+      static trace trc{};
+      return trc;
+   }
+   
+   template <size_t I>
+   inline void enable_trace() noexcept {
+      global_trace<0>().disabled = false;
+   }
+   
+   template <size_t I>
+   inline void disable_trace() noexcept {
+      global_trace<0>().disabled = true;
+   }
+   
+   template <opts Opts = opts{}>
+   [[nodiscard]] write_error write_file_trace(const std::string& file_name, auto&& buffer) noexcept
+   {
+      write<set_json<Opts>()>(global_trace<0>(), buffer);
+      return {buffer_to_file(buffer, file_name)};
+   }
+   
+   template <class... Args>
+      requires(sizeof...(Args) <= 1)
+   constexpr void trace_begin(const std::string_view name, Args&&... args) noexcept
+   {
+      auto& trc = global_trace<0>();
+      trc.begin(name, std::forward<Args>(args)...);
+   }
+   
+   template <class... Args>
+      requires(sizeof...(Args) <= 1)
+   constexpr void trace_end(const std::string_view name, Args&&... args) noexcept
+   {
+      auto& trc = global_trace<0>();
+      trc.end(name, std::forward<Args>(args)...);
+   }
+   
+   template <class... Args>
+      requires(sizeof...(Args) <= 1)
+   constexpr void trace_async_begin(const std::string_view name, Args&&... args) noexcept
+   {
+      auto& trc = global_trace<0>();
+      trc.async_begin(name, std::forward<Args>(args)...);
+   }
+   
+   template <class... Args>
+      requires(sizeof...(Args) <= 1)
+   constexpr void trace_async_end(const std::string_view name, Args&&... args) noexcept
+   {
+      auto& trc = global_trace<0>();
+      trc.async_end(name, std::forward<Args>(args)...);
+   }
+   
+   // Automatically adds the end event when it leave scope
+   struct duration_trace final
+   {
+      duration_trace(const std::string_view name) noexcept : name(name) {
+         trace_begin(name);
+      }
+      ~duration_trace() noexcept {
+         trace_end(name);
+      }
+      
+      const std::string_view name{};
+   };
+   
+   struct async_trace final
+   {
+      async_trace(const std::string_view name) noexcept : name(name) {
+         trace_async_begin(name);
+      }
+      ~async_trace() noexcept {
+         trace_async_end(name);
+      }
+      
+      const std::string_view name{};
    };
 }
