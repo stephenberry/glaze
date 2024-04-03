@@ -7,21 +7,13 @@
 
 #include <chrono>
 
+// This code allows profiling and time tracing using tools like Perfetto https://perfetto.dev/
+// The specification adheres to Chrome's tracing format document:
+// https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview
+
 namespace glz
 {
-   // https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview
-   
-   constexpr char B = 'B'; // duration event begin
-   constexpr char E = 'E'; // duration event end
-   constexpr char X = 'X'; // complete event
-   constexpr char i = 'i'; // instant event
-   constexpr char C = 'C'; // counter event
-   constexpr char b = 'b'; // async event begin
-   constexpr char n = 'n'; // async event nestable instant
-   constexpr char e = 'e'; // async event end
-   // ...
-   
-   enum struct time_unit : uint32_t
+   enum struct display_time_unit : uint32_t
    {
       s, // seconds
       ms, // milliseconds
@@ -30,10 +22,10 @@ namespace glz
    };
    
    template <>
-   struct meta<time_unit>
+   struct meta<display_time_unit>
    {
-      static constexpr sv name = "glz::time_unit";
-      using enum time_unit;
+      static constexpr sv name = "glz::display_time_unit";
+      using enum display_time_unit;
       static constexpr auto value =
       enumerate_no_reflect("s", s, //
                            "ms", ms, //
@@ -41,7 +33,7 @@ namespace glz
                            "ns", ns);
    };
    
-   struct event
+   struct trace_event
    {
       std::string_view name{}; // The name of the event, as displayed in Trace Viewer
       std::optional<std::string_view> cat{}; // The event categories. A comma separated list of categories for the event.
@@ -57,8 +49,8 @@ namespace glz
    
    struct trace
    {
-      std::deque<event> traceEvents{};
-      time_unit displayTimeUnit = time_unit::ms;
+      std::deque<trace_event> traceEvents{};
+      display_time_unit displayTimeUnit = display_time_unit::ms;
       
       std::optional<std::chrono::time_point<std::chrono::steady_clock>> t0{}; // the time of the first event
       
@@ -90,11 +82,11 @@ namespace glz
             return;
          }
          
-         auto tnow = std::chrono::steady_clock::now();
+         const auto tnow = std::chrono::steady_clock::now();
          if (!t0) {
             t0 = tnow;
          }
-         glz::event* event{};
+         trace_event* event{};
          {
             std::unique_lock lock{mtx};
             event = &traceEvents.emplace_back();
@@ -133,11 +125,11 @@ namespace glz
             return;
          }
          
-         auto tnow = std::chrono::steady_clock::now();
+         const auto tnow = std::chrono::steady_clock::now();
          if (!t0) {
             t0 = tnow;
          }
-         glz::event* event{};
+         trace_event* event{};
          {
             std::unique_lock lock{mtx};
             event = &traceEvents.emplace_back();
