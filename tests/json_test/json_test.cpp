@@ -28,10 +28,13 @@
 #include "glaze/json.hpp"
 #include "glaze/json/study.hpp"
 #include "glaze/record/recorder.hpp"
+#include "glaze/trace/trace.hpp"
 #include "glaze/util/poly.hpp"
 #include "glaze/util/progress_bar.hpp"
 
 using namespace boost::ut;
+
+glz::trace trace{};
 
 struct my_struct
 {
@@ -1064,6 +1067,7 @@ suite early_end = [] {
       std::string buffer_data =
          R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2/*double is the best type*/,"b":false,"c":"W","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/}})";
       std::string_view buffer = buffer_data;
+      trace.begin("early_end");
       while (buffer.size() > 0) {
          buffer_data.pop_back();
          buffer = buffer_data;
@@ -1078,6 +1082,7 @@ suite early_end = [] {
          expect(err != glz::error_code::none);
          expect(err.location <= buffer.size());
       }
+      trace.end("early_end");
    };
 };
 
@@ -1108,6 +1113,7 @@ suite prettified_custom_object = [] {
 suite bench = [] {
    using namespace boost::ut;
    "bench"_test = [] {
+      trace.begin("bench");
       std::cout << "\nPerformance regresion test: \n";
 #ifdef NDEBUG
       size_t repeat = 100000;
@@ -1118,37 +1124,44 @@ suite bench = [] {
 
       std::string buffer;
       glz::write_json(thing, buffer);
-
+      
+      trace.begin("write_bench", "JSON writing benchmark");
       auto tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
          buffer.clear();
          glz::write_json(thing, buffer);
       }
       auto tend = std::chrono::high_resolution_clock::now();
+      trace.end("write_bench");
       auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       auto mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "write_json size: " << buffer.size() << " bytes\n";
       std::cout << "write_json: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
-
+      
+      trace.begin("read_bench");
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
          expect(glz::read_json(thing, buffer) == glz::error_code::none);
       }
       tend = std::chrono::high_resolution_clock::now();
+      trace.end("read_bench", "JSON reading benchmark");
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "read_json: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
-
+      
+      trace.begin("json_ptr_bench");
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
          glz::get<std::string>(thing, "/thing_ptr/b");
       }
       tend = std::chrono::high_resolution_clock::now();
+      trace.end("json_ptr_bench", "JSON pointer benchmark");
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       std::cout << "get: " << duration << " s, " << (repeat / duration) << " gets/s"
                 << "\n\n";
+      trace.end("bench");
    };
 };
 
@@ -7280,8 +7293,16 @@ suite filesystem_tests = [] {
 
 int main()
 {
+   trace.begin("json_test", "Full test suite duration.");
    // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
+   
+   trace.end("json_test");
+   const auto ec = glz::write_file_json(trace, "json_test.trace.json", std::string{});
+   if (ec) {
+      std::cerr << "trace output failed\n";
+   }
+   
    return result;
 }
