@@ -9,6 +9,12 @@
 
 #include "glaze/core/context.hpp"
 
+#ifdef _MSC_VER
+// Turn off MSVC warning for unsafe fopen
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+
 namespace glz
 {
    template <class T>
@@ -31,7 +37,9 @@ namespace glz
          return error_code::file_open_failure;
       }
 
-      std::fclose(file);
+      if (std::fclose(file)) {
+         return error_code::file_close_failure;
+      }
 
       return {};
    }
@@ -68,3 +76,8 @@ namespace glz
       return working_directory / filepath;
    }
 }
+
+#ifdef _MSC_VER
+// restore disabled warning
+#pragma warning(pop)
+#endif

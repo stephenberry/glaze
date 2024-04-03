@@ -19,6 +19,7 @@
 
 #ifdef _MSC_VER
 // Turn off broken warning from MSVC for << operator precedence
+#pragma warning(push)
 #pragma warning(disable : 4554)
 #endif
 
@@ -602,3 +603,8 @@ namespace glz::detail
       }
    };
 }
+
+#ifdef _MSC_VER
+// restore disabled warning
+#pragma warning(pop)
+#endif

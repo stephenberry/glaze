@@ -43,6 +43,7 @@ namespace glz
       seek_failure,
       unicode_escape_conversion_failure,
       file_open_failure,
+      file_close_failure,
       file_include_error,
       dump_int_error,
       get_nonexistent_json_ptr,

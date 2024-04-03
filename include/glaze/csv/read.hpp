@@ -16,10 +16,6 @@ namespace glz
 {
    namespace detail
    {
-      template <class T = void>
-      struct from_csv
-      {};
-
       template <>
       struct read<csv>
       {
@@ -554,13 +550,13 @@ namespace glz
       };
    }
 
-   template <uint32_t layout = rowwise, class T, class Buffer>
+   template <uint32_t layout = rowwise, read_csv_supported T, class Buffer>
    [[nodiscard]] inline auto read_csv(T&& value, Buffer&& buffer) noexcept
    {
       return read<opts{.format = csv, .layout = layout}>(value, std::forward<Buffer>(buffer));
    }
 
-   template <uint32_t layout = rowwise, class T, class Buffer>
+   template <uint32_t layout = rowwise, read_csv_supported T, class Buffer>
    [[nodiscard]] inline auto read_csv(Buffer&& buffer) noexcept
    {
       T value{};
@@ -568,7 +564,7 @@ namespace glz
       return value;
    }
 
-   template <uint32_t layout = rowwise, class T>
+   template <uint32_t layout = rowwise, read_csv_supported T>
    [[nodiscard]] inline parse_error read_file_csv(T& value, const sv file_name)
    {
       context ctx{};
