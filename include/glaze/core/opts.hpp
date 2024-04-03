@@ -171,71 +171,56 @@ namespace glz
    {
       template <class T = void>
       struct to_binary;
-      
+
       template <class T = void>
       struct from_binary;
-      
+
       template <class T = void>
       struct to_json;
-      
+
       template <class T = void>
       struct from_json;
-      
+
       template <class T = void>
       struct to_ndjson;
-      
+
       template <class T = void>
       struct from_ndjson;
-      
+
       template <class T = void>
       struct to_csv;
-      
+
       template <class T = void>
       struct from_csv;
    }
-   
+
    template <class T>
-   concept write_binary_supported = requires {
-      detail::to_binary<std::remove_cvref_t<T>>{};
-   };
-   
+   concept write_binary_supported = requires { detail::to_binary<std::remove_cvref_t<T>>{}; };
+
    template <class T>
-   concept read_binary_supported = requires {
-      detail::from_binary<std::remove_cvref_t<T>>{};
-   };
-   
+   concept read_binary_supported = requires { detail::from_binary<std::remove_cvref_t<T>>{}; };
+
    template <class T>
-   concept write_json_supported = requires {
-      detail::to_json<std::remove_cvref_t<T>>{};
-   };
-   
+   concept write_json_supported = requires { detail::to_json<std::remove_cvref_t<T>>{}; };
+
    template <class T>
-   concept read_json_supported = requires {
-      detail::from_json<std::remove_cvref_t<T>>{};
-   };
-   
+   concept read_json_supported = requires { detail::from_json<std::remove_cvref_t<T>>{}; };
+
    template <class T>
-   concept write_ndjson_supported = requires {
-      detail::to_ndjson<std::remove_cvref_t<T>>{};
-   };
-   
+   concept write_ndjson_supported = requires { detail::to_ndjson<std::remove_cvref_t<T>>{}; };
+
    template <class T>
-   concept read_ndjson_supported = requires {
-      detail::from_ndjson<std::remove_cvref_t<T>>{};
-   };
-   
+   concept read_ndjson_supported = requires { detail::from_ndjson<std::remove_cvref_t<T>>{}; };
+
    template <class T>
-   concept write_csv_supported = requires {
-      detail::to_csv<std::remove_cvref_t<T>>{};
-   };
-   
+   concept write_csv_supported = requires { detail::to_csv<std::remove_cvref_t<T>>{}; };
+
    template <class T>
-   concept read_csv_supported = requires {
-      detail::from_csv<std::remove_cvref_t<T>>{};
-   };
-   
+   concept read_csv_supported = requires { detail::from_csv<std::remove_cvref_t<T>>{}; };
+
    template <uint32_t Format, class T>
-   consteval bool write_format_supported() {
+   consteval bool write_format_supported()
+   {
       if constexpr (Format == binary) {
          return write_binary_supported<T>;
       }
@@ -252,9 +237,10 @@ namespace glz
          static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
       }
    }
-   
+
    template <uint32_t Format, class T>
-   consteval bool read_format_supported() {
+   consteval bool read_format_supported()
+   {
       if constexpr (Format == binary) {
          return read_binary_supported<T>;
       }
@@ -271,10 +257,10 @@ namespace glz
          static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
       }
    }
-   
+
    template <uint32_t Format, class T>
    concept write_supported = write_format_supported<Format, T>();
-   
+
    template <uint32_t Format, class T>
    concept read_supported = read_format_supported<Format, T>();
 }

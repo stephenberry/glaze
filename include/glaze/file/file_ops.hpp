@@ -11,7 +11,7 @@
 
 #ifdef _MSC_VER
 // Turn off MSVC warning for unsafe fopen
-#pragma warning( push )
+#pragma warning(push)
 #pragma warning(disable : 4996)
 #endif
 
@@ -79,5 +79,5 @@ namespace glz
 
 #ifdef _MSC_VER
 // restore disabled warning
-#pragma warning( pop )
+#pragma warning(pop)
 #endif

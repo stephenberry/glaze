@@ -48,7 +48,7 @@ namespace glz
          static thread_local std::string buffer(256, ' ');
          return buffer;
       }
-      
+
       template <>
       struct read<json>
       {

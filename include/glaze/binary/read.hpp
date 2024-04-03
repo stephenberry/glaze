@@ -32,8 +32,8 @@ namespace glz
             }
             else {
                using V = std::remove_cvref_t<T>;
-               from_binary<V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                 std::forward<It0>(it), std::forward<It1>(end));
+               from_binary<V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
+                                                 std::forward<It1>(end));
             }
          }
       };
