@@ -23,8 +23,18 @@ auto ec = glz::write_file_json(trace, "trace.json", std::string{});
 Glaze allows `args` as an additional argument to `begin` and `end` methods, which will provide metadata in [Perfetto](https://ui.perfetto.dev/).
 
 ```c++
-trace.begin("my event name", arguments);
 // arguments could be any type that can be serialized to JSON
+trace.begin("my event name", arguments);
+// do stuff
+trace.end("my event name");
+```
+
+Example with a string:
+
+```c++
+trace.begin("my event name", "My event description");
+// do stuff
+trace.end("my event name");
 ```
 
 ## Disabling trace
