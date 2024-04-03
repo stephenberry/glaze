@@ -170,16 +170,22 @@ namespace glz
    namespace detail
    {
       template <class T = void>
+      struct to_binary;
+      
+      template <class T = void>
+      struct from_binary;
+      
+      template <class T = void>
       struct to_json;
       
       template <class T = void>
       struct from_json;
       
       template <class T = void>
-      struct to_binary;
+      struct to_ndjson;
       
       template <class T = void>
-      struct from_binary;
+      struct from_ndjson;
       
       template <class T = void>
       struct to_csv;
@@ -187,6 +193,16 @@ namespace glz
       template <class T = void>
       struct from_csv;
    }
+   
+   template <class T>
+   concept write_binary_supported = requires {
+      detail::to_binary<std::remove_cvref_t<T>>{};
+   };
+   
+   template <class T>
+   concept read_binary_supported = requires {
+      detail::from_binary<std::remove_cvref_t<T>>{};
+   };
    
    template <class T>
    concept write_json_supported = requires {
@@ -199,13 +215,13 @@ namespace glz
    };
    
    template <class T>
-   concept write_binary_supported = requires {
-      detail::to_binary<std::remove_cvref_t<T>>{};
+   concept write_ndjson_supported = requires {
+      detail::to_ndjson<std::remove_cvref_t<T>>{};
    };
    
    template <class T>
-   concept read_binary_supported = requires {
-      detail::from_binary<std::remove_cvref_t<T>>{};
+   concept read_ndjson_supported = requires {
+      detail::from_ndjson<std::remove_cvref_t<T>>{};
    };
    
    template <class T>
@@ -226,6 +242,9 @@ namespace glz
       else if constexpr (Opts.format == json) {
          return write_json_supported<T>;
       }
+      else if constexpr (Opts.format == ndjson) {
+         return write_ndjson_supported<T>;
+      }
       else if constexpr (Opts.format == csv) {
          return write_csv_supported<T>;
       }
@@ -241,6 +260,9 @@ namespace glz
       }
       else if constexpr (Opts.format == json) {
          return read_json_supported<T>;
+      }
+      else if constexpr (Opts.format == ndjson) {
+         return read_ndjson_supported<T>;
       }
       else if constexpr (Opts.format == csv) {
          return read_csv_supported<T>;
