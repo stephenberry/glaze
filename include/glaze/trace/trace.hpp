@@ -65,7 +65,7 @@ namespace glz
       std::mutex mtx{};
       
       template <class... Args>
-         requires (sizeof...(Args) == 0 || sizeof...(Args) == 1)
+         requires (sizeof...(Args) <= 1)
       void begin(const std::string_view name, Args&&... args) noexcept {
          if (disabled) {
             return;
@@ -74,7 +74,7 @@ namespace glz
       }
       
       template <class... Args>
-         requires (sizeof...(Args) == 0 || sizeof...(Args) == 1)
+         requires (sizeof...(Args) <= 1)
       void end(const std::string_view name, Args&&... args) noexcept {
          if (disabled) {
             return;
@@ -83,7 +83,7 @@ namespace glz
       }
       
       template <class... Args>
-         requires (sizeof...(Args) == 0 || sizeof...(Args) == 1)
+         requires (sizeof...(Args) <= 1)
       void duration(const std::string_view name, const char phase, Args&&... args) noexcept {
          if (disabled) {
             return;
@@ -108,7 +108,7 @@ namespace glz
       }
       
       template <class... Args>
-         requires (sizeof...(Args) == 0 || sizeof...(Args) == 1)
+         requires (sizeof...(Args) <= 1)
       void async_begin(const std::string_view name, Args&&... args) noexcept {
          if (disabled) {
             return;
@@ -117,7 +117,7 @@ namespace glz
       }
       
       template <class... Args>
-         requires (sizeof...(Args) == 0 || sizeof...(Args) == 1)
+         requires (sizeof...(Args) <= 1)
       void async_end(const std::string_view name, Args&&... args) noexcept {
          if (disabled) {
             return;
@@ -126,7 +126,7 @@ namespace glz
       }
       
       template <class... Args>
-         requires (sizeof...(Args) == 0 || sizeof...(Args) == 1)
+         requires (sizeof...(Args) <= 1)
       void async(const std::string_view name, const char phase, Args&&... args) noexcept {
          if (disabled) {
             return;
