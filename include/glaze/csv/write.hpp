@@ -13,10 +13,6 @@ namespace glz
 {
    namespace detail
    {
-      template <class T = void>
-      struct to_csv
-      {};
-
       template <>
       struct write<csv>
       {
@@ -345,13 +341,13 @@ namespace glz
       };
    }
 
-   template <uint32_t layout = rowwise, class T, class Buffer>
+   template <uint32_t layout = rowwise, write_csv_supported T, class Buffer>
    GLZ_ALWAYS_INLINE auto write_csv(T&& value, Buffer&& buffer) noexcept
    {
       return write<opts{.format = csv, .layout = layout}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <uint32_t layout = rowwise, class T>
+   template <uint32_t layout = rowwise, write_csv_supported T>
    GLZ_ALWAYS_INLINE auto write_csv(T&& value) noexcept
    {
       std::string buffer{};
@@ -359,7 +355,7 @@ namespace glz
       return buffer;
    }
 
-   template <uint32_t layout = rowwise, class T>
+   template <uint32_t layout = rowwise, write_csv_supported T>
    [[nodiscard]] inline write_error write_file_csv(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
       write<opts{.format = csv, .layout = layout}>(std::forward<T>(value), buffer);

@@ -76,9 +76,6 @@ namespace glz
          }
       }
 
-      template <class T = void>
-      struct to_binary;
-
       template <>
       struct write<binary>
       {
@@ -817,11 +814,6 @@ namespace glz
          }
       };
    }
-      
-   template <class T>
-   concept write_binary_supported = requires {
-      detail::to_binary<std::remove_cvref_t<T>>{};
-   };
 
    template <write_binary_supported T, class Buffer>
    inline void write_binary(T&& value, Buffer&& buffer) noexcept

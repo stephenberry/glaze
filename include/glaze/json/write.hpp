@@ -21,9 +21,6 @@ namespace glz
 {
    namespace detail
    {
-      template <class T = void>
-      struct to_json;
-
       template <>
       struct write<json>
       {
@@ -1444,11 +1441,6 @@ namespace glz
          }
       };
    } // namespace detail
-   
-   template <class T>
-   concept write_json_supported = requires {
-      detail::to_json<std::remove_cvref_t<T>>{};
-   };
 
    template <write_json_supported T, class Buffer>
    [[nodiscard]] inline auto write_json(T&& value, Buffer&& buffer) noexcept

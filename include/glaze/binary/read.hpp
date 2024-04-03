@@ -15,9 +15,6 @@ namespace glz
 {
    namespace detail
    {
-      template <class T = void>
-      struct from_binary;
-
       template <>
       struct read<binary>
       {
@@ -923,11 +920,6 @@ namespace glz
          }
       };
    }
-   
-   template <class T>
-   concept read_binary_supported = requires {
-      detail::from_binary<std::remove_cvref_t<T>>{};
-   };
 
    template <read_binary_supported T, class Buffer>
    [[nodiscard]] inline parse_error read_binary(T&& value, Buffer&& buffer) noexcept

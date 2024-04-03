@@ -48,9 +48,6 @@ namespace glz
          static thread_local std::string buffer(256, ' ');
          return buffer;
       }
-
-      template <class T = void>
-      struct from_json;
       
       template <>
       struct read<json>
@@ -2740,11 +2737,6 @@ namespace glz
       glz::skip skip_value{};
       return read<opts{}>(skip_value, std::forward<Buffer>(buffer), ctx);
    }
-   
-   template <class T>
-   concept read_json_supported = requires {
-      detail::from_json<std::remove_cvref_t<T>>{};
-   };
 
    template <read_json_supported T, class Buffer>
    [[nodiscard]] inline parse_error read_json(T& value, Buffer&& buffer) noexcept
