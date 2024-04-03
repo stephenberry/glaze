@@ -455,14 +455,14 @@ namespace glz
                const auto complex_type = complex_header & 0b0000000'1;
                if (complex_type) {
                   // complex array
-                  const auto tag = complex_header & 0b111'00000;
+                  const auto number_tag = complex_header & 0b111'00000;
                   const auto n = int_from_compressed(it, end);
                   dump<'['>(out, ix);
                   for (size_t i = 0; i < n; ++i) {
                      dump<'['>(out, ix);
-                     beve_to_json_number<Opts>(tag, ctx, it, end, out, ix);
+                     beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
                      dump<','>(out, ix);
-                     beve_to_json_number<Opts>(tag, ctx, it, end, out, ix);
+                     beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
                      dump<']'>(out, ix);
                      if (i != n - 1) {
                         dump<','>(out, ix);
@@ -472,11 +472,11 @@ namespace glz
                }
                else {
                   // complex number
-                  const auto tag = complex_header & 0b111'00000;
+                  const auto number_tag = complex_header & 0b111'00000;
                   dump<'['>(out, ix);
-                  beve_to_json_number<Opts>(tag, ctx, it, end, out, ix);
+                  beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
                   dump<','>(out, ix);
-                  beve_to_json_number<Opts>(tag, ctx, it, end, out, ix);
+                  beve_to_json_number<Opts>(number_tag, ctx, it, end, out, ix);
                   dump<']'>(out, ix);
                }
 

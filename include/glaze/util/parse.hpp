@@ -253,7 +253,7 @@ namespace glz::detail
             uint64_t chunk;
             std::memcpy(&chunk, it, 8);
             uint64_t test_chars = has_quote(chunk);
-            escaped |= has_escape(chunk);
+            escaped |= static_cast<bool>(has_escape(chunk));
             if (test_chars) {
                it += (std::countr_zero(test_chars) >> 3);
 

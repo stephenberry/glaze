@@ -18,6 +18,9 @@
 #include "glaze/binary/beve_to_json.hpp"
 #include "glaze/binary/read.hpp"
 #include "glaze/binary/write.hpp"
+#include "glaze/api/impl.hpp"
+#include "glaze/json/json_ptr.hpp"
+#include "glaze/json/read.hpp"
 
 struct my_struct
 {
@@ -504,10 +507,6 @@ struct glz::meta<some_struct>
       "map", &T::map //
    );
 };
-
-#include "glaze/api/impl.hpp"
-#include "glaze/json/json_ptr.hpp"
-#include "glaze/json/read.hpp"
 
 void test_partial()
 {

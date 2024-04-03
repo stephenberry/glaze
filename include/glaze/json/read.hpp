@@ -48,17 +48,7 @@ namespace glz
          static thread_local std::string buffer(256, ' ');
          return buffer;
       }
-
-      template <class T = void>
-      struct from_json
-      {};
-
-      template <auto Opts, class T, class Ctx, class It0, class It1>
-      concept read_json_invocable = requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
-         from_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                              std::forward<It0>(it), std::forward<It1>(end));
-      };
-
+      
       template <>
       struct read<json>
       {
@@ -75,14 +65,9 @@ namespace glz
                }
             }
             else {
-               if constexpr (read_json_invocable<Opts, T, Ctx, It0, It1>) {
-                  using V = std::remove_cvref_t<T>;
-                  from_json<V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                                  std::forward<It1>(end));
-               }
-               else {
-                  static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
-               }
+               using V = std::remove_cvref_t<T>;
+               from_json<V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
+                                               std::forward<It1>(end));
             }
          }
 
@@ -1114,9 +1099,9 @@ namespace glz
                      value.resize(reserve_size);
                      auto* dest = value.data() + original_size;
                      for (const auto& vector : intermediate) {
-                        const auto n = vector.size();
-                        std::memcpy(dest, vector.data(), n * sizeof(value_type));
-                        dest += n;
+                        const auto vector_size = vector.size();
+                        std::memcpy(dest, vector.data(), vector_size * sizeof(value_type));
+                        dest += vector_size;
                      }
                   }
                   else {
@@ -2753,14 +2738,14 @@ namespace glz
       return read<opts{}>(skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <class T, class Buffer>
+   template <read_json_supported T, class Buffer>
    [[nodiscard]] inline parse_error read_json(T& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <class T, class Buffer>
+   template <read_json_supported T, class Buffer>
    [[nodiscard]] inline expected<T, parse_error> read_json(Buffer&& buffer) noexcept
    {
       T value{};
@@ -2772,7 +2757,7 @@ namespace glz
       return value;
    }
 
-   template <auto Opts = opts{}, class T>
+   template <auto Opts = opts{}, read_json_supported T>
    inline parse_error read_file_json(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
@@ -2786,8 +2771,4 @@ namespace glz
 
       return read<set_json<Opts>()>(value, buffer, ctx);
    }
-
-   template <class T>
-   concept read_json_supported =
-      detail::read_json_invocable<glz::opts{}, std::add_lvalue_reference<T>, glz::context, const char*, const char*>;
 }

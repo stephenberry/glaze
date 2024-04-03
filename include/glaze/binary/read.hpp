@@ -15,16 +15,6 @@ namespace glz
 {
    namespace detail
    {
-      template <class T = void>
-      struct from_binary
-      {};
-
-      template <auto Opts, class T, class Ctx, class It0, class It1>
-      concept read_binary_invocable = requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
-         from_binary<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                                std::forward<It0>(it), std::forward<It1>(end));
-      };
-
       template <>
       struct read<binary>
       {
@@ -41,14 +31,9 @@ namespace glz
                }
             }
             else {
-               if constexpr (read_binary_invocable<Opts, T, Ctx, It0, It1>) {
-                  using V = std::remove_cvref_t<T>;
-                  from_binary<V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                    std::forward<It0>(it), std::forward<It1>(end));
-               }
-               else {
-                  static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
-               }
+               using V = std::remove_cvref_t<T>;
+               from_binary<V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
+                                                 std::forward<It0>(it), std::forward<It1>(end));
             }
          }
       };
@@ -936,13 +921,13 @@ namespace glz
       };
    }
 
-   template <class T, class Buffer>
+   template <read_binary_supported T, class Buffer>
    [[nodiscard]] inline parse_error read_binary(T&& value, Buffer&& buffer) noexcept
    {
       return read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
    }
 
-   template <class T, class Buffer>
+   template <read_binary_supported T, class Buffer>
    [[nodiscard]] inline expected<T, parse_error> read_binary(Buffer&& buffer) noexcept
    {
       T value{};
@@ -953,7 +938,7 @@ namespace glz
       return value;
    }
 
-   template <opts Opts = opts{}, class T>
+   template <opts Opts = opts{}, read_binary_supported T>
    [[nodiscard]] inline parse_error read_file_binary(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
@@ -968,14 +953,14 @@ namespace glz
       return read<set_binary<Opts>()>(value, buffer, ctx);
    }
 
-   template <class T, class Buffer>
+   template <read_binary_supported T, class Buffer>
    [[nodiscard]] inline parse_error read_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
       return read<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value),
                                                                      std::forward<Buffer>(buffer));
    }
 
-   template <class T, class Buffer>
+   template <read_binary_supported T, class Buffer>
    [[nodiscard]] inline expected<T, parse_error> read_binary_untagged(Buffer&& buffer) noexcept
    {
       T value{};
@@ -986,14 +971,10 @@ namespace glz
       return value;
    }
 
-   template <opts Opts = opts{}, class T>
+   template <opts Opts = opts{}, read_binary_supported T>
    [[nodiscard]] inline parse_error read_file_binary_untagged(T& value, const std::string& file_name,
                                                               auto&& buffer) noexcept
    {
       return read_file_binary<opt_true<Opts, &opts::structs_as_arrays>>(value, file_name, buffer);
    }
-
-   template <class T>
-   concept read_binary_supported =
-      detail::read_binary_invocable<glz::opts{}, std::add_lvalue_reference<T>, glz::context, const char*, const char*>;
 }

@@ -5,6 +5,8 @@
 
 #include <cstdint>
 
+#include "glaze/util/type_traits.hpp"
+
 namespace glz
 {
    // format
@@ -161,4 +163,118 @@ namespace glz
       ret.format = json;
       return ret;
    }
+}
+
+namespace glz
+{
+   namespace detail
+   {
+      template <class T = void>
+      struct to_binary;
+      
+      template <class T = void>
+      struct from_binary;
+      
+      template <class T = void>
+      struct to_json;
+      
+      template <class T = void>
+      struct from_json;
+      
+      template <class T = void>
+      struct to_ndjson;
+      
+      template <class T = void>
+      struct from_ndjson;
+      
+      template <class T = void>
+      struct to_csv;
+      
+      template <class T = void>
+      struct from_csv;
+   }
+   
+   template <class T>
+   concept write_binary_supported = requires {
+      detail::to_binary<std::remove_cvref_t<T>>{};
+   };
+   
+   template <class T>
+   concept read_binary_supported = requires {
+      detail::from_binary<std::remove_cvref_t<T>>{};
+   };
+   
+   template <class T>
+   concept write_json_supported = requires {
+      detail::to_json<std::remove_cvref_t<T>>{};
+   };
+   
+   template <class T>
+   concept read_json_supported = requires {
+      detail::from_json<std::remove_cvref_t<T>>{};
+   };
+   
+   template <class T>
+   concept write_ndjson_supported = requires {
+      detail::to_ndjson<std::remove_cvref_t<T>>{};
+   };
+   
+   template <class T>
+   concept read_ndjson_supported = requires {
+      detail::from_ndjson<std::remove_cvref_t<T>>{};
+   };
+   
+   template <class T>
+   concept write_csv_supported = requires {
+      detail::to_csv<std::remove_cvref_t<T>>{};
+   };
+   
+   template <class T>
+   concept read_csv_supported = requires {
+      detail::from_csv<std::remove_cvref_t<T>>{};
+   };
+   
+   template <uint32_t Format, class T>
+   consteval bool write_format_supported() {
+      if constexpr (Format == binary) {
+         return write_binary_supported<T>;
+      }
+      else if constexpr (Format == json) {
+         return write_json_supported<T>;
+      }
+      else if constexpr (Format == ndjson) {
+         return write_ndjson_supported<T>;
+      }
+      else if constexpr (Format == csv) {
+         return write_csv_supported<T>;
+      }
+      else {
+         static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
+      }
+   }
+   
+   template <uint32_t Format, class T>
+   consteval bool read_format_supported() {
+      if constexpr (Format == binary) {
+         return read_binary_supported<T>;
+      }
+      else if constexpr (Format == json) {
+         return read_json_supported<T>;
+      }
+      else if constexpr (Format == ndjson) {
+         return read_ndjson_supported<T>;
+      }
+      else if constexpr (Format == csv) {
+         return read_csv_supported<T>;
+      }
+      else {
+         static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
+      }
+   }
+   
+   template <uint32_t Format, class T>
+   concept write_supported = write_format_supported<Format, T>();
+   
+   template <uint32_t Format, class T>
+   concept read_supported = read_format_supported<Format, T>();
 }
