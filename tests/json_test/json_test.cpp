@@ -1124,7 +1124,7 @@ suite bench = [] {
 
       std::string buffer;
       glz::write_json(thing, buffer);
-      
+
       trace.begin("write_bench", "JSON writing benchmark");
       auto tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
@@ -1138,7 +1138,7 @@ suite bench = [] {
       std::cout << "write_json size: " << buffer.size() << " bytes\n";
       std::cout << "write_json: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
-      
+
       trace.begin("read_bench");
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
@@ -1150,7 +1150,7 @@ suite bench = [] {
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "read_json: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
-      
+
       trace.begin("json_ptr_bench");
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
@@ -7297,12 +7297,12 @@ int main()
    // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
-   
+
    trace.end("json_test");
    const auto ec = glz::write_file_json(trace, "json_test.trace.json", std::string{});
    if (ec) {
       std::cerr << "trace output failed\n";
    }
-   
+
    return result;
 }
