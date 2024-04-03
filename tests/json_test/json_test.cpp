@@ -28,10 +28,13 @@
 #include "glaze/json.hpp"
 #include "glaze/json/study.hpp"
 #include "glaze/record/recorder.hpp"
+#include "glaze/trace/trace.hpp"
 #include "glaze/util/poly.hpp"
 #include "glaze/util/progress_bar.hpp"
 
 using namespace boost::ut;
+
+glz::trace trace{};
 
 struct my_struct
 {
@@ -1108,6 +1111,7 @@ suite prettified_custom_object = [] {
 suite bench = [] {
    using namespace boost::ut;
    "bench"_test = [] {
+      trace.begin("full_bench");
       std::cout << "\nPerformance regresion test: \n";
 #ifdef NDEBUG
       size_t repeat = 100000;
@@ -1118,24 +1122,28 @@ suite bench = [] {
 
       std::string buffer;
       glz::write_json(thing, buffer);
-
+      
+      trace.begin("write_bench");
       auto tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
          buffer.clear();
          glz::write_json(thing, buffer);
       }
       auto tend = std::chrono::high_resolution_clock::now();
+      trace.end("write_bench");
       auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       auto mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "write_json size: " << buffer.size() << " bytes\n";
       std::cout << "write_json: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
-
+      
+      trace.begin("read_bench");
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
          expect(glz::read_json(thing, buffer) == glz::error_code::none);
       }
       tend = std::chrono::high_resolution_clock::now();
+      trace.end("read_bench");
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "read_json: " << duration << " s, " << mbytes_per_sec << " MB/s"
@@ -1149,6 +1157,7 @@ suite bench = [] {
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       std::cout << "get: " << duration << " s, " << (repeat / duration) << " gets/s"
                 << "\n\n";
+      trace.end("full_bench");
    };
 };
 
@@ -7283,5 +7292,11 @@ int main()
    // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
+   
+   const auto ec = glz::write_file_json(trace, "json_test.trace.json", std::string{});
+   if (ec) {
+      std::cerr << "trace output failed\n";
+   }
+   
    return result;
 }
