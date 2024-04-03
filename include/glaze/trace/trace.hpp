@@ -3,13 +3,21 @@
 
 #pragma once
 
-#include "glaze/glaze.hpp"
+#include "glaze/json/write.hpp"
 
 #include <chrono>
+#include <deque>
+#include <thread>
 
 // This code allows profiling and time tracing using tools like Perfetto https://perfetto.dev/
 // The specification adheres to Chrome's tracing format document:
 // https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview
+// ```c++
+// glz::trace trace{};
+// trace.begin("my event name");
+// run computations
+// trace.end("my event name");
+// ```
 
 namespace glz
 {
@@ -44,7 +52,6 @@ namespace glz
       uint64_t tid{}; // The thread ID for the thread that output this event.
       std::optional<uint64_t> id{}; // For async events. Events with the same category and id are treated as from the same event tree.
       glz::raw_json args = "{}"; // metadata
-      std::optional<std::string_view> cname{}; // A fixed color name to associate with the event.
    };
    
    struct trace

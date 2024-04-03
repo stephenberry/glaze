@@ -27,3 +27,9 @@ trace.begin("my event name", arguments);
 // arguments could be any type that can be serialized to JSON
 ```
 
+## Disabling trace
+
+```c++
+trace.disabled = true; // no data will be collected
+```
+
