@@ -1125,7 +1125,7 @@ suite bench = [] {
       std::string buffer;
       glz::write_json(thing, buffer);
       
-      trace.begin("write_bench");
+      trace.begin("write_bench", "JSON writing benchmark");
       auto tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
          buffer.clear();
@@ -1145,7 +1145,7 @@ suite bench = [] {
          expect(glz::read_json(thing, buffer) == glz::error_code::none);
       }
       tend = std::chrono::high_resolution_clock::now();
-      trace.end("read_bench");
+      trace.end("read_bench", "JSON reading benchmark");
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "read_json: " << duration << " s, " << mbytes_per_sec << " MB/s"
@@ -1157,7 +1157,7 @@ suite bench = [] {
          glz::get<std::string>(thing, "/thing_ptr/b");
       }
       tend = std::chrono::high_resolution_clock::now();
-      trace.end("json_ptr_bench");
+      trace.end("json_ptr_bench", "JSON pointer benchmark");
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       std::cout << "get: " << duration << " s, " << (repeat / duration) << " gets/s"
                 << "\n\n";
@@ -7293,7 +7293,7 @@ suite filesystem_tests = [] {
 
 int main()
 {
-   trace.begin("json_test");
+   trace.begin("json_test", "Full test suite duration.");
    // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
    const auto result = boost::ut::cfg<>.run({.report_errors = true});

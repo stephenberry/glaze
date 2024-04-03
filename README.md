@@ -804,6 +804,10 @@ glz::read_ndjson(x, s);
 
 ### [Thread Pool](./docs/thread-pool.md)
 
+### [Time Trace Profiling](./docs/time-trace.md)
+
+- Output performance profiles to JSON and visualize using [Perfetto](https://ui.perfetto.dev)
+
 ### [Wrappers](./docs/wrappers.md)
 
 # Extensions
