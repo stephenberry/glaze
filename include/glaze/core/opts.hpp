@@ -234,18 +234,18 @@ namespace glz
       detail::from_csv<std::remove_cvref_t<T>>{};
    };
    
-   template <opts Opts, class T>
+   template <uint32_t Format, class T>
    consteval bool write_format_supported() {
-      if constexpr (Opts.format == binary) {
+      if constexpr (Format == binary) {
          return write_binary_supported<T>;
       }
-      else if constexpr (Opts.format == json) {
+      else if constexpr (Format == json) {
          return write_json_supported<T>;
       }
-      else if constexpr (Opts.format == ndjson) {
+      else if constexpr (Format == ndjson) {
          return write_ndjson_supported<T>;
       }
-      else if constexpr (Opts.format == csv) {
+      else if constexpr (Format == csv) {
          return write_csv_supported<T>;
       }
       else {
@@ -253,18 +253,18 @@ namespace glz
       }
    }
    
-   template <opts Opts, class T>
+   template <uint32_t Format, class T>
    consteval bool read_format_supported() {
-      if constexpr (Opts.format == binary) {
+      if constexpr (Format == binary) {
          return read_binary_supported<T>;
       }
-      else if constexpr (Opts.format == json) {
+      else if constexpr (Format == json) {
          return read_json_supported<T>;
       }
-      else if constexpr (Opts.format == ndjson) {
+      else if constexpr (Format == ndjson) {
          return read_ndjson_supported<T>;
       }
-      else if constexpr (Opts.format == csv) {
+      else if constexpr (Format == csv) {
          return read_csv_supported<T>;
       }
       else {
@@ -272,9 +272,9 @@ namespace glz
       }
    }
    
-   template <opts Opts, class T>
-   concept write_supported = write_format_supported<Opts, T>();
+   template <uint32_t Format, class T>
+   concept write_supported = write_format_supported<Format, T>();
    
-   template <opts Opts, class T>
-   concept read_supported = read_format_supported<Opts, T>();
+   template <uint32_t Format, class T>
+   concept read_supported = read_format_supported<Format, T>();
 }

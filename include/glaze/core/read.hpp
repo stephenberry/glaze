@@ -46,7 +46,7 @@ namespace glz
 
    // For reading json from a std::vector<char>, std::deque<char> and the like
    template <opts Opts, class T>
-      requires read_supported<Opts, T>
+      requires read_supported<Opts.format, T>
    [[nodiscard]] inline parse_error read(T& value, detail::contiguous auto&& buffer, is_context auto&& ctx) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
@@ -95,7 +95,7 @@ namespace glz
    }
 
    template <opts Opts, class T>
-      requires read_supported<Opts, T>
+      requires read_supported<Opts.format, T>
    [[nodiscard]] inline parse_error read(T& value, detail::contiguous auto&& buffer) noexcept
    {
       context ctx{};
@@ -107,7 +107,7 @@ namespace glz
 
    // for char array input
    template <opts Opts, class T, string_viewable Buffer>
-      requires read_supported<Opts, T>
+      requires read_supported<Opts.format, T>
    [[nodiscard]] inline parse_error read(T& value, Buffer&& buffer, auto&& ctx) noexcept
    {
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
@@ -118,7 +118,7 @@ namespace glz
    }
 
    template <opts Opts, class T, string_viewable Buffer>
-      requires read_supported<Opts, T>
+      requires read_supported<Opts.format, T>
    [[nodiscard]] inline parse_error read(T& value, Buffer&& buffer) noexcept
    {
       context ctx{};

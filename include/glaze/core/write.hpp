@@ -30,7 +30,7 @@ namespace glz
 
    // For writing to a std::string, std::vector<char>, std::deque<char> and the like
    template <opts Opts, class T, output_buffer Buffer>
-      requires write_supported<Opts, T>
+      requires write_supported<Opts.format, T>
    inline void write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
    {
       if constexpr (detail::resizeable<Buffer>) {
@@ -46,7 +46,7 @@ namespace glz
    }
 
    template <auto& Partial, opts Opts, class T, output_buffer Buffer>
-      requires write_supported<Opts, T>
+      requires write_supported<Opts.format, T>
    [[nodiscard]] inline write_error write(T&& value, Buffer& buffer) noexcept
    {
       if constexpr (detail::resizeable<Buffer>) {
@@ -65,7 +65,7 @@ namespace glz
    }
 
    template <opts Opts, class T, output_buffer Buffer>
-      requires write_supported<Opts, T>
+      requires write_supported<Opts.format, T>
    inline void write(T&& value, Buffer& buffer) noexcept
    {
       context ctx{};
@@ -73,7 +73,7 @@ namespace glz
    }
 
    template <opts Opts, class T>
-      requires write_supported<Opts, T>
+      requires write_supported<Opts.format, T>
    [[nodiscard]] inline std::string write(T&& value) noexcept
    {
       std::string buffer{};
@@ -83,7 +83,7 @@ namespace glz
    }
 
    template <opts Opts, class T, raw_buffer Buffer>
-      requires write_supported<Opts, T>
+      requires write_supported<Opts.format, T>
    [[nodiscard]] inline size_t write(T&& value, Buffer&& buffer, is_context auto&& ctx) noexcept
    {
       size_t ix = 0;
@@ -92,7 +92,7 @@ namespace glz
    }
 
    template <opts Opts, class T, raw_buffer Buffer>
-      requires write_supported<Opts, T>
+      requires write_supported<Opts.format, T>
    [[nodiscard]] inline size_t write(T&& value, Buffer&& buffer) noexcept
    {
       context ctx{};
