@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <deque>
+#include <mutex>
 #include <thread>
 
 #include "glaze/json/write.hpp"
