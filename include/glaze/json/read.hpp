@@ -2660,7 +2660,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts, class V, size_t N>
-         GLZ_FLATTEN static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             read<json>::op<Opts>(std::span{ value, N }, ctx, it, end);
          }
