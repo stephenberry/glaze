@@ -1689,6 +1689,22 @@ suite filesystem_tests = [] {
    };
 };
 
+suite c_style_arrays = [] {
+   "uint32_t c array"_test = [] {
+      uint32_t arr[4] = {1, 2, 3, 4};
+      std::string s{};
+      glz::write_binary(arr, s);
+      //expect(s == "[1,2,3,4]") << s;
+   };
+   
+   "const double c array"_test = [] {
+      const double arr[4] = {1.0, 2.0, 3.0, 4.0};
+      std::string s{};
+      glz::write_binary(arr, s);
+      //expect(s == "[1,2,3,4]") << s;
+   };
+};
+
 int main()
 {
    glz::trace_begin("binary_test");
