@@ -715,7 +715,7 @@ namespace glz
             }
          }
       };
-      
+
       // for C style arrays
       template <nullable_t T>
          requires(std::is_array_v<T>)

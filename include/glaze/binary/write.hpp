@@ -501,7 +501,7 @@ namespace glz
             }
          }
       };
-      
+
       template <nullable_t T>
          requires(std::is_array_v<T>)
       struct to_binary<T>

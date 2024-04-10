@@ -2654,7 +2654,7 @@ namespace glz
             }
          }
       };
-      
+
       template <nullable_t T>
          requires(std::is_array_v<T>)
       struct from_json<T>
@@ -2662,7 +2662,7 @@ namespace glz
          template <auto Opts, class V, size_t N>
          GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            read<json>::op<Opts>(std::span{ value, N }, ctx, it, end);
+            read<json>::op<Opts>(std::span{value, N}, ctx, it, end);
          }
       };
 

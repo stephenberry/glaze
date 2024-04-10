@@ -679,20 +679,20 @@ namespace glz
             }
          }
       };
-      
+
       template <nullable_t T>
-         requires (std::is_array_v<T>)
+         requires(std::is_array_v<T>)
       struct from_binary<T> final
       {
          template <auto Opts, class V, size_t N>
          GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            read<binary>::op<Opts>(std::span{ value, N }, ctx, it, end);
+            read<binary>::op<Opts>(std::span{value, N}, ctx, it, end);
          }
       };
 
       template <nullable_t T>
-         requires (!std::is_array_v<T>)
+         requires(!std::is_array_v<T>)
       struct from_binary<T> final
       {
          template <auto Opts>

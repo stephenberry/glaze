@@ -7312,7 +7312,6 @@ struct glz::meta<struct_c_arrays_meta>
    static constexpr auto value = object(&T::ints, &T::floats);
 };
 
-
 suite c_style_arrays = [] {
    "uint32_t c array"_test = [] {
       uint32_t arr[4] = {1, 2, 3, 4};
@@ -7327,14 +7326,14 @@ suite c_style_arrays = [] {
       expect(arr[2] == 3);
       expect(arr[3] == 4);
    };
-   
+
    "const double c array"_test = [] {
       const double arr[4] = {1.1, 2.2, 3.3, 4.4};
       std::string s{};
       glz::write_json(arr, s);
       expect(s == "[1.1,2.2,3.3,4.4]") << s;
    };
-   
+
    "double c array"_test = [] {
       double arr[4] = {1.1, 2.2, 3.3, 4.4};
       std::string s{};
@@ -7348,13 +7347,13 @@ suite c_style_arrays = [] {
       expect(arr[2] == 3.3);
       expect(arr[3] == 4.4);
    };
-   
+
    "struct_c_arrays"_test = [] {
       struct_c_arrays obj{};
       std::string s{};
       glz::write_json(obj, s);
       expect(s == R"({"ints":[1,2],"floats":[3.14]})") << s;
-      
+
       obj.ints[0] = 0;
       obj.ints[1] = 1;
       obj.floats[0] = 0.f;
@@ -7363,12 +7362,12 @@ suite c_style_arrays = [] {
       expect(obj.ints[1] == 2);
       expect(obj.floats[0] == 3.14f);
    };
-   
+
    "struct_c_arrays_meta"_test = [] {
       struct_c_arrays_meta obj{};
       std::string s{};
       glz::write_binary(obj, s);
-      
+
       obj.ints[0] = 0;
       obj.ints[1] = 1;
       obj.floats[0] = 0.f;
