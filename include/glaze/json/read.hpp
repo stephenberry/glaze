@@ -955,7 +955,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
@@ -2654,9 +2654,20 @@ namespace glz
             }
          }
       };
+      
+      template <nullable_t T>
+         requires(std::is_array_v<T>)
+      struct from_json<T>
+      {
+         template <auto Opts, class V, size_t N>
+         GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            read<json>::op<Opts>(std::span{ value, N }, ctx, it, end);
+         }
+      };
 
       template <nullable_t T>
-         requires(!is_expected<T>)
+         requires(!is_expected<T> && !std::is_array_v<T>)
       struct from_json<T>
       {
          template <auto Options>
