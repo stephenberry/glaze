@@ -715,9 +715,21 @@ namespace glz
             }
          }
       };
+      
+      // for C style arrays
+      template <nullable_t T>
+         requires(std::is_array_v<T>)
+      struct to_json<T>
+      {
+         template <auto Opts, class V, size_t N, class... Args>
+         GLZ_ALWAYS_INLINE static void op(const V (&value)[N], is_context auto&& ctx, Args&&... args) noexcept
+         {
+            write<json>::op<Opts>(std::span{value, N}, ctx, std::forward<Args>(args)...);
+         }
+      };
 
       template <nullable_t T>
-         requires(!is_expected<T>)
+         requires(!is_expected<T> && !std::is_array_v<T>)
       struct to_json<T>
       {
          template <auto Opts, class... Args>
