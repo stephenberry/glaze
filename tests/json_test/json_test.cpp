@@ -66,7 +66,7 @@ suite starter = [] {
       std::string buffer{};
       glz::write_json(s, buffer);
       expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
-      expect(glz::prettify(buffer) == R"({
+      expect(glz::prettify_json(buffer) == R"({
    "i": 287,
    "d": 3.14,
    "hello": "Hello World",
@@ -75,6 +75,13 @@ suite starter = [] {
       2,
       3
    ]
+})");
+      
+      expect(glz::prettify_json<glz::opts{.new_lines_in_arrays = false}>(buffer) == R"({
+   "i": 287,
+   "d": 3.14,
+   "hello": "Hello World",
+   "arr": [1, 2, 3]
 })");
    };
 };
@@ -792,7 +799,7 @@ suite user_types = [] {
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
    };
 
-   "complex user obect prettify"_test = [] {
+   "complex user obect opts prettify"_test = [] {
       Thing obj{};
       std::string buffer{};
       glz::write<glz::opts{.prettify = true}>(obj, buffer);
@@ -884,6 +891,207 @@ suite user_types = [] {
    }
 })";
       expect(thing_pretty == buffer);
+   };
+   
+   "complex user obect prettify_json/minify_json"_test = [] {
+      Thing obj{};
+      std::string json{};
+      glz::write_json(obj, json);
+      std::string buffer{};
+      glz::prettify_json(json, buffer);
+      
+      std::string thing_pretty = R"({
+   "thing": {
+      "a": 3.14,
+      "b": "stuff"
+   },
+   "thing2array": [
+      {
+         "a": 3.14,
+         "b": "stuff",
+         "c": 999.342494903,
+         "d": 1E-12,
+         "e": 203082348402.1,
+         "f": 89.089,
+         "g": 12380.00000013,
+         "h": 1000000.000001
+      }
+   ],
+   "vec3": [
+      3.14,
+      2.7,
+      6.5
+   ],
+   "list": [
+      6,
+      7,
+      8,
+      2
+   ],
+   "deque": [
+      9,
+      6.7,
+      3.1
+   ],
+   "vector": [
+      [
+         9,
+         6.7,
+         3.1
+      ],
+      [
+         3.14,
+         2.7,
+         6.5
+      ]
+   ],
+   "i": 8,
+   "d": 2,
+   "b": false,
+   "c": "W",
+   "v": {
+      "x": 0
+   },
+   "color": "Green",
+   "vb": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+   ],
+   "sptr": {
+      "a": 3.14,
+      "b": "stuff"
+   },
+   "array": [
+      "as\"df\\ghjkl",
+      "pie",
+      "42",
+      "foo"
+   ],
+   "map": {
+      "a": 4,
+      "b": 12,
+      "f": 7
+   },
+   "mapi": {
+      "2": 9.63,
+      "5": 3.14,
+      "7": 7.42
+   },
+   "thing_ptr": {
+      "a": 3.14,
+      "b": "stuff"
+   }
+})";
+      expect(thing_pretty == buffer);
+      
+      expect(json == glz::minify_json(thing_pretty));
+   };
+   
+   "complex user obect prettify_jsonc/minify_jsonc"_test = [] {
+      Thing obj{};
+      std::string json{};
+      glz::write_jsonc(obj, json);
+      std::string buffer{};
+      glz::prettify_jsonc(json, buffer);
+      
+      std::string thing_pretty = R"({
+   "thing": {
+      "a": 3.14/*Test comment 1*/,
+      "b": "stuff"/*Test comment 2*/
+   },
+   "thing2array": [
+      {
+         "a": 3.14/*Test comment 1*/,
+         "b": "stuff"/*Test comment 2*/,
+         "c": 999.342494903,
+         "d": 1E-12,
+         "e": 203082348402.1,
+         "f": 89.089,
+         "g": 12380.00000013,
+         "h": 1000000.000001
+      }
+   ],
+   "vec3": [
+      3.14,
+      2.7,
+      6.5
+   ],
+   "list": [
+      6,
+      7,
+      8,
+      2
+   ],
+   "deque": [
+      9,
+      6.7,
+      3.1
+   ],
+   "vector": [
+      [
+         9,
+         6.7,
+         3.1
+      ],
+      [
+         3.14,
+         2.7,
+         6.5
+      ]
+   ],
+   "i": 8,
+   "d": 2/*double is the best type*/,
+   "b": false,
+   "c": "W",
+   "v": {
+      "x": 0
+   },
+   "color": "Green",
+   "vb": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+   ],
+   "sptr": {
+      "a": 3.14/*Test comment 1*/,
+      "b": "stuff"/*Test comment 2*/
+   },
+   "array": [
+      "as\"df\\ghjkl",
+      "pie",
+      "42",
+      "foo"
+   ],
+   "map": {
+      "a": 4,
+      "b": 12,
+      "f": 7
+   },
+   "mapi": {
+      "2": 9.63,
+      "5": 3.14,
+      "7": 7.42
+   },
+   "thing_ptr": {
+      "a": 3.14/*Test comment 1*/,
+      "b": "stuff"/*Test comment 2*/
+   }
+})";
+
+      expect(thing_pretty == buffer);
+      expect(!glz::read_json(obj, buffer));
+      const auto minified = glz::minify_jsonc(thing_pretty);
+      expect(json == minified);
+      expect(!glz::read_json(obj, minified));
    };
 
    "complex user obect roundtrip"_test = [] {
@@ -1092,8 +1300,8 @@ suite minified_custom_object = [] {
    "minified_custom_object"_test = [] {
       Thing obj{};
       std::string buffer = glz::write_json(obj);
-      std::string prettified = glz::prettify(buffer);
-      std::string minified = glz::minify(prettified);
+      std::string prettified = glz::prettify_json(buffer);
+      std::string minified = glz::minify_json(prettified);
       expect(glz::read_json(obj, minified) == glz::error_code::none);
       expect(buffer == minified);
    };
@@ -1105,7 +1313,7 @@ suite prettified_custom_object = [] {
    "prettified_custom_object"_test = [] {
       Thing obj{};
       std::string buffer = glz::write_json(obj);
-      buffer = glz::prettify(buffer);
+      buffer = glz::prettify_json(buffer);
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
    };
 };
@@ -6501,9 +6709,9 @@ suite custom_object_variant_test = [] {
          Obj1{4, "text 4"},
       };
 
-      constexpr auto prettify = glz::opts{.prettify = true};
+      constexpr auto prettify_json = glz::opts{.prettify = true};
 
-      std::string data = glz::write<prettify>(objects);
+      std::string data = glz::write<prettify_json>(objects);
 
       expect(data == R"([
    {
@@ -6552,7 +6760,7 @@ suite custom_object_variant_test = [] {
 
       expect(!glz::read_json(objects, data));
 
-      expect(data == glz::write<prettify>(objects));
+      expect(data == glz::write<prettify_json>(objects));
    };
 };
 

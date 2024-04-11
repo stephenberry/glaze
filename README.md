@@ -536,11 +536,11 @@ Formatted JSON can be written out directly via a compile time option:
 glz::write<glz::opts{.prettify = true}>(obj, buffer);
 ```
 
-Or, JSON text can be formatted with the `glz::prettify` function:
+Or, JSON text can be formatted with the `glz::prettify_json` function:
 
 ```c++
 std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
-auto beautiful = glz::prettify(buffer);
+auto beautiful = glz::prettify_json(buffer);
 ```
 
 `beautiful` is now:
@@ -558,19 +558,13 @@ auto beautiful = glz::prettify(buffer);
 }
 ```
 
-Simplified prettify definition below, which allows the use of tabs or changing the number of spaces per indent.
-
-```c++
-string prettify(auto& in, bool tabs = false, uint32_t indent_size = 3)
-```
-
 # Minify JSON
 
 To minify JSON:
 
 ```c++
 glz::write<glz::opts{.prettify = true}>(obj, buffer);
-std::string minified = glz::minify(buffer);
+std::string minified = glz::minify_json(buffer);
 ```
 
 ## Boolean Flags
