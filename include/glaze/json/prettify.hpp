@@ -378,12 +378,10 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         auto start = it;
          prettify_json<Opts>(ctx, it, end, out, ix);
          if constexpr (resizeable<Out>) {
             out.resize(ix);
          }
-         return;
       }
    }
    

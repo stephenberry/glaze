@@ -795,7 +795,7 @@ suite user_types = [] {
    "complex user obect prettify_json"_test = [] {
       Thing obj{};
       std::string buffer{};
-      glz::write<glz::opts{.prettify_json = true}>(obj, buffer);
+      glz::write<glz::opts{.prettify = true}>(obj, buffer);
       std::string thing_pretty = R"({
    "thing": {
       "a": 3.14,
@@ -2597,7 +2597,7 @@ suite tagged_variant_tests = [] {
       s.clear();
 
       // prettifies valid JSON
-      glz::write<glz::opts{.prettify_json = true}>(var, s);
+      glz::write<glz::opts{.prettify = true}>(var, s);
       tagged_variant parsed_var;
       expect(glz::read_json(parsed_var, s) == glz::error_code::none);
       expect(parsed_var == var);
@@ -6501,7 +6501,7 @@ suite custom_object_variant_test = [] {
          Obj1{4, "text 4"},
       };
 
-      constexpr auto prettify_json = glz::opts{.prettify_json = true};
+      constexpr auto prettify_json = glz::opts{.prettify = true};
 
       std::string data = glz::write<prettify_json>(objects);
 
@@ -6924,7 +6924,7 @@ suite meta_schema_tests = [] {
       glz::write_json(obj, buffer);
       expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
 
-      const auto json_schema = glz::write_json_schema<meta_schema_t, glz::opts{.prettify_json = true}>();
+      const auto json_schema = glz::write_json_schema<meta_schema_t, glz::opts{.prettify = true}>();
       expect(json_schema ==
              R"({
    "type": [
