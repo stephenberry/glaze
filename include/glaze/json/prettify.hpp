@@ -236,7 +236,7 @@ namespace glz
       }
       
       template <opts Opts>
-      inline void prettify(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto&& ix) noexcept {
+      inline void prettify_json(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto&& ix) noexcept {
          constexpr bool use_tabs = Opts.indentation_char == '\t';
          constexpr auto indent_width = Opts.indentation_width;
          
@@ -367,7 +367,7 @@ namespace glz
       }
       
       template <opts Opts, contiguous In, output_buffer Out>
-      inline void prettify(is_context auto&& ctx, In&& in, Out&& out) noexcept {
+      inline void prettify_json(is_context auto&& ctx, In&& in, Out&& out) noexcept {
          if constexpr (resizeable<Out>) {
             if (out.empty()) {
                out.resize(128);
@@ -378,29 +378,34 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         prettify<Opts>(ctx, it, end, out, ix);
+         auto start = it;
+         prettify_json<Opts>(ctx, it, end, out, ix);
          if constexpr (resizeable<Out>) {
             out.resize(ix);
          }
+         return;
       }
    }
    
+   // We don't return errors from prettifying even though they are handled because the error case
+   // should not happen since we prettify auto-generated JSON.
+   // The detail version can be used if error context is needed
    template <opts Opts = opts{}>
-   inline void prettify(const auto& in, auto& out) noexcept
+   inline void prettify_json(const auto& in, auto& out) noexcept
    {
       context ctx{};
-      detail::prettify<Opts>(ctx, in, out);
+      detail::prettify_json<Opts>(ctx, in, out);
    }
    
    /// <summary>
    /// allocating version of prettify
    /// </summary>
    template <opts Opts = opts{}>
-   inline std::string prettify(const auto& in) noexcept
+   inline std::string prettify_json(const auto& in) noexcept
    {
       context ctx{};
       std::string out{};
-      detail::prettify<Opts>(ctx, in, out);
+      detail::prettify_json<Opts>(ctx, in, out);
       return out;
    }
 }

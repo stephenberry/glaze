@@ -66,7 +66,7 @@ suite starter = [] {
       std::string buffer{};
       glz::write_json(s, buffer);
       expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
-      expect(glz::prettify(buffer) == R"({
+      expect(glz::prettify_json(buffer) == R"({
    "i": 287,
    "d": 3.14,
    "hello": "Hello World",
@@ -792,10 +792,10 @@ suite user_types = [] {
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
    };
 
-   "complex user obect prettify"_test = [] {
+   "complex user obect prettify_json"_test = [] {
       Thing obj{};
       std::string buffer{};
-      glz::write<glz::opts{.prettify = true}>(obj, buffer);
+      glz::write<glz::opts{.prettify_json = true}>(obj, buffer);
       std::string thing_pretty = R"({
    "thing": {
       "a": 3.14,
@@ -1092,7 +1092,7 @@ suite minified_custom_object = [] {
    "minified_custom_object"_test = [] {
       Thing obj{};
       std::string buffer = glz::write_json(obj);
-      std::string prettified = glz::prettify(buffer);
+      std::string prettified = glz::prettify_json(buffer);
       std::string minified = glz::minify(prettified);
       expect(glz::read_json(obj, minified) == glz::error_code::none);
       expect(buffer == minified);
@@ -1105,7 +1105,7 @@ suite prettified_custom_object = [] {
    "prettified_custom_object"_test = [] {
       Thing obj{};
       std::string buffer = glz::write_json(obj);
-      buffer = glz::prettify(buffer);
+      buffer = glz::prettify_json(buffer);
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
    };
 };
@@ -2597,7 +2597,7 @@ suite tagged_variant_tests = [] {
       s.clear();
 
       // prettifies valid JSON
-      glz::write<glz::opts{.prettify = true}>(var, s);
+      glz::write<glz::opts{.prettify_json = true}>(var, s);
       tagged_variant parsed_var;
       expect(glz::read_json(parsed_var, s) == glz::error_code::none);
       expect(parsed_var == var);
@@ -6501,9 +6501,9 @@ suite custom_object_variant_test = [] {
          Obj1{4, "text 4"},
       };
 
-      constexpr auto prettify = glz::opts{.prettify = true};
+      constexpr auto prettify_json = glz::opts{.prettify_json = true};
 
-      std::string data = glz::write<prettify>(objects);
+      std::string data = glz::write<prettify_json>(objects);
 
       expect(data == R"([
    {
@@ -6552,7 +6552,7 @@ suite custom_object_variant_test = [] {
 
       expect(!glz::read_json(objects, data));
 
-      expect(data == glz::write<prettify>(objects));
+      expect(data == glz::write<prettify_json>(objects));
    };
 };
 
@@ -6924,7 +6924,7 @@ suite meta_schema_tests = [] {
       glz::write_json(obj, buffer);
       expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
 
-      const auto json_schema = glz::write_json_schema<meta_schema_t, glz::opts{.prettify = true}>();
+      const auto json_schema = glz::write_json_schema<meta_schema_t, glz::opts{.prettify_json = true}>();
       expect(json_schema ==
              R"({
    "type": [
