@@ -3,104 +3,12 @@
 
 #pragma once
 
-// TODO: this only handles /**/ style comments
+// Minified JSON only works with /**/ style comments, so we only supports this
 
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/parse.hpp"
-
-namespace glz
-{
-   namespace detail
-   {
-      enum class general_state : uint32_t { NORMAL, ESCAPED, STRING, BEFORE_ASTERISK, COMMENT, BEFORE_FSLASH };
-      
-      inline void handle_other_states(const char c, general_state& state) noexcept
-      {
-         switch (state) {
-            case general_state::ESCAPED:
-               state = general_state::NORMAL;
-               break;
-            case general_state::STRING:
-               if (c == '"') {
-                  state = general_state::NORMAL;
-               }
-               break;
-            case general_state::BEFORE_ASTERISK:
-               state = general_state::COMMENT;
-               break;
-            case general_state::COMMENT:
-               if (c == '*') {
-                  state = general_state::BEFORE_FSLASH;
-               }
-               break;
-            case general_state::BEFORE_FSLASH:
-               state = (c == '/' ? general_state::NORMAL : general_state::COMMENT);
-               break;
-            default:
-               break;
-         }
-      }
-      
-      inline void minify_normal_state(const char c, auto& out, general_state& state) noexcept
-      {
-         switch (c) {
-            case '\\':
-               out += c;
-               state = general_state::ESCAPED;
-               break;
-            case '\"':
-               out += c;
-               state = general_state::STRING;
-               break;
-            case '/':
-               out += c;
-               state = general_state::BEFORE_ASTERISK;
-            case ' ':
-            case '\n':
-            case '\r':
-            case '\t':
-               break;
-            default:
-               out += c;
-               break;
-         }
-      }
-   }
-
-   /// <summary>
-   /// Minify a JSON string
-   /// </summary>
-   inline void minify(const auto& in, auto& out) noexcept
-   {
-      out.reserve(in.size());
-
-      using namespace detail;
-      general_state state{general_state::NORMAL};
-
-      for (auto c : in) {
-         if (state == general_state::NORMAL) {
-            minify_normal_state(c, out, state);
-            continue;
-         }
-         else {
-            out += c;
-            handle_other_states(c, state);
-         }
-      }
-   }
-
-   /// <summary>
-   /// allocating version of minify
-   /// </summary>
-   inline std::string minify(const auto& in) noexcept
-   {
-      std::string out{};
-      minify(in, out);
-      return out;
-   }
-}
 
 namespace glz
 {
@@ -322,12 +230,7 @@ namespace glz
                   if constexpr (Opts.new_lines_in_arrays) {
                      if (*it != ']') {
                         append_new_line<use_tabs, indent_width>(b, ix, indent);
-                     } else {
-                        dump<' '>(b, ix);
                      }
-                  }
-                  else {
-                     dump<' '>(b, ix);
                   }
                   break;
                }
@@ -406,17 +309,16 @@ namespace glz
                   }
             }
          }
-         
-         if (it == end) [[unlikely]] {
-            ctx.error = error_code::unexpected_end;
-         }
       }
       
       template <opts Opts, contiguous In, output_buffer Out>
       inline void prettify_json(is_context auto&& ctx, In&& in, Out&& out) noexcept {
          if constexpr (resizeable<Out>) {
-            if (out.empty()) {
+            if (in.empty()) {
                out.resize(128);
+            }
+            else {
+               out.resize(in.size() * 2);
             }
          }
          size_t ix = 0;

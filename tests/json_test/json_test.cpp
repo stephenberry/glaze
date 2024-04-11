@@ -76,6 +76,13 @@ suite starter = [] {
       3
    ]
 })");
+      
+      expect(glz::prettify_json<glz::opts{.new_lines_in_arrays = false}>(buffer) == R"({
+   "i": 287,
+   "d": 3.14,
+   "hello": "Hello World",
+   "arr": [1, 2, 3]
+})");
    };
 };
 
@@ -1093,8 +1100,7 @@ suite minified_custom_object = [] {
       Thing obj{};
       std::string buffer = glz::write_json(obj);
       std::string prettified = glz::prettify_json(buffer);
-      std::cerr << prettified << "\n\n\n";
-      std::string minified = glz::minify(prettified);
+      std::string minified = glz::minify_json(prettified);
       expect(glz::read_json(obj, minified) == glz::error_code::none);
       expect(buffer == minified);
    };
