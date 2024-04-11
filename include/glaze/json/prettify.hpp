@@ -117,7 +117,8 @@ namespace glz
          Null = 'n',
          Bool = 't',
          Object_Start = '{',
-         Object_End = '}'
+         Object_End = '}',
+         Comment = '/'
       };
       
       constexpr std::array<json_type, 128> ascii_json_types = []{
@@ -143,6 +144,7 @@ namespace glz
          t['t'] = Bool;
          t['{'] = Object_Start;
          t['}'] = Object_End;
+         t['/'] = Comment;
          return t;
       }();
       
@@ -161,7 +163,7 @@ namespace glz
       {
          auto start = it;
          ++it; // skip quote
-         for (const auto end_m7 = end - 7; it < end_m7; it += 8) {
+         for (const auto end_m7 = end - 7; it < end_m7;) {
             uint64_t chunk;
             std::memcpy(&chunk, it, 8);
             const uint64_t quote = has_quote(chunk);
@@ -178,27 +180,59 @@ namespace glz
                }
                // else we have an escaped quote, so continue
             }
+            else {
+               it += 8;
+            }
          }
          
          // Tail end of buffer. Should be rare we even get here
          while (it < end) {
-            switch (*it) {
-               case '"': {
-                  auto* prev = it - 1;
-                  while (*prev == '\\') {
-                     --prev;
-                  }
-                  if (size_t(it - prev) % 2) {
-                     ++it; // add quote
-                     return { start, size_t(it - start) };
-                  }
-                  ++it; // skip the escaped quote
-                  break;
+            if (*it == '"') {
+               auto* prev = it - 1;
+               while (*prev == '\\') {
+                  --prev;
                }
-               default: {
-                  ++it;
+               if (size_t(it - prev) % 2) {
+                  ++it; // add quote
+                  return { start, size_t(it - start) };
                }
             }
+            ++it;
+         }
+         
+         return {};
+      }
+      
+      // Reads /* my comment */ style comments
+      inline sv read_jsonc_comment(auto&& it, auto&& end) noexcept
+      {
+         auto start = it;
+         it += 2; // skip /*
+         for (const auto end_m7 = end - 7; it < end_m7;) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it, 8);
+            const uint64_t slash = has_forward_slash(chunk);
+            if (slash) {
+               it += (std::countr_zero(slash) >> 3);
+               
+               if (it[-1] == '*') {
+                  ++it; // add slash
+                  return { start, size_t(it - start) };
+               }
+               // else continue
+            }
+            else {
+               it += 8;
+            }
+         }
+         
+         // Tail end of buffer. Should be rare we even get here
+         while (it < end) {
+            if (it[-1] == '*' && *it == '/') {
+               ++it; // add slash
+               return { start, size_t(it - start) };
+            }
+            ++it;
          }
          
          return {};
@@ -349,7 +383,18 @@ namespace glz
                      append_new_line<use_tabs, indent_width>(b, ix, indent);
                   }
                   dump<'}'>(b, ix);
+                  ++it;
                   break;
+               }
+               case Comment: {
+                  if constexpr (Opts.comments) {
+                     const auto value = read_jsonc_comment(it, end);
+                     dump(value, b, ix);
+                     break;
+                  }
+                  else {
+                     [[fallthrough]];
+                  }
                }
                case Unset:
                   [[fallthrough]];
@@ -387,6 +432,7 @@ namespace glz
    // We don't return errors from prettifying even though they are handled because the error case
    // should not happen since we prettify auto-generated JSON.
    // The detail version can be used if error context is needed
+   
    template <opts Opts = opts{}>
    inline void prettify_json(const auto& in, auto& out) noexcept
    {
@@ -403,6 +449,25 @@ namespace glz
       context ctx{};
       std::string out{};
       detail::prettify_json<Opts>(ctx, in, out);
+      return out;
+   }
+   
+   template <opts Opts = opts{}>
+   inline void prettify_jsonc(const auto& in, auto& out) noexcept
+   {
+      context ctx{};
+      detail::prettify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
+   }
+   
+   /// <summary>
+   /// allocating version of prettify
+   /// </summary>
+   template <opts Opts = opts{}>
+   inline std::string prettify_jsonc(const auto& in) noexcept
+   {
+      context ctx{};
+      std::string out{};
+      detail::prettify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
       return out;
    }
 }

@@ -1092,7 +1092,7 @@ suite minified_custom_object = [] {
    "minified_custom_object"_test = [] {
       Thing obj{};
       std::string buffer = glz::write_json(obj);
-      std::string prettified = glz::prettify_json(buffer);
+      std::string prettified = glz::prettify_jsonc(buffer);
       std::string minified = glz::minify(prettified);
       expect(glz::read_json(obj, minified) == glz::error_code::none);
       expect(buffer == minified);
