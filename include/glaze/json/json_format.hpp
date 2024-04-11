@@ -10,7 +10,7 @@
 
 namespace glz::detail
 {
-   constexpr std::array<bool, 128> ascii_whitespace_table = []{
+   constexpr std::array<bool, 128> ascii_whitespace_table = [] {
       std::array<bool, 128> t{};
       t['\n'] = true;
       t['\t'] = true;
@@ -18,7 +18,7 @@ namespace glz::detail
       t[' '] = true;
       return t;
    }();
-   
+
    enum struct json_type : char {
       Unset = -1,
       String = '"',
@@ -33,8 +33,8 @@ namespace glz::detail
       Object_End = '}',
       Comment = '/'
    };
-   
-   constexpr std::array<json_type, 128> ascii_json_types = []{
+
+   constexpr std::array<json_type, 128> ascii_json_types = [] {
       std::array<json_type, 128> t{};
       using enum json_type;
       t['"'] = String;
@@ -61,9 +61,10 @@ namespace glz::detail
       t['/'] = Comment;
       return t;
    }();
-   
+
    template <bool use_tabs, uint8_t indentation_width>
-   inline void append_new_line(auto&& b, auto&& ix, const int64_t indent) {
+   inline void append_new_line(auto&& b, auto&& ix, const int64_t indent)
+   {
       dump<'\n'>(b, ix);
       if constexpr (use_tabs) {
          dumpn<'\t'>(indent, b, ix);
@@ -72,7 +73,7 @@ namespace glz::detail
          dumpn<' '>(indent * indentation_width, b, ix);
       }
    };
-   
+
    inline sv read_json_string(auto&& it, auto&& end) noexcept
    {
       auto start = it;
@@ -83,14 +84,14 @@ namespace glz::detail
          const uint64_t quote = has_quote(chunk);
          if (quote) {
             it += (std::countr_zero(quote) >> 3);
-            
+
             auto* prev = it - 1;
             while (*prev == '\\') {
                --prev;
             }
             if (size_t(it - prev) % 2) {
                ++it; // add quote
-               return { start, size_t(it - start) };
+               return {start, size_t(it - start)};
             }
             ++it; // skip escaped quote and continue
          }
@@ -98,7 +99,7 @@ namespace glz::detail
             it += 8;
          }
       }
-      
+
       // Tail end of buffer. Should be rare we even get here
       while (it < end) {
          if (*it == '"') {
@@ -108,15 +109,15 @@ namespace glz::detail
             }
             if (size_t(it - prev) % 2) {
                ++it; // add quote
-               return { start, size_t(it - start) };
+               return {start, size_t(it - start)};
             }
          }
          ++it;
       }
-      
+
       return {};
    }
-   
+
    // Reads /* my comment */ style comments
    inline sv read_jsonc_comment(auto&& it, auto&& end) noexcept
    {
@@ -128,10 +129,10 @@ namespace glz::detail
          const uint64_t slash = has_forward_slash(chunk);
          if (slash) {
             it += (std::countr_zero(slash) >> 3);
-            
+
             if (it[-1] == '*') {
                ++it; // add slash
-               return { start, size_t(it - start) };
+               return {start, size_t(it - start)};
             }
             // skip slash and continue
             ++it;
@@ -140,20 +141,20 @@ namespace glz::detail
             it += 8;
          }
       }
-      
+
       // Tail end of buffer. Should be rare we even get here
       while (it < end) {
          if (it[-1] == '*' && *it == '/') {
             ++it; // add slash
-            return { start, size_t(it - start) };
+            return {start, size_t(it - start)};
          }
          ++it;
       }
-      
+
       return {};
    }
-   
-   constexpr std::array<bool, 128> numeric_ascii_table = []{
+
+   constexpr std::array<bool, 128> numeric_ascii_table = [] {
       std::array<bool, 128> t{};
       t['0'] = true;
       t['1'] = true;
@@ -172,14 +173,13 @@ namespace glz::detail
       t['E'] = true;
       return t;
    }();
-   
+
    inline sv read_json_number(auto&& it, auto&& end) noexcept
    {
       auto start = it;
-      while (it < end && numeric_ascii_table[*it])
-      {
+      while (it < end && numeric_ascii_table[*it]) {
          ++it;
       }
-      return { start, size_t(it - start) };
+      return {start, size_t(it - start)};
    }
 }

@@ -76,7 +76,7 @@ suite starter = [] {
       3
    ]
 })");
-      
+
       expect(glz::prettify_json<glz::opts{.new_lines_in_arrays = false}>(buffer) == R"({
    "i": 287,
    "d": 3.14,
@@ -892,14 +892,14 @@ suite user_types = [] {
 })";
       expect(thing_pretty == buffer);
    };
-   
+
    "complex user obect prettify_json/minify_json"_test = [] {
       Thing obj{};
       std::string json{};
       glz::write_json(obj, json);
       std::string buffer{};
       glz::prettify_json(json, buffer);
-      
+
       std::string thing_pretty = R"({
    "thing": {
       "a": 3.14,
@@ -988,17 +988,17 @@ suite user_types = [] {
    }
 })";
       expect(thing_pretty == buffer);
-      
+
       expect(json == glz::minify_json(thing_pretty));
    };
-   
+
    "complex user obect prettify_jsonc/minify_jsonc"_test = [] {
       Thing obj{};
       std::string json{};
       glz::write_jsonc(obj, json);
       std::string buffer{};
       glz::prettify_jsonc(json, buffer);
-      
+
       std::string thing_pretty = R"({
    "thing": {
       "a": 3.14/*Test comment 1*/,
