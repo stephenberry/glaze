@@ -142,6 +142,7 @@ namespace glz
          t[']'] = Array_End;
          t['n'] = Null;
          t['t'] = Bool;
+         t['f'] = Bool;
          t['{'] = Object_Start;
          t['}'] = Object_End;
          t['/'] = Comment;
@@ -178,7 +179,7 @@ namespace glz
                   ++it; // add quote
                   return { start, size_t(it - start) };
                }
-               // else we have an escaped quote, so continue
+               ++it; // skip escaped quote and continue
             }
             else {
                it += 8;
@@ -219,7 +220,8 @@ namespace glz
                   ++it; // add slash
                   return { start, size_t(it - start) };
                }
-               // else continue
+               // skip slash and continue
+               ++it;
             }
             else {
                it += 8;
