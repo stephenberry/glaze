@@ -160,6 +160,7 @@ namespace glz
       inline sv read_json_string(auto&& it, auto&& end) noexcept
       {
          auto start = it;
+         ++it; // skip quote
          for (const auto end_m7 = end - 7; it < end_m7; it += 8) {
             uint64_t chunk;
             std::memcpy(&chunk, it, 8);
@@ -172,9 +173,8 @@ namespace glz
                   --prev;
                }
                if (size_t(it - prev) % 2) {
-                  const sv ret{ start, size_t(it - start) };
-                  ++it; // skip quote
-                  return ret;
+                  ++it; // add quote
+                  return { start, size_t(it - start) };
                }
                // else we have an escaped quote, so continue
             }
@@ -189,9 +189,8 @@ namespace glz
                      --prev;
                   }
                   if (size_t(it - prev) % 2) {
-                     const sv ret{ start, size_t(it - start) };
-                     ++it; // skip quote
-                     return ret;
+                     ++it; // add quote
+                     return { start, size_t(it - start) };
                   }
                   ++it; // skip the escaped quote
                   break;
