@@ -3,23 +3,14 @@
 
 #pragma once
 
-// Minified JSON only works with /**/ style comments, so we only supports this
+// Minified JSONC only works with /**/ style comments, so we only supports this
 
-#include "glaze/json/prettify.hpp"
+#include "glaze/json/json_format.hpp"
 
 namespace glz
 {
    namespace detail
    {
-      constexpr std::array<bool, 128> ascii_whitespace_table = []{
-         std::array<bool, 128> t{};
-         t['\n'] = true;
-         t['\t'] = true;
-         t['\r'] = true;
-         t[' '] = true;
-         return t;
-      }();
-      
       template <opts Opts>
       inline void minify_json(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto&& ix) noexcept {
          using enum json_type;
