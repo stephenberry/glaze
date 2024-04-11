@@ -34,7 +34,7 @@ suite starter = [] {
       std::string buffer{};
       glz::ex::write_json(s, buffer);
       expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
-      expect(glz::prettify(buffer) == R"({
+      expect(glz::prettify_json(buffer) == R"({
    "i": 287,
    "d": 3.14,
    "hello": "Hello World",
