@@ -434,7 +434,7 @@ namespace glz::detail
       bool is_front_hash = true;
       bool is_sum_hash = false;
    };
-   
+
    struct single_char_hash_opts
    {
       bool is_front_hash = true;
@@ -476,7 +476,8 @@ namespace glz::detail
          }
       }
 
-      return single_char_hash_desc{N, min_diff > 0, min_diff, hashes.front(), hashes.back(), Opts.is_front_hash, Opts.is_sum_hash};
+      return single_char_hash_desc{
+         N, min_diff > 0, min_diff, hashes.front(), hashes.back(), Opts.is_front_hash, Opts.is_sum_hash};
    }
 
    template <class T, single_char_hash_desc D>

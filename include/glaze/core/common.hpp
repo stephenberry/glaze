@@ -615,7 +615,7 @@ namespace glz
                else {
                   constexpr single_char_hash_opts sum_hash{.is_front_hash = true, .is_sum_hash = true};
                   constexpr auto sum_desc = single_char_hash<n, sum_hash>(keys);
-                  
+
                   if constexpr (sum_desc.valid) {
                      return make_single_char_map<value_t, sum_desc>({key_value<T, I>()...});
                   }
