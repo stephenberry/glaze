@@ -374,13 +374,13 @@ namespace glz
                         }
 
                         // Tail end of buffer. Uncommon for long strings.
-                        for (; c < e; ++c) {
+                        for (const auto data = data_ptr(b); c < e; ++c) {
                            if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
-                              std::memcpy(data_ptr(b) + ix, &escaped, 2);
+                              std::memcpy(data + ix, &escaped, 2);
                               ix += 2;
                            }
                            else {
-                              std::memcpy(data_ptr(b) + ix, c, 1);
+                              std::memcpy(data + ix, c, 1);
                               ++ix;
                            }
                         }
