@@ -329,7 +329,7 @@ namespace glz
                         const auto* c = str.data();
                         const auto* const e = c + n;
 
-                        if (str.size() > 7) {
+                        if (n > 7) {
                            const auto data = data_ptr(b);
                            for (const auto end_m7 = e - 7; c < end_m7;) {
                               std::memcpy(data + ix, c, 8);
