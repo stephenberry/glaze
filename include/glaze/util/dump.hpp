@@ -69,13 +69,13 @@ namespace glz::detail
       b[ix] = c;
       ++ix;
    }
-   
+
    GLZ_ALWAYS_INLINE void dump_unchecked(const char c, auto* b, auto& ix) noexcept
    {
       b[ix] = c;
       ++ix;
    }
-   
+
    GLZ_ALWAYS_INLINE void dump_unchecked(const char c, vector_like auto& b, auto& ix) noexcept
    {
       b[ix] = c;

@@ -36,7 +36,7 @@ namespace glz::detail
       0, 0, 0, 0, 0, 0, 0, 0, 0, 0 //
    };
    // clang-format on
-   
+
    constexpr std::array<bool, 128> ascii_whitespace_table = [] {
       std::array<bool, 128> t{};
       t['\n'] = true;
@@ -45,7 +45,7 @@ namespace glz::detail
       t[' '] = true;
       return t;
    }();
-   
+
    constexpr std::array<bool, 128> ascii_whitespace_comment_table = [] {
       std::array<bool, 128> t{};
       t['\n'] = true;

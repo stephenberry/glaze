@@ -173,11 +173,9 @@ namespace glz
          }
       };
 
-      constexpr std::array<uint16_t, 256> char_escape_table = []{
-         auto combine = [](const char chars[2]) -> uint16_t {
-            return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8);
-         };
-         
+      constexpr std::array<uint16_t, 256> char_escape_table = [] {
+         auto combine = [](const char chars[2]) -> uint16_t { return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8); };
+
          std::array<uint16_t, 256> t{};
          t['\b'] = combine(R"(\b)");
          t['\t'] = combine(R"(\t)");
@@ -240,7 +238,7 @@ namespace glz
                         b.resize((std::max)(b.size() * 2, k));
                      }
                   }
-                  
+
                   dump_unchecked<'"'>(b, ix);
                   if (const auto escaped = char_escape_table[uint8_t(value)]; escaped) {
                      std::memcpy(data_ptr(b) + ix, &escaped, 2);
@@ -335,9 +333,10 @@ namespace glz
                               std::memcpy(data + ix, c, 8);
                               uint64_t chunk;
                               std::memcpy(&chunk, c, 8);
-                              // We don't check for writing out invalid characters as this can be tested by the user if necessary.
-                              // In the case of invalid JSON characters we write out null characters to showcase the error and make the JSON invalid.
-                              // These would then be detected upon reading the JSON.
+                              // We don't check for writing out invalid characters as this can be tested by the user if
+                              // necessary. In the case of invalid JSON characters we write out null characters to
+                              // showcase the error and make the JSON invalid. These would then be detected upon reading
+                              // the JSON.
                               const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_16(chunk);
                               if (test_chars) {
                                  const auto length = (std::countr_zero(test_chars) >> 3);
