@@ -329,7 +329,7 @@ suite escaping_tests = [] {
       std::string str = "\"\\\b\f\n\r\tᇿ";
       std::string buffer{};
       glz::write_json(str, buffer);
-      expect(buffer == R"("\"\\\b\f\n\r\tᇿ")");
+      expect(buffer == R"("\"\\\b\f\n\r\tᇿ")") << buffer;
    };
 
    "escaped_char write"_test = [] {
