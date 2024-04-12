@@ -223,8 +223,7 @@ namespace glz::detail
          const auto index = table[hash % bucket_size];
          if constexpr (use_hash_comparison) {
             // Odds of having a uint64_t hash collision is pretty small
-            // And no valid keys could colide becuase of perfect hashing so this
-            // isnt that bad
+            // And no valid/known keys could colide becuase of perfect hashing
             if (hashes[index] != hash) [[unlikely]]
                return items.end();
          }
