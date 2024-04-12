@@ -75,7 +75,7 @@ namespace glz::detail
             break;
          }
          default: {
-            unreachable();
+            // zero size case
             break;
          }
          }
