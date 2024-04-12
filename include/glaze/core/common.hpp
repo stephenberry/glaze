@@ -605,7 +605,8 @@ namespace glz
                return make_single_char_map<value_t, front_desc>({key_value<T, I>()...});
             }
             else {
-               constexpr auto back_desc = single_char_hash<n, false>(std::array<sv, n>{get_key<T, I>()...});
+               constexpr single_char_hash_opts rear_hash{.is_front_hash = false};
+               constexpr auto back_desc = single_char_hash<n, rear_hash>(std::array<sv, n>{get_key<T, I>()...});
 
                if constexpr (back_desc.valid) {
                   return make_single_char_map<value_t, back_desc>({key_value<T, I>()...});

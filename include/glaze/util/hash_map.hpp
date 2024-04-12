@@ -23,6 +23,8 @@
 #pragma warning(disable : 4554)
 #endif
 
+#include "glaze/util/utility.hpp"
+
 // Notes on padding:
 // We only need to do buffer extensions on very short keys (n < 8)
 // Our static thread_local string_buffer always has enough padding for short strings (n < 8)
@@ -73,6 +75,7 @@ namespace glz::detail
             break;
          }
          default: {
+            unreachable();
             break;
          }
          }
@@ -433,8 +436,13 @@ namespace glz::detail
       uint8_t back{};
       bool is_front_hash = true;
    };
+   
+   struct single_char_hash_opts
+   {
+      bool is_front_hash = true;
+   };
 
-   template <size_t N, bool IsFrontHash = true>
+   template <size_t N, single_char_hash_opts Opts = single_char_hash_opts{}>
    inline constexpr single_char_hash_desc single_char_hash(const std::array<std::string_view, N>& v) noexcept
    {
       if constexpr (N > 255) {
@@ -446,7 +454,7 @@ namespace glz::detail
          if (v[i].size() == 0) {
             return {};
          }
-         if constexpr (IsFrontHash) {
+         if constexpr (Opts.is_front_hash) {
             hashes[i] = static_cast<uint8_t>(v[i][0]);
          }
          else {
@@ -463,7 +471,7 @@ namespace glz::detail
          }
       }
 
-      return single_char_hash_desc{N, min_diff > 0, min_diff, hashes.front(), hashes.back(), IsFrontHash};
+      return single_char_hash_desc{N, min_diff > 0, min_diff, hashes.front(), hashes.back(), Opts.is_front_hash};
    }
 
    template <class T, single_char_hash_desc D>

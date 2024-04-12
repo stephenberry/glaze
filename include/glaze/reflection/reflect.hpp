@@ -73,7 +73,8 @@ namespace glz
                   {{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
             }
             else {
-               constexpr auto back_desc = single_char_hash<n, false>(member_names<T>);
+               constexpr single_char_hash_opts rear_hash{.is_front_hash = false};
+               constexpr auto back_desc = single_char_hash<n, rear_hash>(member_names<T>);
 
                if constexpr (back_desc.valid) {
                   return make_single_char_map<value_t, back_desc>(
