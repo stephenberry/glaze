@@ -301,7 +301,7 @@ namespace glz
                   dump_unchecked<'"'>(b, ix);
                }
                else {
-                  const sv str = [&]() -> sv {
+                  const sv str = [&]() -> const sv {
                      if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                         return value ? value : "";
                      }
@@ -362,7 +362,7 @@ namespace glz
                                  ix += length;
 
                                  if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) [[likely]] {
-                                    std::memcpy(data_ptr(b) + ix, &escaped, 2);
+                                    std::memcpy(data + ix, &escaped, 2);
                                  }
                                  ix += 2;
                                  ++c;
