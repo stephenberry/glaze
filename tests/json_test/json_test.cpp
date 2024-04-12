@@ -7586,6 +7586,30 @@ suite c_style_arrays = [] {
    };
 };
 
+struct sum_hash_obj_t
+{
+   int aa{};
+   int aab{};
+   int cab{};
+   int zac{};
+};
+
+template <>
+struct glz::meta<sum_hash_obj_t>
+{
+   using T = sum_hash_obj_t;
+   static constexpr auto value = object(&T::aa, &T::aab, &T::cab, &T::zac);
+};
+
+suite sum_hash_obj_test = [] {
+   "sum_hash_obj"_test = [] {
+      sum_hash_obj_t obj{};
+      const auto s = glz::write_json(obj);
+      expect(s == R"({"aa":0,"aab":0,"cab":0,"zac":0})");
+      expect(!glz::read_json(obj, s));
+   };
+};
+
 int main()
 {
    trace.begin("json_test", "Full test suite duration.");
