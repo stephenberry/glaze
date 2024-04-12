@@ -350,8 +350,9 @@ namespace glz
                         const auto* const e = c + n;
 
                         if (str.size() > 7) {
+                           const auto data = data_ptr(b);
                            for (const auto end_m7 = e - 7; c < end_m7;) {
-                              std::memcpy(data_ptr(b) + ix, c, 8);
+                              std::memcpy(data + ix, c, 8);
                               uint64_t chunk;
                               std::memcpy(&chunk, c, 8);
                               const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_16(chunk);
