@@ -173,25 +173,21 @@ namespace glz
          }
       };
 
-      constexpr uint16_t combine(const char chars[2]) noexcept
-      {
-         return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8);
-      }
-
-      // clang-format off
-      constexpr std::array<uint16_t, 256> char_escape_table = { //
-         0, 0, 0, 0, 0, 0, 0, 0, combine(R"(\b)"), combine(R"(\t)"), //
-         combine(R"(\n)"), 0, combine(R"(\f)"), combine(R"(\r)"), 0, 0, 0, 0, 0, 0, //
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-         0, 0, 0, 0, combine(R"(\")"), 0, 0, 0, 0, 0, //
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-         0, 0, combine(R"(\\)") //
-      };
-      // clang-format on
+      constexpr std::array<uint16_t, 256> char_escape_table = []{
+         auto combine = [](const char chars[2]) -> uint16_t {
+            return uint16_t(chars[0]) | (uint16_t(chars[1]) << 8);
+         };
+         
+         std::array<uint16_t, 256> t{};
+         t['\b'] = combine(R"(\b)");
+         t['\t'] = combine(R"(\t)");
+         t['\n'] = combine(R"(\n)");
+         t['\f'] = combine(R"(\f)");
+         t['\r'] = combine(R"(\r)");
+         t['\"'] = combine(R"(\")");
+         t['\\'] = combine(R"(\\)");
+         return t;
+      }();
 
       template <size_t Bytes>
          requires(Bytes == 8)
@@ -231,7 +227,6 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
          {
             if constexpr (Opts.number) {
-               // TODO: Should we check if the string number is valid?
                dump(value, b, ix);
             }
             else if constexpr (char_t<T>) {
@@ -239,45 +234,30 @@ namespace glz
                   dump(value, b, ix);
                }
                else {
-                  dump<'"'>(b, ix);
-
-                  switch (value) {
-                  case '"':
-                     dump<"\\\"">(b, ix);
-                     break;
-                  case '\\':
-                     dump<"\\\\">(b, ix);
-                     break;
-                  case '\b':
-                     dump<"\\b">(b, ix);
-                     break;
-                  case '\f':
-                     dump<"\\f">(b, ix);
-                     break;
-                  case '\n':
-                     dump<"\\n">(b, ix);
-                     break;
-                  case '\r':
-                     dump<"\\r">(b, ix);
-                     break;
-                  case '\t':
-                     dump<"\\t">(b, ix);
-                     break;
-                  case '\0':
-                     // escape character treated as empty string
-                     break;
-                  default:
-                     // Hiding warning for build, this is an error with wider char types
-                     dump(static_cast<char>(value), b,
-                          ix); // TODO: This warning is an error We need to be able to dump wider char types
+                  if constexpr (resizeable<B>) {
+                     const auto k = ix + 4; // 4 characters is enough for quotes and escaped character
+                     if (k >= b.size()) [[unlikely]] {
+                        b.resize((std::max)(b.size() * 2, k));
+                     }
                   }
-
-                  dump<'"'>(b, ix);
+                  
+                  dump_unchecked<'"'>(b, ix);
+                  if (const auto escaped = char_escape_table[uint8_t(value)]; escaped) {
+                     std::memcpy(data_ptr(b) + ix, &escaped, 2);
+                     ix += 2;
+                  }
+                  else if (value == '\0') {
+                     // null character treated as empty string
+                  }
+                  else {
+                     dump_unchecked(value, b, ix);
+                  }
+                  dump_unchecked<'"'>(b, ix);
                }
             }
             else {
                if constexpr (Opts.raw_string) {
-                  const sv str = [&]() -> sv {
+                  const sv str = [&]() -> const sv {
                      if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                         return value ? value : "";
                      }
@@ -301,7 +281,7 @@ namespace glz
                   dump_unchecked<'"'>(b, ix);
                }
                else {
-                  const sv str = [&]() -> sv {
+                  const sv str = [&]() -> const sv {
                      if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
                         return value ? value : "";
                      }
@@ -324,7 +304,7 @@ namespace glz
                   // now we don't have to check writing
 
                   if constexpr (Opts.raw) {
-                     dump(str, b, ix);
+                     dump_unchecked(str, b, ix);
                   }
                   else {
                      dump_unchecked<'"'>(b, ix);
@@ -349,20 +329,22 @@ namespace glz
                         const auto* c = str.data();
                         const auto* const e = c + n;
 
-                        if (str.size() > 7) {
+                        if (n > 7) {
+                           const auto data = data_ptr(b);
                            for (const auto end_m7 = e - 7; c < end_m7;) {
-                              std::memcpy(data_ptr(b) + ix, c, 8);
+                              std::memcpy(data + ix, c, 8);
                               uint64_t chunk;
                               std::memcpy(&chunk, c, 8);
+                              // We don't check for writing out invalid characters as this can be tested by the user if necessary.
+                              // In the case of invalid JSON characters we write out null characters to showcase the error and make the JSON invalid.
+                              // These would then be detected upon reading the JSON.
                               const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_16(chunk);
                               if (test_chars) {
                                  const auto length = (std::countr_zero(test_chars) >> 3);
                                  c += length;
                                  ix += length;
 
-                                 if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) [[likely]] {
-                                    std::memcpy(data_ptr(b) + ix, &escaped, 2);
-                                 }
+                                 std::memcpy(data + ix, &char_escape_table[uint8_t(*c)], 2);
                                  ix += 2;
                                  ++c;
                               }
@@ -374,13 +356,13 @@ namespace glz
                         }
 
                         // Tail end of buffer. Uncommon for long strings.
-                        for (; c < e; ++c) {
+                        for (const auto data = data_ptr(b); c < e; ++c) {
                            if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
-                              std::memcpy(data_ptr(b) + ix, &escaped, 2);
+                              std::memcpy(data + ix, &escaped, 2);
                               ix += 2;
                            }
                            else {
-                              std::memcpy(data_ptr(b) + ix, c, 1);
+                              std::memcpy(data + ix, c, 1);
                               ++ix;
                            }
                         }
