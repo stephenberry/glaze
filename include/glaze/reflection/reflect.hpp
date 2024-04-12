@@ -66,7 +66,8 @@ namespace glz
          }
          else if constexpr (n < 64) // don't even attempt a first character hash if we have too many keys
          {
-            constexpr auto front_desc = single_char_hash<n>(member_names<T>);
+            constexpr auto& keys = member_names<T>;
+            constexpr auto front_desc = single_char_hash<n>(keys);
 
             if constexpr (front_desc.valid) {
                return make_single_char_map<value_t, front_desc>(
@@ -74,14 +75,23 @@ namespace glz
             }
             else {
                constexpr single_char_hash_opts rear_hash{.is_front_hash = false};
-               constexpr auto back_desc = single_char_hash<n, rear_hash>(member_names<T>);
+               constexpr auto back_desc = single_char_hash<n, rear_hash>(keys);
 
                if constexpr (back_desc.valid) {
                   return make_single_char_map<value_t, back_desc>(
                      {{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
                }
                else {
-                  return naive_or_normal_hash();
+                  constexpr single_char_hash_opts sum_hash{.is_front_hash = true, .is_sum_hash = true};
+                  constexpr auto sum_desc = single_char_hash<n, sum_hash>(keys);
+                  
+                  if constexpr (sum_desc.valid) {
+                     return make_single_char_map<value_t, sum_desc>(
+                        {{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
+                  }
+                  else {
+                     return naive_or_normal_hash();
+                  }
                }
             }
          }

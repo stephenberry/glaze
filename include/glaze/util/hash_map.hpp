@@ -435,11 +435,13 @@ namespace glz::detail
       uint8_t front{};
       uint8_t back{};
       bool is_front_hash = true;
+      bool is_sum_hash = false;
    };
    
    struct single_char_hash_opts
    {
       bool is_front_hash = true;
+      bool is_sum_hash = false; // sums the size of the key
    };
 
    template <size_t N, single_char_hash_opts Opts = single_char_hash_opts{}>
@@ -455,10 +457,15 @@ namespace glz::detail
             return {};
          }
          if constexpr (Opts.is_front_hash) {
-            hashes[i] = static_cast<uint8_t>(v[i][0]);
+            if constexpr (Opts.is_sum_hash) {
+               hashes[i] = uint8_t(v[i][0]) + uint8_t(v[i].size());
+            }
+            else {
+               hashes[i] = uint8_t(v[i][0]);
+            }
          }
          else {
-            hashes[i] = static_cast<uint8_t>(v[i].back());
+            hashes[i] = uint8_t(v[i].back());
          }
       }
 
@@ -466,12 +473,13 @@ namespace glz::detail
 
       uint8_t min_diff = (std::numeric_limits<uint8_t>::max)();
       for (size_t i = 0; i < N - 1; ++i) {
-         if ((hashes[i + 1] - hashes[i]) < min_diff) {
-            min_diff = hashes[i + 1] - hashes[i];
+         const auto diff = hashes[i + 1] - hashes[i];
+         if (diff < min_diff) {
+            min_diff = diff;
          }
       }
 
-      return single_char_hash_desc{N, min_diff > 0, min_diff, hashes.front(), hashes.back(), Opts.is_front_hash};
+      return single_char_hash_desc{N, min_diff > 0, min_diff, hashes.front(), hashes.back(), Opts.is_front_hash, Opts.is_sum_hash};
    }
 
    template <class T, single_char_hash_desc D>
@@ -493,19 +501,32 @@ namespace glz::detail
          }
 
          if constexpr (D.is_front_hash) {
-            const auto k = static_cast<uint8_t>(static_cast<uint8_t>(key[0]) - D.front);
-            if (k >= static_cast<uint8_t>(N_table)) [[unlikely]] {
-               return items.end();
+            if constexpr (D.is_sum_hash) {
+               const auto k = uint8_t(uint8_t(key[0]) + uint8_t(key.size()) - D.front);
+               if (k >= uint8_t(N_table)) [[unlikely]] {
+                  return items.end();
+               }
+               const auto index = table[k];
+               const auto& item = items[index];
+               if (item.first != key) [[unlikely]]
+                  return items.end();
+               return items.begin() + index;
             }
-            const auto index = table[k];
-            const auto& item = items[index];
-            if (item.first != key) [[unlikely]]
-               return items.end();
-            return items.begin() + index;
+            else {
+               const auto k = uint8_t(uint8_t(key[0]) - D.front);
+               if (k >= uint8_t(N_table)) [[unlikely]] {
+                  return items.end();
+               }
+               const auto index = table[k];
+               const auto& item = items[index];
+               if (item.first != key) [[unlikely]]
+                  return items.end();
+               return items.begin() + index;
+            }
          }
          else {
-            const auto k = static_cast<uint8_t>(static_cast<uint8_t>(key.back()) - D.front);
-            if (k >= static_cast<uint8_t>(N_table)) [[unlikely]] {
+            const auto k = uint8_t(uint8_t(key.back()) - D.front);
+            if (k >= uint8_t(N_table)) [[unlikely]] {
                return items.end();
             }
             const auto index = table[k];
@@ -530,11 +551,17 @@ namespace glz::detail
       uint8_t i = 0;
       for (const auto& pair : pairs) {
          ht.items[i] = pair;
+         const auto& key = pair.first;
          if constexpr (D.is_front_hash) {
-            ht.table[static_cast<uint8_t>(pair.first[0]) - D.front] = i;
+            if constexpr (D.is_sum_hash) {
+               ht.table[uint8_t(key[0]) + uint8_t(key.size()) - D.front] = i;
+            }
+            else {
+               ht.table[uint8_t(key[0]) - D.front] = i;
+            }
          }
          else {
-            ht.table[static_cast<uint8_t>(pair.first.back()) - D.front] = i;
+            ht.table[uint8_t(key.back()) - D.front] = i;
          }
          ++i;
       }
