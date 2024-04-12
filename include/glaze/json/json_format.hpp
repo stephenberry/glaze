@@ -10,15 +10,6 @@
 
 namespace glz::detail
 {
-   constexpr std::array<bool, 128> ascii_whitespace_table = [] {
-      std::array<bool, 128> t{};
-      t['\n'] = true;
-      t['\t'] = true;
-      t['\r'] = true;
-      t[' '] = true;
-      return t;
-   }();
-
    enum struct json_type : char {
       Unset = -1,
       String = '"',
