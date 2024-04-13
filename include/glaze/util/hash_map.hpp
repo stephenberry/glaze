@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <glaze/util/compare.hpp>
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -595,10 +596,10 @@ namespace glz::detail
       }
       else {
          if constexpr (CheckSize) {
-            return (key.size() == n) && (std::memcmp(key.data(), S.data(), n) == 0);
+            return (key.size() == n) && compare(key.data(), S.data(), n);
          }
          else {
-            return std::memcmp(key.data(), S.data(), n) == 0;
+            return compare(key.data(), S.data(), n);
          }
       }
    }
