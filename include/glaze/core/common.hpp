@@ -620,7 +620,7 @@ namespace glz
                      return make_single_char_map<value_t, sum_desc>({key_value<T, I>()...});
                   }
                   else {
-                     if constexpr (n <= 20) {
+                     if constexpr (n <= naive_map_max_size) {
                         return glz::detail::naive_map<value_t, n, use_hash_comparison>({key_value<T, I>()...});
                      }
                      else {

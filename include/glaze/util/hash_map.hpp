@@ -176,16 +176,19 @@ namespace glz::detail
       }
       return false;
    }
+   
+   constexpr size_t naive_map_max_size = 32;
 
-   template <class Value, std::size_t N, bool use_hash_comparison = false>
+   template <class Value, size_t N, bool use_hash_comparison = false>
    struct naive_map
    {
       // Birthday paradox makes this unsuitable for large numbers of keys without
-      // using a ton of memory Could resonably use it for 64 or so keys if the
-      // bucketsize scalled more agressively But I would swhitch to a more space
-      // efficient perfect map
-      static_assert(N <= 32, "Not suitable for large numbers of keys");
-      static constexpr size_t bucket_size = (N > 16 ? 8 : 4) * std::bit_ceil(N);
+      // using a ton of memory.
+      static_assert(N <= naive_map_max_size, "Not suitable for large numbers of keys");
+      // std::bit_ceil(N * N) / 2 results in a max of around 62% collision chance (e.g. size 32).
+      // This uses 512 bytes for 32 keys.
+      // Keeping the bucket size a power of 2 probably makes the modulus more efficient.
+      static constexpr size_t bucket_size = (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
       uint64_t seed{};
       std::array<std::pair<std::string_view, Value>, N> items{};
       std::array<uint64_t, N * use_hash_comparison> hashes{};
@@ -204,7 +207,7 @@ namespace glz::detail
             if constexpr (use_hash_comparison) {
                hashes[i] = hash;
             }
-            table[hash % bucket_size] = static_cast<uint8_t>(i);
+            table[hash % bucket_size] = uint8_t(i);
          }
       }
 
@@ -312,8 +315,7 @@ namespace glz::detail
          const size_t index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
          if constexpr (!std::integral<Key> && use_hash_comparison) {
             // Odds of having a uint64_t hash collision is pretty small
-            // And no valid keys could colide becuase of perfect hashing so this
-            // isnt that bad
+            // And no valid/known keys could colide becuase of perfect hashing
             if (hashes[index] != hash) [[unlikely]]
                return items.end();
          }
@@ -331,14 +333,9 @@ namespace glz::detail
       constexpr decltype(auto) find(auto&& key) noexcept
       {
          const auto hash = hash_alg{}(key, seed);
-         // constexpr bucket_size means the compiler can replace the modulos with
-         // more efficient instructions So this is not as expensive as this looks
          const auto extra = buckets[hash % N];
          const auto index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
          if constexpr (!std::integral<Key> && use_hash_comparison) {
-            // Odds of having a uint64_t hash collision is pretty small
-            // And no valid keys could colide becuase of perfect hashing so this
-            // isnt that bad
             if (hashes[index] != hash) [[unlikely]]
                return items.end();
          }
