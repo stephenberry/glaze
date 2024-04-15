@@ -479,10 +479,10 @@ namespace glz::detail
    }
 
    template <class T, single_char_hash_desc D>
+      requires (D.N < 256)
    struct single_char_map
    {
       static constexpr auto N = D.N;
-      static_assert(N < 256);
       std::array<std::pair<std::string_view, T>, N> items{};
       static constexpr size_t N_table = D.back - D.front + 1;
       std::array<uint8_t, N_table> table{};
@@ -535,10 +535,10 @@ namespace glz::detail
    };
 
    template <class T, single_char_hash_desc D>
+      requires (D.N < 256)
    constexpr auto make_single_char_map(std::initializer_list<std::pair<std::string_view, T>> pairs)
    {
       constexpr auto N = D.N;
-      static_assert(N < 256);
       if (pairs.size() != N) {
          std::abort();
       }
