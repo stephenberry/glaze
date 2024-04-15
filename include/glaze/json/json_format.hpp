@@ -11,7 +11,7 @@
 namespace glz::detail
 {
    enum struct json_type : char {
-      Unset = -1,
+      Unset = 'x',
       String = '"',
       Comma = ',',
       Number = '-',
