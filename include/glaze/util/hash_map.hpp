@@ -157,7 +157,7 @@ namespace glz::detail
          if (n < 8) {
             return bitmix(h ^ to_uint64_n_below_8(data, n));
          }
-         
+
          const char* end7 = data + n - 7;
          for (auto d0 = data; d0 < end7; d0 += 8) {
             h = bitmix(h ^ to_uint64(d0));
@@ -177,7 +177,7 @@ namespace glz::detail
       }
       return false;
    }
-   
+
    constexpr size_t naive_map_max_size = 32;
 
    template <class Value, size_t N, bool use_hash_comparison = false>
@@ -440,7 +440,7 @@ namespace glz::detail
    };
 
    template <size_t N, single_char_hash_opts Opts = single_char_hash_opts{}>
-      requires (N < 256)
+      requires(N < 256)
    inline constexpr single_char_hash_desc single_char_hash(const std::array<std::string_view, N>& v) noexcept
    {
       std::array<uint8_t, N> hashes;
@@ -479,7 +479,7 @@ namespace glz::detail
    }
 
    template <class T, single_char_hash_desc D>
-      requires (D.N < 256)
+      requires(D.N < 256)
    struct single_char_map
    {
       static constexpr auto N = D.N;
@@ -535,7 +535,7 @@ namespace glz::detail
    };
 
    template <class T, single_char_hash_desc D>
-      requires (D.N < 256)
+      requires(D.N < 256)
    constexpr auto make_single_char_map(std::initializer_list<std::pair<std::string_view, T>> pairs)
    {
       constexpr auto N = D.N;
