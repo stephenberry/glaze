@@ -129,7 +129,7 @@ namespace glz::detail
       std::memcpy(b + ix, s.data(), n);
       ix += n;
    }
-   
+
    template <char c>
    GLZ_ALWAYS_INLINE void dumpn(size_t n, char*& b) noexcept
    {
