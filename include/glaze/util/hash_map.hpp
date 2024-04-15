@@ -440,12 +440,9 @@ namespace glz::detail
    };
 
    template <size_t N, single_char_hash_opts Opts = single_char_hash_opts{}>
+      requires (N < 256)
    inline constexpr single_char_hash_desc single_char_hash(const std::array<std::string_view, N>& v) noexcept
    {
-      if constexpr (N > 255) {
-         return {};
-      }
-
       std::array<uint8_t, N> hashes;
       for (size_t i = 0; i < N; ++i) {
          if (v[i].size() == 0) {
@@ -469,6 +466,9 @@ namespace glz::detail
       uint8_t min_diff = (std::numeric_limits<uint8_t>::max)();
       for (size_t i = 0; i < N - 1; ++i) {
          const auto diff = hashes[i + 1] - hashes[i];
+         if (diff == 0) {
+            return {};
+         }
          if (diff < min_diff) {
             min_diff = diff;
          }
