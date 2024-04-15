@@ -4,6 +4,7 @@
 #pragma once
 
 #include <bit>
+#include <cstring>
 #include <span>
 
 #include "glaze/core/write.hpp"
@@ -105,12 +106,6 @@ namespace glz::detail
       b += n;
    }
 
-   template <char c>
-   GLZ_ALWAYS_INLINE void dumpn(size_t n, char*& b) noexcept
-   {
-      std::fill_n(b, n, c);
-   }
-
    template <string_literal str>
    GLZ_ALWAYS_INLINE void dump(vector_like auto& b, auto& ix) noexcept
    {
@@ -134,6 +129,12 @@ namespace glz::detail
       std::memcpy(b + ix, s.data(), n);
       ix += n;
    }
+   
+   template <char c>
+   GLZ_ALWAYS_INLINE void dumpn(size_t n, char*& b) noexcept
+   {
+      std::memset(b, c, n);
+   }
 
    template <char c>
    GLZ_ALWAYS_INLINE void dumpn(size_t n, vector_like auto& b, auto& ix) noexcept
@@ -142,7 +143,7 @@ namespace glz::detail
          b.resize((std::max)(b.size() * 2, ix + n));
       }
 
-      std::fill_n(b.data() + ix, n, c);
+      std::memset(b.data() + ix, c, n);
       ix += n;
    }
 
