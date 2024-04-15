@@ -152,17 +152,18 @@ namespace glz::detail
       {
          uint64_t h = (0xcbf29ce484222325 ^ seed) * 1099511628211;
          const auto n = value.size();
+         const char* data = value.data();
 
          if (n < 8) {
-            return bitmix(h ^ to_uint64_n_below_8(value.data(), n));
+            return bitmix(h ^ to_uint64_n_below_8(data, n));
          }
-
-         const char* end7 = value.data() + n - 7;
-         for (auto d0 = value.data(); d0 < end7; d0 += 8) {
+         
+         const char* end7 = data + n - 7;
+         for (auto d0 = data; d0 < end7; d0 += 8) {
             h = bitmix(h ^ to_uint64(d0));
          }
          // Handle potential tail. We know we have at least 8
-         return bitmix(h ^ to_uint64(value.data() + n - 8));
+         return bitmix(h ^ to_uint64(data + n - 8));
       }
    };
 
