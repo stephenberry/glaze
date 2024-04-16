@@ -4239,18 +4239,11 @@ suite get_sv = [] {
    };
    
    "get_as_json valid"_test = [] {
-      std::string_view data = R"({ "data": [ {"a": true;} ] })";
-
-      auto a = glz::get_as_json<bool, "/data/0/a">(data);
-      expect(a.has_value()) << glz::format_error(a.error(), data);
-      expect(a.value());
-   };
-   
-   "get_as_json invalid"_test = [] {
       std::string_view data = R"({ "data": [ {"a": true} ] })";
 
       auto a = glz::get_as_json<bool, "/data/0/a">(data);
-      expect(!a.has_value());
+      expect(a.has_value());
+      expect(a.value());
    };
 
    "action"_test = [] {

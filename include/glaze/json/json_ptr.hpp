@@ -663,13 +663,25 @@ namespace glz
                   if constexpr (n) {
                      for_each<n.value()>([&](auto) {
                         skip_value<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
                         if (*it != ',') {
                            ctx.error = error_code::array_element_not_found;
                            return;
                         }
                         ++it;
                      });
-                     ret = parse_value<Opts>(ctx, it, end);
+                     
+                     skip_ws_no_pre_check<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     
+                     if constexpr (I == (N - 1)) {
+                        ret = parse_value<Opts>(ctx, it, end);
+                     }
+                     return;
                   }
                   else {
                      ctx.error = error_code::array_element_not_found;
@@ -684,7 +696,7 @@ namespace glz
                   return;
                }
 
-               while (true) {
+               while (it < end) {
                   skip_ws_no_pre_check<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
@@ -693,40 +705,36 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
-                  if (bool(ctx.error)) [[unlikely]] {
+                  
+                  if (cx_string_cmp<key>(k)) {
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     match<':'>(ctx, it);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+                     skip_ws_no_pre_check<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
+
+                     if constexpr (I == (N - 1)) {
+                        ret = parse_value<Opts>(ctx, it, end);
+                     }
                      return;
                   }
                   else {
-                     if (cx_string_cmp<key>(k)) {
-                        skip_ws<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]] {
-                           return;
-                        }
-                        match<':'>(ctx, it);
-                        if (bool(ctx.error)) [[unlikely]] {
-                           return;
-                        }
-                        skip_ws_no_pre_check<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]] {
-                           return;
-                        }
-
-                        if constexpr (I == (N - 1)) {
-                           ret = parse_value<Opts>(ctx, it, end);
-                        }
+                     skip_value<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
-                     else {
-                        skip_value<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]] {
-                           return;
-                        }
-                        if (*it != ',') {
-                           ctx.error = error_code::key_not_found;
-                           return;
-                        }
-                        ++it;
+                     if (*it != ',') {
+                        ctx.error = error_code::key_not_found;
+                        return;
                      }
+                     ++it;
                   }
                }
             }
