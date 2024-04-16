@@ -123,7 +123,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, Args&&... args) noexcept
          {
-            using V = std::decay_t<decltype(value.get())>;
+            using V = std::remove_cvref_t<decltype(value.get())>;
             to_json<V>::template op<Opts>(value.get(), std::forward<Args>(args)...);
          }
       };
@@ -326,9 +326,9 @@ namespace glz
                      {
                         const auto* c = str.data();
                         const auto* const e = c + n;
+                        const auto data = data_ptr(b);
 
                         if (n > 7) {
-                           const auto data = data_ptr(b);
                            for (const auto end_m7 = e - 7; c < end_m7;) {
                               std::memcpy(data + ix, c, 8);
                               uint64_t chunk;
@@ -355,7 +355,7 @@ namespace glz
                         }
 
                         // Tail end of buffer. Uncommon for long strings.
-                        for (const auto data = data_ptr(b); c < e; ++c) {
+                        for (; c < e; ++c) {
                            if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
                               std::memcpy(data + ix, &escaped, 2);
                               ix += 2;

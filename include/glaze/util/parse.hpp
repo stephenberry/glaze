@@ -195,9 +195,61 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (ctx.error == error_code::none) [[likely]] {
-         skip_ws_no_pre_check<Opts>(ctx, it, end);
+      if (bool(ctx.error)) [[unlikely]]
+         return;
+      skip_ws_no_pre_check<Opts>(ctx, it, end);
+   }
+   
+   GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
+   {
+      {
+         constexpr uint64_t n{sizeof(uint64_t)};
+         while (length >= n) {
+            uint64_t v[2];
+            std::memcpy(v, ws, n);
+            std::memcpy(v + 1, it, n);
+            if (v[0] != v[1]) {
+               return;
+            }
+            length -= n;
+            ws += n;
+            it += n;
+         }
       }
+      {
+         constexpr uint64_t n{sizeof(uint32_t)};
+         if (length >= n) {
+            uint32_t v[2];
+            std::memcpy(v, ws, n);
+            std::memcpy(v + 1, it, n);
+            if (v[0] != v[1]) {
+               return;
+            }
+            length -= n;
+            ws += n;
+            it += n;
+         }
+      }
+      {
+         constexpr uint64_t n{sizeof(uint16_t)};
+         if (length >= n) {
+            uint16_t v[2];
+            std::memcpy(v, ws, n);
+            std::memcpy(v + 1, it, n);
+            if (v[0] != v[1]) {
+               return;
+            }
+            //length -= n;
+            //ws += n;
+            it += n;
+         }
+      }
+      // We have to call a whitespace check after this function
+      // in case the whitespace is mismatching.
+      // So, we forgo this check as to not duplicate.
+      /*if (length && *ws == *it) {
+         ++it;
+      }*/
    }
 
    GLZ_ALWAYS_INLINE void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
