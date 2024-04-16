@@ -158,6 +158,12 @@ namespace glz::detail
    {
       return has_zero(chunk ^ repeat_byte('/'));
    }
+   
+   template <char Char>
+   GLZ_ALWAYS_INLINE constexpr auto has_char(const uint64_t chunk) noexcept
+   {
+      return has_zero(chunk ^ repeat_byte(Char));
+   }
 
    GLZ_ALWAYS_INLINE constexpr uint64_t is_less_16(const uint64_t c) noexcept
    {
@@ -726,37 +732,92 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
-      size_t open_count = 1;
-      size_t close_count = 0;
-      while (true) {
+      size_t depth = 1;
+      
+      for (const auto fin = end - 7; it < fin;) {
+         uint64_t chunk;
+         std::memcpy(&chunk, it, 8);
+         const uint64_t test = has_quote(chunk) | has_forward_slash(chunk) | has_zero(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         if (test) {
+            it += (std::countr_zero(test) >> 3);
+            
+            switch (*it)
+            {
+               case '"': {
+                  skip_string<opts{}>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  break;
+               }
+               case '/': {
+                  skip_comment(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+                  break;
+               }
+               case open: {
+                  ++it;
+                  ++depth;
+                  break;
+               }
+               case close: {
+                  ++it;
+                  --depth;
+                  if (depth == 0) {
+                     return;
+                  }
+                  break;
+               }
+               default: {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+            }
+         }
+         else {
+            it += 8;
+         }
+      }
+      
+      // Tail end of buffer. Should be rare we even get here
+      while (it < end) {
          switch (*it) {
-         case '\0':
-            ctx.error = error_code::unexpected_end;
-            return;
-         case '/':
+         case '"': {
+            skip_string<opts{}>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            break;
+         }
+         case '/': {
             skip_comment(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
             break;
-         case '"':
-            skip_string<opts{}>(ctx, it, end);
-            break;
-         case open:
-            ++open_count;
+         }
+         case open: {
             ++it;
+            ++depth;
             break;
-         case close:
-            ++close_count;
+         }
+         case close: {
             ++it;
-            if (close_count >= open_count) {
+            --depth;
+            if (depth == 0) {
                return;
             }
             break;
-         default:
+         }
+         default: {
             ++it;
          }
+         }
       }
+      
+      ctx.error = error_code::unexpected_end;
    }
 
    GLZ_ALWAYS_INLINE constexpr bool is_numeric(const auto c) noexcept
