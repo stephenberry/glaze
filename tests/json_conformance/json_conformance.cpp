@@ -65,7 +65,8 @@ inline void should_fail()
       {
          empty_object obj{};
          expect(glz::read_json(obj, s));
-      } {
+      }
+      {
          glz::json_t obj{};
          expect(glz::read_json(obj, s));
       }

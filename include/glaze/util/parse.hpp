@@ -158,7 +158,7 @@ namespace glz::detail
    {
       return has_zero(chunk ^ repeat_byte('/'));
    }
-   
+
    template <char Char>
    GLZ_ALWAYS_INLINE constexpr auto has_char(const uint64_t chunk) noexcept
    {
@@ -205,7 +205,7 @@ namespace glz::detail
          return;
       skip_ws_no_pre_check<Opts>(ctx, it, end);
    }
-   
+
    GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
    {
       {
@@ -245,8 +245,8 @@ namespace glz::detail
             if (v[0] != v[1]) {
                return;
             }
-            //length -= n;
-            //ws += n;
+            // length -= n;
+            // ws += n;
             it += n;
          }
       }
@@ -733,54 +733,54 @@ namespace glz::detail
    {
       ++it;
       size_t depth = 1;
-      
+
       for (const auto fin = end - 7; it < fin;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
-         const uint64_t test = has_quote(chunk) | has_forward_slash(chunk) | has_zero(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         const uint64_t test = has_quote(chunk) | has_forward_slash(chunk) | has_zero(chunk) | has_char<open>(chunk) |
+                               has_char<close>(chunk);
          if (test) {
             it += (std::countr_zero(test) >> 3);
-            
-            switch (*it)
-            {
-               case '"': {
-                  skip_string<opts{}>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-                  break;
-               }
-               case '/': {
-                  skip_comment(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
-                  break;
-               }
-               case open: {
-                  ++it;
-                  ++depth;
-                  break;
-               }
-               case close: {
-                  ++it;
-                  --depth;
-                  if (depth == 0) {
-                     return;
-                  }
-                  break;
-               }
-               default: {
-                  ctx.error = error_code::unexpected_end;
+
+            switch (*it) {
+            case '"': {
+               skip_string<opts{}>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
+               break;
+            }
+            case '/': {
+               skip_comment(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               break;
+            }
+            case open: {
+               ++it;
+               ++depth;
+               break;
+            }
+            case close: {
+               ++it;
+               --depth;
+               if (depth == 0) {
+                  return;
+               }
+               break;
+            }
+            default: {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
             }
          }
          else {
             it += 8;
          }
       }
-      
+
       // Tail end of buffer. Should be rare we even get here
       while (it < end) {
          switch (*it) {
@@ -816,7 +816,7 @@ namespace glz::detail
          }
          }
       }
-      
+
       ctx.error = error_code::unexpected_end;
    }
 

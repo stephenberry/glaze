@@ -366,7 +366,7 @@ namespace glz
                               ++data;
                            }
                         }
-                        
+
                         ix += size_t(data - start);
                      }
 

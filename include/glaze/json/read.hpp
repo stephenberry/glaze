@@ -967,7 +967,7 @@ namespace glz
             match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            
+
             const auto ws_start = it;
             skip_ws_no_pre_check<Options>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
@@ -984,7 +984,7 @@ namespace glz
                }
                return;
             }
-            
+
             const size_t ws_size = size_t(it - ws_start);
 
             const auto n = value.size();
@@ -1000,11 +1000,11 @@ namespace glz
                   return;
                if (*it == ',') [[likely]] {
                   ++it;
-                  
+
                   if (ws_size && ws_size < size_t(end - it)) {
                      skip_matching_ws(ws_start, it, ws_size);
                   }
-                  
+
                   skip_ws_no_pre_check<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
@@ -1046,11 +1046,11 @@ namespace glz
                         return;
                      if (*it == ',') [[likely]] {
                         ++it;
-                        
+
                         if (ws_size && ws_size < size_t(end - it)) {
                            skip_matching_ws(ws_start, it, ws_size);
                         }
-                        
+
                         skip_ws_no_pre_check<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -1087,11 +1087,11 @@ namespace glz
                         return;
                      if (*it == ',') [[likely]] {
                         ++it;
-                        
+
                         if (ws_size && ws_size < size_t(end - it)) {
                            skip_matching_ws(ws_start, it, ws_size);
                         }
-                        
+
                         skip_ws_no_pre_check<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -1142,11 +1142,11 @@ namespace glz
                         return;
                      if (*it == ',') [[likely]] {
                         ++it;
-                        
+
                         if (ws_size && ws_size < size_t(end - it)) {
                            skip_matching_ws(ws_start, it, ws_size);
                         }
-                        
+
                         skip_ws_no_pre_check<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -1729,13 +1729,13 @@ namespace glz
                      match<','>(ctx, it);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     
+
                      if constexpr (num_members > 1 || !Opts.error_on_unknown_keys) {
                         if (ws_size && ws_size < size_t(end - it)) {
                            skip_matching_ws(ws_start, it, ws_size);
                         }
                      }
-                     
+
                      skip_ws_no_pre_check<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
@@ -2048,13 +2048,13 @@ namespace glz
                   match<','>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
-                  
+
                   if constexpr (num_members > 1 || !Opts.error_on_unknown_keys) {
                      if (ws_size && ws_size < size_t(end - it)) {
                         skip_matching_ws(ws_start, it, ws_size);
                      }
                   }
-                  
+
                   skip_ws_no_pre_check<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
