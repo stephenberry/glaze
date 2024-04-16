@@ -1530,8 +1530,6 @@ namespace glz
          }
 
          skip_ws_no_pre_check<Opts>(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
       }
 
       template <glz::opts Opts>
