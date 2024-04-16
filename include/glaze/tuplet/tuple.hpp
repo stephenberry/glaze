@@ -139,7 +139,6 @@ namespace glz
 
    // tuplet::detail::get_tuple_base implementation
    // tuplet::detail::apply_impl
-   // tuplet::detail::size_t_from_digits
    namespace tuplet::detail
    {
       template <class A, class... T>
@@ -156,13 +155,7 @@ namespace glz
       {
          return static_cast<F&&>(f)(static_cast<T&&>(t).identity_t<Bases>::value...);
       }
-      template <char... D>
-      constexpr size_t size_t_from_digits()
-      {
-         static_assert((('0' <= D && D <= '9') && ...), "Must be integral literal");
-         size_t num = 0;
-         return ((num = num * 10 + (D - '0')), ..., num);
-      }
+      
       template <class First, class>
       using first_t = First;
 
@@ -617,16 +610,6 @@ namespace glz
          return tuple<T&&...>{static_cast<T&&>(a)...};
       }
    } // namespace tuplet
-
-   // tuplet literals
-   namespace tuplet::literals
-   {
-      template <char... D>
-      constexpr auto operator""_tag() noexcept -> tag<detail::size_t_from_digits<D...>()>
-      {
-         return {};
-      }
-   } // namespace tuplet::literals
 } // namespace glz
 
 // std::tuple_size specialization
