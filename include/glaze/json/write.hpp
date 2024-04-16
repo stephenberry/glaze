@@ -326,11 +326,12 @@ namespace glz
                      {
                         const auto* c = str.data();
                         const auto* const e = c + n;
-                        const auto data = data_ptr(b);
+                        const auto start = data_ptr(b) + ix;
+                        auto data = start;
 
                         if (n > 7) {
                            for (const auto end_m7 = e - 7; c < end_m7;) {
-                              std::memcpy(data + ix, c, 8);
+                              std::memcpy(data, c, 8);
                               uint64_t chunk;
                               std::memcpy(&chunk, c, 8);
                               // We don't check for writing out invalid characters as this can be tested by the user if
@@ -341,14 +342,14 @@ namespace glz
                               if (test_chars) {
                                  const auto length = (std::countr_zero(test_chars) >> 3);
                                  c += length;
-                                 ix += length;
+                                 data += length;
 
-                                 std::memcpy(data + ix, &char_escape_table[uint8_t(*c)], 2);
-                                 ix += 2;
+                                 std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
+                                 data += 2;
                                  ++c;
                               }
                               else {
-                                 ix += 8;
+                                 data += 8;
                                  c += 8;
                               }
                            }
@@ -357,14 +358,16 @@ namespace glz
                         // Tail end of buffer. Uncommon for long strings.
                         for (; c < e; ++c) {
                            if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
-                              std::memcpy(data + ix, &escaped, 2);
-                              ix += 2;
+                              std::memcpy(data, &escaped, 2);
+                              data += 2;
                            }
                            else {
-                              std::memcpy(data + ix, c, 1);
-                              ++ix;
+                              std::memcpy(data, c, 1);
+                              ++data;
                            }
                         }
+                        
+                        ix += size_t(data - start);
                      }
 
                      dump_unchecked<'"'>(b, ix);
