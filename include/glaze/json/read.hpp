@@ -1665,7 +1665,7 @@ namespace glz
             }
             else {
                // Only used if error_on_missing_keys = true
-               [[maybe_unused]] bit_array<num_members> fields{};
+               bit_array<num_members * Opts.error_on_missing_keys> fields{};
 
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T> && num_members > 0) {
