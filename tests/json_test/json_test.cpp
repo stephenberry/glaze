@@ -4237,7 +4237,7 @@ suite get_sv = [] {
       auto x0 = glz::get_as_json<int, "/obj/x/0">(s);
       expect(x0 == 0);
    };
-   
+
    "get_as_json valid"_test = [] {
       std::string_view data = R"({ "data": [ {"a": true} ] })";
 
