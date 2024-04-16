@@ -3320,19 +3320,6 @@ suite char16_test = [] {
 
          expect(c == u'H');
       }
-
-      {
-         // TODO: Support non-ascii
-         /*char16_t c{};
-         glz::read_json(c, R"("∆")");
-
-         expect(c == u'∆');*/
-      }
-
-      /*std::basic_string<char16_t> x;
-      glz::read_json(x, "Hello World");
-
-      expect(x == u"Hello World");*/
    };
 };
 
@@ -4528,37 +4515,6 @@ break"])";
       expect(glz::validate_json(pass3) == glz::error_code::none);
    };
 };
-
-// TODO: Perhaps add bit field support
-/*struct bit_field_t
-{
-   uint32_t x : 27;
-   unsigned char : 0;
-   bool b : 1;
-   uint64_t i : 63;
-};
-
-template <>
-struct glz::meta<bit_field_t>
-{
-   using T = bit_field_t;
-   static constexpr auto value = object("x", getset{ [](auto& s) { return s.x; }, [](auto& s, auto value) { s.x = value;
-} });
-};
-
-suite bit_field_test = []
-{
-   "bit field"_test = []
-   {
-      bit_field_t s{};
-      std::string b = R"({"x":19,"b":true,"i":5})";
-      auto ec = glz::read_json(s, b);
-      expect(ec == glz::error_code::none);
-      expect(s.x == 19);
-      expect(s.b);
-      expect(s.i == 5);
-   };
-};*/
 
 struct StructE
 {

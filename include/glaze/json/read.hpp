@@ -967,7 +967,9 @@ namespace glz
             match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws_no_pre_check<Opts>(ctx, it, end);
+            
+            const auto ws_start = it;
+            skip_ws_no_pre_check<Options>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -982,6 +984,8 @@ namespace glz
                }
                return;
             }
+            
+            const size_t ws_size = size_t(it - ws_start);
 
             const auto n = value.size();
 
@@ -996,6 +1000,11 @@ namespace glz
                   return;
                if (*it == ',') [[likely]] {
                   ++it;
+                  
+                  if (ws_size && ws_size < size_t(end - it)) {
+                     skip_matching_ws(ws_start, it, ws_size);
+                  }
+                  
                   skip_ws_no_pre_check<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
@@ -1037,6 +1046,11 @@ namespace glz
                         return;
                      if (*it == ',') [[likely]] {
                         ++it;
+                        
+                        if (ws_size && ws_size < size_t(end - it)) {
+                           skip_matching_ws(ws_start, it, ws_size);
+                        }
+                        
                         skip_ws_no_pre_check<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -1073,6 +1087,11 @@ namespace glz
                         return;
                      if (*it == ',') [[likely]] {
                         ++it;
+                        
+                        if (ws_size && ws_size < size_t(end - it)) {
+                           skip_matching_ws(ws_start, it, ws_size);
+                        }
+                        
                         skip_ws_no_pre_check<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -1123,6 +1142,11 @@ namespace glz
                         return;
                      if (*it == ',') [[likely]] {
                         ++it;
+                        
+                        if (ws_size && ws_size < size_t(end - it)) {
+                           skip_matching_ws(ws_start, it, ws_size);
+                        }
+                        
                         skip_ws_no_pre_check<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -1525,13 +1549,7 @@ namespace glz
                   return;
             }
             match<'{'>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
          }
-
-         skip_ws_no_pre_check<Opts>(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
       }
 
       template <glz::opts Opts>
@@ -1595,6 +1613,7 @@ namespace glz
          GLZ_FLATTEN static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             parse_object_opening<Options>(ctx, it, end);
+            skip_ws<Options>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -1649,8 +1668,11 @@ namespace glz
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             parse_object_opening<Options>(ctx, it, end);
+            const auto ws_start = it;
+            skip_ws<Options>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
+            const size_t ws_size = size_t(it - ws_start);
 
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
@@ -1665,7 +1687,7 @@ namespace glz
             }
             else {
                // Only used if error_on_missing_keys = true
-               [[maybe_unused]] bit_array<num_members> fields{};
+               bit_array<num_members * Opts.error_on_missing_keys> fields{};
 
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T> && num_members > 0) {
@@ -1707,6 +1729,13 @@ namespace glz
                      match<','>(ctx, it);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
+                     
+                     if constexpr (num_members > 1 || !Opts.error_on_unknown_keys) {
+                        if (ws_size && ws_size < size_t(end - it)) {
+                           skip_matching_ws(ws_start, it, ws_size);
+                        }
+                     }
+                     
                      skip_ws_no_pre_check<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
@@ -1947,22 +1976,18 @@ namespace glz
          template <auto Options, string_literal tag = "">
          GLZ_FLATTEN static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            static constexpr auto num_members = [] {
-               if constexpr (reflectable<T>) {
-                  return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
-               }
-               else {
-                  return std::tuple_size_v<meta_t<T>>;
-               }
-            }();
+            static constexpr auto num_members = reflection_count<T>;
 
             if constexpr (num_members == 0) {
                static_assert(false_v<T>, "No members to read for partial read");
             }
 
             parse_object_opening<Options>(ctx, it, end);
+            const auto ws_start = it;
+            skip_ws<Options>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
+            const size_t ws_size = size_t(it - ws_start);
 
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
@@ -2016,12 +2041,20 @@ namespace glz
                   }
                   return;
                }
-               else if (first) [[unlikely]]
+               else if (first) [[unlikely]] {
                   first = false;
+               }
                else [[likely]] {
                   match<','>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
+                  
+                  if constexpr (num_members > 1 || !Opts.error_on_unknown_keys) {
+                     if (ws_size && ws_size < size_t(end - it)) {
+                        skip_matching_ws(ws_start, it, ws_size);
+                     }
+                  }
+                  
                   skip_ws_no_pre_check<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
