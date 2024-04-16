@@ -49,6 +49,10 @@ auto z = glz::get_as_json<double, "/obj/x">(s);
 expect(z == 5.5);
 ```
 
+> [!IMPORTANT]
+>
+> `get_as_json` does not validate JSON beyond the targeted value. This is to avoid parsing the entire document once the targeted value is reached.
+
 ### get_sv_json
 
 `get_sv_json` allows you to get a `std::string_view` to a targeted value within an input buffer. This can be more efficient to check values and handle custom parsing than constructing a new value with `get_as_json`.
@@ -58,6 +62,10 @@ std::string s = R"({"obj":{"x":5.5}})";
 auto view = glz::get_sv_json<"/obj/x">(s);
 expect(view == "5.5");
 ```
+
+> [!IMPORTANT]
+>
+> `get_sv_json` does not validate JSON beyond the targeted value. This is to avoid parsing the entire document once the targeted value is reached.
 
 ## Seek
 
