@@ -4229,13 +4229,28 @@ suite get_sv = [] {
       expect(view == "5.5");
    };
 
-   "get_sv_arry"_test = [] {
+   "get_sv_array"_test = [] {
       std::string s = R"({"obj":{"x":[0,1,2]}})";
 
       auto x = glz::get_as_json<std::vector<int>, "/obj/x">(s);
       expect(x == std::vector<int>{0, 1, 2});
       auto x0 = glz::get_as_json<int, "/obj/x/0">(s);
       expect(x0 == 0);
+   };
+   
+   "get_as_json valid"_test = [] {
+      std::string_view data = R"({ "data": [ {"a": true;} ] })";
+
+      auto a = glz::get_as_json<bool, "/data/0/a">(data);
+      expect(a.has_value()) << glz::format_error(a.error(), data);
+      expect(a.value());
+   };
+   
+   "get_as_json invalid"_test = [] {
+      std::string_view data = R"({ "data": [ {"a": true} ] })";
+
+      auto a = glz::get_as_json<bool, "/data/0/a">(data);
+      expect(!a.has_value());
    };
 
    "action"_test = [] {

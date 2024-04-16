@@ -606,6 +606,10 @@ namespace glz
          result_t ret;
 
          for_each<N>([&](auto I) {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            
             static constexpr auto key = std::get<I>(tokens);
             if constexpr (maybe_numeric_key(key)) {
                switch (*it) {
@@ -613,11 +617,26 @@ namespace glz
                   ++it;
                   while (true) {
                      skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
                      const auto k = parse_key(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
                      if (cx_string_cmp<key>(k)) {
                         skip_ws<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
                         match<':'>(ctx, it);
-                        skip_ws<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
+                        skip_ws_no_pre_check<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
 
                         if constexpr (I == (N - 1)) {
                            ret = parse_value<Opts>(ctx, it, end);
@@ -626,9 +645,11 @@ namespace glz
                      }
                      else {
                         skip_value<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
                         if (*it != ',') {
-                           ret = unexpected(
-                              parse_error{error_code::key_not_found, static_cast<size_t>(std::distance(start, it))});
+                           ctx.error = error_code::key_not_found;
                            return;
                         }
                         ++it;
@@ -643,8 +664,7 @@ namespace glz
                      for_each<n.value()>([&](auto) {
                         skip_value<Opts>(ctx, it, end);
                         if (*it != ',') {
-                           ret = unexpected(parse_error{error_code::array_element_not_found,
-                                                        static_cast<size_t>(std::distance(start, it))});
+                           ctx.error = error_code::array_element_not_found;
                            return;
                         }
                         ++it;
@@ -652,8 +672,7 @@ namespace glz
                      ret = parse_value<Opts>(ctx, it, end);
                   }
                   else {
-                     ret = unexpected(parse_error{error_code::array_element_not_found,
-                                                  static_cast<size_t>(std::distance(start, it))});
+                     ctx.error = error_code::array_element_not_found;
                      return;
                   }
                }
@@ -661,20 +680,36 @@ namespace glz
             }
             else {
                match<'{'>(ctx, it);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                while (true) {
-                  skip_ws<Opts>(ctx, it, end);
+                  skip_ws_no_pre_check<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   const auto k = parse_key(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
-                     ret = unexpected(
-                        parse_error{error_code::syntax_error, static_cast<size_t>(std::distance(start, it))});
+                     return;
+                  }
+                  if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
                   else {
                      if (cx_string_cmp<key>(k)) {
                         skip_ws<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
                         match<':'>(ctx, it);
-                        skip_ws<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
+                        skip_ws_no_pre_check<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
 
                         if constexpr (I == (N - 1)) {
                            ret = parse_value<Opts>(ctx, it, end);
@@ -683,9 +718,11 @@ namespace glz
                      }
                      else {
                         skip_value<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
                         if (*it != ',') {
-                           ret = unexpected(
-                              parse_error{error_code::key_not_found, static_cast<size_t>(std::distance(start, it))});
+                           ctx.error = error_code::key_not_found;
                            return;
                         }
                         ++it;
@@ -694,6 +731,10 @@ namespace glz
                }
             }
          });
+         
+         if (bool(ctx.error)) [[unlikely]] {
+            return result_t{unexpected(parse_error{ctx.error, size_t(it - start)})};
+         }
 
          return ret;
       }
