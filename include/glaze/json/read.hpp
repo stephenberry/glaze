@@ -2398,8 +2398,8 @@ namespace glz
                                           using V = std::decay_t<decltype(v)>;
                                           constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
                                           if constexpr (is_object) {
-                                             from_json<V>::template op<opening_handled<Opts>(), tag_literal>(
-                                                v, ctx, it, end);
+                                             from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it,
+                                                                                                             end);
                                           }
                                        },
                                        value);
@@ -2411,7 +2411,7 @@ namespace glz
                                  }
                               }
                            }
-                           
+
                            auto deduction_it = deduction_map.find(key);
                            if (deduction_it != deduction_map.end()) [[likely]] {
                               possible_types &= deduction_it->second;
