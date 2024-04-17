@@ -9,11 +9,14 @@
 #include <utility>
 #include <vector>
 
-namespace glz::detail
+namespace glz
 {
    template <class T, class... U>
    concept is_any_of = (std::same_as<T, U> || ...);
-   
+}
+
+namespace glz::detail
+{
    template <class T>
    concept char_t = std::same_as<std::decay_t<T>, char> || std::same_as<std::decay_t<T>, char16_t> ||
                     std::same_as<std::decay_t<T>, char32_t> || std::same_as<std::decay_t<T>, wchar_t>;
