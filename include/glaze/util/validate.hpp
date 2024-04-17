@@ -7,6 +7,9 @@
 #include <optional>
 #include <string>
 
+#include "glaze/core/write_chars.hpp"
+#include "glaze/util/dump.hpp"
+
 namespace glz
 {
    namespace detail
@@ -88,34 +91,44 @@ namespace glz
       inline std::string generate_error_string(const std::string_view error, const source_info& info,
                                                const std::string_view filename = "")
       {
-         std::string s{};
-         s.reserve(error.size() + info.context.size() + filename.size() + 128);
+         std::string b{};
+         b.resize(error.size() + info.context.size() + filename.size() + 128);
+         size_t ix{};
 
          if (!filename.empty()) {
-            s += filename;
-            s += ":";
+            dump(filename, b, ix);
+            dump(':', b, ix);
          }
 
-         s += std::to_string(info.line) + ":" + std::to_string(info.column) + ": ";
-         s += error;
-         s += "\n";
+         glz::context ctx{};
+         write_chars::op<opts{}>(info.line, ctx, b, ix);
+         dump(':', b, ix);
+         write_chars::op<opts{}>(info.column, ctx, b, ix);
+         dump(": ", b, ix);
+         dump(error, b, ix);
+         dump('\n', b, ix);
          if (info.front_truncation) {
             if (info.rear_truncation) {
-               s += "..." + info.context + "...\n   ";
+               dump("...", b, ix);
+               dump(info.context, b, ix);
+               dump("...\n   ", b, ix);
             }
             else {
-               s += "..." + info.context + "\n   ";
+               dump("...", b, ix);
+               dump(info.context, b, ix);
+               dump("\n   ", b, ix);
             }
          }
          else {
-            s += "   " + info.context + "\n   ";
+            dump("   ", b, ix);
+            dump(info.context, b, ix);
+            dump("\n   ", b, ix);
          }
-         for (size_t i = 0; i < info.column - 1 - info.front_truncation; ++i) {
-            s += " ";
-         }
-         s += "^";
+         dumpn<' '>(info.column - 1 - info.front_truncation, b, ix);
+         dump('^', b, ix);
 
-         return s;
+         b.resize(ix);
+         return b;
       }
    }
 }

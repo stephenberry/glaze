@@ -6,9 +6,10 @@
 #include <charconv>
 #include <type_traits>
 
-#include "glaze/core/common.hpp"
+#include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/dtoa.hpp"
+#include "glaze/util/dump.hpp"
 #include "glaze/util/itoa.hpp"
 
 namespace glz::detail

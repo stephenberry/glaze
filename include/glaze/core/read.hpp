@@ -8,7 +8,6 @@
 #include "glaze/api/std/span.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/util/parse.hpp"
-#include "glaze/util/validate.hpp"
 
 namespace glz
 {

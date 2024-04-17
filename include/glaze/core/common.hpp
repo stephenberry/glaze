@@ -23,6 +23,7 @@
 #include "glaze/util/tuple.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/utility.hpp"
+#include "glaze/util/validate.hpp"
 #include "glaze/util/variant.hpp"
 
 namespace glz
@@ -94,9 +95,6 @@ namespace glz
    template <class... T>
    overload(T...) -> overload<T...>;
 
-   template <class T, class... U>
-   concept is_any_of = (std::same_as<T, U> || ...);
-
    struct hidden
    {};
 
@@ -145,47 +143,6 @@ namespace glz
 
    template <class T>
    concept is_includer = requires(T t) { requires T::glaze_includer == true; };
-
-   template <class T>
-   concept range = requires(T& t) {
-      requires !std::same_as<void, decltype(t.begin())>;
-      requires !std::same_as<void, decltype(t.end())>;
-      requires std::input_iterator<decltype(t.begin())>;
-   };
-
-   // range like
-   template <class T>
-   using iterator_t = decltype(std::begin(std::declval<T&>()));
-
-   template <range R>
-   using range_value_t = std::iter_value_t<iterator_t<R>>;
-
-   template <range R>
-   [[nodiscard]] constexpr bool empty_range(R&& rng)
-   {
-#ifdef __cpp_lib_ranges
-      return std::ranges::empty(rng);
-#else
-      // in lieu of std::ranges::empty
-      if constexpr (requires() {
-                       {
-                          rng.empty()
-                       } -> std::convertible_to<bool>;
-                    }) {
-         return rng.empty();
-      }
-      else if constexpr (requires() {
-                            {
-                               rng.size()
-                            } -> std::same_as<std::size_t>;
-                         }) {
-         return rng.size() == std::size_t{0};
-      }
-      else {
-         return std::cbegin(rng) == std::cend(rng);
-      }
-#endif
-   }
 
    template <class T>
    concept is_member_function_pointer = std::is_member_function_pointer_v<T>;
@@ -267,20 +224,6 @@ namespace glz
    namespace detail
    {
       template <class T>
-      concept char_t = std::same_as<std::decay_t<T>, char> || std::same_as<std::decay_t<T>, char16_t> ||
-                       std::same_as<std::decay_t<T>, char32_t> || std::same_as<std::decay_t<T>, wchar_t>;
-
-      template <class T>
-      concept bool_t =
-         std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>;
-
-      template <class T>
-      concept int_t = std::integral<std::decay_t<T>> && !char_t<std::decay_t<T>> && !bool_t<T>;
-
-      template <class T>
-      concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
-
-      template <class T>
       concept constructible = requires { meta<std::decay_t<T>>::construct; } || local_construct_t<std::decay_t<T>>;
 
       template <class T>
@@ -336,9 +279,6 @@ namespace glz
                              std::same_as<T, std::vector<bool>::const_reference>;
 
       template <class T>
-      concept vector_like = resizeable<T> && accessible<T> && has_data<T>;
-
-      template <class T>
       concept is_no_reflect = requires(T t) { requires T::glaze_reflect == false; };
 
       template <class T>
@@ -347,12 +287,6 @@ namespace glz
                                       std::bool_constant<(std::decay_t<T>{}.size(), true)>()
                                    } -> std::same_as<std::true_type>;
                                 } && std::decay_t<T>{}.size() > 0);
-
-      template <class T>
-      concept is_float128 = requires(T x) {
-         requires sizeof(x) == 16;
-         requires std::floating_point<T>;
-      };
 
       template <class T>
       constexpr size_t get_size() noexcept
@@ -927,6 +861,19 @@ namespace glz
    {
       using Tuple = std::decay_t<decltype(glz::tuplet::tuple{conv_sv(args)...})>;
       return glz::detail::Flags{group_builder<Tuple>::op(glz::tuplet::tuple{conv_sv(args)...})};
+   }
+   
+   template <detail::glaze_flags_t T>
+   consteval auto byte_length() noexcept
+   {
+      constexpr auto N = std::tuple_size_v<meta_t<T>>;
+
+      if constexpr (N % 8 == 0) {
+         return N / 8;
+      }
+      else {
+         return (N / 8) + 1;
+      }
    }
 }
 
