@@ -7,8 +7,6 @@
 #include <iterator>
 #include <string_view>
 
-#include "glaze/util/validate.hpp"
-
 namespace glz
 {
    enum class error_code : uint32_t {

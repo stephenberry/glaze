@@ -7,7 +7,6 @@
 
 #include "glaze/core/common.hpp"
 #include "glaze/core/opts.hpp"
-#include "glaze/util/validate.hpp"
 
 namespace glz
 {
@@ -16,17 +15,6 @@ namespace glz
 
    template <class Buffer>
    concept output_buffer = range<Buffer> && (sizeof(range_value_t<Buffer>) == sizeof(char));
-
-   template <class T>
-   [[nodiscard]] GLZ_ALWAYS_INLINE auto data_ptr(T& buffer) noexcept
-   {
-      if constexpr (detail::resizeable<T>) {
-         return buffer.data();
-      }
-      else {
-         return buffer;
-      }
-   }
 
    // For writing to a std::string, std::vector<char>, std::deque<char> and the like
    template <opts Opts, class T, output_buffer Buffer>

@@ -5,12 +5,24 @@
 
 #include <bit>
 #include <cstring>
+#include <string_view>
 #include <span>
 
-#include "glaze/core/write.hpp"
+#include "glaze/concepts/container_concepts.hpp"
 
 namespace glz::detail
 {
+   template <class T>
+   [[nodiscard]] GLZ_ALWAYS_INLINE auto data_ptr(T& buffer) noexcept
+   {
+      if constexpr (detail::resizeable<T>) {
+         return buffer.data();
+      }
+      else {
+         return buffer;
+      }
+   }
+   
    GLZ_ALWAYS_INLINE void dump(const char c, vector_like auto& b, auto& ix) noexcept
    {
       if (ix == b.size()) [[unlikely]] {
@@ -290,18 +302,5 @@ namespace glz::detail
 
       std::memcpy(b.data() + ix, bytes.data(), N);
       ix += N;
-   }
-
-   template <glaze_flags_t T>
-   consteval auto byte_length() noexcept
-   {
-      constexpr auto N = std::tuple_size_v<meta_t<T>>;
-
-      if constexpr (N % 8 == 0) {
-         return N / 8;
-      }
-      else {
-         return (N / 8) + 1;
-      }
    }
 }

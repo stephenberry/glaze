@@ -5,10 +5,38 @@
 
 #include <concepts>
 #include <cstdint>
+#include <ranges>
 #include <utility>
+#include <vector>
+
+namespace glz
+{
+   template <class T, class... U>
+   concept is_any_of = (std::same_as<T, U> || ...);
+}
 
 namespace glz::detail
 {
+   template <class T>
+   concept char_t = std::same_as<std::decay_t<T>, char> || std::same_as<std::decay_t<T>, char16_t> ||
+                    std::same_as<std::decay_t<T>, char32_t> || std::same_as<std::decay_t<T>, wchar_t>;
+
+   template <class T>
+   concept bool_t =
+      std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>;
+
+   template <class T>
+   concept int_t = std::integral<std::decay_t<T>> && !char_t<std::decay_t<T>> && !bool_t<T>;
+
+   template <class T>
+   concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
+   
+   template <class T>
+   concept is_float128 = requires(T x) {
+      requires sizeof(x) == 16;
+      requires std::floating_point<T>;
+   };
+   
    template <typename T>
    concept complex_t = requires(T a, T b) {
       {
@@ -106,6 +134,9 @@ namespace glz::detail
          container[size_t{}]
       } -> std::same_as<typename T::reference>;
    };
+   
+   template <class T>
+   concept vector_like = resizeable<T> && accessible<T> && has_data<T>;
 
    template <class T>
    concept map_subscriptable = requires(T container) {
@@ -166,4 +197,48 @@ namespace glz::detail
          path.has_extension()
       } -> std::convertible_to<bool>;
    };
+}
+
+namespace glz
+{
+   template <class T>
+   concept range = requires(T& t) {
+      requires !std::same_as<void, decltype(t.begin())>;
+      requires !std::same_as<void, decltype(t.end())>;
+      requires std::input_iterator<decltype(t.begin())>;
+   };
+   
+   // range like
+   template <class T>
+   using iterator_t = decltype(std::begin(std::declval<T&>()));
+   
+   template <range R>
+   using range_value_t = std::iter_value_t<iterator_t<R>>;
+
+   template <range R>
+   [[nodiscard]] constexpr bool empty_range(R&& rng)
+   {
+#ifdef __cpp_lib_ranges
+      return std::ranges::empty(rng);
+#else
+      // in lieu of std::ranges::empty
+      if constexpr (requires() {
+                       {
+                          rng.empty()
+                       } -> std::convertible_to<bool>;
+                    }) {
+         return rng.empty();
+      }
+      else if constexpr (requires() {
+                            {
+                               rng.size()
+                            } -> std::same_as<std::size_t>;
+                         }) {
+         return rng.size() == std::size_t{0};
+      }
+      else {
+         return std::cbegin(rng) == std::cend(rng);
+      }
+#endif
+   }
 }
