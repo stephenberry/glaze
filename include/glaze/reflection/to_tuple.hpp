@@ -1320,7 +1320,7 @@ namespace glz
       constexpr auto get_ptr(T&& t) noexcept
       {
          auto& p = std::get<N>(to_tuple(t));
-         return ptr_t<std::decay_t<decltype(p)>>{&p};
+         return ptr_t<std::remove_cvref_t<decltype(p)>>{&p};
       }
    }
 }

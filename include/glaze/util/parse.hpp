@@ -19,23 +19,57 @@
 
 namespace glz::detail
 {
-   // clang-format off
-   constexpr std::array<char, 256> char_unescape_table = { //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, '"', 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, '/', 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, '\\', 0, 0, 0, 0, 0, '\b', 0, //
-      0, 0, '\f', 0, 0, 0, 0, 0, 0, 0, //
-      '\n', 0, 0, 0, '\r', 0, '\t', 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0 //
-   };
-   // clang-format on
+   constexpr std::array<bool, 128> numeric_ascii_table = [] {
+      std::array<bool, 128> t{};
+      t['0'] = true;
+      t['1'] = true;
+      t['2'] = true;
+      t['3'] = true;
+      t['4'] = true;
+      t['5'] = true;
+      t['6'] = true;
+      t['7'] = true;
+      t['8'] = true;
+      t['9'] = true;
+      t['.'] = true;
+      t['+'] = true;
+      t['-'] = true;
+      t['e'] = true;
+      t['E'] = true;
+      return t;
+   }();
+
+   constexpr std::array<char, 256> char_unescape_table = [] {
+      std::array<char, 256> t{};
+      t['"'] = '"';
+      t['/'] = '/';
+      t['\\'] = '\\';
+      t['b'] = '\b';
+      t['f'] = '\f';
+      t['n'] = '\n';
+      t['r'] = '\r';
+      t['t'] = '\t';
+      return t;
+   }();
+
+   constexpr std::array<bool, 128> ascii_whitespace_table = [] {
+      std::array<bool, 128> t{};
+      t['\n'] = true;
+      t['\t'] = true;
+      t['\r'] = true;
+      t[' '] = true;
+      return t;
+   }();
+
+   constexpr std::array<bool, 128> ascii_whitespace_comment_table = [] {
+      std::array<bool, 128> t{};
+      t['\n'] = true;
+      t['\t'] = true;
+      t['\r'] = true;
+      t[' '] = true;
+      t['/'] = true;
+      return t;
+   }();
 
    // assumes null terminated
    template <char c>
@@ -75,10 +109,6 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE void skip_comment(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (bool(ctx.error)) [[unlikely]] {
-         return;
-      }
-
       ++it;
       if (it == end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
@@ -104,9 +134,10 @@ namespace glz::detail
       }
    }
 
-   consteval uint64_t repeat_byte(char c)
+   template <class T>
+   consteval uint64_t repeat_byte(const T repeat)
    {
-      const auto byte = uint8_t(c);
+      const auto byte = uint8_t(repeat);
       uint64_t res{};
       res |= uint64_t(byte) << 56;
       res |= uint64_t(byte) << 48;
@@ -139,57 +170,41 @@ namespace glz::detail
       return has_zero(chunk ^ repeat_byte(' '));
    }
 
-   GLZ_ALWAYS_INLINE constexpr auto has_forward_slash(const uint64_t chunk) noexcept
+   template <char Char>
+   GLZ_ALWAYS_INLINE constexpr auto has_char(const uint64_t chunk) noexcept
    {
-      return has_zero(chunk ^ repeat_byte('/'));
+      return has_zero(chunk ^ repeat_byte(Char));
    }
 
    GLZ_ALWAYS_INLINE constexpr uint64_t is_less_16(const uint64_t c) noexcept
    {
-      return has_zero(c & 0b1111000011110000111100001111000011110000111100001111000011110000);
+      return has_zero(c & repeat_byte(0b11110000));
    }
 
    GLZ_ALWAYS_INLINE constexpr uint64_t is_greater_15(const uint64_t c) noexcept
    {
-      return (c & 0b1111000011110000111100001111000011110000111100001111000011110000);
+      return (c & repeat_byte(0b11110000));
    }
 
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws_no_pre_check(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.force_conformance) {
-         while (true) {
-            switch (*it) {
-            case '\t':
-            case '\n':
-            case '\r':
-            case ' ':
-               ++it;
-               break;
-            case '/': {
+         while (ascii_whitespace_comment_table[*it]) {
+            if (*it == '/') [[unlikely]] {
                skip_comment(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               break;
             }
-            default:
-               return;
+            else [[likely]] {
+               ++it;
             }
          }
       }
       else {
-         while (true) {
-            switch (*it) {
-            case '\t':
-            case '\n':
-            case '\r':
-            case ' ':
-               ++it;
-               break;
-            default:
-               return;
-            }
+         while (ascii_whitespace_table[*it]) {
+            ++it;
          }
       }
    }
@@ -197,9 +212,61 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (ctx.error == error_code::none) [[likely]] {
-         skip_ws_no_pre_check<Opts>(ctx, it, end);
+      if (bool(ctx.error)) [[unlikely]]
+         return;
+      skip_ws_no_pre_check<Opts>(ctx, it, end);
+   }
+
+   GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
+   {
+      {
+         constexpr uint64_t n{sizeof(uint64_t)};
+         while (length >= n) {
+            uint64_t v[2];
+            std::memcpy(v, ws, n);
+            std::memcpy(v + 1, it, n);
+            if (v[0] != v[1]) {
+               return;
+            }
+            length -= n;
+            ws += n;
+            it += n;
+         }
       }
+      {
+         constexpr uint64_t n{sizeof(uint32_t)};
+         if (length >= n) {
+            uint32_t v[2];
+            std::memcpy(v, ws, n);
+            std::memcpy(v + 1, it, n);
+            if (v[0] != v[1]) {
+               return;
+            }
+            length -= n;
+            ws += n;
+            it += n;
+         }
+      }
+      {
+         constexpr uint64_t n{sizeof(uint16_t)};
+         if (length >= n) {
+            uint16_t v[2];
+            std::memcpy(v, ws, n);
+            std::memcpy(v + 1, it, n);
+            if (v[0] != v[1]) {
+               return;
+            }
+            // length -= n;
+            // ws += n;
+            it += n;
+         }
+      }
+      // We have to call a whitespace check after this function
+      // in case the whitespace is mismatching.
+      // So, we forgo this check as to not duplicate.
+      /*if (length && *ws == *it) {
+         ++it;
+      }*/
    }
 
    GLZ_ALWAYS_INLINE void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
@@ -231,9 +298,7 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-
-      auto* pc = std::memchr(it, '"', std::distance(it, end));
+      const auto* pc = std::memchr(it, '"', std::distance(it, end));
       if (pc) [[likely]] {
          it = reinterpret_cast<std::decay_t<decltype(it)>>(pc);
          return;
@@ -253,7 +318,7 @@ namespace glz::detail
             uint64_t chunk;
             std::memcpy(&chunk, it, 8);
             uint64_t test_chars = has_quote(chunk);
-            escaped |= has_escape(chunk);
+            escaped |= static_cast<bool>(has_escape(chunk));
             if (test_chars) {
                it += (std::countr_zero(test_chars) >> 3);
 
@@ -676,60 +741,91 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
-      size_t open_count = 1;
-      size_t close_count = 0;
-      while (true) {
+      size_t depth = 1;
+
+      for (const auto fin = end - 7; it < fin;) {
+         uint64_t chunk;
+         std::memcpy(&chunk, it, 8);
+         const uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         if (test) {
+            it += (std::countr_zero(test) >> 3);
+
+            switch (*it) {
+            case '"': {
+               skip_string<opts{}>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               break;
+            }
+            case '/': {
+               skip_comment(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               break;
+            }
+            case open: {
+               ++it;
+               ++depth;
+               break;
+            }
+            case close: {
+               ++it;
+               --depth;
+               if (depth == 0) {
+                  return;
+               }
+               break;
+            }
+            default: {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            }
+         }
+         else {
+            it += 8;
+         }
+      }
+
+      // Tail end of buffer. Should be rare we even get here
+      while (it < end) {
          switch (*it) {
-         case '\0':
-            ctx.error = error_code::unexpected_end;
-            return;
-         case '/':
+         case '"': {
+            skip_string<opts{}>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+            break;
+         }
+         case '/': {
             skip_comment(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
             break;
-         case '"':
-            skip_string<opts{}>(ctx, it, end);
-            break;
-         case open:
-            ++open_count;
+         }
+         case open: {
             ++it;
+            ++depth;
             break;
-         case close:
-            ++close_count;
+         }
+         case close: {
             ++it;
-            if (close_count >= open_count) {
+            --depth;
+            if (depth == 0) {
                return;
             }
             break;
-         default:
+         }
+         default: {
             ++it;
          }
+         }
       }
-   }
 
-   GLZ_ALWAYS_INLINE constexpr bool is_numeric(const auto c) noexcept
-   {
-      switch (c) {
-      case '0':
-      case '1':
-      case '2':
-      case '3': //
-      case '4':
-      case '5':
-      case '6':
-      case '7': //
-      case '8':
-      case '9': //
-      case '.':
-      case '+':
-      case '-': //
-      case 'e':
-      case 'E': //
-         return true;
-      }
-      return false;
+      ctx.error = error_code::unexpected_end;
    }
 
    inline constexpr std::optional<uint64_t> stoui(const std::string_view s) noexcept
@@ -794,7 +890,9 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.force_conformance) {
-         it = std::find_if_not(it + 1, end, is_numeric<char>);
+         while (numeric_ascii_table[*it]) {
+            ++it;
+         }
       }
       else {
          skip_number_with_validation(ctx, it, end);

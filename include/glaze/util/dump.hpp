@@ -4,12 +4,25 @@
 #pragma once
 
 #include <bit>
+#include <cstring>
 #include <span>
+#include <string_view>
 
-#include "glaze/core/write.hpp"
+#include "glaze/concepts/container_concepts.hpp"
 
 namespace glz::detail
 {
+   template <class T>
+   [[nodiscard]] GLZ_ALWAYS_INLINE auto data_ptr(T& buffer) noexcept
+   {
+      if constexpr (detail::resizeable<T>) {
+         return buffer.data();
+      }
+      else {
+         return buffer;
+      }
+   }
+
    GLZ_ALWAYS_INLINE void dump(const char c, vector_like auto& b, auto& ix) noexcept
    {
       if (ix == b.size()) [[unlikely]] {
@@ -70,6 +83,18 @@ namespace glz::detail
       ++ix;
    }
 
+   GLZ_ALWAYS_INLINE void dump_unchecked(const char c, auto* b, auto& ix) noexcept
+   {
+      b[ix] = c;
+      ++ix;
+   }
+
+   GLZ_ALWAYS_INLINE void dump_unchecked(const char c, vector_like auto& b, auto& ix) noexcept
+   {
+      b[ix] = c;
+      ++ix;
+   }
+
    GLZ_ALWAYS_INLINE void dump_unchecked(const sv str, vector_like auto& b, auto& ix) noexcept
    {
       const auto n = str.size();
@@ -91,12 +116,6 @@ namespace glz::detail
       static constexpr auto n = s.size();
       std::memcpy(b, s.data(), n);
       b += n;
-   }
-
-   template <char c>
-   GLZ_ALWAYS_INLINE void dumpn(size_t n, char*& b) noexcept
-   {
-      std::fill_n(b, n, c);
    }
 
    template <string_literal str>
@@ -124,13 +143,19 @@ namespace glz::detail
    }
 
    template <char c>
+   GLZ_ALWAYS_INLINE void dumpn(size_t n, char*& b) noexcept
+   {
+      std::memset(b, c, n);
+   }
+
+   template <char c>
    GLZ_ALWAYS_INLINE void dumpn(size_t n, vector_like auto& b, auto& ix) noexcept
    {
       if (ix + n > b.size()) [[unlikely]] {
          b.resize((std::max)(b.size() * 2, ix + n));
       }
 
-      std::fill_n(b.data() + ix, n, c);
+      std::memset(b.data() + ix, c, n);
       ix += n;
    }
 
@@ -277,18 +302,5 @@ namespace glz::detail
 
       std::memcpy(b.data() + ix, bytes.data(), N);
       ix += N;
-   }
-
-   template <glaze_flags_t T>
-   consteval auto byte_length() noexcept
-   {
-      constexpr auto N = std::tuple_size_v<meta_t<T>>;
-
-      if constexpr (N % 8 == 0) {
-         return N / 8;
-      }
-      else {
-         return (N / 8) + 1;
-      }
    }
 }

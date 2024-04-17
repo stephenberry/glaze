@@ -16,19 +16,23 @@ namespace glz
          constexpr auto N = std::tuple_size_v<meta_t<T>>;
 
          bool equal = true;
-         for_each<N>([&](auto I) {
+         for_each_short_circuit<N>([&](auto I) {
             auto& l = detail::get_member(lhs, get<1>(get<I>(meta_v<T>)));
             auto& r = detail::get_member(rhs, get<1>(get<I>(meta_v<T>)));
             using V = std::decay_t<decltype(l)>;
             if constexpr (std::floating_point<V> && requires { meta<std::decay_t<T>>::compare_epsilon; }) {
                if (std::abs(l - r) >= meta<std::decay_t<T>>::compare_epsilon) {
                   equal = false;
+                  return true; // exit
                }
+               return false; // continue
             }
             else {
                if (l != r) {
                   equal = false;
+                  return true; // exit
                }
+               return false; // continue
             }
          });
 

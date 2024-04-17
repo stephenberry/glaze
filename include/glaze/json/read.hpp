@@ -6,7 +6,6 @@
 #include <charconv>
 #include <climits>
 #include <cwchar>
-#include <deque>
 #include <filesystem>
 #include <iterator>
 #include <locale>
@@ -49,16 +48,6 @@ namespace glz
          return buffer;
       }
 
-      template <class T = void>
-      struct from_json
-      {};
-
-      template <auto Opts, class T, class Ctx, class It0, class It1>
-      concept read_json_invocable = requires(T&& value, Ctx&& ctx, It0&& it, It1&& end) {
-         from_json<std::remove_cvref_t<T>>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx),
-                                                              std::forward<It0>(it), std::forward<It1>(end));
-      };
-
       template <>
       struct read<json>
       {
@@ -75,14 +64,9 @@ namespace glz
                }
             }
             else {
-               if constexpr (read_json_invocable<Opts, T, Ctx, It0, It1>) {
-                  using V = std::remove_cvref_t<T>;
-                  from_json<V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
-                                                  std::forward<It1>(end));
-               }
-               else {
-                  static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
-               }
+               using V = std::remove_cvref_t<T>;
+               from_json<V>::template op<Opts>(std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<It0>(it),
+                                               std::forward<It1>(end));
             }
          }
 
@@ -971,7 +955,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Options.ws_handled) {
                skip_ws<Options>(ctx, it, end);
@@ -983,7 +967,9 @@ namespace glz
             match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws_no_pre_check<Opts>(ctx, it, end);
+
+            const auto ws_start = it;
+            skip_ws_no_pre_check<Options>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -999,6 +985,8 @@ namespace glz
                return;
             }
 
+            const size_t ws_size = size_t(it - ws_start);
+
             const auto n = value.size();
 
             auto value_it = value.begin();
@@ -1012,6 +1000,11 @@ namespace glz
                   return;
                if (*it == ',') [[likely]] {
                   ++it;
+
+                  if (ws_size && ws_size < size_t(end - it)) {
+                     skip_matching_ws(ws_start, it, ws_size);
+                  }
+
                   skip_ws_no_pre_check<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
@@ -1039,6 +1032,9 @@ namespace glz
                if constexpr (has_reserve<T> && has_capacity<T>) {
                   // If we can reserve memmory, like std::vector, then we want to check the capacity
                   // and use a temporary buffer if the capacity needs to grow
+                  if (value.capacity() == 0) {
+                     value.reserve(1); // we want to directly use our vector for the first element
+                  }
                   const auto capacity = value.capacity();
                   for (size_t i = value.size(); i < capacity; ++i) {
                      // emplace_back while we have capacity
@@ -1050,6 +1046,11 @@ namespace glz
                         return;
                      if (*it == ',') [[likely]] {
                         ++it;
+
+                        if (ws_size && ws_size < size_t(end - it)) {
+                           skip_matching_ws(ws_start, it, ws_size);
+                        }
+
                         skip_ws_no_pre_check<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -1064,9 +1065,21 @@ namespace glz
                      }
                   }
 
-                  std::deque<typename T::value_type> intermediate{};
+                  using value_type = typename T::value_type;
+
+                  std::vector<std::vector<value_type>> intermediate;
+                  intermediate.reserve(48);
+                  auto* active = &intermediate.emplace_back();
+                  active->reserve(2);
                   while (it < end) {
-                     read<json>::op<ws_handled<Opts>()>(intermediate.emplace_back(), ctx, it, end);
+                     if (active->size() == active->capacity()) {
+                        // we want to populate the next vector
+                        const auto former_capacity = active->capacity();
+                        active = &intermediate.emplace_back();
+                        active->reserve(2 * former_capacity);
+                     }
+
+                     read<json>::op<ws_handled<Opts>()>(active->emplace_back(), ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      skip_ws_no_pre_check<Opts>(ctx, it, end);
@@ -1074,6 +1087,11 @@ namespace glz
                         return;
                      if (*it == ',') [[likely]] {
                         ++it;
+
+                        if (ws_size && ws_size < size_t(end - it)) {
+                           skip_matching_ws(ws_start, it, ws_size);
+                        }
+
                         skip_ws_no_pre_check<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -1088,10 +1106,30 @@ namespace glz
                      }
                   }
 
-                  value.reserve(value.size() + intermediate.size());
-                  const auto inter_end = intermediate.end();
-                  for (auto inter = intermediate.begin(); inter < inter_end; ++inter) {
-                     value.emplace_back(std::move(*inter));
+                  const auto intermediate_size = intermediate.size();
+                  size_t reserve_size = value.size();
+                  for (size_t i = 0; i < intermediate_size; ++i) {
+                     reserve_size += intermediate[i].size();
+                  }
+
+                  if constexpr (std::is_trivially_copyable_v<value_type> && !std::same_as<T, std::vector<bool>>) {
+                     const auto original_size = value.size();
+                     value.resize(reserve_size);
+                     auto* dest = value.data() + original_size;
+                     for (const auto& vector : intermediate) {
+                        const auto vector_size = vector.size();
+                        std::memcpy(dest, vector.data(), vector_size * sizeof(value_type));
+                        dest += vector_size;
+                     }
+                  }
+                  else {
+                     value.reserve(reserve_size);
+                     for (const auto& vector : intermediate) {
+                        const auto inter_end = vector.end();
+                        for (auto inter = vector.begin(); inter < inter_end; ++inter) {
+                           value.emplace_back(std::move(*inter));
+                        }
+                     }
                   }
                }
                else {
@@ -1104,6 +1142,11 @@ namespace glz
                         return;
                      if (*it == ',') [[likely]] {
                         ++it;
+
+                        if (ws_size && ws_size < size_t(end - it)) {
+                           skip_matching_ws(ws_start, it, ws_size);
+                        }
+
                         skip_ws_no_pre_check<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -1506,13 +1549,7 @@ namespace glz
                   return;
             }
             match<'{'>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
          }
-
-         skip_ws_no_pre_check<Opts>(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
       }
 
       template <glz::opts Opts>
@@ -1576,6 +1613,7 @@ namespace glz
          GLZ_FLATTEN static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             parse_object_opening<Options>(ctx, it, end);
+            skip_ws<Options>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -1630,8 +1668,11 @@ namespace glz
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             parse_object_opening<Options>(ctx, it, end);
+            const auto ws_start = it;
+            skip_ws<Options>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
+            const size_t ws_size = size_t(it - ws_start);
 
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
@@ -1646,7 +1687,7 @@ namespace glz
             }
             else {
                // Only used if error_on_missing_keys = true
-               [[maybe_unused]] bit_array<num_members> fields{};
+               bit_array<num_members * Opts.error_on_missing_keys> fields{};
 
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T> && num_members > 0) {
@@ -1688,6 +1729,13 @@ namespace glz
                      match<','>(ctx, it);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
+
+                     if constexpr (num_members > 1 || !Opts.error_on_unknown_keys) {
+                        if (ws_size && ws_size < size_t(end - it)) {
+                           skip_matching_ws(ws_start, it, ws_size);
+                        }
+                     }
+
                      skip_ws_no_pre_check<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
@@ -1928,22 +1976,18 @@ namespace glz
          template <auto Options, string_literal tag = "">
          GLZ_FLATTEN static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            static constexpr auto num_members = [] {
-               if constexpr (reflectable<T>) {
-                  return std::tuple_size_v<decltype(to_tuple(std::declval<T>()))>;
-               }
-               else {
-                  return std::tuple_size_v<meta_t<T>>;
-               }
-            }();
+            static constexpr auto num_members = reflection_count<T>;
 
             if constexpr (num_members == 0) {
                static_assert(false_v<T>, "No members to read for partial read");
             }
 
             parse_object_opening<Options>(ctx, it, end);
+            const auto ws_start = it;
+            skip_ws<Options>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
+            const size_t ws_size = size_t(it - ws_start);
 
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
@@ -1997,12 +2041,20 @@ namespace glz
                   }
                   return;
                }
-               else if (first) [[unlikely]]
+               else if (first) [[unlikely]] {
                   first = false;
+               }
                else [[likely]] {
                   match<','>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
+
+                  if constexpr (num_members > 1 || !Opts.error_on_unknown_keys) {
+                     if (ws_size && ws_size < size_t(end - it)) {
+                        skip_matching_ws(ws_start, it, ws_size);
+                     }
+                  }
+
                   skip_ws_no_pre_check<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
@@ -2637,7 +2689,18 @@ namespace glz
       };
 
       template <nullable_t T>
-         requires(!is_expected<T>)
+         requires(std::is_array_v<T>)
+      struct from_json<T>
+      {
+         template <auto Opts, class V, size_t N>
+         GLZ_ALWAYS_INLINE static void op(V (&value)[N], is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            read<json>::op<Opts>(std::span{value, N}, ctx, it, end);
+         }
+      };
+
+      template <nullable_t T>
+         requires(!is_expected<T> && !std::is_array_v<T>)
       struct from_json<T>
       {
          template <auto Options>
@@ -2718,14 +2781,14 @@ namespace glz
       return read<opts{}>(skip_value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <class T, class Buffer>
+   template <read_json_supported T, class Buffer>
    [[nodiscard]] inline parse_error read_json(T& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <class T, class Buffer>
+   template <read_json_supported T, class Buffer>
    [[nodiscard]] inline expected<T, parse_error> read_json(Buffer&& buffer) noexcept
    {
       T value{};
@@ -2737,7 +2800,7 @@ namespace glz
       return value;
    }
 
-   template <auto Opts = opts{}, class T>
+   template <auto Opts = opts{}, read_json_supported T>
    inline parse_error read_file_json(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
@@ -2751,8 +2814,4 @@ namespace glz
 
       return read<set_json<Opts>()>(value, buffer, ctx);
    }
-
-   template <class T>
-   concept read_json_supported =
-      detail::read_json_invocable<glz::opts{}, std::add_lvalue_reference<T>, glz::context, const char*, const char*>;
 }

@@ -7,6 +7,7 @@
 
 namespace glz
 {
+   // TODO: replace with std::unreachable
    [[noreturn]] inline void unreachable() noexcept
    {
       // Uses compiler specific extensions if possible.

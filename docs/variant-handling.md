@@ -140,3 +140,16 @@ suite tagged_variant_tests = [] {
    };
 };
 ```
+
+## BEVE to JSON
+
+BEVE uses the variant index to denote the type in a variant. When calling `glz::beve_to_json`, variants will be written in JSON with `"index"` and `"value"` keys. The index indicates the type, which would correspond to a `std::variant` `index()` method.
+
+```json
+{
+  "index": 1,
+  "value": "my value"
+}
+```
+
+> BEVE conversion to JSON does not support `string` tags, to simplify the specification and avoid bifurcation of variant handling. Using the index is more efficient in binary and more directly translated to `std::variant`.

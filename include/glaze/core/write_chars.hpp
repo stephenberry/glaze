@@ -6,9 +6,10 @@
 #include <charconv>
 #include <type_traits>
 
-#include "glaze/core/common.hpp"
+#include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/util/dtoa.hpp"
+#include "glaze/util/dump.hpp"
 #include "glaze/util/itoa.hpp"
 
 namespace glz::detail
@@ -63,23 +64,23 @@ namespace glz::detail
          using V = std::decay_t<decltype(value)>;
 
          if constexpr (is_any_of<V, float, double, int32_t, uint32_t, int64_t, uint64_t>) {
-            auto start = data_ptr(b) + ix;
-            auto end = glz::to_chars(start, value);
-            ix += std::distance(start, end);
+            const auto start = data_ptr(b) + ix;
+            const auto end = glz::to_chars(start, value);
+            ix += size_t(end - start);
          }
          else if constexpr (is_float128<V>) {
-            auto start = data_ptr(b) + ix;
-            auto [ptr, ec] = std::to_chars(start, data_ptr(b) + b.size(), value, std::chars_format::general);
+            const auto start = data_ptr(b) + ix;
+            const auto [ptr, ec] = std::to_chars(start, data_ptr(b) + b.size(), value, std::chars_format::general);
             if (ec != std::errc()) {
                // TODO: Do we need to handle this error state?
             }
-            ix += std::distance(start, ptr);
+            ix += size_t(ptr - start);
          }
          else if constexpr (std::integral<V>) {
             using X = std::decay_t<decltype(sized_integer_conversion<V>())>;
-            auto start = data_ptr(b) + ix;
-            auto end = glz::to_chars(start, static_cast<X>(value));
-            ix += std::distance(start, end);
+            const auto start = data_ptr(b) + ix;
+            const auto end = glz::to_chars(start, static_cast<X>(value));
+            ix += size_t(end - start);
          }
          else {
             static_assert(false_v<V>, "type is not supported");

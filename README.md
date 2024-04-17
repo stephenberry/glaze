@@ -29,7 +29,7 @@ Glaze also supports:
 
 - No runtime type information necessary (compiles with `-fno-rtti`)
 - Rapid error handling with short circuiting
-- [JSON-RPC 2.0 support](./docs/json-rpc.md)
+- [JSON-RPC 2.0 support](./docs/rpc/json-rpc.md)
 - [JSON Schema generation](./docs/json-schema.md)
 - [CSV Reading/Writing](./docs/csv.md)
 - [Much more!](#more-features)
@@ -536,11 +536,11 @@ Formatted JSON can be written out directly via a compile time option:
 glz::write<glz::opts{.prettify = true}>(obj, buffer);
 ```
 
-Or, JSON text can be formatted with the `glz::prettify` function:
+Or, JSON text can be formatted with the `glz::prettify_json` function:
 
 ```c++
 std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
-auto beautiful = glz::prettify(buffer);
+auto beautiful = glz::prettify_json(buffer);
 ```
 
 `beautiful` is now:
@@ -558,19 +558,13 @@ auto beautiful = glz::prettify(buffer);
 }
 ```
 
-Simplified prettify definition below, which allows the use of tabs or changing the number of spaces per indent.
-
-```c++
-string prettify(auto& in, bool tabs = false, uint32_t indent_size = 3)
-```
-
 # Minify JSON
 
 To minify JSON:
 
 ```c++
 glz::write<glz::opts{.prettify = true}>(obj, buffer);
-std::string minified = glz::minify(buffer);
+std::string minified = glz::minify_json(buffer);
 ```
 
 ## Boolean Flags
@@ -794,7 +788,7 @@ glz::read_ndjson(x, s);
 
 ### [JSON Pointer Syntax](./docs/json-pointer-syntax.md)
 
-### [JSON-RPC 2.0](./docs/json-rpc.md)
+### [JSON-RPC 2.0](./docs/rpc/json-rpc.md)
 
 ### [JSON Schema](./docs/json-schema.md)
 
@@ -804,6 +798,10 @@ glz::read_ndjson(x, s);
 
 ### [Thread Pool](./docs/thread-pool.md)
 
+### [Time Trace Profiling](./docs/time-trace.md)
+
+- Output performance profiles to JSON and visualize using [Perfetto](https://ui.perfetto.dev)
+
 ### [Wrappers](./docs/wrappers.md)
 
 # Extensions
@@ -811,7 +809,8 @@ glz::read_ndjson(x, s);
 See the `ext` directory for extensions.
 
 - [Eigen](https://gitlab.com/libeigen/eigen)
-- [JSON-RPC 2.0](./docs/json-rpc.md)
+- [JSON-RPC 2.0](./docs/rpc/json-rpc.md)
+- [Command Line Interface Menu (cli_menu)](./docs/cli-menu.md)
 
 # License
 

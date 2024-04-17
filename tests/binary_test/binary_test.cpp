@@ -15,9 +15,13 @@
 #include <unordered_set>
 
 #include "boost/ut.hpp"
+#include "glaze/api/impl.hpp"
 #include "glaze/binary/beve_to_json.hpp"
 #include "glaze/binary/read.hpp"
 #include "glaze/binary/write.hpp"
+#include "glaze/json/json_ptr.hpp"
+#include "glaze/json/read.hpp"
+#include "glaze/trace/trace.hpp"
 
 struct my_struct
 {
@@ -409,6 +413,7 @@ void bench()
 {
    using namespace boost::ut;
    "bench"_test = [] {
+      glz::trace_begin("bench");
       std::cout << "\nPerformance regresion test: \n";
 #ifdef NDEBUG
       size_t repeat = 100000;
@@ -441,6 +446,7 @@ void bench()
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "from_binary: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
+      glz::trace_end("bench");
    };
 }
 
@@ -504,10 +510,6 @@ struct glz::meta<some_struct>
       "map", &T::map //
    );
 };
-
-#include "glaze/api/impl.hpp"
-#include "glaze/json/json_ptr.hpp"
-#include "glaze/json/read.hpp"
 
 void test_partial()
 {
@@ -1150,6 +1152,7 @@ suite signal_tests = [] {
 
 suite vector_tests = [] {
    "std::vector<uint8_t>"_test = [] {
+      glz::duration_trace trace{"test std::vector<uint8_t>"};
       std::string s;
       static constexpr auto n = 10000;
       std::vector<uint8_t> v(n);
@@ -1172,6 +1175,7 @@ suite vector_tests = [] {
    };
 
    "std::vector<uint16_t>"_test = [] {
+      glz::duration_trace trace{"test std::vector<uint16_t>"};
       std::string s;
       static constexpr auto n = 10000;
       std::vector<uint16_t> v(n);
@@ -1195,6 +1199,7 @@ suite vector_tests = [] {
    };
 
    "std::vector<float>"_test = [] {
+      glz::async_trace trace{"test std::vector<float>"};
       std::string s;
       static constexpr auto n = 10000;
       std::vector<float> v(n);
@@ -1218,6 +1223,7 @@ suite vector_tests = [] {
    };
 
    "std::vector<double>"_test = [] {
+      glz::async_trace trace{"test std::vector<double>"};
       std::string s;
       static constexpr auto n = 10000;
       std::vector<double> v(n);
@@ -1592,6 +1598,50 @@ suite beve_to_json_tests = [] {
       expect(!glz::beve_to_json(buffer, json));
       expect(json == R"([99,"spiders"])") << json;
    };
+
+   "beve_to_json std::variant<int, std::string>"_test = [] {
+      std::variant<int, std::string> v = 99;
+      std::string buffer{};
+      glz::write_binary(v, buffer);
+
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"({"index":0,"value":99})") << json;
+   };
+
+   "beve_to_json std::variant<int, std::string> prettify"_test = [] {
+      std::variant<int, std::string> v = 99;
+      std::string buffer{};
+      glz::write_binary(v, buffer);
+
+      std::string json{};
+      expect(!glz::beve_to_json<glz::opts{.prettify = true}>(buffer, json));
+      expect(json == //
+             R"({
+   "index": 0,
+   "value": 99
+})") << json;
+   };
+
+   "beve_to_json std::complex<float>"_test = [] {
+      std::complex<float> v{1.f, 2.f};
+      std::string buffer{};
+      glz::write_binary(v, buffer);
+
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"([1,2])") << json;
+   };
+
+   "beve_to_json std::vector<std::complex<float>>"_test = [] {
+      std::vector<std::complex<float>> v{{1.f, 2.f}, {2.f, 3.f}};
+      std::string buffer{};
+      glz::write_binary(v, buffer);
+
+      std::string json{};
+      expect(!glz::beve_to_json(buffer, json));
+      expect(json == R"([[1,2],[2,3]])") << json;
+   };
 };
 
 suite merge_tests = [] {
@@ -1639,13 +1689,101 @@ suite filesystem_tests = [] {
    };
 };
 
+struct struct_c_arrays
+{
+   uint16_t ints[2]{1, 2};
+   float floats[1]{3.14f};
+};
+
+struct struct_c_arrays_meta
+{
+   uint16_t ints[2]{1, 2};
+   float floats[1]{3.14f};
+};
+
+template <>
+struct glz::meta<struct_c_arrays_meta>
+{
+   using T = struct_c_arrays_meta;
+   static constexpr auto value = object(&T::ints, &T::floats);
+};
+
+suite c_style_arrays = [] {
+   "uint32_t c array"_test = [] {
+      uint32_t arr[4] = {1, 2, 3, 4};
+      std::string s{};
+      glz::write_binary(arr, s);
+      std::memset(arr, 0, 4 * sizeof(uint32_t));
+      expect(arr[0] == 0);
+      expect(!glz::read_binary(arr, s));
+      expect(arr[0] == 1);
+      expect(arr[1] == 2);
+      expect(arr[2] == 3);
+      expect(arr[3] == 4);
+   };
+
+   "const double c array"_test = [] {
+      const double arr[4] = {1.1, 2.2, 3.3, 4.4};
+      std::string s{};
+      glz::write_binary(arr, s);
+   };
+
+   "double c array"_test = [] {
+      double arr[4] = {1.1, 2.2, 3.3, 4.4};
+      std::string s{};
+      glz::write_binary(arr, s);
+      std::memset(arr, 0, 4 * sizeof(double));
+      expect(arr[0] == 0.0);
+      expect(!glz::read_binary(arr, s));
+      expect(arr[0] == 1.1);
+      expect(arr[1] == 2.2);
+      expect(arr[2] == 3.3);
+      expect(arr[3] == 4.4);
+   };
+
+   "struct_c_arrays"_test = [] {
+      struct_c_arrays obj{};
+      std::string s{};
+      glz::write_binary(obj, s);
+
+      obj.ints[0] = 0;
+      obj.ints[1] = 1;
+      obj.floats[0] = 0.f;
+      expect(!glz::read_binary(obj, s));
+      expect(obj.ints[0] == 1);
+      expect(obj.ints[1] == 2);
+      expect(obj.floats[0] == 3.14f);
+   };
+
+   "struct_c_arrays_meta"_test = [] {
+      struct_c_arrays_meta obj{};
+      std::string s{};
+      glz::write_binary(obj, s);
+
+      obj.ints[0] = 0;
+      obj.ints[1] = 1;
+      obj.floats[0] = 0.f;
+      expect(!glz::read_binary(obj, s));
+      expect(obj.ints[0] == 1);
+      expect(obj.ints[1] == 2);
+      expect(obj.floats[0] == 3.14f);
+   };
+};
+
 int main()
 {
+   glz::trace_begin("binary_test");
    write_tests();
    bench();
    test_partial();
    file_include_test();
    container_types();
 
-   return boost::ut::cfg<>.run({.report_errors = true});
+   auto result = boost::ut::cfg<>.run({.report_errors = true});
+   glz::trace_end("binary_test");
+   const auto ec = glz::write_file_trace("binary_test.trace.json", std::string{});
+   if (ec) {
+      std::cerr << "trace output failed\n";
+   }
+   return result;
 }

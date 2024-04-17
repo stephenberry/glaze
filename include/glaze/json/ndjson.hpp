@@ -10,10 +10,6 @@ namespace glz
 {
    namespace detail
    {
-      template <class T = void>
-      struct from_ndjson
-      {};
-
       template <>
       struct read<ndjson>
       {
@@ -156,10 +152,6 @@ namespace glz
          }
       };
 
-      template <class T = void>
-      struct to_ndjson
-      {};
-
       template <>
       struct write<ndjson>
       {
@@ -264,14 +256,14 @@ namespace glz
       };
    } // namespace detail
 
-   template <class T, class Buffer>
+   template <read_ndjson_supported T, class Buffer>
    [[nodiscard]] inline auto read_ndjson(T& value, Buffer&& buffer)
    {
       context ctx{};
       return read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
-   template <class T, class Buffer>
+   template <read_ndjson_supported T, class Buffer>
    [[nodiscard]] inline expected<T, parse_error> read_ndjson(Buffer&& buffer)
    {
       T value{};
@@ -283,7 +275,7 @@ namespace glz
       return unexpected(ec);
    }
 
-   template <auto Opts = opts{.format = ndjson}, class T>
+   template <auto Opts = opts{.format = ndjson}, read_ndjson_supported T>
    [[nodiscard]] inline parse_error read_file_ndjson(T& value, const sv file_name)
    {
       context ctx{};
@@ -300,13 +292,13 @@ namespace glz
       return read<Opts>(value, buffer, ctx);
    }
 
-   template <class T, class Buffer>
+   template <write_ndjson_supported T, class Buffer>
    [[nodiscard]] inline auto write_ndjson(T&& value, Buffer&& buffer)
    {
       return write<opts{.format = ndjson}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   template <class T>
+   template <write_ndjson_supported T>
    [[nodiscard]] inline auto write_ndjson(T&& value)
    {
       std::string buffer{};
@@ -314,7 +306,7 @@ namespace glz
       return buffer;
    }
 
-   template <class T>
+   template <write_ndjson_supported T>
    [[nodiscard]] inline write_error write_file_ndjson(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
       write<opts{.format = ndjson}>(std::forward<T>(value), buffer);

@@ -28,10 +28,13 @@
 #include "glaze/json.hpp"
 #include "glaze/json/study.hpp"
 #include "glaze/record/recorder.hpp"
+#include "glaze/trace/trace.hpp"
 #include "glaze/util/poly.hpp"
 #include "glaze/util/progress_bar.hpp"
 
 using namespace boost::ut;
+
+glz::trace trace{};
 
 struct my_struct
 {
@@ -63,7 +66,7 @@ suite starter = [] {
       std::string buffer{};
       glz::write_json(s, buffer);
       expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
-      expect(glz::prettify(buffer) == R"({
+      expect(glz::prettify_json(buffer) == R"({
    "i": 287,
    "d": 3.14,
    "hello": "Hello World",
@@ -72,6 +75,13 @@ suite starter = [] {
       2,
       3
    ]
+})");
+
+      expect(glz::prettify_json<glz::opts{.new_lines_in_arrays = false}>(buffer) == R"({
+   "i": 287,
+   "d": 3.14,
+   "hello": "Hello World",
+   "arr": [1, 2, 3]
 })");
    };
 };
@@ -319,7 +329,7 @@ suite escaping_tests = [] {
       std::string str = "\"\\\b\f\n\r\tᇿ";
       std::string buffer{};
       glz::write_json(str, buffer);
-      expect(buffer == R"("\"\\\b\f\n\r\tᇿ")");
+      expect(buffer == R"("\"\\\b\f\n\r\tᇿ")") << buffer;
    };
 
    "escaped_char write"_test = [] {
@@ -789,7 +799,7 @@ suite user_types = [] {
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
    };
 
-   "complex user obect prettify"_test = [] {
+   "complex user obect opts prettify"_test = [] {
       Thing obj{};
       std::string buffer{};
       glz::write<glz::opts{.prettify = true}>(obj, buffer);
@@ -881,6 +891,207 @@ suite user_types = [] {
    }
 })";
       expect(thing_pretty == buffer);
+   };
+
+   "complex user obect prettify_json/minify_json"_test = [] {
+      Thing obj{};
+      std::string json{};
+      glz::write_json(obj, json);
+      std::string buffer{};
+      glz::prettify_json(json, buffer);
+
+      std::string thing_pretty = R"({
+   "thing": {
+      "a": 3.14,
+      "b": "stuff"
+   },
+   "thing2array": [
+      {
+         "a": 3.14,
+         "b": "stuff",
+         "c": 999.342494903,
+         "d": 1E-12,
+         "e": 203082348402.1,
+         "f": 89.089,
+         "g": 12380.00000013,
+         "h": 1000000.000001
+      }
+   ],
+   "vec3": [
+      3.14,
+      2.7,
+      6.5
+   ],
+   "list": [
+      6,
+      7,
+      8,
+      2
+   ],
+   "deque": [
+      9,
+      6.7,
+      3.1
+   ],
+   "vector": [
+      [
+         9,
+         6.7,
+         3.1
+      ],
+      [
+         3.14,
+         2.7,
+         6.5
+      ]
+   ],
+   "i": 8,
+   "d": 2,
+   "b": false,
+   "c": "W",
+   "v": {
+      "x": 0
+   },
+   "color": "Green",
+   "vb": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+   ],
+   "sptr": {
+      "a": 3.14,
+      "b": "stuff"
+   },
+   "array": [
+      "as\"df\\ghjkl",
+      "pie",
+      "42",
+      "foo"
+   ],
+   "map": {
+      "a": 4,
+      "b": 12,
+      "f": 7
+   },
+   "mapi": {
+      "2": 9.63,
+      "5": 3.14,
+      "7": 7.42
+   },
+   "thing_ptr": {
+      "a": 3.14,
+      "b": "stuff"
+   }
+})";
+      expect(thing_pretty == buffer);
+
+      expect(json == glz::minify_json(thing_pretty));
+   };
+
+   "complex user obect prettify_jsonc/minify_jsonc"_test = [] {
+      Thing obj{};
+      std::string json{};
+      glz::write_jsonc(obj, json);
+      std::string buffer{};
+      glz::prettify_jsonc(json, buffer);
+
+      std::string thing_pretty = R"({
+   "thing": {
+      "a": 3.14/*Test comment 1*/,
+      "b": "stuff"/*Test comment 2*/
+   },
+   "thing2array": [
+      {
+         "a": 3.14/*Test comment 1*/,
+         "b": "stuff"/*Test comment 2*/,
+         "c": 999.342494903,
+         "d": 1E-12,
+         "e": 203082348402.1,
+         "f": 89.089,
+         "g": 12380.00000013,
+         "h": 1000000.000001
+      }
+   ],
+   "vec3": [
+      3.14,
+      2.7,
+      6.5
+   ],
+   "list": [
+      6,
+      7,
+      8,
+      2
+   ],
+   "deque": [
+      9,
+      6.7,
+      3.1
+   ],
+   "vector": [
+      [
+         9,
+         6.7,
+         3.1
+      ],
+      [
+         3.14,
+         2.7,
+         6.5
+      ]
+   ],
+   "i": 8,
+   "d": 2/*double is the best type*/,
+   "b": false,
+   "c": "W",
+   "v": {
+      "x": 0
+   },
+   "color": "Green",
+   "vb": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+   ],
+   "sptr": {
+      "a": 3.14/*Test comment 1*/,
+      "b": "stuff"/*Test comment 2*/
+   },
+   "array": [
+      "as\"df\\ghjkl",
+      "pie",
+      "42",
+      "foo"
+   ],
+   "map": {
+      "a": 4,
+      "b": 12,
+      "f": 7
+   },
+   "mapi": {
+      "2": 9.63,
+      "5": 3.14,
+      "7": 7.42
+   },
+   "thing_ptr": {
+      "a": 3.14/*Test comment 1*/,
+      "b": "stuff"/*Test comment 2*/
+   }
+})";
+
+      expect(thing_pretty == buffer);
+      expect(!glz::read_json(obj, buffer));
+      const auto minified = glz::minify_jsonc(thing_pretty);
+      expect(json == minified);
+      expect(!glz::read_json(obj, minified));
    };
 
    "complex user obect roundtrip"_test = [] {
@@ -1064,6 +1275,7 @@ suite early_end = [] {
       std::string buffer_data =
          R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1e-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2/*double is the best type*/,"b":false,"c":"W","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"optional":null,"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/}})";
       std::string_view buffer = buffer_data;
+      trace.begin("early_end");
       while (buffer.size() > 0) {
          buffer_data.pop_back();
          buffer = buffer_data;
@@ -1078,6 +1290,7 @@ suite early_end = [] {
          expect(err != glz::error_code::none);
          expect(err.location <= buffer.size());
       }
+      trace.end("early_end");
    };
 };
 
@@ -1087,8 +1300,8 @@ suite minified_custom_object = [] {
    "minified_custom_object"_test = [] {
       Thing obj{};
       std::string buffer = glz::write_json(obj);
-      std::string prettified = glz::prettify(buffer);
-      std::string minified = glz::minify(prettified);
+      std::string prettified = glz::prettify_json(buffer);
+      std::string minified = glz::minify_json(prettified);
       expect(glz::read_json(obj, minified) == glz::error_code::none);
       expect(buffer == minified);
    };
@@ -1100,7 +1313,7 @@ suite prettified_custom_object = [] {
    "prettified_custom_object"_test = [] {
       Thing obj{};
       std::string buffer = glz::write_json(obj);
-      buffer = glz::prettify(buffer);
+      buffer = glz::prettify_json(buffer);
       expect(glz::read_json(obj, buffer) == glz::error_code::none);
    };
 };
@@ -1108,6 +1321,7 @@ suite prettified_custom_object = [] {
 suite bench = [] {
    using namespace boost::ut;
    "bench"_test = [] {
+      trace.begin("bench");
       std::cout << "\nPerformance regresion test: \n";
 #ifdef NDEBUG
       size_t repeat = 100000;
@@ -1119,36 +1333,43 @@ suite bench = [] {
       std::string buffer;
       glz::write_json(thing, buffer);
 
+      trace.begin("write_bench", "JSON writing benchmark");
       auto tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
          buffer.clear();
          glz::write_json(thing, buffer);
       }
       auto tend = std::chrono::high_resolution_clock::now();
+      trace.end("write_bench");
       auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       auto mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "write_json size: " << buffer.size() << " bytes\n";
       std::cout << "write_json: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
 
+      trace.begin("read_bench");
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
          expect(glz::read_json(thing, buffer) == glz::error_code::none);
       }
       tend = std::chrono::high_resolution_clock::now();
+      trace.end("read_bench", "JSON reading benchmark");
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       mbytes_per_sec = repeat * buffer.size() / (duration * 1048576);
       std::cout << "read_json: " << duration << " s, " << mbytes_per_sec << " MB/s"
                 << "\n";
 
+      trace.begin("json_ptr_bench");
       tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
          glz::get<std::string>(thing, "/thing_ptr/b");
       }
       tend = std::chrono::high_resolution_clock::now();
+      trace.end("json_ptr_bench", "JSON pointer benchmark");
       duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
       std::cout << "get: " << duration << " s, " << (repeat / duration) << " gets/s"
                 << "\n\n";
+      trace.end("bench");
    };
 };
 
@@ -3105,19 +3326,6 @@ suite char16_test = [] {
 
          expect(c == u'H');
       }
-
-      {
-         // TODO: Support non-ascii
-         /*char16_t c{};
-         glz::read_json(c, R"("∆")");
-
-         expect(c == u'∆');*/
-      }
-
-      /*std::basic_string<char16_t> x;
-      glz::read_json(x, "Hello World");
-
-      expect(x == u"Hello World");*/
    };
 };
 
@@ -4027,13 +4235,21 @@ suite get_sv = [] {
       expect(view == "5.5");
    };
 
-   "get_sv_arry"_test = [] {
+   "get_sv_array"_test = [] {
       std::string s = R"({"obj":{"x":[0,1,2]}})";
 
       auto x = glz::get_as_json<std::vector<int>, "/obj/x">(s);
       expect(x == std::vector<int>{0, 1, 2});
       auto x0 = glz::get_as_json<int, "/obj/x/0">(s);
       expect(x0 == 0);
+   };
+
+   "get_as_json valid"_test = [] {
+      std::string_view data = R"({ "data": [ {"a": true} ] })";
+
+      auto a = glz::get_as_json<bool, "/data/0/a">(data);
+      expect(a.has_value());
+      expect(a.value());
    };
 
    "action"_test = [] {
@@ -4313,37 +4529,6 @@ break"])";
       expect(glz::validate_json(pass3) == glz::error_code::none);
    };
 };
-
-// TODO: Perhaps add bit field support
-/*struct bit_field_t
-{
-   uint32_t x : 27;
-   unsigned char : 0;
-   bool b : 1;
-   uint64_t i : 63;
-};
-
-template <>
-struct glz::meta<bit_field_t>
-{
-   using T = bit_field_t;
-   static constexpr auto value = object("x", getset{ [](auto& s) { return s.x; }, [](auto& s, auto value) { s.x = value;
-} });
-};
-
-suite bit_field_test = []
-{
-   "bit field"_test = []
-   {
-      bit_field_t s{};
-      std::string b = R"({"x":19,"b":true,"i":5})";
-      auto ec = glz::read_json(s, b);
-      expect(ec == glz::error_code::none);
-      expect(s.x == 19);
-      expect(s.b);
-      expect(s.i == 5);
-   };
-};*/
 
 struct StructE
 {
@@ -6494,9 +6679,9 @@ suite custom_object_variant_test = [] {
          Obj1{4, "text 4"},
       };
 
-      constexpr auto prettify = glz::opts{.prettify = true};
+      constexpr auto prettify_json = glz::opts{.prettify = true};
 
-      std::string data = glz::write<prettify>(objects);
+      std::string data = glz::write<prettify_json>(objects);
 
       expect(data == R"([
    {
@@ -6545,7 +6730,7 @@ suite custom_object_variant_test = [] {
 
       expect(!glz::read_json(objects, data));
 
-      expect(data == glz::write<prettify>(objects));
+      expect(data == glz::write<prettify_json>(objects));
    };
 };
 
@@ -7284,10 +7469,129 @@ suite filesystem_tests = [] {
    };
 };
 
+static_assert(glz::detail::readable_array_t<std::span<double, 4>>);
+
+struct struct_c_arrays
+{
+   uint16_t ints[2]{1, 2};
+   float floats[1]{3.14f};
+};
+
+struct struct_c_arrays_meta
+{
+   uint16_t ints[2]{1, 2};
+   float floats[1]{3.14f};
+};
+
+template <>
+struct glz::meta<struct_c_arrays_meta>
+{
+   using T = struct_c_arrays_meta;
+   static constexpr auto value = object(&T::ints, &T::floats);
+};
+
+suite c_style_arrays = [] {
+   "uint32_t c array"_test = [] {
+      uint32_t arr[4] = {1, 2, 3, 4};
+      std::string s{};
+      glz::write_json(arr, s);
+      expect(s == "[1,2,3,4]") << s;
+      std::memset(arr, 0, 4 * sizeof(uint32_t));
+      expect(arr[0] == 0);
+      expect(!glz::read_json(arr, s));
+      expect(arr[0] == 1);
+      expect(arr[1] == 2);
+      expect(arr[2] == 3);
+      expect(arr[3] == 4);
+   };
+
+   "const double c array"_test = [] {
+      const double arr[4] = {1.1, 2.2, 3.3, 4.4};
+      std::string s{};
+      glz::write_json(arr, s);
+      expect(s == "[1.1,2.2,3.3,4.4]") << s;
+   };
+
+   "double c array"_test = [] {
+      double arr[4] = {1.1, 2.2, 3.3, 4.4};
+      std::string s{};
+      glz::write_json(arr, s);
+      expect(s == "[1.1,2.2,3.3,4.4]") << s;
+      std::memset(arr, 0, 4 * sizeof(double));
+      expect(arr[0] == 0.0);
+      expect(!glz::read_json(arr, s));
+      expect(arr[0] == 1.1);
+      expect(arr[1] == 2.2);
+      expect(arr[2] == 3.3);
+      expect(arr[3] == 4.4);
+   };
+
+   "struct_c_arrays"_test = [] {
+      struct_c_arrays obj{};
+      std::string s{};
+      glz::write_json(obj, s);
+      expect(s == R"({"ints":[1,2],"floats":[3.14]})") << s;
+
+      obj.ints[0] = 0;
+      obj.ints[1] = 1;
+      obj.floats[0] = 0.f;
+      expect(!glz::read_json(obj, s));
+      expect(obj.ints[0] == 1);
+      expect(obj.ints[1] == 2);
+      expect(obj.floats[0] == 3.14f);
+   };
+
+   "struct_c_arrays_meta"_test = [] {
+      struct_c_arrays_meta obj{};
+      std::string s{};
+      glz::write_binary(obj, s);
+
+      obj.ints[0] = 0;
+      obj.ints[1] = 1;
+      obj.floats[0] = 0.f;
+      expect(!glz::read_binary(obj, s));
+      expect(obj.ints[0] == 1);
+      expect(obj.ints[1] == 2);
+      expect(obj.floats[0] == 3.14f);
+   };
+};
+
+struct sum_hash_obj_t
+{
+   int aa{};
+   int aab{};
+   int cab{};
+   int zac{};
+};
+
+template <>
+struct glz::meta<sum_hash_obj_t>
+{
+   using T = sum_hash_obj_t;
+   static constexpr auto value = object(&T::aa, &T::aab, &T::cab, &T::zac);
+};
+
+suite sum_hash_obj_test = [] {
+   "sum_hash_obj"_test = [] {
+      sum_hash_obj_t obj{};
+      const auto s = glz::write_json(obj);
+      expect(s == R"({"aa":0,"aab":0,"cab":0,"zac":0})");
+      expect(!glz::read_json(obj, s));
+   };
+};
+
 int main()
 {
+   trace.begin("json_test", "Full test suite duration.");
    // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
+
+   trace.end("json_test");
+   const auto ec = glz::write_file_json(trace, "json_test.trace.json", std::string{});
+   if (ec) {
+      std::cerr << "trace output failed\n";
+   }
+
    return result;
 }

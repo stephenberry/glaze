@@ -142,13 +142,12 @@ namespace glz
    GLZ_ALWAYS_INLINE auto* to_chars_u64_len_8(auto* buf, uint32_t val) noexcept
    {
       /* 8 digits: aabbccdd */
-      uint32_t aa, bb, cc, dd, aabb, ccdd;
-      aabb = uint32_t((uint64_t(val) * 109951163) >> 40); /* (val / 10000) */
-      ccdd = val - aabb * 10000; /* (val % 10000) */
-      aa = (aabb * 5243) >> 19; /* (aabb / 100) */
-      cc = (ccdd * 5243) >> 19; /* (ccdd / 100) */
-      bb = aabb - aa * 100; /* (aabb % 100) */
-      dd = ccdd - cc * 100; /* (ccdd % 100) */
+      const uint32_t aabb = uint32_t((uint64_t(val) * 109951163) >> 40); /* (val / 10000) */
+      const uint32_t ccdd = val - aabb * 10000; /* (val % 10000) */
+      const uint32_t aa = (aabb * 5243) >> 19; /* (aabb / 100) */
+      const uint32_t cc = (ccdd * 5243) >> 19; /* (ccdd / 100) */
+      const uint32_t bb = aabb - aa * 100; /* (aabb % 100) */
+      const uint32_t dd = ccdd - cc * 100; /* (ccdd % 100) */
       std::memcpy(buf, char_table + aa * 2, 2);
       std::memcpy(buf + 2, char_table + bb * 2, 2);
       std::memcpy(buf + 4, char_table + cc * 2, 2);

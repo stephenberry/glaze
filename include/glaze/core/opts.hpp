@@ -5,6 +5,8 @@
 
 #include <cstdint>
 
+#include "glaze/util/type_traits.hpp"
+
 namespace glz
 {
    // format
@@ -28,6 +30,7 @@ namespace glz
       bool prettify = false; // Write out prettified JSON
       char indentation_char = ' '; // Prettified JSON indentation char
       uint8_t indentation_width = 3; // Prettified JSON indentation size
+      bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
       bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
       bool write_type_info = true; // Write type info for meta objects in variants
       bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
@@ -44,6 +47,9 @@ namespace glz
                                       // glaze_object_t concepts
       bool partial_read_nested = false; // Rewind forward the partially readed struct to the end of the struct
       bool concatenate = true; // concatenates ranges of std::pair into single objects when writing
+
+      bool hide_non_invocable =
+         true; // hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
 
       // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled
@@ -158,4 +164,104 @@ namespace glz
       ret.format = json;
       return ret;
    }
+}
+
+namespace glz
+{
+   namespace detail
+   {
+      template <class T = void>
+      struct to_binary;
+
+      template <class T = void>
+      struct from_binary;
+
+      template <class T = void>
+      struct to_json;
+
+      template <class T = void>
+      struct from_json;
+
+      template <class T = void>
+      struct to_ndjson;
+
+      template <class T = void>
+      struct from_ndjson;
+
+      template <class T = void>
+      struct to_csv;
+
+      template <class T = void>
+      struct from_csv;
+   }
+
+   template <class T>
+   concept write_binary_supported = requires { detail::to_binary<std::remove_cvref_t<T>>{}; };
+
+   template <class T>
+   concept read_binary_supported = requires { detail::from_binary<std::remove_cvref_t<T>>{}; };
+
+   template <class T>
+   concept write_json_supported = requires { detail::to_json<std::remove_cvref_t<T>>{}; };
+
+   template <class T>
+   concept read_json_supported = requires { detail::from_json<std::remove_cvref_t<T>>{}; };
+
+   template <class T>
+   concept write_ndjson_supported = requires { detail::to_ndjson<std::remove_cvref_t<T>>{}; };
+
+   template <class T>
+   concept read_ndjson_supported = requires { detail::from_ndjson<std::remove_cvref_t<T>>{}; };
+
+   template <class T>
+   concept write_csv_supported = requires { detail::to_csv<std::remove_cvref_t<T>>{}; };
+
+   template <class T>
+   concept read_csv_supported = requires { detail::from_csv<std::remove_cvref_t<T>>{}; };
+
+   template <uint32_t Format, class T>
+   consteval bool write_format_supported()
+   {
+      if constexpr (Format == binary) {
+         return write_binary_supported<T>;
+      }
+      else if constexpr (Format == json) {
+         return write_json_supported<T>;
+      }
+      else if constexpr (Format == ndjson) {
+         return write_ndjson_supported<T>;
+      }
+      else if constexpr (Format == csv) {
+         return write_csv_supported<T>;
+      }
+      else {
+         static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
+      }
+   }
+
+   template <uint32_t Format, class T>
+   consteval bool read_format_supported()
+   {
+      if constexpr (Format == binary) {
+         return read_binary_supported<T>;
+      }
+      else if constexpr (Format == json) {
+         return read_json_supported<T>;
+      }
+      else if constexpr (Format == ndjson) {
+         return read_ndjson_supported<T>;
+      }
+      else if constexpr (Format == csv) {
+         return read_csv_supported<T>;
+      }
+      else {
+         static_assert(false_v<T>, "Glaze metadata is probably needed for your type");
+      }
+   }
+
+   template <uint32_t Format, class T>
+   concept write_supported = write_format_supported<Format, T>();
+
+   template <uint32_t Format, class T>
+   concept read_supported = read_format_supported<Format, T>();
 }

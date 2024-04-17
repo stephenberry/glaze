@@ -78,12 +78,18 @@ namespace glz::detail
 namespace glz
 {
    template <auto N, class T>
-   constexpr auto nameof = [] {
-      constexpr auto name = detail::get_name_impl<N, T>;
-      constexpr auto begin = name.find(detail::reflect_field::end);
-      constexpr auto tmp = name.substr(0, begin);
-      return tmp.substr(tmp.find_last_of(detail::reflect_field::begin) + 1);
-   }();
+   struct nameof_impl
+   {
+      static constexpr auto name = detail::get_name_impl<N, T>;
+      static constexpr auto begin = name.find(detail::reflect_field::end);
+      static constexpr auto tmp = name.substr(0, begin);
+      static constexpr auto stripped = tmp.substr(tmp.find_last_of(detail::reflect_field::begin) + 1);
+      // making static memory to stripped to help the compiler optimize away prettified function signature
+      static constexpr std::string_view stripped_literal = join_v<stripped>;
+   };
+
+   template <auto N, class T>
+   constexpr auto nameof = []() constexpr { return nameof_impl<N, T>::stripped_literal; }();
 
    template <class T>
    constexpr auto type_name = [] {

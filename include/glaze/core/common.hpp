@@ -18,10 +18,12 @@
 #include "glaze/util/expected.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/hash_map.hpp"
+#include "glaze/util/help.hpp"
 #include "glaze/util/string_literal.hpp"
 #include "glaze/util/tuple.hpp"
 #include "glaze/util/type_traits.hpp"
 #include "glaze/util/utility.hpp"
+#include "glaze/util/validate.hpp"
 #include "glaze/util/variant.hpp"
 
 namespace glz
@@ -93,9 +95,6 @@ namespace glz
    template <class... T>
    overload(T...) -> overload<T...>;
 
-   template <class T, class... U>
-   concept is_any_of = (std::same_as<T, U> || ...);
-
    struct hidden
    {};
 
@@ -144,47 +143,6 @@ namespace glz
 
    template <class T>
    concept is_includer = requires(T t) { requires T::glaze_includer == true; };
-
-   template <class T>
-   concept range = requires(T& t) {
-      requires !std::same_as<void, decltype(t.begin())>;
-      requires !std::same_as<void, decltype(t.end())>;
-      requires std::input_iterator<decltype(t.begin())>;
-   };
-
-   // range like
-   template <class T>
-   using iterator_t = decltype(std::begin(std::declval<T&>()));
-
-   template <range R>
-   using range_value_t = std::iter_value_t<iterator_t<R>>;
-
-   template <range R>
-   [[nodiscard]] constexpr bool empty_range(R&& rng)
-   {
-#ifdef __cpp_lib_ranges
-      return std::ranges::empty(rng);
-#else
-      // in lieu of std::ranges::empty
-      if constexpr (requires() {
-                       {
-                          rng.empty()
-                       } -> std::convertible_to<bool>;
-                    }) {
-         return rng.empty();
-      }
-      else if constexpr (requires() {
-                            {
-                               rng.size()
-                            } -> std::same_as<std::size_t>;
-                         }) {
-         return rng.size() == std::size_t{0};
-      }
-      else {
-         return std::cbegin(rng) == std::cend(rng);
-      }
-#endif
-   }
 
    template <class T>
    concept is_member_function_pointer = std::is_member_function_pointer_v<T>;
@@ -266,20 +224,6 @@ namespace glz
    namespace detail
    {
       template <class T>
-      concept char_t = std::same_as<std::decay_t<T>, char> || std::same_as<std::decay_t<T>, char16_t> ||
-                       std::same_as<std::decay_t<T>, char32_t> || std::same_as<std::decay_t<T>, wchar_t>;
-
-      template <class T>
-      concept bool_t =
-         std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>;
-
-      template <class T>
-      concept int_t = std::integral<std::decay_t<T>> && !char_t<std::decay_t<T>> && !bool_t<T>;
-
-      template <class T>
-      concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
-
-      template <class T>
       concept constructible = requires { meta<std::decay_t<T>>::construct; } || local_construct_t<std::decay_t<T>>;
 
       template <class T>
@@ -335,9 +279,6 @@ namespace glz
                              std::same_as<T, std::vector<bool>::const_reference>;
 
       template <class T>
-      concept vector_like = resizeable<T> && accessible<T> && has_data<T>;
-
-      template <class T>
       concept is_no_reflect = requires(T t) { requires T::glaze_reflect == false; };
 
       template <class T>
@@ -346,12 +287,6 @@ namespace glz
                                       std::bool_constant<(std::decay_t<T>{}.size(), true)>()
                                    } -> std::same_as<std::true_type>;
                                 } && std::decay_t<T>{}.size() > 0);
-
-      template <class T>
-      concept is_float128 = requires(T x) {
-         requires sizeof(x) == 16;
-         requires std::floating_point<T>;
-      };
 
       template <class T>
       constexpr size_t get_size() noexcept
@@ -598,34 +533,39 @@ namespace glz
          }
          else if constexpr (n < 64) // don't even attempt a first character hash if we have too many keys
          {
-            constexpr auto front_desc = single_char_hash<n>(std::array<sv, n>{get_key<T, I>()...});
+            constexpr std::array<sv, n> keys{get_key<T, I>()...};
+            constexpr auto front_desc = single_char_hash<n>(keys);
 
             if constexpr (front_desc.valid) {
                return make_single_char_map<value_t, front_desc>({key_value<T, I>()...});
             }
             else {
-               constexpr auto back_desc = single_char_hash<n, false>(std::array<sv, n>{get_key<T, I>()...});
+               constexpr single_char_hash_opts rear_hash{.is_front_hash = false};
+               constexpr auto back_desc = single_char_hash<n, rear_hash>(keys);
 
                if constexpr (back_desc.valid) {
                   return make_single_char_map<value_t, back_desc>({key_value<T, I>()...});
                }
                else {
-                  if constexpr (n <= 20) {
-                     return glz::detail::naive_map<value_t, n, use_hash_comparison>({key_value<T, I>()...});
+                  constexpr single_char_hash_opts sum_hash{.is_front_hash = true, .is_sum_hash = true};
+                  constexpr auto sum_desc = single_char_hash<n, sum_hash>(keys);
+
+                  if constexpr (sum_desc.valid) {
+                     return make_single_char_map<value_t, sum_desc>({key_value<T, I>()...});
                   }
                   else {
-                     return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({key_value<T, I>()...});
+                     if constexpr (n <= naive_map_max_size) {
+                        return glz::detail::naive_map<value_t, n, use_hash_comparison>({key_value<T, I>()...});
+                     }
+                     else {
+                        return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({key_value<T, I>()...});
+                     }
                   }
                }
             }
          }
          else {
-            if constexpr (n <= 20) {
-               return glz::detail::naive_map<value_t, n, use_hash_comparison>({key_value<T, I>()...});
-            }
-            else {
-               return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({key_value<T, I>()...});
-            }
+            return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({key_value<T, I>()...});
          }
       }
 
@@ -922,6 +862,19 @@ namespace glz
       using Tuple = std::decay_t<decltype(glz::tuplet::tuple{conv_sv(args)...})>;
       return glz::detail::Flags{group_builder<Tuple>::op(glz::tuplet::tuple{conv_sv(args)...})};
    }
+
+   template <detail::glaze_flags_t T>
+   consteval auto byte_length() noexcept
+   {
+      constexpr auto N = std::tuple_size_v<meta_t<T>>;
+
+      if constexpr (N % 8 == 0) {
+         return N / 8;
+      }
+      else {
+         return (N / 8) + 1;
+      }
+   }
 }
 
 namespace glz
@@ -974,6 +927,7 @@ struct glz::meta<glz::error_code>
                            "seek_failure", seek_failure, //
                            "unicode_escape_conversion_failure", unicode_escape_conversion_failure, //
                            "file_open_failure", file_open_failure, //
+                           "file_close_failure", file_close_failure, //
                            "file_include_error", file_include_error, //
                            "dump_int_error", dump_int_error, //
                            "get_nonexistent_json_ptr", get_nonexistent_json_ptr, //

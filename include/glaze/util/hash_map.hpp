@@ -17,8 +17,11 @@
 #include <span>
 #include <string_view>
 
+#include "glaze/util/compare.hpp"
+
 #ifdef _MSC_VER
 // Turn off broken warning from MSVC for << operator precedence
+#pragma warning(push)
 #pragma warning(disable : 4554)
 #endif
 
@@ -72,6 +75,7 @@ namespace glz::detail
             break;
          }
          default: {
+            // zero size case
             break;
          }
          }
@@ -150,17 +154,18 @@ namespace glz::detail
       {
          uint64_t h = (0xcbf29ce484222325 ^ seed) * 1099511628211;
          const auto n = value.size();
+         const char* data = value.data();
 
          if (n < 8) {
-            return bitmix(h ^ to_uint64_n_below_8(value.data(), n));
+            return bitmix(h ^ to_uint64_n_below_8(data, n));
          }
 
-         const char* end7 = value.data() + n - 7;
-         for (auto d0 = value.data(); d0 < end7; d0 += 8) {
+         const char* end7 = data + n - 7;
+         for (auto d0 = data; d0 < end7; d0 += 8) {
             h = bitmix(h ^ to_uint64(d0));
          }
          // Handle potential tail. We know we have at least 8
-         return bitmix(h ^ to_uint64(value.data() + n - 8));
+         return bitmix(h ^ to_uint64(data + n - 8));
       }
    };
 
@@ -175,15 +180,18 @@ namespace glz::detail
       return false;
    }
 
-   template <class Value, std::size_t N, bool use_hash_comparison = false>
+   constexpr size_t naive_map_max_size = 32;
+
+   template <class Value, size_t N, bool use_hash_comparison = false>
    struct naive_map
    {
       // Birthday paradox makes this unsuitable for large numbers of keys without
-      // using a ton of memory Could resonably use it for 64 or so keys if the
-      // bucketsize scalled more agressively But I would swhitch to a more space
-      // efficient perfect map
-      static_assert(N <= 32, "Not suitable for large numbers of keys");
-      static constexpr size_t bucket_size = (N > 16 ? 8 : 4) * std::bit_ceil(N);
+      // using a ton of memory.
+      static_assert(N <= naive_map_max_size, "Not suitable for large numbers of keys");
+      // std::bit_ceil(N * N) / 2 results in a max of around 62% collision chance (e.g. size 32).
+      // This uses 512 bytes for 32 keys.
+      // Keeping the bucket size a power of 2 probably makes the modulus more efficient.
+      static constexpr size_t bucket_size = (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
       uint64_t seed{};
       std::array<std::pair<std::string_view, Value>, N> items{};
       std::array<uint64_t, N * use_hash_comparison> hashes{};
@@ -202,7 +210,7 @@ namespace glz::detail
             if constexpr (use_hash_comparison) {
                hashes[i] = hash;
             }
-            table[hash % bucket_size] = static_cast<uint8_t>(i);
+            table[hash % bucket_size] = uint8_t(i);
          }
       }
 
@@ -219,14 +227,13 @@ namespace glz::detail
          const auto index = table[hash % bucket_size];
          if constexpr (use_hash_comparison) {
             // Odds of having a uint64_t hash collision is pretty small
-            // And no valid keys could colide becuase of perfect hashing so this
-            // isnt that bad
+            // And no valid/known keys could colide becuase of perfect hashing
             if (hashes[index] != hash) [[unlikely]]
                return items.end();
          }
          else {
             const auto& item = items[index];
-            if (item.first != key) [[unlikely]]
+            if (!compare_sv(item.first, key)) [[unlikely]]
                return items.end();
          }
          return items.begin() + index;
@@ -311,8 +318,7 @@ namespace glz::detail
          const size_t index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
          if constexpr (!std::integral<Key> && use_hash_comparison) {
             // Odds of having a uint64_t hash collision is pretty small
-            // And no valid keys could colide becuase of perfect hashing so this
-            // isnt that bad
+            // And no valid/known keys could colide becuase of perfect hashing
             if (hashes[index] != hash) [[unlikely]]
                return items.end();
          }
@@ -321,8 +327,14 @@ namespace glz::detail
                return items.end();
             }
             const auto& item = items[index];
-            if (item.first != key) [[unlikely]]
-               return items.end();
+            if constexpr (std::integral<Key>) {
+               if (item.first != key) [[unlikely]]
+                  return items.end();
+            }
+            else {
+               if (!compare_sv(item.first, key)) [[unlikely]]
+                  return items.end();
+            }
          }
          return items.begin() + index;
       }
@@ -330,21 +342,25 @@ namespace glz::detail
       constexpr decltype(auto) find(auto&& key) noexcept
       {
          const auto hash = hash_alg{}(key, seed);
-         // constexpr bucket_size means the compiler can replace the modulos with
-         // more efficient instructions So this is not as expensive as this looks
          const auto extra = buckets[hash % N];
-         const auto index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
+         const size_t index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
          if constexpr (!std::integral<Key> && use_hash_comparison) {
-            // Odds of having a uint64_t hash collision is pretty small
-            // And no valid keys could colide becuase of perfect hashing so this
-            // isnt that bad
             if (hashes[index] != hash) [[unlikely]]
                return items.end();
          }
          else {
-            const auto& item = items[index];
-            if (item.first != key) [[unlikely]]
+            if (index >= N) [[unlikely]] {
                return items.end();
+            }
+            const auto& item = items[index];
+            if constexpr (std::integral<Key>) {
+               if (item.first != key) [[unlikely]]
+                  return items.end();
+            }
+            else {
+               if (!compare_sv(item.first, key)) [[unlikely]]
+                  return items.end();
+            }
          }
          return items.begin() + index;
       }
@@ -431,25 +447,34 @@ namespace glz::detail
       uint8_t front{};
       uint8_t back{};
       bool is_front_hash = true;
+      bool is_sum_hash = false;
    };
 
-   template <size_t N, bool IsFrontHash = true>
+   struct single_char_hash_opts
+   {
+      bool is_front_hash = true;
+      bool is_sum_hash = false; // sums the size of the key
+   };
+
+   template <size_t N, single_char_hash_opts Opts = single_char_hash_opts{}>
+      requires(N < 256)
    inline constexpr single_char_hash_desc single_char_hash(const std::array<std::string_view, N>& v) noexcept
    {
-      if constexpr (N > 255) {
-         return {};
-      }
-
       std::array<uint8_t, N> hashes;
       for (size_t i = 0; i < N; ++i) {
          if (v[i].size() == 0) {
             return {};
          }
-         if constexpr (IsFrontHash) {
-            hashes[i] = static_cast<uint8_t>(v[i][0]);
+         if constexpr (Opts.is_front_hash) {
+            if constexpr (Opts.is_sum_hash) {
+               hashes[i] = uint8_t(v[i][0]) + uint8_t(v[i].size());
+            }
+            else {
+               hashes[i] = uint8_t(v[i][0]);
+            }
          }
          else {
-            hashes[i] = static_cast<uint8_t>(v[i].back());
+            hashes[i] = uint8_t(v[i].back());
          }
       }
 
@@ -457,19 +482,24 @@ namespace glz::detail
 
       uint8_t min_diff = (std::numeric_limits<uint8_t>::max)();
       for (size_t i = 0; i < N - 1; ++i) {
-         if ((hashes[i + 1] - hashes[i]) < min_diff) {
-            min_diff = hashes[i + 1] - hashes[i];
+         const auto diff = hashes[i + 1] - hashes[i];
+         if (diff == 0) {
+            return {};
+         }
+         if (diff < min_diff) {
+            min_diff = diff;
          }
       }
 
-      return single_char_hash_desc{N, min_diff > 0, min_diff, hashes.front(), hashes.back(), IsFrontHash};
+      return single_char_hash_desc{
+         N, min_diff > 0, min_diff, hashes.front(), hashes.back(), Opts.is_front_hash, Opts.is_sum_hash};
    }
 
    template <class T, single_char_hash_desc D>
+      requires(D.N < 256)
    struct single_char_map
    {
       static constexpr auto N = D.N;
-      static_assert(N < 256);
       std::array<std::pair<std::string_view, T>, N> items{};
       static constexpr size_t N_table = D.back - D.front + 1;
       std::array<uint8_t, N_table> table{};
@@ -483,36 +513,36 @@ namespace glz::detail
             return items.end();
          }
 
-         if constexpr (D.is_front_hash) {
-            const auto k = static_cast<uint8_t>(static_cast<uint8_t>(key[0]) - D.front);
-            if (k >= static_cast<uint8_t>(N_table)) [[unlikely]] {
-               return items.end();
+         const auto k = [&]() -> uint8_t {
+            if constexpr (D.is_front_hash) {
+               if constexpr (D.is_sum_hash) {
+                  return uint8_t(uint8_t(key[0]) + uint8_t(key.size()) - D.front);
+               }
+               else {
+                  return uint8_t(uint8_t(key[0]) - D.front);
+               }
             }
-            const auto index = table[k];
-            const auto& item = items[index];
-            if (item.first != key) [[unlikely]]
-               return items.end();
-            return items.begin() + index;
-         }
-         else {
-            const auto k = static_cast<uint8_t>(static_cast<uint8_t>(key.back()) - D.front);
-            if (k >= static_cast<uint8_t>(N_table)) [[unlikely]] {
-               return items.end();
+            else {
+               return uint8_t(uint8_t(key.back()) - D.front);
             }
-            const auto index = table[k];
-            const auto& item = items[index];
-            if (item.first != key) [[unlikely]]
-               return items.end();
-            return items.begin() + index;
+         }();
+
+         if (k >= uint8_t(N_table)) [[unlikely]] {
+            return items.end();
          }
+         const auto index = table[k];
+         const auto& item = items[index];
+         if (!compare_sv(item.first, key)) [[unlikely]]
+            return items.end();
+         return items.begin() + index;
       }
    };
 
    template <class T, single_char_hash_desc D>
+      requires(D.N < 256)
    constexpr auto make_single_char_map(std::initializer_list<std::pair<std::string_view, T>> pairs)
    {
       constexpr auto N = D.N;
-      static_assert(N < 256);
       if (pairs.size() != N) {
          std::abort();
       }
@@ -521,11 +551,17 @@ namespace glz::detail
       uint8_t i = 0;
       for (const auto& pair : pairs) {
          ht.items[i] = pair;
+         const auto& key = pair.first;
          if constexpr (D.is_front_hash) {
-            ht.table[static_cast<uint8_t>(pair.first[0]) - D.front] = i;
+            if constexpr (D.is_sum_hash) {
+               ht.table[uint8_t(key[0]) + uint8_t(key.size()) - D.front] = i;
+            }
+            else {
+               ht.table[uint8_t(key[0]) - D.front] = i;
+            }
          }
          else {
-            ht.table[static_cast<uint8_t>(pair.first.back()) - D.front] = i;
+            ht.table[uint8_t(key.back()) - D.front] = i;
          }
          ++i;
       }
@@ -543,7 +579,7 @@ namespace glz::detail
 
       constexpr decltype(auto) find(auto&& key) const noexcept
       {
-         if (S == key) [[likely]] {
+         if (compare_sv<S>(key)) [[likely]] {
             return items.begin();
          }
          else [[unlikely]] {
@@ -555,16 +591,15 @@ namespace glz::detail
    template <const std::string_view& S, bool CheckSize = true>
    inline constexpr bool cx_string_cmp(const std::string_view key) noexcept
    {
-      constexpr auto n = S.size();
       if (std::is_constant_evaluated()) {
          return key == S;
       }
       else {
          if constexpr (CheckSize) {
-            return (key.size() == n) && (std::memcmp(key.data(), S.data(), n) == 0);
+            return compare_sv<S>(key);
          }
          else {
-            return std::memcmp(key.data(), S.data(), n) == 0;
+            return compare<S.size()>(key.data(), S.data());
          }
       }
    }
@@ -602,3 +637,8 @@ namespace glz::detail
       }
    };
 }
+
+#ifdef _MSC_VER
+// restore disabled warning
+#pragma warning(pop)
+#endif
