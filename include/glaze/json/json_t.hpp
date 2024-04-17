@@ -102,6 +102,10 @@ namespace glz
       void reset() noexcept { data = null_t{}; }
 
       json_t() = default;
+      json_t(const json_t&) = default;
+      json_t& operator=(const json_t&) = default;
+      json_t(json_t&&) = default;
+      json_t& operator=(json_t&&) = default;
 
       template <class T>
          requires std::convertible_to<T, val_t> && (!std::same_as<json_t, std::decay_t<T>>)
@@ -126,10 +130,10 @@ namespace glz
          // {"literal", "other_literal"} but then we have to copy the data from the initializer list data =
          // object_t(obj); // This is what we would use if std::initializer_list<std::pair<const std::string, json_t>>
          // worked
-         data = object_t{};
+         data.emplace<object_t>();
          auto& data_obj = std::get<object_t>(data);
          for (auto&& pair : obj) {
-            data_obj.emplace(pair.first, pair.second);
+            data_obj.emplace(pair.first, std::move(pair.second));
          }
       }
 
@@ -137,7 +141,7 @@ namespace glz
       template <bool deprioritize = true>
       json_t(std::initializer_list<json_t>&& arr)
       {
-         data = array_t(arr);
+         data.emplace<array_t>(std::move(arr));
       }
 
       template <class T>
