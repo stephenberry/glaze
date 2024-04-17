@@ -2369,64 +2369,60 @@ namespace glz
                            return;
 
                         if constexpr (deduction_map.size()) {
+                           // We first check if a tag is defined and see if the key matches the tag
+                           if constexpr (!tag_v<T>.empty()) {
+                              if (key == tag_v<T>) {
+                                 parse_object_entry_sep<Opts>(ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
+                                 std::string_view type_id{};
+                                 read<json>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
+                                 skip_ws_no_pre_check<Opts>(ctx, it, end);
+                                 if (bool(ctx.error)) [[unlikely]]
+                                    return;
+                                 if (!(*it == ',' || *it == '}')) {
+                                    ctx.error = error_code::syntax_error;
+                                    return;
+                                 }
+
+                                 static constexpr auto id_map = make_variant_id_map<T>();
+                                 auto id_it = id_map.find(type_id);
+                                 if (id_it != id_map.end()) [[likely]] {
+                                    it = start;
+                                    const auto type_index = id_it->second;
+                                    if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
+                                    std::visit(
+                                       [&](auto&& v) {
+                                          using V = std::decay_t<decltype(v)>;
+                                          constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
+                                          if constexpr (is_object) {
+                                             from_json<V>::template op<opening_handled<Opts>(), tag_literal>(
+                                                v, ctx, it, end);
+                                          }
+                                       },
+                                       value);
+                                    return; // we've decoded our target type
+                                 }
+                                 else {
+                                    ctx.error = error_code::no_matching_variant_type;
+                                    return;
+                                 }
+                              }
+                           }
+                           
                            auto deduction_it = deduction_map.find(key);
                            if (deduction_it != deduction_map.end()) [[likely]] {
                               possible_types &= deduction_it->second;
                            }
-                           else [[unlikely]] {
-                              if constexpr (!tag_v<T>.empty()) {
-                                 if (key == tag_v<T>) {
-                                    parse_object_entry_sep<Opts>(ctx, it, end);
-                                    if (bool(ctx.error)) [[unlikely]]
-                                       return;
-                                    std::string_view type_id{};
-                                    read<json>::op<ws_handled<Opts>()>(type_id, ctx, it, end);
-                                    if (bool(ctx.error)) [[unlikely]]
-                                       return;
-                                    skip_ws_no_pre_check<Opts>(ctx, it, end);
-                                    if (bool(ctx.error)) [[unlikely]]
-                                       return;
-                                    if (!(*it == ',' || *it == '}')) {
-                                       ctx.error = error_code::syntax_error;
-                                       return;
-                                    }
-
-                                    static constexpr auto id_map = make_variant_id_map<T>();
-                                    auto id_it = id_map.find(type_id);
-                                    if (id_it != id_map.end()) [[likely]] {
-                                       it = start;
-                                       const auto type_index = id_it->second;
-                                       if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
-                                       std::visit(
-                                          [&](auto&& v) {
-                                             using V = std::decay_t<decltype(v)>;
-                                             constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
-                                             if constexpr (is_object) {
-                                                from_json<V>::template op<opening_handled<Opts>(), tag_literal>(
-                                                   v, ctx, it, end);
-                                             }
-                                          },
-                                          value);
-                                       return;
-                                    }
-                                    else {
-                                       ctx.error = error_code::no_matching_variant_type;
-                                       return;
-                                    }
-                                 }
-                                 else if constexpr (Opts.error_on_unknown_keys) {
-                                    ctx.error = error_code::unknown_key;
-                                    return;
-                                 }
-                              }
-                              else if constexpr (Opts.error_on_unknown_keys) {
-                                 ctx.error = error_code::unknown_key;
-                                 return;
-                              }
+                           else if constexpr (Opts.error_on_unknown_keys) {
+                              ctx.error = error_code::unknown_key;
+                              return;
                            }
                         }
                         else if constexpr (!tag_v<T>.empty()) {
-                           // empty object case for variant
+                           // empty object case for variant, if there are no normal elements
                            if (key == tag_v<T>) {
                               parse_object_entry_sep<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
