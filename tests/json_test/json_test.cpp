@@ -2757,7 +2757,32 @@ struct glz::meta<holds_some_num>
    static constexpr auto value = object("num", glz::detail::array_variant{&T::num});
 };
 
+struct OptionA {
+   std::string tag{};
+   int a{};
+};
+
+struct OptionB {
+   std::string tag{};
+   int a{};
+};
+
+using TaggedObject = std::variant<OptionA, OptionB>;
+
+template <>
+struct glz::meta<TaggedObject> {
+  static constexpr std::string_view tag = "tag";
+  static constexpr auto ids = std::array{"A", "B"};
+};
+
 suite tagged_variant_tests = [] {
+   "TaggedObject"_test = [] {
+      TaggedObject content;
+      std::string data = R"({ "tag": "A", "a": 2 })";
+      expect(!glz::read_json<TaggedObject>(content, data));
+      expect(std::get<OptionA>(content).a == 2);
+   };
+   
    "tagged_variant_read_tests"_test = [] {
       tagged_variant var{};
       expect(glz::read_json(var, R"({"action":"DELETE","data":"the_internet"})") == glz::error_code::none);
