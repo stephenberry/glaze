@@ -39,23 +39,18 @@ namespace glz::detail
       return t;
    }();
    
-   // clang-format off
-   constexpr std::array<char, 256> char_unescape_table = { //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, '"', 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, '/', 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0, //
-      0, 0, '\\', 0, 0, 0, 0, 0, '\b', 0, //
-      0, 0, '\f', 0, 0, 0, 0, 0, 0, 0, //
-      '\n', 0, 0, 0, '\r', 0, '\t', 0, 0, 0, //
-      0, 0, 0, 0, 0, 0, 0, 0, 0, 0 //
-   };
-   // clang-format on
+   constexpr std::array<char, 256> char_unescape_table = [] {
+      std::array<char, 256> t{};
+      t['"'] = '"';
+      t['/'] = '/';
+      t['\\'] = '\\';
+      t['b'] = '\b';
+      t['f'] = '\f';
+      t['n'] = '\n';
+      t['r'] = '\r';
+      t['t'] = '\t';
+      return t;
+   }();
 
    constexpr std::array<bool, 128> ascii_whitespace_table = [] {
       std::array<bool, 128> t{};
