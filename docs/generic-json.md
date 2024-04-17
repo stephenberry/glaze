@@ -30,3 +30,15 @@ std::string buffer{};
 glz::write_json(json, buffer);
 expect(buffer == R"({"answer":{"everything":42},"happy":true,"list":[1,0,2],"name":"Stephen","object":{"currency":"USD","value":42.99},"pi":3.141})");
 ```
+
+## glz::raw_json
+
+There are times when you want to parse JSON into a C++ string, to inspect or decode at a later point. `glz::raw_json` is a simple wrapper around a `std::string` that will decode and encode JSON without needing a concrete structure.
+
+```c++
+std::vector<glz::raw_json> v{"0", "1", "2"};
+std::string s;
+glz::write_json(v, s);
+expect(s == R"([0,1,2])");
+```
+
