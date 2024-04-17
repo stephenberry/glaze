@@ -17,6 +17,8 @@
 #include <span>
 #include <string_view>
 
+#include "glaze/util/compare.hpp"
+
 #ifdef _MSC_VER
 // Turn off broken warning from MSVC for << operator precedence
 #pragma warning(push)
@@ -231,7 +233,7 @@ namespace glz::detail
          }
          else {
             const auto& item = items[index];
-            if (item.first != key) [[unlikely]]
+            if (!compare_sv(item.first, key)) [[unlikely]]
                return items.end();
          }
          return items.begin() + index;
@@ -325,8 +327,14 @@ namespace glz::detail
                return items.end();
             }
             const auto& item = items[index];
-            if (item.first != key) [[unlikely]]
-               return items.end();
+            if constexpr (std::integral<Key>) {
+               if (item.first != key) [[unlikely]]
+                  return items.end();
+            }
+            else {
+               if (!compare_sv(item.first, key)) [[unlikely]]
+                  return items.end();
+            }
          }
          return items.begin() + index;
       }
@@ -335,15 +343,24 @@ namespace glz::detail
       {
          const auto hash = hash_alg{}(key, seed);
          const auto extra = buckets[hash % N];
-         const auto index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
+         const size_t index = extra < 1 ? -extra : table[combine(hash, extra) % storage_size];
          if constexpr (!std::integral<Key> && use_hash_comparison) {
             if (hashes[index] != hash) [[unlikely]]
                return items.end();
          }
          else {
-            const auto& item = items[index];
-            if (item.first != key) [[unlikely]]
+            if (index >= N) [[unlikely]] {
                return items.end();
+            }
+            const auto& item = items[index];
+            if constexpr (std::integral<Key>) {
+               if (item.first != key) [[unlikely]]
+                  return items.end();
+            }
+            else {
+               if (!compare_sv(item.first, key)) [[unlikely]]
+                  return items.end();
+            }
          }
          return items.begin() + index;
       }
@@ -495,42 +512,29 @@ namespace glz::detail
          if (key.size() == 0) [[unlikely]] {
             return items.end();
          }
-
-         if constexpr (D.is_front_hash) {
-            if constexpr (D.is_sum_hash) {
-               const auto k = uint8_t(uint8_t(key[0]) + uint8_t(key.size()) - D.front);
-               if (k >= uint8_t(N_table)) [[unlikely]] {
-                  return items.end();
+         
+         const auto k = [&]() -> uint8_t {
+            if constexpr (D.is_front_hash) {
+               if constexpr (D.is_sum_hash) {
+                  return uint8_t(uint8_t(key[0]) + uint8_t(key.size()) - D.front);
                }
-               const auto index = table[k];
-               const auto& item = items[index];
-               if (item.first != key) [[unlikely]]
-                  return items.end();
-               return items.begin() + index;
+               else {
+                  return uint8_t(uint8_t(key[0]) - D.front);
+               }
             }
             else {
-               const auto k = uint8_t(uint8_t(key[0]) - D.front);
-               if (k >= uint8_t(N_table)) [[unlikely]] {
-                  return items.end();
-               }
-               const auto index = table[k];
-               const auto& item = items[index];
-               if (item.first != key) [[unlikely]]
-                  return items.end();
-               return items.begin() + index;
+               return uint8_t(uint8_t(key.back()) - D.front);
             }
+         }();
+         
+         if (k >= uint8_t(N_table)) [[unlikely]] {
+            return items.end();
          }
-         else {
-            const auto k = uint8_t(uint8_t(key.back()) - D.front);
-            if (k >= uint8_t(N_table)) [[unlikely]] {
-               return items.end();
-            }
-            const auto index = table[k];
-            const auto& item = items[index];
-            if (item.first != key) [[unlikely]]
-               return items.end();
-            return items.begin() + index;
-         }
+         const auto index = table[k];
+         const auto& item = items[index];
+         if (!compare_sv(item.first, key)) [[unlikely]]
+            return items.end();
+         return items.begin() + index;
       }
    };
 
@@ -575,7 +579,7 @@ namespace glz::detail
 
       constexpr decltype(auto) find(auto&& key) const noexcept
       {
-         if (S == key) [[likely]] {
+         if (compare_sv<S>(key)) [[likely]] {
             return items.begin();
          }
          else [[unlikely]] {
@@ -587,16 +591,15 @@ namespace glz::detail
    template <const std::string_view& S, bool CheckSize = true>
    inline constexpr bool cx_string_cmp(const std::string_view key) noexcept
    {
-      constexpr auto n = S.size();
       if (std::is_constant_evaluated()) {
          return key == S;
       }
       else {
          if constexpr (CheckSize) {
-            return (key.size() == n) && (std::memcmp(key.data(), S.data(), n) == 0);
+            return compare_sv<S>(key);
          }
          else {
-            return std::memcmp(key.data(), S.data(), n) == 0;
+            return compare<S.size()>(key.data(), S.data());
          }
       }
    }
