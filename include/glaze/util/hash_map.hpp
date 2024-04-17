@@ -512,7 +512,7 @@ namespace glz::detail
          if (key.size() == 0) [[unlikely]] {
             return items.end();
          }
-         
+
          const auto k = [&]() -> uint8_t {
             if constexpr (D.is_front_hash) {
                if constexpr (D.is_sum_hash) {
@@ -526,7 +526,7 @@ namespace glz::detail
                return uint8_t(uint8_t(key.back()) - D.front);
             }
          }();
-         
+
          if (k >= uint8_t(N_table)) [[unlikely]] {
             return items.end();
          }

@@ -68,7 +68,7 @@ namespace glz
       }
       return true;
    }
-   
+
    // IMPORTANT:
    // This comparison function produces less binary than `compare` above and is very fast.
    // However, if our count is less than 8, we must be able to access the previous [8 - count] bytes.
@@ -95,7 +95,7 @@ namespace glz
       std::memcpy(v + 1, rhs, 8);
       return v[0] == v[1];
    }
-   
+
    template <uint64_t Count, class Char>
    inline bool compare(const Char* lhs, const Char* rhs) noexcept
    {
@@ -139,7 +139,7 @@ namespace glz
          return true;
       }
    }
-   
+
    // compare_sv checks sizes
    inline constexpr bool compare_sv(const std::string_view lhs, const std::string_view rhs) noexcept
    {
@@ -150,7 +150,7 @@ namespace glz
          return (lhs.size() == rhs.size()) && compare(lhs.data(), rhs.data(), lhs.size());
       }
    }
-   
+
    template <const std::string_view& lhs>
    inline constexpr bool compare_sv(const std::string_view rhs) noexcept
    {
