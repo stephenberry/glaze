@@ -207,13 +207,6 @@ namespace glz
       requires !std::same_as<void, decltype(t.end())>;
       requires std::input_iterator<decltype(t.begin())>;
    };
-
-   // range like
-   template <class T>
-   using iterator_t = decltype(std::begin(std::declval<T&>()));
-
-   template <range R>
-   using range_value_t = std::iter_value_t<iterator_t<R>>;
    
    // range like
    template <class T>
