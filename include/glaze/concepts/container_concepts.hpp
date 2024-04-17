@@ -22,21 +22,20 @@ namespace glz::detail
                     std::same_as<std::decay_t<T>, char32_t> || std::same_as<std::decay_t<T>, wchar_t>;
 
    template <class T>
-   concept bool_t =
-      std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>;
+   concept bool_t = std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>;
 
    template <class T>
    concept int_t = std::integral<std::decay_t<T>> && !char_t<std::decay_t<T>> && !bool_t<T>;
 
    template <class T>
    concept num_t = std::floating_point<std::decay_t<T>> || int_t<T>;
-   
+
    template <class T>
    concept is_float128 = requires(T x) {
       requires sizeof(x) == 16;
       requires std::floating_point<T>;
    };
-   
+
    template <typename T>
    concept complex_t = requires(T a, T b) {
       {
@@ -134,7 +133,7 @@ namespace glz::detail
          container[size_t{}]
       } -> std::same_as<typename T::reference>;
    };
-   
+
    template <class T>
    concept vector_like = resizeable<T> && accessible<T> && has_data<T>;
 
@@ -207,11 +206,11 @@ namespace glz
       requires !std::same_as<void, decltype(t.end())>;
       requires std::input_iterator<decltype(t.begin())>;
    };
-   
+
    // range like
    template <class T>
    using iterator_t = decltype(std::begin(std::declval<T&>()));
-   
+
    template <range R>
    using range_value_t = std::iter_value_t<iterator_t<R>>;
 

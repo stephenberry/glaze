@@ -862,7 +862,7 @@ namespace glz
       using Tuple = std::decay_t<decltype(glz::tuplet::tuple{conv_sv(args)...})>;
       return glz::detail::Flags{group_builder<Tuple>::op(glz::tuplet::tuple{conv_sv(args)...})};
    }
-   
+
    template <detail::glaze_flags_t T>
    consteval auto byte_length() noexcept
    {

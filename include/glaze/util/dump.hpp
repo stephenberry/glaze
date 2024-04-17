@@ -5,8 +5,8 @@
 
 #include <bit>
 #include <cstring>
-#include <string_view>
 #include <span>
+#include <string_view>
 
 #include "glaze/concepts/container_concepts.hpp"
 
@@ -22,7 +22,7 @@ namespace glz::detail
          return buffer;
       }
    }
-   
+
    GLZ_ALWAYS_INLINE void dump(const char c, vector_like auto& b, auto& ix) noexcept
    {
       if (ix == b.size()) [[unlikely]] {

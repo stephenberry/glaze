@@ -38,7 +38,7 @@ namespace glz::detail
       t['E'] = true;
       return t;
    }();
-   
+
    constexpr std::array<char, 256> char_unescape_table = [] {
       std::array<char, 256> t{};
       t['"'] = '"';
