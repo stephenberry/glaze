@@ -3034,7 +3034,7 @@ suite generic_json_tests = [] {
    
    "json_t copy construction"_test = [] {
       std::string s{};
-      glz::write_json(glz::json_t{*(glz::read_json<glz::json_t>("{}"))}, s);
+      glz::write_json(glz::json_t(*(glz::read_json<glz::json_t>("{}"))), s);
       expect(s == "{}") << s;
    };
 };
