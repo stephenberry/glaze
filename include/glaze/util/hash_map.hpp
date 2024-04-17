@@ -512,42 +512,29 @@ namespace glz::detail
          if (key.size() == 0) [[unlikely]] {
             return items.end();
          }
-
-         if constexpr (D.is_front_hash) {
-            if constexpr (D.is_sum_hash) {
-               const auto k = uint8_t(uint8_t(key[0]) + uint8_t(key.size()) - D.front);
-               if (k >= uint8_t(N_table)) [[unlikely]] {
-                  return items.end();
+         
+         const auto k = [&]() -> uint8_t {
+            if constexpr (D.is_front_hash) {
+               if constexpr (D.is_sum_hash) {
+                  return uint8_t(uint8_t(key[0]) + uint8_t(key.size()) - D.front);
                }
-               const auto index = table[k];
-               const auto& item = items[index];
-               if (item.first != key) [[unlikely]]
-                  return items.end();
-               return items.begin() + index;
+               else {
+                  return uint8_t(uint8_t(key[0]) - D.front);
+               }
             }
             else {
-               const auto k = uint8_t(uint8_t(key[0]) - D.front);
-               if (k >= uint8_t(N_table)) [[unlikely]] {
-                  return items.end();
-               }
-               const auto index = table[k];
-               const auto& item = items[index];
-               if (item.first != key) [[unlikely]]
-                  return items.end();
-               return items.begin() + index;
+               return uint8_t(uint8_t(key.back()) - D.front);
             }
+         }();
+         
+         if (k >= uint8_t(N_table)) [[unlikely]] {
+            return items.end();
          }
-         else {
-            const auto k = uint8_t(uint8_t(key.back()) - D.front);
-            if (k >= uint8_t(N_table)) [[unlikely]] {
-               return items.end();
-            }
-            const auto index = table[k];
-            const auto& item = items[index];
-            if (item.first != key) [[unlikely]]
-               return items.end();
-            return items.begin() + index;
-         }
+         const auto index = table[k];
+         const auto& item = items[index];
+         if (!compare_sv(item.first, key)) [[unlikely]]
+            return items.end();
+         return items.begin() + index;
       }
    };
 
