@@ -155,7 +155,7 @@ namespace glz
       {
          return static_cast<F&&>(f)(static_cast<T&&>(t).identity_t<Bases>::value...);
       }
-      
+
       template <class First, class>
       using first_t = First;
 
