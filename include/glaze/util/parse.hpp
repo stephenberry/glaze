@@ -139,9 +139,10 @@ namespace glz::detail
       }
    }
 
-   consteval uint64_t repeat_byte(char c)
+   template <class T>
+   consteval uint64_t repeat_byte(const T repeat)
    {
-      const auto byte = uint8_t(c);
+      const auto byte = uint8_t(repeat);
       uint64_t res{};
       res |= uint64_t(byte) << 56;
       res |= uint64_t(byte) << 48;
@@ -174,11 +175,6 @@ namespace glz::detail
       return has_zero(chunk ^ repeat_byte(' '));
    }
 
-   GLZ_ALWAYS_INLINE constexpr auto has_forward_slash(const uint64_t chunk) noexcept
-   {
-      return has_zero(chunk ^ repeat_byte('/'));
-   }
-
    template <char Char>
    GLZ_ALWAYS_INLINE constexpr auto has_char(const uint64_t chunk) noexcept
    {
@@ -187,12 +183,12 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE constexpr uint64_t is_less_16(const uint64_t c) noexcept
    {
-      return has_zero(c & 0b1111000011110000111100001111000011110000111100001111000011110000);
+      return has_zero(c & repeat_byte(0b11110000));
    }
 
    GLZ_ALWAYS_INLINE constexpr uint64_t is_greater_15(const uint64_t c) noexcept
    {
-      return (c & 0b1111000011110000111100001111000011110000111100001111000011110000);
+      return (c & repeat_byte(0b11110000));
    }
 
    template <opts Opts>
@@ -307,9 +303,7 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-
-      auto* pc = std::memchr(it, '"', std::distance(it, end));
+      const auto* pc = std::memchr(it, '"', std::distance(it, end));
       if (pc) [[likely]] {
          it = reinterpret_cast<std::decay_t<decltype(it)>>(pc);
          return;
@@ -757,7 +751,7 @@ namespace glz::detail
       for (const auto fin = end - 7; it < fin;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
-         const uint64_t test = has_quote(chunk) | has_forward_slash(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         const uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
          if (test) {
             it += (std::countr_zero(test) >> 3);
 

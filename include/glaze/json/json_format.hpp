@@ -117,7 +117,7 @@ namespace glz::detail
       for (const auto end_m7 = end - 7; it < end_m7;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
-         const uint64_t slash = has_forward_slash(chunk);
+         const uint64_t slash = has_char<'/'>(chunk);
          if (slash) {
             it += (std::countr_zero(slash) >> 3);
 
