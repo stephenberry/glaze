@@ -3059,7 +3059,7 @@ suite generic_json_tests = [] {
       glz::json_t json{};
       expect(glz::read_json(json, buffer) == glz::error_code::parse_number_failure);
    };
-   
+
    "json_t copy construction"_test = [] {
       std::string s{};
       glz::write_json(glz::json_t(*(glz::read_json<glz::json_t>("{}"))), s);
