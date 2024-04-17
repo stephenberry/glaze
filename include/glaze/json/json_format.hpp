@@ -145,30 +145,10 @@ namespace glz::detail
       return {};
    }
 
-   constexpr std::array<bool, 128> numeric_ascii_table = [] {
-      std::array<bool, 128> t{};
-      t['0'] = true;
-      t['1'] = true;
-      t['2'] = true;
-      t['3'] = true;
-      t['4'] = true;
-      t['5'] = true;
-      t['6'] = true;
-      t['7'] = true;
-      t['8'] = true;
-      t['9'] = true;
-      t['.'] = true;
-      t['+'] = true;
-      t['-'] = true;
-      t['e'] = true;
-      t['E'] = true;
-      return t;
-   }();
-
-   inline sv read_json_number(auto&& it, auto&& end) noexcept
+   inline sv read_json_number(auto&& it) noexcept
    {
       auto start = it;
-      while (it < end && numeric_ascii_table[*it]) {
+      while (numeric_ascii_table[*it]) {
          ++it;
       }
       return {start, size_t(it - start)};
