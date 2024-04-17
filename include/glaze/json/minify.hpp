@@ -17,7 +17,7 @@ namespace glz
          using enum json_type;
 
          auto skip_whitespace = [&] {
-            while (it < end && ascii_whitespace_table[*it]) {
+            while (ascii_whitespace_table[*it]) {
                ++it;
             }
          };
@@ -93,8 +93,6 @@ namespace glz
                   [[fallthrough]];
                }
             }
-            case Unset:
-               [[fallthrough]];
             [[unlikely]] default : {
                ctx.error = error_code::syntax_error;
                return;

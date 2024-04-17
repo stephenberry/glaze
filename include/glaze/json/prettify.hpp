@@ -153,11 +153,10 @@ namespace glz
       {
          if constexpr (resizeable<Out>) {
             if (in.empty()) {
-               out.resize(128);
+               out.clear();
+               return;
             }
-            else {
-               out.resize(in.size() * 2);
-            }
+            out.resize(in.size() * 2);
          }
          size_t ix = 0;
          auto [it, end] = read_iterators<Opts>(ctx, in);
