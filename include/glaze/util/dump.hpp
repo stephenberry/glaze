@@ -4,6 +4,7 @@
 #pragma once
 
 #include <bit>
+#include <cstddef>
 #include <cstring>
 #include <span>
 #include <string_view>
