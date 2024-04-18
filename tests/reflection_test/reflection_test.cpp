@@ -35,6 +35,26 @@ suite reflection = [] {
 
       expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
    };
+   
+   "reflect_write prettify"_test = [] {
+      std::string buffer = R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})";
+      my_struct obj{};
+      expect(!glz::read_json(obj, buffer));
+
+      buffer.clear();
+      glz::write<glz::opts{.prettify = true}>(obj, buffer);
+
+      expect(buffer == R"({
+   "i": 287,
+   "d": 3.14,
+   "hello": "Hello World",
+   "arr": [
+      1,
+      2,
+      3
+   ]
+})");
+   };
 };
 
 struct non_default_t
