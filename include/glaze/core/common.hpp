@@ -32,6 +32,7 @@ namespace glz
    template <class T>
    struct raw_t
    {
+      static constexpr bool glaze_wrapper = true;
       using value_type = T;
       T& val;
    };
@@ -225,32 +226,32 @@ namespace glz
    {
       template <class T>
       concept constructible = requires { meta<std::decay_t<T>>::construct; } || local_construct_t<std::decay_t<T>>;
-
+      
       template <class T>
       concept meta_value_t = glaze_t<std::decay_t<T>>;
-
+      
       template <class T>
       concept str_t = !std::same_as<std::nullptr_t, T> && std::convertible_to<std::decay_t<T>, std::string_view>;
-
+      
       // this concept requires that T is string and copies the string in json
       template <class T>
       concept string_t = str_t<T> && !std::same_as<std::decay_t<T>, std::string_view> && has_push_back<T>;
-
+      
       template <class T>
       concept char_array_t = str_t<T> && std::is_array_v<std::remove_pointer_t<std::remove_reference_t<T>>>;
-
+      
       // this concept requires that T is just a view
       template <class T>
       concept str_view_t = std::same_as<std::decay_t<T>, std::string_view>;
-
+      
       template <class T>
       concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
-                               pair_t<range_value_t<T>> && map_subscriptable<T>;
-
+      pair_t<range_value_t<T>> && map_subscriptable<T>;
+      
       template <class T>
       concept writable_map_t =
-         !custom_write<T> && !meta_value_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>>;
-
+      !custom_write<T> && !meta_value_t<T> && !str_t<T> && range<T> && pair_t<range_value_t<T>>;
+      
       template <class Map>
       concept heterogeneous_map = requires {
          typename Map::key_compare;
@@ -258,36 +259,36 @@ namespace glz
                   std::same_as<typename Map::key_compare, std::greater<>> ||
                   requires { typename Map::key_compare::is_transparent; });
       };
-
+      
       template <class T>
       concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>)&&range<T>);
-
+      
       template <class T>
       concept readable_array_t =
-         (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> && !filesystem_path<T>);
-
+      (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> && !filesystem_path<T>);
+      
       template <class T>
       concept writable_array_t =
-         (range<T> && !custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> && !filesystem_path<T>);
-
+      (range<T> && !custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> && !filesystem_path<T>);
+      
       template <class T>
       concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> &&
-                                    !resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
-
+      !resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
+      
       template <class T>
       concept boolean_like = std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> ||
-                             std::same_as<T, std::vector<bool>::const_reference>;
-
+      std::same_as<T, std::vector<bool>::const_reference>;
+      
       template <class T>
       concept is_no_reflect = requires(T t) { requires T::glaze_reflect == false; };
-
+      
       template <class T>
       concept has_static_size = (is_span<T> && !is_dynamic_span<T>) || (requires(T container) {
-                                   {
-                                      std::bool_constant<(std::decay_t<T>{}.size(), true)>()
-                                   } -> std::same_as<std::true_type>;
-                                } && std::decay_t<T>{}.size() > 0);
-
+         {
+            std::bool_constant<(std::decay_t<T>{}.size(), true)>()
+         } -> std::same_as<std::true_type>;
+      } && std::decay_t<T>{}.size() > 0);
+      
       template <class T>
       constexpr size_t get_size() noexcept
       {
@@ -298,15 +299,18 @@ namespace glz
             return std::decay_t<T>{}.size();
          }
       }
-
+      
       template <class T>
       concept is_reference_wrapper = is_specialization_v<T, std::reference_wrapper>;
-
+      
       template <class T>
       concept tuple_t = requires(T t) {
          std::tuple_size<T>::value;
          glz::get<0>(t);
       } && !meta_value_t<T> && !range<T>;
+      
+      template <class T>
+      concept glaze_wrapper = requires { requires T::glaze_wrapper == true; };
 
       template <class T>
       concept always_null_t =
@@ -319,12 +323,12 @@ namespace glz
             *t
          };
       };
+      
+      template <class T>
+      concept nullable_wrapper = glaze_wrapper<T> && nullable_t<typename T::value_type>;
 
       template <class T>
-      concept raw_nullable = is_specialization_v<T, raw_t> && requires { requires nullable_t<typename T::value_type>; };
-
-      template <class T>
-      concept null_t = nullable_t<T> || always_null_t<T> || raw_nullable<T>;
+      concept null_t = nullable_t<T> || always_null_t<T> || nullable_wrapper<T>;
 
       template <class T>
       concept func_t = requires(T t) {
