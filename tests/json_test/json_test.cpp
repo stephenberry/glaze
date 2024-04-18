@@ -4791,6 +4791,39 @@ suite quote_map = [] {
    };
 };
 
+struct nullable_quoted_num_t
+{
+   std::optional<int> i{};
+   
+   struct glaze {
+      using T = nullable_quoted_num_t;
+      static constexpr auto value = glz::object("i", glz::quoted_num<&T::i>);
+   };
+};
+
+suite nullable_quoted_num = [] {
+   "nullable_quoted_num"_test = [] {
+      std::string_view json = R"({"i":"42"})";
+      nullable_quoted_num_t obj{};
+      expect(!glz::read_json(obj, json));
+      expect(obj.i.value() == 42);
+      
+      json = R"({"i":null})";
+      expect(!glz::read_json(obj, json));
+      expect(!obj.i.has_value());
+      
+      json = R"({"i":""})";
+      expect(glz::read_json(obj, json) == glz::error_code::parse_number_failure);
+   };
+   
+   "nullable_quoted_num error_on_missing_keys"_test = [] {
+      std::string_view json = R"({})";
+      nullable_quoted_num_t obj{};
+      expect(!glz::read<glz::opts{.error_on_missing_keys = true}>(obj, json));
+      expect(!obj.i.has_value());
+   };
+};
+
 struct bool_map
 {
    std::map<bool, std::string> x;
