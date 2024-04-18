@@ -63,18 +63,47 @@ namespace glz::detail
 
          using V = std::decay_t<decltype(value)>;
 
-         if constexpr (is_any_of<V, float, double, int32_t, uint32_t, int64_t, uint64_t>) {
+         if constexpr (std::floating_point<V>) {
+            if constexpr (uint8_t(Opts.float_max_write_precision) > 0 &&
+                          uint8_t(Opts.float_max_write_precision) < sizeof(V)) {
+               // we cast to a lower precision floating point value before writing out
+               if constexpr (uint8_t(Opts.float_max_write_precision) == 8) {
+                  const auto reduced = static_cast<double>(value);
+                  const auto start = data_ptr(b) + ix;
+                  const auto end = glz::to_chars(start, reduced);
+                  ix += size_t(end - start);
+               }
+               else if constexpr (uint8_t(Opts.float_max_write_precision) == 4) {
+                  const auto reduced = static_cast<float>(value);
+                  const auto start = data_ptr(b) + ix;
+                  const auto end = glz::to_chars(start, reduced);
+                  ix += size_t(end - start);
+               }
+               else {
+                  static_assert(false_v<V>, "invalid float_max_write_precision");
+               }
+            }
+            else if constexpr (is_any_of<V, float, double>) {
+               const auto start = data_ptr(b) + ix;
+               const auto end = glz::to_chars(start, value);
+               ix += size_t(end - start);
+            }
+            else if constexpr (is_float128<V>) {
+               const auto start = data_ptr(b) + ix;
+               const auto [ptr, ec] = std::to_chars(start, data_ptr(b) + b.size(), value, std::chars_format::general);
+               if (ec != std::errc()) {
+                  // TODO: Do we need to handle this error state?
+               }
+               ix += size_t(ptr - start);
+            }
+            else {
+               static_assert(false_v<V>, "type is not supported");
+            }
+         }
+         else if constexpr (is_any_of<V, int32_t, uint32_t, int64_t, uint64_t>) {
             const auto start = data_ptr(b) + ix;
             const auto end = glz::to_chars(start, value);
             ix += size_t(end - start);
-         }
-         else if constexpr (is_float128<V>) {
-            const auto start = data_ptr(b) + ix;
-            const auto [ptr, ec] = std::to_chars(start, data_ptr(b) + b.size(), value, std::chars_format::general);
-            if (ec != std::errc()) {
-               // TODO: Do we need to handle this error state?
-            }
-            ix += size_t(ptr - start);
          }
          else if constexpr (std::integral<V>) {
             using X = std::decay_t<decltype(sized_integer_conversion<V>())>;
