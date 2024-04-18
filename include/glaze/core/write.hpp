@@ -12,7 +12,7 @@ namespace glz
 {
    template <class Buffer>
    concept non_const_buffer = !std::is_const_v<Buffer>;
-   
+
    template <class Buffer>
    concept raw_buffer = std::same_as<std::decay_t<Buffer>, char*> && non_const_buffer<Buffer>;
 
