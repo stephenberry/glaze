@@ -7643,6 +7643,17 @@ suite sum_hash_obj_test = [] {
    };
 };
 
+struct write_precision_t
+{
+   double pi = std::numbers::pi_v<double>;
+   
+   struct glaze
+   {
+      using T = write_precision_t;
+      static constexpr auto value = glz::object("pi", glz::write_float32<&T::pi>);
+   };
+};
+
 suite max_write_precision_tests = [] {
    "max_write_precision"_test = [] {
       double pi = std::numbers::pi_v<double>;
@@ -7660,6 +7671,12 @@ suite max_write_precision_tests = [] {
       expect(json_double != json_float);
       expect(json_float == glz::write_json(std::array{std::numbers::pi_v<float>, 2 * std::numbers::pi_v<float>}));
       expect(!glz::read_json(double_array, json_float));
+   };
+   
+   "write_precision_t"_test = [] {
+      write_precision_t obj{};
+      std::string json_float = glz::write_json(obj);
+      expect(json_float == R"({"pi":3.1415927})") << json_float;
    };
 };
 

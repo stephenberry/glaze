@@ -123,6 +123,14 @@ namespace glz
       ret.ws_handled = false;
       return ret;
    }
+   
+   template <opts Opts, auto member_ptr>
+   constexpr auto set_opt(auto&& value)
+   {
+      opts ret = Opts;
+      ret.*member_ptr = value;
+      return ret;
+   }
 
    template <opts Opts, auto member_ptr>
    constexpr auto opt_on()
