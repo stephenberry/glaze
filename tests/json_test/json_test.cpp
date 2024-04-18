@@ -7646,7 +7646,7 @@ suite sum_hash_obj_test = [] {
 struct write_precision_t
 {
    double pi = std::numbers::pi_v<double>;
-   
+
    struct glaze
    {
       using T = write_precision_t;
@@ -7658,21 +7658,21 @@ suite max_write_precision_tests = [] {
    "max_write_precision"_test = [] {
       double pi = std::numbers::pi_v<double>;
       std::string json_double = glz::write_json(pi);
-      
+
       constexpr glz::opts options{.float_max_write_precision = glz::float_precision::float32};
       std::string json_float = glz::write<options>(pi);
       expect(json_double != json_float);
       expect(json_float == glz::write_json(std::numbers::pi_v<float>));
       expect(!glz::read_json(pi, json_float));
-      
-      std::vector<double> double_array{ pi, 2 * pi };
+
+      std::vector<double> double_array{pi, 2 * pi};
       json_double = glz::write_json(double_array);
       json_float = glz::write<options>(double_array);
       expect(json_double != json_float);
       expect(json_float == glz::write_json(std::array{std::numbers::pi_v<float>, 2 * std::numbers::pi_v<float>}));
       expect(!glz::read_json(double_array, json_float));
    };
-   
+
    "write_precision_t"_test = [] {
       write_precision_t obj{};
       std::string json_float = glz::write_json(obj);
