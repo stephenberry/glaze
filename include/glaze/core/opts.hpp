@@ -21,7 +21,7 @@ namespace glz
    
    enum struct float_precision : uint8_t
    {
-      none,
+      full,
       float32 = 4,
       float64 = 8,
       float128 = 16

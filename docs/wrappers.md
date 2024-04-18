@@ -41,8 +41,9 @@ glz::custom<&T::read, &T::write> // calls custom read and write std::functions o
 glz::manage<&T::x, &T::read_x, &T::write_x> // calls read_x() after reading x and calls write_x() before writing x
 glz::raw<&T::x> // write out string like types without quotes
 glz::raw_string<&T::string> // do not decode/encode escaped characters for strings (improves read/write performance)
- 
+
 glz::write_float32<&T::x> // writes out numbers with a maximum precision of float32_t
 glz::write_float64<&T::x> // writes out numbers with a maximum precision of float64_t
+glz::write_float_full<&T::x> // writes out numbers with full precision (turns off higher level float precision wrappers)
 ```
 
