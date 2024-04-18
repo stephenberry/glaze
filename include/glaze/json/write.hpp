@@ -456,7 +456,7 @@ namespace glz
          }
       };
 
-      template <glz::opts Opts>
+      template <opts Opts>
       GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, auto&&... args) noexcept
       {
          dump<','>(args...);
