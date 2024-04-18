@@ -18,6 +18,14 @@ namespace glz
    // layout
    constexpr uint32_t rowwise = 0;
    constexpr uint32_t colwise = 1;
+   
+   enum struct float_precision : uint8_t
+   {
+      full,
+      float32 = 4,
+      float64 = 8,
+      float128 = 16
+   };
 
    struct opts
    {
@@ -38,7 +46,12 @@ namespace glz
                                           // skip_null_members = false to require nullable members
       bool error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
+      
       uint32_t layout = rowwise; // CSV row wise output/input
+      
+      // the maximum precision type used for writing floats, higher precision floats will be cast down to this precision
+      float_precision float_max_write_precision{};
+      
       bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool number = false; // read numbers as strings and write these string as numbers
       bool raw = false; // write out string like values without quotes
@@ -108,6 +121,14 @@ namespace glz
    {
       opts ret = Opts;
       ret.ws_handled = false;
+      return ret;
+   }
+   
+   template <opts Opts, auto member_ptr>
+   constexpr auto set_opt(auto&& value)
+   {
+      opts ret = Opts;
+      ret.*member_ptr = value;
       return ret;
    }
 
