@@ -1111,7 +1111,7 @@ namespace glz::detail
             else if (escape_char == '\\') {
                escape_char = in[next + 1];
                if (escape_char == 'u') [[unlikely]] {
-                  in += next;
+                  in += next + 2;
                   out += next;
                   if (!handle_unicode_code_point(in, out)) {
                      ctx.error = error_code::unicode_escape_conversion_failure;
@@ -1151,6 +1151,7 @@ namespace glz::detail
             else if (escape_char == '\\') {
                escape_char = in[1];
                if (escape_char == 'u') {
+                  in += 2;
                   if (!handle_unicode_code_point(in, out)) {
                      ctx.error = error_code::unicode_escape_conversion_failure;
                      return in;
