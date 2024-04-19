@@ -25,8 +25,8 @@ namespace glz::detail
       Comment = '/'
    };
 
-   constexpr std::array<json_type, 128> ascii_json_types = [] {
-      std::array<json_type, 128> t{};
+   constexpr std::array<json_type, 256> json_types = [] {
+      std::array<json_type, 256> t{};
       using enum json_type;
       t['"'] = String;
       t[','] = Comma;
@@ -148,7 +148,7 @@ namespace glz::detail
    inline sv read_json_number(auto&& it) noexcept
    {
       auto start = it;
-      while (numeric_ascii_table[*it]) {
+      while (numeric_table[*it]) {
          ++it;
       }
       return {start, size_t(it - start)};

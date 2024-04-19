@@ -23,7 +23,7 @@ namespace glz
          int64_t indent{};
 
          while (it < end) {
-            switch (ascii_json_types[size_t(*it)]) {
+            switch (json_types[size_t(*it)]) {
             case String: {
                const auto value = read_json_string(it, end);
                dump(value, b, ix);
