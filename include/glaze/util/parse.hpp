@@ -145,25 +145,25 @@ namespace glz::detail
    // Standard proposal: https://eisenwave.github.io/cpp-proposals/bit-permutations.html
    // Same as pdep
    template <std::unsigned_integral T>
-   [[nodiscard]] constexpr T bit_expandr(T x, T m) noexcept
+   [[nodiscard]] constexpr T bit_expandr(const T x, const T m) noexcept
    {
-       T result = 0;
-       for (int i = 0, j = 0; i < std::numeric_limits<T>::digits; ++i) {
-           const bool mask_bit = (m >> i) & 1;
-           result |= (mask_bit & (x >> j)) << i;
-           j += mask_bit;
-       }
-       return result;
+      T result{};
+      for (int i = 0, j = 0; i < std::numeric_limits<T>::digits; ++i) {
+         const bool mask_bit = (m >> i) & 1;
+         result |= (mask_bit & (x >> j)) << i;
+         j += mask_bit;
+      }
+      return result;
    }
    
    template <class Char>
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t code_point_to_utf8(const uint32_t code_point, Char* c) {
       if (code_point < 128) {
-         c[0] = static_cast<Char>(code_point);
+         c[0] = Char(code_point);
          return 1;
       }
       
-      const auto leading_zeros = std::countr_zero(code_point);
+      const auto leading_zeros = std::countl_zero(code_point);
       if (leading_zeros >= 11) {
          const uint32_t pattern = bit_expandr(0x3F00u, code_point) | 0xC0u;
          c[0] = Char(pattern >> 8);

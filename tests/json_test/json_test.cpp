@@ -282,6 +282,13 @@ suite escaping_tests = [] {
       expect(obj.escaped_key == 5);
       expect(obj.escaped_key2 == "bye");
    };
+   
+   "\u11FF read"_test = [] {
+      std::string in = R"("\u11FF")";
+      std::string str{};
+      expect(!glz::read_json(str, in));
+      expect(str == "ᇿ") << str;
+   };
 
    "escaped_characters read"_test = [] {
       std::string in = R"({"escape_chars":"\b\f\n\r\t\u11FF"})";
