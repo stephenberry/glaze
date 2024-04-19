@@ -8,7 +8,6 @@
 #include <cwchar>
 #include <filesystem>
 #include <iterator>
-#include <locale>
 #include <ranges>
 #include <type_traits>
 
@@ -462,82 +461,6 @@ namespace glz
          }
       };
 
-      template <class T, class Val, class It, class End>
-      GLZ_ALWAYS_INLINE void read_escaped_unicode(Val& value, is_context auto&& ctx, It&& it, End&& end)
-      {
-         // This is slow but who is escaping unicode nowadays
-         // codecvt is problematic on mingw hence mixing with the c character conversion functions
-         if (std::distance(it, end) < 4 || !std::all_of(it, it + 4, ::isxdigit)) [[unlikely]] {
-            ctx.error = error_code::u_requires_hex_digits;
-            return;
-         }
-         if constexpr (std::is_same_v<T, char32_t>) {
-            if constexpr (char_t<Val>) {
-               value = hex4_to_char32(it);
-            }
-            else {
-               value.push_back(hex4_to_char32(it));
-            }
-         }
-         else {
-            char32_t codepoint = hex4_to_char32(it);
-            if constexpr (std::is_same_v<T, char16_t>) {
-               if (codepoint < 0x10000) {
-                  if constexpr (char_t<Val>) {
-                     value = static_cast<T>(codepoint);
-                  }
-                  else {
-                     value.push_back(static_cast<T>(codepoint));
-                  }
-               }
-               else {
-                  if constexpr (char_t<Val>) {
-                     ctx.error = error_code::unicode_escape_conversion_failure;
-                     return;
-                  }
-                  else {
-                     const auto t = codepoint - 0x10000;
-                     const auto high = static_cast<T>(((t << 12) >> 22) + 0xD800);
-                     const auto low = static_cast<T>(((t << 22) >> 22) + 0xDC00);
-                     value.push_back(high);
-                     value.push_back(low);
-                  }
-               }
-            }
-            else {
-               char8_t buffer[4];
-               auto& facet = std::use_facet<std::codecvt<char32_t, char8_t, mbstate_t>>(std::locale());
-               std::mbstate_t mbstate{};
-               const char32_t* from_next;
-               char8_t* to_next;
-               const auto result =
-                  facet.out(mbstate, &codepoint, &codepoint + 1, from_next, buffer, buffer + 4, to_next);
-               if (result != std::codecvt_base::ok) {
-                  ctx.error = error_code::unicode_escape_conversion_failure;
-                  return;
-               }
-
-               if constexpr (std::is_same_v<T, char> || std::is_same_v<T, char8_t>) {
-                  if constexpr (char_t<Val>) {
-                     if ((to_next - buffer) != 1) [[unlikely]] {
-                        ctx.error = error_code::unicode_escape_conversion_failure;
-                        return;
-                     }
-                     value = static_cast<T>(buffer[0]);
-                  }
-                  else {
-                     value.append(reinterpret_cast<T*>(buffer), to_next - buffer);
-                  }
-               }
-               else if constexpr (std::is_same_v<T, wchar_t>) {
-                  static_assert(false_v<T>, "wchar_t is unsupported, JSON requires UTF8");
-               }
-            }
-         }
-
-         std::advance(it, 4);
-      }
-
       template <string_t T>
       struct from_json<T>
       {
@@ -788,8 +711,7 @@ namespace glz
                   ++it;
                   break;
                case 'u': {
-                  ++it;
-                  read_escaped_unicode<T>(value, ctx, it, end);
+                  ctx.error = error_code::unicode_escape_conversion_failure;
                   return;
                }
                default: {

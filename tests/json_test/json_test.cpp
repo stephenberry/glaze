@@ -313,17 +313,6 @@ suite escaping_tests = [] {
       in = R"("\t")";
       expect(glz::read_json(c, in) == glz::error_code::none);
       expect(c == '\t');
-
-      in = R"("\u11FF")";
-      char32_t c32{};
-      expect(glz::read_json(c32, in) == glz::error_code::none);
-      expect(static_cast<uint32_t>(c32) == 0x11FF);
-
-      in = R"("\u732B")";
-      char16_t c16{};
-      expect(glz::read_json(c16, in) == glz::error_code::none);
-      char16_t uc = u'\u732b';
-      expect(c16 == uc);
    };
 
    "escaped_characters write"_test = [] {

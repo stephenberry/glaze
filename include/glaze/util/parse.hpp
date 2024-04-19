@@ -6,7 +6,6 @@
 #include <bit>
 #include <cstring>
 #include <iterator>
-#include <locale>
 #include <span>
 
 #include "glaze/core/context.hpp"
@@ -70,6 +69,194 @@ namespace glz::detail
       t['/'] = true;
       return t;
    }();
+   
+   constexpr std::array<uint8_t, 256> digit_hex_table = []{
+      std::array<uint8_t, 256> t;
+      std::fill(t.begin(), t.end(), uint8_t(255));
+      t['0'] = 0;
+      t['1'] = 1;
+      t['2'] = 2;
+      t['3'] = 3;
+      t['4'] = 4;
+      t['5'] = 5;
+      t['6'] = 6;
+      t['7'] = 7;
+      t['8'] = 8;
+      t['9'] = 9;
+      t['A'] = 0xA;
+      t['B'] = 0xB;
+      t['C'] = 0xC;
+      t['D'] = 0xD;
+      t['E'] = 0xE;
+      t['F'] = 0xF;
+      return t;
+   }();
+   
+   template <class T>
+   consteval uint32_t repeat_byte4(const T repeat)
+   {
+      const auto byte = uint8_t(repeat);
+      uint32_t res{};
+      res |= uint32_t(byte) << 24;
+      res |= uint32_t(byte) << 16;
+      res |= uint32_t(byte) << 8;
+      res |= uint32_t(byte);
+      return res;
+   }
+   
+   GLZ_ALWAYS_INLINE constexpr uint32_t has_zero_u32(const uint32_t chunk) noexcept
+   {
+      return (((chunk - 0x01010101) & ~chunk) & 0x80808080);
+   }
+
+   GLZ_ALWAYS_INLINE constexpr uint32_t is_less_16_u32(const uint32_t chunk) noexcept
+   {
+      return has_zero_u32(chunk & repeat_byte4(0b11110000));
+   }
+   
+   template <class T>
+   consteval uint64_t repeat_byte8(const T repeat)
+   {
+      const auto byte = uint8_t(repeat);
+      uint64_t res{};
+      res |= uint64_t(byte) << 56;
+      res |= uint64_t(byte) << 48;
+      res |= uint64_t(byte) << 40;
+      res |= uint64_t(byte) << 32;
+      res |= uint64_t(byte) << 24;
+      res |= uint64_t(byte) << 16;
+      res |= uint64_t(byte) << 8;
+      res |= uint64_t(byte);
+      return res;
+   }
+   
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t hex_to_u32(const char* c) noexcept {
+      const auto& t = digit_hex_table;
+      const uint8_t arr[]{ t[c[3]], t[c[2]], t[c[1]], t[c[0]] };
+      uint32_t chunk;
+      std::memcpy(&chunk, arr, 4);
+      if (is_less_16_u32(chunk)) [[likely]] {
+         return chunk;
+      }
+      return 0xFFFFFFFFu;
+   }
+   
+   // TODO: replace with std::bit_expandr if accepted
+   // Standard proposal: https://eisenwave.github.io/cpp-proposals/bit-permutations.html
+   // Same as pdep
+   template <std::unsigned_integral T>
+   [[nodiscard]] constexpr T bit_expandr(T x, T m) noexcept
+   {
+       T result = 0;
+       for (int i = 0, j = 0; i < std::numeric_limits<T>::digits; ++i) {
+           const bool mask_bit = (m >> i) & 1;
+           result |= (mask_bit & (x >> j)) << i;
+           j += mask_bit;
+       }
+       return result;
+   }
+   
+   template <class Char>
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t code_point_to_utf8(const uint32_t code_point, Char* c) {
+      if (code_point < 128) {
+         c[0] = static_cast<Char>(code_point);
+         return 1;
+      }
+      
+      const auto leading_zeros = std::countr_zero(code_point);
+      if (leading_zeros >= 11) {
+         const uint32_t pattern = bit_expandr(0x3F00u, code_point) | 0xC0u;
+         c[0] = Char(pattern >> 8);
+         c[1] = Char(pattern & 0xFFu);
+         return 2;
+      } else if (leading_zeros >= 16) {
+         const uint32_t pattern = bit_expandr(0x0F0800u, code_point) | 0xE0u;
+         c[0] = Char(pattern >> 16);
+         c[1] = Char(pattern >> 8);
+         c[2] = Char(pattern & 0xFFu);
+         return 3;
+      } else if (leading_zeros >= 21) {
+         const uint32_t pattern = bit_expandr(0x01020400u, code_point) | 0xF0u;
+         c[0] = Char(pattern >> 24);
+         c[1] = Char(pattern >> 16);
+         c[2] = Char(pattern >> 8);
+         c[3] = Char(pattern & 0xFFu);
+         return 4;
+      }
+      return 0;
+   }
+   
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t skip_code_point(const uint32_t code_point) {
+      if (code_point < 128) {
+         return 1;
+      }
+      
+      const auto leading_zeros = std::countr_zero(code_point);
+      if (leading_zeros >= 11) {
+         return 2;
+      } else if (leading_zeros >= 16) {
+         return 3;
+      } else if (leading_zeros >= 21) {
+         return 4;
+      }
+      return 0;
+   }
+   
+   template <class Char>
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& src, Char* dst) {
+      static constexpr uint32_t sub_code_point = 0xfffd;
+      uint32_t code_point = hex_to_u32(src);
+      if (code_point == 0xFFFFFFFFu) [[unlikely]] {
+         return false;
+      }
+      src += 4; // skip the code point characters
+      if (code_point >= 0xd800 && code_point < 0xdc00) {
+         // surrogate pair code points
+         if (((src[0] << 8) | src[1]) != ((Char(0x5Cu) << 8) | Char(0x75u))) {
+            code_point = sub_code_point;
+         } else {
+            const uint32_t code_point2 = hex_to_u32(src + 2) - 0xdc00;
+            if (code_point2 >> 10) {
+               code_point = sub_code_point;
+            } else {
+               code_point = (((code_point - 0xd800) << 10) | code_point2) + 0x10000;
+               src += 6;
+            }
+         }
+      } else if (code_point >= 0xdc00 && code_point <= 0xdfff) {
+         code_point = sub_code_point;
+      }
+      const uint32_t offset = code_point_to_utf8(code_point, dst);
+      dst += offset;
+      return offset > 0;
+   }
+   
+   template <class Char>
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool skip_unicode_code_point(const Char*& src) {
+      static constexpr uint32_t sub_code_point = 0xfffd;
+      uint32_t code_point = hex_to_u32(src);
+      if (code_point == 0xFFFFFFFFu) [[unlikely]] {
+         return false;
+      }
+      src += 4; // skip the code point characters
+      if (code_point >= 0xd800 && code_point < 0xdc00) {
+         // surrogate pair code points
+         if (((src[0] << 8) | src[1]) != ((Char(0x5Cu) << 8) | Char(0x75u))) {
+            code_point = sub_code_point;
+         } else {
+            const uint32_t code_point2 = hex_to_u32(src + 2) - 0xdc00;
+            if (code_point2 >> 10) {
+               code_point = sub_code_point;
+            } else {
+               code_point = (((code_point - 0xd800) << 10) | code_point2) + 0x10000;
+               src += 6;
+            }
+         }
+      } else if (code_point >= 0xdc00 && code_point <= 0xdfff) {
+         code_point = sub_code_point;
+      }
+      return skip_code_point(code_point) > 0;
+   }
 
    // assumes null terminated
    template <char c>
@@ -134,22 +321,6 @@ namespace glz::detail
       }
    }
 
-   template <class T>
-   consteval uint64_t repeat_byte(const T repeat)
-   {
-      const auto byte = uint8_t(repeat);
-      uint64_t res{};
-      res |= uint64_t(byte) << 56;
-      res |= uint64_t(byte) << 48;
-      res |= uint64_t(byte) << 40;
-      res |= uint64_t(byte) << 32;
-      res |= uint64_t(byte) << 24;
-      res |= uint64_t(byte) << 16;
-      res |= uint64_t(byte) << 8;
-      res |= uint64_t(byte);
-      return res;
-   }
-
    GLZ_ALWAYS_INLINE constexpr auto has_zero(const uint64_t chunk) noexcept
    {
       return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080);
@@ -157,33 +328,33 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE constexpr auto has_quote(const uint64_t chunk) noexcept
    {
-      return has_zero(chunk ^ repeat_byte('"'));
+      return has_zero(chunk ^ repeat_byte8('"'));
    }
 
    GLZ_ALWAYS_INLINE constexpr auto has_escape(const uint64_t chunk) noexcept
    {
-      return has_zero(chunk ^ repeat_byte('\\'));
+      return has_zero(chunk ^ repeat_byte8('\\'));
    }
 
    GLZ_ALWAYS_INLINE constexpr auto has_space(const uint64_t chunk) noexcept
    {
-      return has_zero(chunk ^ repeat_byte(' '));
+      return has_zero(chunk ^ repeat_byte8(' '));
    }
 
    template <char Char>
    GLZ_ALWAYS_INLINE constexpr auto has_char(const uint64_t chunk) noexcept
    {
-      return has_zero(chunk ^ repeat_byte(Char));
+      return has_zero(chunk ^ repeat_byte8(Char));
    }
 
-   GLZ_ALWAYS_INLINE constexpr uint64_t is_less_16(const uint64_t c) noexcept
+   GLZ_ALWAYS_INLINE constexpr uint64_t is_less_16(const uint64_t chunk) noexcept
    {
-      return has_zero(c & repeat_byte(0b11110000));
+      return has_zero(chunk & repeat_byte8(0b11110000));
    }
 
-   GLZ_ALWAYS_INLINE constexpr uint64_t is_greater_15(const uint64_t c) noexcept
+   GLZ_ALWAYS_INLINE constexpr uint64_t is_greater_15(const uint64_t chunk) noexcept
    {
-      return (c & repeat_byte(0b11110000));
+      return (chunk & repeat_byte8(0b11110000));
    }
 
    template <opts Opts>
@@ -387,12 +558,7 @@ namespace glz::detail
                   }
                   else if (*it == 'u') [[unlikely]] {
                      ++it;
-                     if ((end - it) < 4) [[unlikely]] {
-                        ctx.error = error_code::syntax_error;
-                        return true;
-                     }
-                     else if (std::all_of(it, it + 4, ::isxdigit)) [[likely]] {
-                        it += 4;
+                     if (size_t(end - it) > 4 && skip_unicode_code_point(it)) [[likely]]  {
                         continue;
                      }
                      else [[unlikely]] {
@@ -425,12 +591,7 @@ namespace glz::detail
                }
                else if (*it == 'u') {
                   ++it;
-                  if ((end - it) < 4) [[unlikely]] {
-                     ctx.error = error_code::syntax_error;
-                     return true;
-                  }
-                  else if (std::all_of(it, it + 4, ::isxdigit)) [[likely]] {
-                     it += 4;
+                  if (size_t(end - it) > 4 && skip_unicode_code_point(it)) [[likely]]  {
                      continue;
                   }
                   else [[unlikely]] {
@@ -666,13 +827,12 @@ namespace glz::detail
                }
                else if (*it == 'u') {
                   ++it;
-                  if ((end - it) < 4) [[unlikely]] {
+                  if (size_t(end - it) > 4 && skip_unicode_code_point(it)) [[likely]]  {
+                     continue;
+                  }
+                  else [[unlikely]] {
                      ctx.error = error_code::syntax_error;
                      return;
-                  }
-                  else if (std::all_of(it, it + 4, ::isxdigit)) [[likely]] {
-                     it += 4;
-                     continue;
                   }
                }
                ctx.error = error_code::syntax_error;
@@ -931,35 +1091,6 @@ namespace glz::detail
       return value;
    }
 
-   GLZ_ALWAYS_INLINE bool handle_escaped_unicode(auto*& in, auto*& out)
-   {
-      in += 2;
-      // This is slow but who is escaping unicode nowadays
-      // codecvt is problematic on mingw hence mixing with the c character conversion functions
-      if (!std::all_of(in, in + 4, ::isxdigit)) [[unlikely]] {
-         return false;
-      }
-
-      char32_t codepoint = hex4_to_char32(in);
-
-      in += 4;
-
-      char8_t buffer[4];
-      auto& facet = std::use_facet<std::codecvt<char32_t, char8_t, mbstate_t>>(std::locale());
-      std::mbstate_t mbstate{};
-      const char32_t* from_next;
-      char8_t* to_next;
-      const auto result = facet.out(mbstate, &codepoint, &codepoint + 1, from_next, buffer, buffer + 4, to_next);
-      if (result != std::codecvt_base::ok) {
-         return false;
-      }
-
-      const auto offset = size_t(to_next - buffer);
-      std::memcpy(out, buffer, offset);
-      out += offset;
-      return true;
-   }
-
    // errors return the 'in' pointer for better error reporting
    template <size_t Bytes>
       requires(Bytes == 8)
@@ -982,7 +1113,7 @@ namespace glz::detail
                if (escape_char == 'u') [[unlikely]] {
                   in += next;
                   out += next;
-                  if (!handle_escaped_unicode(in, out)) {
+                  if (!handle_unicode_code_point(in, out)) {
                      ctx.error = error_code::unicode_escape_conversion_failure;
                      return in;
                   }
@@ -1020,7 +1151,7 @@ namespace glz::detail
             else if (escape_char == '\\') {
                escape_char = in[1];
                if (escape_char == 'u') {
-                  if (!handle_escaped_unicode(in, out)) {
+                  if (!handle_unicode_code_point(in, out)) {
                      ctx.error = error_code::unicode_escape_conversion_failure;
                      return in;
                   }

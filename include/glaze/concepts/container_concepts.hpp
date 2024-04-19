@@ -18,8 +18,7 @@ namespace glz
 namespace glz::detail
 {
    template <class T>
-   concept char_t = std::same_as<std::decay_t<T>, char> || std::same_as<std::decay_t<T>, char16_t> ||
-                    std::same_as<std::decay_t<T>, char32_t> || std::same_as<std::decay_t<T>, wchar_t>;
+   concept char_t = std::same_as<std::decay_t<T>, char>;
 
    template <class T>
    concept bool_t = std::same_as<std::decay_t<T>, bool> || std::same_as<std::decay_t<T>, std::vector<bool>::reference>;
