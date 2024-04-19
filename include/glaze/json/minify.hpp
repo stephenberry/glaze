@@ -17,7 +17,7 @@ namespace glz
          using enum json_type;
 
          auto skip_whitespace = [&] {
-            while (ascii_whitespace_table[*it]) {
+            while (whitespace_table[*it]) {
                ++it;
             }
          };
@@ -25,7 +25,7 @@ namespace glz
          skip_whitespace();
 
          while (it < end) {
-            switch (ascii_json_types[size_t(*it)]) {
+            switch (json_types[size_t(*it)]) {
             case String: {
                const auto value = read_json_string(it, end);
                dump(value, b, ix);
