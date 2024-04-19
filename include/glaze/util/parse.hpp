@@ -106,12 +106,12 @@ namespace glz::detail
    
    GLZ_ALWAYS_INLINE constexpr uint32_t has_zero_u32(const uint32_t chunk) noexcept
    {
-      return (((chunk - 0x01010101) & ~chunk) & 0x80808080);
+      return (((chunk - 0x01010101u) & ~chunk) & 0x80808080u);
    }
 
    GLZ_ALWAYS_INLINE constexpr uint32_t is_less_16_u32(const uint32_t chunk) noexcept
    {
-      return has_zero_u32(chunk & repeat_byte4(0b11110000));
+      return has_zero_u32(chunk & repeat_byte4(0b11110000u));
    }
    
    template <class T>
@@ -323,7 +323,7 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE constexpr auto has_zero(const uint64_t chunk) noexcept
    {
-      return (((chunk - 0x0101010101010101) & ~chunk) & 0x8080808080808080);
+      return (((chunk - 0x0101010101010101u) & ~chunk) & 0x8080808080808080u);
    }
 
    GLZ_ALWAYS_INLINE constexpr auto has_quote(const uint64_t chunk) noexcept
@@ -349,12 +349,12 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE constexpr uint64_t is_less_16(const uint64_t chunk) noexcept
    {
-      return has_zero(chunk & repeat_byte8(0b11110000));
+      return has_zero(chunk & repeat_byte8(0b11110000u));
    }
 
    GLZ_ALWAYS_INLINE constexpr uint64_t is_greater_15(const uint64_t chunk) noexcept
    {
-      return (chunk & repeat_byte8(0b11110000));
+      return (chunk & repeat_byte8(0b11110000u));
    }
 
    template <opts Opts>
