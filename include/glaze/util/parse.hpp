@@ -19,8 +19,8 @@
 
 namespace glz::detail
 {
-   constexpr std::array<bool, 128> numeric_ascii_table = [] {
-      std::array<bool, 128> t{};
+   constexpr std::array<bool, 256> numeric_table = [] {
+      std::array<bool, 256> t{};
       t['0'] = true;
       t['1'] = true;
       t['2'] = true;
@@ -52,8 +52,8 @@ namespace glz::detail
       return t;
    }();
 
-   constexpr std::array<bool, 128> ascii_whitespace_table = [] {
-      std::array<bool, 128> t{};
+   constexpr std::array<bool, 256> whitespace_table = [] {
+      std::array<bool, 256> t{};
       t['\n'] = true;
       t['\t'] = true;
       t['\r'] = true;
@@ -61,8 +61,8 @@ namespace glz::detail
       return t;
    }();
 
-   constexpr std::array<bool, 128> ascii_whitespace_comment_table = [] {
-      std::array<bool, 128> t{};
+   constexpr std::array<bool, 256> whitespace_comment_table = [] {
+      std::array<bool, 256> t{};
       t['\n'] = true;
       t['\t'] = true;
       t['\r'] = true;
@@ -190,7 +190,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void skip_ws_no_pre_check(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.force_conformance) {
-         while (ascii_whitespace_comment_table[*it]) {
+         while (whitespace_comment_table[*it]) {
             if (*it == '/') [[unlikely]] {
                skip_comment(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
@@ -203,7 +203,7 @@ namespace glz::detail
          }
       }
       else {
-         while (ascii_whitespace_table[*it]) {
+         while (whitespace_table[*it]) {
             ++it;
          }
       }
@@ -890,7 +890,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void skip_number(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.force_conformance) {
-         while (numeric_ascii_table[*it]) {
+         while (numeric_table[*it]) {
             ++it;
          }
       }
