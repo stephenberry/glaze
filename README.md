@@ -192,6 +192,14 @@ find_package(glaze REQUIRED)
 target_link_libraries(main PRIVATE glaze::glaze)
 ```
 
+### [build2](https://build2.org)
+
+- Available on [cppget](https://cppget.org/libglaze)
+
+```
+import libs = libglaze%lib{glaze}
+```
+
 ### Arch Linux
 
 - AUR packages: [glaze](https://aur.archlinux.org/packages/glaze) and [glaze-git](https://aur.archlinux.org/packages/glaze-git)
