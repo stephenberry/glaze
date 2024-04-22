@@ -83,6 +83,12 @@ namespace glz::detail
       t['7'] = 7;
       t['8'] = 8;
       t['9'] = 9;
+      t['a'] = 0xA;
+      t['b'] = 0xB;
+      t['c'] = 0xC;
+      t['d'] = 0xD;
+      t['e'] = 0xE;
+      t['f'] = 0xF;
       t['A'] = 0xA;
       t['B'] = 0xB;
       t['C'] = 0xC;
