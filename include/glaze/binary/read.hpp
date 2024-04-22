@@ -503,7 +503,7 @@ namespace glz
                ++it;
 
                const auto n = int_from_compressed(it, end);
-               
+
                if ((it + n * sizeof(V)) > end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
@@ -583,7 +583,7 @@ namespace glz
                ++it;
 
                const auto n = int_from_compressed(it, end);
-               
+
                if ((it + n * sizeof(V)) > end) [[unlikely]] {
                   ctx.error = error_code::unexpected_end;
                   return;
@@ -905,14 +905,14 @@ namespace glz
                return;
             }
             ++it;
-            
+
             using V = std::decay_t<T>;
             constexpr auto N = std::tuple_size_v<meta_t<V>>;
             if (int_from_compressed(it, end) != N) {
                ctx.error = error_code::syntax_error;
                return;
             }
-            
+
             for_each<N>(
                [&](auto I) { read<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, it, end); });
          }
@@ -931,21 +931,19 @@ namespace glz
                return;
             }
             ++it;
-            
+
             using V = std::decay_t<T>;
             constexpr auto N = std::tuple_size_v<V>;
             if (int_from_compressed(it, end) != N) {
                ctx.error = error_code::syntax_error;
                return;
             }
-            
+
             if constexpr (is_std_tuple<T>) {
-               for_each<N>(
-                  [&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+               for_each<N>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
             }
             else {
-               for_each<N>(
-                  [&](auto I) { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+               for_each<N>([&](auto I) { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
             }
          }
       };
