@@ -138,8 +138,6 @@ namespace glz
                   [[fallthrough]];
                }
             }
-            case Unset:
-               [[fallthrough]];
             [[unlikely]] default : {
                ctx.error = error_code::syntax_error;
                return;
