@@ -282,7 +282,7 @@ suite escaping_tests = [] {
       expect(obj.escaped_key == 5);
       expect(obj.escaped_key2 == "bye");
    };
-   
+
    "\u11FF read"_test = [] {
       std::string in = R"("\u11FF")";
       std::string str{};
@@ -3892,23 +3892,23 @@ suite unicode_tests = [] {
 
       expect(obj.text == "ᇿ");
    };
-   
+
    "surrogate pair"_test = [] {
-      const char* json = R"("\uD83C\uDF40")"; //🍀
+      const char* json = R"("\uD83C\uDF40")"; // 🍀
       std::string val;
       expect(!glz::read_json(val, json));
       expect(val == "🍀");
    };
-   
+
    "mixed unicode"_test = [] {
-      const char* json = R"("\u11FF\uD83C\uDF40ᇿ🍀\u11FF")"; //ᇿ🍀ᇿ🍀ᇿ
+      const char* json = R"("\u11FF\uD83C\uDF40ᇿ🍀\u11FF")"; // ᇿ🍀ᇿ🍀ᇿ
       std::string val;
       expect(!glz::read_json(val, json));
       expect(val == "ᇿ🍀ᇿ🍀ᇿ");
    };
-   
+
    "multi surrogate unicode"_test = [] {
-      const char* json = R"("\uD83D\uDE00\uD83C\uDF40😀🍀\uD83D\uDE00")"; //😀🍀😀🍀😀
+      const char* json = R"("\uD83D\uDE00\uD83C\uDF40😀🍀\uD83D\uDE00")"; // 😀🍀😀🍀😀
       std::string val;
       expect(!glz::read_json(val, json));
       expect(val == "😀🍀😀🍀😀");

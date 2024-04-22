@@ -69,8 +69,8 @@ namespace glz::detail
       t['/'] = true;
       return t;
    }();
-   
-   constexpr std::array<uint8_t, 256> digit_hex_table = []{
+
+   constexpr std::array<uint8_t, 256> digit_hex_table = [] {
       std::array<uint8_t, 256> t;
       std::fill(t.begin(), t.end(), uint8_t(255));
       t['0'] = 0;
@@ -97,7 +97,7 @@ namespace glz::detail
       t['F'] = 0xF;
       return t;
    }();
-   
+
    template <class T>
    consteval uint32_t repeat_byte4(const T repeat)
    {
@@ -109,7 +109,7 @@ namespace glz::detail
       res |= uint32_t(byte);
       return res;
    }
-   
+
    GLZ_ALWAYS_INLINE constexpr uint32_t has_zero_u32(const uint32_t chunk) noexcept
    {
       return (((chunk - 0x01010101u) & ~chunk) & 0x80808080u);
@@ -119,7 +119,7 @@ namespace glz::detail
    {
       return has_zero_u32(chunk & repeat_byte4(0b11110000u));
    }
-   
+
    template <class T>
    consteval uint64_t repeat_byte8(const T repeat)
    {
@@ -135,10 +135,11 @@ namespace glz::detail
       res |= uint64_t(byte);
       return res;
    }
-   
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t hex_to_u32(const char* c) noexcept {
+
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t hex_to_u32(const char* c) noexcept
+   {
       const auto& t = digit_hex_table;
-      const uint8_t arr[4]{ t[c[3]], t[c[2]], t[c[1]], t[c[0]] };
+      const uint8_t arr[4]{t[c[3]], t[c[2]], t[c[1]], t[c[0]]};
       uint32_t chunk;
       std::memcpy(&chunk, arr, 4);
       // check that all hex characters are valid
@@ -153,9 +154,10 @@ namespace glz::detail
       }
       return 0xFFFFFFFFu;
    }
-   
+
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t code_point_to_utf8(const uint32_t code_point, Char* c) {
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t code_point_to_utf8(const uint32_t code_point, Char* c)
+   {
       if (code_point <= 0x7F) {
          c[0] = Char(code_point);
          return 1;
@@ -180,8 +182,9 @@ namespace glz::detail
       }
       return 0;
    }
-   
-   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t skip_code_point(const uint32_t code_point) {
+
+   [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t skip_code_point(const uint32_t code_point)
+   {
       if (code_point <= 0x7F) {
          return 1;
       }
@@ -196,12 +199,12 @@ namespace glz::detail
       }
       return 0;
    }
-   
+
    namespace unicode
    {
       constexpr uint32_t generic_surrogate_mask = 0xF800;
       constexpr uint32_t generic_surrogate_value = 0xD800;
-      
+
       constexpr uint32_t surrogate_mask = 0xFC00;
       constexpr uint32_t high_surrogate_value = 0xD800;
       constexpr uint32_t low_surrogate_value = 0xDC00;
@@ -210,25 +213,26 @@ namespace glz::detail
       constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
       constexpr uint32_t surrogate_codepoint_bits = 10;
    }
-   
+
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& it, Char*& dst) {
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& it, Char*& dst)
+   {
       using namespace unicode;
-      
+
       const uint32_t high = hex_to_u32(it);
       if (high == 0xFFFFFFFFu) [[unlikely]] {
          return false;
       }
       it += 4; // skip the code point characters
-      
+
       uint32_t code_point;
-      
+
       if ((high & generic_surrogate_mask) == generic_surrogate_value) {
          // surrogate pair code points
          if ((high & surrogate_mask) != high_surrogate_value) {
             return false;
          }
-         
+
          it += 2;
          // verify that second unicode escape sequence is present
          const uint32_t low = hex_to_u32(it);
@@ -236,7 +240,7 @@ namespace glz::detail
             return false;
          }
          it += 4;
-         
+
          if ((low & surrogate_mask) != low_surrogate_value) {
             return false;
          }
@@ -252,28 +256,29 @@ namespace glz::detail
       dst += offset;
       return offset > 0;
    }
-   
+
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool skip_unicode_code_point(const Char*& it, const Char* end) {
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool skip_unicode_code_point(const Char*& it, const Char* end)
+   {
       using namespace unicode;
       if (it + 4 >= end) [[unlikely]] {
          return false;
       }
-      
+
       const uint32_t high = hex_to_u32(it);
       if (high == 0xFFFFFFFFu) [[unlikely]] {
          return false;
       }
       it += 4; // skip the code point characters
-      
+
       uint32_t code_point;
-      
+
       if ((high & generic_surrogate_mask) == generic_surrogate_value) {
          // surrogate pair code points
          if ((high & surrogate_mask) != high_surrogate_value) {
             return false;
          }
-         
+
          if (it + 6 >= end) [[unlikely]] {
             return false;
          }
@@ -284,7 +289,7 @@ namespace glz::detail
             return false;
          }
          it += 4;
-         
+
          if ((low & surrogate_mask) != low_surrogate_value) {
             return false;
          }
@@ -599,7 +604,7 @@ namespace glz::detail
                   }
                   else if (*it == 'u') [[unlikely]] {
                      ++it;
-                     if (skip_unicode_code_point(it, end)) [[likely]]  {
+                     if (skip_unicode_code_point(it, end)) [[likely]] {
                         continue;
                      }
                      else [[unlikely]] {
@@ -632,7 +637,7 @@ namespace glz::detail
                }
                else if (*it == 'u') {
                   ++it;
-                  if (skip_unicode_code_point(it, end)) [[likely]]  {
+                  if (skip_unicode_code_point(it, end)) [[likely]] {
                      continue;
                   }
                   else [[unlikely]] {
@@ -868,7 +873,7 @@ namespace glz::detail
                }
                else if (*it == 'u') {
                   ++it;
-                  if (skip_unicode_code_point(it, end)) [[likely]]  {
+                  if (skip_unicode_code_point(it, end)) [[likely]] {
                      continue;
                   }
                   else [[unlikely]] {
