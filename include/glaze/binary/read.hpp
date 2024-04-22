@@ -306,6 +306,10 @@ namespace glz
 
             if constexpr (Opts.no_header) {
                const auto n = int_from_compressed(it, end);
+               if ((it + n) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
                value.resize(n);
                std::memcpy(value.data(), &(*it), n);
                std::advance(it, n);
@@ -322,6 +326,10 @@ namespace glz
                ++it;
 
                const auto n = int_from_compressed(it, end);
+               if ((it + n) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
                value.resize(n);
                std::memcpy(value.data(), &(*it), n);
                std::advance(it, n);
@@ -407,6 +415,10 @@ namespace glz
 
                for (size_t i = 0; i < n; ++i) {
                   const auto length = int_from_compressed(it, end);
+                  if ((it + length) > end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
                   V str;
                   str.resize(length);
                   std::memcpy(str.data(), &*it, length);
@@ -491,6 +503,11 @@ namespace glz
                ++it;
 
                const auto n = int_from_compressed(it, end);
+               
+               if ((it + n * sizeof(V)) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
 
                if constexpr (resizeable<T>) {
                   value.resize(n);
@@ -566,6 +583,11 @@ namespace glz
                ++it;
 
                const auto n = int_from_compressed(it, end);
+               
+               if ((it + n * sizeof(V)) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
 
                if constexpr (resizeable<T>) {
                   value.resize(n);
