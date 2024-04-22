@@ -150,7 +150,7 @@ namespace glz::detail
       requires(std::is_unsigned_v<T>)
    inline bool parse_int(auto& val, const CharType*& cur) noexcept
    {
-      using X = X;
+      using X = std::remove_volatile_t<T>;
       constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(val)>>;
       const CharType* sig_cut{}; // significant part cutting position for long number
       [[maybe_unused]] const CharType* sig_end{}; // significant part ending position
