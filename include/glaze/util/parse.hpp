@@ -207,7 +207,7 @@ namespace glz::detail
    }
    
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& src, Char* dst) {
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& src, Char*& dst) {
       constexpr uint32_t generic_surrogate_mask = 0xF800;
       constexpr uint32_t generic_surrogate_value = 0xD800;
       
