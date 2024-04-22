@@ -3892,6 +3892,13 @@ suite unicode_tests = [] {
 
       expect(obj.text == "ᇿ");
    };
+   
+   "surrogate pair"_test = [] {
+      const char* json = R"("\uD83C\uDF40")"; //🍀
+      std::string val;
+      expect(!glz::read_json(val, json));
+      expect(val == "🍀");
+   };
 };
 
 struct value_t
