@@ -184,7 +184,7 @@ namespace glz::detail
       }
       cur += 19; /* skip continuous 19 digits */
       if (!digi_is_digit_or_fp(*cur)) {
-         val = static_cast<T>(sig);
+         val = static_cast<std::remove_volatile_t<T>>(sig);
          return true;
       }
       goto digi_intg_more; /* read more digits in integral part */
@@ -234,7 +234,7 @@ namespace glz::detail
             if ((sig < (U64_MAX / 10)) || (sig == (U64_MAX / 10) && num_tmp <= (U64_MAX % 10))) {
                sig = num_tmp + sig * 10;
                cur++;
-               val = static_cast<T>(sig);
+               val = static_cast<std::remove_volatile_t<T>>(sig);
                return true;
             }
          }
@@ -367,7 +367,7 @@ namespace glz::detail
          return true;
       }
 
-      val = static_cast<T>(sig);
+      val = static_cast<std::remove_volatile_t<T>>(sig);
       if constexpr (is_volatile) {
          if (exp >= 0) {
             val = val * T(powers_of_ten_int[exp]);
