@@ -3899,6 +3899,20 @@ suite unicode_tests = [] {
       expect(!glz::read_json(val, json));
       expect(val == "🍀");
    };
+   
+   "mixed unicode"_test = [] {
+      const char* json = R"("\u11FF\uD83C\uDF40ᇿ🍀\u11FF")"; //ᇿ🍀ᇿ🍀ᇿ
+      std::string val;
+      expect(!glz::read_json(val, json));
+      expect(val == "ᇿ🍀ᇿ🍀ᇿ");
+   };
+   
+   "multi surrogate unicode"_test = [] {
+      const char* json = R"("\uD83D\uDE00\uD83C\uDF40😀🍀\uD83D\uDE00")"; //😀🍀😀🍀😀
+      std::string val;
+      expect(!glz::read_json(val, json));
+      expect(val == "😀🍀😀🍀😀");
+   };
 };
 
 struct value_t
