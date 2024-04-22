@@ -4835,6 +4835,11 @@ suite nullable_quoted_num = [] {
       expect(!glz::read<glz::opts{.error_on_missing_keys = true}>(obj, json));
       expect(!obj.i.has_value());
    };
+   
+   "nullable_quoted_num null value"_test = [] {
+      nullable_quoted_num_t obj{};
+      expect(glz::write_json(obj) == R"({})");
+   };
 };
 
 struct bool_map
