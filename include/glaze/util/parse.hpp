@@ -436,19 +436,26 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
    {
-      {
-         constexpr uint64_t n{sizeof(uint64_t)};
-         while (length >= n) {
-            uint64_t v[2];
-            std::memcpy(v, ws, n);
-            std::memcpy(v + 1, it, n);
+      if (length > 7) {
+         uint64_t v[2];
+         while (length > 8) {
+            std::memcpy(v, ws, 8);
+            std::memcpy(v + 1, it, 8);
             if (v[0] != v[1]) {
                return;
             }
-            length -= n;
-            ws += n;
-            it += n;
+            length -= 8;
+            ws += 8;
+            it += 8;
          }
+
+         const auto shift = 8 - length;
+         ws -= shift;
+         it -= shift;
+
+         std::memcpy(v, ws, 8);
+         std::memcpy(v + 1, it, 8);
+         return;
       }
       {
          constexpr uint64_t n{sizeof(uint32_t)};
