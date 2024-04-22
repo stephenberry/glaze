@@ -19,6 +19,18 @@ my_struct s{};
 glz::read_binary(s, buffer);
 ```
 
+> [!WARNING]
+>
+> Reading binary has few checks for valid input. This is intentional for maximum performance, as safety can be achieved through commonly used mechanisms.
+>
+>  Binary format errors may occur if data is incorrectly written, corrupted, or maliciously manipulated.
+>
+> - Do not write binary by hand, to ensure valid formatting.
+> - Use protocols like TCP or other checksum methods to ensure data is not corrupted.
+> - Use proper cryptographic solutions where malicious attacks are possible.
+>
+> Glaze does include some validation for binary input, but this should be seen as a final line of defense.
+
 ## Untagged Binary
 
 By default Glaze will handle structs as tagged objects, meaning that keys will be written/read. However, structs can be written/read without tags by using the option `structs_as_arrays` or the functions `glz::write_binary_untagged` and `glz::read_binary_untagged`.

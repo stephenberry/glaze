@@ -42,19 +42,19 @@ namespace glz::detail
       case 1: {
          uint16_t h;
          std::memcpy(&h, &(*it), 2);
-         std::advance(it, 2);
+         it += 2;
          return h >> 2;
       }
       case 2: {
          uint32_t h;
          std::memcpy(&h, &(*it), 4);
-         std::advance(it, 4);
+         it += 4;
          return h >> 2;
       }
       case 3: {
          uint64_t h;
          std::memcpy(&h, &(*it), 8);
-         std::advance(it, 8);
+         it += 8;
          return h >> 2;
       }
       default:
