@@ -138,10 +138,11 @@ namespace glz
                   [[fallthrough]];
                }
             }
-            [[unlikely]] default : {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
+               [[unlikely]] default:
+               {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
             }
          }
       }
