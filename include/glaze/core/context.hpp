@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <iterator>
+#include <string>
 #include <string_view>
 
 namespace glz

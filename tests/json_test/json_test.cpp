@@ -282,6 +282,13 @@ suite escaping_tests = [] {
       expect(obj.escaped_key == 5);
       expect(obj.escaped_key2 == "bye");
    };
+   
+   "\u11FF read"_test = [] {
+      std::string in = R"("\u11FF")";
+      std::string str{};
+      expect(!glz::read_json(str, in));
+      expect(str == "ᇿ") << str;
+   };
 
    "escaped_characters read"_test = [] {
       std::string in = R"({"escape_chars":"\b\f\n\r\t\u11FF"})";
@@ -313,17 +320,6 @@ suite escaping_tests = [] {
       in = R"("\t")";
       expect(glz::read_json(c, in) == glz::error_code::none);
       expect(c == '\t');
-
-      in = R"("\u11FF")";
-      char32_t c32{};
-      expect(glz::read_json(c32, in) == glz::error_code::none);
-      expect(static_cast<uint32_t>(c32) == 0x11FF);
-
-      in = R"("\u732B")";
-      char16_t c16{};
-      expect(glz::read_json(c16, in) == glz::error_code::none);
-      char16_t uc = u'\u732b';
-      expect(c16 == uc);
    };
 
    "escaped_characters write"_test = [] {
@@ -2062,14 +2058,6 @@ suite write_tests = [] {
       }
       {
          std::string s;
-         wchar_t v{'a'};
-         glz::write_json(v, s); // This line gives warning about converting wchar to char, is that fine? Should we
-                                // write a to_buffer template to handle type wchar?
-         // Is the below what we actually expect?
-         expect(s == R"("a")"); // std::to_string(static_cast<int>('a')));
-      }
-      {
-         std::string s;
          short v{1};
          glz::write_json(v, s);
          expect(s == "1");
@@ -3360,17 +3348,6 @@ suite small_chars = [] {
    };
 };
 
-suite char16_test = [] {
-   "char16_test"_test = [] {
-      {
-         char16_t c{};
-         expect(glz::read_json(c, R"("H")") == glz::error_code::none);
-
-         expect(c == u'H');
-      }
-   };
-};
-
 suite ndjson_test = [] {
    "ndjson"_test = [] {
       std::vector<std::string> x = {"Hello", "World", "Ice", "Cream"};
@@ -3914,6 +3891,27 @@ suite unicode_tests = [] {
       expect(glz::read_json(obj, str) == glz::error_code::none);
 
       expect(obj.text == "ᇿ");
+   };
+   
+   "surrogate pair"_test = [] {
+      const char* json = R"("\uD83C\uDF40")"; //🍀
+      std::string val;
+      expect(!glz::read_json(val, json));
+      expect(val == "🍀");
+   };
+   
+   "mixed unicode"_test = [] {
+      const char* json = R"("\u11FF\uD83C\uDF40ᇿ🍀\u11FF")"; //ᇿ🍀ᇿ🍀ᇿ
+      std::string val;
+      expect(!glz::read_json(val, json));
+      expect(val == "ᇿ🍀ᇿ🍀ᇿ");
+   };
+   
+   "multi surrogate unicode"_test = [] {
+      const char* json = R"("\uD83D\uDE00\uD83C\uDF40😀🍀\uD83D\uDE00")"; //😀🍀😀🍀😀
+      std::string val;
+      expect(!glz::read_json(val, json));
+      expect(val == "😀🍀😀🍀😀");
    };
 };
 
@@ -4551,7 +4549,7 @@ break"])";
 1e00,2e+00,2e-00
 ,"rosebud"])";
       auto ec_pass1 = glz::read<glz::opts{.force_conformance = true}>(json, pass1);
-      expect(ec_pass1 == glz::error_code::none);
+      expect(ec_pass1 == glz::error_code::none) << glz::format_error(ec_pass1, pass1);
       expect(glz::validate_json(pass1) == glz::error_code::none);
 
       std::string pass2 = R"([[[[[[[[[[[[[[[[[[["Not too deep"]]]]]]]]]]]]]]]]]]])";
