@@ -11,6 +11,7 @@ namespace glz
 {
    namespace detail
    {
+      // We can use unchecked dumping to the output because we know minifying will not make the output any larger
       template <opts Opts>
       inline void minify_json(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto&& ix) noexcept
       {
@@ -28,65 +29,65 @@ namespace glz
             switch (json_types[size_t(*it)]) {
             case String: {
                const auto value = read_json_string(it, end);
-               dump(value, b, ix);
+               dump_unchecked(value, b, ix);
                break;
             }
             case Comma: {
-               dump<','>(b, ix);
+               dump_unchecked<','>(b, ix);
                ++it;
                break;
             }
             case Number: {
                const auto value = read_json_number(it);
-               dump(value, b, ix);
+               dump_unchecked(value, b, ix);
                break;
             }
             case Colon: {
-               dump<':'>(b, ix);
+               dump_unchecked<':'>(b, ix);
                ++it;
                break;
             }
             case Array_Start: {
-               dump<'['>(b, ix);
+               dump_unchecked<'['>(b, ix);
                ++it;
                break;
             }
             case Array_End: {
-               dump<']'>(b, ix);
+               dump_unchecked<']'>(b, ix);
                ++it;
                break;
             }
             case Null: {
-               dump<"null">(b, ix);
+               dump_unchecked<"null">(b, ix);
                it += 4;
                break;
             }
             case Bool: {
                if (*it == 't') {
-                  dump<"true">(b, ix);
+                  dump_unchecked<"true">(b, ix);
                   it += 4;
                   break;
                }
                else {
-                  dump<"false">(b, ix);
+                  dump_unchecked<"false">(b, ix);
                   it += 5;
                   break;
                }
             }
             case Object_Start: {
-               dump<'{'>(b, ix);
+               dump_unchecked<'{'>(b, ix);
                ++it;
                break;
             }
             case Object_End: {
-               dump<'}'>(b, ix);
+               dump_unchecked<'}'>(b, ix);
                ++it;
                break;
             }
             case Comment: {
                if constexpr (Opts.comments) {
                   const auto value = read_jsonc_comment(it, end);
-                  dump(value, b, ix);
+                  dump_unchecked(value, b, ix);
                   break;
                }
                else {

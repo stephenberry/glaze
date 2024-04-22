@@ -102,6 +102,16 @@ namespace glz::detail
       std::memcpy(b.data() + ix, str.data(), n);
       ix += n;
    }
+   
+   template <string_literal str>
+   GLZ_ALWAYS_INLINE void dump_unchecked(vector_like auto& b, auto& ix) noexcept
+   {
+      static constexpr auto s = str.sv();
+      static constexpr auto n = s.size();
+
+      std::memcpy(b.data() + ix, s.data(), n);
+      ix += n;
+   }
 
    template <char c>
    GLZ_ALWAYS_INLINE void dump(char*& b) noexcept

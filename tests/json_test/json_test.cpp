@@ -4835,6 +4835,11 @@ suite nullable_quoted_num = [] {
       expect(!glz::read<glz::opts{.error_on_missing_keys = true}>(obj, json));
       expect(!obj.i.has_value());
    };
+   
+   "nullable_quoted_num null value"_test = [] {
+      nullable_quoted_num_t obj{};
+      expect(glz::write_json(obj) == R"({})");
+   };
 };
 
 struct bool_map
@@ -6019,12 +6024,12 @@ suite complex_test = [] {
     4
   ]
 ])";
-      std::vector<std::complex<int16_t>> cx{};
+      std::vector<std::complex<float>> cx{};
       expect(!glz::read_json(cx, s));
-      expect(cx[0].real() == 1);
-      expect(cx[0].imag() == 2);
-      expect(cx[1].real() == 3);
-      expect(cx[1].imag() == 4);
+      expect(cx[0].real() == 1.f);
+      expect(cx[0].imag() == 2.f);
+      expect(cx[1].real() == 3.f);
+      expect(cx[1].imag() == 4.f);
    };
 };
 
