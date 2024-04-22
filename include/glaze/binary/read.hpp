@@ -778,7 +778,10 @@ namespace glz
 
                using V = std::decay_t<T>;
                constexpr auto N = std::tuple_size_v<meta_t<V>>;
-               skip_compressed_int(it, end);
+               if (int_from_compressed(it, end) != N) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
 
                for_each<N>([&](auto I) {
                   static constexpr auto item = get<I>(meta_v<V>);
@@ -880,11 +883,15 @@ namespace glz
                return;
             }
             ++it;
-
-            skip_compressed_int(it, end);
-
+            
             using V = std::decay_t<T>;
-            for_each<std::tuple_size_v<meta_t<V>>>(
+            constexpr auto N = std::tuple_size_v<meta_t<V>>;
+            if (int_from_compressed(it, end) != N) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            
+            for_each<N>(
                [&](auto I) { read<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, it, end); });
          }
       };
@@ -902,16 +909,20 @@ namespace glz
                return;
             }
             ++it;
-
-            skip_compressed_int(it, end);
-
+            
             using V = std::decay_t<T>;
+            constexpr auto N = std::tuple_size_v<V>;
+            if (int_from_compressed(it, end) != N) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+            
             if constexpr (is_std_tuple<T>) {
-               for_each<std::tuple_size_v<V>>(
+               for_each<N>(
                   [&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
             }
             else {
-               for_each<std::tuple_size_v<V>>(
+               for_each<N>(
                   [&](auto I) { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
             }
          }
