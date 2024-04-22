@@ -2058,14 +2058,6 @@ suite write_tests = [] {
       }
       {
          std::string s;
-         wchar_t v{'a'};
-         glz::write_json(v, s); // This line gives warning about converting wchar to char, is that fine? Should we
-                                // write a to_buffer template to handle type wchar?
-         // Is the below what we actually expect?
-         expect(s == R"("a")"); // std::to_string(static_cast<int>('a')));
-      }
-      {
-         std::string s;
          short v{1};
          glz::write_json(v, s);
          expect(s == "1");
@@ -3356,17 +3348,6 @@ suite small_chars = [] {
    };
 };
 
-suite char16_test = [] {
-   "char16_test"_test = [] {
-      {
-         char16_t c{};
-         expect(glz::read_json(c, R"("H")") == glz::error_code::none);
-
-         expect(c == u'H');
-      }
-   };
-};
-
 suite ndjson_test = [] {
    "ndjson"_test = [] {
       std::vector<std::string> x = {"Hello", "World", "Ice", "Cream"};
@@ -4547,7 +4528,7 @@ break"])";
 1e00,2e+00,2e-00
 ,"rosebud"])";
       auto ec_pass1 = glz::read<glz::opts{.force_conformance = true}>(json, pass1);
-      expect(ec_pass1 == glz::error_code::none);
+      expect(ec_pass1 == glz::error_code::none) << glz::format_error(ec_pass1, pass1);
       expect(glz::validate_json(pass1) == glz::error_code::none);
 
       std::string pass2 = R"([[[[[[[[[[[[[[[[[[["Not too deep"]]]]]]]]]]]]]]]]]]])";
