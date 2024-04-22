@@ -135,8 +135,15 @@ namespace glz::detail
       const uint8_t arr[4]{ t[c[3]], t[c[2]], t[c[1]], t[c[0]] };
       uint32_t chunk;
       std::memcpy(&chunk, arr, 4);
+      // check that all hex characters are valid
       if (is_less_16_u32(chunk)) [[likely]] {
-         return chunk;
+         // now pack into first four bytes of uint32_t
+         uint32_t packed{};
+         packed |= (chunk & 0x0000000F);
+         packed |= (chunk & 0x00000F00) >> 4;
+         packed |= (chunk & 0x000F0000) >> 8;
+         packed |= (chunk & 0x0F000000) >> 12;
+         return packed;
       }
       return 0xFFFFFFFFu;
    }
@@ -158,45 +165,42 @@ namespace glz::detail
    
    template <class Char>
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t code_point_to_utf8(const uint32_t code_point, Char* c) {
-      if (code_point < 128) {
+      if (code_point <= 0x7F) {
          c[0] = Char(code_point);
          return 1;
       }
-      
-      const auto leading_zeros = std::countl_zero(code_point);
-      if (leading_zeros >= 11) {
-         const uint32_t pattern = bit_expandr(0x3F00u, code_point) | 0xC0u;
-         c[0] = Char(pattern >> 8);
-         c[1] = Char(pattern & 0xFFu);
+      if (code_point <= 0x7FF) {
+         c[0] = Char(0xC0 | ((code_point >> 6) & 0x1F));
+         c[1] = Char(0x80 | (code_point & 0x3F));
          return 2;
-      } else if (leading_zeros >= 16) {
-         const uint32_t pattern = bit_expandr(0x0F0800u, code_point) | 0xE0u;
-         c[0] = Char(pattern >> 16);
-         c[1] = Char(pattern >> 8);
-         c[2] = Char(pattern & 0xFFu);
+      }
+      if (code_point <= 0xFFFF) {
+         c[0] = Char(0xE0 | ((code_point >> 12) & 0x0F));
+         c[1] = Char(0x80 | ((code_point >> 6) & 0x3F));
+         c[2] = Char(0x80 | (code_point & 0x3F));
          return 3;
-      } else if (leading_zeros >= 21) {
-         const uint32_t pattern = bit_expandr(0x01020400u, code_point) | 0xF0u;
-         c[0] = Char(pattern >> 24);
-         c[1] = Char(pattern >> 16);
-         c[2] = Char(pattern >> 8);
-         c[3] = Char(pattern & 0xFFu);
+      }
+      if (code_point <= 0x10FFFF) {
+         c[0] = Char(0xF0 | ((code_point >> 18) & 0x07));
+         c[1] = Char(0x80 | ((code_point >> 12) & 0x3F));
+         c[2] = Char(0x80 | ((code_point >> 6) & 0x3F));
+         c[3] = Char(0x80 | (code_point & 0x3F));
          return 4;
       }
       return 0;
    }
    
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t skip_code_point(const uint32_t code_point) {
-      if (code_point < 128) {
+      if (code_point <= 0x7F) {
          return 1;
       }
-      
-      const auto leading_zeros = std::countr_zero(code_point);
-      if (leading_zeros >= 11) {
+      if (code_point <= 0x7FF) {
          return 2;
-      } else if (leading_zeros >= 16) {
+      }
+      if (code_point <= 0xFFFF) {
          return 3;
-      } else if (leading_zeros >= 21) {
+      }
+      if (code_point <= 0x10FFFF) {
          return 4;
       }
       return 0;
@@ -204,27 +208,49 @@ namespace glz::detail
    
    template <class Char>
    [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& src, Char* dst) {
-      static constexpr uint32_t sub_code_point = 0xfffd;
-      uint32_t code_point = hex_to_u32(src);
-      if (code_point == 0xFFFFFFFFu) [[unlikely]] {
+      constexpr uint32_t generic_surrogate_mask = 0xF800;
+      constexpr uint32_t generic_surrogate_value = 0xD800;
+      
+      constexpr uint32_t surrogate_mask = 0xFC00;
+      constexpr uint32_t high_surrogate_value = 0xD800;
+      constexpr uint32_t low_surrogate_value = 0xDC00;
+
+      constexpr uint32_t surrogate_codepoint_offset = 0x10000;
+      constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
+      constexpr uint32_t surrogate_codepoint_bits = 10;
+      
+      uint32_t high = hex_to_u32(src);
+      if (high == 0xFFFFFFFFu) [[unlikely]] {
          return false;
       }
       src += 4; // skip the code point characters
-      if (code_point >= 0xd800 && code_point < 0xdc00) {
+      
+      uint32_t code_point;
+      
+      if ((high & generic_surrogate_mask) == generic_surrogate_value) {
          // surrogate pair code points
-         if (((src[0] << 8) | src[1]) != ((Char(0x5Cu) << 8) | Char(0x75u))) {
-            code_point = sub_code_point;
-         } else {
-            const uint32_t code_point2 = hex_to_u32(src + 2) - 0xdc00;
-            if (code_point2 >> 10) {
-               code_point = sub_code_point;
-            } else {
-               code_point = (((code_point - 0xd800) << 10) | code_point2) + 0x10000;
-               src += 6;
-            }
+         if ((high & surrogate_mask) != high_surrogate_value) {
+            return false;
          }
-      } else if (code_point >= 0xdc00 && code_point <= 0xdfff) {
-         code_point = sub_code_point;
+         
+         src += 2;
+         // verify that second unicode escape sequence is present
+         uint32_t low = hex_to_u32(src);
+         if (low == 0xFFFFFFFFu) [[unlikely]] {
+            return false;
+         }
+         src += 4;
+         
+         if ((low & surrogate_mask) != low_surrogate_value) {
+            return false;
+         }
+
+         code_point = (high & surrogate_codepoint_mask) << surrogate_codepoint_bits;
+         code_point |= (low & surrogate_codepoint_mask);
+         code_point += surrogate_codepoint_offset;
+      }
+      else {
+         code_point = high;
       }
       const uint32_t offset = code_point_to_utf8(code_point, dst);
       dst += offset;
