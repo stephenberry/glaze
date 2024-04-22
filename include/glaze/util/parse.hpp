@@ -154,21 +154,6 @@ namespace glz::detail
       return 0xFFFFFFFFu;
    }
    
-   // TODO: replace with std::bit_expandr if accepted
-   // Standard proposal: https://eisenwave.github.io/cpp-proposals/bit-permutations.html
-   // Same as pdep
-   template <std::unsigned_integral T>
-   [[nodiscard]] constexpr T bit_expandr(const T x, const T m) noexcept
-   {
-      T result{};
-      for (int i = 0, j = 0; i < std::numeric_limits<T>::digits; ++i) {
-         const bool mask_bit = (m >> i) & 1;
-         result |= (mask_bit & (x >> j)) << i;
-         j += mask_bit;
-      }
-      return result;
-   }
-   
    template <class Char>
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t code_point_to_utf8(const uint32_t code_point, Char* c) {
       if (code_point <= 0x7F) {
@@ -212,8 +197,8 @@ namespace glz::detail
       return 0;
    }
    
-   template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& src, Char*& dst) {
+   namespace unicode
+   {
       constexpr uint32_t generic_surrogate_mask = 0xF800;
       constexpr uint32_t generic_surrogate_value = 0xD800;
       
@@ -224,12 +209,17 @@ namespace glz::detail
       constexpr uint32_t surrogate_codepoint_offset = 0x10000;
       constexpr uint32_t surrogate_codepoint_mask = 0x03FF;
       constexpr uint32_t surrogate_codepoint_bits = 10;
+   }
+   
+   template <class Char>
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& it, Char*& dst) {
+      using namespace unicode;
       
-      uint32_t high = hex_to_u32(src);
+      const uint32_t high = hex_to_u32(it);
       if (high == 0xFFFFFFFFu) [[unlikely]] {
          return false;
       }
-      src += 4; // skip the code point characters
+      it += 4; // skip the code point characters
       
       uint32_t code_point;
       
@@ -239,13 +229,13 @@ namespace glz::detail
             return false;
          }
          
-         src += 2;
+         it += 2;
          // verify that second unicode escape sequence is present
-         uint32_t low = hex_to_u32(src);
+         const uint32_t low = hex_to_u32(it);
          if (low == 0xFFFFFFFFu) [[unlikely]] {
             return false;
          }
-         src += 4;
+         it += 4;
          
          if ((low & surrogate_mask) != low_surrogate_value) {
             return false;
@@ -264,28 +254,47 @@ namespace glz::detail
    }
    
    template <class Char>
-   [[nodiscard]] GLZ_ALWAYS_INLINE bool skip_unicode_code_point(const Char*& src) {
-      static constexpr uint32_t sub_code_point = 0xfffd;
-      uint32_t code_point = hex_to_u32(src);
-      if (code_point == 0xFFFFFFFFu) [[unlikely]] {
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool skip_unicode_code_point(const Char*& it, const Char* end) {
+      using namespace unicode;
+      if (it + 4 >= end) [[unlikely]] {
          return false;
       }
-      src += 4; // skip the code point characters
-      if (code_point >= 0xd800 && code_point < 0xdc00) {
+      
+      const uint32_t high = hex_to_u32(it);
+      if (high == 0xFFFFFFFFu) [[unlikely]] {
+         return false;
+      }
+      it += 4; // skip the code point characters
+      
+      uint32_t code_point;
+      
+      if ((high & generic_surrogate_mask) == generic_surrogate_value) {
          // surrogate pair code points
-         if (((src[0] << 8) | src[1]) != ((Char(0x5Cu) << 8) | Char(0x75u))) {
-            code_point = sub_code_point;
-         } else {
-            const uint32_t code_point2 = hex_to_u32(src + 2) - 0xdc00;
-            if (code_point2 >> 10) {
-               code_point = sub_code_point;
-            } else {
-               code_point = (((code_point - 0xd800) << 10) | code_point2) + 0x10000;
-               src += 6;
-            }
+         if ((high & surrogate_mask) != high_surrogate_value) {
+            return false;
          }
-      } else if (code_point >= 0xdc00 && code_point <= 0xdfff) {
-         code_point = sub_code_point;
+         
+         if (it + 6 >= end) [[unlikely]] {
+            return false;
+         }
+         it += 2;
+         // verify that second unicode escape sequence is present
+         const uint32_t low = hex_to_u32(it);
+         if (low == 0xFFFFFFFFu) [[unlikely]] {
+            return false;
+         }
+         it += 4;
+         
+         if ((low & surrogate_mask) != low_surrogate_value) {
+            return false;
+         }
+
+         code_point = (high & surrogate_codepoint_mask) << surrogate_codepoint_bits;
+         code_point |= (low & surrogate_codepoint_mask);
+         code_point += surrogate_codepoint_offset;
+      }
+      else {
+         code_point = high;
       }
       return skip_code_point(code_point) > 0;
    }
@@ -590,11 +599,11 @@ namespace glz::detail
                   }
                   else if (*it == 'u') [[unlikely]] {
                      ++it;
-                     if (size_t(end - it) > 4 && skip_unicode_code_point(it)) [[likely]]  {
+                     if (skip_unicode_code_point(it, end)) [[likely]]  {
                         continue;
                      }
                      else [[unlikely]] {
-                        ctx.error = error_code::syntax_error;
+                        ctx.error = error_code::unicode_escape_conversion_failure;
                         return true;
                      }
                   }
@@ -623,11 +632,11 @@ namespace glz::detail
                }
                else if (*it == 'u') {
                   ++it;
-                  if (size_t(end - it) > 4 && skip_unicode_code_point(it)) [[likely]]  {
+                  if (skip_unicode_code_point(it, end)) [[likely]]  {
                      continue;
                   }
                   else [[unlikely]] {
-                     ctx.error = error_code::syntax_error;
+                     ctx.error = error_code::unicode_escape_conversion_failure;
                      return true;
                   }
                }
@@ -859,11 +868,11 @@ namespace glz::detail
                }
                else if (*it == 'u') {
                   ++it;
-                  if (size_t(end - it) > 4 && skip_unicode_code_point(it)) [[likely]]  {
+                  if (skip_unicode_code_point(it, end)) [[likely]]  {
                      continue;
                   }
                   else [[unlikely]] {
-                     ctx.error = error_code::syntax_error;
+                     ctx.error = error_code::unicode_escape_conversion_failure;
                      return;
                   }
                }
