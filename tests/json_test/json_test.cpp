@@ -635,6 +635,19 @@ suite container_types = [] {
          expect(map2[it.first] == it.second);
       }
    };
+   "unordered_map<int, std::string> roundtrip"_test = [] {
+      std::unordered_map<int, std::string> map;
+      for (auto i = 0; i < 5; ++i) {
+         map[rand()] = std::to_string(rand());
+      }
+      std::string buffer{};
+      std::unordered_map<int, std::string> map2{};
+      glz::write_json(map, buffer);
+      expect(!glz::read_json(map2, buffer));
+      for (auto& it : map) {
+         expect(map2[it.first] == it.second);
+      }
+   };
    "tuple roundtrip"_test = [] {
       auto tuple = std::make_tuple(3, 2.7, std::string("curry"));
       decltype(tuple) tuple2{};

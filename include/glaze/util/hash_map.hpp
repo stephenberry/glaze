@@ -482,7 +482,7 @@ namespace glz::detail
 
       uint8_t min_diff = (std::numeric_limits<uint8_t>::max)();
       for (size_t i = 0; i < N - 1; ++i) {
-         const auto diff = hashes[i + 1] - hashes[i];
+         const auto diff = uint8_t(hashes[i + 1] - hashes[i]);
          if (diff == 0) {
             return {};
          }
