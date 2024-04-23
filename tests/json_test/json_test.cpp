@@ -6221,13 +6221,13 @@ struct request_t
 struct QuoteData
 {
    // session
-   uint64_t time;
-   std::string action; // send, recv
-   std::string quote; // order, kill
-   std::string account;
-   uint32_t uid;
-   uint32_t session_id;
-   uint32_t request_id;
+   uint64_t time{};
+   std::string action{}; // send, recv
+   std::string quote{}; // order, kill
+   std::string account{};
+   uint32_t uid{};
+   uint32_t session_id{};
+   uint32_t request_id{};
    // order
    int state = 0;
    std::string order_id = "";
