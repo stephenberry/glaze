@@ -100,6 +100,7 @@ namespace glz::repe
          auto [b, e] = read_iterators<Opts>(ctx, state.message);
          if (bool(ctx.error)) [[unlikely]] {
             return 0;
+         }
          auto start = b;
 
          glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
@@ -174,6 +175,7 @@ namespace glz::repe
       auto [b, e] = read_iterators<Opts>(ctx, buffer);
       if (bool(ctx.error)) [[unlikely]] {
          return error_t{error_e::parse_error};
+      }
       auto start = b;
 
       // clang 14 won't build when capturing from structured binding
@@ -585,6 +587,7 @@ namespace glz::repe
          auto [b, e] = read_iterators<Opts>(ctx, msg);
          if (bool(ctx.error)) [[unlikely]] {
             return error_t{error_e::parse_error};
+         }
          auto start = b;
 
          auto handle_error = [&](auto& it) {
