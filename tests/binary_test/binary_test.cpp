@@ -778,7 +778,7 @@ suite byte_buffer = [] {
       msg.val = "hello";
       std::vector<std::byte> buffer{};
       glz::write_binary(msg, buffer);
-      
+
       buffer.emplace_back(static_cast<std::byte>('\0'));
 
       msg.id = 0;
@@ -788,7 +788,7 @@ suite byte_buffer = [] {
       expect(msg.id == 5);
       expect(msg.val == "hello");
    };
-   
+
    "uint8_t buffer"_test = [] {
       TestMsg msg{};
       msg.id = 5;

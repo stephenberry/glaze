@@ -34,13 +34,14 @@ namespace glz::detail
    constexpr uint8_t byte_count = uint8_t(std::bit_width(sizeof(T)) - 1);
 
    constexpr std::array<uint8_t, 8> byte_count_lookup{1, 2, 4, 8, 16, 32, 64, 128};
-   
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(is_context auto&& ctx, auto&& it,
+                                                                        auto&& end) noexcept
    {
       uint8_t header;
       std::memcpy(&header, it, 1);
       const uint8_t config = header & 0b000000'11;
-      
+
       if ((it + byte_count_lookup[config]) > end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return 0;
@@ -78,7 +79,7 @@ namespace glz::detail
       uint8_t header;
       std::memcpy(&header, it, 1);
       const uint8_t config = header & 0b000000'11;
-      
+
       if ((it + byte_count_lookup[config]) > end) [[unlikely]] {
          ctx.error = error_code::unexpected_end;
          return;
