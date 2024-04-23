@@ -951,7 +951,11 @@ namespace glz
 
             // growing
             if constexpr (emplace_backable<T>) {
-               if constexpr (has_reserve<T> && has_capacity<T>) {
+               // This optimization is useful when a std::vector contains large types (greater than 4096 bytes)
+               // It is faster to simply use emplace_back for small types and reasonably lengthed vectors
+               // (less than a million elements)
+               // https://baptiste-wicht.com/posts/2012/12/cpp-benchmark-vector-list-deque.html
+               if constexpr (has_reserve<T> && has_capacity<T> && requires { requires (sizeof(typename T::value_type) > 4096); }) {
                   // If we can reserve memmory, like std::vector, then we want to check the capacity
                   // and use a temporary buffer if the capacity needs to grow
                   if (value.capacity() == 0) {
@@ -1055,6 +1059,7 @@ namespace glz
                   }
                }
                else {
+                  // If we don't have reserve (like std::deque) or we have small sized elements
                   while (it < end) {
                      read<json>::op<ws_handled<Opts>()>(value.emplace_back(), ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
