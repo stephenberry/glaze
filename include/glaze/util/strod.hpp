@@ -25,7 +25,7 @@ namespace glz::detail
    // Wontfix: Numbers with more than 19 sigfigs may be off by 1ulp. No algorithm should be outputing more than 17
    // digits so I dont think roundtripping matters if you supply extra digits
 
-   inline constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
+   constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
                                                                10ull,
                                                                100ull,
                                                                1000ull,
@@ -45,7 +45,7 @@ namespace glz::detail
                                                                100000000000000000ull,
                                                                1000000000000000000ull,
                                                                10000000000000000000ull};
-   inline constexpr std::array<double, 23> powers_of_ten_float = {1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,
+   constexpr std::array<double, 23> powers_of_ten_float = {1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,
                                                                   1e8,  1e9,  1e10, 1e11, 1e12, 1e13, 1e14, 1e15,
                                                                   1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22};
 // https://stackoverflow.com/questions/28868367/getting-the-high-part-of-64-bit-integer-multiplication
@@ -81,14 +81,14 @@ namespace glz::detail
    }
 #endif
    // Min decimal exponent in pow10_sig_table.
-   inline constexpr auto pow10_sig_table_min_exp = -343;
+   constexpr auto pow10_sig_table_min_exp = -343;
    // Max decimal exponent in pow10_sig_table.
-   inline constexpr auto pow10_sig_table_max_exp = 324;
+   constexpr auto pow10_sig_table_max_exp = 324;
    // Min exact decimal exponent in pow10_sig_table
-   inline constexpr auto pow10_sig_table_min_exact = 0;
+   constexpr auto pow10_sig_table_min_exact = 0;
    // Max exact decimal exponent in pow10_sig_table
-   inline constexpr auto pow10_sig_table_max_exact = 27;
-   inline constexpr std::array<uint64_t, 668> pow10_sig_table = {
+   constexpr auto pow10_sig_table_max_exact = 27;
+   constexpr std::array<uint64_t, 668> pow10_sig_table = {
       0xBF29DCABA82FDEAE, 0xEEF453D6923BD65A, 0x9558B4661B6565F8, 0xBAAEE17FA23EBF76, 0xE95A99DF8ACE6F53,
       0x91D8A02BB6C10594, 0xB64EC836A47146F9, 0xE3E27A444D8D98B7, 0x8E6D8C6AB0787F72, 0xB208EF855C969F4F,
       0xDE8B2B66B3BC4723, 0x8B16FB203055AC76, 0xADDCB9E83C6B1793, 0xD953E8624B85DD78, 0x87D4713D6F33AA6B,
@@ -224,9 +224,9 @@ namespace glz::detail
       0x849FEEC281D7F328, 0xA5C7EA73224DEFF3, 0xCF39E50FEAE16BEF, 0x81842F29F2CCE375, 0xA1E53AF46F801C53,
       0xCA5E89B18B602368, 0xFCF62C1DEE382C42, 0x9E19DB92B4E31BA9};
 
-   inline uint64_t sig2_from_exp10(int32_t exp10) noexcept { return pow10_sig_table[exp10 - pow10_sig_table_min_exp]; }
+   inline constexpr uint64_t sig2_from_exp10(int32_t exp10) noexcept { return pow10_sig_table[exp10 - pow10_sig_table_min_exp]; }
 
-   inline int32_t exp2_from_exp10(int32_t exp10) noexcept { return (((exp10 * 217706 - 4128768) >> 16) + 126); }
+   inline constexpr int32_t exp2_from_exp10(int32_t exp10) noexcept { return (((exp10 * 217706 - 4128768) >> 16) + 126); }
 
    /*==============================================================================
     * Digit Character Matcher
@@ -234,19 +234,19 @@ namespace glz::detail
    // Digit type
    using digi_type = uint8_t;
    // Digit: '0'.
-   inline constexpr digi_type DIGI_TYPE_ZERO = 1 << 0;
+   constexpr digi_type DIGI_TYPE_ZERO = 1 << 0;
    // Digit: [1-9].
-   inline constexpr digi_type DIGI_TYPE_NONZERO = 1 << 1;
+   constexpr digi_type DIGI_TYPE_NONZERO = 1 << 1;
    // Plus sign (positive): '+'.
-   inline constexpr digi_type DIGI_TYPE_POS = 1 << 2;
+   constexpr digi_type DIGI_TYPE_POS = 1 << 2;
    // Minus sign (negative): '-'.
-   inline constexpr digi_type DIGI_TYPE_NEG = 1 << 3;
+   constexpr digi_type DIGI_TYPE_NEG = 1 << 3;
    // Decimal point: '.'
-   inline constexpr digi_type DIGI_TYPE_DOT = 1 << 4;
+   constexpr digi_type DIGI_TYPE_DOT = 1 << 4;
    // Exponent sign: 'e, 'E'.
-   inline constexpr digi_type DIGI_TYPE_EXP = 1 << 5;
-   // Digit type table (generate with misc/make_tables.c)
-   inline constexpr std::array<digi_type, 256> digi_table = {
+   constexpr digi_type DIGI_TYPE_EXP = 1 << 5;
+   // Digit type table
+   constexpr std::array<digi_type, 256> digi_table = {
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x08, 0x10, 0x00, 0x01, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02, 0x02,
@@ -304,14 +304,14 @@ namespace glz::detail
    {                                                                                                     \
       x(1) x(2) x(3) x(4) x(5) x(6) x(7) x(8) x(9) x(10) x(11) x(12) x(13) x(14) x(15) x(16) x(17) x(18) \
    }
-   inline constexpr auto e_bit = static_cast<uint8_t>('E' ^ 'e');
+   constexpr auto e_bit = static_cast<uint8_t>('E' ^ 'e');
    /*==============================================================================
     * IEEE-754 Double Number Constants
     *============================================================================*/
    // maximum decimal power of double number (1.7976931348623157e308)
-   inline constexpr auto F64_MAX_DEC_EXP = 308;
+   constexpr auto F64_MAX_DEC_EXP = 308;
    // minimum decimal power of double number (4.9406564584124654e-324)
-   inline constexpr auto F64_MIN_DEC_EXP = (-324);
+   constexpr auto F64_MIN_DEC_EXP = (-324);
 
    consteval uint32_t ceillog2(uint32_t x) { return x < 2 ? x : 1 + ceillog2(x >> 1); }
 
@@ -510,7 +510,7 @@ namespace glz::detail
             /* this number is an integer consisting of 20 digits */
             if ((sig < (U64_MAX / 10)) || (sig == (U64_MAX / 10) && num_tmp <= (U64_MAX % 10))) {
                sig = num_tmp + sig * 10;
-               cur++;
+               ++cur;
                val = static_cast<T>(sig);
                if constexpr (!std::is_unsigned_v<T>) {
                   if constexpr (is_volatile) {
