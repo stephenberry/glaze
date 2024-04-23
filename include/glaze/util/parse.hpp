@@ -536,7 +536,7 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      const auto* pc = std::memchr(it, '"', std::distance(it, end));
+      const auto* pc = std::memchr(it, '"', size_t(end - it));
       if (pc) [[likely]] {
          it = reinterpret_cast<std::decay_t<decltype(it)>>(pc);
          return;
