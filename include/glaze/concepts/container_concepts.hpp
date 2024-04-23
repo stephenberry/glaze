@@ -13,7 +13,7 @@ namespace glz
 {
    template <class T, class... U>
    concept is_any_of = (std::same_as<T, U> || ...);
-   
+
    template <class T>
    concept resizable = requires(T v) { v.resize(0); };
 

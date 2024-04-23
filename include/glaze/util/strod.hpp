@@ -26,28 +26,28 @@ namespace glz::detail
    // digits so I dont think roundtripping matters if you supply extra digits
 
    constexpr std::array<uint64_t, 20> powers_of_ten_int{1ull,
-                                                               10ull,
-                                                               100ull,
-                                                               1000ull,
-                                                               10000ull,
-                                                               100000ull,
-                                                               1000000ull,
-                                                               10000000ull,
-                                                               100000000ull,
-                                                               1000000000ull,
-                                                               10000000000ull,
-                                                               100000000000ull,
-                                                               1000000000000ull,
-                                                               10000000000000ull,
-                                                               100000000000000ull,
-                                                               1000000000000000ull,
-                                                               10000000000000000ull,
-                                                               100000000000000000ull,
-                                                               1000000000000000000ull,
-                                                               10000000000000000000ull};
+                                                        10ull,
+                                                        100ull,
+                                                        1000ull,
+                                                        10000ull,
+                                                        100000ull,
+                                                        1000000ull,
+                                                        10000000ull,
+                                                        100000000ull,
+                                                        1000000000ull,
+                                                        10000000000ull,
+                                                        100000000000ull,
+                                                        1000000000000ull,
+                                                        10000000000000ull,
+                                                        100000000000000ull,
+                                                        1000000000000000ull,
+                                                        10000000000000000ull,
+                                                        100000000000000000ull,
+                                                        1000000000000000000ull,
+                                                        10000000000000000000ull};
    constexpr std::array<double, 23> powers_of_ten_float = {1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,
-                                                                  1e8,  1e9,  1e10, 1e11, 1e12, 1e13, 1e14, 1e15,
-                                                                  1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22};
+                                                           1e8,  1e9,  1e10, 1e11, 1e12, 1e13, 1e14, 1e15,
+                                                           1e16, 1e17, 1e18, 1e19, 1e20, 1e21, 1e22};
 // https://stackoverflow.com/questions/28868367/getting-the-high-part-of-64-bit-integer-multiplication
 #ifdef __SIZEOF_INT128__
    inline uint64_t mulhi64(uint64_t a, uint64_t b)
@@ -224,9 +224,15 @@ namespace glz::detail
       0x849FEEC281D7F328, 0xA5C7EA73224DEFF3, 0xCF39E50FEAE16BEF, 0x81842F29F2CCE375, 0xA1E53AF46F801C53,
       0xCA5E89B18B602368, 0xFCF62C1DEE382C42, 0x9E19DB92B4E31BA9};
 
-   inline constexpr uint64_t sig2_from_exp10(int32_t exp10) noexcept { return pow10_sig_table[exp10 - pow10_sig_table_min_exp]; }
+   inline constexpr uint64_t sig2_from_exp10(int32_t exp10) noexcept
+   {
+      return pow10_sig_table[exp10 - pow10_sig_table_min_exp];
+   }
 
-   inline constexpr int32_t exp2_from_exp10(int32_t exp10) noexcept { return (((exp10 * 217706 - 4128768) >> 16) + 126); }
+   inline constexpr int32_t exp2_from_exp10(int32_t exp10) noexcept
+   {
+      return (((exp10 * 217706 - 4128768) >> 16) + 126);
+   }
 
    /*==============================================================================
     * Digit Character Matcher
