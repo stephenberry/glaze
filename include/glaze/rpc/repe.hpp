@@ -113,7 +113,7 @@ namespace glz::repe
             return 0;
          }
 
-         return size_t(std::distance(start, b));
+         return size_t(b - start);
       }
       else {
          static_assert(false_v<Value>, "TODO: implement BEVE");
@@ -178,10 +178,9 @@ namespace glz::repe
       }
       auto start = b;
 
-      // clang 14 won't build when capturing from structured binding
       auto handle_error = [&](auto& it) {
          ctx.error = error_code::syntax_error;
-         parse_error pe{ctx.error, size_t(std::distance(start, it)), ctx.includer_error};
+         parse_error pe{ctx.error, size_t(it - start), ctx.includer_error};
          return error_t{error_e::parse_error, format_error(pe, buffer)};
       };
 
@@ -195,7 +194,7 @@ namespace glz::repe
       glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
 
       if (bool(ctx.error)) {
-         parse_error pe{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
+         parse_error pe{ctx.error, size_t(b - start), ctx.includer_error};
          return {error_e::parse_error, format_error(pe, buffer)};
       }
 
@@ -216,7 +215,7 @@ namespace glz::repe
          glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
 
          if (bool(ctx.error)) {
-            parse_error pe{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
+            parse_error pe{ctx.error, size_t(b - start), ctx.includer_error};
             return {error_e::parse_error, format_error(pe, buffer)};
          }
       }
