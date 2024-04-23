@@ -16,7 +16,23 @@ namespace glz
       inline void minify_json(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto&& ix) noexcept
       {
          using enum json_type;
+         
+         auto ws_start = it;
+         uint64_t ws_size{};
 
+         auto skip_expected_whitespace = [&] {
+            auto new_ws_start = it;
+            if (ws_size && ws_size < size_t(end - it)) [[likely]] {
+               skip_matching_ws(ws_start, it, ws_size);
+            }
+            
+            while (whitespace_table[*it]) {
+               ++it;
+            }
+            ws_start = new_ws_start;
+            ws_size = size_t(it - new_ws_start);
+         };
+         
          auto skip_whitespace = [&] {
             while (whitespace_table[*it]) {
                ++it;
@@ -30,64 +46,76 @@ namespace glz
             case String: {
                const auto value = read_json_string(it, end);
                dump_unchecked(value, b, ix);
+               skip_whitespace();
                break;
             }
             case Comma: {
                dump_unchecked<','>(b, ix);
                ++it;
+               skip_expected_whitespace();
                break;
             }
             case Number: {
                const auto value = read_json_number(it);
                dump_unchecked(value, b, ix);
+               skip_whitespace();
                break;
             }
             case Colon: {
                dump_unchecked<':'>(b, ix);
                ++it;
+               skip_whitespace();
                break;
             }
             case Array_Start: {
                dump_unchecked<'['>(b, ix);
                ++it;
+               skip_expected_whitespace();
                break;
             }
             case Array_End: {
                dump_unchecked<']'>(b, ix);
                ++it;
+               skip_whitespace();
                break;
             }
             case Null: {
                dump_unchecked<"null">(b, ix);
                it += 4;
+               skip_whitespace();
                break;
             }
             case Bool: {
                if (*it == 't') {
                   dump_unchecked<"true">(b, ix);
                   it += 4;
+                  skip_whitespace();
                   break;
                }
                else {
                   dump_unchecked<"false">(b, ix);
                   it += 5;
+                  skip_whitespace();
                   break;
                }
             }
             case Object_Start: {
                dump_unchecked<'{'>(b, ix);
                ++it;
+               skip_expected_whitespace();
                break;
             }
             case Object_End: {
                dump_unchecked<'}'>(b, ix);
                ++it;
+               skip_whitespace();
                break;
             }
             case Comment: {
                if constexpr (Opts.comments) {
                   const auto value = read_jsonc_comment(it, end);
                   dump_unchecked(value, b, ix);
+                  skip_whitespace();
                   break;
                }
                else {
@@ -100,8 +128,6 @@ namespace glz
                   return;
                }
             }
-
-            skip_whitespace();
          }
       }
 
