@@ -801,9 +801,6 @@ namespace glz
          {
             if constexpr (Opts.no_header) {
                skip_compressed_int(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
-               }
             }
             else {
                constexpr uint8_t header = tag::string;
