@@ -204,7 +204,7 @@ void write_tests()
 
    "round_trip"_test = [] {
       {
-         std::vector<std::byte> s;
+         std::string s;
          float f{0.96875f};
          auto start = f;
          s.resize(sizeof(float));
@@ -217,7 +217,7 @@ void write_tests()
    "bool"_test = [] {
       {
          bool b = true;
-         std::vector<std::byte> out;
+         std::string out;
          glz::write_binary(b, out);
          bool b2{};
          expect(!glz::read_binary(b2, out));
@@ -228,7 +228,7 @@ void write_tests()
    "float"_test = [] {
       {
          float f = 1.5f;
-         std::vector<std::byte> out;
+         std::string out;
          glz::write_binary(f, out);
          float f2{};
          expect(!glz::read_binary(f2, out));
@@ -239,7 +239,7 @@ void write_tests()
    "string"_test = [] {
       {
          std::string s = "Hello World";
-         std::vector<std::byte> out;
+         std::string out;
          glz::write_binary(s, out);
          std::string s2{};
          expect(!glz::read_binary(s2, out));
@@ -250,7 +250,7 @@ void write_tests()
    "array"_test = [] {
       {
          std::array<float, 3> arr = {1.2f, 3434.343f, 0.f};
-         std::vector<std::byte> out;
+         std::string out;
          glz::write_binary(arr, out);
          std::array<float, 3> arr2{};
          expect(!glz::read_binary(arr2, out));
@@ -261,7 +261,7 @@ void write_tests()
    "vector"_test = [] {
       {
          std::vector<float> v = {1.2f, 3434.343f, 0.f};
-         std::vector<std::byte> out;
+         std::string out;
          glz::write_binary(v, out);
          std::vector<float> v2;
          expect(!glz::read_binary(v2, out));
@@ -273,7 +273,7 @@ void write_tests()
       my_struct s{};
       s.i = 5;
       s.hello = "Wow!";
-      std::vector<std::byte> out;
+      std::string out;
       glz::write_binary(s, out);
       my_struct s2{};
       expect(!glz::read_binary(s2, out));
@@ -282,7 +282,7 @@ void write_tests()
    };
 
    "nullable"_test = [] {
-      std::vector<std::byte> out;
+      std::string out;
 
       std::optional<int> op_int{};
       glz::write_binary(op_int, out);
@@ -322,7 +322,7 @@ void write_tests()
    };
 
    "map"_test = [] {
-      std::vector<std::byte> out;
+      std::string out;
 
       std::map<std::string, int> str_map{{"a", 1}, {"b", 10}, {"c", 100}, {"d", 1000}};
 
@@ -351,7 +351,7 @@ void write_tests()
 
    "enum"_test = [] {
       Color color = Color::Green;
-      std::vector<std::byte> buffer{};
+      std::string buffer{};
       glz::write_binary(color, buffer);
 
       Color color_read = Color::Red;
@@ -360,7 +360,7 @@ void write_tests()
    };
 
    "complex user obect"_test = [] {
-      std::vector<std::byte> buffer{};
+      std::string buffer{};
 
       Thing obj{};
       obj.thing.a = 5.7;
@@ -422,7 +422,7 @@ void bench()
 #endif
       Thing thing{};
 
-      std::vector<std::byte> buffer;
+      std::string buffer;
       // std::string buffer;
 
       auto tstart = std::chrono::high_resolution_clock::now();
@@ -522,7 +522,7 @@ void test_partial()
    std::string buffer = R"({"i":2,"map":{"fish":5,"cake":2,"bear":3}})";
    expect(glz::read_json(s, buffer) == false);
 
-   std::vector<std::byte> out;
+   std::string out;
    static constexpr auto partial = glz::json_ptrs("/i", "/d", "/hello", "/sub/x", "/sub/y", "/map/fish", "/map/bear");
 
    static constexpr auto sorted = glz::sort_json_ptrs(partial);
@@ -793,10 +793,8 @@ suite byte_buffer = [] {
       TestMsg msg{};
       msg.id = 5;
       msg.val = "hello";
-      std::vector<std::byte> buffer{};
+      std::string buffer{};
       glz::write_binary(msg, buffer);
-
-      buffer.emplace_back(static_cast<std::byte>('\0'));
 
       msg.id = 0;
       msg.val = "";

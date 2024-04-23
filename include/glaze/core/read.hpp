@@ -21,7 +21,7 @@ namespace glz
 
       using Buffer = std::decay_t<decltype(buffer)>;
       if constexpr (is_specialization_v<Buffer, std::basic_string> ||
-                    is_specialization_v<Buffer, std::basic_string_view> || span<Buffer> || Opts.format == binary) {
+                    is_specialization_v<Buffer, std::basic_string_view> || span<Buffer>) {
          e += buffer.size();
 
          if (b == e) {
@@ -29,14 +29,15 @@ namespace glz
          }
       }
       else {
-         // if not a std::string or a std::string_view, check that the last character is a null character
-         // this is not required for binary specification reading, because we require the data to be properly formatted
+         // if not a std::string, std::string_view, or span, check that the last character is a null character
          if (buffer.empty()) {
             ctx.error = error_code::no_read_input;
          }
-         e += buffer.size() - 1;
-         if (*e != '\0') {
-            ctx.error = error_code::data_must_be_null_terminated;
+         else {
+            e += buffer.size() - 1;
+            if (*e != '\0') {
+               ctx.error = error_code::data_must_be_null_terminated;
+            }
          }
       }
 
@@ -57,7 +58,7 @@ namespace glz
 
       using Buffer = std::decay_t<decltype(buffer)>;
       if constexpr (is_specialization_v<Buffer, std::basic_string> ||
-                    is_specialization_v<Buffer, std::basic_string_view> || span<Buffer> || Opts.format == binary) {
+                    is_specialization_v<Buffer, std::basic_string_view> || span<Buffer>) {
          e += buffer.size();
 
          if (b == e) {
@@ -66,8 +67,7 @@ namespace glz
          }
       }
       else {
-         // if not a std::string or a std::string_view, check that the last character is a null character
-         // this is not required for binary specification reading, because we require the data to be properly formatted
+         // if not a std::string, std::string_view, or span, check that the last character is a null character
          if (buffer.empty()) {
             ctx.error = error_code::no_read_input;
             return {ctx.error, 0};
@@ -90,7 +90,7 @@ namespace glz
          }
       }
 
-      return {ctx.error, static_cast<size_t>(std::distance(start, b)), ctx.includer_error};
+      return {ctx.error, static_cast<size_t>(b - start), ctx.includer_error};
    }
 
    template <opts Opts, class T>
