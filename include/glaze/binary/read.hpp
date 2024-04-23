@@ -110,7 +110,7 @@ namespace glz
             uint8_t data[Length];
 
             std::memcpy(data, &(*it), Length);
-            std::advance(it, Length);
+            it += Length;
 
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::get<I>(meta_v<T>);
@@ -130,7 +130,7 @@ namespace glz
             if constexpr (Opts.no_header) {
                using V = std::decay_t<T>;
                std::memcpy(&value, &(*it), sizeof(V));
-               std::advance(it, sizeof(V));
+               it += sizeof(V);
             }
             else {
                constexpr uint8_t type =
@@ -147,7 +147,7 @@ namespace glz
 
                using V = std::decay_t<decltype(value)>;
                std::memcpy(&value, &(*it), sizeof(V));
-               std::advance(it, sizeof(V));
+               it += sizeof(V);
             }
          }
       };
@@ -163,7 +163,7 @@ namespace glz
 
             if constexpr (Opts.no_header) {
                std::memcpy(&value, &(*it), sizeof(V));
-               std::advance(it, sizeof(V));
+               it += sizeof(V);
             }
             else {
                constexpr uint8_t type =
@@ -179,7 +179,7 @@ namespace glz
                ++it;
 
                std::memcpy(&value, &(*it), sizeof(V));
-               std::advance(it, sizeof(V));
+               it += sizeof(V);
             }
          }
       };
@@ -194,7 +194,7 @@ namespace glz
             if constexpr (Opts.no_header) {
                using V = std::decay_t<T>;
                std::memcpy(&value, &(*it), sizeof(V));
-               std::advance(it, sizeof(V));
+               it += sizeof(V);
             }
             else {
                constexpr uint8_t header = tag::extensions | 0b00011'000;
@@ -220,7 +220,7 @@ namespace glz
                ++it;
 
                std::memcpy(&value, &(*it), 2 * sizeof(V));
-               std::advance(it, 2 * sizeof(V));
+               it += 2 * sizeof(V);
             }
          }
       };
@@ -319,7 +319,7 @@ namespace glz
                }
                value.resize(n);
                std::memcpy(value.data(), &(*it), n);
-               std::advance(it, n);
+               it += n;
             }
             else {
                constexpr uint8_t header = tag::string;
@@ -339,7 +339,7 @@ namespace glz
                }
                value.resize(n);
                std::memcpy(value.data(), &(*it), n);
-               std::advance(it, n);
+               it += n;
             }
          }
       };
@@ -403,7 +403,7 @@ namespace glz
                for (size_t i = 0; i < n; ++i) {
                   V x;
                   std::memcpy(&x, &*it, sizeof(V));
-                  std::advance(it, sizeof(V));
+                  it += sizeof(V);
                   value.emplace(x);
                }
             }
@@ -435,7 +435,7 @@ namespace glz
                   V str;
                   str.resize(length);
                   std::memcpy(str.data(), &*it, length);
-                  std::advance(it, length);
+                  it += length;
                   value.emplace(std::move(str));
                }
             }
@@ -541,12 +541,12 @@ namespace glz
 
                if constexpr (contiguous<T>) {
                   std::memcpy(value.data(), &*it, n * sizeof(V));
-                  std::advance(it, n * sizeof(V));
+                  it += n * sizeof(V);
                }
                else {
                   for (auto&& x : value) {
                      std::memcpy(&x, &*it, sizeof(V));
-                     std::advance(it, sizeof(V));
+                     it += sizeof(V);
                   }
                }
             }
@@ -587,7 +587,7 @@ namespace glz
                   }
 
                   std::memcpy(x.data(), &*it, length);
-                  std::advance(it, length);
+                  it += length;
                }
             }
             else if constexpr (complex_t<V>) {
@@ -630,12 +630,12 @@ namespace glz
 
                if constexpr (contiguous<T>) {
                   std::memcpy(value.data(), &*it, n * sizeof(V));
-                  std::advance(it, n * sizeof(V));
+                  it += n * sizeof(V);
                }
                else {
                   for (auto&& x : value) {
                      std::memcpy(&x, &*it, sizeof(V));
-                     std::advance(it, sizeof(V));
+                     it += sizeof(V);
                   }
                }
             }
@@ -901,7 +901,7 @@ namespace glz
 
                const std::string_view key{it, length};
 
-               std::advance(it, length);
+               it += length;
 
                if constexpr (N > 0) {
                   if (const auto& p = storage.find(key); p != storage.end()) [[likely]] {

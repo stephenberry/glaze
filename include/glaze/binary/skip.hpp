@@ -43,7 +43,7 @@ namespace glz::detail
       if ((tag & 0b00000'111) == tag::string) {
          for (size_t i = 0; i < n_keys; ++i) {
             const auto string_length = int_from_compressed(ctx, it, end);
-            std::advance(it, string_length);
+            it += string_length;
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -56,7 +56,7 @@ namespace glz::detail
          const uint8_t byte_count = byte_count_lookup[tag >> 5];
          for (size_t i = 0; i < n_keys; ++i) {
             const auto n = int_from_compressed(ctx, it, end);
-            std::advance(it, byte_count * n);
+            it += byte_count * n;
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -83,7 +83,7 @@ namespace glz::detail
          ++it;
          const auto n = int_from_compressed(ctx, it, end);
          const uint8_t byte_count = byte_count_lookup[tag >> 5];
-         std::advance(it, byte_count * n);
+         it += byte_count * n;
          break;
       }
       case 3: { // bool or string
@@ -92,11 +92,11 @@ namespace glz::detail
          if (is_bool) {
             const auto n = int_from_compressed(ctx, it, end);
             const auto num_bytes = (n + 7) / 8;
-            std::advance(it, num_bytes);
+            it += num_bytes;
          }
          else {
             const auto n = int_from_compressed(ctx, it, end);
-            std::advance(it, n);
+            it += n;
          }
          break;
       }

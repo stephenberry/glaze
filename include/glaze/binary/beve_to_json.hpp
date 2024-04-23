@@ -17,9 +17,9 @@ namespace glz
          const uint8_t byte_count = detail::byte_count_lookup[tag >> 5];
 
          auto write_number = [&]<class T>(T&& value) {
-            std::memcpy(&value, &(*it), sizeof(T));
+            std::memcpy(&value, it, sizeof(T));
             to_json<T>::template op<Opts>(value, ctx, out, ix);
-            std::advance(it, sizeof(T));
+            it += sizeof(T);
          };
 
          switch (number_type) {
@@ -132,7 +132,7 @@ namespace glz
             const auto n = detail::int_from_compressed(ctx, it, end);
             const sv value{reinterpret_cast<const char*>(&*it), n};
             to_json<sv>::template op<Opts>(value, ctx, out, ix);
-            std::advance(it, n);
+            it += n;
             break;
          }
          case tag::object: {
@@ -161,7 +161,7 @@ namespace glz
                   else {
                      dump<':'>(out, ix);
                   }
-                  std::advance(it, n);
+                  it += n;
                   // convert the value
                   beve_to_json_value<Opts>(ctx, it, end, out, ix);
                   if (i != n_fields - 1) {
@@ -196,9 +196,9 @@ namespace glz
             auto write_array = [&]<class T>(T&& value) {
                const auto n = int_from_compressed(ctx, it, end);
                for (size_t i = 0; i < n; ++i) {
-                  std::memcpy(&value, &(*it), sizeof(T));
+                  std::memcpy(&value, it, sizeof(T));
                   to_json<T>::template op<Opts>(value, ctx, out, ix);
-                  std::advance(it, sizeof(T));
+                  it += sizeof(T);
                   if (i != n - 1) {
                      dump<','>(out, ix);
                   }
@@ -295,7 +295,7 @@ namespace glz
                      const auto n = detail::int_from_compressed(ctx, it, end);
                      const sv value{reinterpret_cast<const char*>(&*it), n};
                      to_json<sv>::template op<Opts>(value, ctx, out, ix);
-                     std::advance(it, n);
+                     it += n;
                      if (i != n_strings - 1) {
                         dump<','>(out, ix);
                      }
