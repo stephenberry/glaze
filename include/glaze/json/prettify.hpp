@@ -150,7 +150,7 @@ namespace glz
       template <opts Opts, contiguous In, output_buffer Out>
       inline void prettify_json(is_context auto&& ctx, In&& in, Out&& out) noexcept
       {
-         if constexpr (resizeable<Out>) {
+         if constexpr (resizable<Out>) {
             if (in.empty()) {
                out.clear();
                return;
@@ -163,7 +163,7 @@ namespace glz
             return;
          }
          prettify_json<Opts>(ctx, it, end, out, ix);
-         if constexpr (resizeable<Out>) {
+         if constexpr (resizable<Out>) {
             out.resize(ix);
          }
       }

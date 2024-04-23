@@ -346,7 +346,7 @@ namespace glz
 
       // for set types
       template <class T>
-         requires(readable_array_t<T> && !emplace_backable<T> && !resizeable<T> && emplaceable<T>)
+         requires(readable_array_t<T> && !emplace_backable<T> && !resizable<T> && emplaceable<T>)
       struct from_binary<T> final
       {
          template <auto Opts>
@@ -492,7 +492,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -531,7 +531,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -567,7 +567,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -620,7 +620,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -651,7 +651,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {

@@ -106,7 +106,7 @@ namespace glz::repe
          glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
 
          if (bool(ctx.error)) {
-            parse_error ec{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
+            parse_error ec{ctx.error, size_t(b - start), ctx.includer_error};
             write_json(std::forward_as_tuple(header{.error = true},
                                              error_t{error_e::parse_error, format_error(ec, state.message)}),
                        response);

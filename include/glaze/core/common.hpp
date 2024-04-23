@@ -273,7 +273,7 @@ namespace glz
 
       template <class T>
       concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> &&
-                                    !resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
+                                    !resizable<std::decay_t<decltype(std::declval<T>()[0])>>;
 
       template <class T>
       concept boolean_like = std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> ||

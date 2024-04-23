@@ -514,7 +514,7 @@ namespace glz
          }
       }
 
-      if constexpr (detail::resizeable<JSONBuffer>) {
+      if constexpr (resizable<JSONBuffer>) {
          out.resize(ix);
       }
 

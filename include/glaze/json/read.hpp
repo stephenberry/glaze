@@ -823,7 +823,7 @@ namespace glz
 
       // for set types
       template <class T>
-         requires(readable_array_t<T> && !emplace_backable<T> && !resizeable<T> && emplaceable<T>)
+         requires(readable_array_t<T> && !emplace_backable<T> && !resizable<T> && emplaceable<T>)
       struct from_json<T>
       {
          template <auto Options>
@@ -872,7 +872,7 @@ namespace glz
 
       // for types like std::vector, std::array, std::deque, etc.
       template <class T>
-         requires(readable_array_t<T> && (emplace_backable<T> || !resizeable<T>) && !emplaceable<T>)
+         requires(readable_array_t<T> && (emplace_backable<T> || !resizable<T>) && !emplaceable<T>)
       struct from_json<T>
       {
          template <auto Options>
@@ -896,7 +896,7 @@ namespace glz
 
             if (*it == ']') [[unlikely]] {
                ++it;
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.clear();
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -1155,7 +1155,7 @@ namespace glz
       }
 
       template <class T>
-         requires readable_array_t<T> && (!emplace_backable<T> && resizeable<T>)
+         requires readable_array_t<T> && (!emplace_backable<T> && resizable<T>)
       struct from_json<T>
       {
          template <auto Options>

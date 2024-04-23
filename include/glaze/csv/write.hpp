@@ -67,7 +67,7 @@ namespace glz
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            if constexpr (resizeable<T>) {
+            if constexpr (resizable<T>) {
                if constexpr (Opts.layout == rowwise) {
                   const auto n = value.size();
                   for (size_t i = 0; i < n; ++i) {

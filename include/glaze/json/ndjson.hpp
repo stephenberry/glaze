@@ -22,7 +22,7 @@ namespace glz
       };
 
       template <class T>
-         requires readable_array_t<T> && (emplace_backable<T> || !resizeable<T>)
+         requires readable_array_t<T> && (emplace_backable<T> || !resizable<T>)
       struct from_ndjson<T>
       {
          template <auto Opts>
@@ -33,7 +33,7 @@ namespace glz
             }
 
             if (it == end) {
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.clear();
 
                   if constexpr (Opts.shrink_to_fit) {
