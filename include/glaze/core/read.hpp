@@ -102,7 +102,7 @@ namespace glz
    }
 
    template <class T>
-   concept string_viewable = std::convertible_to<std::decay_t<T>, std::string_view> && !detail::has_data<T>;
+   concept string_viewable = std::convertible_to<std::decay_t<T>, std::string_view> && !has_data<T>;
 
    // for char array input
    template <opts Opts, class T, string_viewable Buffer>

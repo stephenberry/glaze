@@ -341,7 +341,7 @@ namespace glz
                      }
 
                      static_assert(sizeof(*it) == sizeof(char));
-                     const char* cur = reinterpret_cast<const char*>(&*it);
+                     const char* cur = reinterpret_cast<const char*>(it);
                      const char* beg = cur;
                      if constexpr (std::is_volatile_v<decltype(value)>) {
                         // Hardware may interact with value changes, so we parse into a temporary and assign in one
@@ -373,7 +373,7 @@ namespace glz
                      }
 
                      static_assert(sizeof(*it) == sizeof(char));
-                     const char* cur = reinterpret_cast<const char*>(&*it);
+                     const char* cur = reinterpret_cast<const char*>(it);
                      const char* beg = cur;
                      auto s = parse_int<std::decay_t<decltype(i)>, Options.force_conformance>(i, cur);
                      if (!s) [[unlikely]] {
@@ -398,7 +398,7 @@ namespace glz
                   }
 
                   static_assert(sizeof(*it) == sizeof(char));
-                  const char* cur = reinterpret_cast<const char*>(&*it);
+                  const char* cur = reinterpret_cast<const char*>(it);
                   const char* beg = cur;
                   auto s = parse_int<decay_keep_volatile_t<decltype(i)>, Options.force_conformance>(i, cur);
                   if (!s) [[unlikely]] {
@@ -431,7 +431,7 @@ namespace glz
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  it += std::distance(it, ptr);
+                  it = ptr;
                }
                else {
                   if constexpr (std::is_volatile_v<decltype(value)>) {
@@ -557,27 +557,6 @@ namespace glz
                   return;
             }
 
-            auto handle_escaped = [&]() {
-               switch (*it) {
-               case '"':
-               case '\\':
-               case '/':
-               case 'b':
-               case 'f':
-               case 'n':
-               case 'r':
-               case 't':
-               case 'u': {
-                  ++it;
-                  break;
-               }
-               default: {
-                  ctx.error = error_code::invalid_escape;
-                  return;
-               }
-               }
-            };
-
             auto start = it;
             [[maybe_unused]] auto write_to_char_buffer = [&] {
                if constexpr (char_array_t<T>) {
@@ -613,9 +592,13 @@ namespace glz
                   }
                   else {
                      ++it;
-                     handle_escaped();
-                     if (bool(ctx.error)) [[unlikely]]
+                     if (valid_escape_table[*it]) [[likely]] {
+                        ++it;
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::invalid_escape;
                         return;
+                     }
                   }
                }
                else {
@@ -638,9 +621,13 @@ namespace glz
                   }
                   case '\\': {
                      ++it;
-                     handle_escaped();
-                     if (bool(ctx.error)) [[unlikely]]
+                     if (valid_escape_table[*it]) [[likely]] {
+                        ++it;
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::invalid_escape;
                         return;
+                     }
                      if constexpr (str_view_t<T>) {
                         value = std::string_view{start, size_t(it - start - 1)};
                      }
@@ -823,7 +810,7 @@ namespace glz
 
       // for set types
       template <class T>
-         requires(readable_array_t<T> && !emplace_backable<T> && !resizeable<T> && emplaceable<T>)
+         requires(readable_array_t<T> && !emplace_backable<T> && !resizable<T> && emplaceable<T>)
       struct from_json<T>
       {
          template <auto Options>
@@ -872,7 +859,7 @@ namespace glz
 
       // for types like std::vector, std::array, std::deque, etc.
       template <class T>
-         requires(readable_array_t<T> && (emplace_backable<T> || !resizeable<T>) && !emplaceable<T>)
+         requires(readable_array_t<T> && (emplace_backable<T> || !resizable<T>) && !emplaceable<T>)
       struct from_json<T>
       {
          template <auto Options>
@@ -896,7 +883,7 @@ namespace glz
 
             if (*it == ']') [[unlikely]] {
                ++it;
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.clear();
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -1155,7 +1142,7 @@ namespace glz
       }
 
       template <class T>
-         requires readable_array_t<T> && (!emplace_backable<T> && resizeable<T>)
+         requires readable_array_t<T> && (!emplace_backable<T> && resizable<T>)
       struct from_json<T>
       {
          template <auto Options>

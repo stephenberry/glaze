@@ -273,7 +273,7 @@ namespace glz
 
       template <class T>
       concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> &&
-                                    !resizeable<std::decay_t<decltype(std::declval<T>()[0])>>;
+                                    !resizable<std::decay_t<decltype(std::declval<T>()[0])>>;
 
       template <class T>
       concept boolean_like = std::same_as<T, bool> || std::same_as<T, std::vector<bool>::reference> ||
@@ -651,9 +651,9 @@ namespace glz
       {
          constexpr auto N = std::variant_size_v<T>;
 
-         std::array<std::string_view, get_max_keys<T, N>> data{};
-         auto* data_ptr =
-            &data; // This intermediate pointer is necessary for GCC 13 (otherwise segfaults with reflection logic)
+         std::array<std::string_view, get_max_keys<T, N>> keys{};
+         // This intermediate pointer is necessary for GCC 13 (otherwise segfaults with reflection logic)
+         auto* data_ptr = &keys;
          size_t index = 0;
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
@@ -678,11 +678,11 @@ namespace glz
             }
          });
 
-         std::sort(data.begin(), data.end());
-         const auto end = std::unique(data.begin(), data.end());
-         const auto size = std::distance(data.begin(), end);
+         std::sort(keys.begin(), keys.end());
+         const auto end = std::unique(keys.begin(), keys.end());
+         const auto size = std::distance(keys.begin(), end);
 
-         return std::pair{data, size};
+         return std::pair{keys, size};
       }
 
       template <class T, size_t... I>

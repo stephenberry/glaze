@@ -50,6 +50,20 @@ namespace glz::detail
       t['t'] = '\t';
       return t;
    }();
+   
+   constexpr std::array<bool, 256> valid_escape_table = [] {
+      std::array<bool, 256> t{};
+      t['"'] = true;
+      t['/'] = true;
+      t['\\'] = true;
+      t['b'] = true;
+      t['f'] = true;
+      t['n'] = true;
+      t['r'] = true;
+      t['t'] = true;
+      t['u'] = true;
+      return t;
+   }();
 
    constexpr std::array<bool, 256> whitespace_table = [] {
       std::array<bool, 256> t{};
@@ -332,7 +346,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto n = size_t(end - it);
-      if ((n < str.size()) || std::memcmp(&*it, str.value, str.size())) [[unlikely]] {
+      if ((n < str.size()) || std::memcmp(it, str.value, str.size())) [[unlikely]] {
          ctx.error = error_code::syntax_error;
       }
       else [[likely]] {
@@ -522,7 +536,7 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      const auto* pc = std::memchr(it, '"', std::distance(it, end));
+      const auto* pc = std::memchr(it, '"', size_t(end - it));
       if (pc) [[likely]] {
          it = reinterpret_cast<std::decay_t<decltype(it)>>(pc);
          return;

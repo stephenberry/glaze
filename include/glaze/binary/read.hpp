@@ -80,7 +80,7 @@ namespace glz
             const auto num_bytes = (value.size() + 7) / 8;
             for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
                uint8_t byte;
-               std::memcpy(&byte, &*it, 1);
+               std::memcpy(&byte, it, 1);
                for (size_t bit_i = 0; bit_i < 8 && i < n; ++bit_i, ++i) {
                   value[i] = byte >> bit_i & uint8_t(1);
                }
@@ -346,7 +346,7 @@ namespace glz
 
       // for set types
       template <class T>
-         requires(readable_array_t<T> && !emplace_backable<T> && !resizeable<T> && emplaceable<T>)
+         requires(readable_array_t<T> && !emplace_backable<T> && !resizable<T> && emplaceable<T>)
       struct from_binary<T> final
       {
          template <auto Opts>
@@ -374,7 +374,7 @@ namespace glz
                const auto num_bytes = (value.size() + 7) / 8;
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
                   uint8_t byte;
-                  std::memcpy(&byte, &*it, 1);
+                  std::memcpy(&byte, it, 1);
                   for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
                      bool x = byte >> bit_i & uint8_t(1);
                      value.emplace(x);
@@ -402,7 +402,7 @@ namespace glz
 
                for (size_t i = 0; i < n; ++i) {
                   V x;
-                  std::memcpy(&x, &*it, sizeof(V));
+                  std::memcpy(&x, it, sizeof(V));
                   it += sizeof(V);
                   value.emplace(x);
                }
@@ -434,7 +434,7 @@ namespace glz
                   }
                   V str;
                   str.resize(length);
-                  std::memcpy(str.data(), &*it, length);
+                  std::memcpy(str.data(), it, length);
                   it += length;
                   value.emplace(std::move(str));
                }
@@ -492,7 +492,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -503,7 +503,7 @@ namespace glz
                const auto num_bytes = (value.size() + 7) / 8;
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
                   uint8_t byte;
-                  std::memcpy(&byte, &*it, 1);
+                  std::memcpy(&byte, it, 1);
                   for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
                      value[i] = byte >> bit_i & uint8_t(1);
                   }
@@ -531,7 +531,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -540,12 +540,12 @@ namespace glz
                }
 
                if constexpr (contiguous<T>) {
-                  std::memcpy(value.data(), &*it, n * sizeof(V));
+                  std::memcpy(value.data(), it, n * sizeof(V));
                   it += n * sizeof(V);
                }
                else {
                   for (auto&& x : value) {
-                     std::memcpy(&x, &*it, sizeof(V));
+                     std::memcpy(&x, it, sizeof(V));
                      it += sizeof(V);
                   }
                }
@@ -567,7 +567,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -586,7 +586,7 @@ namespace glz
                      value.shrink_to_fit();
                   }
 
-                  std::memcpy(x.data(), &*it, length);
+                  std::memcpy(x.data(), it, length);
                   it += length;
                }
             }
@@ -620,7 +620,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -629,12 +629,12 @@ namespace glz
                }
 
                if constexpr (contiguous<T>) {
-                  std::memcpy(value.data(), &*it, n * sizeof(V));
+                  std::memcpy(value.data(), it, n * sizeof(V));
                   it += n * sizeof(V);
                }
                else {
                   for (auto&& x : value) {
-                     std::memcpy(&x, &*it, sizeof(V));
+                     std::memcpy(&x, it, sizeof(V));
                      it += sizeof(V);
                   }
                }
@@ -651,7 +651,7 @@ namespace glz
                   return;
                }
 
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {

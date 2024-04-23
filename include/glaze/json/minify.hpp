@@ -138,7 +138,7 @@ namespace glz
             return;
          }
 
-         if constexpr (resizeable<Out>) {
+         if constexpr (resizable<Out>) {
             out.resize(in.size());
          }
          size_t ix = 0;
@@ -147,7 +147,7 @@ namespace glz
             return;
          }
          minify_json<Opts>(ctx, it, end, out, ix);
-         if constexpr (resizeable<Out>) {
+         if constexpr (resizable<Out>) {
             out.resize(ix);
          }
       }

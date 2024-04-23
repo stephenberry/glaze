@@ -232,7 +232,7 @@ namespace glz
                   dump(value, b, ix);
                }
                else {
-                  if constexpr (resizeable<B>) {
+                  if constexpr (resizable<B>) {
                      const auto k = ix + 4; // 4 characters is enough for quotes and escaped character
                      if (k >= b.size()) [[unlikely]] {
                         b.resize((std::max)(b.size() * 2, k));
@@ -265,7 +265,7 @@ namespace glz
                   }();
 
                   // We need at space for quotes and the string length: 2 + n.
-                  if constexpr (resizeable<B>) {
+                  if constexpr (resizable<B>) {
                      const auto n = str.size();
                      const auto k = ix + 2 + n;
                      if (k >= b.size()) [[unlikely]] {
@@ -293,7 +293,7 @@ namespace glz
                   // For each individual character we need room for two characters to handle escapes.
                   // So, we need 2 + 2 * n characters to handle all cases.
                   // We add another 8 characters to support SWAR
-                  if constexpr (resizeable<B>) {
+                  if constexpr (resizable<B>) {
                      const auto k = ix + 10 + 2 * n;
                      if (k >= b.size()) [[unlikely]] {
                         b.resize((std::max)(b.size() * 2, k));

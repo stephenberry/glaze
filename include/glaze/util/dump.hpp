@@ -16,7 +16,7 @@ namespace glz::detail
    template <class T>
    [[nodiscard]] GLZ_ALWAYS_INLINE auto data_ptr(T& buffer) noexcept
    {
-      if constexpr (detail::resizeable<T>) {
+      if constexpr (resizable<T>) {
          return buffer.data();
       }
       else {

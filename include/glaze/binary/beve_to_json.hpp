@@ -130,7 +130,7 @@ namespace glz
          case tag::string: {
             ++it;
             const auto n = detail::int_from_compressed(ctx, it, end);
-            const sv value{reinterpret_cast<const char*>(&*it), n};
+            const sv value{reinterpret_cast<const char*>(it), n};
             to_json<sv>::template op<Opts>(value, ctx, out, ix);
             it += n;
             break;
@@ -153,7 +153,7 @@ namespace glz
                for (size_t i = 0; i < n_fields; ++i) {
                   // convert the key
                   const auto n = detail::int_from_compressed(ctx, it, end);
-                  const sv key{reinterpret_cast<const char*>(&*it), n};
+                  const sv key{reinterpret_cast<const char*>(it), n};
                   to_json<sv>::template op<Opts>(key, ctx, out, ix);
                   if constexpr (Opts.prettify) {
                      dump<": ">(out, ix);
@@ -293,7 +293,7 @@ namespace glz
                   const auto n_strings = int_from_compressed(ctx, it, end);
                   for (size_t i = 0; i < n_strings; ++i) {
                      const auto n = detail::int_from_compressed(ctx, it, end);
-                     const sv value{reinterpret_cast<const char*>(&*it), n};
+                     const sv value{reinterpret_cast<const char*>(it), n};
                      to_json<sv>::template op<Opts>(value, ctx, out, ix);
                      it += n;
                      if (i != n_strings - 1) {
@@ -514,7 +514,7 @@ namespace glz
          }
       }
 
-      if constexpr (detail::resizeable<JSONBuffer>) {
+      if constexpr (resizable<JSONBuffer>) {
          out.resize(ix);
       }
 

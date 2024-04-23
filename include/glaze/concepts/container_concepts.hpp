@@ -13,6 +13,25 @@ namespace glz
 {
    template <class T, class... U>
    concept is_any_of = (std::same_as<T, U> || ...);
+   
+   template <class T>
+   concept resizable = requires(T v) { v.resize(0); };
+
+   template <class T>
+   concept erasable = requires(T v) { v.erase(v.cbegin(), v.cend()); };
+
+   template <class T>
+   concept has_size = requires(T v) { v.size(); };
+
+   template <class T>
+   concept has_empty = requires(T v) {
+      {
+         v.empty()
+      } -> std::convertible_to<bool>;
+   };
+
+   template <class T>
+   concept has_data = requires(T v) { v.data(); };
 }
 
 namespace glz::detail
@@ -96,25 +115,6 @@ namespace glz::detail
    };
 
    template <class T>
-   concept resizeable = requires(T container) { container.resize(0); };
-
-   template <class T>
-   concept erasable = requires(T container) { container.erase(container.cbegin(), container.cend()); };
-
-   template <class T>
-   concept has_size = requires(T container) { container.size(); };
-
-   template <class T>
-   concept has_empty = requires(T container) {
-      {
-         container.empty()
-      } -> std::convertible_to<bool>;
-   };
-
-   template <class T>
-   concept has_data = requires(T container) { container.data(); };
-
-   template <class T>
    concept has_push_back = requires(T t, typename T::value_type v) { t.push_back(v); };
 
    template <class T>
@@ -138,7 +138,7 @@ namespace glz::detail
    };
 
    template <class T>
-   concept vector_like = resizeable<T> && accessible<T> && has_data<T>;
+   concept vector_like = resizable<T> && accessible<T> && has_data<T>;
 
    template <class T>
    concept map_subscriptable = requires(T container) {
