@@ -40,7 +40,12 @@ namespace glz
                      append_new_line<use_tabs, indent_width>(b, ix, indent);
                   }
                   else {
-                     dump<' '>(b, ix);
+                     if constexpr (use_tabs) {
+                        dump<'\t'>(b, ix);
+                     }
+                     else {
+                        dump<' '>(b, ix);
+                     }
                   }
                }
                break;
@@ -51,7 +56,12 @@ namespace glz
                break;
             }
             case Colon: {
-               dump<": ">(b, ix);
+               if constexpr (use_tabs) {
+                  dump<":\t">(b, ix);
+               }
+               else {
+                  dump<": ">(b, ix);
+               }
                ++it;
                break;
             }
