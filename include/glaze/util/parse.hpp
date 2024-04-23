@@ -50,6 +50,20 @@ namespace glz::detail
       t['t'] = '\t';
       return t;
    }();
+   
+   constexpr std::array<bool, 256> valid_escape_table = [] {
+      std::array<bool, 256> t{};
+      t['"'] = true;
+      t['/'] = true;
+      t['\\'] = true;
+      t['b'] = true;
+      t['f'] = true;
+      t['n'] = true;
+      t['r'] = true;
+      t['t'] = true;
+      t['u'] = true;
+      return t;
+   }();
 
    constexpr std::array<bool, 256> whitespace_table = [] {
       std::array<bool, 256> t{};

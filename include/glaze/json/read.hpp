@@ -557,27 +557,6 @@ namespace glz
                   return;
             }
 
-            auto handle_escaped = [&]() {
-               switch (*it) {
-               case '"':
-               case '\\':
-               case '/':
-               case 'b':
-               case 'f':
-               case 'n':
-               case 'r':
-               case 't':
-               case 'u': {
-                  ++it;
-                  break;
-               }
-               default: {
-                  ctx.error = error_code::invalid_escape;
-                  return;
-               }
-               }
-            };
-
             auto start = it;
             [[maybe_unused]] auto write_to_char_buffer = [&] {
                if constexpr (char_array_t<T>) {
@@ -613,9 +592,13 @@ namespace glz
                   }
                   else {
                      ++it;
-                     handle_escaped();
-                     if (bool(ctx.error)) [[unlikely]]
+                     if (valid_escape_table[*it]) [[likely]] {
+                        ++it;
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::invalid_escape;
                         return;
+                     }
                   }
                }
                else {
@@ -638,9 +621,13 @@ namespace glz
                   }
                   case '\\': {
                      ++it;
-                     handle_escaped();
-                     if (bool(ctx.error)) [[unlikely]]
+                     if (valid_escape_table[*it]) [[likely]] {
+                        ++it;
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::invalid_escape;
                         return;
+                     }
                      if constexpr (str_view_t<T>) {
                         value = std::string_view{start, size_t(it - start - 1)};
                      }
