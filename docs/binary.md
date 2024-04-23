@@ -31,6 +31,10 @@ glz::read_binary(s, buffer);
 >
 > Glaze does include some validation for binary input, but this should be seen as a final line of defense.
 
+> [!IMPORTANT]
+>
+> Glaze will be adding a fully checked binary (BEVE) parsing option, but this does not currently exist. So, do not use BEVE for open APIs where users could send corrupt/invalid input with the current codebase.
+
 ## Untagged Binary
 
 By default Glaze will handle structs as tagged objects, meaning that keys will be written/read. However, structs can be written/read without tags by using the option `structs_as_arrays` or the functions `glz::write_binary_untagged` and `glz::read_binary_untagged`.
