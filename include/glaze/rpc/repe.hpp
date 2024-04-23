@@ -591,7 +591,7 @@ namespace glz::repe
 
          auto handle_error = [&](auto& it) {
             ctx.error = error_code::syntax_error;
-            parse_error pe{ctx.error, size_t(std::distance(start, it)), ctx.includer_error};
+            parse_error pe{ctx.error, size_t(it - start), ctx.includer_error};
             write_json(
                std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(pe, msg)}),
                response);
@@ -608,7 +608,7 @@ namespace glz::repe
          glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
 
          if (bool(ctx.error)) {
-            parse_error pe{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
+            parse_error pe{ctx.error, size_t(b - start), ctx.includer_error};
             response = format_error(pe, msg);
             return !(h.action & notify);
          }
@@ -622,7 +622,7 @@ namespace glz::repe
          }
 
          if (auto it = methods.find(h.method); it != methods.end()) {
-            const sv body = msg.substr(size_t(std::distance(start, b)));
+            const sv body = msg.substr(size_t(b - start));
             it->second(state{body, h, response, error}); // handle the body
          }
          else {
