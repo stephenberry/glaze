@@ -955,7 +955,7 @@ namespace glz
                // It is faster to simply use emplace_back for small types and reasonably lengthed vectors
                // (less than a million elements)
                // https://baptiste-wicht.com/posts/2012/12/cpp-benchmark-vector-list-deque.html
-               if constexpr (has_reserve<T> && has_capacity<T> && requires { sizeof(typename T::value_type) > 4096 }) {
+               if constexpr (has_reserve<T> && has_capacity<T> && requires { sizeof(typename T::value_type) > 4096; }) {
                   // If we can reserve memmory, like std::vector, then we want to check the capacity
                   // and use a temporary buffer if the capacity needs to grow
                   if (value.capacity() == 0) {
