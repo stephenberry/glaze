@@ -183,6 +183,6 @@ namespace glz::detail
    {
       auto start = it;
       skip_value<Opts>(ctx, it, end);
-      return std::span{start, static_cast<size_t>(std::distance(start, it))};
+      return std::span{start, size_t(it - start)};
    }
 }

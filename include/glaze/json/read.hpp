@@ -281,19 +281,18 @@ namespace glz
                   return;
             }
 
-            if (std::distance(it, end) < 4) [[unlikely]] {
+            if (size_t(end - it) < 4) [[unlikely]] {
                ctx.error = error_code::expected_true_or_false;
                return;
             }
 
             uint64_t c{};
             // Note that because our buffer must be null terminated, we can read one more index without checking:
-            // std::distance(it, end) < 5
-            std::memcpy(&c, &*it, 5);
+            std::memcpy(&c, it, 5);
             constexpr uint64_t u_true = 0b00000000'00000000'00000000'00000000'01100101'01110101'01110010'01110100;
             constexpr uint64_t u_false = 0b00000000'00000000'00000000'01100101'01110011'01101100'01100001'01100110;
             // We have to wipe the 5th character for true testing
-            if ((c & 0b11111111'11111111'11111111'00000000'11111111'11111111'11111111'11111111) == u_true) {
+            if ((c & 0xFF'FF'FF'00'FF'FF'FF'FF) == u_true) {
                value = true;
                it += 4;
             }
@@ -1749,12 +1748,12 @@ namespace glz
                         }
                         else [[unlikely]] {
                            if constexpr (tag.sv().empty()) {
-                              std::advance(it, -int64_t(key.size()));
+                              it -= int64_t(key.size());
                               ctx.error = error_code::unknown_key;
                               return;
                            }
                            else if (key != tag.sv()) {
-                              std::advance(it, -int64_t(key.size()));
+                              it -= int64_t(key.size());
                               ctx.error = error_code::unknown_key;
                               return;
                            }
@@ -2024,12 +2023,12 @@ namespace glz
                   }
                   else [[unlikely]] {
                      if constexpr (tag.sv().empty()) {
-                        std::advance(it, -int64_t(key.size()));
+                        it -= int64_t(key.size());
                         ctx.error = error_code::unknown_key;
                         return;
                      }
                      else if (key != tag.sv()) {
-                        std::advance(it, -int64_t(key.size()));
+                        it -= int64_t(key.size());
                         ctx.error = error_code::unknown_key;
                         return;
                      }
