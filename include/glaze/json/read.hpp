@@ -431,7 +431,7 @@ namespace glz
                      ctx.error = error_code::parse_number_failure;
                      return;
                   }
-                  it += std::distance(it, ptr);
+                  it = ptr;
                }
                else {
                   if constexpr (std::is_volatile_v<decltype(value)>) {
