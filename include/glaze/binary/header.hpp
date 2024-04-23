@@ -38,7 +38,7 @@ namespace glz::detail
    [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       uint8_t header;
-      std::memcpy(&header, &(*it), 1);
+      std::memcpy(&header, it, 1);
       const uint8_t config = header & 0b000000'11;
       
       if ((it + byte_count_lookup[config]) > end) [[unlikely]] {
@@ -52,19 +52,19 @@ namespace glz::detail
          return header >> 2;
       case 1: {
          uint16_t h;
-         std::memcpy(&h, &(*it), 2);
+         std::memcpy(&h, it, 2);
          it += 2;
          return h >> 2;
       }
       case 2: {
          uint32_t h;
-         std::memcpy(&h, &(*it), 4);
+         std::memcpy(&h, it, 4);
          it += 4;
          return h >> 2;
       }
       case 3: {
          uint64_t h;
-         std::memcpy(&h, &(*it), 8);
+         std::memcpy(&h, it, 8);
          it += 8;
          return h >> 2;
       }
@@ -76,7 +76,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE constexpr void skip_compressed_int(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       uint8_t header;
-      std::memcpy(&header, &(*it), 1);
+      std::memcpy(&header, it, 1);
       const uint8_t config = header & 0b000000'11;
       
       if ((it + byte_count_lookup[config]) > end) [[unlikely]] {
