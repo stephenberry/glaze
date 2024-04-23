@@ -341,7 +341,7 @@ namespace glz
                      }
 
                      static_assert(sizeof(*it) == sizeof(char));
-                     const char* cur = reinterpret_cast<const char*>(&*it);
+                     const char* cur = reinterpret_cast<const char*>(it);
                      const char* beg = cur;
                      if constexpr (std::is_volatile_v<decltype(value)>) {
                         // Hardware may interact with value changes, so we parse into a temporary and assign in one
@@ -373,7 +373,7 @@ namespace glz
                      }
 
                      static_assert(sizeof(*it) == sizeof(char));
-                     const char* cur = reinterpret_cast<const char*>(&*it);
+                     const char* cur = reinterpret_cast<const char*>(it);
                      const char* beg = cur;
                      auto s = parse_int<std::decay_t<decltype(i)>, Options.force_conformance>(i, cur);
                      if (!s) [[unlikely]] {
@@ -398,7 +398,7 @@ namespace glz
                   }
 
                   static_assert(sizeof(*it) == sizeof(char));
-                  const char* cur = reinterpret_cast<const char*>(&*it);
+                  const char* cur = reinterpret_cast<const char*>(it);
                   const char* beg = cur;
                   auto s = parse_int<decay_keep_volatile_t<decltype(i)>, Options.force_conformance>(i, cur);
                   if (!s) [[unlikely]] {

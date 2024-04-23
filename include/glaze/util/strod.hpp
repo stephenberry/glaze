@@ -780,7 +780,7 @@ namespace glz::detail
       requires(sizeof(T) <= 8)
    inline bool parse_float(auto& val, auto& itr) noexcept
    {
-      const uint8_t* cur = reinterpret_cast<const uint8_t*>(&*itr);
+      const uint8_t* cur = reinterpret_cast<const uint8_t*>(itr);
       const uint8_t* beg = cur;
       if (parse_float<T, force_conformance>(val, cur)) {
          itr += (cur - beg);

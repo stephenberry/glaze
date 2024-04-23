@@ -332,7 +332,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto n = size_t(end - it);
-      if ((n < str.size()) || std::memcmp(&*it, str.value, str.size())) [[unlikely]] {
+      if ((n < str.size()) || std::memcmp(it, str.value, str.size())) [[unlikely]] {
          ctx.error = error_code::syntax_error;
       }
       else [[likely]] {

@@ -137,7 +137,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, auto& it) noexcept
    {
       static_assert(sizeof(*it) == sizeof(char));
-      const char* cur = reinterpret_cast<const char*>(&*it);
+      const char* cur = reinterpret_cast<const char*>(it);
       const char* beg = cur;
       if (stoui64(res, cur)) {
          it += (cur - beg);
