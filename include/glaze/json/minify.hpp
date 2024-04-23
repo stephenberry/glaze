@@ -16,7 +16,7 @@ namespace glz
       inline void minify_json(is_context auto&& ctx, auto&& it, auto&& end, auto&& b, auto&& ix) noexcept
       {
          using enum json_type;
-         
+
          auto ws_start = it;
          uint64_t ws_size{};
 
@@ -25,14 +25,14 @@ namespace glz
             if (ws_size && ws_size < size_t(end - it)) [[likely]] {
                skip_matching_ws(ws_start, it, ws_size);
             }
-            
+
             while (whitespace_table[*it]) {
                ++it;
             }
             ws_start = new_ws_start;
             ws_size = size_t(it - new_ws_start);
          };
-         
+
          auto skip_whitespace = [&] {
             while (whitespace_table[*it]) {
                ++it;
