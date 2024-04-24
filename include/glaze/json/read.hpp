@@ -515,10 +515,10 @@ namespace glz
 
                      const char* c;
                      if (length < size_t(end - it)) [[likely]] {
-                        c = parse_string<Bytes>(&*start, value.data(), ctx);
+                        c = parse_string<Bytes>(start, value.data(), ctx);
                      }
                      else [[unlikely]] {
-                        c = parse_string<1>(&*start, value.data(), ctx);
+                        c = parse_string<1>(start, value.data(), ctx);
                      }
 
                      if (bool(ctx.error)) [[unlikely]] {
