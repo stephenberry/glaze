@@ -144,9 +144,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            match<'"'>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_MATCH_QUOTE;
 
             const auto n = value.size();
             for (size_t i = 1; it < end; ++i, ++it) {
@@ -270,9 +268,7 @@ namespace glz
                skip_ws_no_pre_check<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               match<'"'>(ctx, it);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
+               GLZ_MATCH_QUOTE;
             }
 
             if constexpr (!Opts.ws_handled) {
@@ -306,7 +302,7 @@ namespace glz
             }
 
             if constexpr (Opts.quoted_num) {
-               match<'"'>(ctx, it);
+               GLZ_MATCH_QUOTE;
             }
          }
       };
@@ -319,9 +315,7 @@ namespace glz
          {
             if constexpr (Options.quoted_num) {
                skip_ws<Options>(ctx, it, end);
-               match<'"'>(ctx, it);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
+               GLZ_MATCH_QUOTE;
             }
 
             if constexpr (!Options.ws_handled) {
@@ -455,7 +449,7 @@ namespace glz
             }
 
             if constexpr (Options.quoted_num) {
-               match<'"'>(ctx, it);
+               GLZ_MATCH_QUOTE;
             }
          }
       };
@@ -482,9 +476,7 @@ namespace glz
                         return;
                   }
 
-                  match<'"'>(ctx, it);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
+                  GLZ_MATCH_QUOTE;
                }
 
                // overwrite portion
@@ -557,9 +549,7 @@ namespace glz
                      return;
                }
 
-               match<'"'>(ctx, it);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
+               GLZ_MATCH_QUOTE;
             }
 
             auto start = it;
@@ -600,9 +590,7 @@ namespace glz
                      return;
                }
 
-               match<'"'>(ctx, it);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
+               GLZ_MATCH_QUOTE;
             }
 
             if (*it == '\\') [[unlikely]] {
@@ -654,7 +642,7 @@ namespace glz
                }
                value = *it++;
             }
-            match<'"'>(ctx, it);
+            GLZ_MATCH_QUOTE;
          }
       };
 
@@ -712,15 +700,11 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            match<'"'>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_MATCH_QUOTE;
             skip_till_quote(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            match<'"'>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_MATCH_QUOTE;
          }
       };
 
@@ -1600,9 +1584,7 @@ namespace glz
                      static_assert(false_v<T>, "This should be unreachable");
                   }
                   else if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0) {
-                     match<'"'>(ctx, it);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
+                     GLZ_MATCH_QUOTE;
 
                      // parsing to an empty object, but at this point the JSON presents keys
 
@@ -2194,9 +2176,7 @@ namespace glz
                         const sv key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
-                        match<'"'>(ctx, it);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
+                        GLZ_MATCH_QUOTE;
 
                         if constexpr (deduction_map.size()) {
                            // We first check if a tag is defined and see if the key matches the tag
@@ -2386,17 +2366,13 @@ namespace glz
                return;
 
             // TODO Use key parsing for compiletime known keys
-            match<'"'>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_MATCH_QUOTE;
             auto start = it;
             skip_till_quote(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
             sv type_id = {start, static_cast<size_t>(it - start)};
-            match<'"'>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_MATCH_QUOTE;
 
             static constexpr auto id_map = make_variant_id_map<T>();
             auto id_it = id_map.find(type_id);

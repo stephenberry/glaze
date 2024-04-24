@@ -319,6 +319,14 @@ namespace glz::detail
    }
 
    // assumes null terminated
+#define GLZ_MATCH_QUOTE if (*it != '"') [[unlikely]] { \
+      ctx.error = error_code::expected_quote; \
+      return; \
+   } \
+   else [[likely]] { \
+      ++it; \
+   }
+   
    template <char c>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it) noexcept
    {
