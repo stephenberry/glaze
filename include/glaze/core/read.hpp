@@ -11,63 +11,85 @@
 
 namespace glz
 {
-   template <opts Opts>
-   auto read_iterators(is_context auto&& ctx,contiguous auto&& buffer) noexcept
+   template <opts Opts, bool Padded = false>
+   auto read_iterators(is_context auto&& ctx, contiguous auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
       auto it = reinterpret_cast<const char*>(buffer.data());
       auto end = reinterpret_cast<const char*>(buffer.data()); // to be incremented
+      
+      if (buffer.empty()) [[unlikely]] {
+         ctx.error = error_code::no_read_input;
+         return std::pair{it, end};
+      }
 
       using Buffer = std::remove_cvref_t<decltype(buffer)>;
       if constexpr (is_specialization_v<Buffer, std::basic_string> ||
                     is_specialization_v<Buffer, std::basic_string_view> || span<Buffer>) {
-         end += buffer.size();
-
-         if (it == end) {
-            ctx.error = error_code::no_read_input;
+         if constexpr (Padded) {
+            end += buffer.size() - padding_bytes;
+         }
+         else {
+            end += buffer.size();
          }
       }
       else {
          // if not a std::string, std::string_view, or span, check that the last character is a null character
-         if (buffer.empty()) {
-            ctx.error = error_code::no_read_input;
+         end += buffer.size() - 1;
+         if constexpr (Padded) {
+            end -= padding_bytes;
          }
-         else {
-            end += buffer.size() - 1;
-            if (*end != '\0') {
-               ctx.error = error_code::data_must_be_null_terminated;
-            }
+         if (*end != '\0') {
+            ctx.error = error_code::data_must_be_null_terminated;
          }
       }
 
       return std::pair{it, end};
    }
 
-   // For reading json from a std::vector<char>, std::deque<char> and the like
    template <opts Opts, class T>
       requires read_supported<Opts.format, T>
    [[nodiscard]] parse_error read(T& value, contiguous auto&& buffer, is_context auto&& ctx) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
+      using Buffer = std::remove_reference_t<decltype(buffer)>;
       
-      auto [it, end] = read_iterators<Opts>(ctx, buffer);
+      if (buffer.empty()) [[unlikely]] {
+         ctx.error = error_code::no_read_input;
+         return {ctx.error, 0, ctx.includer_error};
+      }
+      
+      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !Opts.disable_padding;
+      
+      if constexpr (use_padded) {
+         // Pad the buffer for SWAR
+         buffer.resize(buffer.size() + padding_bytes);
+      }
+      
+      auto [it, end] = read_iterators<Opts, use_padded>(ctx, buffer);
+      auto start = it;
       if (bool(ctx.error)) [[unlikely]] {
-         return {ctx.error, 0};
+         goto finish;
       }
 
-      auto start = it;
-
-      detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
+      if constexpr (use_padded) {
+         detail::read<Opts.format>::template op<opt_true<Opts, &opts::is_padded>>(value, ctx, it, end);
+      }
+      else {
+         detail::read<Opts.format>::template op<opt_false<Opts, &opts::is_padded>>(value, ctx, it, end);
+      }
+      
       if (bool(ctx.error)) [[unlikely]] {
-         return {ctx.error, size_t(it - start), ctx.includer_error};
+         goto finish;
       }
 
       if constexpr (Opts.force_conformance) {
+         // Trailing whitespace is not allowed
          if (it < end) {
             detail::skip_ws_no_pre_check<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
-               return {ctx.error, size_t(it - start), ctx.includer_error};
+               goto finish;
             }
             if (it != end) {
                ctx.error = error_code::syntax_error;
@@ -75,6 +97,12 @@ namespace glz
          }
       }
 
+      finish:
+      if constexpr (use_padded) {
+         // Restore the original buffer state
+         buffer.resize(buffer.size() - padding_bytes);
+      }
+      
       return {ctx.error, size_t(it - start), ctx.includer_error};
    }
 

@@ -1319,7 +1319,7 @@ namespace glz
             const auto current_file = ctx.current_file;
             ctx.current_file = string_file_path;
 
-            const auto ecode = glz::read<Opts>(value.value, buffer, ctx);
+            const auto ecode = glz::read<opt_true<Opts, &opts::disable_padding>>(value.value, buffer, ctx);
             if (bool(ctx.error)) [[unlikely]] {
                ctx.error = error_code::includer_error;
                auto& error_msg = error_buffer();
