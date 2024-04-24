@@ -539,7 +539,7 @@ namespace glz
       };
 
       template <class T>
-         requires(str_view_t<T> || char_array_t<T>)
+         requires(string_view_t<T> || char_array_t<T>)
       struct from_json<T>
       {
          template <auto Opts, class It, class End>
@@ -581,11 +581,12 @@ namespace glz
                      return;
 
                   if (*it == '"') {
-                     ++it;
-                     if constexpr (str_view_t<T>) {
-                        value = std::string_view{start, size_t(it - start - 1)};
+                     if constexpr (string_view_t<T>) {
+                        value = {start, size_t(it - start)};
+                        ++it;
                      }
                      else if constexpr (char_array_t<T>) {
+                        ++it;
                         write_to_char_buffer();
                      }
                      return;
@@ -628,7 +629,7 @@ namespace glz
                         ctx.error = error_code::invalid_escape;
                         return;
                      }
-                     if constexpr (str_view_t<T>) {
+                     if constexpr (string_view_t<T>) {
                         value = std::string_view{start, size_t(it - start - 1)};
                      }
                      else if constexpr (char_array_t<T>) {

@@ -242,7 +242,7 @@ namespace glz
 
       // this concept requires that T is just a view
       template <class T>
-      concept str_view_t = std::same_as<std::decay_t<T>, std::string_view>;
+      concept string_view_t = std::same_as<std::decay_t<T>, std::string_view>;
 
       template <class T>
       concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
