@@ -214,14 +214,6 @@ namespace glz
    using text = basic_text<std::string>;
    using text_view = basic_text<std::string_view>;
 
-   using basic = std::variant<bool, char, char8_t, unsigned char, signed char, short, unsigned short, float, int,
-                              unsigned int, long, unsigned long, double, long long, unsigned long long, std::string>;
-
-   // Explicitly defining basic_ptr to avoid additional template instantiations
-   using basic_ptr =
-      std::variant<bool*, char*, char8_t*, unsigned char*, signed char*, short*, unsigned short*, float*, int*,
-                   unsigned int*, long*, unsigned long*, double*, long long*, unsigned long long*, std::string*>;
-
    namespace detail
    {
       template <class T>

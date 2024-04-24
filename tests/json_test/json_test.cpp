@@ -2463,8 +2463,6 @@ suite error_outputs = [] {
    };
 };
 
-#include "glaze/json/study.hpp"
-
 struct study_obj
 {
    size_t x{};
