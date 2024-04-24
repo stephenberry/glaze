@@ -1789,13 +1789,15 @@ namespace glz
                         else [[unlikely]] {
                            if (*it != '"') {
                               // we need to search until we find the ending quote of the key
-                              skip_till_quote(ctx, it, end);
+                              skip_string_view<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
                               auto start = key.data();
                               key = {start, size_t(it - start)};
                            }
-                           ++it; // skip the quote
+                           else {
+                              ++it; // skip the quote
+                           }
 
                            parse_object_entry_sep<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
