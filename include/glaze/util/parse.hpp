@@ -544,18 +544,92 @@ namespace glz::detail
 
       ctx.error = error_code::expected_quote;
    }
-
+   
    template <opts Opts>
+      requires (Opts.is_padded)
    GLZ_ALWAYS_INLINE bool skip_till_unescaped_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
+      
+      bool escaped = false;
 
       if constexpr (!Opts.force_conformance) {
-         bool escaped = false;
-         for (const auto fin = end - 7; it < fin;) {
+         while (it < end) {
             uint64_t chunk;
             std::memcpy(&chunk, it, 8);
             uint64_t test_chars = has_quote(chunk);
+            escaped |= static_cast<bool>(has_escape(chunk));
+            if (test_chars) {
+               it += (std::countr_zero(test_chars) >> 3);
+               
+               auto* prev = it - 1;
+               while (*prev == '\\') {
+                  --prev;
+               }
+               if (size_t(it - prev) % 2) {
+                  return escaped;
+               }
+               ++it; // skip the escaped quote
+            }
+            else {
+               it += 8;
+            }
+         }
+      }
+      else {
+         while (it < end) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it, 8);
+            const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
+            if (test_chars) {
+               it += (std::countr_zero(test_chars) >> 3);
+
+               if (*it == '"') {
+                  return escaped;
+               }
+               else if (*it == '\\') [[likely]] {
+                  ++it;
+                  if (char_unescape_table[*it]) [[likely]] {
+                     ++it;
+                     continue;
+                  }
+                  else if (*it == 'u') [[unlikely]] {
+                     ++it;
+                     if (skip_unicode_code_point(it, end)) [[likely]] {
+                        continue;
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::unicode_escape_conversion_failure;
+                        return true;
+                     }
+                  }
+               }
+               ctx.error = error_code::syntax_error;
+               return true;
+            }
+            else {
+               it += 8;
+            }
+         }
+      }
+
+      ctx.error = error_code::expected_quote;
+      return false;
+   }
+
+   template <opts Opts>
+      requires (!Opts.is_padded)
+   GLZ_ALWAYS_INLINE bool skip_till_unescaped_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
+      
+      bool escaped = false;
+
+      if constexpr (!Opts.force_conformance) {
+         for (const auto fin = end - 7; it < fin;) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it, 8);
+            const uint64_t test_chars = has_quote(chunk);
             escaped |= static_cast<bool>(has_escape(chunk));
             if (test_chars) {
                it += (std::countr_zero(test_chars) >> 3);
@@ -606,11 +680,10 @@ namespace glz::detail
          }
       }
       else {
-         bool escaped = false;
          for (const auto fin = end - 7; it < fin;) {
             uint64_t chunk;
             std::memcpy(&chunk, it, 8);
-            uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
+            const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
             if (test_chars) {
                it += (std::countr_zero(test_chars) >> 3);
 
@@ -644,7 +717,7 @@ namespace glz::detail
 
          // Tail end of buffer. Should be rare we even get here
          while (it < end) {
-            if (*it < 16) [[unlikely]] {
+            if (*it < 32) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return true;
             }

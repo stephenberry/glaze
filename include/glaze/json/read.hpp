@@ -2067,7 +2067,7 @@ namespace glz
                   else [[unlikely]] {
                      it -= key.size(); // rewind to skip the potentially escaped key
 
-                     // Unknown key handler does not unescape keys or want unescaped keys. Unknown escaped keys
+                     // Unknown key handler does not unescape keys. Unknown escaped keys
                      // are handled by the user.
 
                      const auto start = it;
