@@ -16,15 +16,15 @@ namespace glz
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
-      auto b = reinterpret_cast<const char*>(buffer.data());
-      auto e = reinterpret_cast<const char*>(buffer.data()); // to be incremented
+      auto it = reinterpret_cast<const char*>(buffer.data());
+      auto end = reinterpret_cast<const char*>(buffer.data()); // to be incremented
 
       using Buffer = std::remove_cvref_t<decltype(buffer)>;
       if constexpr (is_specialization_v<Buffer, std::basic_string> ||
                     is_specialization_v<Buffer, std::basic_string_view> || span<Buffer>) {
-         e += buffer.size();
+         end += buffer.size();
 
-         if (b == e) {
+         if (it == end) {
             ctx.error = error_code::no_read_input;
          }
       }
@@ -34,14 +34,14 @@ namespace glz
             ctx.error = error_code::no_read_input;
          }
          else {
-            e += buffer.size() - 1;
-            if (*e != '\0') {
+            end += buffer.size() - 1;
+            if (*end != '\0') {
                ctx.error = error_code::data_must_be_null_terminated;
             }
          }
       }
 
-      return std::pair{b, e};
+      return std::pair{it, end};
    }
 
    // For reading json from a std::vector<char>, std::deque<char> and the like
@@ -51,31 +51,31 @@ namespace glz
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
       
-      auto [b, e] = read_iterators<Opts>(ctx, buffer);
+      auto [it, end] = read_iterators<Opts>(ctx, buffer);
       if (bool(ctx.error)) [[unlikely]] {
          return {ctx.error, 0};
       }
 
-      auto start = b;
+      auto start = it;
 
-      detail::read<Opts.format>::template op<Opts>(value, ctx, b, e);
+      detail::read<Opts.format>::template op<Opts>(value, ctx, it, end);
       if (bool(ctx.error)) [[unlikely]] {
-         return {ctx.error, size_t(b - start), ctx.includer_error};
+         return {ctx.error, size_t(it - start), ctx.includer_error};
       }
 
       if constexpr (Opts.force_conformance) {
-         if (b < e) {
-            detail::skip_ws_no_pre_check<Opts>(ctx, b, e);
+         if (it < end) {
+            detail::skip_ws_no_pre_check<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
-               return {ctx.error, size_t(b - start), ctx.includer_error};
+               return {ctx.error, size_t(it - start), ctx.includer_error};
             }
-            if (b != e) {
+            if (it != end) {
                ctx.error = error_code::syntax_error;
             }
          }
       }
 
-      return {ctx.error, size_t(b - start), ctx.includer_error};
+      return {ctx.error, size_t(it - start), ctx.includer_error};
    }
 
    template <opts Opts, class T>

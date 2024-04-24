@@ -32,6 +32,9 @@ namespace glz
 
    template <class T>
    concept has_data = requires(T v) { v.data(); };
+   
+   template <class Buffer>
+   concept non_const_buffer = !std::is_const_v<Buffer>;
 }
 
 namespace glz::detail
