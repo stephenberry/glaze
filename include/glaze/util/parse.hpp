@@ -1275,18 +1275,6 @@ namespace glz::detail
       return sv{start, static_cast<size_t>(it++ - start)};
    }
 
-   /* Copyright (c) 2022 Tero 'stedo' Liukko, MIT License */
-   GLZ_ALWAYS_INLINE unsigned char hex2dec(char hex) { return ((hex & 0xf) + (hex >> 6) * 9); }
-
-   GLZ_ALWAYS_INLINE char32_t hex4_to_char32(const char* hex)
-   {
-      uint32_t value = hex2dec(hex[3]);
-      value |= hex2dec(hex[2]) << 4;
-      value |= hex2dec(hex[1]) << 8;
-      value |= hex2dec(hex[0]) << 12;
-      return value;
-   }
-
    // errors return the 'in' pointer for better error reporting
    // valid results return the 'out' pointer to enable resizing
    template <size_t Bytes>
