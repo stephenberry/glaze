@@ -778,7 +778,6 @@ namespace glz::detail
                --prev;
             }
             if (size_t(it - prev) % 2) {
-               ++it;
                return;
             }
             ++it; // skip the escaped quote
@@ -809,7 +808,6 @@ namespace glz::detail
                --prev;
             }
             if (size_t(it - prev) % 2) {
-               ++it;
                return;
             }
             ++it; // skip the escaped quote
@@ -837,7 +835,6 @@ namespace glz::detail
                --prev;
             }
             if (size_t(it - prev) % 2) {
-               ++it;
                return;
             }
             ++it; // skip the escaped quote

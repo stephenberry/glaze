@@ -558,91 +558,26 @@ namespace glz
             }
 
             auto start = it;
-            [[maybe_unused]] auto write_to_char_buffer = [&] {
-               if constexpr (char_array_t<T>) {
-                  const size_t n = it - start - 1;
-                  sv str{start, n};
-
-                  if ((sizeof(value) - 1) < n) {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
-                  for (size_t i = 0; i < n; ++i) {
-                     value[i] = str[i];
-                  }
-                  value[n] = '\0';
+            
+            if constexpr (string_view_t<T>) {
+               skip_string_view<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               value = {start, size_t(it - start)};
+               ++it;
+            }
+            else if constexpr (char_array_t<T>) {
+               skip_string_view<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               
+               const size_t n = it - start;
+               if ((sizeof(value) - 1) < n) {
+                  ctx.error = error_code::unexpected_end;
+                  return;
                }
-            };
-
-            while (it < end) {
-               if constexpr (!Opts.force_conformance) {
-                  skip_till_escape_or_quote(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-
-                  if (*it == '"') {
-                     if constexpr (string_view_t<T>) {
-                        value = {start, size_t(it - start)};
-                        ++it;
-                     }
-                     else if constexpr (char_array_t<T>) {
-                        ++it;
-                        write_to_char_buffer();
-                     }
-                     return;
-                  }
-                  else {
-                     ++it;
-                     if (valid_escape_table[*it]) [[likely]] {
-                        ++it;
-                     }
-                     else [[unlikely]] {
-                        ctx.error = error_code::invalid_escape;
-                        return;
-                     }
-                  }
-               }
-               else {
-                  switch (*it) {
-                  case '"': {
-                     ++it;
-                     return;
-                  }
-                  case '\b':
-                  case '\f':
-                  case '\n':
-                  case '\r':
-                  case '\t': {
-                     ctx.error = error_code::syntax_error;
-                     return;
-                  }
-                  case '\0': {
-                     ctx.error = error_code::unexpected_end;
-                     return;
-                  }
-                  case '\\': {
-                     ++it;
-                     if (valid_escape_table[*it]) [[likely]] {
-                        ++it;
-                     }
-                     else [[unlikely]] {
-                        ctx.error = error_code::invalid_escape;
-                        return;
-                     }
-                     if constexpr (string_view_t<T>) {
-                        value = std::string_view{start, size_t(it - start - 1)};
-                     }
-                     else if constexpr (char_array_t<T>) {
-                        write_to_char_buffer();
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                     }
-                     break;
-                  }
-                  default:
-                     ++it;
-                  }
-               }
+               std::memcpy(value, start, n);
+               value[n] = '\0';
             }
          }
       };
@@ -1674,6 +1609,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      const sv key{ start, size_t(it - start) };
+                     ++it;
 
                      parse_object_entry_sep<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
@@ -1755,6 +1691,7 @@ namespace glz
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
                               key = {start, size_t(it - start)};
+                              ++it;
 
                               parse_object_entry_sep<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
@@ -1796,9 +1733,7 @@ namespace glz
                               auto start = key.data();
                               key = {start, size_t(it - start)};
                            }
-                           else {
-                              ++it; // skip the quote
-                           }
+                           ++it; // skip the quote
 
                            parse_object_entry_sep<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
@@ -2063,6 +1998,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]]
                         return;
                      key = { start, size_t(it - start) };
+                     ++it;
 
                      // We duplicate this code to avoid generating unreachable code
                      parse_object_entry_sep<Opts>(ctx, it, end);
