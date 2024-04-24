@@ -407,9 +407,9 @@ namespace glz::detail
       return has_zero(chunk ^ repeat_byte8(Char));
    }
 
-   GLZ_ALWAYS_INLINE constexpr uint64_t is_less_16(const uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr uint64_t is_less_32(const uint64_t chunk) noexcept
    {
-      return has_zero(chunk & repeat_byte8(0b11110000u));
+      return has_zero(chunk & repeat_byte8(0b11100000u));
    }
 
    GLZ_ALWAYS_INLINE constexpr uint64_t is_greater_15(const uint64_t chunk) noexcept
@@ -610,7 +610,7 @@ namespace glz::detail
          for (const auto fin = end - 7; it < fin;) {
             uint64_t chunk;
             std::memcpy(&chunk, it, 8);
-            uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_16(chunk);
+            uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
             if (test_chars) {
                it += (std::countr_zero(test_chars) >> 3);
 

@@ -195,7 +195,7 @@ namespace glz
          while (true) {
             std::memcpy(&swar, in, Bytes);
             std::memcpy(out + ix, in, Bytes);
-            auto next = has_quote(swar) | has_escape(swar) | is_less_16(swar);
+            auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
 
             if (next) {
                next = std::countr_zero(next) >> 3;
@@ -338,7 +338,7 @@ namespace glz
                               // necessary. In the case of invalid JSON characters we write out null characters to
                               // showcase the error and make the JSON invalid. These would then be detected upon reading
                               // the JSON.
-                              const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_16(chunk);
+                              const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
                               if (test_chars) {
                                  const auto length = (std::countr_zero(test_chars) >> 3);
                                  c += length;
