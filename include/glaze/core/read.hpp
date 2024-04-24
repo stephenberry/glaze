@@ -12,7 +12,7 @@
 namespace glz
 {
    template <opts Opts>
-   auto read_iterators(is_context auto&& ctx, detail::contiguous auto&& buffer) noexcept
+   auto read_iterators(is_context auto&& ctx,contiguous auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
@@ -47,7 +47,7 @@ namespace glz
    // For reading json from a std::vector<char>, std::deque<char> and the like
    template <opts Opts, class T>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] parse_error read(T& value, detail::contiguous auto&& buffer, is_context auto&& ctx) noexcept
+   [[nodiscard]] parse_error read(T& value, contiguous auto&& buffer, is_context auto&& ctx) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
       
@@ -80,7 +80,7 @@ namespace glz
 
    template <opts Opts, class T>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] parse_error read(T& value, detail::contiguous auto&& buffer) noexcept
+   [[nodiscard]] parse_error read(T& value, contiguous auto&& buffer) noexcept
    {
       context ctx{};
       return read<Opts>(value, buffer, ctx);
