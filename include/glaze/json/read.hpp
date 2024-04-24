@@ -209,14 +209,14 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         GLZ_ALWAYS_INLINE static void op(auto&& v, is_context auto&& ctx, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& v, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Options.ws_handled) {
-               skip_ws<Options>(ctx, args...);
+               skip_ws<Options>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            match<'['>(ctx, args...);
+            match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -224,22 +224,20 @@ namespace glz
 
             auto* ptr = reinterpret_cast<typename T::value_type*>(&v);
             static_assert(sizeof(T) == sizeof(typename T::value_type) * 2);
-            read<json>::op<Opts>(ptr[0], ctx, args...);
+            read<json>::op<Opts>(ptr[0], ctx, it, end);
 
-            skip_ws<Opts>(ctx, args...);
+            skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            match<','>(ctx, args...);
+            GLZ_MATCH_COMMA;
+
+            read<json>::op<Opts>(ptr[1], ctx, it, end);
+
+            skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-
-            read<json>::op<Opts>(ptr[1], ctx, args...);
-
-            skip_ws<Opts>(ctx, args...);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            match<']'>(ctx, args...);
+            match<']'>(ctx, it, end);
          }
       };
 
@@ -775,9 +773,7 @@ namespace glz
                   ++it;
                   return;
                }
-               match<','>(ctx, it);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
+               GLZ_MATCH_COMMA;
             }
          }
       };
@@ -1094,7 +1090,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
                if (i < n - 1) {
-                  match<','>(ctx, it);
+                  GLZ_MATCH_COMMA;
                }
                ++i;
             }
@@ -1136,9 +1132,7 @@ namespace glz
                   return;
                }
                if constexpr (I != 0) {
-                  match<','>(ctx, it);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
+                  GLZ_MATCH_COMMA;
                   skip_ws_no_pre_check<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
@@ -1208,9 +1202,7 @@ namespace glz
                   ++it;
                   return;
                }
-               match<','>(ctx, it);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
+               GLZ_MATCH_COMMA;
             }
          }
       };
@@ -1565,9 +1557,7 @@ namespace glz
                      first = false;
                   }
                   else {
-                     match<','>(ctx, it);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
+                     GLZ_MATCH_COMMA;
 
                      if constexpr (num_members > 1 || !Opts.error_on_unknown_keys) {
                         if (ws_size && ws_size < size_t(end - it)) {
@@ -1869,9 +1859,7 @@ namespace glz
                   first = false;
                }
                else [[likely]] {
-                  match<','>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
+                  GLZ_MATCH_COMMA;
 
                   if constexpr (num_members > 1 || !Opts.error_on_unknown_keys) {
                      if (ws_size && ws_size < size_t(end - it)) {
@@ -2169,9 +2157,7 @@ namespace glz
                      auto start = it;
                      while (*it != '}') {
                         if (it != start) {
-                           match<','>(ctx, it);
-                           if (bool(ctx.error)) [[unlikely]]
-                              return;
+                           GLZ_MATCH_COMMA;
                         }
                         const sv key = parse_object_key<T, Opts, tag_literal>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
@@ -2380,9 +2366,7 @@ namespace glz
                skip_ws<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               match<','>(ctx, it);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
+               GLZ_MATCH_COMMA;
                const auto type_index = id_it->second;
                if (value.index() != type_index) value = runtime_variant_map<T>()[type_index];
                std::visit([&](auto&& v) { read<json>::op<Opts>(v, ctx, it, end); }, value);

@@ -907,6 +907,7 @@ struct glz::meta<glz::error_code>
                            "expected_brace", expected_brace, //
                            "expected_bracket", expected_bracket, //
                            "expected_quote", expected_quote, //
+                           "expected_comma", expected_comma, //
                            "exceeded_static_array_size", exceeded_static_array_size, //
                            "unexpected_end", unexpected_end, //
                            "expected_end_comment", expected_end_comment, //
