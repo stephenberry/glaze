@@ -249,7 +249,7 @@ ut::suite struct_test_cases = [] {
       auto s = glz::write_json(response_vec);
       ut::expect(
          s ==
-         R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:66: syntax_error\n..._method_name\",\"params\":{},\"id:\"uuid\"}\"\n                                  ^"},"id":null}])")
+         R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:66: expected_colon\n..._method_name\",\"params\":{},\"id:\"uuid\"}\"\n                                  ^"},"id":null}])")
          << s;
       ut::expect(response_vec.at(0).error.has_value());
       ut::expect(response_vec.at(0).error->code == rpc::error_e::parse_error);
