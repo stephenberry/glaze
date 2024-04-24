@@ -1665,28 +1665,14 @@ namespace glz
 
                      // parsing to an empty object, but at this point the JSON presents keys
 
-                     // Unknown key handler does not unescape keys or want unescaped keys. Unknown escaped keys are
+                     // Unknown key handler does not unescape keys. Unknown escaped keys are
                      // handled by the user.
 
-                     sv key;
                      const auto start = it;
-                     while (true) {
-                        skip_till_escape_or_quote(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-
-                        if (*it == '"') [[likely]] {
-                           key = {start, size_t(it - start)};
-                           ++it;
-                           break;
-                        }
-                        else {
-                           ++it; // skip the escape
-                           if (*it == '"') {
-                              ++it; // skip the escaped quote
-                           }
-                        }
-                     }
+                     skip_string_view<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     const sv key{ start, size_t(it - start) };
 
                      parse_object_entry_sep<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
@@ -2071,23 +2057,10 @@ namespace glz
                      // are handled by the user.
 
                      const auto start = it;
-                     while (true) {
-                        skip_till_escape_or_quote(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-
-                        if (*it == '"') [[likely]] {
-                           key = {start, size_t(it - start)};
-                           ++it;
-                           break;
-                        }
-                        else {
-                           ++it; // skip the escape
-                           if (*it == '"') {
-                              ++it; // skip the escaped quote
-                           }
-                        }
-                     }
+                     skip_string_view<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                     key = { start, size_t(it - start) };
 
                      // We duplicate this code to avoid generating unreachable code
                      parse_object_entry_sep<Opts>(ctx, it, end);
