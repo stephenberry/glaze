@@ -1159,6 +1159,7 @@ namespace glz::detail
    }
 
    // errors return the 'in' pointer for better error reporting
+   // valid results return the 'out' pointer to enable resizing
    template <size_t Bytes>
       requires(Bytes == 8)
    GLZ_ALWAYS_INLINE const char* parse_string(const auto* in, auto* out, context& ctx) noexcept
@@ -1171,29 +1172,28 @@ namespace glz::detail
 
          if (next) {
             next = std::countr_zero(next) >> 3;
-            auto escape_char = in[next];
-            if (escape_char == '"') {
+            in += next;
+            if (*in == '"') {
                return out + next;
             }
-            else if (escape_char == '\\') {
-               escape_char = in[next + 1];
-               if (escape_char == 'u') [[unlikely]] {
-                  in += next + 2;
-                  out += next;
-                  if (!handle_unicode_code_point(in, out)) {
-                     ctx.error = error_code::unicode_escape_conversion_failure;
-                     return in;
-                  }
-                  continue;
+            ++in; // skip the escape
+            if (*in == 'u') {
+               ++in;
+               out += next;
+               if (!handle_unicode_code_point(in, out)) {
+                  ctx.error = error_code::unicode_escape_conversion_failure;
+                  return in;
                }
-               escape_char = char_unescape_table[escape_char];
+            }
+            else {
+               const auto escape_char = char_unescape_table[*in];
                if (escape_char == 0) [[unlikely]] {
                   ctx.error = error_code::invalid_escape;
                   return in;
                }
                out[next] = escape_char;
                out += next + 1;
-               in += next + 2;
+               ++in;
             }
          }
          else {
@@ -1211,28 +1211,26 @@ namespace glz::detail
       while (true) {
          *out = *in;
          if (*in == '"' || *in == '\\') {
-            auto escape_char = *in;
-            if (escape_char == '"') {
+            if (*in == '"') {
                return out;
             }
-            else if (escape_char == '\\') {
-               escape_char = in[1];
-               if (escape_char == 'u') {
-                  in += 2;
-                  if (!handle_unicode_code_point(in, out)) {
-                     ctx.error = error_code::unicode_escape_conversion_failure;
-                     return in;
-                  }
-                  continue;
+            ++in; // skip the escape
+            if (*in == 'u') {
+               ++in;
+               if (!handle_unicode_code_point(in, out)) {
+                  ctx.error = error_code::unicode_escape_conversion_failure;
+                  return in;
                }
-               escape_char = char_unescape_table[escape_char];
+            }
+            else {
+               const auto escape_char = char_unescape_table[*in];
                if (escape_char == 0) {
                   ctx.error = error_code::invalid_escape;
                   return in;
                }
                out[0] = escape_char;
-               out += 1;
-               in += 2;
+               ++out;
+               ++in;
             }
          }
          else {
