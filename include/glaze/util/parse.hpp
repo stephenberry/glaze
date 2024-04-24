@@ -1087,8 +1087,65 @@ namespace glz::detail
          }
       }
    }
+   
+   template <opts Opts, char open, char close>
+      requires (Opts.is_padded)
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      ++it;
+      size_t depth = 1;
 
-   template <char open, char close>
+      while (it < end) [[likely]] {
+         uint64_t chunk;
+         std::memcpy(&chunk, it, 8);
+         const uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         if (test) {
+            it += (std::countr_zero(test) >> 3);
+
+            switch (*it) {
+            case '"': {
+               skip_string<opts{}>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               break;
+            }
+            case '/': {
+               skip_comment(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               break;
+            }
+            case open: {
+               ++it;
+               ++depth;
+               break;
+            }
+            case close: {
+               ++it;
+               --depth;
+               if (depth == 0) {
+                  return;
+               }
+               break;
+            }
+            default: {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
+            }
+         }
+         else {
+            it += 8;
+         }
+      }
+
+      ctx.error = error_code::unexpected_end;
+   }
+
+   template <opts Opts, char open, char close>
+      requires (!Opts.is_padded)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;

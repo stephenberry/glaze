@@ -1037,12 +1037,12 @@ namespace glz
                break;
             }
             case '{':
-               skip_until_closed<'{', '}'>(ctx, it, end);
+               skip_until_closed<Opts, '{', '}'>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return {};
                break;
             case '[':
-               skip_until_closed<'[', ']'>(ctx, it, end);
+               skip_until_closed<Opts, '[', ']'>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return {};
                break;
