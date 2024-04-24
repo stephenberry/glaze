@@ -483,7 +483,7 @@ namespace glz
 
                if constexpr (Opts.raw_string) {
                   auto start = it;
-                  skip_till_quote(ctx, it, end);
+                  skip_string_view<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
@@ -701,7 +701,7 @@ namespace glz
                   return;
             }
             GLZ_MATCH_QUOTE;
-            skip_till_quote(ctx, it, end);
+            skip_string_view<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
             GLZ_MATCH_QUOTE;
@@ -1949,7 +1949,7 @@ namespace glz
                      // We may have just found the prefix of a longer, unknown key.
                      if (*it != '"') [[unlikely]] {
                         auto* start = key.data();
-                        skip_till_quote(ctx, it, end);
+                        skip_string_view<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         key = {start, size_t(it - start)};
@@ -2368,10 +2368,10 @@ namespace glz
             // TODO Use key parsing for compiletime known keys
             GLZ_MATCH_QUOTE;
             auto start = it;
-            skip_till_quote(ctx, it, end);
+            skip_string_view<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            sv type_id = {start, static_cast<size_t>(it - start)};
+            sv type_id = {start, size_t(it - start)};
             GLZ_MATCH_QUOTE;
 
             static constexpr auto id_map = make_variant_id_map<T>();
