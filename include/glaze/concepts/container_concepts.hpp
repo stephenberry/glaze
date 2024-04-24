@@ -32,6 +32,22 @@ namespace glz
 
    template <class T>
    concept has_data = requires(T v) { v.data(); };
+   
+   template <class T>
+   concept has_reserve = requires(T t) { t.reserve(size_t(1)); };
+
+   template <class T>
+   concept has_capacity = requires(T t) {
+      {
+         t.capacity()
+      } -> std::integral;
+   };
+
+   template <class T>
+   concept contiguous = has_size<T> && has_data<T>;
+   
+   template <class Buffer>
+   concept non_const_buffer = !std::is_const_v<Buffer>;
 }
 
 namespace glz::detail
@@ -116,19 +132,6 @@ namespace glz::detail
 
    template <class T>
    concept has_push_back = requires(T t, typename T::value_type v) { t.push_back(v); };
-
-   template <class T>
-   concept has_reserve = requires(T t) { t.reserve(size_t(1)); };
-
-   template <class T>
-   concept has_capacity = requires(T t) {
-      {
-         t.capacity()
-      } -> std::integral;
-   };
-
-   template <class T>
-   concept contiguous = has_size<T> && has_data<T>;
 
    template <class T>
    concept accessible = requires(T container) {

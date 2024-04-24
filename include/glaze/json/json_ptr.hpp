@@ -572,7 +572,7 @@ namespace glz
    }
 
    template <string_literal Str, auto Opts = opts{}>
-   [[nodiscard]] inline auto get_view_json(detail::contiguous auto&& buffer)
+   [[nodiscard]] inline auto get_view_json(contiguous auto&& buffer)
    {
       static constexpr auto s = chars<Str>;
 
@@ -629,10 +629,7 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]] {
                            return;
                         }
-                        match<':'>(ctx, it);
-                        if (bool(ctx.error)) [[unlikely]] {
-                           return;
-                        }
+                        GLZ_MATCH_COLON;
                         skip_ws_no_pre_check<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]] {
                            return;
@@ -711,10 +708,7 @@ namespace glz
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
-                     match<':'>(ctx, it);
-                     if (bool(ctx.error)) [[unlikely]] {
-                        return;
-                     }
+                     GLZ_MATCH_COLON;
                      skip_ws_no_pre_check<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
@@ -749,7 +743,7 @@ namespace glz
    }
 
    template <class T, string_literal Str, auto Opts = opts{}>
-   [[nodiscard]] inline expected<T, parse_error> get_as_json(detail::contiguous auto&& buffer)
+   [[nodiscard]] inline expected<T, parse_error> get_as_json(contiguous auto&& buffer)
    {
       const auto str = glz::get_view_json<Str>(buffer);
       if (str) {
@@ -759,7 +753,7 @@ namespace glz
    }
 
    template <string_literal Str, auto Opts = opts{}>
-   [[nodiscard]] inline expected<sv, parse_error> get_sv_json(detail::contiguous auto&& buffer)
+   [[nodiscard]] inline expected<sv, parse_error> get_sv_json(contiguous auto&& buffer)
    {
       const auto s = glz::get_view_json<Str>(buffer);
       if (s) {

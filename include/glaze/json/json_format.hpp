@@ -64,8 +64,41 @@ namespace glz::detail
          dumpn<' '>(indent * indentation_width, b, ix);
       }
    };
+   
+   template <opts Opts>
+      requires (Opts.is_padded)
+   sv read_json_string(auto&& it, auto&& end) noexcept
+   {
+      auto start = it;
+      ++it; // skip quote
+      while (it < end) [[likely]] {
+         uint64_t chunk;
+         std::memcpy(&chunk, it, 8);
+         const uint64_t quote = has_quote(chunk);
+         if (quote) {
+            it += (std::countr_zero(quote) >> 3);
 
-   inline sv read_json_string(auto&& it, auto&& end) noexcept
+            auto* prev = it - 1;
+            while (*prev == '\\') {
+               --prev;
+            }
+            if (size_t(it - prev) % 2) {
+               ++it; // add quote
+               return {start, size_t(it - start)};
+            }
+            ++it; // skip escaped quote and continue
+         }
+         else {
+            it += 8;
+         }
+      }
+
+      return {};
+   }
+
+   template <opts Opts>
+      requires (!Opts.is_padded)
+   sv read_json_string(auto&& it, auto&& end) noexcept
    {
       auto start = it;
       ++it; // skip quote

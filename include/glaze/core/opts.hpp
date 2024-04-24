@@ -20,6 +20,8 @@ namespace glz
    constexpr uint32_t colwise = 1;
 
    enum struct float_precision : uint8_t { full, float32 = 4, float64 = 8, float128 = 16 };
+   
+   constexpr uint32_t padding_bytes = 8;
 
    struct opts
    {
@@ -64,6 +66,8 @@ namespace glz
       bool ws_handled = false; // whitespace has already been parsed
       bool no_header = false; // whether or not a binary header is needed
       bool write_unknown = true; // whether to write unkwown fields
+      bool is_padded = false; // whether or not the read buffer is padded
+      bool disable_padding = false; // to explicitly disable padding for contexts like includers
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };

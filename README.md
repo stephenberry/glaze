@@ -413,7 +413,7 @@ This test case:
 Produces this error:
 
 ```
-1:17: syntax_error
+1:17: expected_comma
    {"Hello":"World"x, "color": "red"}
                    ^
 ```

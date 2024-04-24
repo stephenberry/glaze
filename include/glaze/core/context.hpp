@@ -18,6 +18,8 @@ namespace glz
       expected_brace,
       expected_bracket,
       expected_quote,
+      expected_comma,
+      expected_colon,
       exceeded_static_array_size,
       unexpected_end,
       expected_end_comment,

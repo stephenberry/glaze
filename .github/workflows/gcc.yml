@@ -31,15 +31,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install gcc 13
-      if: matrix.gcc == 13
-      run: |
-        sudo apt-get update
-        sudo apt-get install software-properties-common
-        sudo add-apt-repository ppa:ubuntu-toolchain-r/ppa -y
-        sudo apt-get update
-        sudo apt-get install -y gcc-13 g++-13
-
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
 

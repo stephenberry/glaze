@@ -11,6 +11,7 @@
 #include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/core/opts.hpp"
+#include "glaze/util/compare.hpp"
 #include "glaze/util/expected.hpp"
 #include "glaze/util/inline.hpp"
 #include "glaze/util/stoui64.hpp"
@@ -319,6 +320,30 @@ namespace glz::detail
    }
 
    // assumes null terminated
+#define GLZ_MATCH_QUOTE if (*it != '"') [[unlikely]] { \
+      ctx.error = error_code::expected_quote; \
+      return; \
+   } \
+   else [[likely]] { \
+      ++it; \
+   }
+   
+#define GLZ_MATCH_COMMA if (*it != ',') [[unlikely]] { \
+      ctx.error = error_code::expected_comma; \
+      return; \
+   } \
+   else [[likely]] { \
+      ++it; \
+   }
+   
+#define GLZ_MATCH_COLON if (*it != ':') [[unlikely]] { \
+      ctx.error = error_code::expected_colon; \
+      return; \
+   } \
+   else [[likely]] { \
+      ++it; \
+   }
+   
    template <char c>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it) noexcept
    {
@@ -341,12 +366,25 @@ namespace glz::detail
          ++it;
       }
    }
+   
+   template <string_literal str, opts Opts>
+      requires (Opts.is_padded && str.size() <= padding_bytes)
+   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
+   {
+      if (!compare<str.size()>(it, str.value)) [[unlikely]] {
+         ctx.error = error_code::syntax_error;
+      }
+      else [[likely]] {
+         it += str.size();
+      }
+   }
 
-   template <string_literal str>
+   template <string_literal str, opts Opts>
+      requires (!Opts.is_padded)
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto n = size_t(end - it);
-      if ((n < str.size()) || std::memcmp(it, str.value, str.size())) [[unlikely]] {
+      if ((n < str.size()) || !compare<str.size()>(it, str.value)) [[unlikely]] {
          ctx.error = error_code::syntax_error;
       }
       else [[likely]] {
@@ -407,9 +445,9 @@ namespace glz::detail
       return has_zero(chunk ^ repeat_byte8(Char));
    }
 
-   GLZ_ALWAYS_INLINE constexpr uint64_t is_less_16(const uint64_t chunk) noexcept
+   GLZ_ALWAYS_INLINE constexpr uint64_t is_less_32(const uint64_t chunk) noexcept
    {
-      return has_zero(chunk & repeat_byte8(0b11110000u));
+      return has_zero(chunk & repeat_byte8(0b11100000u));
    }
 
    GLZ_ALWAYS_INLINE constexpr uint64_t is_greater_15(const uint64_t chunk) noexcept
@@ -507,33 +545,6 @@ namespace glz::detail
       }*/
    }
 
-   GLZ_ALWAYS_INLINE void skip_till_escape_or_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
-   {
-      static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-
-      for (const auto end_m7 = end - 7; it < end_m7; it += 8) {
-         uint64_t chunk;
-         std::memcpy(&chunk, it, 8);
-         const uint64_t test_chars = has_quote(chunk) | has_escape(chunk);
-         if (test_chars) {
-            it += (std::countr_zero(test_chars) >> 3);
-            return;
-         }
-      }
-
-      // Tail end of buffer. Should be rare we even get here
-      while (it < end) {
-         switch (*it) {
-         case '\\':
-         case '"':
-            return;
-         }
-         ++it;
-      }
-
-      ctx.error = error_code::expected_quote;
-   }
-
    GLZ_ALWAYS_INLINE void skip_till_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto* pc = std::memchr(it, '"', size_t(end - it));
@@ -544,18 +555,92 @@ namespace glz::detail
 
       ctx.error = error_code::expected_quote;
    }
-
+   
    template <opts Opts>
+      requires (Opts.is_padded)
    GLZ_ALWAYS_INLINE bool skip_till_unescaped_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
+      
+      bool escaped = false;
 
       if constexpr (!Opts.force_conformance) {
-         bool escaped = false;
-         for (const auto fin = end - 7; it < fin;) {
+         while (it < end) {
             uint64_t chunk;
             std::memcpy(&chunk, it, 8);
             uint64_t test_chars = has_quote(chunk);
+            escaped |= static_cast<bool>(has_escape(chunk));
+            if (test_chars) {
+               it += (std::countr_zero(test_chars) >> 3);
+               
+               auto* prev = it - 1;
+               while (*prev == '\\') {
+                  --prev;
+               }
+               if (size_t(it - prev) % 2) {
+                  return escaped;
+               }
+               ++it; // skip the escaped quote
+            }
+            else {
+               it += 8;
+            }
+         }
+      }
+      else {
+         while (it < end) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it, 8);
+            const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
+            if (test_chars) {
+               it += (std::countr_zero(test_chars) >> 3);
+
+               if (*it == '"') {
+                  return escaped;
+               }
+               else if (*it == '\\') [[likely]] {
+                  ++it;
+                  if (char_unescape_table[*it]) [[likely]] {
+                     ++it;
+                     continue;
+                  }
+                  else if (*it == 'u') [[unlikely]] {
+                     ++it;
+                     if (skip_unicode_code_point(it, end)) [[likely]] {
+                        continue;
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::unicode_escape_conversion_failure;
+                        return true;
+                     }
+                  }
+               }
+               ctx.error = error_code::syntax_error;
+               return true;
+            }
+            else {
+               it += 8;
+            }
+         }
+      }
+
+      ctx.error = error_code::expected_quote;
+      return false;
+   }
+
+   template <opts Opts>
+      requires (!Opts.is_padded)
+   GLZ_ALWAYS_INLINE bool skip_till_unescaped_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
+      
+      bool escaped = false;
+
+      if constexpr (!Opts.force_conformance) {
+         for (const auto fin = end - 7; it < fin;) {
+            uint64_t chunk;
+            std::memcpy(&chunk, it, 8);
+            const uint64_t test_chars = has_quote(chunk);
             escaped |= static_cast<bool>(has_escape(chunk));
             if (test_chars) {
                it += (std::countr_zero(test_chars) >> 3);
@@ -606,11 +691,10 @@ namespace glz::detail
          }
       }
       else {
-         bool escaped = false;
          for (const auto fin = end - 7; it < fin;) {
             uint64_t chunk;
             std::memcpy(&chunk, it, 8);
-            uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_16(chunk);
+            const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
             if (test_chars) {
                it += (std::countr_zero(test_chars) >> 3);
 
@@ -644,7 +728,7 @@ namespace glz::detail
 
          // Tail end of buffer. Should be rare we even get here
          while (it < end) {
-            if (*it < 16) [[unlikely]] {
+            if (*it < 32) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return true;
             }
@@ -686,38 +770,94 @@ namespace glz::detail
       ctx.error = error_code::expected_quote;
       return false;
    }
-
-   // very similar code to skip_till_quote, but it consumes the iterator and returns the key
-   [[nodiscard]] GLZ_ALWAYS_INLINE const sv parse_unescaped_key(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   
+   template <opts Opts>
+      requires (Opts.is_padded)
+   GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
 
-      auto start = it;
-
-      for (const auto end_m7 = end - 7; it < end_m7; it += 8) {
+      while (it < end) [[likely]] {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
-         uint64_t test_chars = has_quote(chunk);
+         const uint64_t test_chars = has_quote(chunk);
+         if (test_chars) {
+            it += (std::countr_zero(test_chars) >> 3);
+            
+            auto* prev = it - 1;
+            while (*prev == '\\') {
+               --prev;
+            }
+            if (size_t(it - prev) % 2) {
+               return;
+            }
+            ++it; // skip the escaped quote
+         }
+         else {
+            it += 8;
+         }
+      }
+
+      ctx.error = error_code::expected_quote;
+   }
+   
+   template <opts Opts>
+      requires (!Opts.is_padded)
+   GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
+
+      for (const auto fin = end - 7; it < fin;) {
+         uint64_t chunk;
+         std::memcpy(&chunk, it, 8);
+         const uint64_t test_chars = has_quote(chunk);
          if (test_chars) {
             it += (std::countr_zero(test_chars) >> 3);
 
-            sv ret{start, size_t(it - start)};
-            ++it;
-            return ret;
+            auto* prev = it - 1;
+            while (*prev == '\\') {
+               --prev;
+            }
+            if (size_t(it - prev) % 2) {
+               return;
+            }
+            ++it; // skip the escaped quote
+         }
+         else {
+            it += 8;
          }
       }
 
       // Tail end of buffer. Should be rare we even get here
       while (it < end) {
-         if (*it == '"') {
-            sv ret{start, size_t(it - start)};
+         switch (*it) {
+         case '\\': {
             ++it;
-            return ret;
+            if (it == end) [[unlikely]] {
+               ctx.error = error_code::expected_quote;
+               return;
+            }
+            ++it;
+            break;
          }
-         ++it;
+         case '"': {
+            auto* prev = it - 1;
+            while (*prev == '\\') {
+               --prev;
+            }
+            if (size_t(it - prev) % 2) {
+               return;
+            }
+            ++it; // skip the escaped quote
+            break;
+         }
+         default: {
+            ++it;
+         }
+         }
       }
+
       ctx.error = error_code::expected_quote;
-      return {};
    }
 
    struct key_stats_t
@@ -876,7 +1016,7 @@ namespace glz::detail
 
       if constexpr (Opts.force_conformance) {
          while (true) {
-            if (*it < 16) [[unlikely]] {
+            if (*it < 32) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
@@ -910,61 +1050,72 @@ namespace glz::detail
          }
       }
       else {
-         for (const auto fin = end - 7; it < fin;) {
-            uint64_t chunk;
-            std::memcpy(&chunk, it, 8);
-            const uint64_t test_chars = has_quote(chunk);
-            if (test_chars) {
-               it += (std::countr_zero(test_chars) >> 3);
-
-               auto* prev = it - 1;
-               while (*prev == '\\') {
-                  --prev;
-               }
-               if (size_t(it - prev) % 2) {
-                  ++it; // skip the quote
-                  return;
-               }
-               ++it; // skip the escaped quote
-            }
-            else {
-               it += 8;
-            }
+         skip_string_view<Opts>(ctx, it, end);
+         if (bool(ctx.error)) [[unlikely]] {
+            return;
          }
+         ++it; // skip the quote
+      }
+   }
+   
+   template <opts Opts, char open, char close>
+      requires (Opts.is_padded)
+   GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   {
+      ++it;
+      size_t depth = 1;
 
-         // Tail end of buffer. Should be rare we even get here
-         while (it < end) {
+      while (it < end) [[likely]] {
+         uint64_t chunk;
+         std::memcpy(&chunk, it, 8);
+         const uint64_t test = has_quote(chunk) | has_char<'/'>(chunk) | has_char<open>(chunk) | has_char<close>(chunk);
+         if (test) {
+            it += (std::countr_zero(test) >> 3);
+
             switch (*it) {
-            case '\\': {
-               ++it;
-               if (it == end) [[unlikely]] {
-                  ctx.error = error_code::expected_quote;
+            case '"': {
+               skip_string<opts{}>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               ++it;
                break;
             }
-            case '"': {
-               auto* prev = it - 1;
-               while (*prev == '\\') {
-                  --prev;
-               }
-               if (size_t(it - prev) % 2) {
-                  ++it; // skip the quote
+            case '/': {
+               skip_comment(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               ++it; // skip the escaped quote
+               break;
+            }
+            case open: {
+               ++it;
+               ++depth;
+               break;
+            }
+            case close: {
+               ++it;
+               --depth;
+               if (depth == 0) {
+                  return;
+               }
                break;
             }
             default: {
-               ++it;
+               ctx.error = error_code::unexpected_end;
+               return;
             }
             }
          }
+         else {
+            it += 8;
+         }
       }
+
+      ctx.error = error_code::unexpected_end;
    }
 
-   template <char open, char close>
+   template <opts Opts, char open, char close>
+      requires (!Opts.is_padded)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
@@ -1144,18 +1295,6 @@ namespace glz::detail
       if (bool(ctx.error)) [[unlikely]]
          return {};
       return sv{start, static_cast<size_t>(it++ - start)};
-   }
-
-   /* Copyright (c) 2022 Tero 'stedo' Liukko, MIT License */
-   GLZ_ALWAYS_INLINE unsigned char hex2dec(char hex) { return ((hex & 0xf) + (hex >> 6) * 9); }
-
-   GLZ_ALWAYS_INLINE char32_t hex4_to_char32(const char* hex)
-   {
-      uint32_t value = hex2dec(hex[3]);
-      value |= hex2dec(hex[2]) << 4;
-      value |= hex2dec(hex[1]) << 8;
-      value |= hex2dec(hex[0]) << 12;
-      return value;
    }
 
    // errors return the 'in' pointer for better error reporting

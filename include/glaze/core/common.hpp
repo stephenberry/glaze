@@ -242,7 +242,7 @@ namespace glz
 
       // this concept requires that T is just a view
       template <class T>
-      concept str_view_t = std::same_as<std::decay_t<T>, std::string_view>;
+      concept string_view_t = std::same_as<std::decay_t<T>, std::string_view>;
 
       template <class T>
       concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
@@ -907,6 +907,8 @@ struct glz::meta<glz::error_code>
                            "expected_brace", expected_brace, //
                            "expected_bracket", expected_bracket, //
                            "expected_quote", expected_quote, //
+                           "expected_comma", expected_comma, //
+                           "expected_colon", expected_colon, //
                            "exceeded_static_array_size", exceeded_static_array_size, //
                            "unexpected_end", unexpected_end, //
                            "expected_end_comment", expected_end_comment, //

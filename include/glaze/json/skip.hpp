@@ -11,7 +11,7 @@ namespace glz::detail
    GLZ_FLATTEN void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.force_conformance) {
-         skip_until_closed<'{', '}'>(ctx, it, end);
+         skip_until_closed<Opts, '{', '}'>(ctx, it, end);
       }
       else {
          ++it;
@@ -33,9 +33,7 @@ namespace glz::detail
             skip_ws_no_pre_check<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            match<':'>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_MATCH_COLON;
             skip_ws_no_pre_check<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -58,7 +56,7 @@ namespace glz::detail
    GLZ_FLATTEN void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.force_conformance) {
-         skip_until_closed<'[', ']'>(ctx, it, end);
+         skip_until_closed<Opts, '[', ']'>(ctx, it, end);
       }
       else {
          ++it;
@@ -97,12 +95,12 @@ namespace glz::detail
          while (true) {
             switch (*it) {
             case '{':
-               skip_until_closed<'{', '}'>(ctx, it, end);
+               skip_until_closed<Opts, '{', '}'>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                break;
             case '[':
-               skip_until_closed<'[', ']'>(ctx, it, end);
+               skip_until_closed<Opts, '[', ']'>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                break;
@@ -153,17 +151,17 @@ namespace glz::detail
          }
          case 'n': {
             ++it;
-            match<"ull">(ctx, it, end);
+            match<"ull", Opts>(ctx, it, end);
             break;
          }
          case 'f': {
             ++it;
-            match<"alse">(ctx, it, end);
+            match<"alse", Opts>(ctx, it, end);
             break;
          }
          case 't': {
             ++it;
-            match<"rue">(ctx, it, end);
+            match<"rue", Opts>(ctx, it, end);
             break;
          }
          case '\0': {

@@ -2431,7 +2431,7 @@ suite error_outputs = [] {
       auto pe = glz::read_json(m, s);
       expect(pe != glz::error_code::none);
       auto err = glz::format_error(pe, s);
-      expect(err == "1:17: syntax_error\n   {\"Hello\":\"World\"x, \"color\": \"red\"}\n                   ^") << err;
+      expect(err == "1:17: expected_comma\n   {\"Hello\":\"World\"x, \"color\": \"red\"}\n                   ^") << err;
    };
 
    "invalid character with tabs in json"_test = [] {
@@ -2440,7 +2440,7 @@ suite error_outputs = [] {
       auto pe = glz::read_json(m, s);
       expect(pe != glz::error_code::none);
       auto err = glz::format_error(pe, s);
-      expect(err == "1:20: syntax_error\n   {\"Hello\": \"  World\"x, \"color\":  \"red\"}\n                      ^")
+      expect(err == "1:20: expected_comma\n   {\"Hello\": \"  World\"x, \"color\":  \"red\"}\n                      ^")
          << err;
    };
 
@@ -3266,14 +3266,15 @@ suite nested_file_include_test = [] {
 
          obj.b.i = 13;
 
-         expect(glz::write_file_json(obj.b, "./b/b.json", std::string{}) == glz::error_code::none);
+         expect(!glz::write_file_json(obj.b, "./b/b.json", std::string{}));
       }
 
       obj.b.i = 0;
 
       std::string s = R"({ "a": { "include": "./a/a.json" }, "b": { "include": "./b/b.json" } })";
 
-      expect(glz::read_json(obj, s) == glz::error_code::none);
+      const auto ec = glz::read_json(obj, s);
+      expect(!ec) << glz::format_error(ec, s);
 
       expect(obj.a.i == 13);
    };
@@ -3361,7 +3362,7 @@ suite ndjson_test = [] {
 
       x.clear();
 
-      expect(glz::read_ndjson(x, s) == glz::error_code::none);
+      expect(!glz::read_ndjson(x, s));
       expect(x[0] == "Hello");
       expect(x[1] == "World");
       expect(x[2] == "Ice");
@@ -3991,7 +3992,7 @@ suite byte_buffer = [] {
       msg.id = 0;
       msg.val = "";
 
-      expect(glz::read_json(msg, buffer) == glz::error_code::none);
+      expect(!glz::read_json(msg, buffer));
       expect(msg.id == 5);
       expect(msg.val == "hello");
    };
@@ -4008,7 +4009,7 @@ suite byte_buffer = [] {
       msg.id = 0;
       msg.val = "";
 
-      expect(glz::read_json(msg, buffer) == glz::error_code::none);
+      expect(!glz::read_json(msg, buffer));
       expect(msg.id == 5);
       expect(msg.val == "hello");
    };
@@ -4025,7 +4026,7 @@ suite byte_buffer = [] {
       msg.id = 0;
       msg.val = "";
 
-      expect(glz::read_json(msg, buffer) == glz::error_code::none);
+      expect(!glz::read_json(msg, buffer));
       expect(msg.id == 5);
       expect(msg.val == "hello");
    };
