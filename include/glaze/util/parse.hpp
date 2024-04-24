@@ -769,7 +769,7 @@ namespace glz::detail
       while (it < end) [[likely]] {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
-         uint64_t test_chars = has_quote(chunk);
+         const uint64_t test_chars = has_quote(chunk);
          if (test_chars) {
             it += (std::countr_zero(test_chars) >> 3);
             
