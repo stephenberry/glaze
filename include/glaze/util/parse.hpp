@@ -1210,10 +1210,10 @@ namespace glz::detail
    {
       while (true) {
          *out = *in;
-         if (*in == '"' || *in == '\\') {
-            if (*in == '"') {
-               return out;
-            }
+         if (*in == '"') {
+            return out;
+         }
+         else if (*in == '\\') {
             ++in; // skip the escape
             if (*in == 'u') {
                ++in;
