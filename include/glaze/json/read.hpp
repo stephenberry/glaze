@@ -510,15 +510,15 @@ namespace glz
 
                      // The null character may be the first byte of an 8 byte uint64_t SWAR chunk
                      // so we need to at least add 7 bytes. We add 8 here, because why not.
-                     const auto length = round_up_to_multiple<Bytes>(size_t(it - start)) + Bytes;
+                     const auto length = size_t(it - start) + Bytes;
                      value.resize(length);
 
                      const char* c;
                      if (length < size_t(end - it)) [[likely]] {
-                        c = parse_string<Bytes>(&*start, value.data(), ctx);
+                        c = parse_string<Bytes>(start, value.data(), ctx);
                      }
                      else [[unlikely]] {
-                        c = parse_string<1>(&*start, value.data(), ctx);
+                        c = parse_string<1>(start, value.data(), ctx);
                      }
 
                      if (bool(ctx.error)) [[unlikely]] {

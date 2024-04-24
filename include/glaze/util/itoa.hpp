@@ -37,7 +37,7 @@
 
 namespace glz
 {
-   inline constexpr char char_table[200] = {
+   constexpr char char_table[200] = {
       '0', '0', '0', '1', '0', '2', '0', '3', '0', '4', '0', '5', '0', '6', '0', '7', '0', '8', '0', '9', '1', '0', '1',
       '1', '1', '2', '1', '3', '1', '4', '1', '5', '1', '6', '1', '7', '1', '8', '1', '9', '2', '0', '2', '1', '2', '2',
       '2', '3', '2', '4', '2', '5', '2', '6', '2', '7', '2', '8', '2', '9', '3', '0', '3', '1', '3', '2', '3', '3', '3',
@@ -48,9 +48,7 @@ namespace glz
       '0', '8', '1', '8', '2', '8', '3', '8', '4', '8', '5', '8', '6', '8', '7', '8', '8', '8', '9', '9', '0', '9', '1',
       '9', '2', '9', '3', '9', '4', '9', '5', '9', '6', '9', '7', '9', '8', '9', '9'};
 
-   template <class T>
-      requires std::same_as<T, uint32_t>
-   inline auto* to_chars(auto* buf, T val) noexcept
+   inline auto* to_chars(auto* buf, uint32_t val) noexcept
    {
       /* The maximum value of uint32_t is 4294967295 (10 digits), */
       /* these digits are named as 'aabbccddee' here.             */
@@ -66,7 +64,7 @@ namespace glz
 
       if (val < 100) { /* 1-2 digits: aa */
          lz = val < 10;
-         std::memcpy(&buf[0], &char_table[val * 2 + lz], 2);
+         std::memcpy(buf, char_table + (val * 2 + lz), 2);
          buf -= lz;
          return buf + 2;
       }
@@ -74,9 +72,9 @@ namespace glz
          aa = (val * 5243) >> 19; /* (val / 100) */
          bb = val - aa * 100; /* (val % 100) */
          lz = aa < 10;
-         std::memcpy(&buf[0], &char_table[aa * 2 + lz], 2);
+         std::memcpy(buf, char_table + (aa * 2 + lz), 2);
          buf -= lz;
-         std::memcpy(&buf[2], &char_table[2 * bb], 2);
+         std::memcpy(&buf[2], char_table + (2 * bb), 2);
 
          return buf + 4;
       }
@@ -130,9 +128,7 @@ namespace glz
       }
    }
 
-   template <class T>
-      requires std::same_as<T, int32_t>
-   inline auto* to_chars(auto* buf, T x) noexcept
+   inline auto* to_chars(auto* buf, int32_t x) noexcept
    {
       *buf = '-';
       // shifts are necessary to have the numeric_limits<int32_t>::min case
@@ -246,9 +242,7 @@ namespace glz
       }
    }
 
-   template <class T>
-      requires std::same_as<T, uint64_t>
-   inline auto* to_chars(auto* buf, T val) noexcept
+   inline auto* to_chars(auto* buf, uint64_t val) noexcept
    {
       if (val < 100000000) { /* 1-8 digits */
          buf = to_chars_u64_len_1_8(buf, uint32_t(val));
@@ -273,9 +267,7 @@ namespace glz
       }
    }
 
-   template <class T>
-      requires std::same_as<T, int64_t>
-   inline auto* to_chars(auto* buf, T x) noexcept
+   inline auto* to_chars(auto* buf, int64_t x) noexcept
    {
       *buf = '-';
       // shifts are necessary to have the numeric_limits<int64_t>::min case
