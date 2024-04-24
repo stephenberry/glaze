@@ -23,7 +23,7 @@ namespace glz
    using basic_ptr =
       std::variant<bool*, char*, char8_t*, unsigned char*, signed char*, short*, unsigned short*, float*, int*,
                    unsigned int*, long*, unsigned long*, double*, long long*, unsigned long long*, std::string*>;
-   
+
    namespace study
    {
       struct param
