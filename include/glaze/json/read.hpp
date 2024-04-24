@@ -1750,11 +1750,10 @@ namespace glz
                            // We may have just found the prefix of a longer, unknown key.
                            if (*it != '"') [[unlikely]] {
                               auto* start = key.data();
-                              skip_till_quote(ctx, it, end);
+                              skip_string_view<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
                               key = {start, size_t(it - start)};
-                              ++it; // skip the quote
 
                               parse_object_entry_sep<Opts>(ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
