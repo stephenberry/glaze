@@ -18,7 +18,7 @@ namespace glz
 
       auto it = reinterpret_cast<const char*>(buffer.data());
       auto end = reinterpret_cast<const char*>(buffer.data()); // to be incremented
-      
+
       if (buffer.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
          return std::pair{it, end};
@@ -54,19 +54,19 @@ namespace glz
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
       using Buffer = std::remove_reference_t<decltype(buffer)>;
-      
+
       if (buffer.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
          return {ctx.error, 0, ctx.includer_error};
       }
-      
+
       constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !Opts.disable_padding;
-      
+
       if constexpr (use_padded) {
          // Pad the buffer for SWAR
          buffer.resize(buffer.size() + padding_bytes);
       }
-      
+
       auto [it, end] = read_iterators<Opts, use_padded>(ctx, buffer);
       auto start = it;
       if (bool(ctx.error)) [[unlikely]] {
@@ -79,7 +79,7 @@ namespace glz
       else {
          detail::read<Opts.format>::template op<opt_false<Opts, &opts::is_padded>>(value, ctx, it, end);
       }
-      
+
       if (bool(ctx.error)) [[unlikely]] {
          goto finish;
       }
@@ -97,12 +97,12 @@ namespace glz
          }
       }
 
-      finish:
+   finish:
       if constexpr (use_padded) {
          // Restore the original buffer state
          buffer.resize(buffer.size() - padding_bytes);
       }
-      
+
       return {ctx.error, size_t(it - start), ctx.includer_error};
    }
 

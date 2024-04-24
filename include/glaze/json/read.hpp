@@ -551,7 +551,7 @@ namespace glz
             }
 
             auto start = it;
-            
+
             if constexpr (string_view_t<T>) {
                skip_string_view<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
@@ -563,7 +563,7 @@ namespace glz
                skip_string_view<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               
+
                const size_t n = it - start;
                if ((sizeof(value) - 1) < n) {
                   ctx.error = error_code::unexpected_end;
@@ -1583,7 +1583,7 @@ namespace glz
                      skip_string_view<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     const sv key{ start, size_t(it - start) };
+                     const sv key{start, size_t(it - start)};
                      ++it;
 
                      parse_object_entry_sep<Opts>(ctx, it, end);
@@ -1970,7 +1970,7 @@ namespace glz
                      skip_string_view<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     key = { start, size_t(it - start) };
+                     key = {start, size_t(it - start)};
                      ++it;
 
                      // We duplicate this code to avoid generating unreachable code

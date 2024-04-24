@@ -64,9 +64,9 @@ namespace glz::detail
          dumpn<' '>(indent * indentation_width, b, ix);
       }
    };
-   
+
    template <opts Opts>
-      requires (Opts.is_padded)
+      requires(Opts.is_padded)
    sv read_json_string(auto&& it, auto&& end) noexcept
    {
       auto start = it;
@@ -97,7 +97,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-      requires (!Opts.is_padded)
+      requires(!Opts.is_padded)
    sv read_json_string(auto&& it, auto&& end) noexcept
    {
       auto start = it;

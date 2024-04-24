@@ -20,7 +20,7 @@ namespace glz
    constexpr uint32_t colwise = 1;
 
    enum struct float_precision : uint8_t { full, float32 = 4, float64 = 8, float128 = 16 };
-   
+
    constexpr uint32_t padding_bytes = 8;
 
    struct opts

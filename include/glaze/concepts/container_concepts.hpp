@@ -32,7 +32,7 @@ namespace glz
 
    template <class T>
    concept has_data = requires(T v) { v.data(); };
-   
+
    template <class T>
    concept has_reserve = requires(T t) { t.reserve(size_t(1)); };
 
@@ -45,7 +45,7 @@ namespace glz
 
    template <class T>
    concept contiguous = has_size<T> && has_data<T>;
-   
+
    template <class Buffer>
    concept non_const_buffer = !std::is_const_v<Buffer>;
 }

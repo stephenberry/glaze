@@ -320,30 +320,33 @@ namespace glz::detail
    }
 
    // assumes null terminated
-#define GLZ_MATCH_QUOTE if (*it != '"') [[unlikely]] { \
+#define GLZ_MATCH_QUOTE                       \
+   if (*it != '"') [[unlikely]] {             \
       ctx.error = error_code::expected_quote; \
-      return; \
-   } \
-   else [[likely]] { \
-      ++it; \
+      return;                                 \
+   }                                          \
+   else [[likely]] {                          \
+      ++it;                                   \
    }
-   
-#define GLZ_MATCH_COMMA if (*it != ',') [[unlikely]] { \
+
+#define GLZ_MATCH_COMMA                       \
+   if (*it != ',') [[unlikely]] {             \
       ctx.error = error_code::expected_comma; \
-      return; \
-   } \
-   else [[likely]] { \
-      ++it; \
+      return;                                 \
+   }                                          \
+   else [[likely]] {                          \
+      ++it;                                   \
    }
-   
-#define GLZ_MATCH_COLON if (*it != ':') [[unlikely]] { \
+
+#define GLZ_MATCH_COLON                       \
+   if (*it != ':') [[unlikely]] {             \
       ctx.error = error_code::expected_colon; \
-      return; \
-   } \
-   else [[likely]] { \
-      ++it; \
+      return;                                 \
+   }                                          \
+   else [[likely]] {                          \
+      ++it;                                   \
    }
-   
+
    template <char c>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it) noexcept
    {
@@ -366,9 +369,9 @@ namespace glz::detail
          ++it;
       }
    }
-   
+
    template <string_literal str, opts Opts>
-      requires (Opts.is_padded && str.size() <= padding_bytes)
+      requires(Opts.is_padded && str.size() <= padding_bytes)
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
    {
       if (!compare<str.size()>(it, str.value)) [[unlikely]] {
@@ -380,7 +383,7 @@ namespace glz::detail
    }
 
    template <string_literal str, opts Opts>
-      requires (!Opts.is_padded)
+      requires(!Opts.is_padded)
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto n = size_t(end - it);
@@ -555,13 +558,13 @@ namespace glz::detail
 
       ctx.error = error_code::expected_quote;
    }
-   
+
    template <opts Opts>
-      requires (Opts.is_padded)
+      requires(Opts.is_padded)
    GLZ_ALWAYS_INLINE bool skip_till_unescaped_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-      
+
       bool escaped = false;
 
       if constexpr (!Opts.force_conformance) {
@@ -572,7 +575,7 @@ namespace glz::detail
             escaped |= static_cast<bool>(has_escape(chunk));
             if (test_chars) {
                it += (std::countr_zero(test_chars) >> 3);
-               
+
                auto* prev = it - 1;
                while (*prev == '\\') {
                   --prev;
@@ -629,11 +632,11 @@ namespace glz::detail
    }
 
    template <opts Opts>
-      requires (!Opts.is_padded)
+      requires(!Opts.is_padded)
    GLZ_ALWAYS_INLINE bool skip_till_unescaped_quote(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
-      
+
       bool escaped = false;
 
       if constexpr (!Opts.force_conformance) {
@@ -770,9 +773,9 @@ namespace glz::detail
       ctx.error = error_code::expected_quote;
       return false;
    }
-   
+
    template <opts Opts>
-      requires (Opts.is_padded)
+      requires(Opts.is_padded)
    GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
@@ -783,7 +786,7 @@ namespace glz::detail
          const uint64_t test_chars = has_quote(chunk);
          if (test_chars) {
             it += (std::countr_zero(test_chars) >> 3);
-            
+
             auto* prev = it - 1;
             while (*prev == '\\') {
                --prev;
@@ -800,9 +803,9 @@ namespace glz::detail
 
       ctx.error = error_code::expected_quote;
    }
-   
+
    template <opts Opts>
-      requires (!Opts.is_padded)
+      requires(!Opts.is_padded)
    GLZ_ALWAYS_INLINE void skip_string_view(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       static_assert(std::contiguous_iterator<std::decay_t<decltype(it)>>);
@@ -1057,9 +1060,9 @@ namespace glz::detail
          ++it; // skip the quote
       }
    }
-   
+
    template <opts Opts, char open, char close>
-      requires (Opts.is_padded)
+      requires(Opts.is_padded)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
@@ -1115,7 +1118,7 @@ namespace glz::detail
    }
 
    template <opts Opts, char open, char close>
-      requires (!Opts.is_padded)
+      requires(!Opts.is_padded)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       ++it;
