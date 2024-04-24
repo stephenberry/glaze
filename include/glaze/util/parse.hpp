@@ -336,6 +336,14 @@ namespace glz::detail
       ++it; \
    }
    
+#define GLZ_MATCH_COLON if (*it != ':') [[unlikely]] { \
+      ctx.error = error_code::expected_colon; \
+      return; \
+   } \
+   else [[likely]] { \
+      ++it; \
+   }
+   
    template <char c>
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it) noexcept
    {

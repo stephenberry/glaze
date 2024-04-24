@@ -1389,9 +1389,7 @@ namespace glz
          skip_ws_no_pre_check<Opts>(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return;
-         match<':'>(ctx, it);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
+         GLZ_MATCH_COLON;
          skip_ws_no_pre_check<Opts>(ctx, it, end);
       }
 
@@ -2424,9 +2422,7 @@ namespace glz
                      skip_ws<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
-                     match<':'>(ctx, it);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
+                     GLZ_MATCH_COLON;
                      // read in unexpected value
                      if (!value) {
                         read<json>::op<Opts>(value.error(), ctx, it, end);
