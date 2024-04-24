@@ -44,7 +44,7 @@ namespace glz
          while (it < end) {
             switch (json_types[size_t(*it)]) {
             case String: {
-               const auto value = read_json_string(it, end);
+               const auto value = read_json_string<Opts>(it, end);
                dump_unchecked(value, b, ix);
                skip_whitespace();
                break;
@@ -139,14 +139,14 @@ namespace glz
          }
 
          if constexpr (resizable<Out>) {
-            out.resize(in.size());
+            out.resize(in.size() + padding_bytes);
          }
          size_t ix = 0;
          auto [it, end] = read_iterators<Opts>(ctx, in);
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         minify_json<Opts>(ctx, it, end, out, ix);
+         minify_json<opt_true<Opts, &opts::is_padded>>(ctx, it, end, out, ix);
          if constexpr (resizable<Out>) {
             out.resize(ix);
          }

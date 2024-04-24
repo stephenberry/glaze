@@ -25,7 +25,7 @@ namespace glz
          while (it < end) {
             switch (json_types[size_t(*it)]) {
             case String: {
-               const auto value = read_json_string(it, end);
+               const auto value = read_json_string<Opts>(it, end);
                dump(value, b, ix);
                break;
             }
