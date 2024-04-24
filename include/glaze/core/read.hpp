@@ -12,14 +12,14 @@
 namespace glz
 {
    template <opts Opts>
-   inline auto read_iterators(is_context auto&& ctx, detail::contiguous auto&& buffer) noexcept
+   auto read_iterators(is_context auto&& ctx, detail::contiguous auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
       auto b = reinterpret_cast<const char*>(buffer.data());
       auto e = reinterpret_cast<const char*>(buffer.data()); // to be incremented
 
-      using Buffer = std::decay_t<decltype(buffer)>;
+      using Buffer = std::remove_cvref_t<decltype(buffer)>;
       if constexpr (is_specialization_v<Buffer, std::basic_string> ||
                     is_specialization_v<Buffer, std::basic_string_view> || span<Buffer>) {
          e += buffer.size();
@@ -47,7 +47,7 @@ namespace glz
    // For reading json from a std::vector<char>, std::deque<char> and the like
    template <opts Opts, class T>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] inline parse_error read(T& value, detail::contiguous auto&& buffer, is_context auto&& ctx) noexcept
+   [[nodiscard]] parse_error read(T& value, detail::contiguous auto&& buffer, is_context auto&& ctx) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
@@ -90,24 +90,24 @@ namespace glz
          }
       }
 
-      return {ctx.error, static_cast<size_t>(b - start), ctx.includer_error};
+      return {ctx.error, size_t(b - start), ctx.includer_error};
    }
 
    template <opts Opts, class T>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] inline parse_error read(T& value, detail::contiguous auto&& buffer) noexcept
+   [[nodiscard]] parse_error read(T& value, detail::contiguous auto&& buffer) noexcept
    {
       context ctx{};
       return read<Opts>(value, buffer, ctx);
    }
 
    template <class T>
-   concept string_viewable = std::convertible_to<std::decay_t<T>, std::string_view> && !has_data<T>;
+   concept c_style_char_buffer = std::convertible_to<std::remove_cvref_t<T>, std::string_view> && !has_data<T>;
 
    // for char array input
-   template <opts Opts, class T, string_viewable Buffer>
+   template <opts Opts, class T, c_style_char_buffer Buffer>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] inline parse_error read(T& value, Buffer&& buffer, auto&& ctx) noexcept
+   [[nodiscard]] parse_error read(T& value, Buffer&& buffer, auto&& ctx) noexcept
    {
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
       if (str.empty()) {
@@ -116,9 +116,9 @@ namespace glz
       return read<Opts>(value, str, ctx);
    }
 
-   template <opts Opts, class T, string_viewable Buffer>
+   template <opts Opts, class T, c_style_char_buffer Buffer>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] inline parse_error read(T& value, Buffer&& buffer) noexcept
+   [[nodiscard]] parse_error read(T& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return read<Opts>(value, std::forward<Buffer>(buffer), ctx);
