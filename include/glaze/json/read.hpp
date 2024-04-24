@@ -216,7 +216,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            match<"[">(ctx, args...);
+            match<'['>(ctx, args...);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -230,7 +230,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]]
                return;
 
-            match<",">(ctx, args...);
+            match<','>(ctx, args...);
             if (bool(ctx.error)) [[unlikely]]
                return;
 
@@ -239,7 +239,7 @@ namespace glz
             skip_ws<Opts>(ctx, args...);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            match<"]">(ctx, args...);
+            match<']'>(ctx, args...);
          }
       };
 
@@ -254,7 +254,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
-            match<"null">(ctx, args...);
+            match<"null", Opts>(ctx, args...);
          }
       };
 
@@ -2327,7 +2327,7 @@ namespace glz
                   else {
                      using V = std::tuple_element_t<0, nullable_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
-                     match<"null">(ctx, it, end);
+                     match<"null", Opts>(ctx, it, end);
                   }
                   break;
                default: {
@@ -2517,7 +2517,7 @@ namespace glz
 
             if (*it == 'n') {
                ++it;
-               match<"ull">(ctx, it, end);
+               match<"ull", Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                if constexpr (!std::is_pointer_v<T>) {

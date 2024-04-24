@@ -11,6 +11,7 @@
 #include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/core/opts.hpp"
+#include "glaze/util/compare.hpp"
 #include "glaze/util/expected.hpp"
 #include "glaze/util/inline.hpp"
 #include "glaze/util/stoui64.hpp"
@@ -349,12 +350,25 @@ namespace glz::detail
          ++it;
       }
    }
+   
+   template <string_literal str, opts Opts>
+      requires (Opts.is_padded && str.size() <= padding_bytes)
+   GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&&) noexcept
+   {
+      if (!compare<str.size()>(it, str.value)) [[unlikely]] {
+         ctx.error = error_code::syntax_error;
+      }
+      else [[likely]] {
+         it += str.size();
+      }
+   }
 
-   template <string_literal str>
+   template <string_literal str, opts Opts>
+      requires (!Opts.is_padded)
    GLZ_ALWAYS_INLINE void match(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       const auto n = size_t(end - it);
-      if ((n < str.size()) || std::memcmp(it, str.value, str.size())) [[unlikely]] {
+      if ((n < str.size()) || !compare<str.size()>(it, str.value)) [[unlikely]] {
          ctx.error = error_code::syntax_error;
       }
       else [[likely]] {

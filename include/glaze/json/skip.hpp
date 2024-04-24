@@ -153,17 +153,17 @@ namespace glz::detail
          }
          case 'n': {
             ++it;
-            match<"ull">(ctx, it, end);
+            match<"ull", Opts>(ctx, it, end);
             break;
          }
          case 'f': {
             ++it;
-            match<"alse">(ctx, it, end);
+            match<"alse", Opts>(ctx, it, end);
             break;
          }
          case 't': {
             ++it;
-            match<"rue">(ctx, it, end);
+            match<"rue", Opts>(ctx, it, end);
             break;
          }
          case '\0': {
