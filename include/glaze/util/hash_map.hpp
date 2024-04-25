@@ -349,7 +349,7 @@ namespace glz::detail
          // more efficient instructions So this is not as expensive as this looks
          const auto index = table[hash % D.bucket_size];
          if constexpr (D.use_hash_comparison) {
-            // Odds of having a uint64_t hash collision is pretty small
+            // Odds of having a uint64_t hash collision extremely small for naive map sizes
             // And no valid/known keys could colide becuase of perfect hashing
             if (hashes[index] != hash) [[unlikely]]
                return items.end();
