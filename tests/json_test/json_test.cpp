@@ -7719,6 +7719,29 @@ suite short_keys_tests = []
    };
 };
 
+struct long_keys_t
+{
+   int axxxxxxxxxx = 1;
+   int aaxxxxxxxxxx = 2;
+   int abxxxxxxxxxx = 3;
+   int baxxxxxxxxxx = 4;
+   int babxxxxxxxxxx = 5;
+   int aaaxxxxxxxxxx = 6;
+   int cabxxxxxxxxxx = 7;
+   int bcaxxxxxxxxxx = 8;
+   int ccaxxxxxxxxxx = 9;
+};
+
+suite long_keys_tests = []
+{
+   "long_keys"_test = [] {
+      long_keys_t obj{};
+      std::string s{};
+      glz::write_json(obj, s);
+      expect(!glz::read_json(obj, s));
+   };
+};
+
 int main()
 {
    trace.begin("json_test", "Full test suite duration.");

@@ -35,6 +35,7 @@
 
 // To provide a mechanism to short circuit hashing when we know an unknown key is provided
 // we allow hashing algorithms to return the seed when a hash does not need to be performed.
+// To improve performance, we can ensure that the seed never hashes with any of the buckets as well.
 
 namespace glz::detail
 {
@@ -207,6 +208,22 @@ namespace glz::detail
             }
             return bitmix(h_init ^ to_uint64_n_below_8(value.data(), n));
          }
+         else if constexpr (D.min_length > 7) {
+            const auto n = value.size();
+
+            if (n < 8) {
+               return D.seed;
+            }
+
+            uint64_t h = h_init;
+            const char* data = value.data();
+            const char* end7 = data + n - 7;
+            for (auto d0 = data; d0 < end7; d0 += 8) {
+               h = bitmix(h ^ to_uint64(d0));
+            }
+            // Handle potential tail. We know we have at least 8
+            return bitmix(h ^ to_uint64(data + n - 8));
+         }
          else {
             uint64_t h = h_init;
             const auto n = value.size();
@@ -286,7 +303,13 @@ namespace glz::detail
                ++index;
             }
 
-            if (index == N) return;
+            if (index == N) {
+               // make sure the seed does not collide with any hashes
+               const auto bucket = seed % desc.bucket_size;
+               if (not contains(std::span{bucket_index.data(), N}, bucket)) {
+                  return; // found working seed
+               }
+            }
          }
 
          seed = invalid;
