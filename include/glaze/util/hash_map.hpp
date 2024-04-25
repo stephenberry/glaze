@@ -47,10 +47,8 @@ namespace glz::detail
       uint64_t seed{};
       size_t bucket_size{};
       bool use_hash_comparison = false;
-      bool has_zero_length = false;
       size_t min_length = (std::numeric_limits<size_t>::max)();
       size_t max_length{};
-      std::array<size_t, naive_map_max_size> lengths{}; // lengths of keys
    };
    
    inline constexpr uint64_t to_uint64_n_below_8(const char* bytes, const size_t N) noexcept
@@ -270,16 +268,12 @@ namespace glz::detail
       
       for (size_t i = 0; i < N; ++i) {
          const auto n = v[i].size();
-         if (n == 0) {
-            desc.has_zero_length = true;
-         }
          if (n < desc.min_length) {
             desc.min_length = n;
          }
          if (n > desc.max_length) {
             desc.max_length = n;
          }
-         desc.lengths[i] = n;
       }
       
       auto naive_perfect_hash = [&]
@@ -649,12 +643,12 @@ namespace glz::detail
             }
          }();
 
-         if (k >= uint8_t(N_table)) [[unlikely]] {
+         if (k >= uint8_t(N_table)) {
             return items.end();
          }
          const auto index = table[k];
          const auto& item = items[index];
-         if (!compare_sv(item.first, key)) [[unlikely]]
+         if (!compare_sv(item.first, key))
             return items.end();
          return items.begin() + index;
       }
