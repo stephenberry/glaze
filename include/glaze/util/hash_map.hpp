@@ -33,8 +33,25 @@
 // For valid keys we always have a quote and a null character '\0'
 // Our key can be empty, which means we need 6 bytes of additional padding
 
+// To provide a mechanism to short circuit hashing when we know an unknown key is provided
+// we allow hashing algorithms to return the seed when a hash does not need to be performed.
+
 namespace glz::detail
 {
+   constexpr size_t naive_map_max_size = 32;
+   
+   struct naive_map_desc
+   {
+      size_t N{};
+      uint64_t seed{};
+      size_t bucket_size{};
+      bool use_hash_comparison = false;
+      bool has_zero_length = false;
+      size_t min_length = (std::numeric_limits<size_t>::max)();
+      size_t max_length{};
+      std::array<size_t, naive_map_max_size> lengths{}; // lengths of keys
+   };
+   
    inline constexpr uint64_t to_uint64_n_below_8(const char* bytes, const size_t N) noexcept
    {
       static_assert(std::endian::native == std::endian::little);
@@ -93,6 +110,11 @@ namespace glz::detail
          for (size_t i = 0; i < N; ++i) {
             res |= (uint64_t(uint8_t(bytes[i])) << (i << 3));
          }
+         return res;
+      }
+      else if constexpr (N == 8) {
+         uint64_t res;
+         std::memcpy(&res, bytes, N);
          return res;
       }
       else {
@@ -174,10 +196,10 @@ namespace glz::detail
          return bitmix(h ^ to_uint64(data + n - 8));
       }
       
-      template <uint64_t seed>
+      template <naive_map_desc D>
       constexpr uint64_t operator()(const std::string_view value) noexcept
       {
-         constexpr auto h_init = (0xcbf29ce484222325 ^ seed) * 1099511628211;
+         constexpr auto h_init = (0xcbf29ce484222325 ^ D.seed) * 1099511628211;
          uint64_t h = h_init;
          const auto n = value.size();
          const char* data = value.data();
@@ -205,16 +227,6 @@ namespace glz::detail
       }
       return false;
    }
-
-   constexpr size_t naive_map_max_size = 32;
-   
-   struct naive_map_desc
-   {
-      size_t N{};
-      uint64_t seed{};
-      size_t bucket_size{};
-      bool use_hash_comparison = false;
-   };
    
    template <bool use_hash_comparison, size_t N>
       requires(N <= naive_map_max_size)
@@ -230,6 +242,20 @@ namespace glz::detail
       desc.use_hash_comparison = use_hash_comparison;
       auto& seed = desc.seed;
       
+      for (size_t i = 0; i < N; ++i) {
+         const auto n = v[i].size();
+         if (n == 0) {
+            desc.has_zero_length = true;
+         }
+         if (n < desc.min_length) {
+            desc.min_length = n;
+         }
+         if (n > desc.max_length) {
+            desc.max_length = n;
+         }
+         desc.lengths[i] = n;
+      }
+      
       auto naive_perfect_hash = [&]
       {
          std::array<size_t, N> bucket_index{};
@@ -240,6 +266,9 @@ namespace glz::detail
             size_t index = 0;
             for (const auto& key : v) {
                const auto hash = naive_hash{}(key, seed);
+               if (hash == seed) {
+                  break;
+               }
                const auto bucket = hash % desc.bucket_size;
                if (contains(std::span{bucket_index.data(), index}, bucket)) {
                   break;
@@ -282,7 +311,7 @@ namespace glz::detail
 
       constexpr decltype(auto) find(auto&& key) const noexcept
       {
-         const auto hash = naive_hash{}.operator()<D.seed>(key);
+         const auto hash = naive_hash{}.operator()<D>(key);
          // constexpr bucket_size means the compiler can replace the modulos with
          // more efficient instructions So this is not as expensive as this looks
          const auto index = table[hash % D.bucket_size];
@@ -443,6 +472,10 @@ namespace glz::detail
             seed = gen() + 1;
             for (storage_type i{}; i < N; ++i) {
                const auto hash = hash_alg{}(items[i].first, seed);
+               if (hash == seed) {
+                  failed = true;
+                  break;
+               }
                hashes[i] = hash;
                const auto bucket = hash % N;
                const auto bucket_size = bucket_sizes[bucket]++;
