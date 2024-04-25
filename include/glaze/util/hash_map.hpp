@@ -149,10 +149,36 @@ namespace glz::detail
       {
          return bitmix(uint64_t(value) ^ seed);
       }
+      
+      template <uint64_t seed>
+      constexpr uint64_t operator()(std::integral auto value) noexcept
+      {
+         return bitmix(uint64_t(value) ^ seed);
+      }
 
       constexpr uint64_t operator()(const std::string_view value, const uint64_t seed) noexcept
       {
          uint64_t h = (0xcbf29ce484222325 ^ seed) * 1099511628211;
+         const auto n = value.size();
+         const char* data = value.data();
+
+         if (n < 8) {
+            return bitmix(h ^ to_uint64_n_below_8(data, n));
+         }
+
+         const char* end7 = data + n - 7;
+         for (auto d0 = data; d0 < end7; d0 += 8) {
+            h = bitmix(h ^ to_uint64(d0));
+         }
+         // Handle potential tail. We know we have at least 8
+         return bitmix(h ^ to_uint64(data + n - 8));
+      }
+      
+      template <uint64_t seed>
+      constexpr uint64_t operator()(const std::string_view value) noexcept
+      {
+         constexpr auto h_init = (0xcbf29ce484222325 ^ seed) * 1099511628211;
+         uint64_t h = h_init;
          const auto n = value.size();
          const char* data = value.data();
 
@@ -256,7 +282,7 @@ namespace glz::detail
 
       constexpr decltype(auto) find(auto&& key) const noexcept
       {
-         const auto hash = naive_hash{}(key, D.seed);
+         const auto hash = naive_hash{}.operator()<D.seed>(key);
          // constexpr bucket_size means the compiler can replace the modulos with
          // more efficient instructions So this is not as expensive as this looks
          const auto index = table[hash % D.bucket_size];
