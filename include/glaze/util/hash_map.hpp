@@ -40,7 +40,7 @@
 namespace glz::detail
 {
    constexpr size_t naive_map_max_size = 32;
-   
+
    struct naive_map_desc
    {
       size_t N{};
@@ -50,7 +50,7 @@ namespace glz::detail
       size_t min_length = (std::numeric_limits<size_t>::max)();
       size_t max_length{};
    };
-   
+
    inline constexpr uint64_t to_uint64_n_below_8(const char* bytes, const size_t N) noexcept
    {
       static_assert(std::endian::native == std::endian::little);
@@ -170,7 +170,7 @@ namespace glz::detail
       {
          return bitmix(uint64_t(value) ^ seed);
       }
-      
+
       template <uint64_t seed>
       constexpr uint64_t operator()(std::integral auto value) noexcept
       {
@@ -194,7 +194,7 @@ namespace glz::detail
          // Handle potential tail. We know we have at least 8
          return bitmix(h ^ to_uint64(data + n - 8));
       }
-      
+
       template <naive_map_desc D>
       constexpr uint64_t operator()(const std::string_view value) noexcept
       {
@@ -251,13 +251,13 @@ namespace glz::detail
       }
       return false;
    }
-   
+
    template <bool use_hash_comparison, size_t N>
       requires(N <= naive_map_max_size)
    constexpr naive_map_desc naive_map_hash(const std::array<std::string_view, N>& v) noexcept
    {
       constexpr auto invalid = (std::numeric_limits<uint64_t>::max)();
-      
+
       naive_map_desc desc{N};
       // std::bit_ceil(N * N) / 2 results in a max of around 62% collision chance (e.g. size 32).
       // This uses 512 bytes for 32 keys.
@@ -265,7 +265,7 @@ namespace glz::detail
       desc.bucket_size = (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
       desc.use_hash_comparison = use_hash_comparison;
       auto& seed = desc.seed;
-      
+
       for (size_t i = 0; i < N; ++i) {
          const auto n = v[i].size();
          if (n < desc.min_length) {
@@ -275,9 +275,8 @@ namespace glz::detail
             desc.max_length = n;
          }
       }
-      
-      auto naive_perfect_hash = [&]
-      {
+
+      auto naive_perfect_hash = [&] {
          std::array<size_t, N> bucket_index{};
 
          naive_prng gen{};
@@ -308,7 +307,7 @@ namespace glz::detail
 
          seed = invalid;
       };
-      
+
       naive_perfect_hash();
       if (seed == invalid) {
          // Failed to find perfect hash
@@ -356,13 +355,13 @@ namespace glz::detail
          return items.begin() + index;
       }
    };
-   
+
    template <class T, naive_map_desc D>
       requires(D.N <= naive_map_max_size)
    constexpr auto make_naive_map(const std::array<std::pair<std::string_view, T>, D.N>& pairs)
    {
       naive_map<T, D> ht{pairs};
-      
+
       using hash_alg = naive_hash<D.use_hash_comparison>;
 
       for (size_t i = 0; i < D.N; ++i) {
@@ -648,8 +647,7 @@ namespace glz::detail
          }
          const auto index = table[k];
          const auto& item = items[index];
-         if (!compare_sv(item.first, key))
-            return items.end();
+         if (!compare_sv(item.first, key)) return items.end();
          return items.begin() + index;
       }
    };

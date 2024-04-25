@@ -7708,8 +7708,7 @@ struct short_keys_t
    int cca = 9;
 };
 
-suite short_keys_tests = []
-{
+suite short_keys_tests = [] {
    "short_keys"_test = [] {
       short_keys_t obj{};
       std::string s{};
@@ -7732,8 +7731,7 @@ struct long_keys_t
    int ccaxxxxxxxxxx = 9;
 };
 
-suite long_keys_tests = []
-{
+suite long_keys_tests = [] {
    "long_keys"_test = [] {
       long_keys_t obj{};
       std::string s{};
