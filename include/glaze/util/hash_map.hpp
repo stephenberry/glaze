@@ -417,15 +417,15 @@ namespace glz::detail
       std::array<std::pair<Key, Value>, N> items{};
       std::array<uint64_t, N + 1> hashes{}; // Save one more hash value of 0 for unknown keys
 
-      constexpr decltype(auto) begin() const { return items.begin(); }
-      constexpr decltype(auto) end() const { return items.end(); }
+      constexpr decltype(auto) begin() const noexcept { return items.begin(); }
+      constexpr decltype(auto) end() const noexcept { return items.end(); }
 
-      constexpr decltype(auto) begin() { return items.begin(); }
-      constexpr decltype(auto) end() { return items.end(); }
+      constexpr decltype(auto) begin() noexcept { return items.begin(); }
+      constexpr decltype(auto) end() noexcept { return items.end(); }
 
-      constexpr size_t size() const { return items.size(); }
+      constexpr size_t size() const noexcept { return items.size(); }
 
-      constexpr size_t index(auto&& key) const { return find(key) - begin(); }
+      constexpr size_t index(auto&& key) const noexcept { return find(key) - begin(); }
 
       constexpr decltype(auto) find(auto&& key) const noexcept
       {
@@ -626,8 +626,8 @@ namespace glz::detail
       static constexpr size_t N_table = D.back - D.front + 1;
       std::array<uint8_t, N_table> table{};
 
-      constexpr decltype(auto) begin() const { return items.begin(); }
-      constexpr decltype(auto) end() const { return items.end(); }
+      constexpr decltype(auto) begin() const noexcept { return items.begin(); }
+      constexpr decltype(auto) end() const noexcept { return items.end(); }
 
       constexpr decltype(auto) find(auto&& key) const noexcept
       {
@@ -696,8 +696,8 @@ namespace glz::detail
    {
       std::array<std::pair<std::string_view, T>, 1> items{};
 
-      constexpr decltype(auto) begin() const { return items.begin(); }
-      constexpr decltype(auto) end() const { return items.end(); }
+      constexpr decltype(auto) begin() const noexcept { return items.begin(); }
+      constexpr decltype(auto) end() const noexcept { return items.end(); }
 
       constexpr decltype(auto) find(auto&& key) const noexcept
       {
@@ -735,8 +735,8 @@ namespace glz::detail
          S0.size() == S1.size(); // if we need to check the size again on the second compare
       static constexpr bool check_size = !same_size;
 
-      constexpr decltype(auto) begin() const { return items.begin(); }
-      constexpr decltype(auto) end() const { return items.end(); }
+      constexpr decltype(auto) begin() const noexcept { return items.begin(); }
+      constexpr decltype(auto) end() const noexcept { return items.end(); }
 
       constexpr decltype(auto) find(auto&& key) const noexcept
       {
