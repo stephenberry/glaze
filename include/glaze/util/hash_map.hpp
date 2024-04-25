@@ -133,7 +133,7 @@ namespace glz::detail
    }
 
    // https://en.wikipedia.org/wiki/Xorshift
-   struct naive_prng
+   struct naive_prng final
    {
       uint64_t x = 7185499250578500046;
       constexpr uint64_t operator()() noexcept
@@ -149,24 +149,24 @@ namespace glz::detail
    // we keep generating seeds until its perfect. This allows for the usage of fast
    // but terible hashing algs.
    // This is one such terible hashing alg
-   struct naive_hash
+   template <bool use_hash_comparison>
+   struct naive_hash final
    {
-      static constexpr uint64_t bitmix(uint64_t h) noexcept
+      static inline constexpr uint64_t bitmix(uint64_t h) noexcept
       {
-         h ^= (h >> 33);
-         h *= 0xff51afd7ed558ccdL;
-         h ^= (h >> 33);
-         h *= 0xc4ceb9fe1a85ec53L;
-         h ^= (h >> 33);
+         if constexpr (use_hash_comparison) {
+            h ^= (h >> 33);
+            h *= 0xff51afd7ed558ccdL;
+            h ^= (h >> 33);
+            h *= 0xc4ceb9fe1a85ec53L;
+            h ^= (h >> 33);
+         }
+         else {
+            h *= 0x9FB21C651E98DF25L;
+            h ^= std::rotr(h, 49);
+         }
          return h;
       };
-
-      // static constexpr uint64_t bitmix(uint64_t x)
-      // {
-      //   x *= 0x9FB21C651E98DF25L;
-      //   x ^= std::rotr(x, 49);
-      //   return x;
-      // };
 
       constexpr uint64_t operator()(std::integral auto value, const uint64_t seed) noexcept
       {
@@ -291,7 +291,7 @@ namespace glz::detail
             seed = gen();
             size_t index = 0;
             for (const auto& key : v) {
-               const auto hash = naive_hash{}(key, seed);
+               const auto hash = naive_hash<use_hash_comparison>{}(key, seed);
                if (hash == seed) {
                   break;
                }
@@ -332,6 +332,7 @@ namespace glz::detail
       // Birthday paradox makes this unsuitable for large numbers of keys without
       // using a ton of memory.
       static constexpr auto N = D.N;
+      using hash_alg = naive_hash<D.use_hash_comparison>;
       std::array<std::pair<std::string_view, Value>, N> items{};
       std::array<uint64_t, N * D.use_hash_comparison> hashes{};
       std::array<uint8_t, D.bucket_size> table{};
@@ -343,7 +344,7 @@ namespace glz::detail
 
       constexpr decltype(auto) find(auto&& key) const noexcept
       {
-         const auto hash = naive_hash{}.operator()<D>(key);
+         const auto hash = hash_alg{}.template operator()<D>(key);
          // constexpr bucket_size means the compiler can replace the modulos with
          // more efficient instructions So this is not as expensive as this looks
          const auto index = table[hash % D.bucket_size];
@@ -367,9 +368,11 @@ namespace glz::detail
    constexpr auto make_naive_map(const std::array<std::pair<std::string_view, T>, D.N>& pairs)
    {
       naive_map<T, D> ht{pairs};
+      
+      using hash_alg = naive_hash<D.use_hash_comparison>;
 
       for (size_t i = 0; i < D.N; ++i) {
-         const auto hash = naive_hash{}(pairs[i].first, D.seed);
+         const auto hash = hash_alg{}.template operator()<D>(pairs[i].first);
          if constexpr (D.use_hash_comparison) {
             ht.hashes[i] = hash;
          }
@@ -405,7 +408,7 @@ namespace glz::detail
       // From serge-sans-paille/frozen
       static constexpr uint64_t storage_size = std::bit_ceil(N) * (N < 32 ? 2 : 1);
       static constexpr auto max_bucket_size = 2 * std::bit_width(N);
-      using hash_alg = naive_hash;
+      using hash_alg = naive_hash<use_hash_comparison>;
       uint64_t seed{};
       // The extra info in the bucket most likely does not need to be 64 bits
       std::array<int64_t, N> buckets{};
