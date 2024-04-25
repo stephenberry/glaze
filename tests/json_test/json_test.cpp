@@ -7695,6 +7695,30 @@ suite max_write_precision_tests = [] {
    };
 };
 
+struct short_keys_t
+{
+   int a = 1;
+   int aa = 2;
+   int ab = 3;
+   int ba = 4;
+   int bab = 5;
+   int aaa = 6;
+   int cab = 7;
+   int bca = 8;
+   int cca = 9;
+};
+
+suite short_keys_tests = []
+{
+   "short_keys"_test = [] {
+      short_keys_t obj{};
+      std::string s{};
+      glz::write_json(obj, s);
+      expect(s == R"({"a":1,"aa":2,"ab":3,"ba":4,"bab":5,"aaa":6,"cab":7,"bca":8,"cca":9})") << s;
+      expect(!glz::read_json(obj, s));
+   };
+};
+
 int main()
 {
    trace.begin("json_test", "Full test suite duration.");

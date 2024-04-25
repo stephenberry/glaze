@@ -200,20 +200,29 @@ namespace glz::detail
       constexpr uint64_t operator()(const std::string_view value) noexcept
       {
          constexpr auto h_init = (0xcbf29ce484222325 ^ D.seed) * 1099511628211;
-         uint64_t h = h_init;
-         const auto n = value.size();
-         const char* data = value.data();
-
-         if (n < 8) {
-            return bitmix(h ^ to_uint64_n_below_8(data, n));
+         if constexpr (D.max_length < 8) {
+            const auto n = value.size();
+            if (n > 7) {
+               return D.seed;
+            }
+            return bitmix(h_init ^ to_uint64_n_below_8(value.data(), n));
          }
+         else {
+            uint64_t h = h_init;
+            const auto n = value.size();
+            const char* data = value.data();
 
-         const char* end7 = data + n - 7;
-         for (auto d0 = data; d0 < end7; d0 += 8) {
-            h = bitmix(h ^ to_uint64(d0));
+            if (n < 8) {
+               return bitmix(h ^ to_uint64_n_below_8(data, n));
+            }
+
+            const char* end7 = data + n - 7;
+            for (auto d0 = data; d0 < end7; d0 += 8) {
+               h = bitmix(h ^ to_uint64(d0));
+            }
+            // Handle potential tail. We know we have at least 8
+            return bitmix(h ^ to_uint64(data + n - 8));
          }
-         // Handle potential tail. We know we have at least 8
-         return bitmix(h ^ to_uint64(data + n - 8));
       }
    };
 
