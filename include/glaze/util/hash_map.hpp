@@ -181,51 +181,86 @@ namespace glz::detail
    }
 
    constexpr size_t naive_map_max_size = 32;
+   
+   struct naive_map_desc
+   {
+      size_t N{};
+      uint64_t seed{};
+      size_t bucket_size{};
+      bool use_hash_comparison = false;
+   };
+   
+   template <bool use_hash_comparison, size_t N>
+      requires(N <= naive_map_max_size)
+   constexpr naive_map_desc naive_map_hash(const std::array<std::string_view, N>& v) noexcept
+   {
+      constexpr auto invalid = (std::numeric_limits<uint64_t>::max)();
+      
+      naive_map_desc desc{N};
+      // std::bit_ceil(N * N) / 2 results in a max of around 62% collision chance (e.g. size 32).
+      // This uses 512 bytes for 32 keys.
+      // Keeping the bucket size a power of 2 probably makes the modulus more efficient.
+      desc.bucket_size = (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
+      desc.use_hash_comparison = use_hash_comparison;
+      auto& seed = desc.seed;
+      
+      auto naive_perfect_hash = [&]
+      {
+         std::array<size_t, N> bucket_index{};
 
-   template <class Value, size_t N, bool use_hash_comparison = false>
+         naive_prng gen{};
+         for (size_t i = 0; i < 1024; ++i) {
+            seed = gen();
+            size_t index = 0;
+            for (const auto& key : v) {
+               const auto hash = naive_hash{}(key, seed);
+               const auto bucket = hash % desc.bucket_size;
+               if (contains(std::span{bucket_index.data(), index}, bucket)) {
+                  break;
+               }
+               bucket_index[index] = bucket;
+               ++index;
+            }
+
+            if (index == N) return;
+         }
+
+         seed = invalid;
+      };
+      
+      naive_perfect_hash();
+      if (seed == invalid) {
+         // Failed to find perfect hash
+         std::abort();
+         return {};
+      }
+
+      return desc;
+   }
+
+   template <class Value, naive_map_desc D>
+      requires(D.N <= naive_map_max_size)
    struct naive_map
    {
       // Birthday paradox makes this unsuitable for large numbers of keys without
       // using a ton of memory.
-      static_assert(N <= naive_map_max_size, "Not suitable for large numbers of keys");
-      // std::bit_ceil(N * N) / 2 results in a max of around 62% collision chance (e.g. size 32).
-      // This uses 512 bytes for 32 keys.
-      // Keeping the bucket size a power of 2 probably makes the modulus more efficient.
-      static constexpr size_t bucket_size = (N == 1) ? 1 : std::bit_ceil(N * N) / 2;
-      uint64_t seed{};
+      static constexpr auto N = D.N;
       std::array<std::pair<std::string_view, Value>, N> items{};
-      std::array<uint64_t, N * use_hash_comparison> hashes{};
-      std::array<uint8_t, bucket_size> table{};
+      std::array<uint64_t, N * D.use_hash_comparison> hashes{};
+      std::array<uint8_t, D.bucket_size> table{};
 
-      explicit constexpr naive_map(const std::array<std::pair<std::string_view, Value>, N>& pairs) : items(pairs)
-      {
-         seed = naive_perfect_hash();
-         if (seed == (std::numeric_limits<uint64_t>::max)()) {
-            // Failed to find perfect hash
-            std::abort();
-         }
+      constexpr decltype(auto) begin() const noexcept { return items.begin(); }
+      constexpr decltype(auto) end() const noexcept { return items.end(); }
 
-         for (size_t i = 0; i < N; ++i) {
-            const auto hash = naive_hash{}(items[i].first, seed);
-            if constexpr (use_hash_comparison) {
-               hashes[i] = hash;
-            }
-            table[hash % bucket_size] = uint8_t(i);
-         }
-      }
-
-      constexpr decltype(auto) begin() const { return items.begin(); }
-      constexpr decltype(auto) end() const { return items.end(); }
-
-      constexpr size_t size() const { return items.size(); }
+      constexpr size_t size() const noexcept { return items.size(); }
 
       constexpr decltype(auto) find(auto&& key) const noexcept
       {
-         const auto hash = naive_hash{}(key, seed);
+         const auto hash = naive_hash{}(key, D.seed);
          // constexpr bucket_size means the compiler can replace the modulos with
          // more efficient instructions So this is not as expensive as this looks
-         const auto index = table[hash % bucket_size];
-         if constexpr (use_hash_comparison) {
+         const auto index = table[hash % D.bucket_size];
+         if constexpr (D.use_hash_comparison) {
             // Odds of having a uint64_t hash collision is pretty small
             // And no valid/known keys could colide becuase of perfect hashing
             if (hashes[index] != hash) [[unlikely]]
@@ -238,31 +273,24 @@ namespace glz::detail
          }
          return items.begin() + index;
       }
-
-      constexpr uint64_t naive_perfect_hash() noexcept
-      {
-         std::array<size_t, N> bucket_index{};
-
-         naive_prng gen{};
-         for (size_t i = 0; i < 1024; ++i) {
-            seed = gen();
-            size_t index = 0;
-            for (const auto& kv : items) {
-               const auto hash = naive_hash{}(kv.first, seed);
-               const auto bucket = hash % bucket_size;
-               if (contains(std::span{bucket_index.data(), index}, bucket)) {
-                  break;
-               }
-               bucket_index[index] = bucket;
-               ++index;
-            }
-
-            if (index == N) return seed;
-         }
-
-         return uint64_t(-1);
-      }
    };
+   
+   template <class T, naive_map_desc D>
+      requires(D.N <= naive_map_max_size)
+   constexpr auto make_naive_map(const std::array<std::pair<std::string_view, T>, D.N>& pairs)
+   {
+      naive_map<T, D> ht{pairs};
+
+      for (size_t i = 0; i < D.N; ++i) {
+         const auto hash = naive_hash{}(pairs[i].first, D.seed);
+         if constexpr (D.use_hash_comparison) {
+            ht.hashes[i] = hash;
+         }
+         ht.table[hash % D.bucket_size] = uint8_t(i);
+      }
+
+      return ht;
+   }
 
    template <uint64_t N>
    consteval auto fit_unsigned_type() noexcept
