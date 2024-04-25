@@ -551,7 +551,8 @@ namespace glz
                   }
                   else {
                      if constexpr (n <= naive_map_max_size) {
-                        return glz::detail::naive_map<value_t, n, use_hash_comparison>({key_value<T, I>()...});
+                        constexpr auto naive_desc = naive_map_hash<use_hash_comparison, n>(keys);
+                        return glz::detail::make_naive_map<value_t, naive_desc>({key_value<T, I>()...});
                      }
                      else {
                         return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({key_value<T, I>()...});

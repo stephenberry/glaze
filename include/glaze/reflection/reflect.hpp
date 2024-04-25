@@ -80,7 +80,8 @@ namespace glz
                   }
                   else {
                      if constexpr (n <= naive_map_max_size) {
-                        return glz::detail::naive_map<value_t, n, use_hash_comparison>({std::pair<sv, value_t>{
+                        constexpr auto naive_desc = naive_map_hash<use_hash_comparison, n>(keys);
+                        return glz::detail::make_naive_map<value_t, naive_desc>({std::pair<sv, value_t>{
                            get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
                      }
                      else {
