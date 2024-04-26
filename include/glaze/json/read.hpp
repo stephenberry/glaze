@@ -512,7 +512,7 @@ namespace glz
                      std::memcpy(p, it, 8);
                      uint64_t swar;
                      std::memcpy(&swar, p, 8);
-                     auto next = has_quote(swar) | has_escape(swar);
+                     auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
 
                      if (next) {
                         next = std::countr_zero(next) >> 3;
@@ -520,6 +520,10 @@ namespace glz
                         if (*it == '"') {
                            value = { temp.data(), size_t(p + next - temp.data()) };
                            ++it;
+                           return;
+                        }
+                        if (*it < 32) [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
                            return;
                         }
                         ++it; // skip the escape

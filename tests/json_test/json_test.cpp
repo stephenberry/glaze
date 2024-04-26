@@ -2435,12 +2435,12 @@ suite error_outputs = [] {
    };
 
    "invalid character with tabs in json"_test = [] {
-      std::string s = R"({"Hello":	" 	World"x, "color": 	"red"})";
+      std::string s = R"({"Hello":	"World"x, "color": 	"red"})";
       std::map<std::string, std::string> m;
       auto pe = glz::read_json(m, s);
       expect(pe != glz::error_code::none);
       auto err = glz::format_error(pe, s);
-      expect(err == "1:20: expected_comma\n   {\"Hello\": \"  World\"x, \"color\":  \"red\"}\n                      ^")
+      expect(err == "1:18: expected_comma\n   {\"Hello\": \"World\"x, \"color\":  \"red\"}\n                    ^")
          << err;
    };
 
