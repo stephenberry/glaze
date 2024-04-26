@@ -500,9 +500,9 @@ namespace glz
                   if constexpr (Opts.is_padded)
                   {
                      auto& temp = string_decode_buffer();
-                     auto* p = temp.data();
                   string_decode_padded:
-                     auto* p_end = temp.data() + temp.size() - 8; // subtract 8 for swar
+                     auto* p = temp.data();
+                     auto* p_end = temp.data() + temp.size() - padding_bytes; // subtract 8 for swar
                      
                      while (p < p_end) [[likely]] {
                         std::memcpy(p, it, 8);
@@ -558,8 +558,8 @@ namespace glz
                      // So we need to have this much space available in our read buffer
                      const auto end12 = end - 12;
                      auto& temp = string_decode_buffer();
-                     auto* p = temp.data();
                   string_decode:
+                     auto* p = temp.data();
                      auto* p_end = temp.data() + temp.size() - 8; // subtract 8 for swar
                      
                      while (p < p_end) [[likely]] {
