@@ -612,10 +612,43 @@ namespace glz
    } // namespace tuplet
 } // namespace glz
 
-// std::tuple_size specialization
-// std::tuple_element specialization
-namespace std
+#include <array>
+#include <tuple>
+
+namespace glz
 {
+   template <class... T>
+   struct tuple_size;
+   
+   template <class T>
+   constexpr size_t tuple_size_v = tuple_size<std::remove_const_t<T>>::value;
+   
+   template <class T, size_t N>
+   struct tuple_size<std::array<T, N>> {
+       static constexpr size_t value = N;
+   };
+   
+   template <class... Types>
+   struct tuple_size<std::tuple<Types...>> {
+       static constexpr size_t value = sizeof...(Types);
+   };
+   
+   template <size_t I, class... T>
+   struct tuple_element;
+   
+   template <size_t I, class Tuple>
+   using tuple_element_t = typename tuple_element<I, Tuple>::type;
+   
+   template <size_t I, class... T>
+   struct tuple_element<I, std::tuple<T...>> {
+       using type = typename std::tuple_element<I, std::tuple<T...>>::type;
+   };
+   
+   template <std::size_t I, typename T1, typename T2>
+   struct tuple_element<I, std::pair<T1, T2>> {
+       using type = typename std::conditional<I == 0, T1, T2>::type;
+   };
+   
    template <class... T>
    struct tuple_size<glz::tuplet::tuple<T...>> : std::integral_constant<size_t, sizeof...(T)>
    {};
@@ -625,6 +658,7 @@ namespace std
    {
       using type = decltype(glz::tuplet::tuple<T...>::decl_elem(glz::tuplet::tag<I>()));
    };
+   
    template <class A, class B>
    struct tuple_size<glz::tuplet::pair<A, B>> : std::integral_constant<size_t, 2>
    {};
@@ -635,4 +669,4 @@ namespace std
       static_assert(I < 2, "tuplet::pair only has 2 elements");
       using type = std::conditional_t<I == 0, A, B>;
    };
-} // namespace std
+}

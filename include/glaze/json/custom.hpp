@@ -45,14 +45,14 @@ namespace glz
                   using Ret = typename return_type<From>::type;
                   if constexpr (std::is_void_v<Ret>) {
                      using Tuple = typename inputs_as_tuple<From>::type;
-                     if constexpr (std::tuple_size_v<Tuple> == 0) {
+                     if constexpr (glz::tuple_size_v<Tuple> == 0) {
                         skip_array<Opts>(ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         (value.val.*(value.from))();
                      }
-                     else if constexpr (std::tuple_size_v<Tuple> == 1) {
-                        std::decay_t<std::tuple_element_t<0, Tuple>> input{};
+                     else if constexpr (glz::tuple_size_v<Tuple> == 1) {
+                        std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
                         read<json>::op<Opts>(input, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -74,14 +74,14 @@ namespace glz
 
                      if constexpr (std::is_void_v<Ret>) {
                         using Tuple = typename function_traits<Func>::arguments;
-                        if constexpr (std::tuple_size_v<Tuple> == 0) {
+                        if constexpr (glz::tuple_size_v<Tuple> == 0) {
                            skip_array<Opts>(ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                            from();
                         }
-                        else if constexpr (std::tuple_size_v<Tuple> == 1) {
-                           std::decay_t<std::tuple_element_t<0, Tuple>> input{};
+                        else if constexpr (glz::tuple_size_v<Tuple> == 1) {
+                           std::decay_t<glz::tuple_element_t<0, Tuple>> input{};
                            read<json>::op<Opts>(input, ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
@@ -108,7 +108,7 @@ namespace glz
                   using Ret = invocable_result_t<From>;
                   if constexpr (std::is_void_v<Ret>) {
                      using Tuple = invocable_args_t<From>;
-                     constexpr auto N = std::tuple_size_v<Tuple>;
+                     constexpr auto N = glz::tuple_size_v<Tuple>;
                      if constexpr (N == 0) {
                         static_assert(false_v<T>, "lambda must take in the class as the first argument");
                      }
@@ -119,7 +119,7 @@ namespace glz
                         value.from(value.val);
                      }
                      else if constexpr (N == 2) {
-                        std::decay_t<std::tuple_element_t<1, Tuple>> input{};
+                        std::decay_t<glz::tuple_element_t<1, Tuple>> input{};
                         read<json>::op<Opts>(input, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -161,7 +161,7 @@ namespace glz
             if constexpr (std::is_member_pointer_v<To>) {
                if constexpr (std::is_member_function_pointer_v<To>) {
                   using Tuple = typename inputs_as_tuple<To>::type;
-                  if constexpr (std::tuple_size_v<Tuple> == 0) {
+                  if constexpr (glz::tuple_size_v<Tuple> == 0) {
                      write<json>::op<Opts>((value.val.*(value.to))(), ctx, args...);
                   }
                   else {
@@ -179,7 +179,7 @@ namespace glz
                      }
                      else {
                         using Tuple = typename function_traits<Func>::arguments;
-                        if constexpr (std::tuple_size_v<Tuple> == 0) {
+                        if constexpr (glz::tuple_size_v<Tuple> == 0) {
                            write<json>::op<Opts>(to(), ctx, args...);
                         }
                         else {

@@ -160,7 +160,7 @@ namespace glz
                member_array[index]);
          }
          else if constexpr (tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>) {
-            if (index >= std::tuple_size_v<std::decay_t<T>>) return false;
+            if (index >= glz::tuple_size_v<std::decay_t<T>>) return false;
             auto tuple_element_ptr = get_runtime(value, index);
             return std::visit(
                [&](auto&& element_ptr) { return seek_impl(std::forward<F>(func), *element_ptr, json_ptr); },
@@ -433,7 +433,7 @@ namespace glz
    // input array must be sorted
    inline constexpr auto group_json_ptrs_impl(const auto& arr)
    {
-      constexpr auto N = std::tuple_size_v<std::decay_t<decltype(arr)>>;
+      constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(arr)>>;
 
       std::array<sv, N> first_keys;
       std::transform(arr.begin(), arr.end(), first_keys.begin(), first_key);

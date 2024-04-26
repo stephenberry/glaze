@@ -398,14 +398,14 @@ namespace glz
       struct tuple_ptr_variant<std::pair<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
       {};
 
-      template <class Tuple, class = std::make_index_sequence<std::tuple_size<Tuple>::value>>
+      template <class Tuple, class = std::make_index_sequence<glz::tuple_size<Tuple>::value>>
       struct value_tuple_variant;
 
       template <class Tuple, size_t I>
       struct member_type
       {
-         using T0 = decay_keep_volatile_t<std::tuple_element_t<0, std::tuple_element_t<I, Tuple>>>;
-         using type = std::tuple_element_t<std::is_member_pointer_v<T0> ? 0 : 1, std::tuple_element_t<I, Tuple>>;
+         using T0 = decay_keep_volatile_t<glz::tuple_element_t<0, glz::tuple_element_t<I, Tuple>>>;
+         using type = glz::tuple_element_t<std::is_member_pointer_v<T0> ? 0 : 1, glz::tuple_element_t<I, Tuple>>;
       };
 
       template <class Tuple, size_t... I>
@@ -423,8 +423,8 @@ namespace glz
       {
          return []<size_t... I>(std::index_sequence<I...>) {
             using value_t = typename tuple_variant<meta_t<T>>::type;
-            return std::array<value_t, std::tuple_size_v<meta_t<T>>>{glz::get<I>(meta_v<T>)...};
-         }(std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{});
+            return std::array<value_t, glz::tuple_size_v<meta_t<T>>>{glz::get<I>(meta_v<T>)...};
+         }(std::make_index_sequence<glz::tuple_size_v<meta_t<T>>>{});
       }
 
       template <class Tuple, std::size_t... Is>
@@ -433,7 +433,7 @@ namespace glz
          using value_t = typename tuple_ptr_variant<Tuple>::type;
          using tuple_ref = std::add_lvalue_reference_t<Tuple>;
          using getter_t = value_t (*)(tuple_ref);
-         return std::array<getter_t, std::tuple_size_v<Tuple>>{+[](tuple_ref t) -> value_t {
+         return std::array<getter_t, glz::tuple_size_v<Tuple>>{+[](tuple_ref t) -> value_t {
             if constexpr (is_std_tuple<Tuple>) {
                return &std::get<Is>(t);
             }
@@ -447,7 +447,7 @@ namespace glz
       inline auto get_runtime(Tuple&& t, const size_t index)
       {
          using T = std::decay_t<Tuple>;
-         static constexpr auto indices = std::make_index_sequence<std::tuple_size_v<T>>{};
+         static constexpr auto indices = std::make_index_sequence<glz::tuple_size_v<T>>{};
          static constexpr auto runtime_getter = tuple_runtime_getter<T>(indices);
          return runtime_getter[index](t);
       }
@@ -515,7 +515,7 @@ namespace glz
       constexpr auto make_map_impl(std::index_sequence<I...>)
       {
          using value_t = value_tuple_variant_t<meta_t<T>>;
-         constexpr auto n = std::tuple_size_v<meta_t<T>>;
+         constexpr auto n = glz::tuple_size_v<meta_t<T>>;
 
          if constexpr (n == 0) {
             return nullptr; // Hack to fix MSVC
@@ -570,16 +570,16 @@ namespace glz
          requires(!reflectable<T>)
       constexpr auto make_map()
       {
-         constexpr auto indices = std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{};
+         constexpr auto indices = std::make_index_sequence<glz::tuple_size_v<meta_t<T>>>{};
          return make_map_impl<decay_keep_volatile_t<T>, use_hash_comparison>(indices);
       }
 
       template <class T>
       constexpr auto make_key_int_map()
       {
-         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         constexpr auto N = glz::tuple_size_v<meta_t<T>>;
          return [&]<size_t... I>(std::index_sequence<I...>) {
-            return normal_map<sv, size_t, std::tuple_size_v<meta_t<T>>>(
+            return normal_map<sv, size_t, glz::tuple_size_v<meta_t<T>>>(
                {std::make_pair<sv, size_t>(get_enum_key<T, I>(), I)...});
          }(std::make_index_sequence<N>{});
       }
@@ -587,7 +587,7 @@ namespace glz
       template <class T>
       constexpr auto make_enum_to_string_map()
       {
-         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         constexpr auto N = glz::tuple_size_v<meta_t<T>>;
          return [&]<size_t... I>(std::index_sequence<I...>) {
             using key_t = std::underlying_type_t<T>;
             return normal_map<key_t, sv, N>(
@@ -601,13 +601,13 @@ namespace glz
       {
          return []<size_t... I>(std::index_sequence<I...>) {
             return std::array<sv, sizeof...(I)>{get_enum_key<T, I>()...};
-         }(std::make_index_sequence<std::tuple_size_v<meta_t<T>>>{});
+         }(std::make_index_sequence<glz::tuple_size_v<meta_t<T>>>{});
       }
 
       template <class T>
       constexpr auto make_string_to_enum_map() noexcept
       {
-         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         constexpr auto N = glz::tuple_size_v<meta_t<T>>;
          return [&]<size_t... I>(std::index_sequence<I...>) {
             return normal_map<sv, T, N>({std::pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
          }(std::make_index_sequence<N>{});
@@ -633,7 +633,7 @@ namespace glz
                res += count_members<V>;
             }
             else {
-               res += std::tuple_size_v<meta_t<V>>;
+               res += glz::tuple_size_v<meta_t<V>>;
             }
          });
          return res;
@@ -651,11 +651,11 @@ namespace glz
          for_each<N>([&](auto I) {
             using V = std::decay_t<std::variant_alternative_t<I, T>>;
             if constexpr (reflectable<V>) {
-               for_each<std::tuple_size_v<decltype(member_names<V>)>>(
+               for_each<glz::tuple_size_v<decltype(member_names<V>)>>(
                   [&](auto J) { (*data_ptr)[index++] = glz::get<J>(member_names<V>); });
             }
             else {
-               for_each<std::tuple_size_v<meta_t<V>>>([&](auto J) {
+               for_each<glz::tuple_size_v<meta_t<V>>>([&](auto J) {
                   constexpr auto item = get<J>(meta_v<V>);
                   using T0 = std::decay_t<decltype(get<0>(item))>;
                   auto key_getter = [&] {
@@ -697,11 +697,11 @@ namespace glz
          for_each<N>([&](auto I) {
             using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
             if constexpr (reflectable<V>) {
-               for_each<std::tuple_size_v<decltype(member_names<V>)>>(
+               for_each<glz::tuple_size_v<decltype(member_names<V>)>>(
                   [&](auto J) { deduction_map.find(get<J>(member_names<V>))->second[I] = true; });
             }
             else {
-               for_each<std::tuple_size_v<meta_t<V>>>([&](auto J) {
+               for_each<glz::tuple_size_v<meta_t<V>>>([&](auto J) {
                   constexpr auto item = get<J>(meta_v<V>);
                   using T0 = std::decay_t<decltype(get<0>(item))>;
                   auto key_getter = [&] {
@@ -776,7 +776,7 @@ namespace glz
       template <class T, class mptr_t>
       using member_t = decltype(get_member(std::declval<T>(), std::declval<std::decay_t<mptr_t>&>()));
 
-      template <class T, class = std::make_index_sequence<std::tuple_size<meta_t<T>>::value>>
+      template <class T, class = std::make_index_sequence<glz::tuple_size<meta_t<T>>::value>>
       struct members_from_meta;
 
       template <class T, size_t... I>
@@ -863,7 +863,7 @@ namespace glz
    template <detail::glaze_flags_t T>
    consteval auto byte_length() noexcept
    {
-      constexpr auto N = std::tuple_size_v<meta_t<T>>;
+      constexpr auto N = glz::tuple_size_v<meta_t<T>>;
 
       if constexpr (N % 8 == 0) {
          return N / 8;
@@ -882,7 +882,7 @@ namespace glz
          return detail::count_members<T>;
       }
       else {
-         return std::tuple_size_v<meta_t<T>>;
+         return glz::tuple_size_v<meta_t<T>>;
       }
    }();
 }
@@ -1026,10 +1026,10 @@ namespace glz::detail
    {
       using V = std::decay_t<T>;
       using Item = std::decay_t<decltype(glz::get<I>(meta_v<V>))>;
-      using T0 = std::decay_t<std::tuple_element_t<0, Item>>;
+      using T0 = std::decay_t<glz::tuple_element_t<0, Item>>;
       static constexpr bool use_reflection = std::is_member_pointer_v<T0>; // for member object reflection
       static constexpr size_t member_index = use_reflection ? 0 : 1;
-      using mptr_t = std::decay_t<std::tuple_element_t<member_index, Item>>;
+      using mptr_t = std::decay_t<glz::tuple_element_t<member_index, Item>>;
       using type = member_t<V, mptr_t>;
    };
 
@@ -1041,7 +1041,7 @@ namespace glz::detail
       static constexpr bool use_reflection = false; // for member object reflection
       static constexpr size_t member_index = 0;
       using Item = decltype(to_tuple(std::declval<T>()));
-      using mptr_t = std::tuple_element_t<I, Item>;
+      using mptr_t = glz::tuple_element_t<I, Item>;
       using type = member_t<V, mptr_t>;
       using T0 = mptr_t;
    };

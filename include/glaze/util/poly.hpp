@@ -25,7 +25,7 @@ namespace glz
    template <class Spec, size_t... I>
    inline constexpr auto make_mem_fn_wrapper_map_impl(std::index_sequence<I...>)
    {
-      constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
+      constexpr auto N = glz::tuple_size_v<meta_t<Spec>>;
       return detail::normal_map<sv, fn_variant<Spec>, N>({std::make_pair<sv, fn_variant<Spec>>(
          sv(get<0>(get<I>(meta_v<Spec>))), get_argument<get<1>(get<I>(meta_v<Spec>))>())...});
    }
@@ -33,7 +33,7 @@ namespace glz
    template <class Spec>
    inline constexpr auto make_mem_fn_wrapper_map()
    {
-      constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
+      constexpr auto N = glz::tuple_size_v<meta_t<Spec>>;
       return make_mem_fn_wrapper_map_impl<Spec>(std::make_index_sequence<N>{});
    }
 
@@ -73,7 +73,7 @@ namespace glz
       {
          raw_ptr = anything.data();
 
-         static constexpr auto N = std::tuple_size_v<meta_t<Spec>>;
+         static constexpr auto N = glz::tuple_size_v<meta_t<Spec>>;
          static constexpr auto frozen_map = detail::make_map<std::remove_pointer_t<T>, false>();
 
          for_each_poly<N>([&](auto I) {

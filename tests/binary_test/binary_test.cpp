@@ -529,7 +529,7 @@ void test_partial()
 
    static constexpr auto groups = glz::group_json_ptrs<sorted>();
 
-   static constexpr auto N = std::tuple_size_v<decltype(groups)>;
+   static constexpr auto N = glz::tuple_size_v<decltype(groups)>;
    glz::for_each<N>([&](auto I) {
       const auto group = glz::get<I>(groups);
       std::cout << std::get<0>(group) << ": ";

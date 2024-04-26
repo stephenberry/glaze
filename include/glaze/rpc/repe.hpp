@@ -376,10 +376,10 @@ namespace glz::repe
             }
             else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
                using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
-               constexpr auto N = std::tuple_size_v<Tuple>;
+               constexpr auto N = glz::tuple_size_v<Tuple>;
                static_assert(N == 1, "Only one input is allowed for your function");
 
-               using Params = std::tuple_element_t<0, Tuple>;
+               using Params = glz::tuple_element_t<0, Tuple>;
                using Result = std::invoke_result_t<Func, Params>;
 
                methods[full_key] = [this, params = std::decay_t<Params>{}, result = std::decay_t<Result>{},
@@ -446,7 +446,7 @@ namespace glz::repe
                   using F = std::decay_t<Func>;
                   using Ret = typename return_type<F>::type;
                   using Tuple = typename inputs_as_tuple<F>::type;
-                  constexpr auto n_args = std::tuple_size_v<Tuple>;
+                  constexpr auto n_args = glz::tuple_size_v<Tuple>;
                   if constexpr (std::is_void_v<Ret>) {
                      if constexpr (n_args == 0) {
                         methods[full_key] = [&value, &func](repe::state&& state) {
@@ -461,7 +461,7 @@ namespace glz::repe
                         };
                      }
                      else if constexpr (n_args == 1) {
-                        using Input = std::decay_t<std::tuple_element_t<0, Tuple>>;
+                        using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
                         methods[full_key] = [this, &value, &func, input = Input{}](repe::state&& state) mutable {
                            if (!(state.header.action & empty)) {
                               if (read_params<Opts>(input, state, response) == 0) {
@@ -502,7 +502,7 @@ namespace glz::repe
                         };
                      }
                      else if constexpr (n_args == 1) {
-                        using Input = std::decay_t<std::tuple_element_t<0, Tuple>>;
+                        using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
                         methods[full_key] = [this, &value, &func, input = Input{}](repe::state&& state) mutable {
                            if (!(state.header.action & empty)) {
                               if (read_params<Opts>(input, state, response) == 0) {

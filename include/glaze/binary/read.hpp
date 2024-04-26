@@ -104,7 +104,7 @@ namespace glz
          template <auto Opts, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&&, It0&& it, It1&&)
          {
-            constexpr auto N = std::tuple_size_v<meta_t<T>>;
+            constexpr auto N = glz::tuple_size_v<meta_t<T>>;
 
             constexpr auto Length = byte_length<T>();
             uint8_t data[Length];
@@ -839,7 +839,7 @@ namespace glz
                ++it;
 
                using V = std::decay_t<T>;
-               constexpr auto N = std::tuple_size_v<meta_t<V>>;
+               constexpr auto N = glz::tuple_size_v<meta_t<V>>;
                if (int_from_compressed(ctx, it, end) != N) {
                   ctx.error = error_code::syntax_error;
                   return;
@@ -953,7 +953,7 @@ namespace glz
             ++it;
 
             using V = std::decay_t<T>;
-            constexpr auto N = std::tuple_size_v<meta_t<V>>;
+            constexpr auto N = glz::tuple_size_v<meta_t<V>>;
             if (int_from_compressed(ctx, it, end) != N) {
                ctx.error = error_code::syntax_error;
                return;
@@ -979,7 +979,7 @@ namespace glz
             ++it;
 
             using V = std::decay_t<T>;
-            constexpr auto N = std::tuple_size_v<V>;
+            constexpr auto N = glz::tuple_size_v<V>;
             if (int_from_compressed(ctx, it, end) != N) {
                ctx.error = error_code::syntax_error;
                return;

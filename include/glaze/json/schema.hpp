@@ -149,7 +149,7 @@ namespace glz
          auto schema_instance = json_schema_v<T>;
          auto tuple = to_tuple(schema_instance);
          using V = std::decay_t<decltype(tuple)>;
-         constexpr auto N = std::tuple_size_v<V>;
+         constexpr auto N = glz::tuple_size_v<V>;
          if constexpr (N > 0) {
             constexpr auto& names = member_names<json_schema_type<T>>;
             return [&]<size_t... I>(std::index_sequence<I...>) {
@@ -230,7 +230,7 @@ namespace glz
 
             // TODO use oneOf instead of enum to handle doc comments
             using V = std::decay_t<T>;
-            static constexpr auto N = std::tuple_size_v<meta_t<V>>;
+            static constexpr auto N = glz::tuple_size_v<meta_t<V>>;
             // s.enumeration = std::vector<std::string_view>(N);
             // for_each<N>([&](auto I) {
             //    static constexpr auto item = std::get<I>(meta_v<V>);
@@ -244,7 +244,7 @@ namespace glz
                enumeration.constant = get_enum_key<V, I>();
                static constexpr size_t member_index = std::is_enum_v<T0> ? 0 : 1;
                static constexpr size_t comment_index = member_index + 1;
-               constexpr auto Size = std::tuple_size_v<decltype(item)>;
+               constexpr auto Size = glz::tuple_size_v<decltype(item)>;
                if constexpr (Size > comment_index) {
                   enumeration.description = get<comment_index>(item);
                }
@@ -284,7 +284,7 @@ namespace glz
          template <auto Opts>
          static void op(auto& s, auto& defs) noexcept
          {
-            using V = std::decay_t<std::tuple_element_t<1, range_value_t<std::decay_t<T>>>>;
+            using V = std::decay_t<glz::tuple_element_t<1, range_value_t<std::decay_t<T>>>>;
             s.type = {"object"};
             auto& def = defs[name_v<V>];
             if (!def.type) {
@@ -459,7 +459,7 @@ namespace glz
                }
 
                static constexpr size_t comment_index = member_index + 1;
-               static constexpr auto Size = std::tuple_size_v<typename Element::Item>;
+               static constexpr auto Size = glz::tuple_size_v<typename Element::Item>;
 
                if constexpr (Size > comment_index && glaze_object_t<T>) {
                   static constexpr auto item = glz::get<I>(meta_v<V>);

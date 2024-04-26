@@ -15,10 +15,10 @@ namespace glz
    template <class T>
    concept is_std_tuple = is_specialization_v<T, std::tuple>;
 
-   inline constexpr auto size_impl(auto&& t) { return std::tuple_size_v<std::decay_t<decltype(t)>>; }
+   inline constexpr auto size_impl(auto&& t) { return glz::tuple_size_v<std::decay_t<decltype(t)>>; }
 
    template <class T>
-   inline constexpr size_t size_v = std::tuple_size_v<std::decay_t<T>>;
+   inline constexpr size_t size_v = glz::tuple_size_v<std::decay_t<T>>;
 
    namespace detail
    {
@@ -32,7 +32,7 @@ namespace glz
    template <class Tuple, std::size_t... Is>
    auto tuple_split(Tuple&& tuple)
    {
-      static constexpr auto N = std::tuple_size_v<Tuple>;
+      static constexpr auto N = glz::tuple_size_v<Tuple>;
       static constexpr auto is = std::make_index_sequence<N / 2>{};
       return std::make_pair(detail::tuple_split_impl<0>(tuple, is), detail::tuple_split_impl<1>(tuple, is));
    }
@@ -57,16 +57,16 @@ namespace glz
    template <class Tuple>
    constexpr auto filter()
    {
-      constexpr auto n = std::tuple_size_v<Tuple>;
+      constexpr auto n = glz::tuple_size_v<Tuple>;
       std::array<uint64_t, n> indices{};
       size_t i = 0;
       for_each<n>([&](auto I) {
-         using V = std::decay_t<std::tuple_element_t<I, Tuple>>;
+         using V = std::decay_t<glz::tuple_element_t<I, Tuple>>;
          if constexpr (std::is_member_pointer_v<V>) {
             if constexpr (I == 0) {
                indices[i++] = 0;
             }
-            else if constexpr (std::convertible_to<std::tuple_element_t<I - 1, Tuple>, std::string_view>) {
+            else if constexpr (std::convertible_to<glz::tuple_element_t<I - 1, Tuple>, std::string_view>) {
                // If the previous element in the tuple is convertible to a std::string_view, then we treat it as the key
                indices[i++] = I - 1;
             }
@@ -78,7 +78,7 @@ namespace glz
             if constexpr (I == 0) {
                indices[i++] = 0;
             }
-            else if constexpr (std::convertible_to<std::tuple_element_t<I - 1, Tuple>, std::string_view>) {
+            else if constexpr (std::convertible_to<glz::tuple_element_t<I - 1, Tuple>, std::string_view>) {
                // If the previous element in the tuple is convertible to a std::string_view, then we treat it as the key
                indices[i++] = I - 1;
             }
@@ -106,7 +106,7 @@ namespace glz
    template <class Func, class Tuple>
    inline constexpr auto map_tuple(Func&& f, Tuple&& tuple)
    {
-      constexpr auto N = std::tuple_size_v<std::decay_t<Tuple>>;
+      constexpr auto N = glz::tuple_size_v<std::decay_t<Tuple>>;
       return detail::map_tuple(f, tuple, std::make_index_sequence<N>{});
    }
 
@@ -152,7 +152,7 @@ namespace glz
    template <class Tuple>
    constexpr auto make_groups_helper()
    {
-      constexpr auto N = std::tuple_size_v<Tuple>;
+      constexpr auto N = glz::tuple_size_v<Tuple>;
 
       constexpr auto filtered = filter<Tuple>();
       constexpr auto starts = shrink_index_array<filtered.second>(filtered.first);

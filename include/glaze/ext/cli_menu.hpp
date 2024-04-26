@@ -36,7 +36,7 @@ namespace glz
          }
          else if constexpr (readable_array_t<T> || tuple_t<T> || is_std_tuple<T>) {
             if constexpr (tuple_t<T> || is_std_tuple<T>) {
-               std::printf("json array[%d]>", int(std::tuple_size_v<T>));
+               std::printf("json array[%d]>", int(glz::tuple_size_v<T>));
             }
             else {
                std::printf("json array> ");
@@ -107,9 +107,9 @@ namespace glz
                   }
                   else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
                      using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
-                     using Params = std::tuple_element_t<0, Tuple>;
+                     using Params = glz::tuple_element_t<0, Tuple>;
                      using P = std::decay_t<Params>;
-                     constexpr auto N = std::tuple_size_v<Tuple>;
+                     constexpr auto N = glz::tuple_size_v<Tuple>;
                      static_assert(N == 1, "Only one input is allowed for your function");
                      static thread_local std::array<char, 256> input{};
                      if constexpr (is_help<P>) {

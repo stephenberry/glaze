@@ -65,7 +65,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
-            static constexpr auto N = std::tuple_size_v<meta_t<T>>;
+            static constexpr auto N = glz::tuple_size_v<meta_t<T>>;
 
             dump<'['>(b, ix);
 
@@ -749,7 +749,7 @@ namespace glz
                   using V = std::decay_t<decltype(val)>;
 
                   if constexpr (Opts.write_type_info && !tag_v<T>.empty() && glaze_object_t<V>) {
-                     constexpr auto num_members = std::tuple_size_v<meta_t<V>>;
+                     constexpr auto num_members = glz::tuple_size_v<meta_t<V>>;
 
                      // must first write out type
                      if constexpr (Opts.prettify) {
@@ -828,7 +828,7 @@ namespace glz
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using V = std::decay_t<decltype(value.value)>;
-            static constexpr auto N = std::tuple_size_v<V>;
+            static constexpr auto N = glz::tuple_size_v<V>;
 
             dump<'['>(args...);
             if constexpr (N > 0 && Opts.prettify) {
@@ -866,10 +866,10 @@ namespace glz
          {
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<std::decay_t<T>>) {
-                  return std::tuple_size_v<meta_t<std::decay_t<T>>>;
+                  return glz::tuple_size_v<meta_t<std::decay_t<T>>>;
                }
                else {
-                  return std::tuple_size_v<std::decay_t<T>>;
+                  return glz::tuple_size_v<std::decay_t<T>>;
                }
             }();
 
@@ -918,10 +918,10 @@ namespace glz
          {
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<std::decay_t<T>>) {
-                  return std::tuple_size_v<meta_t<std::decay_t<T>>>;
+                  return glz::tuple_size_v<meta_t<std::decay_t<T>>>;
                }
                else {
-                  return std::tuple_size_v<std::decay_t<T>>;
+                  return glz::tuple_size_v<std::decay_t<T>>;
                }
             }();
 
@@ -989,7 +989,7 @@ namespace glz
             }
 
             using V = std::decay_t<decltype(value.value)>;
-            static constexpr auto N = std::tuple_size_v<V> / 2;
+            static constexpr auto N = glz::tuple_size_v<V> / 2;
 
             bool first = true;
             for_each<N>([&](auto I) {
@@ -1015,7 +1015,7 @@ namespace glz
                      write_entry_separator<Opts>(ctx, b, ix);
                   }
 
-                  using Key = typename std::decay_t<std::tuple_element_t<2 * I, V>>;
+                  using Key = typename std::decay_t<glz::tuple_element_t<2 * I, V>>;
 
                   if constexpr (str_t<Key> || char_t<Key>) {
                      const sv key = glz::get<2 * I>(value.value);
@@ -1063,7 +1063,7 @@ namespace glz
             }
 
             using V = std::decay_t<decltype(value.value)>;
-            static constexpr auto N = std::tuple_size_v<V>;
+            static constexpr auto N = glz::tuple_size_v<V>;
 
             for_each<N>([&](auto I) {
                write<json>::op<opening_and_closing_handled<Options>()>(glz::get<I>(value.value), ctx, b, ix);
@@ -1227,7 +1227,7 @@ namespace glz
                   write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
 
                   static constexpr size_t comment_index = member_index + 1;
-                  static constexpr auto S = std::tuple_size_v<typename Element::Item>;
+                  static constexpr auto S = glz::tuple_size_v<typename Element::Item>;
                   if constexpr (Opts.comments && S > comment_index) {
                      static constexpr auto i = glz::get<I>(meta_v<std::decay_t<T>>);
                      if constexpr (std::is_convertible_v<decltype(get<comment_index>(i)), sv>) {
@@ -1306,7 +1306,7 @@ namespace glz
 
             static constexpr auto sorted = sort_json_ptrs(Partial);
             static constexpr auto groups = glz::group_json_ptrs<sorted>();
-            static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
+            static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
 
             static constexpr auto num_members = reflection_count<T>;
 
