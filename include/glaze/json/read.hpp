@@ -1304,11 +1304,13 @@ namespace glz
             const auto current_file = ctx.current_file;
             ctx.current_file = string_file_path;
 
-            const auto ecode = glz::read<opt_true<Opts, &opts::disable_padding>>(value.value, buffer, ctx);
+            // We need to allocate a new buffer here because we could call another includer that uses buffer
+            std::string nested_buffer = buffer;
+            const auto ecode = glz::read<opt_true<Opts, &opts::disable_padding>>(value.value, nested_buffer, ctx);
             if (bool(ctx.error)) [[unlikely]] {
                ctx.error = error_code::includer_error;
                auto& error_msg = error_buffer();
-               error_msg = glz::format_error(ecode, buffer);
+               error_msg = glz::format_error(ecode, nested_buffer);
                ctx.includer_error = error_msg;
                return;
             }
