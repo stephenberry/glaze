@@ -497,109 +497,167 @@ namespace glz
                   ++it;
                }
                else {
-                  // A surrogate pair unicode code point may require 12 characters
-                  // So we need to have this much space available in our read buffer
-                  const auto end12 = end - 12;
-                  auto& temp = string_decode_buffer();
-                  auto* p = temp.data();
-               string_decode:
-                  auto* p_end = temp.data() + temp.size() - 8; // subtract 8 for swar
-                  
-                  while (p < p_end) [[likely]] {
-                     if (it > end12) {
-                        goto finish_decode;
-                     }
-                     std::memcpy(p, it, 8);
-                     uint64_t swar;
-                     std::memcpy(&swar, p, 8);
-                     auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
+                  if constexpr (Opts.is_padded)
+                  {
+                     auto& temp = string_decode_buffer();
+                     auto* p = temp.data();
+                  string_decode_padded:
+                     auto* p_end = temp.data() + temp.size() - 8; // subtract 8 for swar
+                     
+                     while (p < p_end) [[likely]] {
+                        std::memcpy(p, it, 8);
+                        uint64_t swar;
+                        std::memcpy(&swar, p, 8);
+                        auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
 
-                     if (next) {
-                        next = std::countr_zero(next) >> 3;
-                        it += next;
+                        if (next) {
+                           next = std::countr_zero(next) >> 3;
+                           it += next;
+                           if (*it == '"') {
+                              value = { temp.data(), size_t(p + next - temp.data()) };
+                              ++it;
+                              return;
+                           }
+                           if (*it < 32) [[unlikely]] {
+                              ctx.error = error_code::syntax_error;
+                              return;
+                           }
+                           ++it; // skip the escape
+                           if (*it == 'u') {
+                              ++it;
+                              p += next;
+                              if (!handle_unicode_code_point(it, p)) [[unlikely]] {
+                                 ctx.error = error_code::unicode_escape_conversion_failure;
+                                 return;
+                              }
+                           }
+                           else {
+                              const auto escape_char = char_unescape_table[*it];
+                              if (escape_char == 0) [[unlikely]] {
+                                 ctx.error = error_code::invalid_escape;
+                                 return;
+                              }
+                              p += next;
+                              *p = escape_char;
+                              ++p;
+                              ++it;
+                           }
+                        }
+                        else {
+                           it += 8;
+                           p += 8;
+                        }
+                     }
+                     
+                     // we arrived here because we hit the rare case of running out of temp buffer
+                     temp.resize(temp.size() * 2);
+                     goto string_decode_padded;
+                  }
+                  else {
+                     // A surrogate pair unicode code point may require 12 characters
+                     // So we need to have this much space available in our read buffer
+                     const auto end12 = end - 12;
+                     auto& temp = string_decode_buffer();
+                     auto* p = temp.data();
+                  string_decode:
+                     auto* p_end = temp.data() + temp.size() - 8; // subtract 8 for swar
+                     
+                     while (p < p_end) [[likely]] {
+                        if (it > end12) {
+                           goto finish_decode;
+                        }
+                        std::memcpy(p, it, 8);
+                        uint64_t swar;
+                        std::memcpy(&swar, p, 8);
+                        auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
+
+                        if (next) {
+                           next = std::countr_zero(next) >> 3;
+                           it += next;
+                           if (*it == '"') {
+                              value = { temp.data(), size_t(p + next - temp.data()) };
+                              ++it;
+                              return;
+                           }
+                           if (*it < 32) [[unlikely]] {
+                              ctx.error = error_code::syntax_error;
+                              return;
+                           }
+                           ++it; // skip the escape
+                           if (*it == 'u') {
+                              ++it;
+                              p += next;
+                              if (!handle_unicode_code_point(it, p)) [[unlikely]] {
+                                 ctx.error = error_code::unicode_escape_conversion_failure;
+                                 return;
+                              }
+                           }
+                           else {
+                              const auto escape_char = char_unescape_table[*it];
+                              if (escape_char == 0) [[unlikely]] {
+                                 ctx.error = error_code::invalid_escape;
+                                 return;
+                              }
+                              p += next;
+                              *p = escape_char;
+                              ++p;
+                              ++it;
+                           }
+                        }
+                        else {
+                           it += 8;
+                           p += 8;
+                        }
+                     }
+                     
+                     // we arrived here because we hit the rare case of running out of temp buffer
+                     temp.resize(temp.size() * 2);
+                     goto string_decode;
+                     
+                     finish_decode:
+                     // we know we won't run out of space in our temp buffer because we subtract 8
+                     while (it[-1] == '\\') [[unlikely]] {
+                        // if we ended on an escape character then we need to rewind
+                        // because we lost our context
+                        --it;
+                        --p;
+                     }
+                     
+                     while (it < end) [[likely]] {
+                        *p = *it;
                         if (*it == '"') {
-                           value = { temp.data(), size_t(p + next - temp.data()) };
+                           value = { temp.data(), size_t(p - temp.data()) };
                            ++it;
                            return;
                         }
-                        if (*it < 32) [[unlikely]] {
-                           ctx.error = error_code::syntax_error;
-                           return;
-                        }
-                        ++it; // skip the escape
-                        if (*it == 'u') {
-                           ++it;
-                           p += next;
-                           if (!handle_unicode_code_point(it, p)) [[unlikely]] {
-                              ctx.error = error_code::unicode_escape_conversion_failure;
-                              return;
+                        else if (*it == '\\') {
+                           ++it; // skip the escape
+                           if (*it == 'u') {
+                              ++it;
+                              if (!handle_unicode_code_point(it, p, end)) [[unlikely]] {
+                                 ctx.error = error_code::unicode_escape_conversion_failure;
+                                 return;
+                              }
+                           }
+                           else {
+                              const auto escape_char = char_unescape_table[*it];
+                              if (escape_char == 0) [[unlikely]] {
+                                 ctx.error = error_code::invalid_escape;
+                                 return;
+                              }
+                              *p = escape_char;
+                              ++p;
+                              ++it;
                            }
                         }
                         else {
-                           const auto escape_char = char_unescape_table[*it];
-                           if (escape_char == 0) [[unlikely]] {
-                              ctx.error = error_code::invalid_escape;
-                              return;
-                           }
-                           p += next;
-                           *p = escape_char;
+                           ++it;
                            ++p;
-                           ++it;
                         }
                      }
-                     else {
-                        it += 8;
-                        p += 8;
-                     }
+                     
+                     ctx.error = error_code::unexpected_end;
                   }
-                  
-                  // we arrived here because we hit the rare case of running out of temp buffer
-                  temp.resize(temp.size() * 2);
-                  goto string_decode;
-                  
-                  finish_decode:
-                  // we know we won't run out of space in our temp buffer because we subtract 8
-                  while (it[-1] == '\\') [[unlikely]] {
-                     // if we ended on an escape character then we need to rewind
-                     // because we lost our context
-                     --it;
-                     --p;
-                  }
-                  
-                  while (it < end) [[likely]] {
-                     *p = *it;
-                     if (*it == '"') {
-                        value = { temp.data(), size_t(p - temp.data()) };
-                        ++it;
-                        return;
-                     }
-                     else if (*it == '\\') {
-                        ++it; // skip the escape
-                        if (*it == 'u') {
-                           ++it;
-                           if (!handle_unicode_code_point(it, p, end)) [[unlikely]] {
-                              ctx.error = error_code::unicode_escape_conversion_failure;
-                              return;
-                           }
-                        }
-                        else {
-                           const auto escape_char = char_unescape_table[*it];
-                           if (escape_char == 0) [[unlikely]] {
-                              ctx.error = error_code::invalid_escape;
-                              return;
-                           }
-                           *p = escape_char;
-                           ++p;
-                           ++it;
-                        }
-                     }
-                     else {
-                        ++it;
-                        ++p;
-                     }
-                  }
-                  
-                  ctx.error = error_code::unexpected_end;
                }
             }
          }
