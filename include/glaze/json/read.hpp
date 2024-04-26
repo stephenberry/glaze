@@ -39,6 +39,14 @@ namespace glz
          static thread_local std::string buffer(256, ' ');
          return buffer;
       }
+      
+      // The string_buffer() often gets resized, but we want our decode buffer to
+      // only ever grow on resizing. So, we make it its own buffer.
+      GLZ_ALWAYS_INLINE std::string& string_decode_buffer() noexcept
+      {
+         static thread_local std::string buffer(256, ' ');
+         return buffer;
+      }
 
       // We use an error buffer to avoid multiple allocations in the case that errors occur multiple times.
       GLZ_ALWAYS_INLINE std::string& error_buffer() noexcept
@@ -489,45 +497,95 @@ namespace glz
                   ++it;
                }
                else {
-                  auto start = it;
+                  auto& temp = string_decode_buffer();
+                  auto* p = temp.data();
+               string_decode:
+                  auto* p_end = temp.data() + temp.size() - 8; // subtract 8 for swar
+                  
+                  while (p < p_end) [[likely]] {
+                     std::memcpy(p, it, 8);
+                     uint64_t swar;
+                     std::memcpy(&swar, p, 8);
+                     auto next = has_quote(swar) | has_escape(swar);
 
-                  const bool escaped = skip_till_unescaped_quote<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-
-                  if (escaped) {
-                     static constexpr auto Bytes = 8;
-
-                     // The null character may be the first byte of an 8 byte uint64_t SWAR chunk
-                     // so we need to at least add 7 bytes. We add 8 here, because why not.
-                     const auto length = size_t(it - start) + Bytes;
-                     value.resize(length);
-
-                     const char* c;
-                     if constexpr (Opts.is_padded) {
-                        c = parse_string<Bytes>(start, value.data(), ctx);
+                     if (next) {
+                        next = std::countr_zero(next) >> 3;
+                        it += next;
+                        if (*it == '"') {
+                           value = { temp.data(), size_t(p + next - temp.data()) };
+                           ++it;
+                           return;
+                        }
+                        ++it; // skip the escape
+                        if (*it == 'u') {
+                           ++it;
+                           p += next;
+                           if (!handle_unicode_code_point(it, p)) {
+                              ctx.error = error_code::unicode_escape_conversion_failure;
+                              return;
+                           }
+                        }
+                        else {
+                           const auto escape_char = char_unescape_table[*it];
+                           if (escape_char == 0) [[unlikely]] {
+                              ctx.error = error_code::invalid_escape;
+                              return;
+                           }
+                           p[next] = escape_char;
+                           p += next + 1;
+                           ++it;
+                        }
                      }
                      else {
-                        if (length < size_t(end - it)) [[likely]] {
-                           c = parse_string<Bytes>(start, value.data(), ctx);
+                        it += 8;
+                        if (it >= end) [[unlikely]] {
+                           // if we progress beyond the end of the read buffer
+                           // then we need to decode the last few bytes in a special manner
+                           // or we may have invalid syntax and no closing quote
+                           // we want a jump to avoid assembly in the hot path
+                           goto finish_decode;
                         }
-                        else [[unlikely]] {
-                           c = parse_string<1>(start, value.data(), ctx);
-                        }
+                        p += 8;
                      }
-
-                     if (bool(ctx.error)) [[unlikely]] {
-                        it = c;
+                  }
+                  
+                  // we arrived here because we hit the rare case of running out of temp buffer
+                  temp.resize(temp.size() * 2);
+                  goto string_decode;
+                  
+                  finish_decode:
+                  it -= 8; // revert the iterator
+                  while (it < end) [[likely]] {
+                     if (*it == '"') {
+                        value = { temp.data(), size_t(p - temp.data()) };
                         return;
                      }
-
-                     value.resize(size_t(c - value.data()));
+                     else if (*it == '\\') {
+                        ++it;
+                        if (*it == 'u') {
+                           if (!handle_unicode_code_point(it, p)) {
+                              ctx.error = error_code::unicode_escape_conversion_failure;
+                              return;
+                           }
+                        }
+                        else {
+                           const auto escape_char = char_unescape_table[*it];
+                           if (escape_char == 0) [[unlikely]] {
+                              ctx.error = error_code::invalid_escape;
+                              return;
+                           }
+                           *p = escape_char;
+                           ++p;
+                           ++it;
+                        }
+                     }
+                     else {
+                        ++it;
+                        ++p;
+                     }
                   }
-                  else {
-                     value = sv{start, size_t(it - start)};
-                  }
-
-                  ++it;
+                  
+                  ctx.error = error_code::unexpected_end;
                }
             }
          }
