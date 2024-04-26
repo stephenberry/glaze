@@ -109,10 +109,10 @@ namespace glz
 
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<T>) {
-                  return std::tuple_size_v<meta_t<T>>;
+                  return glz::tuple_size_v<meta_t<T>>;
                }
                else {
-                  return std::tuple_size_v<T>;
+                  return glz::tuple_size_v<T>;
                }
             }();
 
@@ -200,10 +200,10 @@ namespace glz
          {
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<std::decay_t<T>>) {
-                  return std::tuple_size_v<meta_t<std::decay_t<T>>>;
+                  return glz::tuple_size_v<meta_t<std::decay_t<T>>>;
                }
                else {
-                  return std::tuple_size_v<std::decay_t<T>>;
+                  return glz::tuple_size_v<std::decay_t<T>>;
                }
             }();
 
@@ -232,10 +232,10 @@ namespace glz
          {
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<std::decay_t<T>>) {
-                  return std::tuple_size_v<meta_t<std::decay_t<T>>>;
+                  return glz::tuple_size_v<meta_t<std::decay_t<T>>>;
                }
                else {
-                  return std::tuple_size_v<std::decay_t<T>>;
+                  return glz::tuple_size_v<std::decay_t<T>>;
                }
             }();
 

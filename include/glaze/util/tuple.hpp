@@ -15,10 +15,10 @@ namespace glz
    template <class T>
    concept is_std_tuple = is_specialization_v<T, std::tuple>;
 
-   inline constexpr auto size_impl(auto&& t) { return std::tuple_size_v<std::decay_t<decltype(t)>>; }
+   inline constexpr auto size_impl(auto&& t) { return glz::tuple_size_v<std::decay_t<decltype(t)>>; }
 
    template <class T>
-   inline constexpr size_t size_v = std::tuple_size_v<std::decay_t<T>>;
+   inline constexpr size_t size_v = glz::tuple_size_v<std::decay_t<T>>;
 
    namespace detail
    {
@@ -32,7 +32,7 @@ namespace glz
    template <class Tuple, std::size_t... Is>
    auto tuple_split(Tuple&& tuple)
    {
-      static constexpr auto N = std::tuple_size_v<Tuple>;
+      static constexpr auto N = glz::tuple_size_v<Tuple>;
       static constexpr auto is = std::make_index_sequence<N / 2>{};
       return std::make_pair(detail::tuple_split_impl<0>(tuple, is), detail::tuple_split_impl<1>(tuple, is));
    }
@@ -106,7 +106,7 @@ namespace glz
    template <class Func, class Tuple>
    inline constexpr auto map_tuple(Func&& f, Tuple&& tuple)
    {
-      constexpr auto N = std::tuple_size_v<std::decay_t<Tuple>>;
+      constexpr auto N = glz::tuple_size_v<std::decay_t<Tuple>>;
       return detail::map_tuple(f, tuple, std::make_index_sequence<N>{});
    }
 

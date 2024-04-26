@@ -98,8 +98,8 @@ namespace glz
                   using ReturnType = typename return_type<ReaderType>::type;
                   if constexpr (std::is_void_v<ReturnType>) {
                      using TupleType = typename inputs_as_tuple<ReaderType>::type;
-                     if constexpr (std::tuple_size_v<TupleType> == 2) {
-                        std::decay_t<std::tuple_element_t<1, TupleType>> input{};
+                     if constexpr (glz::tuple_size_v<TupleType> == 2) {
+                        std::decay_t<glz::tuple_element_t<1, TupleType>> input{};
                         read<json>::op<Opts>(input, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -1279,10 +1279,10 @@ namespace glz
          {
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<T>) {
-                  return std::tuple_size_v<meta_t<T>>;
+                  return glz::tuple_size_v<meta_t<T>>;
                }
                else {
-                  return std::tuple_size_v<T>;
+                  return glz::tuple_size_v<T>;
                }
             }();
 
@@ -1430,7 +1430,7 @@ namespace glz
          auto is_unicode = [](const auto c) { return (static_cast<uint8_t>(c) >> 7) > 0; };
 
          bool may_escape = false;
-         constexpr auto N = std::tuple_size_v<meta_t<T>>;
+         constexpr auto N = glz::tuple_size_v<meta_t<T>>;
          for_each<N>([&](auto I) {
             constexpr auto first = get<0>(get<I>(meta_v<T>));
             using T0 = std::decay_t<decltype(first)>;
@@ -2231,12 +2231,12 @@ namespace glz
       struct variant_type_count<std::variant<Ts...>>
       {
          using V = variant_types<std::variant<Ts...>>;
-         static constexpr auto n_bool = std::tuple_size_v<typename V::bool_types>;
-         static constexpr auto n_number = std::tuple_size_v<typename V::number_types>;
-         static constexpr auto n_string = std::tuple_size_v<typename V::string_types>;
-         static constexpr auto n_object = std::tuple_size_v<typename V::object_types>;
-         static constexpr auto n_array = std::tuple_size_v<typename V::array_types>;
-         static constexpr auto n_null = std::tuple_size_v<typename V::nullable_types>;
+         static constexpr auto n_bool = glz::tuple_size_v<typename V::bool_types>;
+         static constexpr auto n_number = glz::tuple_size_v<typename V::number_types>;
+         static constexpr auto n_string = glz::tuple_size_v<typename V::string_types>;
+         static constexpr auto n_object = glz::tuple_size_v<typename V::object_types>;
+         static constexpr auto n_array = glz::tuple_size_v<typename V::array_types>;
+         static constexpr auto n_null = glz::tuple_size_v<typename V::nullable_types>;
       };
 
       template <class Tuple>
@@ -2245,17 +2245,17 @@ namespace glz
          template <auto Options>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            if constexpr (std::tuple_size_v<Tuple> < 1) {
+            if constexpr (glz::tuple_size_v<Tuple> < 1) {
                ctx.error = error_code::no_matching_variant_type;
             }
             else {
                using const_glaze_types = typename tuple_types<Tuple>::glaze_const_types;
                bool found_match{};
-               for_each<std::tuple_size_v<const_glaze_types>>([&]([[maybe_unused]] auto I) mutable {
+               for_each<glz::tuple_size_v<const_glaze_types>>([&]([[maybe_unused]] auto I) mutable {
                   if (found_match) {
                      return;
                   }
-                  using V = std::tuple_element_t<I, const_glaze_types>;
+                  using V = glz::tuple_element_t<I, const_glaze_types>;
                   // run time substitute to compare to const value
                   std::remove_const_t<std::remove_pointer_t<std::remove_const_t<meta_wrapper_t<V>>>> substitute{};
                   auto copy_it{it};
@@ -2274,8 +2274,8 @@ namespace glz
                }
 
                using non_const_types = typename tuple_types<Tuple>::glaze_non_const_types;
-               if constexpr (std::tuple_size_v < non_const_types >> 0) {
-                  using V = std::tuple_element_t<0, non_const_types>;
+               if constexpr (glz::tuple_size_v < non_const_types >> 0) {
+                  using V = glz::tuple_element_t<0, non_const_types>;
                   if (!std::holds_alternative<V>(value)) value = V{};
                   read<json>::op<ws_handled<Options>()>(std::get<V>(value), ctx, it, end);
                }
@@ -2307,12 +2307,12 @@ namespace glz
                case '{':
                   ++it;
                   using object_types = typename variant_types<T>::object_types;
-                  if constexpr (std::tuple_size_v<object_types> < 1) {
+                  if constexpr (glz::tuple_size_v<object_types> < 1) {
                      ctx.error = error_code::no_matching_variant_type;
                      return;
                   }
-                  else if constexpr (std::tuple_size_v<object_types> == 1) {
-                     using V = std::tuple_element_t<0, object_types>;
+                  else if constexpr (glz::tuple_size_v<object_types> == 1) {
+                     using V = glz::tuple_element_t<0, object_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
                      return;
@@ -2477,11 +2477,11 @@ namespace glz
                }
                case 'n':
                   using nullable_types = typename variant_types<T>::nullable_types;
-                  if constexpr (std::tuple_size_v<nullable_types> < 1) {
+                  if constexpr (glz::tuple_size_v<nullable_types> < 1) {
                      ctx.error = error_code::no_matching_variant_type;
                   }
                   else {
-                     using V = std::tuple_element_t<0, nullable_types>;
+                     using V = glz::tuple_element_t<0, nullable_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      match<"null", Opts>(ctx, it, end);
                   }

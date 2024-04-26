@@ -514,7 +514,7 @@ namespace glz::rpc
       [[nodiscard]] const auto& get_request_map() const
       {
          constexpr auto idx = detail::index_of_name<decltype(Name), Name, Method...>::index;
-         using method_element = std::tuple_element_t<idx, std::tuple<client_method_t<Method>...>>;
+         using method_element = glz::tuple_element_t<idx, std::tuple<client_method_t<Method>...>>;
          using request_map_t = decltype(method_element().pending_requests);
          return detail::get_request_map<request_map_t, Name>(methods);
       }
@@ -523,7 +523,7 @@ namespace glz::rpc
       [[nodiscard]] auto& get_request_map()
       {
          constexpr auto idx = detail::index_of_name<decltype(Name), Name, Method...>::index;
-         using method_element = std::tuple_element_t<idx, std::tuple<client_method_t<Method>...>>;
+         using method_element = glz::tuple_element_t<idx, std::tuple<client_method_t<Method>...>>;
          using request_map_t = decltype(method_element().pending_requests);
          return detail::get_request_map<request_map_t, Name>(methods);
       }

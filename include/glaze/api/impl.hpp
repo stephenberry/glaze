@@ -90,11 +90,11 @@ namespace glz
       }
 
       template <class Arg_tuple, class F, class Parent, size_t... Is>
-         requires std::invocable<F, Parent, ref_t<std::tuple_element_t<Is, Arg_tuple>>...>
+         requires std::invocable<F, Parent, ref_t<glz::tuple_element_t<Is, Arg_tuple>>...>
       decltype(auto) call_args(F&& f, Parent&& parent, [[maybe_unused]] std::span<void*> args,
                                std::index_sequence<Is...>)
       {
-         return f(parent, to_ref<std::tuple_element_t<Is, Arg_tuple>>(args[Is])...);
+         return f(parent, to_ref<glz::tuple_element_t<Is, Arg_tuple>>(args[Is])...);
       }
 
       bool caller(const sv path, const glz::hash_t type_hash, void*& ret, std::span<void*> args) noexcept override
@@ -120,7 +120,7 @@ namespace glz
                            static constexpr auto h = glz::hash<F>();
                            using Ret = typename return_type<V>::type;
                            using Tuple = typename inputs_as_tuple<V>::type;
-                           static constexpr auto N = std::tuple_size_v<Tuple>;
+                           static constexpr auto N = glz::tuple_size_v<Tuple>;
 
                            if (h == type_hash) [[likely]] {
                               if constexpr (std::is_void_v<Ret>) {
@@ -303,7 +303,7 @@ namespace glz
 
          constexpr auto N = sizeof...(Args);
          for_each<N>([&](auto I) {
-            using V = std::tuple_element_t<I, T>;
+            using V = glz::tuple_element_t<I, T>;
             ptr->emplace(name_v<V>, make_api<V>);
          });
 
