@@ -490,16 +490,7 @@ namespace glz
 
                // overwrite portion
 
-               if constexpr (Opts.raw_string) {
-                  auto start = it;
-                  skip_string_view<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-
-                  value = sv{start, size_t(it - start)};
-                  ++it;
-               }
-               else {
+               if constexpr (not Opts.raw_string) {
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
                string_decode_padded:
@@ -556,6 +547,16 @@ namespace glz
                   p = temp.data() + distance; // reset p from new memory
                   goto string_decode_padded;
                }
+               else {
+                  // raw_string
+                  auto start = it;
+                  skip_string_view<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  value = sv{start, size_t(it - start)};
+                  ++it;
+               }
             }
          }
          
@@ -584,16 +585,7 @@ namespace glz
 
                // overwrite portion
 
-               if constexpr (Opts.raw_string) {
-                  auto start = it;
-                  skip_string_view<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
-
-                  value = sv{start, size_t(it - start)};
-                  ++it;
-               }
-               else {
+               if constexpr (not Opts.raw_string) {
                   // A surrogate pair unicode code point may require 12 characters
                   // So we need to have this much space available in our read buffer
                   const auto end12 = end - 12;
@@ -700,6 +692,16 @@ namespace glz
                   }
                   
                   ctx.error = error_code::unexpected_end;
+               }
+               else {
+                  // raw_string
+                  auto start = it;
+                  skip_string_view<Opts>(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]]
+                     return;
+
+                  value = sv{start, size_t(it - start)};
+                  ++it;
                }
             }
          }
