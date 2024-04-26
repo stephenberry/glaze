@@ -36,7 +36,7 @@ namespace glz
       // We don't put this in the context because we don't want to continually reallocate.
       GLZ_ALWAYS_INLINE std::string& string_buffer() noexcept
       {
-         static thread_local std::string buffer(256, ' ');
+         static thread_local std::string buffer(256, '\0');
          return buffer;
       }
       
@@ -44,14 +44,14 @@ namespace glz
       // only ever grow on resizing. So, we make it its own buffer.
       GLZ_ALWAYS_INLINE std::string& string_decode_buffer() noexcept
       {
-         static thread_local std::string buffer(256, ' ');
+         static thread_local std::string buffer(256, '\0');
          return buffer;
       }
 
       // We use an error buffer to avoid multiple allocations in the case that errors occur multiple times.
       GLZ_ALWAYS_INLINE std::string& error_buffer() noexcept
       {
-         static thread_local std::string buffer(256, ' ');
+         static thread_local std::string buffer(256, '\0');
          return buffer;
       }
 
@@ -491,7 +491,7 @@ namespace glz
                if constexpr (not Opts.raw_string) {
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
-                  auto* p_end = temp.data() + temp.size() - padding_bytes; // subtract 8 for swar
+                  auto* p_end = temp.data() + temp.size() - padding_bytes;
                   
                   while (true) {
                      if (p >= p_end) [[unlikely]] {
@@ -499,6 +499,7 @@ namespace glz
                         const auto distance = size_t(p - temp.data());
                         temp.resize(temp.size() * 2);
                         p = temp.data() + distance; // reset p from new memory
+                        p_end = temp.data() + temp.size() - padding_bytes;
                      }
                      std::memcpy(p, it, 8);
                      uint64_t swar;
@@ -509,7 +510,9 @@ namespace glz
                         next = std::countr_zero(next) >> 3;
                         it += next;
                         if (*it == '"') {
-                           value = { temp.data(), size_t(p + next - temp.data()) };
+                           const auto n = size_t((p + next) - temp.data());
+                           value.resize(n);
+                           std::memcpy(value.data(), temp.data(), n);
                            ++it;
                            return;
                         }
@@ -588,7 +591,7 @@ namespace glz
                   const auto end12 = end - 12;
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
-                  auto* p_end = temp.data() + temp.size() - 8; // subtract 8 for swar
+                  auto* p_end = temp.data() + temp.size() - padding_bytes;
                   
                   while (true) {
                      if (p >= p_end) [[unlikely]] {
@@ -596,6 +599,7 @@ namespace glz
                         const auto distance = size_t(p - temp.data());
                         temp.resize(temp.size() * 2);
                         p = temp.data() + distance; // reset p from new memory
+                        p_end = temp.data() + temp.size() - padding_bytes;
                      }
                      if (it > end12) {
                         break;
