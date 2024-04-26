@@ -57,16 +57,16 @@ namespace glz
    template <class Tuple>
    constexpr auto filter()
    {
-      constexpr auto n = std::tuple_size_v<Tuple>;
+      constexpr auto n = glz::tuple_size_v<Tuple>;
       std::array<uint64_t, n> indices{};
       size_t i = 0;
       for_each<n>([&](auto I) {
-         using V = std::decay_t<std::tuple_element_t<I, Tuple>>;
+         using V = std::decay_t<glz::tuple_element_t<I, Tuple>>;
          if constexpr (std::is_member_pointer_v<V>) {
             if constexpr (I == 0) {
                indices[i++] = 0;
             }
-            else if constexpr (std::convertible_to<std::tuple_element_t<I - 1, Tuple>, std::string_view>) {
+            else if constexpr (std::convertible_to<glz::tuple_element_t<I - 1, Tuple>, std::string_view>) {
                // If the previous element in the tuple is convertible to a std::string_view, then we treat it as the key
                indices[i++] = I - 1;
             }
@@ -78,7 +78,7 @@ namespace glz
             if constexpr (I == 0) {
                indices[i++] = 0;
             }
-            else if constexpr (std::convertible_to<std::tuple_element_t<I - 1, Tuple>, std::string_view>) {
+            else if constexpr (std::convertible_to<glz::tuple_element_t<I - 1, Tuple>, std::string_view>) {
                // If the previous element in the tuple is convertible to a std::string_view, then we treat it as the key
                indices[i++] = I - 1;
             }
@@ -152,7 +152,7 @@ namespace glz
    template <class Tuple>
    constexpr auto make_groups_helper()
    {
-      constexpr auto N = std::tuple_size_v<Tuple>;
+      constexpr auto N = glz::tuple_size_v<Tuple>;
 
       constexpr auto filtered = filter<Tuple>();
       constexpr auto starts = shrink_index_array<filtered.second>(filtered.first);
