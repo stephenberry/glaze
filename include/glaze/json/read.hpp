@@ -39,7 +39,7 @@ namespace glz
          static thread_local std::string buffer(256, '\0');
          return buffer;
       }
-      
+
       // The string_buffer() often gets resized, but we want our decode buffer to
       // only ever grow on resizing. So, we make it its own buffer.
       GLZ_ALWAYS_INLINE std::string& string_decode_buffer() noexcept
@@ -464,7 +464,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts, class It, class End>
-            requires (Opts.is_padded)
+            requires(Opts.is_padded)
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
          {
             if constexpr (Opts.number) {
@@ -490,7 +490,7 @@ namespace glz
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
                   auto* p_end = temp.data() + temp.size() - padding_bytes;
-                  
+
                   while (true) {
                      if (p >= p_end) [[unlikely]] {
                         // the rare case of running out of temp buffer
@@ -557,9 +557,9 @@ namespace glz
                }
             }
          }
-         
+
          template <auto Opts, class It, class End>
-         requires (not Opts.is_padded)
+            requires(not Opts.is_padded)
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
          {
             if constexpr (Opts.number) {
@@ -588,7 +588,7 @@ namespace glz
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
                   auto* p_end = temp.data() + temp.size() - padding_bytes;
-                  
+
                   while (true) {
                      if (p >= p_end) [[unlikely]] {
                         // the rare case of running out of temp buffer
@@ -645,7 +645,7 @@ namespace glz
                         p += 8;
                      }
                   }
-                  
+
                   // we know we won't run out of space in our temp buffer because we subtract padding_bytes
                   while (it[-1] == '\\') [[unlikely]] {
                      // if we ended on an escape character then we need to rewind
@@ -653,7 +653,7 @@ namespace glz
                      --it;
                      --p;
                   }
-                  
+
                   while (it < end) [[likely]] {
                      *p = *it;
                      if (*it == '"') {
@@ -688,7 +688,7 @@ namespace glz
                         ++p;
                      }
                   }
-                  
+
                   ctx.error = error_code::unexpected_end;
                }
                else {

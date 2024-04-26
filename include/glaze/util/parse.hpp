@@ -271,7 +271,7 @@ namespace glz::detail
       dst += offset;
       return offset > 0;
    }
-   
+
    template <class Char>
    [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& it, Char*& dst, const Char* end)
    {
@@ -596,10 +596,11 @@ namespace glz::detail
          ++it;
       }*/
    }
-   
+
    // std::countr_zero uses another branch check whether the input is zero,
    // we use this function when we know that x > 0
-   GLZ_ALWAYS_INLINE auto countr_zero(const uint64_t x) noexcept {
+   GLZ_ALWAYS_INLINE auto countr_zero(const uint64_t x) noexcept
+   {
 #ifdef _MSC_VER
       return std::countr_zero(x);
 #else
