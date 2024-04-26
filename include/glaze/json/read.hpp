@@ -463,8 +463,6 @@ namespace glz
       template <string_t T>
       struct from_json<T>
       {
-         // MSVC has a compiler issue where is confused gotos across if constexpr branches
-         // this forces us to have separate functions for whether our input is padded or not
          template <auto Opts, class It, class End>
             requires (Opts.is_padded)
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
@@ -493,10 +491,15 @@ namespace glz
                if constexpr (not Opts.raw_string) {
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
-               string_decode_padded:
                   auto* p_end = temp.data() + temp.size() - padding_bytes; // subtract 8 for swar
                   
-                  while (p < p_end) [[likely]] {
+                  while (true) {
+                     if (p >= p_end) [[unlikely]] {
+                        // we arrived here because we hit the rare case of running out of temp buffer
+                        const auto distance = size_t(p - temp.data());
+                        temp.resize(temp.size() * 2);
+                        p = temp.data() + distance; // reset p from new memory
+                     }
                      std::memcpy(p, it, 8);
                      uint64_t swar;
                      std::memcpy(&swar, p, 8);
@@ -540,12 +543,6 @@ namespace glz
                         p += 8;
                      }
                   }
-                  
-                  // we arrived here because we hit the rare case of running out of temp buffer
-                  const auto distance = size_t(p - temp.data());
-                  temp.resize(temp.size() * 2);
-                  p = temp.data() + distance; // reset p from new memory
-                  goto string_decode_padded;
                }
                else {
                   // raw_string
@@ -591,13 +588,17 @@ namespace glz
                   const auto end12 = end - 12;
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
-                  size_t distance;
-               string_decode:
                   auto* p_end = temp.data() + temp.size() - 8; // subtract 8 for swar
                   
-                  while (p < p_end) [[likely]] {
+                  while (true) {
+                     if (p >= p_end) [[unlikely]] {
+                        // we arrived here because we hit the rare case of running out of temp buffer
+                        const auto distance = size_t(p - temp.data());
+                        temp.resize(temp.size() * 2);
+                        p = temp.data() + distance; // reset p from new memory
+                     }
                      if (it > end12) {
-                        goto finish_decode;
+                        break;
                      }
                      std::memcpy(p, it, 8);
                      uint64_t swar;
@@ -643,13 +644,6 @@ namespace glz
                      }
                   }
                   
-                  // we arrived here because we hit the rare case of running out of temp buffer
-                  distance = size_t(p - temp.data());
-                  temp.resize(temp.size() * 2);
-                  p = temp.data() + distance; // reset p from new memory
-                  goto string_decode;
-                  
-                  finish_decode:
                   // we know we won't run out of space in our temp buffer because we subtract 8
                   while (it[-1] == '\\') [[unlikely]] {
                      // if we ended on an escape character then we need to rewind
