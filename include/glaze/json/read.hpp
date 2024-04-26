@@ -44,7 +44,7 @@ namespace glz
       // only ever grow on resizing. So, we make it its own buffer.
       GLZ_ALWAYS_INLINE std::string& string_decode_buffer() noexcept
       {
-         static thread_local std::string buffer(256, '\0');
+         static thread_local std::string buffer(512, '\0');
          return buffer;
       }
 
