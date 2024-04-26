@@ -497,12 +497,18 @@ namespace glz
                   ++it;
                }
                else {
+                  // A surrogate pair unicode code point may require 12 characters
+                  // So we need to have this much space available in our read buffer
+                  const auto end12 = end - 12;
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
                string_decode:
                   auto* p_end = temp.data() + temp.size() - 8; // subtract 8 for swar
                   
                   while (p < p_end) [[likely]] {
+                     if (it > end12) {
+                        goto finish_decode;
+                     }
                      std::memcpy(p, it, 8);
                      uint64_t swar;
                      std::memcpy(&swar, p, 8);
@@ -520,7 +526,7 @@ namespace glz
                         if (*it == 'u') {
                            ++it;
                            p += next;
-                           if (!handle_unicode_code_point(it, p)) {
+                           if (!handle_unicode_code_point(it, p)) [[unlikely]] {
                               ctx.error = error_code::unicode_escape_conversion_failure;
                               return;
                            }
@@ -531,20 +537,14 @@ namespace glz
                               ctx.error = error_code::invalid_escape;
                               return;
                            }
-                           p[next] = escape_char;
-                           p += next + 1;
+                           p += next;
+                           *p = escape_char;
+                           ++p;
                            ++it;
                         }
                      }
                      else {
                         it += 8;
-                        if (it >= end) [[unlikely]] {
-                           // if we progress beyond the end of the read buffer
-                           // then we need to decode the last few bytes in a special manner
-                           // or we may have invalid syntax and no closing quote
-                           // we want a jump to avoid assembly in the hot path
-                           goto finish_decode;
-                        }
                         p += 8;
                      }
                   }
@@ -554,16 +554,26 @@ namespace glz
                   goto string_decode;
                   
                   finish_decode:
-                  it -= 8; // revert the iterator
+                  // we know we won't run out of space in our temp buffer because we subtract 8
+                  while (it[-1] == '\\') [[unlikely]] {
+                     // if we ended on an escape character then we need to rewind
+                     // because we lost our context
+                     --it;
+                     --p;
+                  }
+                  
                   while (it < end) [[likely]] {
+                     *p = *it;
                      if (*it == '"') {
                         value = { temp.data(), size_t(p - temp.data()) };
+                        ++it;
                         return;
                      }
                      else if (*it == '\\') {
-                        ++it;
+                        ++it; // skip the escape
                         if (*it == 'u') {
-                           if (!handle_unicode_code_point(it, p)) {
+                           ++it;
+                           if (!handle_unicode_code_point(it, p, end)) [[unlikely]] {
                               ctx.error = error_code::unicode_escape_conversion_failure;
                               return;
                            }
@@ -1832,8 +1842,6 @@ namespace glz
                      }
                   }
                   skip_ws<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
                }
             }
          }

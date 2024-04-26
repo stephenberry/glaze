@@ -278,7 +278,7 @@ suite escaping_tests = [] {
       expect(out == R"({"escaped\"key":0,"escaped\"\"key2":"hi","escape_chars":""})");
 
       std::string in = R"({"escaped\"key":5,"escaped\"\"key2":"bye"})";
-      expect(glz::read_json(obj, in) == glz::error_code::none);
+      expect(!glz::read_json(obj, in));
       expect(obj.escaped_key == 5);
       expect(obj.escaped_key2 == "bye");
    };

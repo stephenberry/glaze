@@ -271,6 +271,55 @@ namespace glz::detail
       dst += offset;
       return offset > 0;
    }
+   
+   template <class Char>
+   [[nodiscard]] GLZ_ALWAYS_INLINE bool handle_unicode_code_point(const Char*& it, Char*& dst, const Char* end)
+   {
+      using namespace unicode;
+
+      const uint32_t high = hex_to_u32(it);
+      if (high == 0xFFFFFFFFu) [[unlikely]] {
+         return false;
+      }
+      if (it + 4 >= end) [[unlikely]] {
+         return false;
+      }
+      it += 4; // skip the code point characters
+
+      uint32_t code_point;
+
+      if ((high & generic_surrogate_mask) == generic_surrogate_value) {
+         // surrogate pair code points
+         if ((high & surrogate_mask) != high_surrogate_value) {
+            return false;
+         }
+
+         if (it + 6 >= end) [[unlikely]] {
+            return false;
+         }
+         it += 2;
+         // verify that second unicode escape sequence is present
+         const uint32_t low = hex_to_u32(it);
+         if (low == 0xFFFFFFFFu) [[unlikely]] {
+            return false;
+         }
+         it += 4;
+
+         if ((low & surrogate_mask) != low_surrogate_value) {
+            return false;
+         }
+
+         code_point = (high & surrogate_codepoint_mask) << surrogate_codepoint_bits;
+         code_point |= (low & surrogate_codepoint_mask);
+         code_point += surrogate_codepoint_offset;
+      }
+      else {
+         code_point = high;
+      }
+      const uint32_t offset = code_point_to_utf8(code_point, dst);
+      dst += offset;
+      return offset > 0;
+   }
 
    template <class Char>
    [[nodiscard]] GLZ_ALWAYS_INLINE bool skip_unicode_code_point(const Char*& it, const Char* end)
