@@ -459,6 +459,20 @@ namespace glz
             }
          }
       };
+      
+      // std::countr_zero uses another branch check whether the input is zero,
+      // we use this function when we know that x > 0
+      GLZ_ALWAYS_INLINE auto countr_zero(const uint64_t x) noexcept {
+#ifdef _MSC_VER
+         return std::countr_zero(x);
+#else
+#if __has_builtin(__builtin_ctzll)
+         return __builtin_ctzll(x);
+#else
+         return std::countr_zero(x);
+#endif
+#endif
+      }
 
       template <string_t T>
       struct from_json<T>
@@ -507,7 +521,7 @@ namespace glz
                      auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
 
                      if (next) {
-                        next = std::countr_zero(next) >> 3;
+                        next = countr_zero(next) >> 3;
                         it += next;
                         if (*it == '"') {
                            const auto n = size_t((p + next) - temp.data());
@@ -610,7 +624,7 @@ namespace glz
                      auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
 
                      if (next) {
-                        next = std::countr_zero(next) >> 3;
+                        next = countr_zero(next) >> 3;
                         it += next;
                         if (*it == '"') {
                            const auto n = size_t((p + next) - temp.data());
