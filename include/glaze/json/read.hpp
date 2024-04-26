@@ -495,7 +495,7 @@ namespace glz
                   
                   while (true) {
                      if (p >= p_end) [[unlikely]] {
-                        // we arrived here because we hit the rare case of running out of temp buffer
+                        // the rare case of running out of temp buffer
                         const auto distance = size_t(p - temp.data());
                         temp.resize(temp.size() * 2);
                         p = temp.data() + distance; // reset p from new memory
@@ -595,7 +595,7 @@ namespace glz
                   
                   while (true) {
                      if (p >= p_end) [[unlikely]] {
-                        // we arrived here because we hit the rare case of running out of temp buffer
+                        // the rare case of running out of temp buffer
                         const auto distance = size_t(p - temp.data());
                         temp.resize(temp.size() * 2);
                         p = temp.data() + distance; // reset p from new memory
@@ -660,7 +660,7 @@ namespace glz
                   
                   while (it < end) [[likely]] {
                      *p = *it;
-                     if (*it == '"') {                        
+                     if (*it == '"') {
                         const auto n = size_t(p - temp.data());
                         value.resize(n);
                         std::memcpy(value.data(), temp.data(), n);
