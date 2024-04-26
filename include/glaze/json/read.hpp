@@ -36,14 +36,22 @@ namespace glz
       // We don't put this in the context because we don't want to continually reallocate.
       GLZ_ALWAYS_INLINE std::string& string_buffer() noexcept
       {
-         static thread_local std::string buffer(256, ' ');
+         static thread_local std::string buffer(256, '\0');
+         return buffer;
+      }
+      
+      // The string_buffer() often gets resized, but we want our decode buffer to
+      // only ever grow on resizing. So, we make it its own buffer.
+      GLZ_ALWAYS_INLINE std::string& string_decode_buffer() noexcept
+      {
+         static thread_local std::string buffer(512, '\0');
          return buffer;
       }
 
       // We use an error buffer to avoid multiple allocations in the case that errors occur multiple times.
       GLZ_ALWAYS_INLINE std::string& error_buffer() noexcept
       {
-         static thread_local std::string buffer(256, ' ');
+         static thread_local std::string buffer(256, '\0');
          return buffer;
       }
 
@@ -456,6 +464,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts, class It, class End>
+            requires (Opts.is_padded)
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
          {
             if constexpr (Opts.number) {
@@ -477,9 +486,67 @@ namespace glz
                   GLZ_MATCH_QUOTE;
                }
 
-               // overwrite portion
+               if constexpr (not Opts.raw_string) {
+                  auto& temp = string_decode_buffer();
+                  auto* p = temp.data();
+                  auto* p_end = temp.data() + temp.size() - padding_bytes;
+                  
+                  while (true) {
+                     if (p >= p_end) [[unlikely]] {
+                        // the rare case of running out of temp buffer
+                        const auto distance = size_t(p - temp.data());
+                        temp.resize(temp.size() * 2);
+                        p = temp.data() + distance; // reset p from new memory
+                        p_end = temp.data() + temp.size() - padding_bytes;
+                     }
+                     std::memcpy(p, it, 8);
+                     uint64_t swar;
+                     std::memcpy(&swar, p, 8);
+                     auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
 
-               if constexpr (Opts.raw_string) {
+                     if (next) {
+                        next = countr_zero(next) >> 3;
+                        it += next;
+                        if (*it == '"') {
+                           const auto n = size_t((p + next) - temp.data());
+                           value.resize(n);
+                           std::memcpy(value.data(), temp.data(), n);
+                           ++it;
+                           return;
+                        }
+                        if (*it < 32) [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                        ++it; // skip the escape
+                        if (*it == 'u') {
+                           ++it;
+                           p += next;
+                           if (!handle_unicode_code_point(it, p)) [[unlikely]] {
+                              ctx.error = error_code::unicode_escape_conversion_failure;
+                              return;
+                           }
+                        }
+                        else {
+                           const auto escape_char = char_unescape_table[*it];
+                           if (escape_char == 0) [[unlikely]] {
+                              ctx.error = error_code::invalid_escape;
+                              return;
+                           }
+                           p += next;
+                           *p = escape_char;
+                           ++p;
+                           ++it;
+                        }
+                     }
+                     else {
+                        it += 8;
+                        p += 8;
+                     }
+                  }
+               }
+               else {
+                  // raw_string
                   auto start = it;
                   skip_string_view<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
@@ -488,45 +555,150 @@ namespace glz
                   value = sv{start, size_t(it - start)};
                   ++it;
                }
-               else {
-                  auto start = it;
+            }
+         }
+         
+         template <auto Opts, class It, class End>
+         requires (not Opts.is_padded)
+         GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
+         {
+            if constexpr (Opts.number) {
+               auto start = it;
+               skip_number<Opts>(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
+               value.append(start, size_t(it - start));
+            }
+            else {
+               if constexpr (!Opts.opening_handled) {
+                  if constexpr (!Opts.ws_handled) {
+                     skip_ws<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]]
+                        return;
+                  }
 
-                  const bool escaped = skip_till_unescaped_quote<Opts>(ctx, it, end);
+                  GLZ_MATCH_QUOTE;
+               }
+
+               if constexpr (not Opts.raw_string) {
+                  // A surrogate pair unicode code point may require 12 characters
+                  // So we need to have this much space available in our read buffer
+                  const auto end12 = end - 12;
+                  auto& temp = string_decode_buffer();
+                  auto* p = temp.data();
+                  auto* p_end = temp.data() + temp.size() - padding_bytes;
+                  
+                  while (true) {
+                     if (p >= p_end) [[unlikely]] {
+                        // the rare case of running out of temp buffer
+                        const auto distance = size_t(p - temp.data());
+                        temp.resize(temp.size() * 2);
+                        p = temp.data() + distance; // reset p from new memory
+                        p_end = temp.data() + temp.size() - padding_bytes;
+                     }
+                     if (it > end12) {
+                        break;
+                     }
+                     std::memcpy(p, it, 8);
+                     uint64_t swar;
+                     std::memcpy(&swar, p, 8);
+                     auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
+
+                     if (next) {
+                        next = countr_zero(next) >> 3;
+                        it += next;
+                        if (*it == '"') {
+                           const auto n = size_t((p + next) - temp.data());
+                           value.resize(n);
+                           std::memcpy(value.data(), temp.data(), n);
+                           ++it;
+                           return;
+                        }
+                        if (*it < 32) [[unlikely]] {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                        ++it; // skip the escape
+                        if (*it == 'u') {
+                           ++it;
+                           p += next;
+                           if (!handle_unicode_code_point(it, p)) [[unlikely]] {
+                              ctx.error = error_code::unicode_escape_conversion_failure;
+                              return;
+                           }
+                        }
+                        else {
+                           const auto escape_char = char_unescape_table[*it];
+                           if (escape_char == 0) [[unlikely]] {
+                              ctx.error = error_code::invalid_escape;
+                              return;
+                           }
+                           p += next;
+                           *p = escape_char;
+                           ++p;
+                           ++it;
+                        }
+                     }
+                     else {
+                        it += 8;
+                        p += 8;
+                     }
+                  }
+                  
+                  // we know we won't run out of space in our temp buffer because we subtract padding_bytes
+                  while (it[-1] == '\\') [[unlikely]] {
+                     // if we ended on an escape character then we need to rewind
+                     // because we lost our context
+                     --it;
+                     --p;
+                  }
+                  
+                  while (it < end) [[likely]] {
+                     *p = *it;
+                     if (*it == '"') {
+                        const auto n = size_t(p - temp.data());
+                        value.resize(n);
+                        std::memcpy(value.data(), temp.data(), n);
+                        ++it;
+                        return;
+                     }
+                     else if (*it == '\\') {
+                        ++it; // skip the escape
+                        if (*it == 'u') {
+                           ++it;
+                           if (!handle_unicode_code_point(it, p, end)) [[unlikely]] {
+                              ctx.error = error_code::unicode_escape_conversion_failure;
+                              return;
+                           }
+                        }
+                        else {
+                           const auto escape_char = char_unescape_table[*it];
+                           if (escape_char == 0) [[unlikely]] {
+                              ctx.error = error_code::invalid_escape;
+                              return;
+                           }
+                           *p = escape_char;
+                           ++p;
+                           ++it;
+                        }
+                     }
+                     else {
+                        ++it;
+                        ++p;
+                     }
+                  }
+                  
+                  ctx.error = error_code::unexpected_end;
+               }
+               else {
+                  // raw_string
+                  auto start = it;
+                  skip_string_view<Opts>(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  if (escaped) {
-                     static constexpr auto Bytes = 8;
-
-                     // The null character may be the first byte of an 8 byte uint64_t SWAR chunk
-                     // so we need to at least add 7 bytes. We add 8 here, because why not.
-                     const auto length = size_t(it - start) + Bytes;
-                     value.resize(length);
-
-                     const char* c;
-                     if constexpr (Opts.is_padded) {
-                        c = parse_string<Bytes>(start, value.data(), ctx);
-                     }
-                     else {
-                        if (length < size_t(end - it)) [[likely]] {
-                           c = parse_string<Bytes>(start, value.data(), ctx);
-                        }
-                        else [[unlikely]] {
-                           c = parse_string<1>(start, value.data(), ctx);
-                        }
-                     }
-
-                     if (bool(ctx.error)) [[unlikely]] {
-                        it = c;
-                        return;
-                     }
-
-                     value.resize(size_t(c - value.data()));
-                  }
-                  else {
-                     value = sv{start, size_t(it - start)};
-                  }
-
+                  value = sv{start, size_t(it - start)};
                   ++it;
                }
             }
@@ -1236,11 +1408,13 @@ namespace glz
             const auto current_file = ctx.current_file;
             ctx.current_file = string_file_path;
 
-            const auto ecode = glz::read<opt_true<Opts, &opts::disable_padding>>(value.value, buffer, ctx);
+            // We need to allocate a new buffer here because we could call another includer that uses buffer
+            std::string nested_buffer = buffer;
+            const auto ecode = glz::read<opt_true<Opts, &opts::disable_padding>>(value.value, nested_buffer, ctx);
             if (bool(ctx.error)) [[unlikely]] {
                ctx.error = error_code::includer_error;
                auto& error_msg = error_buffer();
-               error_msg = glz::format_error(ecode, buffer);
+               error_msg = glz::format_error(ecode, nested_buffer);
                ctx.includer_error = error_msg;
                return;
             }
@@ -1774,8 +1948,6 @@ namespace glz
                      }
                   }
                   skip_ws<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
                }
             }
          }

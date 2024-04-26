@@ -278,7 +278,7 @@ suite escaping_tests = [] {
       expect(out == R"({"escaped\"key":0,"escaped\"\"key2":"hi","escape_chars":""})");
 
       std::string in = R"({"escaped\"key":5,"escaped\"\"key2":"bye"})";
-      expect(glz::read_json(obj, in) == glz::error_code::none);
+      expect(!glz::read_json(obj, in));
       expect(obj.escaped_key == 5);
       expect(obj.escaped_key2 == "bye");
    };
@@ -2435,12 +2435,12 @@ suite error_outputs = [] {
    };
 
    "invalid character with tabs in json"_test = [] {
-      std::string s = R"({"Hello":	" 	World"x, "color": 	"red"})";
+      std::string s = R"({"Hello":	"World"x, "color": 	"red"})";
       std::map<std::string, std::string> m;
       auto pe = glz::read_json(m, s);
       expect(pe != glz::error_code::none);
       auto err = glz::format_error(pe, s);
-      expect(err == "1:20: expected_comma\n   {\"Hello\": \"  World\"x, \"color\":  \"red\"}\n                      ^")
+      expect(err == "1:18: expected_comma\n   {\"Hello\": \"World\"x, \"color\":  \"red\"}\n                    ^")
          << err;
    };
 
