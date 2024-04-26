@@ -500,8 +500,8 @@ namespace glz
                   if constexpr (Opts.is_padded)
                   {
                      auto& temp = string_decode_buffer();
-                  string_decode_padded:
                      auto* p = temp.data();
+                  string_decode_padded:
                      auto* p_end = temp.data() + temp.size() - padding_bytes; // subtract 8 for swar
                      
                      while (p < p_end) [[likely]] {
@@ -550,7 +550,9 @@ namespace glz
                      }
                      
                      // we arrived here because we hit the rare case of running out of temp buffer
+                     const auto distance = size_t(p - temp.data());
                      temp.resize(temp.size() * 2);
+                     p = temp.data() + distance; // reset p from new memory
                      goto string_decode_padded;
                   }
                   else {
@@ -558,8 +560,9 @@ namespace glz
                      // So we need to have this much space available in our read buffer
                      const auto end12 = end - 12;
                      auto& temp = string_decode_buffer();
-                  string_decode:
                      auto* p = temp.data();
+                     size_t distance;
+                  string_decode:
                      auto* p_end = temp.data() + temp.size() - 8; // subtract 8 for swar
                      
                      while (p < p_end) [[likely]] {
@@ -611,7 +614,9 @@ namespace glz
                      }
                      
                      // we arrived here because we hit the rare case of running out of temp buffer
+                     distance = size_t(p - temp.data());
                      temp.resize(temp.size() * 2);
+                     p = temp.data() + distance; // reset p from new memory
                      goto string_decode;
                      
                      finish_decode:
