@@ -459,20 +459,6 @@ namespace glz
             }
          }
       };
-      
-      // std::countr_zero uses another branch check whether the input is zero,
-      // we use this function when we know that x > 0
-      GLZ_ALWAYS_INLINE auto countr_zero(const uint64_t x) noexcept {
-#ifdef _MSC_VER
-         return std::countr_zero(x);
-#else
-#if __has_builtin(__builtin_ctzll)
-         return __builtin_ctzll(x);
-#else
-         return std::countr_zero(x);
-#endif
-#endif
-      }
 
       template <string_t T>
       struct from_json<T>
@@ -499,8 +485,6 @@ namespace glz
 
                   GLZ_MATCH_QUOTE;
                }
-
-               // overwrite portion
 
                if constexpr (not Opts.raw_string) {
                   auto& temp = string_decode_buffer();
@@ -597,8 +581,6 @@ namespace glz
                   GLZ_MATCH_QUOTE;
                }
 
-               // overwrite portion
-
                if constexpr (not Opts.raw_string) {
                   // A surrogate pair unicode code point may require 12 characters
                   // So we need to have this much space available in our read buffer
@@ -664,7 +646,7 @@ namespace glz
                      }
                   }
                   
-                  // we know we won't run out of space in our temp buffer because we subtract 8
+                  // we know we won't run out of space in our temp buffer because we subtract padding_bytes
                   while (it[-1] == '\\') [[unlikely]] {
                      // if we ended on an escape character then we need to rewind
                      // because we lost our context
