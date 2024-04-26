@@ -613,7 +613,9 @@ namespace glz
                         next = std::countr_zero(next) >> 3;
                         it += next;
                         if (*it == '"') {
-                           value = { temp.data(), size_t(p + next - temp.data()) };
+                           const auto n = size_t((p + next) - temp.data());
+                           value.resize(n);
+                           std::memcpy(value.data(), temp.data(), n);
                            ++it;
                            return;
                         }
@@ -658,8 +660,10 @@ namespace glz
                   
                   while (it < end) [[likely]] {
                      *p = *it;
-                     if (*it == '"') {
-                        value = { temp.data(), size_t(p - temp.data()) };
+                     if (*it == '"') {                        
+                        const auto n = size_t(p - temp.data());
+                        value.resize(n);
+                        std::memcpy(value.data(), temp.data(), n);
                         ++it;
                         return;
                      }
