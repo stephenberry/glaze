@@ -41,7 +41,7 @@ namespace glz
 
          skip_whitespace();
 
-         while (it < end) {
+         while (true) {
             switch (json_types[size_t(*it)]) {
             case String: {
                const auto value = read_json_string<Opts>(it, end);
