@@ -572,7 +572,16 @@ To minify JSON:
 
 ```c++
 glz::write<glz::opts{.prettify = true}>(obj, buffer);
+// or
 std::string minified = glz::minify_json(buffer);
+```
+
+## Minified JSON Reading
+
+If you wish require minified JSON or know your input will always be minified, then you can gain a little more performance by using the compile time option `.minified = true`.
+
+```c++
+auto ec = glz::read<glz::opts{.minified = true}>(obj, buffer);
 ```
 
 ## Boolean Flags
