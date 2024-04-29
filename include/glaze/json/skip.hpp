@@ -30,23 +30,16 @@ namespace glz::detail
             skip_string<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws_no_pre_check<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_SKIP_WS;
             GLZ_MATCH_COLON;
-            skip_ws_no_pre_check<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_SKIP_WS;
             skip_value<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws_no_pre_check<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_SKIP_WS;
             if (*it != ',') break;
-            skip_ws_no_pre_check<Opts>(ctx, ++it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            ++it;
+            GLZ_SKIP_WS;
          }
          match<'}'>(ctx, it);
       }
@@ -71,13 +64,10 @@ namespace glz::detail
             skip_value<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws_no_pre_check<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_SKIP_WS;
             if (*it != ',') break;
-            skip_ws_no_pre_check<Opts>(ctx, ++it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            ++it;
+            GLZ_SKIP_WS;
          }
          match<']'>(ctx, it);
       }

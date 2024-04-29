@@ -630,10 +630,7 @@ namespace glz
                            return;
                         }
                         GLZ_MATCH_COLON;
-                        skip_ws_no_pre_check<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]] {
-                           return;
-                        }
+                        GLZ_SKIP_WS;
 
                         if constexpr (I == (N - 1)) {
                            ret = parse_value<Opts>(ctx, it, end);
@@ -670,10 +667,7 @@ namespace glz
                         ++it;
                      });
 
-                     skip_ws_no_pre_check<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]] {
-                        return;
-                     }
+                     GLZ_SKIP_WS;
 
                      if constexpr (I == (N - 1)) {
                         ret = parse_value<Opts>(ctx, it, end);
@@ -694,10 +688,7 @@ namespace glz
                }
 
                while (it < end) {
-                  skip_ws_no_pre_check<Opts>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
+                  GLZ_SKIP_WS;
                   const auto k = parse_key(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
                      return;
@@ -709,10 +700,7 @@ namespace glz
                         return;
                      }
                      GLZ_MATCH_COLON;
-                     skip_ws_no_pre_check<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]] {
-                        return;
-                     }
+                     GLZ_SKIP_WS;
 
                      if constexpr (I == (N - 1)) {
                         ret = parse_value<Opts>(ctx, it, end);
