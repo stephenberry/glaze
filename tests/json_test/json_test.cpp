@@ -4561,7 +4561,7 @@ break"])";
 ,"rosebud"])";
       auto ec_pass1 = glz::read<glz::opts{.force_conformance = true}>(json, pass1);
       expect(ec_pass1 == glz::error_code::none) << glz::format_error(ec_pass1, pass1);
-      expect(glz::validate_json(pass1) == glz::error_code::none);
+      expect(!glz::validate_json(pass1));
 
       std::string pass2 = R"([[[[[[[[[[[[[[[[[[["Not too deep"]]]]]]]]]]]]]]]]]]])";
       auto ec_pass2 = glz::read<glz::opts{.force_conformance = true}>(json, pass2);
@@ -4576,8 +4576,8 @@ break"])";
 }
 )";
       auto ec_pass3 = glz::read<glz::opts{.force_conformance = true}>(json, pass3);
-      expect(ec_pass3 == glz::error_code::none);
-      expect(glz::validate_json(pass3) == glz::error_code::none);
+      expect(!ec_pass3);
+      expect(!glz::validate_json(pass3));
    };
 };
 

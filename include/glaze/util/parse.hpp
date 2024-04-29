@@ -506,6 +506,28 @@ namespace glz::detail
    {
       return (chunk & repeat_byte8(0b11110000u));
    }
+   
+   // Macro behaves like skip_ws_no_pre_check, since we want to remove skip_ws in the long run
+#define GLZ_SKIP_WS if constexpr (!Opts.minified) { \
+   if constexpr (!Opts.force_conformance) { \
+      while (whitespace_comment_table[*it]) { \
+         if (*it == '/') [[unlikely]] { \
+            skip_comment(ctx, it, end); \
+            if (bool(ctx.error)) [[unlikely]] { \
+               return; \
+            } \
+         } \
+         else [[likely]] { \
+            ++it; \
+         } \
+      } \
+   } \
+   else { \
+      while (whitespace_table[*it]) { \
+         ++it; \
+      } \
+   } \
+}
 
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws_no_pre_check(is_context auto&& ctx, auto&& it, auto&& end) noexcept

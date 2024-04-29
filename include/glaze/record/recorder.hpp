@@ -120,18 +120,18 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
+            
+            constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
             if constexpr (!Options.opening_handled) {
-               skip_ws_no_pre_check<Options>(ctx, it, end);
+               GLZ_SKIP_WS;
                match<'{'>(ctx, it);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
             }
 
-            skip_ws_no_pre_check<Options>(ctx, it, end);
-
-            constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+            GLZ_SKIP_WS;
 
             // we read into available containers, we do not intialize here
             const size_t n = value.data.size();
@@ -152,14 +152,14 @@ namespace glz
 
                skip_ws<Opts>(ctx, it, end);
                GLZ_MATCH_COLON;
-               skip_ws_no_pre_check<Opts>(ctx, it, end);
+               GLZ_SKIP_WS;
 
                std::visit([&](auto&& deq) { read<json>::op<Opts>(deq, ctx, it, end); }, v.first);
 
                if (i < n - 1) {
                   skip_ws<Opts>(ctx, it, end);
                   GLZ_MATCH_COMMA;
-                  skip_ws_no_pre_check<Opts>(ctx, it, end);
+                  GLZ_SKIP_WS;
                }
             }
 
