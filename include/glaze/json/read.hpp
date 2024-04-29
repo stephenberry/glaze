@@ -1225,7 +1225,7 @@ namespace glz
                read<json>::op<Opts>(x, ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               
+
                GLZ_SKIP_WS;
                if (i < n - 1) {
                   GLZ_MATCH_COMMA;

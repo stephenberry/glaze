@@ -43,7 +43,7 @@ namespace glz
       bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
-      
+
       bool error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
 
@@ -57,7 +57,7 @@ namespace glz
       bool raw = false; // write out string like values without quotes
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
       bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies to reflectable and
-      
+
       // glaze_object_t concepts
       bool partial_read_nested = false; // Rewind forward the partially readed struct to the end of the struct
       bool concatenate = true; // Concatenates ranges of std::pair into single objects when writing
