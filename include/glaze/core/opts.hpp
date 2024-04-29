@@ -34,6 +34,7 @@ namespace glz
       bool skip_null_members = true; // Skip writing out params in an object if the value is null
       bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
       bool prettify = false; // Write out prettified JSON
+      bool minified = false; // Require minified input for JSON, which results in faster read performance
       char indentation_char = ' '; // Prettified JSON indentation char
       uint8_t indentation_width = 3; // Prettified JSON indentation size
       bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element

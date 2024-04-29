@@ -1102,6 +1102,7 @@ suite user_types = [] {
       const auto minified = glz::minify_jsonc(thing_pretty);
       expect(json == minified);
       expect(!glz::read_json(obj, minified));
+      expect(!glz::read<glz::opts{.minified = true}>(obj, minified));
    };
 
    "complex user obect roundtrip"_test = [] {
@@ -1312,7 +1313,16 @@ suite minified_custom_object = [] {
       std::string buffer = glz::write_json(obj);
       std::string prettified = glz::prettify_json(buffer);
       std::string minified = glz::minify_json(prettified);
-      expect(glz::read_json(obj, minified) == glz::error_code::none);
+      expect(!glz::read_json(obj, minified));
+      expect(buffer == minified);
+   };
+   
+   "minified compile time option"_test = [] {
+      Thing obj{};
+      std::string buffer = glz::write_json(obj);
+      std::string prettified = glz::prettify_json(buffer);
+      std::string minified = glz::minify_json(prettified);
+      expect(!glz::read<glz::opts{.minified = true}>(obj, minified));
       expect(buffer == minified);
    };
 };
