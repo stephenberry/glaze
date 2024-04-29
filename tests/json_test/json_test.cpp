@@ -1318,7 +1318,7 @@ suite minified_custom_object = [] {
       expect(!glz::read_json(obj, minified));
       expect(buffer == minified);
    };
-   
+
    "minified compile time option"_test = [] {
       Thing obj{};
       std::string buffer = glz::write_json(obj);
