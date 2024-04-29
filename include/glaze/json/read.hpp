@@ -497,9 +497,7 @@ namespace glz
                         next = countr_zero(next) >> 3;
                         it += next;
                         if (*it == '"') {
-                           const auto n = size_t((p + next) - temp.data());
-                           value.resize(n);
-                           std::memcpy(value.data(), temp.data(), n);
+                           value.assign(temp.data(), size_t((p + next) - temp.data()));
                            ++it;
                            return;
                         }
@@ -541,7 +539,7 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  value = sv{start, size_t(it - start)};
+                  value.assign(start, size_t(it - start));
                   ++it;
                }
             }
@@ -596,9 +594,7 @@ namespace glz
                         next = countr_zero(next) >> 3;
                         it += next;
                         if (*it == '"') {
-                           const auto n = size_t((p + next) - temp.data());
-                           value.resize(n);
-                           std::memcpy(value.data(), temp.data(), n);
+                           value.assign(temp.data(), size_t((p + next) - temp.data()));
                            ++it;
                            return;
                         }
@@ -644,9 +640,7 @@ namespace glz
                   while (it < end) [[likely]] {
                      *p = *it;
                      if (*it == '"') {
-                        const auto n = size_t(p - temp.data());
-                        value.resize(n);
-                        std::memcpy(value.data(), temp.data(), n);
+                        value.assign(temp.data(), size_t(p - temp.data()));
                         ++it;
                         return;
                      }
@@ -685,7 +679,7 @@ namespace glz
                   if (bool(ctx.error)) [[unlikely]]
                      return;
 
-                  value = sv{start, size_t(it - start)};
+                  value.assign(start, size_t(it - start));
                   ++it;
                }
             }
