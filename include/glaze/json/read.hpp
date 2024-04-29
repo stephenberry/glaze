@@ -1707,7 +1707,7 @@ namespace glz
                   else {
                      GLZ_MATCH_COMMA;
 
-                     if constexpr (num_members > 1 || !Opts.error_on_unknown_keys) {
+                     if constexpr ((not Opts.minified) && (num_members > 1 || !Opts.error_on_unknown_keys)) {
                         if (ws_size && ws_size < size_t(end - it)) {
                            skip_matching_ws(ws_start, it, ws_size);
                         }
