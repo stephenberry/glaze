@@ -510,22 +510,25 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws_no_pre_check(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if constexpr (!Opts.force_conformance) {
-         while (whitespace_comment_table[*it]) {
-            if (*it == '/') [[unlikely]] {
-               skip_comment(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
+      if constexpr (!Opts.minified)
+      {
+         if constexpr (!Opts.force_conformance) {
+            while (whitespace_comment_table[*it]) {
+               if (*it == '/') [[unlikely]] {
+                  skip_comment(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
+               }
+               else [[likely]] {
+                  ++it;
                }
             }
-            else [[likely]] {
+         }
+         else {
+            while (whitespace_table[*it]) {
                ++it;
             }
-         }
-      }
-      else {
-         while (whitespace_table[*it]) {
-            ++it;
          }
       }
    }
@@ -533,9 +536,12 @@ namespace glz::detail
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      if (bool(ctx.error)) [[unlikely]]
-         return;
-      skip_ws_no_pre_check<Opts>(ctx, it, end);
+      if constexpr (!Opts.minified)
+      {
+         if (bool(ctx.error)) [[unlikely]]
+            return;
+         skip_ws_no_pre_check<Opts>(ctx, it, end);
+      }
    }
 
    GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
