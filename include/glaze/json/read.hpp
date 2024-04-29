@@ -992,8 +992,10 @@ namespace glz
                if (*it == ',') [[likely]] {
                   ++it;
 
-                  if (ws_size && ws_size < size_t(end - it)) {
-                     skip_matching_ws(ws_start, it, ws_size);
+                  if constexpr (!Opts.minified) {
+                     if (ws_size && ws_size < size_t(end - it)) {
+                        skip_matching_ws(ws_start, it, ws_size);
+                     }
                   }
 
                   GLZ_SKIP_WS;
@@ -1039,8 +1041,10 @@ namespace glz
                      if (*it == ',') [[likely]] {
                         ++it;
 
-                        if (ws_size && ws_size < size_t(end - it)) {
-                           skip_matching_ws(ws_start, it, ws_size);
+                        if constexpr (!Opts.minified) {
+                           if (ws_size && ws_size < size_t(end - it)) {
+                              skip_matching_ws(ws_start, it, ws_size);
+                           }
                         }
 
                         GLZ_SKIP_WS;
@@ -1076,8 +1080,10 @@ namespace glz
                      if (*it == ',') [[likely]] {
                         ++it;
 
-                        if (ws_size && ws_size < size_t(end - it)) {
-                           skip_matching_ws(ws_start, it, ws_size);
+                        if constexpr (!Opts.minified) {
+                           if (ws_size && ws_size < size_t(end - it)) {
+                              skip_matching_ws(ws_start, it, ws_size);
+                           }
                         }
 
                         GLZ_SKIP_WS;
@@ -1128,8 +1134,10 @@ namespace glz
                      if (*it == ',') [[likely]] {
                         ++it;
 
-                        if (ws_size && ws_size < size_t(end - it)) {
-                           skip_matching_ws(ws_start, it, ws_size);
+                        if constexpr (!Opts.minified) {
+                           if (ws_size && ws_size < size_t(end - it)) {
+                              skip_matching_ws(ws_start, it, ws_size);
+                           }
                         }
 
                         GLZ_SKIP_WS;
