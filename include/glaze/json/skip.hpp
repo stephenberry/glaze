@@ -15,9 +15,7 @@ namespace glz::detail
       }
       else {
          ++it;
-         skip_ws<Opts>(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
+         GLZ_SKIP_WS;
          if (*it == '}') {
             ++it;
             return;
@@ -53,9 +51,7 @@ namespace glz::detail
       }
       else {
          ++it;
-         skip_ws<Opts>(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
+         GLZ_SKIP_WS;
          if (*it == ']') {
             ++it;
             return;
@@ -78,9 +74,7 @@ namespace glz::detail
    {
       if constexpr (!Opts.force_conformance) {
          if constexpr (!Opts.ws_handled) {
-            skip_ws<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_SKIP_WS;
          }
          while (true) {
             switch (*it) {
@@ -122,9 +116,7 @@ namespace glz::detail
       }
       else {
          if constexpr (!Opts.ws_handled) {
-            skip_ws<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_SKIP_WS;
          }
          switch (*it) {
          case '{': {
