@@ -999,7 +999,10 @@ suite user_types = [] {
 })";
       expect(thing_pretty == buffer);
 
-      expect(json == glz::minify_json(thing_pretty));
+      const auto minified = glz::minify_json(thing_pretty);
+      expect(json == minified);
+      const auto ec = glz::read<glz::opts{.minified = true}>(obj, minified);
+      expect(!ec) << glz::format_error(ec, minified);
    };
 
    "complex user obect prettify_jsonc/minify_jsonc"_test = [] {
@@ -1102,7 +1105,6 @@ suite user_types = [] {
       const auto minified = glz::minify_jsonc(thing_pretty);
       expect(json == minified);
       expect(!glz::read_json(obj, minified));
-      expect(!glz::read<glz::opts{.minified = true}>(obj, minified));
    };
 
    "complex user obect roundtrip"_test = [] {
