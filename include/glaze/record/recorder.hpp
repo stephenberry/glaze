@@ -120,7 +120,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            
+
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
             if constexpr (!Options.opening_handled) {
