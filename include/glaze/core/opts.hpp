@@ -43,12 +43,13 @@ namespace glz
       bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
+      
       bool error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
 
       uint32_t layout = rowwise; // CSV row wise output/input
 
-      // the maximum precision type used for writing floats, higher precision floats will be cast down to this precision
+      // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
       float_precision float_max_write_precision{};
 
       bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
@@ -56,12 +57,13 @@ namespace glz
       bool raw = false; // write out string like values without quotes
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
       bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies to reflectable and
-                                      // glaze_object_t concepts
+      
+      // glaze_object_t concepts
       bool partial_read_nested = false; // Rewind forward the partially readed struct to the end of the struct
-      bool concatenate = true; // concatenates ranges of std::pair into single objects when writing
+      bool concatenate = true; // Concatenates ranges of std::pair into single objects when writing
 
       bool hide_non_invocable =
-         true; // hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
+         true; // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
 
       // INTERNAL USE
       bool opening_handled = false; // the opening character has been handled
