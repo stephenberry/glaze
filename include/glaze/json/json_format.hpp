@@ -76,7 +76,7 @@ namespace glz::detail
          std::memcpy(&chunk, it, 8);
          const uint64_t quote = has_quote(chunk);
          if (quote) {
-            it += (std::countr_zero(quote) >> 3);
+            it += (countr_zero(quote) >> 3);
 
             auto* prev = it - 1;
             while (*prev == '\\') {
@@ -107,7 +107,7 @@ namespace glz::detail
          std::memcpy(&chunk, it, 8);
          const uint64_t quote = has_quote(chunk);
          if (quote) {
-            it += (std::countr_zero(quote) >> 3);
+            it += (countr_zero(quote) >> 3);
 
             auto* prev = it - 1;
             while (*prev == '\\') {
@@ -152,7 +152,7 @@ namespace glz::detail
          std::memcpy(&chunk, it, 8);
          const uint64_t slash = has_char<'/'>(chunk);
          if (slash) {
-            it += (std::countr_zero(slash) >> 3);
+            it += (countr_zero(slash) >> 3);
 
             if (it[-1] == '*') {
                ++it; // add slash

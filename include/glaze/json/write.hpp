@@ -198,7 +198,7 @@ namespace glz
             auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
 
             if (next) {
-               next = std::countr_zero(next) >> 3;
+               next = countr_zero(next) >> 3;
                const auto escape_char = char_escape_table[uint32_t(in[next])];
                if (escape_char == 0) {
                   ix += next;
@@ -340,7 +340,7 @@ namespace glz
                               // the JSON.
                               const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
                               if (test_chars) {
-                                 const auto length = (std::countr_zero(test_chars) >> 3);
+                                 const auto length = (countr_zero(test_chars) >> 3);
                                  c += length;
                                  data += length;
 
