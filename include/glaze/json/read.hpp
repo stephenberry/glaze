@@ -478,7 +478,7 @@ namespace glz
                if constexpr (not Opts.raw_string) {
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
-                  auto* p_end = temp.data() + temp.size() - padding_bytes;
+                  auto* p_end = p + temp.size() - padding_bytes;
 
                   while (true) {
                      if (p >= p_end) [[unlikely]] {
@@ -572,7 +572,7 @@ namespace glz
                   const auto end12 = end - 12;
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
-                  auto* p_end = temp.data() + temp.size() - padding_bytes;
+                  auto* p_end = p + temp.size() - padding_bytes;
 
                   while (true) {
                      if (p >= p_end) [[unlikely]] {
