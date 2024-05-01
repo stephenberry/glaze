@@ -602,8 +602,8 @@ namespace glz
                      std::memcpy(p, it, 8);
                      uint64_t swar;
                      std::memcpy(&swar, p, 8);
-                     //auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
-                     
+                     // auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
+
                      // We use this optimized code for the sake of GCC and MSVC
                      uint64_t next = 0x2222222222222222ull ^ swar;
                      uint64_t a = 0x5C5C5C5C5C5C5C5Cull ^ swar;
