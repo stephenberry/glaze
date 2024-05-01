@@ -7754,7 +7754,8 @@ suite long_keys_tests = [] {
 
 struct skip_obj
 {
-   struct glaze {
+   struct glaze
+   {
       using T = skip_obj;
       static constexpr auto value = glz::object("str", glz::skip{}, "opt", glz::skip{});
    };
