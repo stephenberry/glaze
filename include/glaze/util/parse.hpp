@@ -113,16 +113,9 @@ namespace glz::detail
       return t;
    }();
 
-   template <class T>
-   consteval uint32_t repeat_byte4(const T repeat)
+   consteval uint32_t repeat_byte4(const auto repeat)
    {
-      const auto byte = uint8_t(repeat);
-      uint32_t res{};
-      res |= uint32_t(byte) << 24;
-      res |= uint32_t(byte) << 16;
-      res |= uint32_t(byte) << 8;
-      res |= uint32_t(byte);
-      return res;
+      return 0x01010101u * uint8_t(repeat);
    }
 
    GLZ_ALWAYS_INLINE constexpr uint32_t has_zero_u32(const uint32_t chunk) noexcept
@@ -135,20 +128,14 @@ namespace glz::detail
       return has_zero_u32(chunk & repeat_byte4(0b11110000u));
    }
 
-   template <class T>
-   consteval uint64_t repeat_byte8(const T repeat)
+   consteval uint64_t repeat_byte8(const auto repeat)
    {
-      const auto byte = uint8_t(repeat);
-      uint64_t res{};
-      res |= uint64_t(byte) << 56;
-      res |= uint64_t(byte) << 48;
-      res |= uint64_t(byte) << 40;
-      res |= uint64_t(byte) << 32;
-      res |= uint64_t(byte) << 24;
-      res |= uint64_t(byte) << 16;
-      res |= uint64_t(byte) << 8;
-      res |= uint64_t(byte);
-      return res;
+      return 0x0101010101010101ull * uint8_t(repeat);
+   }
+   
+   consteval uint64_t not_repeat_byte8(const auto repeat)
+   {
+      return ~(0x0101010101010101ull * uint8_t(repeat));
    }
 
    [[nodiscard]] GLZ_ALWAYS_INLINE uint32_t hex_to_u32(const char* c) noexcept
