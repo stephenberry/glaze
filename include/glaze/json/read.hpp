@@ -529,13 +529,12 @@ namespace glz
                            }
                         }
                         else {
-                           const auto escape_char = char_unescape_table[*it];
-                           if (escape_char == 0) [[unlikely]] {
+                           p += next;
+                           *p = char_unescape_table[*it];
+                           if (*p == 0) [[unlikely]] {
                               ctx.error = error_code::invalid_escape;
                               return;
                            }
-                           p += next;
-                           *p = escape_char;
                            ++p;
                            ++it;
                         }
@@ -640,13 +639,12 @@ namespace glz
                            }
                         }
                         else {
-                           const auto escape_char = char_unescape_table[*it];
-                           if (escape_char == 0) [[unlikely]] {
+                           p += next;
+                           *p = char_unescape_table[*it];
+                           if (*p == 0) [[unlikely]] {
                               ctx.error = error_code::invalid_escape;
                               return;
                            }
-                           p += next;
-                           *p = escape_char;
                            ++p;
                            ++it;
                         }
@@ -682,12 +680,11 @@ namespace glz
                            }
                         }
                         else {
-                           const auto escape_char = char_unescape_table[*it];
-                           if (escape_char == 0) [[unlikely]] {
+                           *p = char_unescape_table[*it];
+                           if (*p == 0) [[unlikely]] {
                               ctx.error = error_code::invalid_escape;
                               return;
                            }
-                           *p = escape_char;
                            ++p;
                            ++it;
                         }
