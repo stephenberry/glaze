@@ -7752,6 +7752,23 @@ suite long_keys_tests = [] {
    };
 };
 
+struct optional_skip_obj
+{
+   struct glaze {
+      using T = optional_skip_obj;
+      static constexpr auto value = glz::object("str", glz::skip{}, "opt", glz::skip{});
+   };
+};
+
+suite optional_skip_tests = [] {
+   "optional_skip"_test = [] {
+      optional_skip_obj obj{};
+      std::string_view json = R"({"str":"hello","opt":null})";
+      expect(!glz::read_json(obj, json));
+      expect(glz::write_json(obj) == "{}");
+   };
+};
+
 int main()
 {
    trace.begin("json_test", "Full test suite duration.");

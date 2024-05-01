@@ -103,9 +103,9 @@ namespace glz
       struct to_json<skip>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&...) noexcept
          {
-            dump(R"("skip type should not have been written")", args...);
+            static_assert(false_v<decltype(value)>, "skip type should not be written");
          }
       };
 
@@ -1160,7 +1160,7 @@ namespace glz
                using Element = glaze_tuple_element<I, N, T>;
                static constexpr size_t member_index = Element::member_index;
                static constexpr bool use_reflection = Element::use_reflection;
-               using val_t = typename Element::type;
+               using val_t = std::remove_cvref_t<typename Element::type>;
 
                decltype(auto) member = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {
@@ -1191,7 +1191,7 @@ namespace glz
                if constexpr (is_includer<val_t>) {
                   return;
                }
-               else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+               else if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
                   return;
                }
                else {
