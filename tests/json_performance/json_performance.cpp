@@ -49,7 +49,7 @@ suite string_performance = [] {
       }
       auto t1 = std::chrono::steady_clock::now();
 
-      expect(!e);
+      expect(!e) << glz::format_error(e, buffer);
 
       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
       std::cerr << duration << '\n';
