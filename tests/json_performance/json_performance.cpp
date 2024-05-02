@@ -39,19 +39,26 @@ suite string_performance = [] {
       }
 
       std::string buffer;
-      glz::write_json(vec, buffer);
-      vec.clear();
       auto t0 = std::chrono::steady_clock::now();
+      for (auto i = 0; i < 100; ++i) {
+         glz::write_json(vec, buffer);
+      }
+      auto t1 = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      std::cerr << duration << '\n';
+      
+      vec.clear();
+      t0 = std::chrono::steady_clock::now();
       glz::parse_error e;
       for (auto i = 0; i < 100; ++i) {
          vec.clear();
          e = glz::read_json(vec, buffer);
       }
-      auto t1 = std::chrono::steady_clock::now();
+      t1 = std::chrono::steady_clock::now();
 
-      expect(!e);
+      expect(!e) << glz::format_error(e, buffer);
 
-      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
+      duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
       std::cerr << duration << '\n';
    };
 };
