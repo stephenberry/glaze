@@ -292,9 +292,9 @@ namespace glz
                   // In the case n == 0 we need two characters for quotes.
                   // For each individual character we need room for two characters to handle escapes.
                   // So, we need 2 + 2 * n characters to handle all cases.
-                  // We add another 8 characters to support SWAR
+                  // We then add padding for SWAR
                   if constexpr (resizable<B>) {
-                     const auto k = ix + 10 + 2 * n;
+                     const auto k = ix + (2 + padding_bytes) + 2 * n;
                      if (k >= b.size()) [[unlikely]] {
                         b.resize((std::max)(b.size() * 2, k));
                      }
@@ -324,53 +324,65 @@ namespace glz
                      }
                      else*/
                      {
-                        const auto* c = str.data();
-                        const auto* const e = c + n;
                         const auto start = data_ptr(b) + ix;
-                        auto data = start;
+                        const auto e = start + n;
+                        auto dst = start;
+                        const auto data_start = str.data();
+                        
+                        std::memcpy(dst, data_start, n);
+                        reinterpret_cast<char*>(dst)[n] = '\n'; // null terminate
+                        static thread_local std::vector<size_t> escape_deltas(256);
+                        escape_deltas.clear();
+                        size_t last_escape_index{};
+                        while (true)
+                        {
+                           uint64_t chunk;
+                           std::memcpy(&chunk, dst, 8);
+                           const uint64_t next = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
+                           if (next) {
+                              dst += (countr_zero(next) >> 3);
 
-                        if (n > 7) {
-                           for (const auto end_m7 = e - 7; c < end_m7;) {
-                              std::memcpy(data, c, 8);
-                              uint64_t chunk;
-                              std::memcpy(&chunk, c, 8);
-                              // We don't check for writing out invalid characters as this can be tested by the user if
-                              // necessary. In the case of invalid JSON characters we write out null characters to
-                              // showcase the error and make the JSON invalid. These would then be detected upon reading
-                              // the JSON.
-                              const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
-                              if (test_chars) {
-                                 const auto length = (countr_zero(test_chars) >> 3);
-                                 c += length;
-                                 data += length;
-
-                                 std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
-                                 data += 2;
-                                 ++c;
+                              if (char(*dst) == '\0' || dst >= e) {
+                                 if (escape_deltas.empty()) {
+                                    ix += n;
+                                    dump_unchecked<'"'>(b, ix);
+                                    return;
+                                 }
+                                 break;
                               }
-                              else {
-                                 data += 8;
-                                 c += 8;
-                              }
-                           }
-                        }
-
-                        // Tail end of buffer. Uncommon for long strings.
-                        for (; c < e; ++c) {
-                           if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
-                              std::memcpy(data, &escaped, 2);
-                              data += 2;
+                              const size_t escape_delta = size_t(dst - start) - last_escape_index;
+                              escape_deltas.emplace_back(escape_delta);
+                              last_escape_index += escape_delta;
+                              ++dst;
                            }
                            else {
-                              std::memcpy(data, c, 1);
-                              ++data;
+                              dst += 8;
                            }
                         }
-
-                        ix += size_t(data - start);
+                        
+                        // we know that we will always have at least one escape here
+                        dst = start + escape_deltas[0];
+                        auto data = data_start + escape_deltas[0];
+                        std::memcpy(dst, &char_escape_table[uint8_t(*data)], 2);
+                        dst += 2;
+                        ++data;
+                        const auto n_escapes = escape_deltas.size();
+                        for (size_t i = 1; i < n_escapes; ++i) {
+                           const auto delta = escape_deltas[i] - 1;
+                           std::memcpy(dst, data, delta);
+                           dst += delta;
+                           data += delta;
+                           std::memcpy(dst, &char_escape_table[uint8_t(*data)], 2);
+                           dst += 2;
+                           ++data;
+                        }
+                        const auto finish = n - size_t(data - data_start);
+                        std::memcpy(dst, data, finish);
+                        dst += finish;
+                        
+                        ix += size_t(dst - start);
+                        dump_unchecked<'"'>(b, ix);
                      }
-
-                     dump_unchecked<'"'>(b, ix);
                   }
                }
             }
