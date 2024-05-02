@@ -311,14 +311,12 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
             if constexpr (Opts.quoted_num) {
-               skip_ws<Opts>(ctx, it, end);
+               GLZ_SKIP_WS;
                GLZ_MATCH_QUOTE;
             }
 
             if constexpr (!Opts.ws_handled) {
-               skip_ws<Opts>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
+               GLZ_SKIP_WS;
             }
 
             using V = std::decay_t<decltype(value)>;
@@ -908,12 +906,10 @@ namespace glz
          template <auto Options>
          GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if constexpr (!Options.ws_handled) {
-               skip_ws<Options>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-            }
             constexpr auto Opts = ws_handled_off<Options>();
+            if constexpr (!Options.ws_handled) {
+               GLZ_SKIP_WS;
+            }
 
             match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
@@ -951,12 +947,10 @@ namespace glz
          template <auto Options>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if constexpr (!Options.ws_handled) {
-               skip_ws<Options>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-            }
             constexpr auto Opts = ws_handled_off<Options>();
+            if constexpr (!Options.ws_handled) {
+               GLZ_SKIP_WS;
+            }
 
             match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
@@ -1166,7 +1160,7 @@ namespace glz
       [[nodiscard]] GLZ_ALWAYS_INLINE size_t number_of_array_elements(is_context auto&& ctx, auto it,
                                                                       auto&& end) noexcept
       {
-         skip_ws_no_pre_check<Opts>(ctx, it, end);
+         skip_ws<Opts>(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return {};
 
@@ -1224,12 +1218,10 @@ namespace glz
          template <auto Options>
          GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if constexpr (!Options.ws_handled) {
-               skip_ws<Options>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-            }
             constexpr auto Opts = ws_handled_off<Options>();
+            if constexpr (!Options.ws_handled) {
+               GLZ_SKIP_WS;
+            }
 
             match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
@@ -1517,17 +1509,6 @@ namespace glz
       }
 
       template <glz::opts Opts>
-      GLZ_ALWAYS_INLINE void parse_object_opening(is_context auto& ctx, auto& it, const auto end)
-      {
-         if constexpr (!Opts.opening_handled) {
-            if constexpr (!Opts.ws_handled) {
-               GLZ_SKIP_WS;
-            }
-            match<'{'>(ctx, it);
-         }
-      }
-
-      template <glz::opts Opts>
       GLZ_ALWAYS_INLINE void parse_object_entry_sep(is_context auto& ctx, auto& it, const auto end)
       {
          GLZ_SKIP_WS;
@@ -1543,7 +1524,7 @@ namespace glz
       {
          // skip white space and escape characters and find the string
          if constexpr (!Opts.ws_handled) {
-            skip_ws_no_pre_check<Opts>(ctx, it, end);
+            skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return {};
          }
@@ -1583,12 +1564,14 @@ namespace glz
          template <opts Options, string_literal tag = "">
          GLZ_FLATTEN static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            parse_object_opening<Options>(ctx, it, end);
-            skip_ws<Options>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+            if constexpr (!Options.opening_handled) {
+               if constexpr (!Options.ws_handled) {
+                  GLZ_SKIP_WS;
+               }
+               match<'{'>(ctx, it);
+            }
+            GLZ_SKIP_WS;
 
             // Only used if error_on_missing_keys = true
             [[maybe_unused]] bit_array<1> fields{};
@@ -1636,14 +1619,16 @@ namespace glz
          template <auto Options, string_literal tag = "">
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            parse_object_opening<Options>(ctx, it, end);
-            const auto ws_start = it;
-            skip_ws<Options>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            const size_t ws_size = size_t(it - ws_start);
-
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+            if constexpr (!Options.opening_handled) {
+               if constexpr (!Options.ws_handled) {
+                  GLZ_SKIP_WS;
+               }
+               match<'{'>(ctx, it);
+            }
+            const auto ws_start = it;
+            GLZ_SKIP_WS;
+            const size_t ws_size = size_t(it - ws_start);
 
             static constexpr auto num_members = reflection_count<T>;
             if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
@@ -1930,14 +1915,16 @@ namespace glz
                static_assert(false_v<T>, "No members to read for partial read");
             }
 
-            parse_object_opening<Options>(ctx, it, end);
-            const auto ws_start = it;
-            skip_ws<Options>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            const size_t ws_size = size_t(it - ws_start);
-
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+            if constexpr (!Options.opening_handled) {
+               if constexpr (!Options.ws_handled) {
+                  GLZ_SKIP_WS;
+               }
+               match<'{'>(ctx, it);
+            }
+            const auto ws_start = it;
+            GLZ_SKIP_WS;
+            const size_t ws_size = size_t(it - ws_start);
 
             // Only used if partial_read_nested = true
             [[maybe_unused]] uint32_t opening_counter = 1;
@@ -2255,13 +2242,12 @@ namespace glz
          template <auto Options>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
+            constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (variant_is_auto_deducible<T>()) {
                if constexpr (!Options.ws_handled) {
-                  skip_ws<Options>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
+                  GLZ_SKIP_WS;
                }
-               constexpr auto Opts = ws_handled_off<Options>();
+               
                switch (*it) {
                case '\0':
                   ctx.error = error_code::unexpected_end;
@@ -2461,12 +2447,10 @@ namespace glz
          {
             auto& value = wrapper.value;
 
-            if constexpr (!Options.ws_handled) {
-               skip_ws<Options>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-            }
             constexpr auto Opts = ws_handled_off<Options>();
+            if constexpr (!Options.ws_handled) {
+               GLZ_SKIP_WS;
+            }
 
             match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
@@ -2600,12 +2584,10 @@ namespace glz
          template <auto Options>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if constexpr (!Options.ws_handled) {
-               skip_ws<Options>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-            }
             constexpr auto Opts = ws_handled_off<Options>();
+            if constexpr (!Options.ws_handled) {
+               GLZ_SKIP_WS;
+            }
 
             if (*it == 'n') {
                ++it;

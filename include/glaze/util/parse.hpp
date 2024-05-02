@@ -485,7 +485,6 @@ namespace glz::detail
       return (chunk & repeat_byte8(0b11110000u));
    }
 
-   // Macro behaves like skip_ws_no_pre_check, since we want to remove skip_ws in the long run
 #define GLZ_SKIP_WS                                \
    if constexpr (!Opts.minified) {                 \
       if constexpr (!Opts.force_conformance) {     \
@@ -508,8 +507,9 @@ namespace glz::detail
       }                                            \
    }
 
+   // skip whitespace
    template <opts Opts>
-   GLZ_ALWAYS_INLINE void skip_ws_no_pre_check(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.minified) {
          if constexpr (!Opts.force_conformance) {
@@ -530,16 +530,6 @@ namespace glz::detail
                ++it;
             }
          }
-      }
-   }
-
-   template <opts Opts>
-   GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
-   {
-      if constexpr (!Opts.minified) {
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         skip_ws_no_pre_check<Opts>(ctx, it, end);
       }
    }
 
