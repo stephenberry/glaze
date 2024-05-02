@@ -346,8 +346,7 @@ namespace glz
                         value = i;
                      }
                      else {
-                        auto s =
-                           parse_int<decay_keep_volatile_t<decltype(value)>, Opts.force_conformance>(value, cur);
+                        auto s = parse_int<decay_keep_volatile_t<decltype(value)>, Opts.force_conformance>(value, cur);
                         if (!s) [[unlikely]] {
                            ctx.error = error_code::parse_number_failure;
                            return;

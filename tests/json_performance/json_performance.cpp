@@ -46,7 +46,7 @@ suite string_performance = [] {
       auto t1 = std::chrono::steady_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
       std::cerr << duration << '\n';
-      
+
       vec.clear();
       t0 = std::chrono::steady_clock::now();
       glz::parse_error e;
