@@ -1897,7 +1897,7 @@ namespace glz
                            return;
                      }
                   }
-                  skip_ws<Opts>(ctx, it, end);
+                  skip_ws_no_pre_check<Opts>(ctx, it, end);
                }
             }
          }
@@ -2243,13 +2243,12 @@ namespace glz
          template <auto Options>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
+            constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (variant_is_auto_deducible<T>()) {
                if constexpr (!Options.ws_handled) {
-                  skip_ws<Options>(ctx, it, end);
-                  if (bool(ctx.error)) [[unlikely]]
-                     return;
+                  GLZ_SKIP_WS;
                }
-               constexpr auto Opts = ws_handled_off<Options>();
+               
                switch (*it) {
                case '\0':
                   ctx.error = error_code::unexpected_end;
@@ -2449,12 +2448,10 @@ namespace glz
          {
             auto& value = wrapper.value;
 
-            if constexpr (!Options.ws_handled) {
-               skip_ws<Options>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-            }
             constexpr auto Opts = ws_handled_off<Options>();
+            if constexpr (!Options.ws_handled) {
+               GLZ_SKIP_WS;
+            }
 
             match<'['>(ctx, it);
             if (bool(ctx.error)) [[unlikely]]
@@ -2588,12 +2585,10 @@ namespace glz
          template <auto Options>
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if constexpr (!Options.ws_handled) {
-               skip_ws<Options>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-            }
             constexpr auto Opts = ws_handled_off<Options>();
+            if constexpr (!Options.ws_handled) {
+               GLZ_SKIP_WS;
+            }
 
             if (*it == 'n') {
                ++it;

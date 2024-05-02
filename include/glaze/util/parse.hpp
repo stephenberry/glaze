@@ -533,16 +533,6 @@ namespace glz::detail
       }
    }
 
-   template <opts Opts>
-   GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
-   {
-      if constexpr (!Opts.minified) {
-         if (bool(ctx.error)) [[unlikely]]
-            return;
-         skip_ws_no_pre_check<Opts>(ctx, it, end);
-      }
-   }
-
    GLZ_ALWAYS_INLINE void skip_matching_ws(const auto* ws, auto&& it, uint64_t length) noexcept
    {
       if (length > 7) {
