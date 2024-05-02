@@ -1161,7 +1161,7 @@ namespace glz
       [[nodiscard]] GLZ_ALWAYS_INLINE size_t number_of_array_elements(is_context auto&& ctx, auto it,
                                                                       auto&& end) noexcept
       {
-         skip_ws_no_pre_check<Opts>(ctx, it, end);
+         skip_ws<Opts>(ctx, it, end);
          if (bool(ctx.error)) [[unlikely]]
             return {};
 
@@ -1525,7 +1525,7 @@ namespace glz
       {
          // skip white space and escape characters and find the string
          if constexpr (!Opts.ws_handled) {
-            skip_ws_no_pre_check<Opts>(ctx, it, end);
+            skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return {};
          }
@@ -1897,7 +1897,7 @@ namespace glz
                            return;
                      }
                   }
-                  skip_ws_no_pre_check<Opts>(ctx, it, end);
+                  skip_ws<Opts>(ctx, it, end);
                }
             }
          }

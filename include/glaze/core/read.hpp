@@ -87,7 +87,7 @@ namespace glz
       if constexpr (Opts.force_conformance) {
          // Trailing whitespace is not allowed
          if (it < end) {
-            detail::skip_ws_no_pre_check<Opts>(ctx, it, end);
+            detail::skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                goto finish;
             }

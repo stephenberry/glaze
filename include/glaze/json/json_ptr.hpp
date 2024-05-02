@@ -601,7 +601,7 @@ namespace glz
       else {
          using namespace glz::detail;
 
-         skip_ws_no_pre_check<Opts>(ctx, it, end);
+         skip_ws<Opts>(ctx, it, end);
 
          result_t ret;
 
