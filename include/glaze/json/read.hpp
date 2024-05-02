@@ -2247,7 +2247,7 @@ namespace glz
                if constexpr (!Options.ws_handled) {
                   GLZ_SKIP_WS;
                }
-               
+
                switch (*it) {
                case '\0':
                   ctx.error = error_code::unexpected_end;
