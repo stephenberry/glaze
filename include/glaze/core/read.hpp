@@ -91,7 +91,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]] {
                goto finish;
             }
-            if (it != end) {
+            if (it != end) [[unlikely]] {
                ctx.error = error_code::syntax_error;
             }
          }

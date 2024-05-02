@@ -507,6 +507,7 @@ namespace glz::detail
       }                                            \
    }
 
+   // skip whitespace
    template <opts Opts>
    GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
