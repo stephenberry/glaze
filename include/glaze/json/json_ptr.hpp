@@ -601,7 +601,7 @@ namespace glz
       else {
          using namespace glz::detail;
 
-         skip_ws<Opts>(ctx, it, end);
+         skip_ws_no_pre_check<Opts>(ctx, it, end);
 
          result_t ret;
 
@@ -616,19 +616,13 @@ namespace glz
                case '{': {
                   ++it;
                   while (true) {
-                     skip_ws<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]] {
-                        return;
-                     }
+                     GLZ_SKIP_WS;
                      const auto k = parse_key(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
                      if (cx_string_cmp<key>(k)) {
-                        skip_ws<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]] {
-                           return;
-                        }
+                        GLZ_SKIP_WS;
                         GLZ_MATCH_COLON;
                         GLZ_SKIP_WS;
 
@@ -695,10 +689,7 @@ namespace glz
                   }
 
                   if (cx_string_cmp<key>(k)) {
-                     skip_ws<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]] {
-                        return;
-                     }
+                     GLZ_SKIP_WS;
                      GLZ_MATCH_COLON;
                      GLZ_SKIP_WS;
 
