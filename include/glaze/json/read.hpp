@@ -307,16 +307,16 @@ namespace glz
       template <num_t T>
       struct from_json<T>
       {
-         template <auto Options, class It>
+         template <auto Opts, class It>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
-            if constexpr (Options.quoted_num) {
-               skip_ws<Options>(ctx, it, end);
+            if constexpr (Opts.quoted_num) {
+               skip_ws<Opts>(ctx, it, end);
                GLZ_MATCH_QUOTE;
             }
 
-            if constexpr (!Options.ws_handled) {
-               skip_ws<Options>(ctx, it, end);
+            if constexpr (!Opts.ws_handled) {
+               skip_ws<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
             }
@@ -338,7 +338,7 @@ namespace glz
                         // Hardware may interact with value changes, so we parse into a temporary and assign in one
                         // place
                         uint64_t i{};
-                        auto s = parse_int<uint64_t, Options.force_conformance>(i, cur);
+                        auto s = parse_int<uint64_t, Opts.force_conformance>(i, cur);
                         if (!s) [[unlikely]] {
                            ctx.error = error_code::parse_number_failure;
                            return;
@@ -347,7 +347,7 @@ namespace glz
                      }
                      else {
                         auto s =
-                           parse_int<decay_keep_volatile_t<decltype(value)>, Options.force_conformance>(value, cur);
+                           parse_int<decay_keep_volatile_t<decltype(value)>, Opts.force_conformance>(value, cur);
                         if (!s) [[unlikely]] {
                            ctx.error = error_code::parse_number_failure;
                            return;
@@ -366,7 +366,7 @@ namespace glz
                      static_assert(sizeof(*it) == sizeof(char));
                      const char* cur = reinterpret_cast<const char*>(it);
                      const char* beg = cur;
-                     auto s = parse_int<std::decay_t<decltype(i)>, Options.force_conformance>(i, cur);
+                     auto s = parse_int<std::decay_t<decltype(i)>, Opts.force_conformance>(i, cur);
                      if (!s) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
@@ -391,7 +391,7 @@ namespace glz
                   static_assert(sizeof(*it) == sizeof(char));
                   const char* cur = reinterpret_cast<const char*>(it);
                   const char* beg = cur;
-                  auto s = parse_int<decay_keep_volatile_t<decltype(i)>, Options.force_conformance>(i, cur);
+                  auto s = parse_int<decay_keep_volatile_t<decltype(i)>, Opts.force_conformance>(i, cur);
                   if (!s) [[unlikely]] {
                      ctx.error = error_code::parse_number_failure;
                      return;
@@ -428,7 +428,7 @@ namespace glz
                   if constexpr (std::is_volatile_v<decltype(value)>) {
                      // Hardware may interact with value changes, so we parse into a temporary and assign in one place
                      V temp;
-                     auto s = parse_float<V, Options.force_conformance>(value, it);
+                     auto s = parse_float<V, Opts.force_conformance>(value, it);
                      if (!s) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
@@ -436,7 +436,7 @@ namespace glz
                      value = temp;
                   }
                   else {
-                     auto s = parse_float<V, Options.force_conformance>(value, it);
+                     auto s = parse_float<V, Opts.force_conformance>(value, it);
                      if (!s) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
@@ -445,7 +445,7 @@ namespace glz
                }
             }
 
-            if constexpr (Options.quoted_num) {
+            if constexpr (Opts.quoted_num) {
                GLZ_MATCH_QUOTE;
             }
          }
