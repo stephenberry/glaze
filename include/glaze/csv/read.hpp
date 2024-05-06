@@ -16,24 +16,25 @@ namespace glz
 {
    namespace detail
    {
-#define GLZ_CSV_NL if (*it == '\n') { \
-      ++it; \
-   } \
-   else if (*it == '\r') { \
-      ++it; \
-      if (*it == '\n') [[likely]] { \
-         ++it; \
-      } \
-      else [[unlikely]] { \
+#define GLZ_CSV_NL                             \
+   if (*it == '\n') {                          \
+      ++it;                                    \
+   }                                           \
+   else if (*it == '\r') {                     \
+      ++it;                                    \
+      if (*it == '\n') [[likely]] {            \
+         ++it;                                 \
+      }                                        \
+      else [[unlikely]] {                      \
          ctx.error = error_code::syntax_error; \
-         return; \
-      } \
-   } \
-   else [[unlikely]] { \
-      ctx.error = error_code::syntax_error; \
-      return; \
+         return;                               \
+      }                                        \
+   }                                           \
+   else [[unlikely]] {                         \
+      ctx.error = error_code::syntax_error;    \
+      return;                                  \
    }
-      
+
       template <>
       struct read<csv>
       {
@@ -230,7 +231,7 @@ namespace glz
                   ctx.error = error_code::syntax_error;
                   return keys;
                }
-               
+
                if (start == it) {
                   // trailing comma or empty
                }
@@ -353,7 +354,7 @@ namespace glz
                if (bool(ctx.error)) {
                   return;
                }
-               
+
                GLZ_CSV_NL;
 
                const auto n_keys = keys.size();
@@ -594,7 +595,7 @@ namespace glz
                      }
                      if (!at_end) [[likely]] {
                         GLZ_CSV_NL;
-                        
+
                         ++row;
                         at_end = it == end;
                         if (at_end) break;

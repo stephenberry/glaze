@@ -82,7 +82,7 @@ suite csv_tests = [] {
 
       expect(!glz::write_file_csv<glz::colwise>(obj, "csv_test_colwise.csv", std::string{}));
    };
-   
+
    "read/write column wise carriage return"_test = [] {
       std::string input_col =
          "num1,num2,maybe,v3s[0],v3s[1],v3s[2]\r\n11,22,1,1,1,1\r\n33,44,1,2,2,2\r\n55,66,0,3,3,3\r\n77,88,0,4,4,4";
@@ -178,7 +178,7 @@ v3s[2],1,2,3,4)");
 
       expect(!glz::write_file_csv(obj, "csv_test_rowwise.csv", std::string{}));
    };
-   
+
    "read/write row wise carriage return"_test = [] {
       std::string input_row =
          "num1,11,33,55,77\r\nnum2,22,44,66,88\r\nmaybe,1,1,0,0\r\nv3s[0],1,2,3,4\r\nv3s[1],1,2,3,4\r\nv3s[2],1,2,3,4";
@@ -204,7 +204,6 @@ v3s[2],1,2,3,4)");
 
       expect(!glz::write_file_csv(obj, "csv_test_rowwise.csv", std::string{}));
    };
-
 
    "std::map row wise"_test = [] {
       std::map<std::string, std::vector<uint64_t>> m;
