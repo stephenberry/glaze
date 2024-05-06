@@ -4597,7 +4597,6 @@ suite utf8_validate = [] {
    };
 };
 
-
 struct StructE
 {
    std::string e;
