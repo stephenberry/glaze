@@ -4581,6 +4581,23 @@ break"])";
    };
 };
 
+suite utf8_validate = [] {
+   "utf8_validate"_test = [] {
+      // In ANSI (GBK) encoding
+      {
+         auto e = glz::validate_json(R"({"key":"value中文"})");
+         expect(!e);
+      }
+
+      // In UTF-8
+      {
+         auto e = glz::validate_json((const char*)u8R"({"key":"value中文"})");
+         expect(!e);
+      }
+   };
+};
+
+
 struct StructE
 {
    std::string e;

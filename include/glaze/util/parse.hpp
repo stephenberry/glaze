@@ -863,7 +863,7 @@ namespace glz::detail
 
       if constexpr (Opts.force_conformance) {
          while (true) {
-            if (*it < 32) [[unlikely]] {
+            if ((*it & 0b11100000) == 0) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
             }
