@@ -7,6 +7,8 @@
 #include "glaze/csv/write.hpp"
 #include "glaze/record/recorder.hpp"
 
+// Specification: https://datatracker.ietf.org/doc/html/rfc4180
+
 using namespace boost::ut;
 
 struct my_struct
@@ -30,7 +32,7 @@ template <>
 struct glz::meta<my_struct>
 {
    using T = my_struct;
-   static constexpr auto value = glz::object("num1", &T::num1, "num2", &T::num2, "maybe", &T::maybe, "v3s", &T::v3s);
+   static constexpr auto value = glz::object(&T::num1, &T::num2, &T::maybe, &T::v3s);
 };
 
 struct string_elements
@@ -54,6 +56,36 @@ suite csv_tests = [] {
 33,44,1,2,2,2
 55,66,0,3,3,3
 77,88,0,4,4,4)";
+
+      my_struct obj{};
+
+      expect(!glz::read_csv<glz::colwise>(obj, input_col));
+
+      expect(obj.num1[0] == 11);
+      expect(obj.num2[2] == 66);
+      expect(obj.maybe[3] == false);
+      expect(obj.v3s[0] == std::array{1, 1, 1});
+      expect(obj.v3s[1] == std::array{2, 2, 2});
+      expect(obj.v3s[2] == std::array{3, 3, 3});
+      expect(obj.v3s[3] == std::array{4, 4, 4});
+
+      std::string out{};
+
+      glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out);
+      expect(out ==
+             R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
+11,22,1,1,1,1
+33,44,1,2,2,2
+55,66,0,3,3,3
+77,88,0,4,4,4
+)");
+
+      expect(!glz::write_file_csv<glz::colwise>(obj, "csv_test_colwise.csv", std::string{}));
+   };
+   
+   "read/write column wise carriage return"_test = [] {
+      std::string input_col =
+         "num1,num2,maybe,v3s[0],v3s[1],v3s[2]\r\n11,22,1,1,1,1\r\n33,44,1,2,2,2\r\n55,66,0,3,3,3\r\n77,88,0,4,4,4";
 
       my_struct obj{};
 
@@ -146,6 +178,33 @@ v3s[2],1,2,3,4)");
 
       expect(!glz::write_file_csv(obj, "csv_test_rowwise.csv", std::string{}));
    };
+   
+   "read/write row wise carriage return"_test = [] {
+      std::string input_row =
+         "num1,11,33,55,77\r\nnum2,22,44,66,88\r\nmaybe,1,1,0,0\r\nv3s[0],1,2,3,4\r\nv3s[1],1,2,3,4\r\nv3s[2],1,2,3,4";
+
+      my_struct obj{};
+      expect(!glz::read_csv(obj, input_row));
+
+      expect(obj.num1[0] == 11);
+      expect(obj.num2[2] == 66);
+      expect(obj.maybe[3] == false);
+      expect(obj.v3s[0][2] == 1);
+
+      std::string out{};
+
+      glz::write<glz::opts{.format = glz::csv}>(obj, out);
+      expect(out ==
+             R"(num1,11,33,55,77
+num2,22,44,66,88
+maybe,1,1,0,0
+v3s[0],1,2,3,4
+v3s[1],1,2,3,4
+v3s[2],1,2,3,4)");
+
+      expect(!glz::write_file_csv(obj, "csv_test_rowwise.csv", std::string{}));
+   };
+
 
    "std::map row wise"_test = [] {
       std::map<std::string, std::vector<uint64_t>> m;
