@@ -512,7 +512,7 @@ namespace glz
                            ++it;
                            return;
                         }
-                        if (*it < 32) [[unlikely]] {
+                        if ((*it & 0b11100000) == 0) [[unlikely]] {
                            ctx.error = error_code::syntax_error;
                            return;
                         }
@@ -622,7 +622,7 @@ namespace glz
                            ++it;
                            return;
                         }
-                        if (*it < 32) [[unlikely]] {
+                        if ((*it & 0b11100000) == 0) [[unlikely]] {
                            ctx.error = error_code::syntax_error;
                            return;
                         }
