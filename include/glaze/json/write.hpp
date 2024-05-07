@@ -234,7 +234,7 @@ namespace glz
                      }
                   }();
 
-                  // We need at space for quotes and the string length: 2 + n.
+                  // We need space for quotes and the string length: 2 + n.
                   if constexpr (resizable<B>) {
                      const auto n = str.size();
                      const auto k = ix + 2 + n;
