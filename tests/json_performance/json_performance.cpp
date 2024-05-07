@@ -14,6 +14,9 @@ std::mt19937 gen{};
 static constexpr std::string_view charset{
    "!#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~\"\\\r\b\f\t\n"};
 
+/*static constexpr std::string_view charset{
+   "!#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`abcdefghijklmnopqrstuvwxyz{|}~\""};*/
+
 inline std::string generate_string()
 {
    auto length = std::uniform_int_distribution<uint32_t>{0, 512}(gen);
@@ -29,7 +32,7 @@ inline std::string generate_string()
 
 suite string_performance = [] {
    "string_performance"_test = [] {
-      constexpr size_t n = 100; // make this number bigger when profiling
+      constexpr size_t n = 100'000; // make this number bigger when profiling
 
       std::vector<std::string> vec;
       vec.reserve(n);

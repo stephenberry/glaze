@@ -216,6 +216,27 @@ namespace glz
             }
          }
       }
+      
+      // https://stackoverflow.com/questions/12181352/high-order-bits-take-them-and-make-a-uint64-t-into-a-uint8-t
+      // The multiplications all the bits into the most significant byte,
+      // and the shift moves them to the least significant byte.
+      // Since multiplication is fast on most modern CPUs this shouldn't be much slower than using assembly.
+      GLZ_ALWAYS_INLINE constexpr uint8_t extract_msbs(const uint64_t x) noexcept {
+         return (x * 0x2040810204081) >> 56;
+      }
+      
+      constexpr std::array<uint8_t[2], 256> run_table = []{
+         std::array<uint8_t[2], 256> t{};
+         for (uint32_t i = 0; i < 256; ++i) {
+            uint8_t next = uint8_t(i);
+            t[i][0] = std::countr_zero(next); // ones represent zeros
+            if (std::popcount(next) > 1) {
+               next >>= (t[i][0] + 1);
+               t[i][1] = std::countr_zero(next);
+            }
+         }
+         return t;
+      }();
 
       template <class T>
          requires str_t<T> || char_t<T>
