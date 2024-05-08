@@ -262,9 +262,9 @@ namespace glz
                   // In the case n == 0 we need two characters for quotes.
                   // For each individual character we need room for two characters to handle escapes.
                   // So, we need 2 + 2 * n characters to handle all cases.
-                  // We add another 8 characters to support SWAR
+                  // We add another 16 characters to support SWAR
                   if constexpr (resizable<B>) {
-                     const auto k = ix + 10 + 2 * n;
+                     const auto k = ix + 18 + 2 * n;
                      if (k >= b.size()) [[unlikely]] {
                         b.resize((std::max)(b.size() * 2, k));
                      }
@@ -296,9 +296,9 @@ namespace glz
                            using simd_t = typename arch<Arch>::simd_t;
                            simd_t chunk;
                            std::memcpy(&chunk, c, 16);
-                           const auto next = countr_zero(uint32_t(opCmpEq<Arch>(opShuffle<Arch>(simd_escapeable0<simd_t>, chunk), chunk) |
-                                    opCmpEq<Arch>(opShuffle<Arch>(simd_escapeable1<simd_t>, chunk), chunk)));
-                           if (next < std::numeric_limits<uint16_t>::max()) {
+                           const auto next = std::countr_zero(opCmpEq<Arch>(opShuffle<Arch>(simd_escapeable0<simd_t>, chunk), chunk) |
+                                    opCmpEq<Arch>(opShuffle<Arch>(simd_escapeable1<simd_t>, chunk), chunk));
+                           if (next < 16) {
                               c += next;
                               data += next;
 
