@@ -470,4 +470,39 @@ namespace glz
          static_assert(false_v<Arch>, "SIMD Architecture not supported");
       }
    }
+   
+#if GLZ_CHECK_INSTRUCTION(GLZ_NEON)
+   template <simd128 T0>
+   GLZ_ALWAYS_INLINE uint32_t compare_bit_mask(T0&& value) noexcept
+   {
+      static constexpr uint8x16_t bit_mask{0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80,
+                                           0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80};
+      auto minput = value & bit_mask;
+      uint8x16_t tmp = vpaddq_u8(minput, minput);
+      tmp = vpaddq_u8(tmp, tmp);
+      tmp = vpaddq_u8(tmp, tmp);
+      return vgetq_lane_u16(vreinterpretq_u16_u8(tmp), 0);
+   }
+#endif
+   
+   template <simd_arch Arch, class T>
+   GLZ_ALWAYS_INLINE auto opCmpEq(T&& a, T&& b) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         return uint32_t(_mm_movemask_epi8(_mm_cmpeq_epi8(a, b)));
+      }
+      else if constexpr (Arch == avx2) {
+         return uint32_t(_mm256_movemask_epi8(_mm256_cmpeq_epi8(a, b)));
+      }
+      else if constexpr (Arch == avx512) {
+         return uint64_t(_mm512_cmpeq_epi8_mask(a, b));
+      }
+      else if constexpr (Arch == neon) {
+         return compare_bit_mask(vceqq_u8(value, other));
+      }
+      else {
+         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+      }
+   }
 }
