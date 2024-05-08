@@ -268,3 +268,206 @@ namespace glz
       using type = typename get_type_at_index<type_list<Rest...>, Index - 1>::type;
    };
 }
+
+namespace glz
+{
+   template <simd_arch Arch, simd T0, simd T1>
+   GLZ_ALWAYS_INLINE simd_t opAndNot(T0&& a, T1&& b) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         return _mm_andnot_si128(b, a);
+      }
+      else if constexpr (Arch == avx2) {
+         return _mm256_andnot_si256(b, a);
+      }
+      else if constexpr (Arch == avx512) {
+         return _mm512_andnot_si512(b, a);
+      }
+      else if constexpr (Arch == neon) {
+         return vbicq_u8(a, b);
+      }
+      else {
+         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+      }
+   }
+   
+   template <simd_arch Arch, simd T0, simd T1>
+   GLZ_ALWAYS_INLINE simd_t opAnd(T0&& a, T1&& b) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         return _mm_and_si128(a, b);
+      }
+      else if constexpr (Arch == avx2) {
+         return _mm256_and_si256(a, b);
+      }
+      else if constexpr (Arch == avx512) {
+         return _mm512_and_si512(a, b);
+      }
+      else if constexpr (Arch == neon) {
+         return vandq_u8(a, b);
+      }
+      else {
+         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+      }
+   }
+   
+   template <simd_arch Arch, simd T0, simd T1>
+   GLZ_ALWAYS_INLINE simd_t opXor(T0&& a, T1&& b) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         return _mm_xor_si128(a, b);
+      }
+      else if constexpr (Arch == avx2) {
+         return _mm256_xor_si256(a, b);
+      }
+      else if constexpr (Arch == avx512) {
+         return _mm512_xor_si512(a, b);
+      }
+      else if constexpr (Arch == neon) {
+         return veorq_u8(a, b);
+      }
+      else {
+         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+      }
+   }
+      
+   template <simd_arch Arch, simd T0, simd T1>
+   GLZ_ALWAYS_INLINE simd_t opOr(T0&& a, T1&& b) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         return _mm_or_si128(a, b);
+      }
+      else if constexpr (Arch == avx2) {
+         return _mm256_or_si256(a, b);
+      }
+      else if constexpr (Arch == avx512) {
+         return _mm512_or_si512(a, b);
+      }
+      else if constexpr (Arch == neon) {
+         return vorrq_u8(a, b);
+      }
+      else {
+         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+      }
+   }
+      
+   template <simd_arch Arch, simd T0, simd T1>
+   GLZ_ALWAYS_INLINE simd_t opSetLSB(T0&& a, T1&& b) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         unwrap_t<simd_t> mask = _mm_set_epi64x(0x00ll, 0x01ll);
+         return b ? _mm_or_si128(a, mask) : _mm_andnot_si128(mask, a);
+      }
+      else if constexpr (Arch == avx2) {
+         unwrap_t<simd_t> mask = _mm256_set_epi64x(0x00ll, 0x00ll, 0x00ll, 0x01ll);
+         return b ? _mm256_or_si256(a, mask) : _mm256_andnot_si256(mask, a);
+      }
+      else if constexpr (Arch == avx512) {
+         unwrap_t<simd_t> mask =
+            _mm512_set_epi64(0x00ll, 0x00ll, 0x00ll, 0x00ll, 0x00ll, 0x00ll, 0x00ll, 0x01ll);
+         return valueNew ? _mm512_or_si512(a, mask) : _mm512_andnot_si512(mask, a);
+      }
+      else if constexpr (Arch == neon) {
+         constexpr uint8x16_t mask{0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+         return b ? vorrq_u8(a, mask) : vbicq_u8(a, mask);
+      }
+      else {
+         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+      }
+   }
+   
+   template <simd_arch Arch, simd T0, simd T1>
+   GLZ_ALWAYS_INLINE simd_t opNot(T0&& a, T1&& b) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         return _mm_xor_si128(a, _mm_set1_epi64x(0xFFFFFFFFFFFFFFFFll));
+      }
+      else if constexpr (Arch == avx2) {
+         return _mm256_xor_si256(a, _mm256_set1_epi64x(0xFFFFFFFFFFFFFFFFll));
+      }
+      else if constexpr (Arch == avx512) {
+         return _mm512_xor_si512(a, _mm512_set1_epi64(0xFFFFFFFFFFFFFFFFll));
+      }
+      else if constexpr (Arch == neon) {
+         return vmvnq_u8(a);
+      }
+      else {
+         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+      }
+   }
+   
+   template <simd_arch Arch, simd T0, simd T1>
+   GLZ_ALWAYS_INLINE simd_t opGetMSB(T0&& a, T1&& b) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         simd_t res = _mm_and_si128(a, _mm_set_epi64x(0x8000000000000000ll, 0x00ll));
+         return !_mm_testz_si128(res, res);
+      }
+      else if constexpr (Arch == avx2) {
+         simd_t result =
+            _mm256_and_si256(a, _mm256_set_epi64x(0x8000000000000000ll, 0x00ll, 0x00ll, 0x00ll));
+         return !_mm256_testz_si256(result, result);
+      }
+      else if constexpr (Arch == avx512) {
+         simd_t result = _mm512_and_si512(
+            a, _mm512_set_epi64(0x8000000000000000ll, 0x00ll, 0x00ll, 0x00ll, 0x00ll, 0x00ll, 0x00ll, 0x00ll));
+         return _mm512_test_epi64_mask(result, result);
+      }
+      else if constexpr (Arch == neon) {
+         return (vgetq_lane_u8(a, 15) & 0x80) != 0;
+      }
+      else {
+         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+      }
+   }
+   
+   template <simd_arch Arch, simd T0, simd T1>
+   GLZ_ALWAYS_INLINE simd_t opBool(T0&& a, T1&& b) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         return !_mm_testz_si128(a, a);
+      }
+      else if constexpr (Arch == avx2) {
+         return !_mm256_testz_si256(a, a);
+      }
+      else if constexpr (Arch == avx512) {
+         return _mm512_test_epi64_mask(a, a);
+      }
+      else if constexpr (Arch == neon) {
+         return vmaxvq_u8(a) != 0;
+      }
+      else {
+         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+      }
+   }
+
+   template <simd_arch Arch, simd T0, simd T1>
+   GLZ_ALWAYS_INLINE simd_t reset(T0&& a, T1&& b) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         return _mm_setzero_si128();
+      }
+      else if constexpr (Arch == avx2) {
+         return _mm256_setzero_si256();
+      }
+      else if constexpr (Arch == avx512) {
+         return _mm512_setzero_si512();
+      }
+      else if constexpr (Arch == neon) {
+         return {};
+      }
+      else {
+         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+      }
+   }
+}
