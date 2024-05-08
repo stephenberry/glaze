@@ -599,16 +599,7 @@ namespace glz
          return _blsr_u64(a);
       }
 #else
-#if __has_builtin(__builtin_arm_rbit)
-      if constexpr (simd_uint32<T>) {
-         return __builtin_arm_rbit(__builtin_arm_rbit(a));
-      }
-      else if constexpr (simd_uint64<T>) {
-         return __builtin_arm_rbit64(__builtin_arm_rbit64(a));
-      }
-#else
       return a & (a - 1);
-#endif
 #endif
    }
    
