@@ -9,7 +9,24 @@
 #include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
 
+#if __has_include(<arm_neon.h>)
+#include <arm_neon.h>
+#else
 #include <immintrin.h>
+#endif
+
+namespace glz
+{
+   struct unsupported {};
+}
+
+#if __has_include(<emmintrin.h>)
+#include <emmintrin.h>
+#else
+constexpr glz::unsupported __m128i{};
+constexpr glz::unsupported __m256i{};
+constexpr glz::unsupported __m512i{};
+#endif
 
 namespace glz
 {
@@ -22,10 +39,10 @@ namespace glz
       neon
    };
    
-   template <class T, class... T>
+   template <class T, class...>
    struct first_t
    {
-      using type = value_type;
+      using type = T;
    };
 
    template <class... T>
@@ -161,7 +178,7 @@ namespace glz
 
 namespace glz
 {
-   template <simd Arch, SIMDT0, SIMDT1>
+   template <simd Arch, SIMD T0, SIMD T1>
    GLZ_ALWAYS_INLINE simd_t opAndNot(T0&& a, T1&& b) noexcept
    {
       using enum simd;
@@ -182,7 +199,7 @@ namespace glz
       }
    }
    
-   template <simd Arch, SIMDT0, SIMDT1>
+   template <simd Arch, SIMD T0, SIMD T1>
    GLZ_ALWAYS_INLINE simd_t opAnd(T0&& a, T1&& b) noexcept
    {
       using enum simd;
@@ -203,7 +220,7 @@ namespace glz
       }
    }
    
-   template <simd Arch, SIMDT0, SIMDT1>
+   template <simd Arch, SIMD T0, SIMD T1>
    GLZ_ALWAYS_INLINE simd_t opXor(T0&& a, T1&& b) noexcept
    {
       using enum simd;
@@ -224,7 +241,7 @@ namespace glz
       }
    }
       
-   template <simd Arch, SIMDT0, SIMDT1>
+   template <simd Arch, SIMD T0, SIMD T1>
    GLZ_ALWAYS_INLINE simd_t opOr(T0&& a, T1&& b) noexcept
    {
       using enum simd;
@@ -245,7 +262,7 @@ namespace glz
       }
    }
       
-   template <simd Arch, SIMDT0, SIMDT1>
+   template <simd Arch, SIMD T0, SIMD T1>
    GLZ_ALWAYS_INLINE simd_t opSetLSB(T0&& a, T1&& b) noexcept
    {
       using enum simd;
@@ -272,7 +289,7 @@ namespace glz
       }
    }
    
-   template <simd Arch, SIMDT0, SIMDT1>
+   template <simd Arch, SIMD T0, SIMD T1>
    GLZ_ALWAYS_INLINE simd_t opNot(T0&& a, T1&& b) noexcept
    {
       using enum simd;
@@ -293,7 +310,7 @@ namespace glz
       }
    }
    
-   template <simd Arch, SIMDT0, SIMDT1>
+   template <simd Arch, SIMD T0, SIMD T1>
    GLZ_ALWAYS_INLINE simd_t opGetMSB(T0&& a, T1&& b) noexcept
    {
       using enum simd;
@@ -319,7 +336,7 @@ namespace glz
       }
    }
    
-   template <simd Arch, SIMDT0, SIMDT1>
+   template <simd Arch, SIMD T0, SIMD T1>
    GLZ_ALWAYS_INLINE simd_t opBool(T0&& a, T1&& b) noexcept
    {
       using enum simd;
@@ -340,7 +357,7 @@ namespace glz
       }
    }
 
-   template <simd Arch, SIMDT0, SIMDT1>
+   template <simd Arch, SIMD T0, SIMD T1>
    GLZ_ALWAYS_INLINE simd_t reset(T0&& a, T1&& b) noexcept
    {
       using enum simd;

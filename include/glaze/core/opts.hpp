@@ -6,6 +6,7 @@
 #include <cstdint>
 
 #include "glaze/util/type_traits.hpp"
+#include "glaze/simd/simd.hpp"
 
 namespace glz
 {
