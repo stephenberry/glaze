@@ -4,7 +4,6 @@
 #pragma once
 
 #include "glaze/simd/simd.hpp"
-#include "glaze/simd/fallback.hpp"
 #include "glaze/simd/neon.hpp"
 
 namespace glz

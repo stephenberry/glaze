@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <algorithm>
+
 #include "glaze/simd/compare.hpp"
 #include "glaze/simd/gather.hpp"
 #include "glaze/simd/shuffle.hpp"
