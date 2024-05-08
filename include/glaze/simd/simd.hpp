@@ -471,6 +471,7 @@ namespace glz
          }
       }
       else {
+         using simd_t = typename arch<Arch>::simd_t;
          simd_t ret;
          std::memcpy(&ret, str, sizeof(simd_t));
          return ret;
@@ -492,7 +493,7 @@ namespace glz
       }
       else if constexpr (Arch == neon) {
          if constexpr (simd_char<Char>) {
-            GLZ_ALIGN unsigned char arr[16];
+            alignas(bytes_per_step<Arch>()) unsigned char arr[16];
             for (uint64_t x = 0; x < 16; ++x) {
                arr[x] = static_cast<unsigned char>(str[x]);
             }
@@ -503,6 +504,7 @@ namespace glz
          }
       }
       else {
+         using simd_t = typename arch<Arch>::simd_t;
          simd_t ret;
          std::memcpy(&ret, str, sizeof(simd_t));
          return ret;
@@ -526,6 +528,7 @@ namespace glz
          return vdupq_n_u8(str);
       }
       else {
+         using simd_t = typename arch<Arch>::simd_t;
          simd_t ret{};
          std::memset(&ret, str, sizeof(simd_t));
          return ret;
@@ -554,6 +557,7 @@ namespace glz
          }
       }
       else {
+         using simd_t = typename arch<Arch>::simd_t;
          std::memcpy(storage, &value, sizeof(simd_t));
       }
    }
