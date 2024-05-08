@@ -9,7 +9,7 @@
 #include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
 
-#if __has_include(<arm_neon.h>)
+#if defined(__arm64__) && __has_include(<arm_neon.h>)
 #include <arm_neon.h>
 #else
 #include <immintrin.h>
@@ -20,19 +20,22 @@ namespace glz
    struct unsupported {};
 }
 
-#if __has_include(<emmintrin.h>)
+#if !defined(__arm64__) && __has_include(<emmintrin.h>)
 #include <emmintrin.h>
 #else
-constexpr glz::unsupported __m128i{};
-constexpr glz::unsupported __m256i{};
-constexpr glz::unsupported __m512i{};
+namespace glz
+{
+   using __m128i = unsupported;
+   using __m256i = unsupported;
+   using __m512i = unsupported;
+}
 #endif
 
 namespace glz
 {
    enum struct simd : uint8_t
    {
-      swar, // uses SIMD  within a register
+      swar, // uses class  within a register
       avx,
       avx2,
       avx512,
@@ -110,9 +113,6 @@ namespace glz
    }
    
    template <class T>
-   concept SIMD = std::same_as<simd_t, std::decay_t<T>>;
-   
-   template <class T>
    concept simd_bool = std::same_as<unwrap_t<T>, bool>;
    
    template <class T>
@@ -152,7 +152,7 @@ namespace glz
    template <uint64_t BytesProcessed, class T, class Integer, Integer Mask>
    struct type_holder {
       static constexpr uint64_t bytesProcessed{ BytesProcessed };
-      static constexpr integer_type_new mask{ Mask };
+      static constexpr Integer mask{ Mask };
       using type         = T;
       using integer_type = Integer;
    };
@@ -178,8 +178,8 @@ namespace glz
 
 namespace glz
 {
-   template <simd Arch, SIMD T0, SIMD T1>
-   GLZ_ALWAYS_INLINE simd_t opAndNot(T0&& a, T1&& b) noexcept
+   template <simd Arch, class T0, class T1>
+   GLZ_ALWAYS_INLINE auto opAndNot(T0&& a, T1&& b) noexcept
    {
       using enum simd;
       if constexpr (Arch == avx) {
@@ -195,12 +195,12 @@ namespace glz
          return vbicq_u8(a, b);
       }
       else {
-         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+         static_assert(false_v<decltype(Arch)>, "class Architecture not supported");
       }
    }
    
-   template <simd Arch, SIMD T0, SIMD T1>
-   GLZ_ALWAYS_INLINE simd_t opAnd(T0&& a, T1&& b) noexcept
+   template <simd Arch, class T0, class T1>
+   GLZ_ALWAYS_INLINE auto opAnd(T0&& a, T1&& b) noexcept
    {
       using enum simd;
       if constexpr (Arch == avx) {
@@ -216,12 +216,12 @@ namespace glz
          return vandq_u8(a, b);
       }
       else {
-         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+         static_assert(false_v<decltype(Arch)>, "class Architecture not supported");
       }
    }
    
-   template <simd Arch, SIMD T0, SIMD T1>
-   GLZ_ALWAYS_INLINE simd_t opXor(T0&& a, T1&& b) noexcept
+   template <simd Arch, class T0, class T1>
+   GLZ_ALWAYS_INLINE auto opXor(T0&& a, T1&& b) noexcept
    {
       using enum simd;
       if constexpr (Arch == avx) {
@@ -237,12 +237,12 @@ namespace glz
          return veorq_u8(a, b);
       }
       else {
-         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+         static_assert(false_v<decltype(Arch)>, "class Architecture not supported");
       }
    }
       
-   template <simd Arch, SIMD T0, SIMD T1>
-   GLZ_ALWAYS_INLINE simd_t opOr(T0&& a, T1&& b) noexcept
+   template <simd Arch, class T0, class T1>
+   GLZ_ALWAYS_INLINE auto opOr(T0&& a, T1&& b) noexcept
    {
       using enum simd;
       if constexpr (Arch == avx) {
@@ -258,26 +258,27 @@ namespace glz
          return vorrq_u8(a, b);
       }
       else {
-         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+         static_assert(false_v<decltype(Arch)>, "class Architecture not supported");
       }
    }
       
-   template <simd Arch, SIMD T0, SIMD T1>
-   GLZ_ALWAYS_INLINE simd_t opSetLSB(T0&& a, T1&& b) noexcept
+   template <simd Arch, class T0, class T1>
+   GLZ_ALWAYS_INLINE auto opSetLSB(T0&& a, T1&& b) noexcept
    {
       using enum simd;
+      using simd_t = typename arch<Arch>::simd_t;
       if constexpr (Arch == avx) {
-         unwrap_t<simd_t> mask = _mm_set_epi64x(0x00ll, 0x01ll);
+         simd_t mask = _mm_set_epi64x(0x00ll, 0x01ll);
          return b ? _mm_or_si128(a, mask) : _mm_andnot_si128(mask, a);
       }
       else if constexpr (Arch == avx2) {
-         unwrap_t<simd_t> mask = _mm256_set_epi64x(0x00ll, 0x00ll, 0x00ll, 0x01ll);
+         simd_t mask = _mm256_set_epi64x(0x00ll, 0x00ll, 0x00ll, 0x01ll);
          return b ? _mm256_or_si256(a, mask) : _mm256_andnot_si256(mask, a);
       }
       else if constexpr (Arch == avx512) {
-         unwrap_t<simd_t> mask =
+         simd_t mask =
             _mm512_set_epi64(0x00ll, 0x00ll, 0x00ll, 0x00ll, 0x00ll, 0x00ll, 0x00ll, 0x01ll);
-         return valueNew ? _mm512_or_si512(a, mask) : _mm512_andnot_si512(mask, a);
+         return b ? _mm512_or_si512(a, mask) : _mm512_andnot_si512(mask, a);
       }
       else if constexpr (Arch == neon) {
          constexpr uint8x16_t mask{0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -285,12 +286,12 @@ namespace glz
          return b ? vorrq_u8(a, mask) : vbicq_u8(a, mask);
       }
       else {
-         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+         static_assert(false_v<decltype(Arch)>, "class Architecture not supported");
       }
    }
    
-   template <simd Arch, SIMD T0, SIMD T1>
-   GLZ_ALWAYS_INLINE simd_t opNot(T0&& a, T1&& b) noexcept
+   template <simd Arch, class T>
+   GLZ_ALWAYS_INLINE auto opNot(T&& a) noexcept
    {
       using enum simd;
       if constexpr (Arch == avx) {
@@ -306,14 +307,15 @@ namespace glz
          return vmvnq_u8(a);
       }
       else {
-         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+         static_assert(false_v<decltype(Arch)>, "class Architecture not supported");
       }
    }
    
-   template <simd Arch, SIMD T0, SIMD T1>
-   GLZ_ALWAYS_INLINE simd_t opGetMSB(T0&& a, T1&& b) noexcept
+   template <simd Arch, class T>
+   GLZ_ALWAYS_INLINE auto opGetMSB(T&& a) noexcept
    {
       using enum simd;
+      using simd_t = typename arch<Arch>::simd_t;
       if constexpr (Arch == avx) {
          simd_t res = _mm_and_si128(a, _mm_set_epi64x(0x8000000000000000ll, 0x00ll));
          return !_mm_testz_si128(res, res);
@@ -332,12 +334,12 @@ namespace glz
          return (vgetq_lane_u8(a, 15) & 0x80) != 0;
       }
       else {
-         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+         static_assert(false_v<decltype(Arch)>, "class Architecture not supported");
       }
    }
    
-   template <simd Arch, SIMD T0, SIMD T1>
-   GLZ_ALWAYS_INLINE simd_t opBool(T0&& a, T1&& b) noexcept
+   template <simd Arch, class T>
+   GLZ_ALWAYS_INLINE auto opBool(T&& a) noexcept
    {
       using enum simd;
       if constexpr (Arch == avx) {
@@ -353,12 +355,12 @@ namespace glz
          return vmaxvq_u8(a) != 0;
       }
       else {
-         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+         static_assert(false_v<decltype(Arch)>, "class Architecture not supported");
       }
    }
 
-   template <simd Arch, SIMD T0, SIMD T1>
-   GLZ_ALWAYS_INLINE simd_t reset(T0&& a, T1&& b) noexcept
+   template <simd Arch, class T>
+   GLZ_ALWAYS_INLINE auto reset() noexcept
    {
       using enum simd;
       if constexpr (Arch == avx) {
@@ -371,14 +373,14 @@ namespace glz
          return _mm512_setzero_si512();
       }
       else if constexpr (Arch == neon) {
-         return {};
+         return std::decay_t<T>{};
       }
       else {
-         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+         static_assert(false_v<decltype(Arch)>, "class Architecture not supported");
       }
    }
    
-#if GLZ_CHECK_INSTRUCTION(GLZ_NEON)
+#if defined(__arm64__) && __has_include(<arm_neon.h>)
    template <class T>
    GLZ_ALWAYS_INLINE uint32_t compare_bit_mask(T&& value) noexcept
    {
@@ -406,10 +408,10 @@ namespace glz
          return uint64_t(_mm512_cmpeq_epi8_mask(a, b));
       }
       else if constexpr (Arch == neon) {
-         return compare_bit_mask(vceqq_u8(value, other));
+         return compare_bit_mask(vceqq_u8(a, b));
       }
       else {
-         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+         static_assert(false_v<decltype(Arch)>, "class Architecture not supported");
       }
    }
    
@@ -432,7 +434,7 @@ namespace glz
          return vqtbl1q_u8(a, vandq_u8(b, mask));
       }
       else {
-         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+         static_assert(false_v<decltype(Arch)>, "class Architecture not supported");
       }
    }
    
