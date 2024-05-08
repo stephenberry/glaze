@@ -296,12 +296,11 @@ namespace glz
                            using simd_t = typename arch<Arch>::simd_t;
                            simd_t chunk;
                            std::memcpy(&chunk, c, 16);
-                           const auto next = uint32_t(opCmpEq<Arch>(opShuffle<Arch>(simd_escapeable0<simd_t>, chunk), chunk) |
-                                    opCmpEq<Arch>(opShuffle<Arch>(simd_escapeable1<simd_t>, chunk), chunk));
-                           if (next) {
-                              const auto length = (countr_zero(next) >> 3);
-                              c += length;
-                              data += length;
+                           const auto next = countr_zero(uint32_t(opCmpEq<Arch>(opShuffle<Arch>(simd_escapeable0<simd_t>, chunk), chunk) |
+                                    opCmpEq<Arch>(opShuffle<Arch>(simd_escapeable1<simd_t>, chunk), chunk)));
+                           if (next < std::numeric_limits<uint16_t>::max()) {
+                              c += next;
+                              data += next;
 
                               std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
                               data += 2;
