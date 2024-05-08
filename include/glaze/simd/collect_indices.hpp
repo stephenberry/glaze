@@ -102,6 +102,7 @@ namespace glz
    template <class T>
    constexpr T chars{simdFromValue<T>(0x20u)};
 
+   template <simd Arch>
    GLZ_ALWAYS_INLINE simd_t collectStructuralsAsSimdBase(const simd_t* values)
    {
       GLZ_ALIGN string_parsing_type v[strides_per_step];

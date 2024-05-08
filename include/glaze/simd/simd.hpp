@@ -9,95 +9,13 @@
 #include "glaze/util/inline.hpp"
 #include "glaze/util/type_traits.hpp"
 
-#if defined(__clang__)
-#define GLZ_CLANG 1
-#elif defined(__GNUC__) && defined(__llvm__)
-#define GLZ_CLANG 1
-#elif defined(__APPLE__) && defined(__clang__)
-#define GLZ_CLANG 1
-#elif defined(_MSC_VER)
-#define GLZ_MSVC 1
-#elif defined(__GNUC__) && !defined(__clang__)
-#define GLZ_GNUCXX 1
-#endif
-
-#if defined(macintosh) || defined(Macintosh) || (defined(__APPLE__) && defined(__MACH__))
-#define GLZ_MAC 1
-#elif defined(linux) || defined(__linux) || defined(__linux__) || defined(__gnu_linux__)
-#define GLZ_LINUX 1
-#elif defined(WIN32) || defined(_WIN32) || defined(_WIN64)
-#define GLZ_WIN 1
-#endif
-
-#if !defined(GLZ_CPU_INSTRUCTIONS)
-#define GLZ_CPU_INSTRUCTIONS 0
-#endif
-
-#if !defined GLZ_ALIGN
-#define GLZ_ALIGN alignas(bytes_per_step)
-#endif
-
-#if !defined(GLZ_CHECK_INSTRUCTION)
-#define GLZ_CHECK_INSTRUCTION(x) (GLZ_CPU_INSTRUCTIONS & x)
-#endif
-
-#if !defined(GLZ_CHECK_FOR_AVX)
-#define GLZ_CHECK_FOR_AVX(x) (GLZ_CPU_INSTRUCTIONS >= x)
-#endif
-
-#if !defined(GLZ_POPCNT)
-#define GLZ_POPCNT (1 << 0)
-#endif
-#if !defined(GLZ_LZCNT)
-#define GLZ_LZCNT (1 << 1)
-#endif
-#if !defined(GLZ_BMI)
-#define GLZ_BMI (1 << 2)
-#endif
-#if !defined(GLZ_BMI2)
-#define GLZ_BMI2 (1 << 3)
-#endif
-#if !defined(GLZ_NEON)
-#define GLZ_NEON (1 << 4)
-#endif
-#if !defined(GLZ_AVX)
-#define GLZ_AVX (1 << 5)
-#endif
-#if !defined(GLZ_AVX2)
-#define GLZ_AVX2 (1 << 6)
-#endif
-#if !defined(GLZ_AVX512)
-#define GLZ_AVX512 (1 << 7)
-#endif
-
-#if !defined(GLZ_ANY)
-#define GLZ_ANY (GLZ_AVX | GLZ_AVX2 | GLZ_AVX512 | GLZ_POPCNT | GLZ_BMI | GLZ_BMI2 | GLZ_LZCNT)
-#endif
-
-#if !defined(GLZ_ANY_AVX)
-#define GLZ_ANY_AVX (GLZ_AVX | GLZ_AVX2 | GLZ_AVX512)
-#endif
-
-#if defined(_MSC_VER)
-#define GLZ_VISUAL_STUDIO 1
-#if defined(__clang__)
-#define GLZ_CLANG_VISUAL_STUDIO 1
-#else
-#define GLZ_REGULAR_VISUAL_STUDIO 1
-#endif
-#endif
-
-#if GLZ_CHECK_INSTRUCTION(GLZ_ANY)
-
 #include <immintrin.h>
-
-#endif
 
 namespace glz
 {
-   enum struct simd_arch : uint8_t
+   enum struct simd : uint8_t
    {
-      swar, // uses SIMD within a register
+      swar, // uses SIMD  within a register
       avx,
       avx2,
       avx512,
@@ -112,86 +30,70 @@ namespace glz
 
    template <class... T>
    using unwrap_t = std::remove_cvref_t<typename first_t<T...>::type>;
-
-   union __m128x;
-
-#if GLZ_CHECK_INSTRUCTION(GLZ_ANY_AVX)
-
-   using simd128_t = __m128i;
-   using simd256_t = __m256i;
-   using simd512_t = __m512i;
-
-#if GLZ_CHECK_INSTRUCTION(GLZ_AVX512)
-   using simd_t = __m512i;
-   constexpr uint64_t bits_per_step{512};
-   using string_parsing_type = uint64_t;
-#elif GLZ_CHECK_INSTRUCTION(GLZ_AVX2)
-   using simd_t = __m256i;
-   constexpr uint64_t bits_per_step{256};
-   using string_parsing_type = uint32_t;
-#elif GLZ_CHECK_INSTRUCTION(GLZ_AVX)
-   using simd_t = __m128i;
-   constexpr uint64_t bits_per_step{128};
-   using string_parsing_type = uint16_t;
-#endif
-#elif GLZ_CHECK_INSTRUCTION(GLZ_NEON)
-
-#include <arm_neon.h>
-
-   using simd128_t = uint8x16_t;
-   using simd256_t = uint32_t;
-   using simd512_t = uint64_t;
-
-   using simd_t = uint8x16_t;
-   constexpr uint64_t bits_per_step{128};
-   using string_parsing_type = uint16_t;
-#else
-   union __m128x {
-#if GLZ_WIN
-      int8_t m128x_int8[16]{};
-      int16_t m128x_int16[8];
-      int32_t m128x_int32[4];
-      int64_t m128x_int64[2];
-      uint8_t m128x_uint8[16];
-      int16_t m128x_uint16[8];
-      int32_t m128x_uint32[4];
-      uint64_t m128x_uint64[2];
-#else
-      int64_t m128x_int64[2];
-      int8_t m128x_int8[16]{};
-      int16_t m128x_int16[8];
-      int32_t m128x_int32[4];
-      uint8_t m128x_uint8[16];
-      int16_t m128x_uint16[8];
-      int32_t m128x_uint32[4];
-      uint64_t m128x_uint64[2];
-#endif
+   
+   template <simd Arch>
+   struct arch;
+   
+   template <>
+   struct arch<simd::swar>
+   {
+      static constexpr uint64_t bits_per_step{64};
+      using simd_t = uint64_t;
+      using string_parsing_type = uint16_t;
    };
-   using simd128_t = __m128x;
-   using simd256_t = uint32_t;
-   using simd512_t = uint64_t;
-
-   using simd_t = __m128x;
-   constexpr uint64_t bits_per_step{128};
-   using string_parsing_type = uint16_t;
-#endif
-
-   constexpr uint64_t bytes_per_step{bits_per_step / 8};
-   constexpr uint64_t bits_per_step64{bits_per_step / 64};
-   constexpr uint64_t strides_per_step{bits_per_step / bytes_per_step};
-
-   using string_view_ptr = const uint8_t*;
-   using structural_index = const uint8_t*;
-   using string_buffer_ptr = uint8_t*;
-
+   
+   template <>
+   struct arch<simd::avx>
+   {
+      static constexpr uint64_t bits_per_step{128};
+      using simd_t = __m128i;
+      using string_parsing_type = uint16_t;
+   };
+   
+   template <>
+   struct arch<simd::avx2>
+   {
+      static constexpr uint64_t bits_per_step{256};
+      using simd_t = __m256i;
+      using string_parsing_type = uint32_t;
+   };
+   
+   template <>
+   struct arch<simd::avx512>
+   {
+      static constexpr uint64_t bits_per_step{512};
+      using simd_t = __m512i;
+      using string_parsing_type = uint64_t;
+   };
+   
+   template <>
+   struct arch<simd::neon>
+   {
+      static constexpr uint64_t bits_per_step{128};
+      using simd_t = uint8x16_t;
+      using string_parsing_type = uint16_t;
+   };
+   
+   template <simd Arch>
+   constexpr uint64_t bytes_per_step() noexcept
+   {
+      return arch<Arch>::bits_per_step / 8;
+   }
+   
+   template <simd Arch>
+   constexpr uint64_t bits_per_step64() noexcept
+   {
+      return arch<Arch>::bits_per_step / 64;
+   }
+   
+   template <simd Arch>
+   constexpr uint64_t strides_per_step() noexcept
+   {
+      return arch<Arch>::bits_per_step / bytes_per_step<Arch>();
+   }
+   
    template <class T>
-   concept simd512 = std::same_as<simd512_t, std::decay_t<T>>;
-   template <class T>
-   concept simd256 = std::same_as<simd256_t, std::decay_t<T>>;
-   template <class T>
-   concept simd128 = std::same_as<simd128_t, std::decay_t<T>>;
-   template <class T>
-   concept simd = std::same_as<simd_t, std::decay_t<T>>;
+   concept SIMD = std::same_as<simd_t, std::decay_t<T>>;
    
    template <class T>
    concept simd_bool = std::same_as<unwrap_t<T>, bool>;
@@ -259,10 +161,10 @@ namespace glz
 
 namespace glz
 {
-   template <simd_arch Arch, simd T0, simd T1>
+   template <simd Arch, SIMDT0, SIMDT1>
    GLZ_ALWAYS_INLINE simd_t opAndNot(T0&& a, T1&& b) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          return _mm_andnot_si128(b, a);
       }
@@ -280,10 +182,10 @@ namespace glz
       }
    }
    
-   template <simd_arch Arch, simd T0, simd T1>
+   template <simd Arch, SIMDT0, SIMDT1>
    GLZ_ALWAYS_INLINE simd_t opAnd(T0&& a, T1&& b) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          return _mm_and_si128(a, b);
       }
@@ -301,10 +203,10 @@ namespace glz
       }
    }
    
-   template <simd_arch Arch, simd T0, simd T1>
+   template <simd Arch, SIMDT0, SIMDT1>
    GLZ_ALWAYS_INLINE simd_t opXor(T0&& a, T1&& b) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          return _mm_xor_si128(a, b);
       }
@@ -322,10 +224,10 @@ namespace glz
       }
    }
       
-   template <simd_arch Arch, simd T0, simd T1>
+   template <simd Arch, SIMDT0, SIMDT1>
    GLZ_ALWAYS_INLINE simd_t opOr(T0&& a, T1&& b) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          return _mm_or_si128(a, b);
       }
@@ -343,10 +245,10 @@ namespace glz
       }
    }
       
-   template <simd_arch Arch, simd T0, simd T1>
+   template <simd Arch, SIMDT0, SIMDT1>
    GLZ_ALWAYS_INLINE simd_t opSetLSB(T0&& a, T1&& b) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          unwrap_t<simd_t> mask = _mm_set_epi64x(0x00ll, 0x01ll);
          return b ? _mm_or_si128(a, mask) : _mm_andnot_si128(mask, a);
@@ -370,10 +272,10 @@ namespace glz
       }
    }
    
-   template <simd_arch Arch, simd T0, simd T1>
+   template <simd Arch, SIMDT0, SIMDT1>
    GLZ_ALWAYS_INLINE simd_t opNot(T0&& a, T1&& b) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          return _mm_xor_si128(a, _mm_set1_epi64x(0xFFFFFFFFFFFFFFFFll));
       }
@@ -391,10 +293,10 @@ namespace glz
       }
    }
    
-   template <simd_arch Arch, simd T0, simd T1>
+   template <simd Arch, SIMDT0, SIMDT1>
    GLZ_ALWAYS_INLINE simd_t opGetMSB(T0&& a, T1&& b) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          simd_t res = _mm_and_si128(a, _mm_set_epi64x(0x8000000000000000ll, 0x00ll));
          return !_mm_testz_si128(res, res);
@@ -417,10 +319,10 @@ namespace glz
       }
    }
    
-   template <simd_arch Arch, simd T0, simd T1>
+   template <simd Arch, SIMDT0, SIMDT1>
    GLZ_ALWAYS_INLINE simd_t opBool(T0&& a, T1&& b) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          return !_mm_testz_si128(a, a);
       }
@@ -438,10 +340,10 @@ namespace glz
       }
    }
 
-   template <simd_arch Arch, simd T0, simd T1>
+   template <simd Arch, SIMDT0, SIMDT1>
    GLZ_ALWAYS_INLINE simd_t reset(T0&& a, T1&& b) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          return _mm_setzero_si128();
       }
@@ -460,8 +362,8 @@ namespace glz
    }
    
 #if GLZ_CHECK_INSTRUCTION(GLZ_NEON)
-   template <simd128 T0>
-   GLZ_ALWAYS_INLINE uint32_t compare_bit_mask(T0&& value) noexcept
+   template <class T>
+   GLZ_ALWAYS_INLINE uint32_t compare_bit_mask(T&& value) noexcept
    {
       static constexpr uint8x16_t bit_mask{0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80,
                                            0x01, 0x02, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80};
@@ -473,10 +375,10 @@ namespace glz
    }
 #endif
    
-   template <simd_arch Arch, class T>
+   template <simd Arch, class T>
    GLZ_ALWAYS_INLINE auto opCmpEq(T&& a, T&& b) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          return uint32_t(_mm_movemask_epi8(_mm_cmpeq_epi8(a, b)));
       }
@@ -494,10 +396,10 @@ namespace glz
       }
    }
    
-   template <simd_arch Arch, class T>
+   template <simd Arch, class T>
    GLZ_ALWAYS_INLINE auto opShuffle(T&& a, T&& b) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          return _mm_shuffle_epi8(a, b);
       }
@@ -525,10 +427,10 @@ namespace glz
       return ret;
    }
    
-   template <simd_arch Arch, class T, class Char>
+   template <simd Arch, class T, class Char>
    GLZ_ALWAYS_INLINE T vgather(Char* str) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          return _mm_load_si128(reinterpret_cast<const __m128i*>(str));
       }
@@ -556,10 +458,10 @@ namespace glz
       }
    }
    
-   template <simd_arch Arch, class T, class Char>
+   template <simd Arch, class T, class Char>
    GLZ_ALWAYS_INLINE T ugather(Char* str) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          return _mm_loadu_si128(reinterpret_cast<const __m128i*>(str));
       }
@@ -588,10 +490,10 @@ namespace glz
       }
    }
    
-   template <simd_arch Arch, class T, class Char>
+   template <simd Arch, class T, class Char>
    GLZ_ALWAYS_INLINE T gather(Char* str) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          return _mm_set1_epi8(str);
       }
@@ -611,10 +513,10 @@ namespace glz
       }
    }
    
-   template <simd_arch Arch, class T, class Char>
+   template <simd Arch, class T, class Char>
    GLZ_ALWAYS_INLINE void store(const T& value, Char* storage) noexcept
    {
-      using enum simd_arch;
+      using enum simd;
       if constexpr (Arch == avx) {
          _mm_store_si128(reinterpret_cast<__m128i*>(storage), value);
       }
@@ -659,5 +561,19 @@ namespace glz
       return a & (a - 1);
 #endif
 #endif
+   }
+   
+   // BMI2
+   template <simd_uint32 T>
+   GLZ_ALWAYS_INLINE T pdep(T&& a, T&& b) noexcept
+   {
+      return _pdep_u32(a, b);
+   }
+
+   // BMI2
+   template <simd_uint64 T>
+   GLZ_ALWAYS_INLINE T pdep(T&& a, T&& b) noexcept
+   {
+      return _pdep_u64(a, b);
    }
 }
