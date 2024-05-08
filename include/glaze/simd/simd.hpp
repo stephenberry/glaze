@@ -95,6 +95,15 @@
 
 namespace glz
 {
+   enum struct simd_arch : uint8_t
+   {
+      swar, // uses SIMD within a register
+      avx,
+      avx2,
+      avx512,
+      neon
+   };
+   
    template <class T, class... T>
    struct first_t
    {

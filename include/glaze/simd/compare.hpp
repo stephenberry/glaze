@@ -31,26 +31,26 @@ namespace glz
 #elif GLZ_CHECK_FOR_AVX(GLZ_AVX)
 
    template <simd128 T0, simd128 T1>
-   GLZ_ALWAYS_INLINE auto opCmpEq(T0&& value, T1&& other) noexcept
+   GLZ_ALWAYS_INLINE auto opCmpEq(T0&& a, T1&& b) noexcept
    {
-      return static_cast<uint32_t>(_mm_movemask_epi8(_mm_cmpeq_epi8(std::forward<T0>(value), std::forward<T1>(other))));
+      return uint32_t(_mm_movemask_epi8(_mm_cmpeq_epi8(a, b)));
    }
 
 #if GLZ_CHECK_FOR_AVX(GLZ_AVX2)
 
    template <simd256 T0, simd256 T1>
-   GLZ_ALWAYS_INLINE auto opCmpEq(T0&& value, T1&& other) noexcept
+   GLZ_ALWAYS_INLINE auto opCmpEq(T0&& a, T1&& b) noexcept
    {
       return static_cast<uint32_t>(
-         _mm256_movemask_epi8(_mm256_cmpeq_epi8(std::forward<T0>(value), std::forward<T1>(other))));
+         _mm256_movemask_epi8(_mm256_cmpeq_epi8(a, b)));
    }
 
 #if GLZ_CHECK_FOR_AVX(GLZ_AVX512)
 
    template <simd512 T0, simd512 T1>
-   GLZ_ALWAYS_INLINE auto opCmpEq(T0&& value, T1&& other) noexcept
+   GLZ_ALWAYS_INLINE auto opCmpEq(T0&& a, T1&& b) noexcept
    {
-      return static_cast<uint64_t>(_mm512_cmpeq_epi8_mask(std::forward<T0>(value), std::forward<T1>(other)));
+      return uint64_t(_mm512_cmpeq_epi8_mask(a, b));
    }
 
 #endif
@@ -60,10 +60,10 @@ namespace glz
 #else
 
    template <simd128 T0, simd128 T1>
-   GLZ_ALWAYS_INLINE uint32_t opCmpEq(T0&& value, T1&& other) noexcept
+   GLZ_ALWAYS_INLINE uint32_t opCmpEq(T0&& a, T1&& b) noexcept
    {
-      return static_cast<uint32_t>(_mm128_movemask_epi8(
-         _mm128_cmpeq_epi8(std::forward<T0>(value), std::forward<T1>(other), std::make_index_sequence<16>{}),
+      return uint32_t(_mm128_movemask_epi8(
+         _mm128_cmpeq_epi8(a, b, std::make_index_sequence<16>{}),
          std::make_index_sequence<16>{}));
    }
 
