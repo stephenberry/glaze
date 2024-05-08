@@ -79,17 +79,5 @@ namespace glz
       return __builtin_ctzll(a);
 #endif
    }
-
-#else
-
-   template <simd_unsigned T>
-   GLZ_ALWAYS_INLINE T blsr(T a) noexcept
-   {
-      if (a == 0) {
-         return 0;
-      }
-
-      return a & (a - 1);
-   }
 #endif
 }

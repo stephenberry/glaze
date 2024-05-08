@@ -54,25 +54,5 @@ namespace glz
       return __builtin_clzll(a);
 #endif
    }
-
-#else
-
-   template <simd_unsigned T>
-   constexpr T lzcnt(T&& a) noexcept
-   {
-      if (a == 0) {
-         return sizeof(T) * 8;
-      }
-
-      T count{};
-      T mask{static_cast<T>(1) << (std::numeric_limits<T>::digits - 1)};
-
-      while ((a & mask) == 0) {
-         ++count;
-         mask >>= 1;
-      }
-
-      return count;
-   }
 #endif
 }

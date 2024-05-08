@@ -7,6 +7,7 @@
 #include <cstdint>
 
 #include "glaze/util/inline.hpp"
+#include "glaze/util/type_traits.hpp"
 
 #if defined(__clang__)
 #define GLZ_CLANG 1
