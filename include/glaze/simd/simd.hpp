@@ -505,4 +505,27 @@ namespace glz
          static_assert(false_v<Arch>, "SIMD Architecture not supported");
       }
    }
+   
+   template <simd_arch Arch, class T>
+   GLZ_ALWAYS_INLINE auto opShuffle(T&& a, T&& b) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         return _mm_shuffle_epi8(a, b);
+      }
+      else if constexpr (Arch == avx2) {
+         return _mm256_shuffle_epi8(a, b);
+      }
+      else if constexpr (Arch == avx512) {
+         return _mm512_shuffle_epi8(a, b);
+      }
+      else if constexpr (Arch == neon) {
+         constexpr uint8x16_t mask{0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F,
+                                          0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F};
+         return vqtbl1q_u8(a, vandq_u8(b, mask));
+      }
+      else {
+         static_assert(false_v<Arch>, "SIMD Architecture not supported");
+      }
+   }
 }
