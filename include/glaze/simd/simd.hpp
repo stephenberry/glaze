@@ -10,6 +10,10 @@
 #include "glaze/util/type_traits.hpp"
 
 #if defined(__arm64__) && __has_include(<arm_neon.h>)
+#define GLZ_NEON
+#endif
+
+#ifdef GLZ_NEON
 #include <arm_neon.h>
 #else
 #include <immintrin.h>
@@ -28,6 +32,28 @@ namespace glz
    using __m128i = unsupported;
    using __m256i = unsupported;
    using __m512i = unsupported;
+   
+   constexpr auto _mm_set_epi64x(auto, auto) { return 0; }
+   constexpr auto _mm256_set_epi64x(auto, auto, auto, auto) { return 0; }
+   constexpr auto _mm512_set_epi64(auto, auto, auto, auto, auto, auto, auto, auto) {
+      return 0;
+   }
+   
+   constexpr auto _mm_set1_epi64x(auto) { return 0; }
+   constexpr auto _mm256_set1_epi64x(auto) { return 0; }
+   constexpr auto _mm512_set1_epi64(auto) { return 0; }
+   
+   constexpr auto _mm_setzero_si128() { return 0; }
+   constexpr auto _mm256_setzero_si256() { return 0; }
+   constexpr auto _mm512_setzero_si512() { return 0; }
+   
+   constexpr auto _mm_load_si128(auto) { return 0; }
+   constexpr auto _mm256_load_si256(auto) { return 0; }
+   constexpr auto _mm512_load_si512(auto) { return 0; }
+   
+   constexpr auto _mm_loadu_si128(auto) { return 0; }
+   constexpr auto _mm256_loadu_si256(auto) { return 0; }
+   constexpr auto _mm512_loadu_si512(auto) { return 0; }
 }
 #endif
 
@@ -380,7 +406,7 @@ namespace glz
       }
    }
    
-#if defined(__arm64__) && __has_include(<arm_neon.h>)
+#ifdef GLZ_NEON
    template <class T>
    GLZ_ALWAYS_INLINE uint32_t compare_bit_mask(T&& value) noexcept
    {
