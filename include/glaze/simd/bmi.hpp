@@ -91,21 +91,5 @@ namespace glz
 
       return a & (a - 1);
    }
-
-   template <simd_unsigned T>
-   GLZ_ALWAYS_INLINE T tzcnt(T a) noexcept
-   {
-      if (a == 0) {
-         return sizeof(T) * 8;
-      }
-
-      T count{};
-      while ((a & 1) == 0) {
-         a >>= 1;
-         ++count;
-      }
-
-      return count;
-   }
 #endif
 }
