@@ -213,18 +213,6 @@ namespace glz
 
    template <class T>
    concept simd_uint64 = std::same_as<uint64_t, unwrap_t<T>>;
-   
-   /*template <class T>
-   concept int8_type = std::same_as<int8_t, unwrap_t<T>>;
-
-   template <class T>
-   concept int16_type = std::same_as<int16_t, unwrap_t<T>>;
-
-   template <class T>
-   concept int32_type = std::same_as<int32_t, unwrap_t<T>>;
-
-   template <class T>
-   concept int64_type = std::same_as<int64_t, unwrap_t<T>>;*/
 
    template <class T>
 	concept simd_unsigned = std::unsigned_integral<unwrap_t<T>> && !simd_bool<T>;
@@ -647,5 +635,29 @@ namespace glz
       else {
          std::memcpy(storage, &value, sizeof(simd_t));
       }
+   }
+   
+   template <std::integral T>
+   GLZ_ALWAYS_INLINE T blsr(T a) noexcept
+   {
+#ifdef _MSC_VER
+      if constexpr (simd_uint32<T>) {
+         return _blsr_u32(a);
+      }
+      else if constexpr (simd_uint64<T>) {
+         return _blsr_u64(a);
+      }
+#else
+#if __has_builtin(__builtin_arm_rbit)
+      if constexpr (simd_uint32<T>) {
+         return __builtin_arm_rbit(__builtin_arm_rbit(a));
+      }
+      else if constexpr (simd_uint64<T>) {
+         return __builtin_arm_rbit64(__builtin_arm_rbit64(a));
+      }
+#else
+      return a & (a - 1);
+#endif
+#endif
    }
 }
