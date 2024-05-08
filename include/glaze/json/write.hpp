@@ -187,36 +187,6 @@ namespace glz
          return t;
       }();
 
-      template <size_t Bytes>
-         requires(Bytes == 8)
-      GLZ_ALWAYS_INLINE void serialize_string(const auto* in, auto* out, auto& ix) noexcept
-      {
-         uint64_t swar;
-         while (true) {
-            std::memcpy(&swar, in, Bytes);
-            std::memcpy(out + ix, in, Bytes);
-            auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
-
-            if (next) {
-               next = countr_zero(next) >> 3;
-               const auto escape_char = char_escape_table[uint32_t(in[next])];
-               if (escape_char == 0) {
-                  ix += next;
-                  return;
-               }
-               ix += next;
-               in += next;
-               std::memcpy(out + ix, &escape_char, 2);
-               ix += 2;
-               ++in;
-            }
-            else {
-               ix += 8;
-               in += 8;
-            }
-         }
-      }
-
       template <class T>
          requires str_t<T> || char_t<T>
       struct to_json<T>
@@ -264,7 +234,7 @@ namespace glz
                      }
                   }();
 
-                  // We need at space for quotes and the string length: 2 + n.
+                  // We need space for quotes and the string length: 2 + n.
                   if constexpr (resizable<B>) {
                      const auto n = str.size();
                      const auto k = ix + 2 + n;
@@ -307,68 +277,50 @@ namespace glz
                   else {
                      dump_unchecked<'"'>(b, ix);
 
-                     // IMPORTANT: This code breaks address sanitizers (GCC and MSVC), because they don't like
-                     // string memory being read beyond the length of the string, even if there is properly
-                     // allocated memory.
-                     // Also, this is only valid if Small String Optimization also has enough aligned memory when
-                     // parsing reserving extra space does nothing for SSO and we must rely on padded alignment, which
-                     // has always worked but is risky
-                     /*if constexpr (string_t<T> && !std::is_const_v<std::remove_reference_t<decltype(value)>>) {
-                        // we know the output buffer has enough space, but we must ensure the string buffer has space
-                        // for swar as well
-                        // say a string is of length 16, then the null character sits at index 16, which means we need
-                        // another 8 bytes to read so we add one to the length to include the null character and round
-                        // this up to the nearest multiple of 8
-                        value.reserve(round_up_to_multiple<8>(n + 1));
-                        serialize_string<8>(value.data(), data_ptr(b), ix);
-                     }
-                     else*/
-                     {
-                        const auto* c = str.data();
-                        const auto* const e = c + n;
-                        const auto start = data_ptr(b) + ix;
-                        auto data = start;
+                     const auto* c = str.data();
+                     const auto* const e = c + n;
+                     const auto start = data_ptr(b) + ix;
+                     auto data = start;
 
-                        if (n > 7) {
-                           for (const auto end_m7 = e - 7; c < end_m7;) {
-                              std::memcpy(data, c, 8);
-                              uint64_t chunk;
-                              std::memcpy(&chunk, c, 8);
-                              // We don't check for writing out invalid characters as this can be tested by the user if
-                              // necessary. In the case of invalid JSON characters we write out null characters to
-                              // showcase the error and make the JSON invalid. These would then be detected upon reading
-                              // the JSON.
-                              const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
-                              if (test_chars) {
-                                 const auto length = (countr_zero(test_chars) >> 3);
-                                 c += length;
-                                 data += length;
+                     if (n > 7) {
+                        for (const auto end_m7 = e - 7; c < end_m7;) {
+                           std::memcpy(data, c, 8);
+                           uint64_t chunk;
+                           std::memcpy(&chunk, c, 8);
+                           // We don't check for writing out invalid characters as this can be tested by the user if
+                           // necessary. In the case of invalid JSON characters we write out null characters to
+                           // showcase the error and make the JSON invalid. These would then be detected upon reading
+                           // the JSON.
+                           const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
+                           if (test_chars) {
+                              const auto length = (countr_zero(test_chars) >> 3);
+                              c += length;
+                              data += length;
 
-                                 std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
-                                 data += 2;
-                                 ++c;
-                              }
-                              else {
-                                 data += 8;
-                                 c += 8;
-                              }
-                           }
-                        }
-
-                        // Tail end of buffer. Uncommon for long strings.
-                        for (; c < e; ++c) {
-                           if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
-                              std::memcpy(data, &escaped, 2);
+                              std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
                               data += 2;
+                              ++c;
                            }
                            else {
-                              std::memcpy(data, c, 1);
-                              ++data;
+                              data += 8;
+                              c += 8;
                            }
                         }
-
-                        ix += size_t(data - start);
                      }
+
+                     // Tail end of buffer. Uncommon for long strings.
+                     for (; c < e; ++c) {
+                        if (const auto escaped = char_escape_table[uint8_t(*c)]; escaped) {
+                           std::memcpy(data, &escaped, 2);
+                           data += 2;
+                        }
+                        else {
+                           std::memcpy(data, c, 1);
+                           ++data;
+                        }
+                     }
+
+                     ix += size_t(data - start);
 
                      dump_unchecked<'"'>(b, ix);
                   }

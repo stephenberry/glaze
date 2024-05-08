@@ -10,8 +10,6 @@ FetchContent_Declare(
   GIT_SHALLOW TRUE
 )
 
-FetchContent_MakeAvailable(ut)
-
 message(STATUS "Fetching dependencies...")
 set_directory_properties(PROPERTIES EXCLUDE_FROM_ALL TRUE)
 set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "" FORCE)

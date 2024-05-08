@@ -568,11 +568,15 @@ auto beautiful = glz::prettify_json(buffer);
 
 # Minify JSON
 
-To minify JSON:
+To write minified JSON:
 
 ```c++
-glz::write<glz::opts{.prettify = true}>(obj, buffer);
-// or
+glz::write_json(obj, buffer); // default is minified
+```
+
+To minify JSON text call:
+
+```c++
 std::string minified = glz::minify_json(buffer);
 ```
 
