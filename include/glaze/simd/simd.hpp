@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include <algorithm>
+#include <array>
+#include <bit>
 #include <concepts>
 #include <cstdint>
 
@@ -420,8 +423,8 @@ namespace glz
    }
 #endif
    
-   template <simd Arch, class T>
-   GLZ_ALWAYS_INLINE auto opCmpEq(T&& a, T&& b) noexcept
+   template <simd Arch>
+   GLZ_ALWAYS_INLINE auto opCmpEq(auto&& a, auto&& b) noexcept
    {
       using enum simd;
       if constexpr (Arch == avx) {
@@ -441,8 +444,8 @@ namespace glz
       }
    }
    
-   template <simd Arch, class T>
-   GLZ_ALWAYS_INLINE auto opShuffle(T&& a, T&& b) noexcept
+   template <simd Arch>
+   GLZ_ALWAYS_INLINE auto opShuffle(auto&& a, auto&& b) noexcept
    {
       using enum simd;
       if constexpr (Arch == avx) {
@@ -464,13 +467,13 @@ namespace glz
       }
    }
    
-   template <simd_unsigned T, class Char>
+   /*template <simd_unsigned T, class Char>
    GLZ_ALWAYS_INLINE T ugather(Char* str) noexcept
    {
       T ret;
       std::memcpy(&ret, str, sizeof(T));
       return ret;
-   }
+   }*/
    
    template <simd Arch, class T, class Char>
    GLZ_ALWAYS_INLINE T vgather(Char* str) noexcept
@@ -616,4 +619,49 @@ namespace glz
    {
       return _pdep_u64(a, b);
    }
+}
+
+// Collect Indices
+namespace glz
+{
+   template <class T>
+   constexpr T simd_escapeable0 = []() consteval {
+      constexpr T escapeable{0, 0, 0x22u, 0, 0, 0, 0, 0, 0x08u, 0, 0, 0, 0x0Cu, 0x0Du, 0, 0};
+      return escapeable;
+   }();
+   template <class T>
+   constexpr T simd_escapeable1 = []() consteval {
+      constexpr T escapeable{0, 0, 0, 0, 0, 0, 0, 0, 0, 0x09u, 0x0Au, 0, 0x5Cu, 0, 0, 0};
+      return escapeable;
+   }();
+   template <class T>
+   constexpr T simd_whitespace = []() consteval{
+      constexpr T whitespace{0x20u, 0x64u, 0x64u, 0x64u, 0x11u, 0x64u, 0x71u, 0x02u,
+                                                0x64u, 0x09u, 0x0Au, 0x70u, 0x64u, 0x0Du, 0x64u, 0x64u};
+      return whitespace;
+   }();
+   template <class T>
+   constexpr T simd_backslashes = []() consteval{
+      std::array<char, 16> t{};
+      t.fill('\\');
+      return std::bit_cast<T>(t);
+   }();
+   template <class T>
+   constexpr T simd_op = []() consteval{
+      constexpr std::array<char, 16> op{0, 0, 0, 0, 0, 0, 0, 0,
+                                        0, 0, 0x3Au, 0x7Bu, 0x2Cu, 0x7Du, 0, 0};
+      return std::bit_cast<T>(op);
+   }();
+   template <class T>
+   constexpr T simd_quotes = []() consteval{
+      std::array<char, 16> t{};
+      t.fill('"');
+      return std::bit_cast<T>(t);
+   }();
+   template <class T>
+   constexpr T simd_spaces = []() consteval{
+      std::array<char, 16> t{};
+      t.fill(' ');
+      return std::bit_cast<T>(t);
+   }();
 }

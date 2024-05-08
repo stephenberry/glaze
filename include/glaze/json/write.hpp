@@ -281,16 +281,44 @@ namespace glz
                      const auto* const e = c + n;
                      const auto start = data_ptr(b) + ix;
                      auto data = start;
+                     
+                     // We don't check for writing out invalid characters as this can be tested by the user if
+                     // necessary. In the case of invalid JSON characters we write out null characters to
+                     // showcase the error and make the JSON invalid. These would then be detected upon reading
+                     // the JSON.
+                     
+                     static constexpr simd Arch = simd::neon;
+                     
+                     if (n > 15)
+                     {
+                        for (const auto end_m15 = e - 15; c < end_m15;) {
+                           std::memcpy(data, c, 16);
+                           using simd_t = typename arch<Arch>::simd_t;
+                           simd_t chunk;
+                           std::memcpy(&chunk, c, 16);
+                           const auto next = uint32_t(opCmpEq<Arch>(opShuffle<Arch>(simd_escapeable0<simd_t>, chunk), chunk) |
+                                    opCmpEq<Arch>(opShuffle<Arch>(simd_escapeable1<simd_t>, chunk), chunk));
+                           if (next) {
+                              const auto length = (countr_zero(next) >> 3);
+                              c += length;
+                              data += length;
+
+                              std::memcpy(data, &char_escape_table[uint8_t(*c)], 2);
+                              data += 2;
+                              ++c;
+                           }
+                           else {
+                              data += 16;
+                              c += 16;
+                           }
+                        }
+                     }
 
                      if (n > 7) {
                         for (const auto end_m7 = e - 7; c < end_m7;) {
                            std::memcpy(data, c, 8);
                            uint64_t chunk;
                            std::memcpy(&chunk, c, 8);
-                           // We don't check for writing out invalid characters as this can be tested by the user if
-                           // necessary. In the case of invalid JSON characters we write out null characters to
-                           // showcase the error and make the JSON invalid. These would then be detected upon reading
-                           // the JSON.
                            const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
                            if (test_chars) {
                               const auto length = (countr_zero(test_chars) >> 3);
