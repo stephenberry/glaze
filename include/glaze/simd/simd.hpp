@@ -528,4 +528,124 @@ namespace glz
          static_assert(false_v<Arch>, "SIMD Architecture not supported");
       }
    }
+   
+   template <simd_unsigned T, class Char>
+   GLZ_ALWAYS_INLINE T ugather(Char* str) noexcept
+   {
+      T ret;
+      std::memcpy(&ret, str, sizeof(T));
+      return ret;
+   }
+   
+   template <simd_arch Arch, class T, class Char>
+   GLZ_ALWAYS_INLINE T vgather(Char* str) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         return _mm_load_si128(reinterpret_cast<const __m128i*>(str));
+      }
+      else if constexpr (Arch == avx2) {
+         return _mm256_load_si256(reinterpret_cast<const __m256i*>(str));
+      }
+      else if constexpr (Arch == avx512) {
+         return _mm512_load_si512(str);
+      }
+      else if constexpr (Arch == neon) {
+         if constexpr (simd_uint16<Char>) {
+            return vreinterpretq_u8_u16(vld1q_u16(str));
+         }
+         else if constexpr (simd_uint64<Char>) {
+            return vreinterpretq_u8_u64(vld1q_u64(str));
+         }
+         else {
+            return vld1q_u8(str);
+         }
+      }
+      else {
+         simd_t ret;
+         std::memcpy(&ret, str, sizeof(simd_t));
+         return ret;
+      }
+   }
+   
+   template <simd_arch Arch, class T, class Char>
+   GLZ_ALWAYS_INLINE T ugather(Char* str) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         return _mm_loadu_si128(reinterpret_cast<const __m128i*>(str));
+      }
+      else if constexpr (Arch == avx2) {
+         return _mm256_loadu_si256(reinterpret_cast<const __m256i*>(str));
+      }
+      else if constexpr (Arch == avx512) {
+         return _mm512_loadu_si512(reinterpret_cast<const __m512i*>(str));
+      }
+      else if constexpr (Arch == neon) {
+         if constexpr (simd_char<Char>) {
+            GLZ_ALIGN unsigned char arr[16];
+            for (uint64_t x = 0; x < 16; ++x) {
+               arr[x] = static_cast<unsigned char>(str[x]);
+            }
+            return vld1q_u8(arr);
+         }
+         else {
+            return vld1q_u8(str);
+         }
+      }
+      else {
+         simd_t ret;
+         std::memcpy(&ret, str, sizeof(simd_t));
+         return ret;
+      }
+   }
+   
+   template <simd_arch Arch, class T, class Char>
+   GLZ_ALWAYS_INLINE T gather(Char* str) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         return _mm_set1_epi8(str);
+      }
+      else if constexpr (Arch == avx2) {
+         return _mm256_set1_epi8(str);
+      }
+      else if constexpr (Arch == avx512) {
+         return _mm512_set1_epi8(str);
+      }
+      else if constexpr (Arch == neon) {
+         return vdupq_n_u8(str);
+      }
+      else {
+         simd_t ret{};
+         std::memset(&ret, str, sizeof(simd_t));
+         return ret;
+      }
+   }
+   
+   template <simd_arch Arch, class T, class Char>
+   GLZ_ALWAYS_INLINE void store(const T& value, Char* storage) noexcept
+   {
+      using enum simd_arch;
+      if constexpr (Arch == avx) {
+         _mm_store_si128(reinterpret_cast<__m128i*>(storage), value);
+      }
+      else if constexpr (Arch == avx2) {
+         _mm256_store_si256(reinterpret_cast<__m256i*>(storage), value);
+      }
+      else if constexpr (Arch == avx512) {
+         _mm512_store_si512(storage, value);
+      }
+      else if constexpr (Arch == neon) {
+         if constexpr (simd_uint8<Char>) {
+            vst1q_u8(storage, value);
+         }
+         else {
+            vst1q_u64(storage, vreinterpretq_u64_u8(value));
+         }
+      }
+      else {
+         std::memcpy(storage, &value, sizeof(simd_t));
+      }
+   }
 }
