@@ -9,12 +9,6 @@
 #include <cstring>
 
 #include "glaze/simd/simd.hpp"
-#include "glaze/simd/avx.hpp"
-#include "glaze/simd/avx2.hpp"
-#include "glaze/simd/avx512.hpp"
-#include "glaze/simd/compare.hpp"
-#include "glaze/simd/gather.hpp"
-#include "glaze/simd/shuffle.hpp"
 
 namespace glz
 {
