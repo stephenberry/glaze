@@ -491,7 +491,7 @@ namespace glz
                      // auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
 
                      // We use this optimized code for the sake of GCC and MSVC
-                     uint64_t next = 0x2222222222222222ull ^ swar;
+                     /*uint64_t next = 0x2222222222222222ull ^ swar;
                      uint64_t a = 0x5C5C5C5C5C5C5C5Cull ^ swar;
                      uint64_t b = 0xE0E0E0E0E0E0E0E0ull & swar;
                      constexpr uint64_t C = 0xFEFEFEFEFEFEFEFFull;
@@ -502,7 +502,15 @@ namespace glz
                      b |= a;
 
                      next = 0x8080808080808080ull & (~swar);
-                     next &= b;
+                     next &= b;*/
+                     
+                     constexpr uint64_t mask = repeat_byte8(0b01111111);
+                     const uint64_t lo7 = swar & mask;
+                     const uint64_t quote = (lo7 ^ repeat_byte8('"')) + mask;
+                     const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + mask;
+                     const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + mask;
+                     const uint64_t t0 = ~((quote & backslash & less_32) | swar);
+                     uint64_t next = t0 & repeat_byte8(0b10000000);
 
                      if (next) {
                         next = countr_zero(next) >> 3;
