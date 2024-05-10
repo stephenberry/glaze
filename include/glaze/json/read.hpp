@@ -494,11 +494,11 @@ namespace glz
                      uint64_t next = 0x2222222222222222ull ^ swar;
                      uint64_t a = 0x5C5C5C5C5C5C5C5Cull ^ swar;
                      uint64_t b = 0xE0E0E0E0E0E0E0E0ull & swar;
-                     constexpr uint64_t c = 0xFEFEFEFEFEFEFEFFull;
-                     next += c;
-                     a += c;
+                     constexpr uint64_t C = 0xFEFEFEFEFEFEFEFFull;
+                     next += C;
+                     a += C;
                      a |= next;
-                     b += c;
+                     b += C;
                      b |= a;
 
                      next = 0x8080808080808080ull & (~swar);

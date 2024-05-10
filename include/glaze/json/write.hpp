@@ -285,15 +285,30 @@ namespace glz
                      if (n > 7) {
                         for (const auto end_m7 = e - 7; c < end_m7;) {
                            std::memcpy(data, c, 8);
-                           uint64_t chunk;
-                           std::memcpy(&chunk, c, 8);
+                           uint64_t swar;
+                           std::memcpy(&swar, c, 8);
                            // We don't check for writing out invalid characters as this can be tested by the user if
                            // necessary. In the case of invalid JSON characters we write out null characters to
                            // showcase the error and make the JSON invalid. These would then be detected upon reading
                            // the JSON.
-                           const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
-                           if (test_chars) {
-                              const auto length = (countr_zero(test_chars) >> 3);
+                           //const uint64_t next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
+                           
+                           // We use this optimized code for the sake of GCC and MSVC
+                           uint64_t next = 0x2222222222222222ull ^ swar;
+                           uint64_t a = 0x5C5C5C5C5C5C5C5Cull ^ swar;
+                           uint64_t b = 0xE0E0E0E0E0E0E0E0ull & swar;
+                           constexpr uint64_t C = 0xFEFEFEFEFEFEFEFFull;
+                           next += C;
+                           a += C;
+                           a |= next;
+                           b += C;
+                           b |= a;
+
+                           next = 0x8080808080808080ull & (~swar);
+                           next &= b;
+                           
+                           if (next) {
+                              const auto length = (countr_zero(next) >> 3);
                               c += length;
                               data += length;
 
