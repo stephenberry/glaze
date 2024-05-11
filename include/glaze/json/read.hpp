@@ -503,7 +503,7 @@ namespace glz
 
                      next = 0x8080808080808080ull & (~swar);
                      next &= b;*/
-                     
+
                      constexpr uint64_t mask = repeat_byte8(0b01111111);
                      const uint64_t lo7 = swar & mask;
                      const uint64_t quote = (lo7 ^ repeat_byte8('"')) + mask;

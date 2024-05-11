@@ -281,7 +281,7 @@ namespace glz
                      const auto* const e = c + n;
                      const auto start = data_ptr(b) + ix;
                      auto data = start;
-                     
+
                      // We don't check for writing out invalid characters as this can be tested by the user if
                      // necessary. In the case of invalid JSON characters we write out null characters to
                      // showcase the error and make the JSON invalid. These would then be detected upon reading
@@ -292,7 +292,7 @@ namespace glz
                            std::memcpy(data, c, 8);
                            uint64_t swar;
                            std::memcpy(&swar, c, 8);
-                           
+
                            constexpr uint64_t mask = repeat_byte8(0b01111111);
                            const uint64_t lo7 = swar & mask;
                            const uint64_t quote = (lo7 ^ repeat_byte8('"')) + mask;
@@ -300,7 +300,7 @@ namespace glz
                            const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + mask;
                            const uint64_t t0 = ~((quote & backslash & less_32) | swar);
                            uint64_t next = t0 & repeat_byte8(0b10000000);
-                           
+
                            if (next) {
                               const auto length = (countr_zero(next) >> 3);
                               c += length;
