@@ -2677,9 +2677,9 @@ namespace glz
    {
       T value{};
       context ctx{};
-      const auto ec = read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
+      const parse_error ec = read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
       if (ec) {
-         return unexpected(ec);
+         return unexpected<parse_error>(ec);
       }
       return value;
    }
