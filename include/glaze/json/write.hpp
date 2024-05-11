@@ -281,19 +281,28 @@ namespace glz
                      const auto* const e = c + n;
                      const auto start = data_ptr(b) + ix;
                      auto data = start;
+                     
+                     // We don't check for writing out invalid characters as this can be tested by the user if
+                     // necessary. In the case of invalid JSON characters we write out null characters to
+                     // showcase the error and make the JSON invalid. These would then be detected upon reading
+                     // the JSON.
 
                      if (n > 7) {
                         for (const auto end_m7 = e - 7; c < end_m7;) {
                            std::memcpy(data, c, 8);
-                           uint64_t chunk;
-                           std::memcpy(&chunk, c, 8);
-                           // We don't check for writing out invalid characters as this can be tested by the user if
-                           // necessary. In the case of invalid JSON characters we write out null characters to
-                           // showcase the error and make the JSON invalid. These would then be detected upon reading
-                           // the JSON.
-                           const uint64_t test_chars = has_quote(chunk) | has_escape(chunk) | is_less_32(chunk);
-                           if (test_chars) {
-                              const auto length = (countr_zero(test_chars) >> 3);
+                           uint64_t swar;
+                           std::memcpy(&swar, c, 8);
+                           
+                           constexpr uint64_t mask = repeat_byte8(0b01111111);
+                           const uint64_t lo7 = swar & mask;
+                           const uint64_t quote = (lo7 ^ repeat_byte8('"')) + mask;
+                           const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + mask;
+                           const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + mask;
+                           const uint64_t t0 = ~((quote & backslash & less_32) | swar);
+                           uint64_t next = t0 & repeat_byte8(0b10000000);
+                           
+                           if (next) {
+                              const auto length = (countr_zero(next) >> 3);
                               c += length;
                               data += length;
 
