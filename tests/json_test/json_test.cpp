@@ -3187,7 +3187,7 @@ suite file_include_test = [] {
       obj.str = "";
 
       std::string buffer{};
-      glz::read_file_json(obj, "../alabastar.json", buffer);
+      expect(!glz::read_file_json(obj, "../alabastar.json", buffer));
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
    };
@@ -3239,7 +3239,7 @@ suite file_include_test_auto = [] {
 
       obj.str = "";
 
-      glz::read_file_json(obj, "./auto.json", std::string{});
+      expect(!glz::read_file_json(obj, "./auto.json", std::string{}));
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
    };
@@ -6880,7 +6880,7 @@ suite hostname_include_test = [] {
       obj.str = "";
 
       std::string buffer{};
-      glz::read_file_json(obj, file_name, buffer);
+      expect(!glz::read_file_json(obj, file_name, buffer));
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
 

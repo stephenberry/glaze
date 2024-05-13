@@ -2688,7 +2688,7 @@ namespace glz
    }
 
    template <auto Opts = opts{}, read_json_supported T>
-   inline parse_error read_file_json(T& value, const sv file_name, auto&& buffer) noexcept
+   [[nodiscard]] inline parse_error read_file_json(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;

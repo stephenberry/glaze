@@ -87,9 +87,10 @@ namespace glz
       return write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);
    }
 
-   [[nodiscard]] inline error_code buffer_to_file(auto&& buffer, auto&& file_name) noexcept
+   // requires file_name to be null terminated
+   [[nodiscard]] inline error_code buffer_to_file(auto&& buffer, const sv file_name) noexcept
    {
-      auto file = std::ofstream(file_name, std::ios::out);
+      auto file = std::ofstream(file_name.data(), std::ios::out);
       if (!file) {
          return error_code::file_open_failure;
       }

@@ -847,15 +847,15 @@ namespace glz
       return write<Partial, opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   // std::string file_name needed for std::ofstream
+   // requires file_name to be null terminated
    template <opts Opts = opts{}, write_binary_supported T>
-   [[nodiscard]] inline write_error write_file_binary(T&& value, const std::string& file_name, auto&& buffer) noexcept
+   [[nodiscard]] inline write_error write_file_binary(T&& value, const sv file_name, auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
       write<set_binary<Opts>()>(std::forward<T>(value), buffer);
 
-      std::ofstream file(file_name, std::ios::binary);
+      std::ofstream file(file_name.data(), std::ios::binary);
 
       if (file) {
          file.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());
