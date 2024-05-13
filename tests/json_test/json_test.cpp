@@ -7786,6 +7786,39 @@ suite skip_tests = [] {
    };
 };
 
+template <size_t N>
+struct FixedName {
+   std::array<char, N> buf;
+   uint16_t len{};
+   
+   struct glaze {
+      static constexpr auto value = [](FixedName&& self) -> auto { return std::string_view(self.buf.data(), self.len); };
+   };
+};
+
+struct Address
+{
+   std::string test = "Hello";
+};
+
+template <>
+struct glz::meta<Address> {
+   static constexpr auto value = [](Address &self) -> FixedName<10> {
+      FixedName<10> val;
+      std::memcpy(val.buf.data(), self.test.data(), self.test.size() + 1);
+      val.len = self.test.size();
+      return val;
+   };
+};
+
+suite stack_allocated_string = [] {
+   "stack_allocated_string"_test = [] {
+      Address obj{};
+      std::string s = glz::write_json(obj);
+      expect(s == R"("Hello")");
+   };
+};
+
 int main()
 {
    trace.begin("json_test", "Full test suite duration.");
