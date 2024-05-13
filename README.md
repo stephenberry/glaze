@@ -155,6 +155,10 @@ auto ec = glz::read_file_json(obj, "./obj.json", std::string{});
 auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 ```
 
+> [!IMPORTANT]
+>
+> The file name (2nd argument), must be null terminated.
+
 ## Compiler/System Support
 
 - Requires C++20
