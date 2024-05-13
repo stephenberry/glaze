@@ -292,7 +292,7 @@ namespace glz
                            std::memcpy(data, c, 8);
                            uint64_t swar;
                            std::memcpy(&swar, c, 8);
-                           
+
                            constexpr uint64_t high_mask = repeat_byte8(0b10000000);
                            constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
                            const uint64_t hi = swar & high_mask;
@@ -317,7 +317,7 @@ namespace glz
                               const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
                               next = ~((quote & backslash & less_32) | swar);
                            }
-                           
+
                            next &= repeat_byte8(0b10000000);
                            if (next) {
                               const auto length = (countr_zero(next) >> 3);
