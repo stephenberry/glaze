@@ -10,12 +10,6 @@
 
 namespace glz
 {
-   template <class Buffer>
-   concept raw_buffer = std::same_as<std::decay_t<Buffer>, char*> && non_const_buffer<Buffer>;
-
-   template <class Buffer>
-   concept output_buffer = range<Buffer> && (sizeof(range_value_t<Buffer>) == sizeof(char)) && non_const_buffer<Buffer>;
-
    // For writing to a std::string, std::vector<char>, std::deque<char> and the like
    template <opts Opts, class T, output_buffer Buffer>
       requires write_supported<Opts.format, T>
