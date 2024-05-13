@@ -7787,14 +7787,18 @@ suite skip_tests = [] {
 };
 
 template <size_t N>
-struct FixedName {
+struct FixedName
+{
    std::array<char, N> buf;
    uint16_t len{};
-   
-   struct glaze {
+
+   struct glaze
+   {
       // If you change this to an lvalue then this will cause stack overflow errors and is difficult to diagnose
       // A const lvalue will work as intended
-      static constexpr auto value = [](FixedName&& self) -> auto { return std::string_view(self.buf.data(), self.len); };
+      static constexpr auto value = [](FixedName&& self) -> auto {
+         return std::string_view(self.buf.data(), self.len);
+      };
    };
 };
 
@@ -7804,8 +7808,9 @@ struct Address
 };
 
 template <>
-struct glz::meta<Address> {
-   static constexpr auto value = [](Address &self) -> FixedName<10> {
+struct glz::meta<Address>
+{
+   static constexpr auto value = [](Address& self) -> FixedName<10> {
       FixedName<10> val;
       std::memcpy(val.buf.data(), self.test.data(), self.test.size() + 1);
       val.len = self.test.size();
