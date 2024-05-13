@@ -7792,6 +7792,8 @@ struct FixedName {
    uint16_t len{};
    
    struct glaze {
+      // If you change this to an lvalue then this will cause stack overflow errors and is difficult to diagnose
+      // A const lvalue will work as intended
       static constexpr auto value = [](FixedName&& self) -> auto { return std::string_view(self.buf.data(), self.len); };
    };
 };
