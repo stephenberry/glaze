@@ -106,12 +106,14 @@ namespace glz
       {
          ctx = std::make_shared<asio::io_context>(concurrency);
          socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
-         socket->set_option(asio::ip::tcp::no_delay(true));
          asio::ip::tcp::resolver resolver{*ctx};
          const auto endpoint = resolver.resolve(host, service);
          std::error_code ec{};
          asio::connect(*socket, endpoint, ec);
-         return ec;
+         if (ec) {
+            return ec;
+         }
+         return socket->set_option(asio::ip::tcp::no_delay(true), ec);
       }
 
       template <class Params>
