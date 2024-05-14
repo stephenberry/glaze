@@ -57,10 +57,10 @@ namespace glz
    template <class Tuple>
    constexpr auto filter()
    {
-      constexpr auto n = glz::tuple_size_v<Tuple>;
-      std::array<uint64_t, n> indices{};
+      constexpr auto N = glz::tuple_size_v<Tuple>;
+      std::array<uint64_t, N> indices{};
       size_t i = 0;
-      for_each<n>([&](auto I) {
+      for_each<N>([&](auto I) {
          using V = std::decay_t<glz::tuple_element_t<I, Tuple>>;
          if constexpr (std::is_member_pointer_v<V>) {
             if constexpr (I == 0) {
