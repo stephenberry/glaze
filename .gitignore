@@ -45,3 +45,6 @@ $RECYCLE.BIN/
 ehthumbs.db
 Thumbs.db
 *.json
+
+# Allow mock test data
+!tests/mock_json_test/json/*.json

@@ -7826,6 +7826,72 @@ suite stack_allocated_string = [] {
    };
 };
 
+struct price_t
+{
+   uint64_t price{};
+   uint64_t volume{};
+};
+
+struct ticker_t
+{
+   uint64_t time{};
+   std::string exchange{};
+   std::string symbol{};
+   std::vector<price_t> asks{};
+   std::vector<price_t> bids{};
+   uint64_t price{};
+   uint64_t volume{};
+   uint64_t open_interest{};
+   uint64_t ceiling{};
+   uint64_t floor{};
+};
+
+suite ticker_tests = [] {
+   std::string_view json = R"({
+  "time": 1686621452000000000,
+  "exchange": "SHFE",
+  "symbol": "rb2310",
+  "asks": [
+    {
+      "price": 3698,
+      "volume": 2882
+    }
+  ],
+  "bids": [
+    {
+      "price": 3693,
+      "volume": 789
+    }
+  ],
+  "price": 3693,
+  "volume": 820389,
+  "open_interest": 1881506,
+  "ceiling": 4075,
+  "floor": 3268
+})";
+   
+   "ticker_t"_test = [&] {
+      ticker_t obj{};
+      
+      const auto ec = glz::read_json(obj, json);
+      expect(!ec) << glz::format_error(ec, json);
+      std::string s = glz::write_json(obj);
+      expect(s == glz::minify_json(json)) << s;
+   };
+   
+   "vector<ticker_t>"_test = [&] {
+      std::vector<ticker_t> v{};
+      v.resize(4);
+      for (size_t i = 0; i < v.size(); ++i) {
+         expect(!glz::read_json(v[i], json));
+      }
+      
+      std::string s = glz::write_json(v);
+      const auto ec = glz::read_json(v, s);
+      expect(!ec) << glz::format_error(ec, s);
+   };
+};
+
 int main()
 {
    trace.begin("json_test", "Full test suite duration.");

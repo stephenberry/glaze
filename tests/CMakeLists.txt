@@ -85,6 +85,7 @@ add_subdirectory(json_performance)
 add_subdirectory(json_test)
 add_subdirectory(jsonrpc_test)
 add_subdirectory(lib_test)
+add_subdirectory(mock_json_test)
 add_subdirectory(reflection_test)
 add_subdirectory(repe_test)
 
