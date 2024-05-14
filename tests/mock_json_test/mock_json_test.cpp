@@ -283,13 +283,12 @@ suite twitter_test = [] {
       auto ec = glz::read_file_json(v, CURRENT_DIRECTORY "/json/twitter.json", buffer);
       expect(!ec) << glz::format_error(ec, buffer);
       std::string s = glz::write_json(v);
-      //expect(glz::buffer_to_file(glz::prettify_json(s), CURRENT_DIRECTORY "/json/twitter_out.json") == glz::error_code::none);
-      //std::string original{};
-      //expect(glz::file_to_buffer(original, CURRENT_DIRECTORY "/json/twitter.json") == glz::error_code::none);
-      //expect(s == original);
+      //expect(glz::buffer_to_file(s, CURRENT_DIRECTORY "/json/twitter_out.json") == glz::error_code::none);
+      std::string original{};
+      expect(glz::file_to_buffer(original, CURRENT_DIRECTORY "/json/twitter.json") == glz::error_code::none);
+      expect(s == original);
    };
 };
-
 
 int main()
 {
