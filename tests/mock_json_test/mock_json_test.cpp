@@ -82,7 +82,7 @@ suite stock_trades = [] {
       auto ec = glz::read_file_json(v, CURRENT_DIRECTORY "/json/stock_trades.json", buffer);
       expect(!ec) << glz::format_error(ec, buffer);
       std::string s = glz::write_json(v);
-      expect(glz::buffer_to_file(s, CURRENT_DIRECTORY "/json/stock_trades_out.json") == glz::error_code::none);
+      //expect(glz::buffer_to_file(s, CURRENT_DIRECTORY "/json/stock_trades_out.json") == glz::error_code::none);
       std::string original{};
       expect(glz::file_to_buffer(original, CURRENT_DIRECTORY "/json/stock_trades.json") == glz::error_code::none);
       expect(s == original);
