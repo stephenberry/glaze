@@ -48,7 +48,7 @@ suite fantasy_nations = [] {
       std::vector<fantasy_nation_t> v{};
       std::string buffer{};
       auto ec = glz::read_file_json(v, CURRENT_DIRECTORY "/json/fantasy_nations.json", buffer);
-      expect(!ec) << glz::format_error(ec, buffer);
+      expect(!ec) << (glz::format_error(ec, buffer) + ("at: " CURRENT_DIRECTORY));
       std::string s = glz::write_json(v);
       std::string original{};
       expect(glz::file_to_buffer(original, CURRENT_DIRECTORY "/json/fantasy_nations.json") == glz::error_code::none);
