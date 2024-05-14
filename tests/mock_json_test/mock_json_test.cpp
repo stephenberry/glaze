@@ -93,7 +93,7 @@ suite stock_trades = [] {
 
 struct url_t
 {
-   std::vector<std::shared_ptr<url_t>> urls{};
+   std::optional<std::vector<std::shared_ptr<url_t>>> urls{};
    std::string url{};
    std::string expanded_url{};
    std::string display_url{};
@@ -114,7 +114,7 @@ struct description_t
 struct entities_t
 {
    description_t description{};
-   url_t url{};
+   std::optional<url_t> url{};
 };
 
 struct user_t
@@ -220,7 +220,7 @@ struct status_entities_t
    std::vector<std::string> symbols{};
    std::vector<url_t> urls{};
    std::vector<user_mention_t> user_mentions{};
-   std::vector<media_t> media{};
+   std::optional<std::vector<media_t>> media{};
 };
 
 struct retweeted_status_t
@@ -283,7 +283,7 @@ suite twitter_test = [] {
       auto ec = glz::read_file_json(v, CURRENT_DIRECTORY "/json/twitter.json", buffer);
       expect(!ec) << glz::format_error(ec, buffer);
       std::string s = glz::write_json(v);
-      //expect(glz::buffer_to_file(s, CURRENT_DIRECTORY "/json/twitter_out.json") == glz::error_code::none);
+      //expect(glz::buffer_to_file(glz::prettify_json(s), CURRENT_DIRECTORY "/json/twitter_out.json") == glz::error_code::none);
       //std::string original{};
       //expect(glz::file_to_buffer(original, CURRENT_DIRECTORY "/json/twitter.json") == glz::error_code::none);
       //expect(s == original);
