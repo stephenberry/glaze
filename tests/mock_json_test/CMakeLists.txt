@@ -1,7 +1,6 @@
 project(mock_json_test)
 
-get_filename_component(CURRENT_DIR "${CMAKE_CURRENT_SOURCE_DIR}" ABSOLUTE)
-add_compile_definitions(CURRENT_DIRECTORY="${CURRENT_DIR}")
+add_compile_definitions(CURRENT_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_executable(${PROJECT_NAME} ${PROJECT_NAME}.cpp)
 
