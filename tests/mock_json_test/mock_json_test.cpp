@@ -5,10 +5,9 @@
 #define BOOST_UT_DISABLE_MODULE
 #endif
 
-#include "glaze/glaze.hpp"
-
 #include "boost/ut.hpp"
 #include "glaze/compare/approx.hpp"
+#include "glaze/glaze.hpp"
 
 using namespace boost::ut;
 
@@ -49,7 +48,8 @@ suite fantasy_nations = [] {
       std::string buffer{};
       auto ec = glz::read_file_json(v, CURRENT_DIRECTORY "/json/fantasy_nations.json", buffer);
       expect(std::filesystem::exists(CURRENT_DIRECTORY)) << "Directory doesn't exist: " CURRENT_DIRECTORY;
-      expect(std::filesystem::exists(CURRENT_DIRECTORY "/json/fantasy_nations.json")) << "File doesn't exist: " CURRENT_DIRECTORY "/json/fantasy_nations.json";
+      expect(std::filesystem::exists(CURRENT_DIRECTORY "/json/fantasy_nations.json"))
+         << "File doesn't exist: " CURRENT_DIRECTORY "/json/fantasy_nations.json";
       expect(!ec) << (glz::format_error(ec, buffer) + (" at: " CURRENT_DIRECTORY));
       std::string s = glz::write_json(v);
       std::string original{};
@@ -84,7 +84,7 @@ suite stock_trades = [] {
       auto ec = glz::read_file_json(v, CURRENT_DIRECTORY "/json/stock_trades.json", buffer);
       expect(!ec) << glz::format_error(ec, buffer);
       std::string s = glz::write_json(v);
-      //expect(glz::buffer_to_file(s, CURRENT_DIRECTORY "/json/stock_trades_out.json") == glz::error_code::none);
+      // expect(glz::buffer_to_file(s, CURRENT_DIRECTORY "/json/stock_trades_out.json") == glz::error_code::none);
       std::string original{};
       expect(glz::file_to_buffer(original, CURRENT_DIRECTORY "/json/stock_trades.json") == glz::error_code::none);
       expect(s == original);
@@ -165,7 +165,16 @@ template <>
 struct glz::meta<user_t>
 {
    using T = user_t;
-   static constexpr auto value = object(&T::id, &T::id_str, &T::name, &T::screen_name, &T::location, &T::description, &T::url, &T::entities, "protected", &T::protected_, &T::followers_count, &T::friends_count, &T::listed_count, &T::created_at, &T::favourites_count, &T::utc_offset, &T::time_zone, &T::geo_enabled, &T::verified, &T::statuses_count, &T::lang, &T::contributors_enabled, &T::is_translator, &T::is_translation_enabled, &T::profile_background_color, &T::profile_background_image_url, &T::profile_background_image_url_https, &T::profile_background_tile, &T::profile_image_url, &T::profile_image_url_https, &T::profile_banner_url, &T::profile_link_color, &T::profile_sidebar_border_color, &T::profile_sidebar_fill_color, &T::profile_text_color, &T::profile_use_background_image, &T::default_profile, &T::default_profile_image, &T::following, &T::follow_request_sent, &T::notifications);
+   static constexpr auto value =
+      object(&T::id, &T::id_str, &T::name, &T::screen_name, &T::location, &T::description, &T::url, &T::entities,
+             "protected", &T::protected_, &T::followers_count, &T::friends_count, &T::listed_count, &T::created_at,
+             &T::favourites_count, &T::utc_offset, &T::time_zone, &T::geo_enabled, &T::verified, &T::statuses_count,
+             &T::lang, &T::contributors_enabled, &T::is_translator, &T::is_translation_enabled,
+             &T::profile_background_color, &T::profile_background_image_url, &T::profile_background_image_url_https,
+             &T::profile_background_tile, &T::profile_image_url, &T::profile_image_url_https, &T::profile_banner_url,
+             &T::profile_link_color, &T::profile_sidebar_border_color, &T::profile_sidebar_fill_color,
+             &T::profile_text_color, &T::profile_use_background_image, &T::default_profile, &T::default_profile_image,
+             &T::following, &T::follow_request_sent, &T::notifications);
 };
 
 struct user_mention_t
@@ -283,7 +292,7 @@ suite twitter_test = [] {
       auto ec = glz::read_file_json(v, CURRENT_DIRECTORY "/json/twitter.json", buffer);
       expect(!ec) << glz::format_error(ec, buffer);
       std::string s = glz::write_json(v);
-      //expect(glz::buffer_to_file(s, CURRENT_DIRECTORY "/json/twitter_out.json") == glz::error_code::none);
+      // expect(glz::buffer_to_file(s, CURRENT_DIRECTORY "/json/twitter_out.json") == glz::error_code::none);
       std::string original{};
       expect(glz::file_to_buffer(original, CURRENT_DIRECTORY "/json/twitter.json") == glz::error_code::none);
       expect(s == original);
