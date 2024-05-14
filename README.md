@@ -432,7 +432,7 @@ Denoting that x is invalid here.
 Array types logically convert to JSON array values. Concepts are used to allow various containers and even user containers if they match standard library interfaces.
 
 - `glz::array` (compile time mixed types)
-- `std::tuple`
+- `std::tuple` (compile time mixed types)
 - `std::array`
 - `std::vector`
 - `std::deque`
@@ -449,9 +449,7 @@ Object types logically convert to JSON object values, such as maps. Like JSON, G
 - `glz::object` (compile time mixed types)
 - `std::map`
 - `std::unordered_map`
-- `std::pair`
-  - Enables dynamic keys in stack storage.
-
+- `std::pair` (enables dynamic keys in stack storage)
 
 > `std::pair` is handled as an object with a single key and value, but when `std::pair` is used in an array, Glaze concatenates the pairs into a single object. `std::vector<std::pair<...>>` will serialize as a single  object. If you don't want this behavior set the compile time option `.concatenate = false`.
 
