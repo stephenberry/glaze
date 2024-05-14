@@ -56,6 +56,40 @@ suite fantasy_nations = [] {
    };
 };
 
+struct stock_trade_t
+{
+   uint64_t trade_id{};
+   std::string stock_symbol{};
+   uint64_t quantity{};
+   double purchase_price{};
+   double sale_price{};
+   std::string purchase_date{};
+   std::string sale_date{};
+   double profit{};
+   double brokerage_fee{};
+   double total_cost{};
+   double total_revenue{};
+   double profit_margin{};
+   std::string trade_type{};
+   std::string sector{};
+   std::string industry{};
+};
+
+suite stock_trades = [] {
+   "stock_trades"_test = [] {
+      std::vector<stock_trade_t> v{};
+      std::string buffer{};
+      auto ec = glz::read_file_json(v, CURRENT_DIRECTORY "/json/stock_trades.json", buffer);
+      expect(!ec) << glz::format_error(ec, buffer);
+      std::string s = glz::write_json(v);
+      expect(glz::buffer_to_file(s, CURRENT_DIRECTORY "/json/stock_trades_out.json") == glz::error_code::none);
+      std::string original{};
+      expect(glz::file_to_buffer(original, CURRENT_DIRECTORY "/json/stock_trades.json") == glz::error_code::none);
+      expect(s == original);
+   };
+};
+
+
 int main()
 {
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
