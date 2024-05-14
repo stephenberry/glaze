@@ -49,6 +49,7 @@ suite fantasy_nations = [] {
       std::string buffer{};
       auto ec = glz::read_file_json(v, CURRENT_DIRECTORY "/json/fantasy_nations.json", buffer);
       expect(std::filesystem::exists(CURRENT_DIRECTORY)) << "Directory doesn't exist: " CURRENT_DIRECTORY;
+      expect(std::filesystem::exists(CURRENT_DIRECTORY "/json/fantasy_nations.json")) << "File doesn't exist: " CURRENT_DIRECTORY "/json/fantasy_nations.json";
       expect(!ec) << (glz::format_error(ec, buffer) + (" at: " CURRENT_DIRECTORY));
       std::string s = glz::write_json(v);
       std::string original{};
