@@ -3,14 +3,15 @@ name: gcc
 on:
   push:
     branches:
-    - main
-    - feature/*
+      - main
+      - 'feature/*'
     paths-ignore:
-    - '**.md'
+      - '**/*.md'
   pull_request:
-    branches: [main]
+    branches:
+      - main
     paths-ignore:
-    - '**.md'
+      - '**/*.md'
   workflow_dispatch:
 
 jobs:
@@ -24,19 +25,23 @@ jobs:
         build_type: [Debug, Release]
         std: [20, 23]
 
-    env:
-      CC: gcc-${{matrix.gcc}} -m32
-      CXX: g++-${{matrix.gcc}} -m32
-
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
+      - name: Set up GCC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-${{ matrix.gcc }} g++-${{ matrix.gcc }}
+        env:
+          CC: gcc-${{ matrix.gcc }} -m32
+          CXX: g++-${{ matrix.gcc }} -m32
 
-    - name: Build
-      run: cmake --build build -j 2
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_CXX_STANDARD=${{ matrix.std }} -DCMAKE_C_COMPILER=${{ env.CC }} -DCMAKE_CXX_COMPILER=${{ env.CXX }}
 
-    - name: Test
-      working-directory: build
-      run: ctest -j 2 --output-on-failure
+      - name: Build
+        run: cmake --build build -j 2
+
+      - name: Test
+        working-directory: build
+        run: ctest -j 2 --output-on-failure
