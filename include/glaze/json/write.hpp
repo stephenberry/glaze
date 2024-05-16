@@ -1173,8 +1173,7 @@ namespace glz
                         first = false;
                      }
                      else {
-                        // Null members may be skipped so we cant just write it out for all but the last member unless
-                        // trailing commas are allowed
+                        // Null members may be skipped so we cant just write it out for all but the last member
                         write_entry_separator<Opts>(ctx, b, ix);
                      }
                   }
@@ -1182,9 +1181,11 @@ namespace glz
                   static constexpr sv key = key_name<I, T, use_reflection>;
                   if constexpr (needs_escaping(key)) {
                      write<json>::op<Opts>(key, ctx, b, ix);
-                     dump<':'>(b, ix);
                      if constexpr (Opts.prettify) {
-                        dump<' '>(b, ix);
+                        dump<": ">(b, ix);
+                     }
+                     else {
+                        dump<':'>(b, ix);
                      }
                   }
                   else {
