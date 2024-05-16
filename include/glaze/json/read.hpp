@@ -611,22 +611,33 @@ namespace glz
                         std::memcpy(p, it, 8);
                         uint64_t swar;
                         std::memcpy(&swar, p, 8);
-                        // auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
+                        
+                        constexpr uint64_t high_mask = repeat_byte8(0b10000000);
+                        constexpr uint64_t lo7_mask = repeat_byte8(0b01111111);
+                        const uint64_t hi = swar & high_mask;
+                        uint64_t next;
+                        if (hi == high_mask) {
+                           // unescaped unicode has all high bits set
+                           it += 8;
+                           p += 8;
+                           continue;
+                        }
+                        else if (hi == 0) {
+                           // we have only ascii
+                           const uint64_t quote = (swar ^ repeat_byte8('"')) + lo7_mask;
+                           const uint64_t backslash = (swar ^ repeat_byte8('\\')) + lo7_mask;
+                           const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+                           next = ~(quote & backslash & less_32);
+                        }
+                        else {
+                           const uint64_t lo7 = swar & lo7_mask;
+                           const uint64_t quote = (lo7 ^ repeat_byte8('"')) + lo7_mask;
+                           const uint64_t backslash = (lo7 ^ repeat_byte8('\\')) + lo7_mask;
+                           const uint64_t less_32 = (swar & repeat_byte8(0b01100000)) + lo7_mask;
+                           next = ~((quote & backslash & less_32) | swar);
+                        }
 
-                        // We use this optimized code for the sake of GCC and MSVC
-                        uint64_t next = 0x2222222222222222ull ^ swar;
-                        uint64_t a = 0x5C5C5C5C5C5C5C5Cull ^ swar;
-                        uint64_t b = 0xE0E0E0E0E0E0E0E0ull & swar;
-                        constexpr uint64_t c = 0xFEFEFEFEFEFEFEFFull;
-                        next += c;
-                        a += c;
-                        a |= next;
-                        b += c;
-                        b |= a;
-
-                        next = 0x8080808080808080ull & (~swar);
-                        next &= b;
-
+                        next &= repeat_byte8(0b10000000);
                         if (next) {
                            next = countr_zero(next) >> 3;
                            it += next;
