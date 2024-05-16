@@ -588,87 +588,91 @@ namespace glz
                }
 
                if constexpr (not Opts.raw_string) {
-                  // A surrogate pair unicode code point may require 12 characters
-                  // So we need to have this much space available in our read buffer
-                  const auto end12 = end - 12;
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
                   auto* p_end = p + temp.size() - padding_bytes;
+                  
+                  if (size_t(end - it) > 11)
+                  {
+                     // A surrogate pair unicode code point may require 12 characters
+                     // So we need to have this much space available in our read buffer
+                     const auto end12 = end - 12;
 
-                  while (true) {
-                     if (p >= p_end) [[unlikely]] {
-                        // the rare case of running out of temp buffer
-                        const auto distance = size_t(p - temp.data());
-                        temp.resize(temp.size() * 2);
-                        p = temp.data() + distance; // reset p from new memory
-                        p_end = temp.data() + temp.size() - padding_bytes;
-                     }
-                     if (it > end12) {
-                        break;
-                     }
-                     std::memcpy(p, it, 8);
-                     uint64_t swar;
-                     std::memcpy(&swar, p, 8);
-                     // auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
-
-                     // We use this optimized code for the sake of GCC and MSVC
-                     uint64_t next = 0x2222222222222222ull ^ swar;
-                     uint64_t a = 0x5C5C5C5C5C5C5C5Cull ^ swar;
-                     uint64_t b = 0xE0E0E0E0E0E0E0E0ull & swar;
-                     constexpr uint64_t c = 0xFEFEFEFEFEFEFEFFull;
-                     next += c;
-                     a += c;
-                     a |= next;
-                     b += c;
-                     b |= a;
-
-                     next = 0x8080808080808080ull & (~swar);
-                     next &= b;
-
-                     if (next) {
-                        next = countr_zero(next) >> 3;
-                        it += next;
-                        if (*it == '"') {
-                           value.assign(temp.data(), size_t((p + next) - temp.data()));
-                           ++it;
-                           return;
+                     while (true) {
+                        if (p >= p_end) [[unlikely]] {
+                           // the rare case of running out of temp buffer
+                           const auto distance = size_t(p - temp.data());
+                           temp.resize(temp.size() * 2);
+                           p = temp.data() + distance; // reset p from new memory
+                           p_end = temp.data() + temp.size() - padding_bytes;
                         }
-                        if ((*it & 0b11100000) == 0) [[unlikely]] {
-                           ctx.error = error_code::syntax_error;
-                           return;
+                        if (it > end12) {
+                           break;
                         }
-                        ++it; // skip the escape
-                        if (*it == 'u') {
-                           ++it;
-                           p += next;
-                           if (!handle_unicode_code_point(it, p)) [[unlikely]] {
-                              ctx.error = error_code::unicode_escape_conversion_failure;
+                        std::memcpy(p, it, 8);
+                        uint64_t swar;
+                        std::memcpy(&swar, p, 8);
+                        // auto next = has_quote(swar) | has_escape(swar) | is_less_32(swar);
+
+                        // We use this optimized code for the sake of GCC and MSVC
+                        uint64_t next = 0x2222222222222222ull ^ swar;
+                        uint64_t a = 0x5C5C5C5C5C5C5C5Cull ^ swar;
+                        uint64_t b = 0xE0E0E0E0E0E0E0E0ull & swar;
+                        constexpr uint64_t c = 0xFEFEFEFEFEFEFEFFull;
+                        next += c;
+                        a += c;
+                        a |= next;
+                        b += c;
+                        b |= a;
+
+                        next = 0x8080808080808080ull & (~swar);
+                        next &= b;
+
+                        if (next) {
+                           next = countr_zero(next) >> 3;
+                           it += next;
+                           if (*it == '"') {
+                              value.assign(temp.data(), size_t((p + next) - temp.data()));
+                              ++it;
                               return;
+                           }
+                           if ((*it & 0b11100000) == 0) [[unlikely]] {
+                              ctx.error = error_code::syntax_error;
+                              return;
+                           }
+                           ++it; // skip the escape
+                           if (*it == 'u') {
+                              ++it;
+                              p += next;
+                              if (!handle_unicode_code_point(it, p)) [[unlikely]] {
+                                 ctx.error = error_code::unicode_escape_conversion_failure;
+                                 return;
+                              }
+                           }
+                           else {
+                              p += next;
+                              *p = char_unescape_table[*it];
+                              if (*p == 0) [[unlikely]] {
+                                 ctx.error = error_code::invalid_escape;
+                                 return;
+                              }
+                              ++p;
+                              ++it;
                            }
                         }
                         else {
-                           p += next;
-                           *p = char_unescape_table[*it];
-                           if (*p == 0) [[unlikely]] {
-                              ctx.error = error_code::invalid_escape;
-                              return;
-                           }
-                           ++p;
-                           ++it;
+                           it += 8;
+                           p += 8;
                         }
                      }
-                     else {
-                        it += 8;
-                        p += 8;
-                     }
-                  }
 
-                  // we know we won't run out of space in our temp buffer because we subtract padding_bytes
-                  while (it[-1] == '\\') [[unlikely]] {
-                     // if we ended on an escape character then we need to rewind
-                     // because we lost our context
-                     --it;
-                     --p;
+                     // we know we won't run out of space in our temp buffer because we subtract padding_bytes
+                     while (it[-1] == '\\') [[unlikely]] {
+                        // if we ended on an escape character then we need to rewind
+                        // because we lost our context
+                        --it;
+                        --p;
+                     }
                   }
 
                   while (it < end) [[likely]] {
