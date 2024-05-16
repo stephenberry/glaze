@@ -1060,10 +1060,14 @@ namespace glz
 
                using WriterType = meta_unknown_write_t<ValueType>;
                if constexpr (std::is_member_object_pointer_v<WriterType>) {
-                  write<json>::op<write_unknown_off<Options>()>(glz::merge{value, value.*writer}, ctx, b, ix);
+                  // TODO: This intermediate is added to get GCC 14 to build
+                  decltype(auto) merged = glz::merge{value, value.*writer};
+                  write<json>::op<write_unknown_off<Options>()>(std::move(merged), ctx, b, ix);
                }
                else if constexpr (std::is_member_function_pointer_v<WriterType>) {
-                  write<json>::op<write_unknown_off<Options>()>(glz::merge{value, (value.*writer)()}, ctx, b, ix);
+                  // TODO: This intermediate is added to get GCC 14 to build
+                  decltype(auto) merged = glz::merge{value, (value.*writer)()};
+                  write<json>::op<write_unknown_off<Options>()>(std::move(merged), ctx, b, ix);
                }
                else {
                   static_assert(false_v<T>, "unknown_write type not handled");
