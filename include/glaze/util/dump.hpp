@@ -169,6 +169,19 @@ namespace glz::detail
       std::memset(b.data() + ix, c, n);
       ix += n;
    }
+   
+   template <char IndentChar>
+   GLZ_ALWAYS_INLINE void dump_newline_indent(size_t n, vector_like auto& b, auto& ix) noexcept
+   {
+      if (const auto k = ix + n + 1; k > b.size()) [[unlikely]] {
+         b.resize((std::max)(b.size() * 2, k));
+      }
+
+      b[ix] = '\n';
+      ++ix;
+      std::memset(b.data() + ix, IndentChar, n);
+      ix += n;
+   }
 
    template <const sv& str>
    GLZ_ALWAYS_INLINE void dump(vector_like auto& b, auto& ix) noexcept
