@@ -440,8 +440,7 @@ namespace glz
       {
          dump<','>(args...);
          if constexpr (Opts.prettify) {
-            dump<'\n'>(args...);
-            dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
          }
       }
 
