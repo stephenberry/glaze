@@ -63,12 +63,7 @@ namespace glz
    using expected = std::expected<Expected, Unexpected>;
 
    template <class Unexpected>
-   struct unexpected : public std::unexpected<Unexpected>
-   {
-      using std::unexpected<Unexpected>::unexpected;
-   };
-   template <class Unexpected>
-   unexpected(Unexpected) -> glz::unexpected<Unexpected>;
+   using unexpected = std::unexpected<Unexpected>;
 
    template <class T>
    concept is_expected =
