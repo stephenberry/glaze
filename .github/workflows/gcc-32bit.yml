@@ -1,4 +1,4 @@
-name: gcc
+name: gcc-32bit
 
 on:
   push:
