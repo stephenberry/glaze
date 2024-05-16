@@ -453,8 +453,7 @@ namespace glz
          if (!empty_range(value)) {
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
 
             auto it = std::begin(value);
@@ -466,8 +465,7 @@ namespace glz
             }
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
          }
 
@@ -532,16 +530,14 @@ namespace glz
             dump<'{'>(args...);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
 
             write_pair_content<Opts>(key, val, ctx, args...);
 
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             dump<'}'>(args...);
          }
@@ -779,21 +775,18 @@ namespace glz
             dump<'['>(args...);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             dump<'"'>(args...);
             dump(ids_v<T>[value.index()], args...);
             dump<"\",">(args...);
             if constexpr (Opts.prettify) {
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             std::visit([&](auto&& v) { write<json>::op<Opts>(v, ctx, args...); }, value);
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             dump<']'>(args...);
          }
@@ -812,8 +805,7 @@ namespace glz
             dump<'['>(args...);
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             for_each<N>([&](auto I) {
                if constexpr (glaze_array_t<V>) {
@@ -829,8 +821,7 @@ namespace glz
             });
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             dump<']'>(args...);
          }
@@ -855,8 +846,7 @@ namespace glz
             dump<'['>(args...);
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
@@ -873,8 +863,7 @@ namespace glz
             });
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             dump<']'>(args...);
          }
@@ -907,8 +896,7 @@ namespace glz
             dump<'['>(args...);
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             using V = std::decay_t<T>;
             for_each<N>([&](auto I) {
@@ -925,8 +913,7 @@ namespace glz
             });
             if constexpr (N > 0 && Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
-               dump<'\n'>(args...);
-               dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             dump<']'>(args...);
          }
@@ -1073,10 +1060,14 @@ namespace glz
 
                using WriterType = meta_unknown_write_t<ValueType>;
                if constexpr (std::is_member_object_pointer_v<WriterType>) {
-                  write<json>::op<write_unknown_off<Options>()>(glz::merge{value, value.*writer}, ctx, b, ix);
+                  // TODO: This intermediate is added to get GCC 14 to build
+                  decltype(auto) merged = glz::merge{value, value.*writer};
+                  write<json>::op<write_unknown_off<Options>()>(std::move(merged), ctx, b, ix);
                }
                else if constexpr (std::is_member_function_pointer_v<WriterType>) {
-                  write<json>::op<write_unknown_off<Options>()>(glz::merge{value, (value.*writer)()}, ctx, b, ix);
+                  // TODO: This intermediate is added to get GCC 14 to build
+                  decltype(auto) merged = glz::merge{value, (value.*writer)()};
+                  write<json>::op<write_unknown_off<Options>()>(std::move(merged), ctx, b, ix);
                }
                else {
                   static_assert(false_v<T>, "unknown_write type not handled");
