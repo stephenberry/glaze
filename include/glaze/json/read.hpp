@@ -590,13 +590,13 @@ namespace glz
                if constexpr (not Opts.raw_string) {
                   auto& temp = string_decode_buffer();
                   auto* p = temp.data();
-                  auto* p_end = p + temp.size() - padding_bytes;
                   
                   if (size_t(end - it) > 11)
                   {
                      // A surrogate pair unicode code point may require 12 characters
                      // So we need to have this much space available in our read buffer
                      const auto end12 = end - 12;
+                     auto* p_end = p + temp.size() - padding_bytes;
 
                      while (true) {
                         if (p >= p_end) [[unlikely]] {
