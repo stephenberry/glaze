@@ -76,7 +76,7 @@ namespace glz
       }
 
       template <class T>
-      expected<T, error_code> api::get_fn(const sv path) noexcept
+      glz::expected<T, error_code> api::get_fn(const sv path) noexcept
       {
          static constexpr auto hash = glz::hash<T>();
          auto d = get_fn(path, hash);
@@ -85,12 +85,12 @@ namespace glz
             return copy;
          }
          else {
-            return unexpected(error_code::invalid_get_fn);
+            return glz::unexpected(error_code::invalid_get_fn);
          }
       }
 
       template <class Ret, class... Args>
-      expected<func_return_t<Ret>, error_code> api::call(const sv path, Args&&... args) noexcept
+      glz::expected<func_return_t<Ret>, error_code> api::call(const sv path, Args&&... args) noexcept
       {
          using F = std::function<Ret(Args...)>;
          static constexpr auto hash = glz::hash<F>();
@@ -136,7 +136,7 @@ namespace glz
             }
          }
 
-         return unexpected(error_code::invalid_call);
+         return glz::unexpected(error_code::invalid_call);
       }
 
       using iface_fn = std::shared_ptr<glz::iface> (*)();
