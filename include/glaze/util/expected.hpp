@@ -68,7 +68,7 @@ namespace glz
       using std::unexpected<Unexpected>::unexpected;
    };
    template <class Unexpected>
-   unexpected(Unexpected) -> unexpected<Unexpected>;
+   unexpected(Unexpected) -> glz::unexpected<Unexpected>;
 
    template <class T>
    concept is_expected =
