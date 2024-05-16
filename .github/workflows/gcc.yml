@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        gcc: [11, 12, 13]
+        gcc: [12, 13, 14]
         build_type: [Debug, Release]
         std: [20, 23]
 
