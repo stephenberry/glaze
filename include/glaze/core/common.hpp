@@ -1056,8 +1056,9 @@ namespace glz::detail
 
       // Allows us to remove a branch if the first item will always be written
       static constexpr bool first_will_be_written = [] {
-         if constexpr (N > 0) {
-            using V = glaze_tuple_element_t<0, N, T>;
+         if constexpr (N > 0) {            
+            using Element = glaze_tuple_element<0, N, T>;
+            using V = std::remove_cvref_t<typename Element::type>;
 
             if constexpr (null_t<V> && Opts.skip_null_members) {
                return false;
@@ -1075,18 +1076,25 @@ namespace glz::detail
          }
       }();
 
-      static constexpr bool contains_always_skipped = [] {
+      static constexpr bool maybe_skipped = [] {
          if constexpr (N > 0) {
-            bool found_always_skipped{};
+            bool found_maybe_skipped{};
             for_each_short_circuit<N>([&](auto I) {
-               using V = glaze_tuple_element_t<I, N, T>;
+               using Element = glaze_tuple_element<I, N, T>;
+               using V = std::remove_cvref_t<typename Element::type>;
+               
+               if constexpr (Opts.skip_null_members && null_t<V>) {
+                  found_maybe_skipped = true;
+                  return true; // early exit
+               }
+               
                if constexpr (is_includer<V> || std::is_same_v<V, hidden> || std::same_as<V, skip>) {
-                  found_always_skipped = true;
+                  found_maybe_skipped = true;
                   return true; // early exit
                }
                return false; // continue
             });
-            return found_always_skipped;
+            return found_maybe_skipped;
          }
          else {
             return false;
