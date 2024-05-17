@@ -24,6 +24,9 @@ namespace glz
    // We use 16 padding bytes because surrogate unicode pairs require 12 bytes
    // and we want a power of 2 buffer
    constexpr uint32_t padding_bytes = 16;
+   
+   // Write padding bytes simplifies our dump calculations by making sure we have significant excess
+   constexpr uint32_t write_padding_bytes = 256;
 
    struct opts
    {
@@ -73,6 +76,8 @@ namespace glz
       bool write_unknown = true; // whether to write unkwown fields
       bool is_padded = false; // whether or not the read buffer is padded
       bool disable_padding = false; // to explicitly disable padding for contexts like includers
+      bool write_unchecked = false; // the write buffer has sufficient space and does not need to be checked
+      // sufficient space is only applicable to writing certain types and based on the write_padding_bytes
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };

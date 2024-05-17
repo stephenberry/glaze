@@ -44,6 +44,12 @@ namespace glz
                                           std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
+      
+      template <class T>
+      concept optional_like = nullable_t<T> && (!is_expected<T> && !std::is_array_v<T>);
+      
+      template <class T>
+      concept supports_unchecked_write = complex_t<T> || boolean_like<T> || num_t<T> || optional_like<T> || always_null_t<T>;
 
       template <is_bitset T>
       struct to_json<T>
@@ -75,8 +81,7 @@ namespace glz
                if (get_member(value, glz::get<1>(item))) {
                   dump<'"'>(b, ix);
                   dump(glz::get<0>(item), b, ix);
-                  dump<'"'>(b, ix);
-                  dump<','>(b, ix);
+                  dump<"\",">(b, ix);
                }
             });
 
@@ -134,11 +139,20 @@ namespace glz
          template <auto Opts, class B>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            dump<'['>(b, ix);
-            write<json>::op<Opts>(value.real(), ctx, b, ix);
-            dump<','>(b, ix);
-            write<json>::op<Opts>(value.imag(), ctx, b, ix);
-            dump<']'>(b, ix);
+            if constexpr (Opts.write_unchecked && (sizeof(typename T::value_type) <= 8)) {
+               dump_unchecked<'['>(b, ix);
+               write<json>::op<Opts>(value.real(), ctx, b, ix);
+               dump_unchecked<','>(b, ix);
+               write<json>::op<Opts>(value.imag(), ctx, b, ix);
+               dump_unchecked<']'>(b, ix);
+            }
+            else {
+               dump<'['>(b, ix);
+               write<json>::op<Opts>(value.real(), ctx, b, ix);
+               dump<','>(b, ix);
+               write<json>::op<Opts>(value.imag(), ctx, b, ix);
+               dump<']'>(b, ix);
+            }
          }
       };
 
@@ -148,11 +162,21 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args) noexcept
          {
-            if (value) {
-               dump<"true">(std::forward<Args>(args)...);
+            if constexpr (Opts.write_unchecked) {
+               if (value) {
+                  dump_unchecked<"true">(std::forward<Args>(args)...);
+               }
+               else {
+                  dump_unchecked<"false">(std::forward<Args>(args)...);
+               }
             }
             else {
-               dump<"false">(std::forward<Args>(args)...);
+               if (value) {
+                  dump<"true">(std::forward<Args>(args)...);
+               }
+               else {
+                  dump<"false">(std::forward<Args>(args)...);
+               }
             }
          }
       };
@@ -163,12 +187,23 @@ namespace glz
          template <auto Opts, class B>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            if constexpr (Opts.quoted_num) {
-               dump<'"'>(b, ix);
+            if constexpr (Opts.write_unchecked) {
+               if constexpr (Opts.quoted_num) {
+                  dump_unchecked<'"'>(b, ix);
+               }
+               write_chars::op<Opts>(value, ctx, b, ix);
+               if constexpr (Opts.quoted_num) {
+                  dump_unchecked<'"'>(b, ix);
+               }
             }
-            write_chars::op<Opts>(value, ctx, b, ix);
-            if constexpr (Opts.quoted_num) {
-               dump<'"'>(b, ix);
+            else {
+               if constexpr (Opts.quoted_num) {
+                  dump<'"'>(b, ix);
+               }
+               write_chars::op<Opts>(value, ctx, b, ix);
+               if constexpr (Opts.quoted_num) {
+                  dump<'"'>(b, ix);
+               }
             }
          }
       };
@@ -435,13 +470,20 @@ namespace glz
          }
       };
 
-      template <opts Opts>
-      GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, auto&&... args) noexcept
+      template <opts Opts, class B, class Ix>
+      GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, B&& b, Ix&& ix) noexcept
       {
-         dump<','>(args...);
          if constexpr (Opts.prettify) {
-            dump<'\n'>(args...);
-            dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+            if constexpr (vector_like<B>) {
+               if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                  b.resize((std::max)(b.size() * 2, k));
+               }
+            }
+            dump_unchecked<",\n">(b, ix);
+            dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+         }
+         else {
+            dump<','>(b, ix);
          }
       }
 
@@ -519,27 +561,38 @@ namespace glz
       template <pair_t T>
       struct to_json<T>
       {
-         template <glz::opts Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(const T& value, is_context auto&& ctx, Args&&... args) noexcept
+         template <glz::opts Opts, class B, class Ix>
+         GLZ_ALWAYS_INLINE static void op(const T& value, is_context auto&& ctx, B&& b, Ix&& ix) noexcept
          {
             const auto& [key, val] = value;
             if (skip_member<Opts>(val)) {
-               return dump<"{}">(args...);
+               return dump<"{}">(b, ix);
             }
 
-            dump<'{'>(args...);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+               if constexpr (vector_like<B>) {
+                  if (const auto k = ix + ctx.indentation_level + 2; k > b.size()) [[unlikely]] {
+                     b.resize((std::max)(b.size() * 2, k));
+                  }
+               }
+               dump_unchecked<"{\n">(b, ix);
+               dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+            }
+            else {
+               dump<'{'>(b, ix);
             }
 
-            write_pair_content<Opts>(key, val, ctx, args...);
+            write_pair_content<Opts>(key, val, ctx, b, ix);
 
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
-               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
+               dump_unchecked<'}'>(b, ix);
             }
-            dump<'}'>(args...);
+            else {
+               dump<'}'>(b, ix);
+            }
          }
       };
 
@@ -565,8 +618,7 @@ namespace glz
                if constexpr (!Opts.opening_handled) {
                   if constexpr (Opts.prettify) {
                      ctx.indentation_level += Opts.indentation_width;
-                     dump<'\n'>(args...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+                     dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
                }
 
@@ -648,8 +700,7 @@ namespace glz
                if constexpr (!Opts.closing_handled) {
                   if constexpr (Opts.prettify) {
                      ctx.indentation_level -= Opts.indentation_width;
-                     dump<'\n'>(args...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+                     dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
                }
             }
@@ -687,18 +738,28 @@ namespace glz
          }
       };
 
-      template <nullable_t T>
-         requires(!is_expected<T> && !std::is_array_v<T>)
+      template <optional_like T>
       struct to_json<T>
       {
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if (value) {
-               write<json>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
+               if constexpr (requires { requires supports_unchecked_write<typename T::value_type>; }
+                             || requires { requires supports_unchecked_write<typename T::element_type>; }) {
+                  write<json>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
+               }
+               else {
+                  write<json>::op<opt_false<Opts, &opts::write_unchecked>>(*value, ctx, std::forward<Args>(args)...);
+               }
             }
             else {
-               dump<"null">(std::forward<Args>(args)...);
+               if constexpr (Opts.write_unchecked) {
+                  dump_unchecked<"null">(std::forward<Args>(args)...);
+               }
+               else {
+                  dump<"null">(std::forward<Args>(args)...);
+               }
             }
          }
       };
@@ -709,7 +770,12 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
          {
-            dump<"null">(args...);
+            if constexpr (Opts.write_unchecked) {
+               dump_unchecked<"null">(args...);
+            }
+            else {
+               dump<"null">(args...);
+            }
          }
       };
 
@@ -828,7 +894,7 @@ namespace glz
       };
 
       template <class T>
-         requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
+         requires glaze_array_t<T> || tuple_t<std::decay_t<T>>
       struct to_json<T>
       {
          template <auto Opts, class... Args>
@@ -1077,17 +1143,52 @@ namespace glz
                op_base<write_unknown_on<Options>()>(std::forward<V>(value), ctx, b, ix);
             }
          }
+         
+         GLZ_FLATTEN static decltype(auto) reflection_tuple(auto&& value, auto&&...) noexcept
+         {
+            if constexpr (reflectable<T>) {
+               using V = decay_keep_volatile_t<decltype(value)>;
+               if constexpr (std::is_const_v<std::remove_reference_t<decltype(value)>>) {
+#if ((defined _MSC_VER) && (!defined __clang__))
+                  static thread_local auto tuple_of_ptrs = make_const_tuple_from_struct<V>();
+#else
+                  static thread_local constinit auto tuple_of_ptrs = make_const_tuple_from_struct<V>();
+#endif
+                  populate_tuple_ptr(value, tuple_of_ptrs);
+                  return tuple_of_ptrs;
+               }
+               else {
+#if ((defined _MSC_VER) && (!defined __clang__))
+                  static thread_local auto tuple_of_ptrs = make_tuple_from_struct<V>();
+#else
+                  static thread_local constinit auto tuple_of_ptrs = make_tuple_from_struct<V>();
+#endif
+                  populate_tuple_ptr(value, tuple_of_ptrs);
+                  return tuple_of_ptrs;
+               }
+            }
+            else {
+               return nullptr;
+            }
+         }
 
          // handles glaze_object_t without extra unknown fields
-         template <auto Options>
-         GLZ_FLATTEN static void op_base(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         template <auto Options, class B>
+         GLZ_FLATTEN static void op_base(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             if constexpr (!Options.opening_handled) {
-               dump<'{'>(b, ix);
                if constexpr (Options.prettify) {
                   ctx.indentation_level += Options.indentation_width;
-                  dump<'\n'>(b, ix);
-                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+                  if constexpr (vector_like<B>) {
+                     if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        b.resize((std::max)(b.size() * 2, k));
+                     }
+                  }
+                  dump_unchecked<"{\n">(b, ix);
+                  dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
+               }
+               else {
+                  dump<'{'>(b, ix);
                }
             }
 
@@ -1095,35 +1196,10 @@ namespace glz
 
             static constexpr auto N = Info::N;
 
-            [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
-               if constexpr (reflectable<T>) {
-                  using V = decay_keep_volatile_t<decltype(value)>;
-                  if constexpr (std::is_const_v<std::remove_reference_t<decltype(value)>>) {
-#if ((defined _MSC_VER) && (!defined __clang__))
-                     static thread_local auto tuple_of_ptrs = make_const_tuple_from_struct<V>();
-#else
-                     static thread_local constinit auto tuple_of_ptrs = make_const_tuple_from_struct<V>();
-#endif
-                     populate_tuple_ptr(value, tuple_of_ptrs);
-                     return tuple_of_ptrs;
-                  }
-                  else {
-#if ((defined _MSC_VER) && (!defined __clang__))
-                     static thread_local auto tuple_of_ptrs = make_tuple_from_struct<V>();
-#else
-                     static thread_local constinit auto tuple_of_ptrs = make_tuple_from_struct<V>();
-#endif
-                     populate_tuple_ptr(value, tuple_of_ptrs);
-                     return tuple_of_ptrs;
-                  }
-               }
-               else {
-                  return nullptr;
-               }
-            }();
-
+            [[maybe_unused]] decltype(auto) t = reflection_tuple(value);
             [[maybe_unused]] bool first = true;
             static constexpr auto first_is_written = Info::first_will_be_written;
+            static constexpr auto contains_always_skipped = Info::contains_always_skipped;
             for_each<N>([&](auto I) {
                constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
 
@@ -1140,62 +1216,113 @@ namespace glz
                      return get<member_index>(get<I>(meta_v<std::decay_t<T>>));
                   }
                }();
-
-               if constexpr (null_t<val_t> && Opts.skip_null_members) {
-                  if constexpr (always_null_t<T>)
-                     return;
-                  else {
-                     auto is_null = [&]() {
-                        if constexpr (nullable_wrapper<val_t>) {
-                           return !bool(member(value).val);
-                        }
-                        else {
-                           return !bool(get_member(value, member));
-                        }
-                     }();
-                     if (is_null) return;
-                  }
-               }
-
-               // skip file_include
-               if constexpr (is_includer<val_t>) {
-                  return;
-               }
-               else if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
-                  return;
-               }
-               else {
-                  if constexpr (first_is_written && I > 0) {
-                     write_entry_separator<Opts>(ctx, b, ix);
-                  }
-                  else {
-                     if (first) {
-                        first = false;
-                     }
-                     else {
-                        // Null members may be skipped so we cant just write it out for all but the last member unless
-                        // trailing commas are allowed
-                        write_entry_separator<Opts>(ctx, b, ix);
-                     }
-                  }
-
+               
+               auto write_key = [&] {
                   static constexpr sv key = key_name<I, T, use_reflection>;
                   if constexpr (needs_escaping(key)) {
+                     // TODO: do compile time escaping
                      write<json>::op<Opts>(key, ctx, b, ix);
-                     dump<':'>(b, ix);
+                     maybe_pad<write_padding_bytes>(b, ix);
                      if constexpr (Opts.prettify) {
-                        dump<' '>(b, ix);
+                        dump_unchecked<": ">(b, ix);
+                     }
+                     else {
+                        dump_unchecked<':'>(b, ix);
                      }
                   }
                   else {
                      static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                           Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                        ;
-                     dump<quoted_key>(b, ix);
+                     Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                     ;
+                     if constexpr (quoted_key.size() < 128) {
+                        // Using the same padding constant alows the compiler
+                        // to not need to load different lengths into the register
+                        maybe_pad<write_padding_bytes>(b, ix);
+                     }
+                     else {
+                        maybe_pad<quoted_key.size() + write_padding_bytes>(b);
+                     }
+                     dump_unchecked<quoted_key>(b, ix);
+                  }
+               };
+               
+               if constexpr (Opts.skip_null_members || contains_always_skipped)
+               {
+                  if constexpr (null_t<val_t>) {
+                     if constexpr (always_null_t<T>)
+                        return;
+                     else {
+                        auto is_null = [&]() {
+                           if constexpr (nullable_wrapper<val_t>) {
+                              return !bool(member(value).val);
+                           }
+                           else {
+                              return !bool(get_member(value, member));
+                           }
+                        }();
+                        if (is_null) return;
+                     }
+                  }
+                  
+                  if constexpr (is_includer<val_t> || std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
+                     return;
+                  }
+                  else {
+                     if constexpr (first_is_written && I > 0) {
+                        write_entry_separator<Opts>(ctx, b, ix);
+                     }
+                     else {
+                        if (first) {
+                           first = false;
+                        }
+                        else {
+                           // Null members may be skipped so we cant just write it out for all but the last member
+                           write_entry_separator<Opts>(ctx, b, ix);
+                        }
+                     }
+                     
+                     write_key();
+                     if constexpr (supports_unchecked_write<val_t>) {
+                        write<json>::op<opt_true<Opts, &opts::write_unchecked>>(get_member(value, member), ctx, b, ix);
+                     }
+                     else {
+                        write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
+                     }
+                     
+                     // MSVC ICE bugs cause this code to be duplicated
+                     static constexpr size_t comment_index = member_index + 1;
+                     static constexpr auto S = glz::tuple_size_v<typename Element::Item>;
+                     if constexpr (Opts.comments && S > comment_index) {
+                        static constexpr auto i = glz::get<I>(meta_v<std::decay_t<T>>);
+                        if constexpr (std::is_convertible_v<decltype(get<comment_index>(i)), sv>) {
+                           static constexpr sv comment = get<comment_index>(i);
+                           if constexpr (comment.size() > 0) {
+                              if constexpr (Opts.prettify) {
+                                 dump<' '>(b, ix);
+                              }
+                              dump<"/*">(b, ix);
+                              dump(comment, b, ix);
+                              dump<"*/">(b, ix);
+                           }
+                        }
+                     }
+                  }
+               }
+               else {
+                  // in this case we don't skip null members
+                  if constexpr (I > 0) {
+                     write_entry_separator<Opts>(ctx, b, ix);
                   }
 
-                  write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
-
+                  write_key();
+                  if constexpr (supports_unchecked_write<val_t>) {
+                     write<json>::op<opt_true<Opts, &opts::write_unchecked>>(get_member(value, member), ctx, b, ix);
+                  }
+                  else {
+                     write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
+                  }
+                  
+                  // MSVC ICE bugs cause this code to be duplicated
                   static constexpr size_t comment_index = member_index + 1;
                   static constexpr auto S = glz::tuple_size_v<typename Element::Item>;
                   if constexpr (Opts.comments && S > comment_index) {
@@ -1217,10 +1344,18 @@ namespace glz
             if constexpr (!Options.closing_handled) {
                if constexpr (Options.prettify) {
                   ctx.indentation_level -= Options.indentation_width;
-                  dump<'\n'>(b, ix);
-                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+                  if constexpr (vector_like<B>) {
+                     if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        b.resize((std::max)(b.size() * 2, k));
+                     }
+                  }
+                  dump_unchecked<'\n'>(b, ix);
+                  dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
+                  dump_unchecked<'}'>(b, ix);
                }
-               dump<'}'>(b, ix);
+               else {
+                  dump<'}'>(b, ix);
+               }
             }
          }
       };
