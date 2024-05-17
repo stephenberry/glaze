@@ -279,7 +279,7 @@ namespace glz::detail
       std::memcpy(b + ix, str.data(), n);
       ix += n;
    }
-   
+
    GLZ_ALWAYS_INLINE void dump_maybe_empty(const sv str, vector_like auto& b, auto& ix) noexcept
    {
       const auto n = str.size();
@@ -292,7 +292,7 @@ namespace glz::detail
          ix += n;
       }
    }
-   
+
    GLZ_ALWAYS_INLINE void dump_maybe_empty(const sv str, auto* b, auto& ix) noexcept
    {
       const auto n = str.size();

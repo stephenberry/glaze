@@ -61,11 +61,11 @@ namespace glz
 {
    template <class Expected, class Unexpected>
    using expected = std::expected<Expected, Unexpected>;
-   
+
    template <class T>
    concept is_expected =
       std::same_as<std::remove_cvref_t<T>, expected<typename T::value_type, typename T::error_type> >;
-   
+
 #ifdef __clang__
    template <class Unexpected>
    struct unexpected : public std::unexpected<Unexpected>
