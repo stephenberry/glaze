@@ -158,6 +158,12 @@ namespace glz::detail
    {
       std::memset(b, c, n);
    }
+   
+   template <char c>
+   GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, char*& b) noexcept
+   {
+      std::memset(b, c, n);
+   }
 
    template <char c>
    GLZ_ALWAYS_INLINE void dumpn(size_t n, vector_like auto& b, auto& ix) noexcept
@@ -166,6 +172,13 @@ namespace glz::detail
          b.resize((std::max)(b.size() * 2, ix + n));
       }
 
+      std::memset(b.data() + ix, c, n);
+      ix += n;
+   }
+   
+   template <char c>
+   GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, vector_like auto& b, auto& ix) noexcept
+   {
       std::memset(b.data() + ix, c, n);
       ix += n;
    }

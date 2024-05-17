@@ -75,8 +75,7 @@ namespace glz
                if (get_member(value, glz::get<1>(item))) {
                   dump<'"'>(b, ix);
                   dump(glz::get<0>(item), b, ix);
-                  dump<'"'>(b, ix);
-                  dump<','>(b, ix);
+                  dump<"\",">(b, ix);
                }
             });
 
@@ -518,27 +517,35 @@ namespace glz
       template <pair_t T>
       struct to_json<T>
       {
-         template <glz::opts Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(const T& value, is_context auto&& ctx, Args&&... args) noexcept
+         template <glz::opts Opts, class B, class Ix>
+         GLZ_ALWAYS_INLINE static void op(const T& value, is_context auto&& ctx, B&& b, Ix&& ix) noexcept
          {
             const auto& [key, val] = value;
             if (skip_member<Opts>(val)) {
-               return dump<"{}">(args...);
+               return dump<"{}">(b, ix);
             }
 
-            dump<'{'>(args...);
             if constexpr (Opts.prettify) {
                ctx.indentation_level += Opts.indentation_width;
-               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+               if constexpr (vector_like<B>) {
+                  if (const auto k = ix + ctx.indentation_level + 2; k > b.size()) [[unlikely]] {
+                     b.resize((std::max)(b.size() * 2, k));
+                  }
+               }
+               dump_unchecked<"{\n">(b, ix);
+               dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+            }
+            else {
+               dump<'{'>(b, ix);
             }
 
-            write_pair_content<Opts>(key, val, ctx, args...);
+            write_pair_content<Opts>(key, val, ctx, b, ix);
 
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
-               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
             }
-            dump<'}'>(args...);
+            dump<'}'>(b, ix);
          }
       };
 
@@ -564,8 +571,7 @@ namespace glz
                if constexpr (!Opts.opening_handled) {
                   if constexpr (Opts.prettify) {
                      ctx.indentation_level += Opts.indentation_width;
-                     dump<'\n'>(args...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+                     dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
                }
 
@@ -647,8 +653,7 @@ namespace glz
                if constexpr (!Opts.closing_handled) {
                   if constexpr (Opts.prettify) {
                      ctx.indentation_level -= Opts.indentation_width;
-                     dump<'\n'>(args...);
-                     dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
+                     dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
                   }
                }
             }

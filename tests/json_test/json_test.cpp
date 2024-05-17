@@ -557,11 +557,33 @@ suite container_types = [] {
       const auto s = glz::write_json(v);
       expect(s == R"({"1":2,"3":4})") << s;
    };
+   "vector pair"_test = [] {
+      std::vector<std::pair<int, int>> v;
+      expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
+      const auto s = glz::write<glz::opts{.prettify = true}>(v);
+      expect(s == R"({
+   "1": 2,
+   "3": 4
+})") << s;
+   };
    "vector pair roundtrip"_test = [] {
       std::vector<std::pair<int, int>> v;
       expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
       const auto s = glz::write<glz::opts{.concatenate = false}>(v);
       expect(s == R"([{"1":2},{"3":4}])") << s;
+   };
+   "vector pair roundtrip"_test = [] {
+      std::vector<std::pair<int, int>> v;
+      expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
+      const auto s = glz::write<glz::opts{.prettify = true, .concatenate = false}>(v);
+      expect(s == R"([
+   {
+      "1": 2
+   },
+   {
+      "3": 4
+   }
+])") << s;
    };
    "deque roundtrip"_test = [] {
       std::vector<int> deq(100);
