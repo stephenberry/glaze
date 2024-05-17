@@ -1078,13 +1078,11 @@ namespace glz::detail
       static constexpr bool contains_always_skipped = [] {
          if constexpr (N > 0) {
             bool found_always_skipped{};
-            for_each_short_circuit<N>([&](auto I){
+            for_each<N>([&](auto I){
                using V = glaze_tuple_element_t<I, N, T>;
                if constexpr (is_includer<V> || std::is_same_v<V, hidden> || std::same_as<V, skip>) {
                   found_always_skipped = true;
-                  return true; // early exit
                }
-               return false; // continue
             });
             return found_always_skipped;
          }
