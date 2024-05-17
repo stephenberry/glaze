@@ -81,7 +81,7 @@ namespace glz
 
                if (get_member(value, glz::get<1>(item))) {
                   dump<'"'>(b, ix);
-                  dump(glz::get<0>(item), b, ix);
+                  dump_maybe_empty(glz::get<0>(item), b, ix);
                   dump<"\",">(b, ix);
                }
             });
@@ -231,7 +231,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
          {
             if constexpr (Opts.number) {
-               dump(value, b, ix);
+               dump_maybe_empty(value, b, ix);
             }
             else if constexpr (char_t<T>) {
                if constexpr (Opts.raw) {
@@ -421,7 +421,7 @@ namespace glz
                // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
                // TODO: Could create a pre quoted map for better performance
                dump<'"'>(args...);
-               dump(str, args...);
+               dump_maybe_empty(str, args...);
                dump<'"'>(args...);
             }
             else [[unlikely]] {
@@ -450,7 +450,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, Args&&... args) noexcept
          {
             dump<'"'>(args...);
-            dump(name_v<std::decay_t<decltype(value)>>, args...);
+            dump_maybe_empty(name_v<std::decay_t<decltype(value)>>, args...);
             dump<'"'>(args...);
          }
       };
@@ -461,7 +461,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
-            dump(value.str, b, ix);
+            dump_maybe_empty(value.str, b, ix);
          }
       };
 
@@ -471,7 +471,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
-            dump(value.str, b, ix);
+            dump_maybe_empty(value.str, b, ix);
          }
       };
 
@@ -804,9 +804,9 @@ namespace glz
                         ctx.indentation_level += Opts.indentation_width;
                         dumpn<Opts.indentation_char>(ctx.indentation_level, args...);
                         dump<'"'>(args...);
-                        dump(tag_v<T>, args...);
+                        dump_maybe_empty(tag_v<T>, args...);
                         dump<"\": \"">(args...);
-                        dump(ids_v<T>[value.index()], args...);
+                        dump_maybe_empty(ids_v<T>[value.index()], args...);
                         if constexpr (num_members == 0) {
                            dump<"\"\n">(args...);
                         }
@@ -817,9 +817,9 @@ namespace glz
                      }
                      else {
                         dump<"{\"">(args...);
-                        dump(tag_v<T>, args...);
+                        dump_maybe_empty(tag_v<T>, args...);
                         dump<"\":\"">(args...);
-                        dump(ids_v<T>[value.index()], args...);
+                        dump_maybe_empty(ids_v<T>[value.index()], args...);
                         if constexpr (num_members == 0) {
                            dump<R"(")">(args...);
                         }
@@ -850,7 +850,7 @@ namespace glz
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
             }
             dump<'"'>(args...);
-            dump(ids_v<T>[value.index()], args...);
+            dump_maybe_empty(ids_v<T>[value.index()], args...);
             dump<"\",">(args...);
             if constexpr (Opts.prettify) {
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
@@ -1066,7 +1066,7 @@ namespace glz
                   else {
                      dump<'"'>(b, ix);
                      write<json>::op<Opts>(item, ctx, b, ix);
-                     dump(Opts.prettify ? "\": " : "\":", b, ix);
+                     dump_not_empty(Opts.prettify ? "\": " : "\":", b, ix);
                   }
 
                   write<json>::op<Opts>(item, ctx, b, ix);
@@ -1306,7 +1306,7 @@ namespace glz
                                  dump<' '>(b, ix);
                               }
                               dump<"/*">(b, ix);
-                              dump(comment, b, ix);
+                              dump_not_empty(comment, b, ix);
                               dump<"*/">(b, ix);
                            }
                         }
@@ -1339,7 +1339,7 @@ namespace glz
                               dump<' '>(b, ix);
                            }
                            dump<"/*">(b, ix);
-                           dump(comment, b, ix);
+                           dump_not_empty(comment, b, ix);
                            dump<"*/">(b, ix);
                         }
                      }
