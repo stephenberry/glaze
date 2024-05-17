@@ -281,7 +281,9 @@ namespace glz
                   // now we don't have to check writing
 
                   dump_unchecked<'"'>(b, ix);
-                  dump_unchecked(str, b, ix);
+                  if (str.size()) [[likely]] {
+                     dump_unchecked(str, b, ix);
+                  }
                   dump_unchecked<'"'>(b, ix);
                }
                else {
@@ -308,7 +310,9 @@ namespace glz
                   // now we don't have to check writing
 
                   if constexpr (Opts.raw) {
-                     dump_unchecked(str, b, ix);
+                     if (str.size()) [[likely]] {
+                        dump_unchecked(str, b, ix);
+                     }
                   }
                   else {
                      dump_unchecked<'"'>(b, ix);
