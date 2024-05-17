@@ -59,15 +59,25 @@ namespace glz
 #if defined(__cpp_lib_expected)
 namespace glz
 {
-   template <class Expected, class Unexpected>
-   using expected = std::expected<Expected, Unexpected>;
-
-   template <class Unexpected>
-   using unexpected = std::unexpected<Unexpected>;
-
-   template <class T>
+   template <class expected_t, class unexpected_t>
+   using expected = std::expected<expected_t, unexpected_t>;
+   
+   template <typename T>
    concept is_expected =
       std::same_as<std::remove_cvref_t<T>, expected<typename T::value_type, typename T::error_type> >;
+   
+#ifdef __clang__
+   template <class unexpected_t>
+   struct unexpected : public std::unexpected<unexpected_t>
+   {
+      using std::unexpected<unexpected_t>::unexpected;
+   };
+   template <class unexpected_t>
+   unexpected(unexpected_t) -> unexpected<unexpected_t>;
+#else
+   template <class Unexpected>
+   using unexpected = std::unexpected<Unexpected>;
+#endif
 }
 #else
 
