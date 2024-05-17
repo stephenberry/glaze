@@ -1211,25 +1211,6 @@ namespace glz
                   }
                }();
                
-               auto write_comments = [&] {
-                  static constexpr size_t comment_index = member_index + 1;
-                  static constexpr auto S = glz::tuple_size_v<typename Element::Item>;
-                  if constexpr (Opts.comments && S > comment_index) {
-                     static constexpr auto i = glz::get<I>(meta_v<std::decay_t<T>>);
-                     if constexpr (std::is_convertible_v<decltype(get<comment_index>(i)), sv>) {
-                        static constexpr sv comment = get<comment_index>(i);
-                        if constexpr (comment.size() > 0) {
-                           if constexpr (Opts.prettify) {
-                              dump<' '>(b, ix);
-                           }
-                           dump<"/*">(b, ix);
-                           dump(comment, b, ix);
-                           dump<"*/">(b, ix);
-                        }
-                     }
-                  }
-               };
-               
                auto write_key = [&] {
                   static constexpr sv key = key_name<I, T, use_reflection>;
                   if constexpr (needs_escaping(key)) {
@@ -1301,7 +1282,23 @@ namespace glz
                      else {
                         write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
                      }
-                     write_comments();
+                     
+                     static constexpr size_t comment_index = member_index + 1;
+                     static constexpr auto S = glz::tuple_size_v<typename Element::Item>;
+                     if constexpr (Opts.comments && S > comment_index) {
+                        static constexpr auto i = glz::get<I>(meta_v<std::decay_t<T>>);
+                        if constexpr (std::is_convertible_v<decltype(get<comment_index>(i)), sv>) {
+                           static constexpr sv comment = get<comment_index>(i);
+                           if constexpr (comment.size() > 0) {
+                              if constexpr (Opts.prettify) {
+                                 dump<' '>(b, ix);
+                              }
+                              dump<"/*">(b, ix);
+                              dump(comment, b, ix);
+                              dump<"*/">(b, ix);
+                           }
+                        }
+                     }
                   }
                }
                else {
@@ -1317,7 +1314,23 @@ namespace glz
                   else {
                      write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
                   }
-                  write_comments();
+                  
+                  static constexpr size_t comment_index = member_index + 1;
+                  static constexpr auto S = glz::tuple_size_v<typename Element::Item>;
+                  if constexpr (Opts.comments && S > comment_index) {
+                     static constexpr auto i = glz::get<I>(meta_v<std::decay_t<T>>);
+                     if constexpr (std::is_convertible_v<decltype(get<comment_index>(i)), sv>) {
+                        static constexpr sv comment = get<comment_index>(i);
+                        if constexpr (comment.size() > 0) {
+                           if constexpr (Opts.prettify) {
+                              dump<' '>(b, ix);
+                           }
+                           dump<"/*">(b, ix);
+                           dump(comment, b, ix);
+                           dump<"*/">(b, ix);
+                        }
+                     }
+                  }
                }
             });
             if constexpr (!Options.closing_handled) {
