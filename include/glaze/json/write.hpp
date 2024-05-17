@@ -1200,8 +1200,8 @@ namespace glz
 
             [[maybe_unused]] decltype(auto) t = reflection_tuple(value);
             [[maybe_unused]] bool first = true;
-            static constexpr auto first_is_written = Info::first_will_be_written;
-            static constexpr auto maybe_skipped = Info::maybe_skipped;
+            constexpr auto first_is_written = Info::first_will_be_written;
+            constexpr auto maybe_skipped = Info::maybe_skipped;
             for_each<N>([&](auto I) {
                constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
 

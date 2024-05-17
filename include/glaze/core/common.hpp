@@ -1064,7 +1064,7 @@ namespace glz::detail
                return false;
             }
 
-            if constexpr (is_includer<V> || std::is_same_v<V, hidden> || std::same_as<V, skip>) {
+            if constexpr (is_includer<V> || std::same_as<V, hidden> || std::same_as<V, skip>) {
                return false;
             }
             else {
@@ -1088,7 +1088,7 @@ namespace glz::detail
                   return true; // early exit
                }
                
-               if constexpr (is_includer<V> || std::is_same_v<V, hidden> || std::same_as<V, skip>) {
+               if constexpr (is_includer<V> || std::same_as<V, hidden> || std::same_as<V, skip>) {
                   found_maybe_skipped = true;
                   return true; // early exit
                }
