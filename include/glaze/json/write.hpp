@@ -1192,7 +1192,8 @@ namespace glz
 
             [[maybe_unused]] decltype(auto) t = reflection_tuple(value);
             [[maybe_unused]] bool first = true;
-            constexpr auto first_is_written = Info::first_will_be_written;
+            static constexpr auto first_is_written = Info::first_will_be_written;
+            static constexpr auto contains_always_skipped = Info::contains_always_skipped;
             for_each<N>([&](auto I) {
                constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
 
@@ -1258,7 +1259,7 @@ namespace glz
                   }
                };
                
-               if constexpr (Opts.skip_null_members || Info::contains_always_skipped)
+               if constexpr (Opts.skip_null_members || contains_always_skipped)
                {
                   if constexpr (null_t<val_t>) {
                      if constexpr (always_null_t<T>)
