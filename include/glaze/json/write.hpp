@@ -139,7 +139,7 @@ namespace glz
          template <auto Opts, class B>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            if constexpr (Opts.write_unchecked) {
+            if constexpr (Opts.write_unchecked && (sizeof(typename T::value_type) <= 8)) {
                dump_unchecked<'['>(b, ix);
                write<json>::op<Opts>(value.real(), ctx, b, ix);
                dump_unchecked<','>(b, ix);
@@ -745,7 +745,13 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if (value) {
-               write<json>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
+               if constexpr (requires { requires supports_unchecked_write<typename T::value_type>; }
+                             || requires { requires supports_unchecked_write<typename T::element_type>; }) {
+                  write<json>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
+               }
+               else {
+                  write<json>::op<opt_false<Opts, &opts::write_unchecked>>(*value, ctx, std::forward<Args>(args)...);
+               }
             }
             else {
                if constexpr (Opts.write_unchecked) {
@@ -1283,6 +1289,7 @@ namespace glz
                         write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
                      }
                      
+                     // MSVC ICE bugs cause this code to be duplicated
                      static constexpr size_t comment_index = member_index + 1;
                      static constexpr auto S = glz::tuple_size_v<typename Element::Item>;
                      if constexpr (Opts.comments && S > comment_index) {
@@ -1315,6 +1322,7 @@ namespace glz
                      write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
                   }
                   
+                  // MSVC ICE bugs cause this code to be duplicated
                   static constexpr size_t comment_index = member_index + 1;
                   static constexpr auto S = glz::tuple_size_v<typename Element::Item>;
                   if constexpr (Opts.comments && S > comment_index) {
