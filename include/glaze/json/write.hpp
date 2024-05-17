@@ -44,12 +44,13 @@ namespace glz
                                           std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
-      
+
       template <class T>
       concept optional_like = nullable_t<T> && (!is_expected<T> && !std::is_array_v<T>);
-      
+
       template <class T>
-      concept supports_unchecked_write = complex_t<T> || boolean_like<T> || num_t<T> || optional_like<T> || always_null_t<T>;
+      concept supports_unchecked_write =
+         complex_t<T> || boolean_like<T> || num_t<T> || optional_like<T> || always_null_t<T>;
 
       template <is_bitset T>
       struct to_json<T>
@@ -745,8 +746,9 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if (value) {
-               if constexpr (requires { requires supports_unchecked_write<typename T::value_type>; }
-                             || requires { requires supports_unchecked_write<typename T::element_type>; }) {
+               if constexpr (
+                  requires { requires supports_unchecked_write<typename T::value_type>; } ||
+                  requires { requires supports_unchecked_write<typename T::element_type>; }) {
                   write<json>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
                }
                else {
@@ -1143,7 +1145,7 @@ namespace glz
                op_base<write_unknown_on<Options>()>(std::forward<V>(value), ctx, b, ix);
             }
          }
-         
+
          GLZ_FLATTEN static decltype(auto) reflection_tuple(auto&& value, auto&&...) noexcept
          {
             if constexpr (reflectable<T>) {
@@ -1216,7 +1218,7 @@ namespace glz
                      return get<member_index>(get<I>(meta_v<std::decay_t<T>>));
                   }
                }();
-               
+
                auto write_key = [&] {
                   static constexpr sv key = key_name<I, T, use_reflection>;
                   if constexpr (needs_escaping(key)) {
@@ -1232,8 +1234,8 @@ namespace glz
                   }
                   else {
                      static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                     Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                     ;
+                                           Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                        ;
                      if constexpr (quoted_key.size() < 128) {
                         // Using the same padding constant alows the compiler
                         // to not need to load different lengths into the register
@@ -1245,9 +1247,8 @@ namespace glz
                      dump_unchecked<quoted_key>(b, ix);
                   }
                };
-               
-               if constexpr (Opts.skip_null_members || contains_always_skipped)
-               {
+
+               if constexpr (Opts.skip_null_members || contains_always_skipped) {
                   if constexpr (null_t<val_t>) {
                      if constexpr (always_null_t<T>)
                         return;
@@ -1263,7 +1264,7 @@ namespace glz
                         if (is_null) return;
                      }
                   }
-                  
+
                   if constexpr (is_includer<val_t> || std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
                      return;
                   }
@@ -1280,7 +1281,7 @@ namespace glz
                            write_entry_separator<Opts>(ctx, b, ix);
                         }
                      }
-                     
+
                      write_key();
                      if constexpr (supports_unchecked_write<val_t>) {
                         write<json>::op<opt_true<Opts, &opts::write_unchecked>>(get_member(value, member), ctx, b, ix);
@@ -1288,7 +1289,7 @@ namespace glz
                      else {
                         write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
                      }
-                     
+
                      // MSVC ICE bugs cause this code to be duplicated
                      static constexpr size_t comment_index = member_index + 1;
                      static constexpr auto S = glz::tuple_size_v<typename Element::Item>;
@@ -1321,7 +1322,7 @@ namespace glz
                   else {
                      write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
                   }
-                  
+
                   // MSVC ICE bugs cause this code to be duplicated
                   static constexpr size_t comment_index = member_index + 1;
                   static constexpr auto S = glz::tuple_size_v<typename Element::Item>;

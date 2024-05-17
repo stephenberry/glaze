@@ -23,7 +23,7 @@ namespace glz::detail
          return buffer;
       }
    }
-   
+
    template <uint32_t N>
    GLZ_ALWAYS_INLINE void maybe_pad(vector_like auto& b, auto& ix) noexcept
    {
@@ -31,17 +31,18 @@ namespace glz::detail
          b.resize((std::max)(b.size() * 2, k));
       }
    }
-   
+
    GLZ_ALWAYS_INLINE void maybe_pad(const size_t n, vector_like auto& b, auto& ix) noexcept
    {
       if (const auto k = ix + n; k > b.size()) [[unlikely]] {
          b.resize((std::max)(b.size() * 2, k));
       }
    }
-   
+
    template <uint32_t N>
-   GLZ_ALWAYS_INLINE void maybe_pad(char*&, auto&) noexcept {}
-   
+   GLZ_ALWAYS_INLINE void maybe_pad(char*&, auto&) noexcept
+   {}
+
    GLZ_ALWAYS_INLINE void maybe_pad(const size_t, char*&, auto&) noexcept {}
 
    GLZ_ALWAYS_INLINE void dump(const char c, vector_like auto& b, auto& ix) noexcept
@@ -83,7 +84,7 @@ namespace glz::detail
       b[ix] = c;
       ++ix;
    }
-   
+
    template <char c>
    GLZ_ALWAYS_INLINE void dump(char*& b) noexcept
    {
@@ -178,7 +179,7 @@ namespace glz::detail
    {
       std::memset(b, c, n);
    }
-   
+
    template <char c>
    GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, char*& b) noexcept
    {
@@ -195,7 +196,7 @@ namespace glz::detail
       std::memset(b.data() + ix, c, n);
       ix += n;
    }
-   
+
    template <char c>
    GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, vector_like auto& b, auto& ix) noexcept
    {
@@ -229,7 +230,7 @@ namespace glz::detail
       std::memcpy(b.data() + ix, s.data(), n);
       ix += n;
    }
-   
+
    template <const sv& str>
    GLZ_ALWAYS_INLINE void dump_unchecked(vector_like auto& b, auto& ix) noexcept
    {
@@ -249,7 +250,7 @@ namespace glz::detail
       std::memcpy(b + ix, s.data(), n);
       ix += n;
    }
-   
+
    template <const sv& str>
    GLZ_ALWAYS_INLINE void dump_unchecked(auto* b, auto& ix) noexcept
    {
