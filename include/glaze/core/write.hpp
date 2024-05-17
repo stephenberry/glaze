@@ -17,7 +17,7 @@ namespace glz
    {
       if constexpr (resizable<Buffer>) {
          if (buffer.empty()) {
-            buffer.resize(128);
+            buffer.resize(2 * write_padding_bytes);
          }
       }
       size_t ix = 0; // overwrite index
@@ -33,7 +33,7 @@ namespace glz
    {
       if constexpr (resizable<Buffer>) {
          if (buffer.empty()) {
-            buffer.resize(128);
+            buffer.resize(2 * write_padding_bytes);
          }
       }
       context ctx{};

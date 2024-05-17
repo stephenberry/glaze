@@ -76,6 +76,8 @@ namespace glz
       bool write_unknown = true; // whether to write unkwown fields
       bool is_padded = false; // whether or not the read buffer is padded
       bool disable_padding = false; // to explicitly disable padding for contexts like includers
+      bool write_unchecked = false; // the write buffer has sufficient space and does not need to be checked
+      // sufficient space is only applicable to writing certain types and based on the write_padding_bytes
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };

@@ -713,7 +713,12 @@ namespace glz
                write<json>::op<Opts>(*value, ctx, std::forward<Args>(args)...);
             }
             else {
-               dump<"null">(std::forward<Args>(args)...);
+               if constexpr (Opts.write_unchecked) {
+                  dump_unchecked<"null">(std::forward<Args>(args)...);
+               }
+               else {
+                  dump<"null">(std::forward<Args>(args)...);
+               }
             }
          }
       };
@@ -724,7 +729,12 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
          {
-            dump<"null">(args...);
+            if constexpr (Opts.write_unchecked) {
+               dump_unchecked<"null">(args...);
+            }
+            else {
+               dump<"null">(args...);
+            }
          }
       };
 
@@ -1184,6 +1194,35 @@ namespace glz
                   }
                };
                
+               auto write_key = [&] {
+                  static constexpr sv key = key_name<I, T, use_reflection>;
+                  if constexpr (needs_escaping(key)) {
+                     // TODO: do compile time escaping
+                     write<json>::op<Opts>(key, ctx, b, ix);
+                     maybe_pad<write_padding_bytes>(b, ix);
+                     if constexpr (Opts.prettify) {
+                        dump_unchecked<": ">(b, ix);
+                     }
+                     else {
+                        dump_unchecked<':'>(b, ix);
+                     }
+                  }
+                  else {
+                     static constexpr auto quoted_key = join_v < chars<"\"">, key,
+                     Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                     ;
+                     if constexpr (quoted_key.size() < 128) {
+                        // Using the same padding constant alows the compiler
+                        // to not need to load different lengths into the register
+                        maybe_pad<write_padding_bytes>(b, ix);
+                     }
+                     else {
+                        maybe_pad<quoted_key.size() + write_padding_bytes>(b);
+                     }
+                     dump_unchecked<quoted_key>(b, ix);
+                  }
+               };
+               
                if constexpr (Opts.skip_null_members || Info::contains_always_skipped)
                {
                   if constexpr (null_t<val_t>) {
@@ -1219,25 +1258,8 @@ namespace glz
                         }
                      }
                      
-                     static constexpr sv key = key_name<I, T, use_reflection>;
-                     if constexpr (needs_escaping(key)) {
-                        write<json>::op<Opts>(key, ctx, b, ix);
-                        if constexpr (Opts.prettify) {
-                           dump<": ">(b, ix);
-                        }
-                        else {
-                           dump<':'>(b, ix);
-                        }
-                     }
-                     else {
-                        static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                        Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                        ;
-                        dump<quoted_key>(b, ix);
-                     }
-                     
-                     write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
-                     
+                     write_key();
+                     write<json>::op<opt_true<Opts, &opts::write_unchecked>>(get_member(value, member), ctx, b, ix);
                      write_comments();
                   }
                }
@@ -1247,25 +1269,8 @@ namespace glz
                      write_entry_separator<Opts>(ctx, b, ix);
                   }
 
-                  static constexpr sv key = key_name<I, T, use_reflection>;
-                  if constexpr (needs_escaping(key)) {
-                     write<json>::op<Opts>(key, ctx, b, ix);
-                     if constexpr (Opts.prettify) {
-                        dump<": ">(b, ix);
-                     }
-                     else {
-                        dump<':'>(b, ix);
-                     }
-                  }
-                  else {
-                     static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                           Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                        ;
-                     dump<quoted_key>(b, ix);
-                  }
-
-                  write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
-
+                  write_key();
+                  write<json>::op<opt_true<Opts, &opts::write_unchecked>>(get_member(value, member), ctx, b, ix);
                   write_comments();
                }
             });
