@@ -90,8 +90,7 @@ add_subdirectory(reflection_test)
 add_subdirectory(repe_test)
 
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
-# It also chokes with clang on linux
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_test(
     NAME glaze-install_test
     COMMAND
