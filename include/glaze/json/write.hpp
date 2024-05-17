@@ -1181,11 +1181,7 @@ namespace glz
                   }
                }
 
-               // skip file_include
-               if constexpr (is_includer<val_t>) {
-                  return;
-               }
-               else if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
+               if constexpr (is_includer<val_t> || std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
                   return;
                }
                else {
