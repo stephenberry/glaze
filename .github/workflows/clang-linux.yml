@@ -16,7 +16,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    
+
     strategy:
       fail-fast: false
       matrix:
@@ -31,6 +31,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libc++-dev libc++abi-dev
+
     - name: Configure CMake
       run: |
         cmake -B ${{github.workspace}}/build \
@@ -38,8 +43,7 @@ jobs:
           -DCMAKE_CXX_STANDARD=${{matrix.std}} \
           -DCMAKE_C_COMPILER=${{env.CC}} \
           -DCMAKE_CXX_COMPILER=${{env.CXX}} \
-          -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
-          -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi"
+          -DCLANG_LIBCXX=ON
 
     - name: Build
       run: cmake --build build -j 2
