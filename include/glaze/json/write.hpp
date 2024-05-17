@@ -44,6 +44,12 @@ namespace glz
                                           std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
+      
+      template <class T>
+      concept optional_like = nullable_t<T> && (!is_expected<T> && !std::is_array_v<T>);
+      
+      template <class T>
+      concept supports_unchecked_write = complex_t<T> || boolean_like<T> || num_t<T> || optional_like<T> || always_null_t<T>;
 
       template <is_bitset T>
       struct to_json<T>
@@ -133,11 +139,20 @@ namespace glz
          template <auto Opts, class B>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            dump<'['>(b, ix);
-            write<json>::op<Opts>(value.real(), ctx, b, ix);
-            dump<','>(b, ix);
-            write<json>::op<Opts>(value.imag(), ctx, b, ix);
-            dump<']'>(b, ix);
+            if constexpr (Opts.write_unchecked) {
+               dump_unchecked<'['>(b, ix);
+               write<json>::op<Opts>(value.real(), ctx, b, ix);
+               dump_unchecked<','>(b, ix);
+               write<json>::op<Opts>(value.imag(), ctx, b, ix);
+               dump_unchecked<']'>(b, ix);
+            }
+            else {
+               dump<'['>(b, ix);
+               write<json>::op<Opts>(value.real(), ctx, b, ix);
+               dump<','>(b, ix);
+               write<json>::op<Opts>(value.imag(), ctx, b, ix);
+               dump<']'>(b, ix);
+            }
          }
       };
 
@@ -147,11 +162,21 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args) noexcept
          {
-            if (value) {
-               dump<"true">(std::forward<Args>(args)...);
+            if constexpr (Opts.write_unchecked) {
+               if (value) {
+                  dump_unchecked<"true">(std::forward<Args>(args)...);
+               }
+               else {
+                  dump_unchecked<"false">(std::forward<Args>(args)...);
+               }
             }
             else {
-               dump<"false">(std::forward<Args>(args)...);
+               if (value) {
+                  dump<"true">(std::forward<Args>(args)...);
+               }
+               else {
+                  dump<"false">(std::forward<Args>(args)...);
+               }
             }
          }
       };
@@ -162,12 +187,23 @@ namespace glz
          template <auto Opts, class B>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            if constexpr (Opts.quoted_num) {
-               dump<'"'>(b, ix);
+            if constexpr (Opts.write_unchecked) {
+               if constexpr (Opts.quoted_num) {
+                  dump_unchecked<'"'>(b, ix);
+               }
+               write_chars::op<Opts>(value, ctx, b, ix);
+               if constexpr (Opts.quoted_num) {
+                  dump_unchecked<'"'>(b, ix);
+               }
             }
-            write_chars::op<Opts>(value, ctx, b, ix);
-            if constexpr (Opts.quoted_num) {
-               dump<'"'>(b, ix);
+            else {
+               if constexpr (Opts.quoted_num) {
+                  dump<'"'>(b, ix);
+               }
+               write_chars::op<Opts>(value, ctx, b, ix);
+               if constexpr (Opts.quoted_num) {
+                  dump<'"'>(b, ix);
+               }
             }
          }
       };
@@ -702,8 +738,7 @@ namespace glz
          }
       };
 
-      template <nullable_t T>
-         requires(!is_expected<T> && !std::is_array_v<T>)
+      template <optional_like T>
       struct to_json<T>
       {
          template <auto Opts, class... Args>
@@ -1259,7 +1294,12 @@ namespace glz
                      }
                      
                      write_key();
-                     write<json>::op<opt_true<Opts, &opts::write_unchecked>>(get_member(value, member), ctx, b, ix);
+                     if constexpr (supports_unchecked_write<val_t>) {
+                        write<json>::op<opt_true<Opts, &opts::write_unchecked>>(get_member(value, member), ctx, b, ix);
+                     }
+                     else {
+                        write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
+                     }
                      write_comments();
                   }
                }
@@ -1270,7 +1310,12 @@ namespace glz
                   }
 
                   write_key();
-                  write<json>::op<opt_true<Opts, &opts::write_unchecked>>(get_member(value, member), ctx, b, ix);
+                  if constexpr (supports_unchecked_write<val_t>) {
+                     write<json>::op<opt_true<Opts, &opts::write_unchecked>>(get_member(value, member), ctx, b, ix);
+                  }
+                  else {
+                     write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
+                  }
                   write_comments();
                }
             });
