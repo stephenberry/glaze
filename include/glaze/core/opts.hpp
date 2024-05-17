@@ -24,6 +24,9 @@ namespace glz
    // We use 16 padding bytes because surrogate unicode pairs require 12 bytes
    // and we want a power of 2 buffer
    constexpr uint32_t padding_bytes = 16;
+   
+   // Write padding bytes simplifies our dump calculations by making sure we have significant excess
+   constexpr uint32_t write_padding_bytes = 256;
 
    struct opts
    {

@@ -434,12 +434,20 @@ namespace glz
          }
       };
 
-      template <opts Opts>
-      GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, auto&&... args) noexcept
+      template <opts Opts, class B, class Ix>
+      GLZ_ALWAYS_INLINE void write_entry_separator(is_context auto&& ctx, B&& b, Ix&& ix) noexcept
       {
-         dump<','>(args...);
          if constexpr (Opts.prettify) {
-            dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
+            if constexpr (vector_like<B>) {
+               if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                  b.resize((std::max)(b.size() * 2, k));
+               }
+            }
+            dump_unchecked<",\n">(b, ix);
+            dumpn_unchecked<Opts.indentation_char>(ctx.indentation_level, b, ix);
+         }
+         else {
+            dump<','>(b, ix);
          }
       }
 
@@ -544,8 +552,11 @@ namespace glz
             if constexpr (Opts.prettify) {
                ctx.indentation_level -= Opts.indentation_width;
                dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, b, ix);
+               dump_unchecked<'}'>(b, ix);
             }
-            dump<'}'>(b, ix);
+            else {
+               dump<'}'>(b, ix);
+            }
          }
       };
 
@@ -832,7 +843,7 @@ namespace glz
       };
 
       template <class T>
-         requires glaze_array_t<std::decay_t<T>> || tuple_t<std::decay_t<T>>
+         requires glaze_array_t<T> || tuple_t<std::decay_t<T>>
       struct to_json<T>
       {
          template <auto Opts, class... Args>
@@ -1083,15 +1094,22 @@ namespace glz
          }
 
          // handles glaze_object_t without extra unknown fields
-         template <auto Options>
-         GLZ_FLATTEN static void op_base(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         template <auto Options, class B>
+         GLZ_FLATTEN static void op_base(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             if constexpr (!Options.opening_handled) {
-               dump<'{'>(b, ix);
                if constexpr (Options.prettify) {
                   ctx.indentation_level += Options.indentation_width;
-                  dump<'\n'>(b, ix);
-                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+                  if constexpr (vector_like<B>) {
+                     if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        b.resize((std::max)(b.size() * 2, k));
+                     }
+                  }
+                  dump_unchecked<"{\n">(b, ix);
+                  dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
+               }
+               else {
+                  dump<'{'>(b, ix);
                }
             }
 
@@ -1222,10 +1240,18 @@ namespace glz
             if constexpr (!Options.closing_handled) {
                if constexpr (Options.prettify) {
                   ctx.indentation_level -= Options.indentation_width;
-                  dump<'\n'>(b, ix);
-                  dumpn<Options.indentation_char>(ctx.indentation_level, b, ix);
+                  if constexpr (vector_like<B>) {
+                     if (const auto k = ix + ctx.indentation_level + write_padding_bytes; k > b.size()) [[unlikely]] {
+                        b.resize((std::max)(b.size() * 2, k));
+                     }
+                  }
+                  dump_unchecked<'\n'>(b, ix);
+                  dumpn_unchecked<Options.indentation_char>(ctx.indentation_level, b, ix);
+                  dump_unchecked<'}'>(b, ix);
                }
-               dump<'}'>(b, ix);
+               else {
+                  dump<'}'>(b, ix);
+               }
             }
          }
       };
