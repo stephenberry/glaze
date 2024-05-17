@@ -1092,6 +1092,34 @@ namespace glz
                op_base<write_unknown_on<Options>()>(std::forward<V>(value), ctx, b, ix);
             }
          }
+         
+         GLZ_FLATTEN static decltype(auto) reflection_tuple(auto&& value, auto&&...) noexcept
+         {
+            if constexpr (reflectable<T>) {
+               using V = decay_keep_volatile_t<decltype(value)>;
+               if constexpr (std::is_const_v<std::remove_reference_t<decltype(value)>>) {
+#if ((defined _MSC_VER) && (!defined __clang__))
+                  static thread_local auto tuple_of_ptrs = make_const_tuple_from_struct<V>();
+#else
+                  static thread_local constinit auto tuple_of_ptrs = make_const_tuple_from_struct<V>();
+#endif
+                  populate_tuple_ptr(value, tuple_of_ptrs);
+                  return tuple_of_ptrs;
+               }
+               else {
+#if ((defined _MSC_VER) && (!defined __clang__))
+                  static thread_local auto tuple_of_ptrs = make_tuple_from_struct<V>();
+#else
+                  static thread_local constinit auto tuple_of_ptrs = make_tuple_from_struct<V>();
+#endif
+                  populate_tuple_ptr(value, tuple_of_ptrs);
+                  return tuple_of_ptrs;
+               }
+            }
+            else {
+               return nullptr;
+            }
+         }
 
          // handles glaze_object_t without extra unknown fields
          template <auto Options, class B>
@@ -1117,33 +1145,7 @@ namespace glz
 
             static constexpr auto N = Info::N;
 
-            [[maybe_unused]] decltype(auto) t = [&]() -> decltype(auto) {
-               if constexpr (reflectable<T>) {
-                  using V = decay_keep_volatile_t<decltype(value)>;
-                  if constexpr (std::is_const_v<std::remove_reference_t<decltype(value)>>) {
-#if ((defined _MSC_VER) && (!defined __clang__))
-                     static thread_local auto tuple_of_ptrs = make_const_tuple_from_struct<V>();
-#else
-                     static thread_local constinit auto tuple_of_ptrs = make_const_tuple_from_struct<V>();
-#endif
-                     populate_tuple_ptr(value, tuple_of_ptrs);
-                     return tuple_of_ptrs;
-                  }
-                  else {
-#if ((defined _MSC_VER) && (!defined __clang__))
-                     static thread_local auto tuple_of_ptrs = make_tuple_from_struct<V>();
-#else
-                     static thread_local constinit auto tuple_of_ptrs = make_tuple_from_struct<V>();
-#endif
-                     populate_tuple_ptr(value, tuple_of_ptrs);
-                     return tuple_of_ptrs;
-                  }
-               }
-               else {
-                  return nullptr;
-               }
-            }();
-
+            [[maybe_unused]] decltype(auto) t = reflection_tuple(value);
             [[maybe_unused]] bool first = true;
             static constexpr auto first_is_written = Info::first_will_be_written;
             for_each<N>([&](auto I) {
