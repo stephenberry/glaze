@@ -1147,7 +1147,7 @@ namespace glz
 
             [[maybe_unused]] decltype(auto) t = reflection_tuple(value);
             [[maybe_unused]] bool first = true;
-            static constexpr auto first_is_written = Info::first_will_be_written;
+            constexpr auto first_is_written = Info::first_will_be_written;
             for_each<N>([&](auto I) {
                constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
 
@@ -1164,38 +1164,87 @@ namespace glz
                      return get<member_index>(get<I>(meta_v<std::decay_t<T>>));
                   }
                }();
-
-               if constexpr (null_t<val_t> && Opts.skip_null_members) {
-                  if constexpr (always_null_t<T>)
-                     return;
-                  else {
-                     auto is_null = [&]() {
-                        if constexpr (nullable_wrapper<val_t>) {
-                           return !bool(member(value).val);
+               
+               auto write_comments = [&] {
+                  static constexpr size_t comment_index = member_index + 1;
+                  static constexpr auto S = glz::tuple_size_v<typename Element::Item>;
+                  if constexpr (Opts.comments && S > comment_index) {
+                     static constexpr auto i = glz::get<I>(meta_v<std::decay_t<T>>);
+                     if constexpr (std::is_convertible_v<decltype(get<comment_index>(i)), sv>) {
+                        static constexpr sv comment = get<comment_index>(i);
+                        if constexpr (comment.size() > 0) {
+                           if constexpr (Opts.prettify) {
+                              dump<' '>(b, ix);
+                           }
+                           dump<"/*">(b, ix);
+                           dump(comment, b, ix);
+                           dump<"*/">(b, ix);
                         }
-                        else {
-                           return !bool(get_member(value, member));
-                        }
-                     }();
-                     if (is_null) return;
-                  }
-               }
-
-               if constexpr (is_includer<val_t> || std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
-                  return;
-               }
-               else {
-                  if constexpr (first_is_written && I > 0) {
-                     write_entry_separator<Opts>(ctx, b, ix);
-                  }
-                  else {
-                     if (first) {
-                        first = false;
                      }
+                  }
+               };
+               
+               if constexpr (Opts.skip_null_members || Info::contains_always_skipped)
+               {
+                  if constexpr (null_t<val_t>) {
+                     if constexpr (always_null_t<T>)
+                        return;
                      else {
-                        // Null members may be skipped so we cant just write it out for all but the last member
+                        auto is_null = [&]() {
+                           if constexpr (nullable_wrapper<val_t>) {
+                              return !bool(member(value).val);
+                           }
+                           else {
+                              return !bool(get_member(value, member));
+                           }
+                        }();
+                        if (is_null) return;
+                     }
+                  }
+                  
+                  if constexpr (is_includer<val_t> || std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
+                     return;
+                  }
+                  else {
+                     if constexpr (first_is_written && I > 0) {
                         write_entry_separator<Opts>(ctx, b, ix);
                      }
+                     else {
+                        if (first) {
+                           first = false;
+                        }
+                        else {
+                           // Null members may be skipped so we cant just write it out for all but the last member
+                           write_entry_separator<Opts>(ctx, b, ix);
+                        }
+                     }
+                     
+                     static constexpr sv key = key_name<I, T, use_reflection>;
+                     if constexpr (needs_escaping(key)) {
+                        write<json>::op<Opts>(key, ctx, b, ix);
+                        if constexpr (Opts.prettify) {
+                           dump<": ">(b, ix);
+                        }
+                        else {
+                           dump<':'>(b, ix);
+                        }
+                     }
+                     else {
+                        static constexpr auto quoted_key = join_v < chars<"\"">, key,
+                        Opts.prettify ? chars<"\": "> : chars < "\":" >>
+                        ;
+                        dump<quoted_key>(b, ix);
+                     }
+                     
+                     write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
+                     
+                     write_comments();
+                  }
+               }
+               else {
+                  // in this case we don't skip null members
+                  if constexpr (I > 0) {
+                     write_entry_separator<Opts>(ctx, b, ix);
                   }
 
                   static constexpr sv key = key_name<I, T, use_reflection>;
@@ -1217,22 +1266,7 @@ namespace glz
 
                   write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
 
-                  static constexpr size_t comment_index = member_index + 1;
-                  static constexpr auto S = glz::tuple_size_v<typename Element::Item>;
-                  if constexpr (Opts.comments && S > comment_index) {
-                     static constexpr auto i = glz::get<I>(meta_v<std::decay_t<T>>);
-                     if constexpr (std::is_convertible_v<decltype(get<comment_index>(i)), sv>) {
-                        static constexpr sv comment = get<comment_index>(i);
-                        if constexpr (comment.size() > 0) {
-                           if constexpr (Opts.prettify) {
-                              dump<' '>(b, ix);
-                           }
-                           dump<"/*">(b, ix);
-                           dump(comment, b, ix);
-                           dump<"*/">(b, ix);
-                        }
-                     }
-                  }
+                  write_comments();
                }
             });
             if constexpr (!Options.closing_handled) {

@@ -1057,22 +1057,36 @@ namespace glz::detail
       // Allows us to remove a branch if the first item will always be written
       static constexpr bool first_will_be_written = [] {
          if constexpr (N > 0) {
-            using val_t = glaze_tuple_element_t<0, N, T>;
+            using V = glaze_tuple_element_t<0, N, T>;
 
-            if constexpr (null_t<val_t> && Opts.skip_null_members) {
+            if constexpr (null_t<V> && Opts.skip_null_members) {
                return false;
             }
 
-            // skip file_include
-            if constexpr (is_includer<val_t>) {
-               return false;
-            }
-            else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+            if constexpr (is_includer<V> || std::is_same_v<V, hidden> || std::same_as<V, skip>) {
                return false;
             }
             else {
                return true;
             }
+         }
+         else {
+            return false;
+         }
+      }();
+      
+      static constexpr bool contains_always_skipped = [] {
+         if constexpr (N > 0) {
+            bool found_always_skipped{};
+            for_each_short_circuit<N>([&](auto I){
+               using V = glaze_tuple_element_t<I, N, T>;
+               if constexpr (is_includer<V> || std::is_same_v<V, hidden> || std::same_as<V, skip>) {
+                  found_always_skipped = true;
+                  return true; // early exit
+               }
+               return false; // continue
+            });
+            return found_always_skipped;
          }
          else {
             return false;
