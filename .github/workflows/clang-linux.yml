@@ -1,4 +1,4 @@
-name: clang
+name: clang-linux
 
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        clang: [16, 17, 18]
+        clang: [15, 16, 18]
         build_type: [Debug, Release]
         std: [20, 23]
 
@@ -38,7 +38,8 @@ jobs:
           -DCMAKE_CXX_STANDARD=${{matrix.std}} \
           -DCMAKE_C_COMPILER=${{env.CC}} \
           -DCMAKE_CXX_COMPILER=${{env.CXX}} \
-          -DCLANG_LIBCXX=ON
+          -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+          -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi"
 
     - name: Build
       run: cmake --build build -j 2
