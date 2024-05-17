@@ -9,6 +9,7 @@ using namespace boost::ut;
 
 struct schema_obj
 {
+   std::string_view desc{"this variable has a description"};
    std::int64_t min1{2};
    std::int64_t max2{5};
    std::string pattern{"[a-z]+"};
@@ -17,6 +18,7 @@ struct schema_obj
 template <>
 struct glz::json_schema<schema_obj>
 {
+   schema desc{.description = "this is a description"};
    schema min1{.minimum = 1L};
    schema max2{.maximum = 2L};
    schema pattern{.pattern = "[a-z]+"};
@@ -42,21 +44,26 @@ auto expect_property(glz::expected<glz::detail::schematic, glz::parse_error> sch
 
 
 suite schema_attributes = [] {
-
+   struct test_case
+   {
+      std::string schema_str = glz::write_json_schema<schema_obj>();
+      glz::expected<glz::detail::schematic, glz::parse_error> obj{glz::read_json<glz::detail::schematic>(schema_str)};
+   };
+   "description"_test = [] {
+      test_case const test{};
+      expect_property<&glz::schema::description>(test.obj, "desc", "this is a description");
+   };
    "min1"_test = [] {
-      auto schema_str = glz::write_json_schema<schema_obj>();
-      auto schema_obj = glz::read_json<glz::detail::schematic>(schema_str);
-      expect_property<&glz::schema::minimum>(schema_obj, "min1", 1L);
+      test_case const test{};
+      expect_property<&glz::schema::minimum>(test.obj, "min1", 1L);
    };
   "max2"_test = [] {
-        auto schema_str = glz::write_json_schema<schema_obj>();
-        auto schema_obj = glz::read_json<glz::detail::schematic>(schema_str);
-        expect_property<&glz::schema::maximum>(schema_obj, "max2", 2L);
+      test_case const test{};
+      expect_property<&glz::schema::maximum>(test.obj, "max2", 2L);
    };
    "pattern"_test = [] {
-        auto schema_str = glz::write_json_schema<schema_obj>();
-        auto schema_obj = glz::read_json<glz::detail::schematic>(schema_str);
-        expect_property<&glz::schema::pattern>(schema_obj, "pattern", std::string_view{"[a-z]+"});
+      test_case const test{};
+      expect_property<&glz::schema::pattern>(test.obj, "pattern", std::string_view{"[a-z]+"});
   };
 };
 
