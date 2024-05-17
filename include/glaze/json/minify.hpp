@@ -45,7 +45,7 @@ namespace glz
             switch (json_types[size_t(*it)]) {
             case String: {
                const auto value = read_json_string<Opts>(it, end);
-               dump_unchecked(value, b, ix);
+               dump_unchecked(value, b, ix); // we couldn't have gotten here without a quote
                skip_whitespace();
                break;
             }
@@ -57,7 +57,7 @@ namespace glz
             }
             case Number: {
                const auto value = read_json_number(it);
-               dump_unchecked(value, b, ix);
+               dump_unchecked(value, b, ix); // we couldn't have gotten here without one valid character
                skip_whitespace();
                break;
             }
@@ -114,7 +114,9 @@ namespace glz
             case Comment: {
                if constexpr (Opts.comments) {
                   const auto value = read_jsonc_comment(it, end);
-                  dump_unchecked(value, b, ix);
+                  if (value.size()) [[likely]] {
+                     dump_unchecked(value, b, ix);
+                  }
                   skip_whitespace();
                   break;
                }

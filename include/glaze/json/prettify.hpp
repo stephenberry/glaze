@@ -26,7 +26,7 @@ namespace glz
             switch (json_types[size_t(*it)]) {
             case String: {
                const auto value = read_json_string<Opts>(it, end);
-               dump(value, b, ix);
+               dump_not_empty(value, b, ix);
                break;
             }
             case Comma: {
@@ -52,7 +52,7 @@ namespace glz
             }
             case Number: {
                const auto value = read_json_number(it);
-               dump(value, b, ix);
+               dump_not_empty(value, b, ix);
                break;
             }
             case Colon: {
@@ -141,7 +141,7 @@ namespace glz
             case Comment: {
                if constexpr (Opts.comments) {
                   const auto value = read_jsonc_comment(it, end);
-                  dump(value, b, ix);
+                  dump_not_empty(value, b, ix);
                   break;
                }
                else {

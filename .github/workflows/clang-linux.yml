@@ -1,0 +1,54 @@
+name: clang-linux
+
+on:
+  push:
+    branches:
+    - main
+    - feature/*
+    paths-ignore:
+    - '**.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+    - '**.md'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        clang: [16, 17, 18]
+        build_type: [Debug, Release]
+        std: [20, 23]
+
+    env:
+      CC: clang-${{matrix.clang}}
+      CXX: clang++-${{matrix.clang}}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libc++-dev libc++abi-dev
+
+    - name: Configure CMake
+      run: |
+        cmake -B ${{github.workspace}}/build \
+          -DCMAKE_BUILD_TYPE=${{matrix.build_type}} \
+          -DCMAKE_CXX_STANDARD=${{matrix.std}} \
+          -DCMAKE_C_COMPILER=${{env.CC}} \
+          -DCMAKE_CXX_COMPILER=${{env.CXX}} \
+          -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+          -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi"
+
+    - name: Build
+      run: cmake --build build -j $(nproc)
+
+    - name: Test
+      working-directory: build
+      run: ctest -j $(nproc) --output-on-failure

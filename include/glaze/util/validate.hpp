@@ -95,8 +95,8 @@ namespace glz
          b.resize(error.size() + info.context.size() + filename.size() + 128);
          size_t ix{};
 
-         if (!filename.empty()) {
-            dump(filename, b, ix);
+         if (not filename.empty()) {
+            dump_not_empty(filename, b, ix);
             dump(':', b, ix);
          }
 
@@ -104,25 +104,25 @@ namespace glz
          write_chars::op<opts{}>(info.line, ctx, b, ix);
          dump(':', b, ix);
          write_chars::op<opts{}>(info.column, ctx, b, ix);
-         dump(": ", b, ix);
-         dump(error, b, ix);
+         dump<": ">(b, ix);
+         dump_maybe_empty(error, b, ix);
          dump('\n', b, ix);
          if (info.front_truncation) {
             if (info.rear_truncation) {
-               dump("...", b, ix);
-               dump(info.context, b, ix);
-               dump("...\n   ", b, ix);
+               dump<"...">(b, ix);
+               dump_maybe_empty(info.context, b, ix);
+               dump<"...\n   ">(b, ix);
             }
             else {
-               dump("...", b, ix);
-               dump(info.context, b, ix);
-               dump("\n   ", b, ix);
+               dump<"...">(b, ix);
+               dump_maybe_empty(info.context, b, ix);
+               dump<"\n   ">(b, ix);
             }
          }
          else {
-            dump("   ", b, ix);
-            dump(info.context, b, ix);
-            dump("\n   ", b, ix);
+            dump<"   ">(b, ix);
+            dump_maybe_empty(info.context, b, ix);
+            dump<"\n   ">(b, ix);
          }
          dumpn<' '>(info.column - 1 - info.front_truncation, b, ix);
          dump('^', b, ix);

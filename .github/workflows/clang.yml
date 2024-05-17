@@ -27,8 +27,8 @@ jobs:
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
     - name: Build
-      run: cmake --build build --config ${{env.BUILD_TYPE}} -j 2
+      run: cmake --build build --config ${{env.BUILD_TYPE}} -j 3
 
     - name: Test
       working-directory: build
-      run: ctest -C ${{env.BUILD_TYPE}} -j 2 --output-on-failure
+      run: ctest -C ${{env.BUILD_TYPE}} -j 3 --output-on-failure
