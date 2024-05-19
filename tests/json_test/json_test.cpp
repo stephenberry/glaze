@@ -7916,8 +7916,9 @@ suite ticker_tests = [] {
    };
 };
 
-struct my_float_struct {
-    float f;
+struct my_float_struct
+{
+   float f;
 };
 
 suite single_float_struct = [] {
