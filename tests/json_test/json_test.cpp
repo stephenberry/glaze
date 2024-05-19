@@ -7916,6 +7916,22 @@ suite ticker_tests = [] {
    };
 };
 
+struct my_float_struct {
+    float f;
+};
+
+suite single_float_struct = [] {
+   "single_float_struct"_test = [] {
+      std::vector<uint8_t> buf;
+      my_float_struct obj{};
+      glz::write_json(obj, buf);
+      std::string out{};
+      out.resize(buf.size());
+      std::memcpy(out.data(), buf.data(), buf.size());
+      expect(out == R"({"f":0})") << out;
+   };
+};
+
 int main()
 {
    trace.begin("json_test", "Full test suite duration.");
