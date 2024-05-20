@@ -14,6 +14,9 @@
 namespace glz::detail
 {
    template <class T>
+   concept byte_sized = sizeof(std::remove_cvref_t<T>) == 1;
+   
+   template <class T>
    [[nodiscard]] GLZ_ALWAYS_INLINE auto data_ptr(T& buffer) noexcept
    {
       if constexpr (resizable<T>) {
@@ -43,26 +46,45 @@ namespace glz::detail
          }
       }
    }
+   
+   template <byte_sized auto c>
+   GLZ_ALWAYS_INLINE void assign_maybe_cast(auto& b, auto& ix) noexcept
+   {
+      using V = std::decay_t<decltype(b[0])>;
+      using C = std::decay_t<decltype(c)>;
+      if constexpr (std::same_as<V, C>) {
+         b[ix] = c;
+      }
+      else {
+         b[ix] = static_cast<V>(c);
+      }
+   }
+   
+   GLZ_ALWAYS_INLINE void assign_maybe_cast(const byte_sized auto c, auto& b, auto& ix) noexcept
+   {
+      using V = std::decay_t<decltype(b[0])>;
+      using C = std::decay_t<decltype(c)>;
+      if constexpr (std::same_as<V, C>) {
+         b[ix] = c;
+      }
+      else {
+         b[ix] = static_cast<V>(c);
+      }
+   }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void dump(const char c, B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(const byte_sized auto c, B& b, auto& ix) noexcept
    {
       if constexpr (vector_like<B>) {
          if (ix == b.size()) [[unlikely]] {
             b.resize(b.size() == 0 ? 128 : b.size() * 2);
          }
       }
-      using V = std::decay_t<decltype(b[0])>;
-      if constexpr (std::same_as<V, char>) {
-         b[ix] = c;
-      }
-      else {
-         b[ix] = static_cast<V>(c);
-      }
+      assign_maybe_cast(c, b, ix);
       ++ix;
    }
 
-   template <char c, class B>
+   template <byte_sized auto c, class B>
    GLZ_ALWAYS_INLINE void dump(B& b, auto& ix) noexcept
    {
       if constexpr (vector_like<B>) {
@@ -70,14 +92,7 @@ namespace glz::detail
             b.resize(b.size() == 0 ? 128 : b.size() * 2);
          }
       }
-      
-      using V = std::decay_t<decltype(b[0])>;
-      if constexpr (std::same_as<V, char>) {
-         b[ix] = c;
-      }
-      else {
-         b[ix] = static_cast<V>(c);
-      }
+      assign_maybe_cast<c>(b, ix);
       ++ix;
    }
 
@@ -102,25 +117,14 @@ namespace glz::detail
    template <char c>
    GLZ_ALWAYS_INLINE void dump_unchecked(auto& b, auto& ix) noexcept
    {
-      using V = std::decay_t<decltype(b[0])>;
-      if constexpr (std::same_as<V, char>) {
-         b[ix] = c;
-      }
-      else {
-         b[ix] = static_cast<V>(c);
-      }
+      assign_maybe_cast<c>(b, ix);
       ++ix;
    }
 
-   GLZ_ALWAYS_INLINE void dump_unchecked(const char c, auto& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump_unchecked(const byte_sized auto c, auto& b, auto& ix) noexcept
    {
       using V = std::decay_t<decltype(b[0])>;
-      if constexpr (std::same_as<V, char>) {
-         b[ix] = c;
-      }
-      else {
-         b[ix] = static_cast<V>(c);
-      }
+      assign_maybe_cast(c, b, ix);
       ++ix;
    }
 
@@ -164,7 +168,6 @@ namespace glz::detail
       else {
          std::memset(b + ix, c, n);
       }
-      
       ix += n;
    }
 
@@ -189,7 +192,7 @@ namespace glz::detail
          }
       }
 
-      b[ix] = '\n';
+      assign_maybe_cast<'\n'>(b, ix);
       ++ix;
       if constexpr (vector_like<B>) {
          std::memset(b.data() + ix, IndentChar, n);
@@ -278,55 +281,6 @@ namespace glz::detail
          static_assert(sizeof(value_t) == sizeof(std::byte));
          b.push_back(std::bit_cast<value_t>(c));
       }
-   }
-
-   template <std::byte c, class B>
-   GLZ_ALWAYS_INLINE void dump(B&& b, auto& ix) noexcept
-   {
-      if (ix == b.size()) [[unlikely]] {
-         b.resize(b.size() == 0 ? 128 : b.size() * 2);
-      }
-
-      using value_t = range_value_t<std::decay_t<B>>;
-      if constexpr (std::same_as<value_t, std::byte>) {
-         b[ix] = c;
-      }
-      else {
-         static_assert(sizeof(value_t) == sizeof(std::byte));
-         b[ix] = std::bit_cast<value_t>(c);
-      }
-      ++ix;
-   }
-
-   template <class B>
-   GLZ_ALWAYS_INLINE void dump(std::byte c, B&& b) noexcept
-   {
-      using value_t = range_value_t<std::decay_t<B>>;
-      if constexpr (std::same_as<value_t, std::byte>) {
-         b.emplace_back(c);
-      }
-      else {
-         static_assert(sizeof(value_t) == sizeof(std::byte));
-         b.push_back(std::bit_cast<value_t>(c));
-      }
-   }
-
-   template <class B>
-   GLZ_ALWAYS_INLINE void dump(std::byte c, auto&& b, auto& ix) noexcept
-   {
-      if (ix == b.size()) [[unlikely]] {
-         b.resize(b.size() == 0 ? 128 : b.size() * 2);
-      }
-
-      using value_t = range_value_t<std::decay_t<B>>;
-      if constexpr (std::same_as<value_t, std::byte>) {
-         b[ix] = c;
-      }
-      else {
-         static_assert(sizeof(value_t) == sizeof(std::byte));
-         b[ix] = std::bit_cast<value_t>(c);
-      }
-      ++ix;
    }
 
    template <class B>
