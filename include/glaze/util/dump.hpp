@@ -270,18 +270,14 @@ namespace glz::detail
    }
    
    template <class B>
-   GLZ_ALWAYS_INLINE void dump(const vector_like auto& bytes, B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(const std::span<const std::byte> bytes, B&& b, auto& ix) noexcept
    {
       const auto n = bytes.size();
-      if constexpr (vector_like<B>) {
-         if (ix + n > b.size()) [[unlikely]] {
-            b.resize((std::max)(b.size() * 2, ix + n));
-         }
-         std::memcpy(b.data() + ix, bytes.data(), n);
+      if (ix + n > b.size()) [[unlikely]] {
+         b.resize((std::max)(b.size() * 2, ix + n));
       }
-      else {
-         std::memcpy(b + ix, bytes.data(), n);
-      }
+
+      std::memcpy(b.data() + ix, bytes.data(), n);
       ix += n;
    }
 
