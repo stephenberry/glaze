@@ -114,7 +114,7 @@ namespace glz::detail
       ix += n;
    }
 
-   template <char c>
+   template <byte_sized auto c>
    GLZ_ALWAYS_INLINE void dump_unchecked(auto& b, auto& ix) noexcept
    {
       assign_maybe_cast<c>(b, ix);
@@ -155,7 +155,7 @@ namespace glz::detail
       ix += n;
    }
 
-   template <char c, class B>
+   template <byte_sized auto c, class B>
    GLZ_ALWAYS_INLINE void dumpn(size_t n, B& b, auto& ix) noexcept
    {
       if constexpr (vector_like<B>) {
@@ -170,7 +170,7 @@ namespace glz::detail
       ix += n;
    }
 
-   template <char c, class B>
+   template <byte_sized auto c, class B>
    GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, B& b, auto& ix) noexcept
    {
       if constexpr (vector_like<B>) {
@@ -266,19 +266,6 @@ namespace glz::detail
             std::memcpy(b + ix, str.data(), n);
          }
          ix += n;
-      }
-   }
-
-   template <std::byte c, class B>
-   GLZ_ALWAYS_INLINE void dump(B&& b) noexcept
-   {
-      using value_t = range_value_t<std::decay_t<B>>;
-      if constexpr (std::same_as<value_t, std::byte>) {
-         b.emplace_back(c);
-      }
-      else {
-         static_assert(sizeof(value_t) == sizeof(std::byte));
-         b.push_back(std::bit_cast<value_t>(c));
       }
    }
 
