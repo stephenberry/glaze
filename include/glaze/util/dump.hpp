@@ -47,7 +47,7 @@ namespace glz::detail
       }
    }
    
-   template <byte_sized auto c>
+   template <auto c>
    GLZ_ALWAYS_INLINE void assign_maybe_cast(auto& b, auto& ix) noexcept
    {
       using V = std::decay_t<decltype(b[0])>;
@@ -84,7 +84,7 @@ namespace glz::detail
       ++ix;
    }
 
-   template <byte_sized auto c, class B>
+   template <auto c, class B>
    GLZ_ALWAYS_INLINE void dump(B& b, auto& ix) noexcept
    {
       if constexpr (vector_like<B>) {
@@ -114,7 +114,7 @@ namespace glz::detail
       ix += n;
    }
 
-   template <byte_sized auto c>
+   template <auto c>
    GLZ_ALWAYS_INLINE void dump_unchecked(auto& b, auto& ix) noexcept
    {
       assign_maybe_cast<c>(b, ix);
@@ -155,7 +155,7 @@ namespace glz::detail
       ix += n;
    }
 
-   template <byte_sized auto c, class B>
+   template <auto c, class B>
    GLZ_ALWAYS_INLINE void dumpn(size_t n, B& b, auto& ix) noexcept
    {
       if constexpr (vector_like<B>) {
@@ -170,7 +170,7 @@ namespace glz::detail
       ix += n;
    }
 
-   template <byte_sized auto c, class B>
+   template <auto c, class B>
    GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, B& b, auto& ix) noexcept
    {
       if constexpr (vector_like<B>) {
