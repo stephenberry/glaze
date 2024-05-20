@@ -140,7 +140,7 @@ namespace glz
    }
 
    template <class T>
-      requires (std::same_as<std::remove_cvref_t<T>, uint32_t>)
+      requires(std::same_as<std::remove_cvref_t<T>, uint32_t>)
    GLZ_ALWAYS_INLINE auto* to_chars_u64_len_8(auto* buf, T val) noexcept
    {
       /* 8 digits: aabbccdd */
@@ -158,7 +158,7 @@ namespace glz
    }
 
    template <class T>
-      requires (std::same_as<std::remove_cvref_t<T>, uint32_t>)
+      requires(std::same_as<std::remove_cvref_t<T>, uint32_t>)
    GLZ_ALWAYS_INLINE auto* to_chars_u64_len_4(auto* buf, T val) noexcept
    {
       /* 4 digits: aabb */
@@ -170,7 +170,7 @@ namespace glz
    }
 
    template <class T>
-      requires (std::same_as<std::remove_cvref_t<T>, uint32_t>)
+      requires(std::same_as<std::remove_cvref_t<T>, uint32_t>)
    inline auto* to_chars_u64_len_1_8(auto* buf, T val) noexcept
    {
       uint32_t aa, bb, cc, dd, aabb, bbcc, ccdd, lz;
@@ -221,7 +221,7 @@ namespace glz
    }
 
    template <class T>
-      requires (std::same_as<std::remove_cvref_t<T>, uint32_t>)
+      requires(std::same_as<std::remove_cvref_t<T>, uint32_t>)
    inline auto* to_chars_u64_len_5_8(auto* buf, T val) noexcept
    {
       if (val < 1000000) { /* 5-6 digits: aabbcc */
@@ -255,7 +255,7 @@ namespace glz
    }
 
    template <class T>
-      requires (std::same_as<std::remove_cvref_t<T>, uint64_t>)
+      requires(std::same_as<std::remove_cvref_t<T>, uint64_t>)
    inline auto* to_chars(auto* buf, T val) noexcept
    {
       if (val < 100000000) { /* 1-8 digits */
