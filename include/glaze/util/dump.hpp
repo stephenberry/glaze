@@ -268,9 +268,9 @@ namespace glz::detail
          ix += n;
       }
    }
-
+   
    template <class B>
-   GLZ_ALWAYS_INLINE void dump(const std::span<const std::byte> bytes, B& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(const vector_like auto& bytes, B& b, auto& ix) noexcept
    {
       const auto n = bytes.size();
       if constexpr (vector_like<B>) {
