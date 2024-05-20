@@ -123,7 +123,6 @@ namespace glz::detail
 
    GLZ_ALWAYS_INLINE void dump_unchecked(const byte_sized auto c, auto& b, auto& ix) noexcept
    {
-      using V = std::decay_t<decltype(b[0])>;
       assign_maybe_cast(c, b, ix);
       ++ix;
    }
