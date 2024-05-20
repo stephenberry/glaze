@@ -13,8 +13,8 @@
 
 namespace glz::detail
 {
-   template <class T>
-   concept byte_sized = sizeof(std::remove_cvref_t<T>) == 1;
+   template <class T, class V = std::remove_cvref_t<T>>
+   concept byte_sized = sizeof(T) == 1 && (std::same_as<V, char> || std::same_as<V, std::byte>);
    
    template <class T>
    [[nodiscard]] GLZ_ALWAYS_INLINE auto data_ptr(T& buffer) noexcept
@@ -270,34 +270,33 @@ namespace glz::detail
    }
 
    template <class B>
-   GLZ_ALWAYS_INLINE void dump(const std::span<const std::byte> bytes, B&& b) noexcept
+   GLZ_ALWAYS_INLINE void dump(const std::span<const std::byte> bytes, B& b, auto& ix) noexcept
    {
       const auto n = bytes.size();
-      const auto b_start = b.size();
-      b.resize(b.size() + n);
-      std::memcpy(b.data() + b_start, bytes.data(), n);
-   }
-
-   template <class B>
-   GLZ_ALWAYS_INLINE void dump(const std::span<const std::byte> bytes, B&& b, auto& ix) noexcept
-   {
-      const auto n = bytes.size();
-      if (ix + n > b.size()) [[unlikely]] {
-         b.resize((std::max)(b.size() * 2, ix + n));
+      if constexpr (vector_like<B>) {
+         if (ix + n > b.size()) [[unlikely]] {
+            b.resize((std::max)(b.size() * 2, ix + n));
+         }
+         std::memcpy(b.data() + ix, bytes.data(), n);
       }
-
-      std::memcpy(b.data() + ix, bytes.data(), n);
+      else {
+         std::memcpy(b + ix, bytes.data(), n);
+      }
       ix += n;
    }
 
    template <size_t N, class B>
-   GLZ_ALWAYS_INLINE void dump(const std::array<uint8_t, N>& bytes, B&& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump(const std::array<uint8_t, N>& bytes, B& b, auto& ix) noexcept
    {
-      if (ix + N > b.size()) [[unlikely]] {
-         b.resize((std::max)(b.size() * 2, ix + N));
+      if constexpr (vector_like<B>) {
+         if (ix + N > b.size()) [[unlikely]] {
+            b.resize((std::max)(b.size() * 2, ix + N));
+         }
+         std::memcpy(b.data() + ix, bytes.data(), N);
       }
-
-      std::memcpy(b.data() + ix, bytes.data(), N);
+      else {
+         std::memcpy(b + ix, bytes.data(), N);
+      }
       ix += N;
    }
 }
