@@ -24,50 +24,34 @@ namespace glz::detail
       }
    }
 
-   template <uint32_t N>
-   GLZ_ALWAYS_INLINE void maybe_pad(vector_like auto& b, auto& ix) noexcept
+   template <uint32_t N, class B>
+   GLZ_ALWAYS_INLINE void maybe_pad(B& b, auto& ix) noexcept
    {
-      if (const auto k = ix + N; k > b.size()) [[unlikely]] {
-         b.resize((std::max)(b.size() * 2, k));
+      if constexpr (vector_like<B>) {
+         if (const auto k = ix + N; k > b.size()) [[unlikely]] {
+            b.resize((std::max)(b.size() * 2, k));
+         }
       }
    }
 
-   GLZ_ALWAYS_INLINE void maybe_pad(const size_t n, vector_like auto& b, auto& ix) noexcept
+   template <class B>
+   GLZ_ALWAYS_INLINE void maybe_pad(const size_t n, B& b, auto& ix) noexcept
    {
-      if (const auto k = ix + n; k > b.size()) [[unlikely]] {
-         b.resize((std::max)(b.size() * 2, k));
+      if constexpr (vector_like<B>) {
+         if (const auto k = ix + n; k > b.size()) [[unlikely]] {
+            b.resize((std::max)(b.size() * 2, k));
+         }
       }
    }
 
-   template <uint32_t N>
-   GLZ_ALWAYS_INLINE void maybe_pad(char*&, auto&) noexcept
-   {}
-
-   GLZ_ALWAYS_INLINE void maybe_pad(const size_t, char*&, auto&) noexcept {}
-
-   GLZ_ALWAYS_INLINE void dump(const char c, vector_like auto& b, auto& ix) noexcept
+   template <class B>
+   GLZ_ALWAYS_INLINE void dump(const char c, B& b, auto& ix) noexcept
    {
-      if (ix == b.size()) [[unlikely]] {
-         b.resize(b.size() == 0 ? 128 : b.size() * 2);
+      if constexpr (vector_like<B>) {
+         if (ix == b.size()) [[unlikely]] {
+            b.resize(b.size() == 0 ? 128 : b.size() * 2);
+         }
       }
-
-      b[ix] = c;
-      ++ix;
-   }
-
-   GLZ_ALWAYS_INLINE void dump(const char c, char*& b) noexcept
-   {
-      *b = c;
-      ++b;
-   }
-
-   template <char c>
-   GLZ_ALWAYS_INLINE void dump(vector_like auto& b, auto& ix) noexcept
-   {
-      if (ix == b.size()) [[unlikely]] {
-         b.resize(b.size() == 0 ? 128 : b.size() * 2);
-      }
-
       using V = std::decay_t<decltype(b[0])>;
       if constexpr (std::same_as<V, char>) {
          b[ix] = c;
@@ -78,55 +62,45 @@ namespace glz::detail
       ++ix;
    }
 
-   template <char c>
-   GLZ_ALWAYS_INLINE void dump(auto* b, auto& ix) noexcept
+   template <char c, class B>
+   GLZ_ALWAYS_INLINE void dump(B& b, auto& ix) noexcept
    {
-      b[ix] = c;
+      if constexpr (vector_like<B>) {
+         if (ix == b.size()) [[unlikely]] {
+            b.resize(b.size() == 0 ? 128 : b.size() * 2);
+         }
+      }
+      
+      using V = std::decay_t<decltype(b[0])>;
+      if constexpr (std::same_as<V, char>) {
+         b[ix] = c;
+      }
+      else {
+         b[ix] = static_cast<V>(c);
+      }
       ++ix;
    }
 
-   template <char c>
-   GLZ_ALWAYS_INLINE void dump(char*& b) noexcept
-   {
-      *b = c;
-      ++b;
-   }
-
-   template <string_literal str>
-   GLZ_ALWAYS_INLINE void dump(char*& b) noexcept
-   {
-      static constexpr auto s = str.sv();
-      static constexpr auto n = s.size();
-      std::memcpy(b, s.data(), n);
-      b += n;
-   }
-
-   template <string_literal str>
-   GLZ_ALWAYS_INLINE void dump(vector_like auto& b, auto& ix) noexcept
+   template <string_literal str, class B>
+   GLZ_ALWAYS_INLINE void dump(B& b, auto& ix) noexcept
    {
       static constexpr auto s = str.sv();
       static constexpr auto n = s.size();
 
-      if (ix + n > b.size()) [[unlikely]] {
-         b.resize((std::max)(b.size() * 2, ix + n));
+      if constexpr (vector_like<B>) {
+         if (ix + n > b.size()) [[unlikely]] {
+            b.resize((std::max)(b.size() * 2, ix + n));
+         }
+         std::memcpy(b.data() + ix, s.data(), n);
       }
-
-      std::memcpy(b.data() + ix, s.data(), n);
-      ix += n;
-   }
-
-   template <string_literal str>
-   GLZ_ALWAYS_INLINE void dump(auto* b, auto& ix) noexcept
-   {
-      static constexpr auto s = str.sv();
-      static constexpr auto n = s.size();
-
-      std::memcpy(b + ix, s.data(), n);
+      else {
+         std::memcpy(b + ix, s.data(), n);
+      }
       ix += n;
    }
 
    template <char c>
-   GLZ_ALWAYS_INLINE void dump_unchecked(vector_like auto& b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump_unchecked(auto& b, auto& ix) noexcept
    {
       using V = std::decay_t<decltype(b[0])>;
       if constexpr (std::same_as<V, char>) {
@@ -138,126 +112,124 @@ namespace glz::detail
       ++ix;
    }
 
-   template <char c>
-   GLZ_ALWAYS_INLINE void dump_unchecked(auto* b, auto& ix) noexcept
+   GLZ_ALWAYS_INLINE void dump_unchecked(const char c, auto& b, auto& ix) noexcept
    {
-      b[ix] = c;
+      using V = std::decay_t<decltype(b[0])>;
+      if constexpr (std::same_as<V, char>) {
+         b[ix] = c;
+      }
+      else {
+         b[ix] = static_cast<V>(c);
+      }
       ++ix;
    }
 
-   GLZ_ALWAYS_INLINE void dump_unchecked(const char c, auto* b, auto& ix) noexcept
-   {
-      b[ix] = c;
-      ++ix;
-   }
-
-   GLZ_ALWAYS_INLINE void dump_unchecked(const char c, vector_like auto& b, auto& ix) noexcept
-   {
-      b[ix] = c;
-      ++ix;
-   }
-
-   GLZ_ALWAYS_INLINE void dump_unchecked(const sv str, vector_like auto& b, auto& ix) noexcept
+   template <class B>
+   GLZ_ALWAYS_INLINE void dump_unchecked(const sv str, B& b, auto& ix) noexcept
    {
       const auto n = str.size();
-      std::memcpy(b.data() + ix, str.data(), n);
+      if constexpr (vector_like<B>) {
+         std::memcpy(b.data() + ix, str.data(), n);
+      }
+      else {
+         std::memcpy(b + ix, str.data(), n);
+      }
       ix += n;
    }
 
-   template <string_literal str>
-   GLZ_ALWAYS_INLINE void dump_unchecked(vector_like auto& b, auto& ix) noexcept
+   template <string_literal str, class B>
+   GLZ_ALWAYS_INLINE void dump_unchecked(B& b, auto& ix) noexcept
    {
       static constexpr auto s = str.sv();
       static constexpr auto n = s.size();
 
-      std::memcpy(b.data() + ix, s.data(), n);
-      ix += n;
-   }
-
-   template <char c>
-   GLZ_ALWAYS_INLINE void dumpn(size_t n, char*& b) noexcept
-   {
-      std::memset(b, c, n);
-   }
-
-   template <char c>
-   GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, char*& b) noexcept
-   {
-      std::memset(b, c, n);
-   }
-
-   template <char c>
-   GLZ_ALWAYS_INLINE void dumpn(size_t n, vector_like auto& b, auto& ix) noexcept
-   {
-      if (ix + n > b.size()) [[unlikely]] {
-         b.resize((std::max)(b.size() * 2, ix + n));
+      if constexpr (vector_like<B>) {
+         std::memcpy(b.data() + ix, s.data(), n);
       }
-
-      std::memset(b.data() + ix, c, n);
+      else {
+         std::memcpy(b + ix, s.data(), n);
+      }
       ix += n;
    }
 
-   template <char c>
-   GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, vector_like auto& b, auto& ix) noexcept
+   template <char c, class B>
+   GLZ_ALWAYS_INLINE void dumpn(size_t n, B& b, auto& ix) noexcept
    {
-      std::memset(b.data() + ix, c, n);
+      if constexpr (vector_like<B>) {
+         if (ix + n > b.size()) [[unlikely]] {
+            b.resize((std::max)(b.size() * 2, ix + n));
+         }
+         std::memset(b.data() + ix, c, n);
+      }
+      else {
+         std::memset(b + ix, c, n);
+      }
+      
       ix += n;
    }
 
-   template <char IndentChar>
-   GLZ_ALWAYS_INLINE void dump_newline_indent(size_t n, vector_like auto& b, auto& ix) noexcept
+   template <char c, class B>
+   GLZ_ALWAYS_INLINE void dumpn_unchecked(size_t n, B& b, auto& ix) noexcept
    {
-      if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
-         b.resize((std::max)(b.size() * 2, k));
+      if constexpr (vector_like<B>) {
+         std::memset(b.data() + ix, c, n);
+      }
+      else {
+         std::memset(b + ix, c, n);
+      }
+      ix += n;
+   }
+
+   template <char IndentChar, class B>
+   GLZ_ALWAYS_INLINE void dump_newline_indent(size_t n, B& b, auto& ix) noexcept
+   {
+      if constexpr (vector_like<B>) {
+         if (const auto k = ix + n + write_padding_bytes; k > b.size()) [[unlikely]] {
+            b.resize((std::max)(b.size() * 2, k));
+         }
       }
 
       b[ix] = '\n';
       ++ix;
-      std::memset(b.data() + ix, IndentChar, n);
-      ix += n;
-   }
-
-   template <const sv& str>
-   GLZ_ALWAYS_INLINE void dump(vector_like auto& b, auto& ix) noexcept
-   {
-      static constexpr auto s = str;
-      static constexpr auto n = s.size();
-
-      if (ix + n > b.size()) [[unlikely]] {
-         b.resize((std::max)(b.size() * 2, ix + n));
+      if constexpr (vector_like<B>) {
+         std::memset(b.data() + ix, IndentChar, n);
       }
-
-      std::memcpy(b.data() + ix, s.data(), n);
+      else {
+         std::memset(b + ix, IndentChar, n);
+      }
       ix += n;
    }
 
-   template <const sv& str>
-   GLZ_ALWAYS_INLINE void dump_unchecked(vector_like auto& b, auto& ix) noexcept
+   template <const sv& str, class B>
+   GLZ_ALWAYS_INLINE void dump(B& b, auto& ix) noexcept
    {
       static constexpr auto s = str;
       static constexpr auto n = s.size();
 
-      std::memcpy(b.data() + ix, s.data(), n);
+      if constexpr (vector_like<B>) {
+         if (ix + n > b.size()) [[unlikely]] {
+            b.resize((std::max)(b.size() * 2, ix + n));
+         }
+         std::memcpy(b.data() + ix, s.data(), n);
+      }
+      else {
+         std::memcpy(b + ix, s.data(), n);
+      }
       ix += n;
    }
 
-   template <const sv& str>
-   GLZ_ALWAYS_INLINE void dump(auto* b, auto& ix) noexcept
+   template <const sv& str, class B>
+   GLZ_ALWAYS_INLINE void dump_unchecked(B& b, auto& ix) noexcept
    {
       static constexpr auto s = str;
       static constexpr auto n = s.size();
 
-      std::memcpy(b + ix, s.data(), n);
-      ix += n;
-   }
-
-   template <const sv& str>
-   GLZ_ALWAYS_INLINE void dump_unchecked(auto* b, auto& ix) noexcept
-   {
-      static constexpr auto s = str;
-      static constexpr auto n = s.size();
-
-      std::memcpy(b + ix, s.data(), n);
+      if constexpr (vector_like<B>) {
+         std::memcpy(b.data() + ix, s.data(), n);
+      }
+      else {
+         std::memcpy(b + ix, s.data(), n);
+      }
       ix += n;
    }
 
