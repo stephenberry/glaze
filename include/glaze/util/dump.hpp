@@ -15,7 +15,7 @@ namespace glz::detail
 {
    template <class T, class V = std::remove_cvref_t<T>>
    concept byte_sized = sizeof(T) == 1 && (std::same_as<V, char> || std::same_as<V, std::byte>);
-   
+
    template <class T>
    [[nodiscard]] GLZ_ALWAYS_INLINE auto data_ptr(T& buffer) noexcept
    {
@@ -46,7 +46,7 @@ namespace glz::detail
          }
       }
    }
-   
+
    template <auto c>
    GLZ_ALWAYS_INLINE void assign_maybe_cast(auto& b, auto& ix) noexcept
    {
@@ -59,7 +59,7 @@ namespace glz::detail
          b[ix] = static_cast<V>(c);
       }
    }
-   
+
    GLZ_ALWAYS_INLINE void assign_maybe_cast(const byte_sized auto c, auto& b, auto& ix) noexcept
    {
       using V = std::decay_t<decltype(b[0])>;
@@ -268,7 +268,7 @@ namespace glz::detail
          ix += n;
       }
    }
-   
+
    template <class B>
    GLZ_ALWAYS_INLINE void dump(const vector_like auto& bytes, B& b, auto& ix) noexcept
    {
