@@ -126,8 +126,7 @@ namespace glz
                   bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
                }
             }
-            //dump(bytes, args...);
-            dump(std::as_bytes(std::span{bytes}), args...);
+            dump(bytes, args...);
          }
       };
 
