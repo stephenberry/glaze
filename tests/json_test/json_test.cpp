@@ -7837,7 +7837,7 @@ struct glz::meta<Address>
    static constexpr auto value = [](Address& self) -> FixedName<10> {
       FixedName<10> val;
       std::memcpy(val.buf.data(), self.test.data(), self.test.size() + 1);
-      val.len = self.test.size();
+      val.len = uint16_t(self.test.size());
       return val;
    };
 };

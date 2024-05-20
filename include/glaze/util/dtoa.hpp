@@ -886,7 +886,7 @@ namespace glz
     These digits are named as "aabbccddeeffgghhii" here.
     For example, input 1234567890123000, output "1234567890123".
     */
-   inline char* write_u64_len_15_to_17_trim(char* buf, uint64_t sig) noexcept
+   inline auto* write_u64_len_15_to_17_trim(auto* buf, uint64_t sig) noexcept
    {
       uint32_t tz1, tz2, tz; /* trailing zero */
 
@@ -970,7 +970,7 @@ namespace glz
    consteval uint32_t numbits(uint32_t x) noexcept { return x < 2 ? x : 1 + numbits(x >> 1); }
 
    template <std::floating_point T>
-   inline char* to_chars(char* buffer, T val) noexcept
+   inline auto* to_chars(auto* buffer, T val) noexcept
    {
       static_assert(std::numeric_limits<T>::is_iec559);
       static_assert(std::numeric_limits<T>::radix == 2);
