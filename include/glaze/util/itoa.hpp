@@ -139,7 +139,9 @@ namespace glz
       return to_chars(buf + (x < 0), uint32_t(x ^ (x >> 31)) - (x >> 31));
    }
 
-   GLZ_ALWAYS_INLINE auto* to_chars_u64_len_8(auto* buf, uint32_t val) noexcept
+   template <class T>
+      requires (std::same_as<std::remove_cvref_t<T>, uint32_t>)
+   GLZ_ALWAYS_INLINE auto* to_chars_u64_len_8(auto* buf, T val) noexcept
    {
       /* 8 digits: aabbccdd */
       const uint32_t aabb = uint32_t((uint64_t(val) * 109951163) >> 40); /* (val / 10000) */
@@ -155,7 +157,9 @@ namespace glz
       return buf + 8;
    }
 
-   GLZ_ALWAYS_INLINE auto* to_chars_u64_len_4(auto* buf, uint32_t val) noexcept
+   template <class T>
+      requires (std::same_as<std::remove_cvref_t<T>, uint32_t>)
+   GLZ_ALWAYS_INLINE auto* to_chars_u64_len_4(auto* buf, T val) noexcept
    {
       /* 4 digits: aabb */
       const uint32_t aa = (val * 5243) >> 19; /* (val / 100) */
@@ -165,7 +169,9 @@ namespace glz
       return buf + 4;
    }
 
-   inline auto* to_chars_u64_len_1_8(auto* buf, uint32_t val) noexcept
+   template <class T>
+      requires (std::same_as<std::remove_cvref_t<T>, uint32_t>)
+   inline auto* to_chars_u64_len_1_8(auto* buf, T val) noexcept
    {
       uint32_t aa, bb, cc, dd, aabb, bbcc, ccdd, lz;
 
@@ -214,7 +220,9 @@ namespace glz
       }
    }
 
-   inline auto* to_chars_u64_len_5_8(auto* buf, uint32_t val) noexcept
+   template <class T>
+      requires (std::same_as<std::remove_cvref_t<T>, uint32_t>)
+   inline auto* to_chars_u64_len_5_8(auto* buf, T val) noexcept
    {
       if (val < 1000000) { /* 5-6 digits: aabbcc */
          const uint32_t aa = uint32_t((uint64_t(val) * 429497) >> 32); /* (val / 10000) */
@@ -246,7 +254,9 @@ namespace glz
       }
    }
 
-   inline auto* to_chars(auto* buf, uint64_t val) noexcept
+   template <class T>
+      requires (std::same_as<std::remove_cvref_t<T>, uint64_t>)
+   inline auto* to_chars(auto* buf, T val) noexcept
    {
       if (val < 100000000) { /* 1-8 digits */
          buf = to_chars_u64_len_1_8(buf, uint32_t(val));
