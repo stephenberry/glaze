@@ -233,52 +233,37 @@ namespace glz::detail
       ix += n;
    }
 
-   GLZ_ALWAYS_INLINE void dump_not_empty(const sv str, vector_like auto& b, auto& ix) noexcept
+   template <class B>
+   GLZ_ALWAYS_INLINE void dump_not_empty(const sv str, B& b, auto& ix) noexcept
    {
       const auto n = str.size();
-      if (ix + n > b.size()) [[unlikely]] {
-         b.resize((std::max)(b.size() * 2, ix + n));
-      }
-
-      std::memcpy(b.data() + ix, str.data(), n);
-      ix += n;
-   }
-
-   GLZ_ALWAYS_INLINE void dump_not_empty(const sv str, auto* b, auto& ix) noexcept
-   {
-      const auto n = str.size();
-
-      std::memcpy(b + ix, str.data(), n);
-      ix += n;
-   }
-
-   GLZ_ALWAYS_INLINE void dump_maybe_empty(const sv str, vector_like auto& b, auto& ix) noexcept
-   {
-      const auto n = str.size();
-      if (n) {
+      if constexpr (vector_like<B>) {
          if (ix + n > b.size()) [[unlikely]] {
             b.resize((std::max)(b.size() * 2, ix + n));
          }
-
          std::memcpy(b.data() + ix, str.data(), n);
-         ix += n;
       }
+      else {
+         std::memcpy(b + ix, str.data(), n);
+      }
+      ix += n;
    }
 
-   GLZ_ALWAYS_INLINE void dump_maybe_empty(const sv str, auto* b, auto& ix) noexcept
+   template <class B>
+   GLZ_ALWAYS_INLINE void dump_maybe_empty(const sv str, B& b, auto& ix) noexcept
    {
       const auto n = str.size();
       if (n) {
-         std::memcpy(b + ix, str.data(), n);
+         if constexpr (vector_like<B>) {
+            if (ix + n > b.size()) [[unlikely]] {
+               b.resize((std::max)(b.size() * 2, ix + n));
+            }
+            std::memcpy(b.data() + ix, str.data(), n);
+         }
+         else {
+            std::memcpy(b + ix, str.data(), n);
+         }
          ix += n;
-      }
-   }
-
-   GLZ_ALWAYS_INLINE void dump(const sv str, char*& b) noexcept
-   {
-      for (auto& c : str) {
-         *b = c;
-         ++b;
       }
    }
 
