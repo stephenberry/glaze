@@ -15,6 +15,8 @@ namespace glz
    template <class T>
    struct quoted_num_t
    {
+      static constexpr bool glaze_wrapper = true;
+      using value_type = T;
       T& val;
    };
 
@@ -22,6 +24,8 @@ namespace glz
    template <class T>
    struct quoted_t
    {
+      static constexpr bool glaze_wrapper = true;
+      using value_type = T;
       T& val;
    };
 
@@ -29,6 +33,8 @@ namespace glz
    template <class T>
    struct number_t
    {
+      static constexpr bool glaze_wrapper = true;
+      using value_type = T;
       T& val;
    };
 

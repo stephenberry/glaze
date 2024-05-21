@@ -23,10 +23,10 @@ namespace glz
          int64_t indent{};
 
          while (it < end) {
-            switch (ascii_json_types[size_t(*it)]) {
+            switch (json_types[size_t(*it)]) {
             case String: {
-               const auto value = read_json_string(it, end);
-               dump(value, b, ix);
+               const auto value = read_json_string<Opts>(it, end);
+               dump_not_empty(value, b, ix);
                break;
             }
             case Comma: {
@@ -40,18 +40,28 @@ namespace glz
                      append_new_line<use_tabs, indent_width>(b, ix, indent);
                   }
                   else {
-                     dump<' '>(b, ix);
+                     if constexpr (use_tabs) {
+                        dump<'\t'>(b, ix);
+                     }
+                     else {
+                        dump<' '>(b, ix);
+                     }
                   }
                }
                break;
             }
             case Number: {
-               const auto value = read_json_number(it, end);
-               dump(value, b, ix);
+               const auto value = read_json_number(it);
+               dump_not_empty(value, b, ix);
                break;
             }
             case Colon: {
-               dump<": ">(b, ix);
+               if constexpr (use_tabs) {
+                  dump<":\t">(b, ix);
+               }
+               else {
+                  dump<": ">(b, ix);
+               }
                ++it;
                break;
             }
@@ -131,19 +141,18 @@ namespace glz
             case Comment: {
                if constexpr (Opts.comments) {
                   const auto value = read_jsonc_comment(it, end);
-                  dump(value, b, ix);
+                  dump_not_empty(value, b, ix);
                   break;
                }
                else {
                   [[fallthrough]];
                }
             }
-            case Unset:
-               [[fallthrough]];
-            [[unlikely]] default : {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
+               [[unlikely]] default:
+               {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
             }
          }
       }
@@ -151,13 +160,12 @@ namespace glz
       template <opts Opts, contiguous In, output_buffer Out>
       inline void prettify_json(is_context auto&& ctx, In&& in, Out&& out) noexcept
       {
-         if constexpr (resizeable<Out>) {
+         if constexpr (resizable<Out>) {
             if (in.empty()) {
-               out.resize(128);
+               out.clear();
+               return;
             }
-            else {
-               out.resize(in.size() * 2);
-            }
+            out.resize(in.size() * 2);
          }
          size_t ix = 0;
          auto [it, end] = read_iterators<Opts>(ctx, in);
@@ -165,7 +173,7 @@ namespace glz
             return;
          }
          prettify_json<Opts>(ctx, it, end, out, ix);
-         if constexpr (resizeable<Out>) {
+         if constexpr (resizable<Out>) {
             out.resize(ix);
          }
       }
@@ -210,198 +218,6 @@ namespace glz
       context ctx{};
       std::string out{};
       detail::prettify_json<opt_true<Opts, &opts::comments>>(ctx, in, out);
-      return out;
-   }
-}
-
-// TODO: delete these deprecated versions of minify and prettify
-namespace glz
-{
-   namespace detail
-   {
-      enum class general_state : uint32_t { NORMAL, ESCAPED, STRING, BEFORE_ASTERISK, COMMENT, BEFORE_FSLASH };
-
-      [[deprecated("Use new glz::prettify_json/glz::minify_json")]] inline void handle_other_states(
-         const char c, general_state& state) noexcept
-      {
-         switch (state) {
-         case general_state::ESCAPED:
-            state = general_state::NORMAL;
-            break;
-         case general_state::STRING:
-            if (c == '"') {
-               state = general_state::NORMAL;
-            }
-            break;
-         case general_state::BEFORE_ASTERISK:
-            state = general_state::COMMENT;
-            break;
-         case general_state::COMMENT:
-            if (c == '*') {
-               state = general_state::BEFORE_FSLASH;
-            }
-            break;
-         case general_state::BEFORE_FSLASH:
-            state = (c == '/' ? general_state::NORMAL : general_state::COMMENT);
-            break;
-         default:
-            break;
-         }
-      }
-
-      [[deprecated("Use new glz::prettify_json/glz::minify_json")]] inline void minify_normal_state(
-         const char c, auto& out, general_state& state) noexcept
-      {
-         switch (c) {
-         case '\\':
-            out += c;
-            state = general_state::ESCAPED;
-            break;
-         case '\"':
-            out += c;
-            state = general_state::STRING;
-            break;
-         case '/':
-            out += c;
-            state = general_state::BEFORE_ASTERISK;
-         case ' ':
-         case '\n':
-         case '\r':
-         case '\t':
-            break;
-         default:
-            out += c;
-            break;
-         }
-      }
-
-      [[deprecated("Use new glz::prettify_json/glz::minify_json")]] inline void prettify_normal_state(
-         const char c, auto& out, uint32_t& indent, auto nl, general_state& state) noexcept
-      {
-         switch (c) {
-         case ',':
-            out += c;
-            nl();
-            break;
-         case '[':
-            out += c;
-            ++indent;
-            nl();
-            break;
-         case ']':
-            --indent;
-            nl();
-            out += c;
-            break;
-         case '{':
-            out += c;
-            ++indent;
-            nl();
-            break;
-         case '}':
-            --indent;
-            nl();
-            out += c;
-            break;
-         case '\\':
-            out += c;
-            state = general_state::ESCAPED;
-            break;
-         case '\"':
-            out += c;
-            state = general_state::STRING;
-            break;
-         case '/':
-            out += " /";
-            state = general_state::BEFORE_ASTERISK;
-            break;
-         case ':':
-            out += ": ";
-            break;
-         case ' ':
-         case '\n':
-         case '\r':
-         case '\t':
-            break;
-         default:
-            out += c;
-            break;
-         }
-      }
-   }
-
-   /// <summary>
-   /// Minify a JSON string
-   /// </summary>
-   [[deprecated("Use new glz::prettify_json/glz::minify_json")]] inline void minify(const auto& in, auto& out) noexcept
-   {
-      out.reserve(in.size());
-
-      using namespace detail;
-      general_state state{general_state::NORMAL};
-
-      for (auto c : in) {
-         if (state == general_state::NORMAL) {
-            minify_normal_state(c, out, state);
-            continue;
-         }
-         else {
-            out += c;
-            handle_other_states(c, state);
-         }
-      }
-   }
-
-   /// <summary>
-   /// allocating version of minify
-   /// </summary>
-   [[deprecated("Use new glz::prettify_json/glz::minify_json")]] inline std::string minify(const auto& in) noexcept
-   {
-      std::string out{};
-      minify(in, out);
-      return out;
-   }
-
-   /// <summary>
-   /// pretty print a JSON string
-   /// </summary>
-   [[deprecated("Use new glz::prettify_json/glz::minify_json")]] inline void prettify(
-      const auto& in, auto& out, const bool tabs = false, const uint32_t indent_size = 3) noexcept
-   {
-      out.reserve(in.size());
-      uint32_t indent{};
-
-      auto nl = [&]() {
-         out += "\n";
-
-         for (uint32_t i = 0; i < indent * (tabs ? 1 : indent_size); i++) {
-            out += tabs ? "\t" : " ";
-         }
-      };
-
-      using namespace detail;
-      general_state state{general_state::NORMAL};
-
-      for (auto c : in) {
-         if (state == general_state::NORMAL) {
-            prettify_normal_state(c, out, indent, nl, state);
-            continue;
-         }
-         else {
-            out += c;
-            handle_other_states(c, state);
-         }
-      }
-   }
-
-   /// <summary>
-   /// allocating version of prettify
-   /// </summary>
-   [[deprecated("Use new glz::prettify_json/glz::minify_json")]] inline std::string prettify(
-      const auto& in, const bool tabs = false, const uint32_t indent_size = 3) noexcept
-   {
-      std::string out{};
-      prettify(in, out, tabs, indent_size);
       return out;
    }
 }

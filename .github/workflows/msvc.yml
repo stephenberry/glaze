@@ -3,14 +3,14 @@ name: msvc
 on:
   push:
     branches:
-    - main
-    - feature/*
+      - main
+      - 'feature/*'
     paths-ignore:
-    - '**.md'
+      - '**.md'
   pull_request:
     branches: [main]
     paths-ignore:
-    - '**.md'
+      - '**.md'
   workflow_dispatch:
 
 env:
@@ -20,13 +20,17 @@ env:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
+
+    strategy:
+      matrix:
+        cpp_version: [20, 23]
 
     steps:
     - uses: actions/checkout@v4
 
     - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+      run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DCMAKE_CXX_STANDARD=${{matrix.cpp_version}}
 
     - name: Build
       run: cmake --build build --config ${{env.BUILD_TYPE}} --parallel

@@ -35,22 +35,11 @@ namespace glz
       constexpr auto make_reflection_map_impl(std::index_sequence<I...>)
       {
          using V = decltype(to_tuple(std::declval<T>()));
-         constexpr auto n = std::tuple_size_v<V>;
+         constexpr auto n = glz::tuple_size_v<V>;
          constexpr auto members = member_names<T>;
          static_assert(members.size() == n);
 
          using value_t = reflection_value_tuple_variant_t<V>;
-
-         auto naive_or_normal_hash = [&] {
-            if constexpr (n <= 20) {
-               return glz::detail::naive_map<value_t, n, use_hash_comparison>(
-                  {std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
-            }
-            else {
-               return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
-                  {std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
-            }
-         };
 
          if constexpr (n == 0) {
             return nullptr; // Hack to fix MSVC
@@ -58,34 +47,54 @@ namespace glz
          }
          else if constexpr (n == 1) {
             return micro_map1<value_t, named_member<T, I>::value...>{
-               std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...};
+               std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...};
          }
          else if constexpr (n == 2) {
             return micro_map2<value_t, named_member<T, I>::value...>{
-               std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...};
+               std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...};
          }
          else if constexpr (n < 64) // don't even attempt a first character hash if we have too many keys
          {
-            constexpr auto front_desc = single_char_hash<n>(member_names<T>);
+            constexpr auto& keys = member_names<T>;
+            constexpr auto front_desc = single_char_hash<n>(keys);
 
             if constexpr (front_desc.valid) {
                return make_single_char_map<value_t, front_desc>(
-                  {{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
+                  {{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
             }
             else {
-               constexpr auto back_desc = single_char_hash<n, false>(member_names<T>);
+               constexpr single_char_hash_opts rear_hash{.is_front_hash = false};
+               constexpr auto back_desc = single_char_hash<n, rear_hash>(keys);
 
                if constexpr (back_desc.valid) {
                   return make_single_char_map<value_t, back_desc>(
-                     {{get<I>(members), std::add_pointer_t<std::tuple_element_t<I, V>>{}}...});
+                     {{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
                }
                else {
-                  return naive_or_normal_hash();
+                  constexpr single_char_hash_opts sum_hash{.is_front_hash = true, .is_sum_hash = true};
+                  constexpr auto sum_desc = single_char_hash<n, sum_hash>(keys);
+
+                  if constexpr (sum_desc.valid) {
+                     return make_single_char_map<value_t, sum_desc>(
+                        {{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
+                  }
+                  else {
+                     if constexpr (n <= naive_map_max_size) {
+                        constexpr auto naive_desc = naive_map_hash<use_hash_comparison, n>(keys);
+                        return glz::detail::make_naive_map<value_t, naive_desc>({std::pair<sv, value_t>{
+                           get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
+                     }
+                     else {
+                        return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({std::pair<sv, value_t>{
+                           get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
+                     }
+                  }
                }
             }
          }
          else {
-            return naive_or_normal_hash();
+            return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
+               {std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
          }
       }
 

@@ -11,13 +11,11 @@ namespace glz::detail
    GLZ_FLATTEN void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.force_conformance) {
-         skip_until_closed<'{', '}'>(ctx, it, end);
+         skip_until_closed<Opts, '{', '}'>(ctx, it, end);
       }
       else {
          ++it;
-         skip_ws<Opts>(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
+         GLZ_SKIP_WS;
          if (*it == '}') {
             ++it;
             return;
@@ -30,25 +28,16 @@ namespace glz::detail
             skip_string<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws_no_pre_check<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            match<':'>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
-            skip_ws_no_pre_check<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_SKIP_WS;
+            GLZ_MATCH_COLON;
+            GLZ_SKIP_WS;
             skip_value<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws_no_pre_check<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_SKIP_WS;
             if (*it != ',') break;
-            skip_ws_no_pre_check<Opts>(ctx, ++it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            ++it;
+            GLZ_SKIP_WS;
          }
          match<'}'>(ctx, it);
       }
@@ -58,13 +47,11 @@ namespace glz::detail
    GLZ_FLATTEN void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.force_conformance) {
-         skip_until_closed<'[', ']'>(ctx, it, end);
+         skip_until_closed<Opts, '[', ']'>(ctx, it, end);
       }
       else {
          ++it;
-         skip_ws<Opts>(ctx, it, end);
-         if (bool(ctx.error)) [[unlikely]]
-            return;
+         GLZ_SKIP_WS;
          if (*it == ']') {
             ++it;
             return;
@@ -73,13 +60,10 @@ namespace glz::detail
             skip_value<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
-            skip_ws_no_pre_check<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_SKIP_WS;
             if (*it != ',') break;
-            skip_ws_no_pre_check<Opts>(ctx, ++it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            ++it;
+            GLZ_SKIP_WS;
          }
          match<']'>(ctx, it);
       }
@@ -90,19 +74,17 @@ namespace glz::detail
    {
       if constexpr (!Opts.force_conformance) {
          if constexpr (!Opts.ws_handled) {
-            skip_ws<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_SKIP_WS;
          }
          while (true) {
             switch (*it) {
             case '{':
-               skip_until_closed<'{', '}'>(ctx, it, end);
+               skip_until_closed<Opts, '{', '}'>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                break;
             case '[':
-               skip_until_closed<'[', ']'>(ctx, it, end);
+               skip_until_closed<Opts, '[', ']'>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                break;
@@ -134,9 +116,7 @@ namespace glz::detail
       }
       else {
          if constexpr (!Opts.ws_handled) {
-            skip_ws<Opts>(ctx, it, end);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_SKIP_WS;
          }
          switch (*it) {
          case '{': {
@@ -153,17 +133,17 @@ namespace glz::detail
          }
          case 'n': {
             ++it;
-            match<"ull">(ctx, it, end);
+            match<"ull", Opts>(ctx, it, end);
             break;
          }
          case 'f': {
             ++it;
-            match<"alse">(ctx, it, end);
+            match<"alse", Opts>(ctx, it, end);
             break;
          }
          case 't': {
             ++it;
-            match<"rue">(ctx, it, end);
+            match<"rue", Opts>(ctx, it, end);
             break;
          }
          case '\0': {
@@ -183,6 +163,6 @@ namespace glz::detail
    {
       auto start = it;
       skip_value<Opts>(ctx, it, end);
-      return std::span{start, static_cast<size_t>(std::distance(start, it))};
+      return std::span{start, size_t(it - start)};
    }
 }

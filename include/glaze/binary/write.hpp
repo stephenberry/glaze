@@ -126,8 +126,7 @@ namespace glz
                   bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
                }
             }
-            // dump(bytes, args...);
-            dump(std::as_bytes(std::span{bytes}), args...);
+            dump(bytes, args...);
          }
       };
 
@@ -137,7 +136,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
          {
-            static constexpr auto N = std::tuple_size_v<meta_t<T>>;
+            static constexpr auto N = glz::tuple_size_v<meta_t<T>>;
 
             std::array<uint8_t, byte_length<T>()> data{};
 
@@ -524,7 +523,7 @@ namespace glz
                write<binary>::op<Opts>(*value, ctx, args...);
             }
             else {
-               dump<std::byte(tag::null)>(args...);
+               dump<tag::null>(args...);
             }
          }
       };
@@ -537,7 +536,7 @@ namespace glz
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             using V = std::decay_t<decltype(value.value)>;
-            static constexpr auto N = std::tuple_size_v<V> / 2;
+            static constexpr auto N = glz::tuple_size_v<V> / 2;
 
             if constexpr (!Options.opening_handled) {
                constexpr uint8_t type = 0; // string key
@@ -560,10 +559,10 @@ namespace glz
       {
          size_t count{};
          using Tuple = std::decay_t<decltype(std::declval<T>().value)>;
-         for_each<std::tuple_size_v<Tuple>>([&](auto I) constexpr {
-            using Value = std::decay_t<std::tuple_element_t<I, Tuple>>;
+         for_each<glz::tuple_size_v<Tuple>>([&](auto I) constexpr {
+            using Value = std::decay_t<glz::tuple_element_t<I, Tuple>>;
             if constexpr (is_specialization_v<Value, glz::obj> || is_specialization_v<Value, glz::obj_copy>) {
-               count += std::tuple_size_v<decltype(std::declval<Value>().value)> / 2;
+               count += glz::tuple_size_v<decltype(std::declval<Value>().value)> / 2;
             }
             else {
                count += reflection_count<Value>;
@@ -580,7 +579,7 @@ namespace glz
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             using V = std::decay_t<decltype(value.value)>;
-            static constexpr auto N = std::tuple_size_v<V>;
+            static constexpr auto N = glz::tuple_size_v<V>;
 
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t tag = tag::object | type;
@@ -606,10 +605,10 @@ namespace glz
                write<binary>::op<Opts>(t, ctx, args...);
             }
             else {
-               dump<std::byte(tag::generic_array)>(args...);
+               dump<tag::generic_array>(args...);
 
                using V = std::decay_t<T>;
-               static constexpr auto N = std::tuple_size_v<meta_t<V>>;
+               static constexpr auto N = glz::tuple_size_v<meta_t<V>>;
                dump_compressed_int<N>(args...);
 
                for_each<N>([&](auto I) {
@@ -670,13 +669,13 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump<std::byte(tag::generic_array)>(args...);
+            dump<tag::generic_array>(args...);
 
-            static constexpr auto N = std::tuple_size_v<meta_t<T>>;
+            static constexpr auto N = glz::tuple_size_v<meta_t<T>>;
             dump_compressed_int<N>(args...);
 
             using V = std::decay_t<T>;
-            for_each<std::tuple_size_v<meta_t<V>>>(
+            for_each<glz::tuple_size_v<meta_t<V>>>(
                [&](auto I) { write<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, args...); });
          }
       };
@@ -688,9 +687,9 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump<std::byte(tag::generic_array)>(args...);
+            dump<tag::generic_array>(args...);
 
-            static constexpr auto N = std::tuple_size_v<T>;
+            static constexpr auto N = glz::tuple_size_v<T>;
             dump_compressed_int<N>(args...);
 
             if constexpr (is_std_tuple<T>) {
@@ -758,7 +757,7 @@ namespace glz
 
             static constexpr auto sorted = sort_json_ptrs(Partial);
             static constexpr auto groups = glz::group_json_ptrs<sorted>();
-            static constexpr auto N = std::tuple_size_v<std::decay_t<decltype(groups)>>;
+            static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
 
             constexpr uint8_t type = 0; // string
             constexpr uint8_t tag = tag::object | type;
@@ -847,15 +846,15 @@ namespace glz
       return write<Partial, opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
-   // std::string file_name needed for std::ofstream
+   // requires file_name to be null terminated
    template <opts Opts = opts{}, write_binary_supported T>
-   [[nodiscard]] inline write_error write_file_binary(T&& value, const std::string& file_name, auto&& buffer) noexcept
+   [[nodiscard]] inline write_error write_file_binary(T&& value, const sv file_name, auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
       write<set_binary<Opts>()>(std::forward<T>(value), buffer);
 
-      std::ofstream file(file_name, std::ios::binary);
+      std::ofstream file(file_name.data(), std::ios::binary);
 
       if (file) {
          file.write(reinterpret_cast<const char*>(buffer.data()), buffer.size());

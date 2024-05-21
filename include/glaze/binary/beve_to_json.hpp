@@ -17,9 +17,9 @@ namespace glz
          const uint8_t byte_count = detail::byte_count_lookup[tag >> 5];
 
          auto write_number = [&]<class T>(T&& value) {
-            std::memcpy(&value, &(*it), sizeof(T));
+            std::memcpy(&value, it, sizeof(T));
             to_json<T>::template op<Opts>(value, ctx, out, ix);
-            std::advance(it, sizeof(T));
+            it += sizeof(T);
          };
 
          switch (number_type) {
@@ -129,10 +129,10 @@ namespace glz
          }
          case tag::string: {
             ++it;
-            const auto n = detail::int_from_compressed(it, end);
-            const sv value{reinterpret_cast<const char*>(&*it), n};
+            const auto n = detail::int_from_compressed(ctx, it, end);
+            const sv value{reinterpret_cast<const char*>(it), n};
             to_json<sv>::template op<Opts>(value, ctx, out, ix);
-            std::advance(it, n);
+            it += n;
             break;
          }
          case tag::object: {
@@ -149,11 +149,11 @@ namespace glz
             switch (key_type) {
             case 0: {
                // string key
-               const auto n_fields = detail::int_from_compressed(it, end);
+               const auto n_fields = detail::int_from_compressed(ctx, it, end);
                for (size_t i = 0; i < n_fields; ++i) {
                   // convert the key
-                  const auto n = detail::int_from_compressed(it, end);
-                  const sv key{reinterpret_cast<const char*>(&*it), n};
+                  const auto n = detail::int_from_compressed(ctx, it, end);
+                  const sv key{reinterpret_cast<const char*>(it), n};
                   to_json<sv>::template op<Opts>(key, ctx, out, ix);
                   if constexpr (Opts.prettify) {
                      dump<": ">(out, ix);
@@ -161,7 +161,7 @@ namespace glz
                   else {
                      dump<':'>(out, ix);
                   }
-                  std::advance(it, n);
+                  it += n;
                   // convert the value
                   beve_to_json_value<Opts>(ctx, it, end, out, ix);
                   if (i != n_fields - 1) {
@@ -194,11 +194,11 @@ namespace glz
             const uint8_t byte_count = detail::byte_count_lookup[tag >> 5];
 
             auto write_array = [&]<class T>(T&& value) {
-               const auto n = int_from_compressed(it, end);
+               const auto n = int_from_compressed(ctx, it, end);
                for (size_t i = 0; i < n; ++i) {
-                  std::memcpy(&value, &(*it), sizeof(T));
+                  std::memcpy(&value, it, sizeof(T));
                   to_json<T>::template op<Opts>(value, ctx, out, ix);
-                  std::advance(it, sizeof(T));
+                  it += sizeof(T);
                   if (i != n - 1) {
                      dump<','>(out, ix);
                   }
@@ -290,12 +290,12 @@ namespace glz
                }
                case 1: {
                   // array of strings
-                  const auto n_strings = int_from_compressed(it, end);
+                  const auto n_strings = int_from_compressed(ctx, it, end);
                   for (size_t i = 0; i < n_strings; ++i) {
-                     const auto n = detail::int_from_compressed(it, end);
-                     const sv value{reinterpret_cast<const char*>(&*it), n};
+                     const auto n = detail::int_from_compressed(ctx, it, end);
+                     const sv value{reinterpret_cast<const char*>(it), n};
                      to_json<sv>::template op<Opts>(value, ctx, out, ix);
-                     std::advance(it, n);
+                     it += n;
                      if (i != n_strings - 1) {
                         dump<','>(out, ix);
                      }
@@ -321,7 +321,7 @@ namespace glz
          }
          case tag::generic_array: {
             ++it;
-            const auto n = int_from_compressed(it, end);
+            const auto n = int_from_compressed(ctx, it, end);
             dump<'['>(out, ix);
             for (size_t i = 0; i < n; ++i) {
                beve_to_json_value<Opts>(ctx, it, end, out, ix);
@@ -344,7 +344,7 @@ namespace glz
             case 1: {
                // variants
                ++it;
-               const auto index = int_from_compressed(it, end);
+               const auto index = int_from_compressed(ctx, it, end);
 
                dump<'{'>(out, ix);
                if constexpr (Opts.prettify) {
@@ -456,7 +456,7 @@ namespace glz
                if (complex_type) {
                   // complex array
                   const auto number_tag = complex_header & 0b111'00000;
-                  const auto n = int_from_compressed(it, end);
+                  const auto n = int_from_compressed(ctx, it, end);
                   dump<'['>(out, ix);
                   for (size_t i = 0; i < n; ++i) {
                      dump<'['>(out, ix);
@@ -514,7 +514,7 @@ namespace glz
          }
       }
 
-      if constexpr (detail::resizeable<JSONBuffer>) {
+      if constexpr (resizable<JSONBuffer>) {
          out.resize(ix);
       }
 

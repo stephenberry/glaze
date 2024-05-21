@@ -160,7 +160,7 @@ namespace glz
                member_array[index]);
          }
          else if constexpr (tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>) {
-            if (index >= std::tuple_size_v<std::decay_t<T>>) return false;
+            if (index >= glz::tuple_size_v<std::decay_t<T>>) return false;
             auto tuple_element_ptr = get_runtime(value, index);
             return std::visit(
                [&](auto&& element_ptr) { return seek_impl(std::forward<F>(func), *element_ptr, json_ptr); },
@@ -433,7 +433,7 @@ namespace glz
    // input array must be sorted
    inline constexpr auto group_json_ptrs_impl(const auto& arr)
    {
-      constexpr auto N = std::tuple_size_v<std::decay_t<decltype(arr)>>;
+      constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(arr)>>;
 
       std::array<sv, N> first_keys;
       std::transform(arr.begin(), arr.end(), first_keys.begin(), first_key);
@@ -572,7 +572,7 @@ namespace glz
    }
 
    template <string_literal Str, auto Opts = opts{}>
-   [[nodiscard]] inline auto get_view_json(detail::contiguous auto&& buffer)
+   [[nodiscard]] inline auto get_view_json(contiguous auto&& buffer)
    {
       static constexpr auto s = chars<Str>;
 
@@ -606,18 +606,25 @@ namespace glz
          result_t ret;
 
          for_each<N>([&](auto I) {
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
+
             static constexpr auto key = std::get<I>(tokens);
             if constexpr (maybe_numeric_key(key)) {
                switch (*it) {
                case '{': {
                   ++it;
                   while (true) {
-                     skip_ws<Opts>(ctx, it, end);
+                     GLZ_SKIP_WS;
                      const auto k = parse_key(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
+                        return;
+                     }
                      if (cx_string_cmp<key>(k)) {
-                        skip_ws<Opts>(ctx, it, end);
-                        match<':'>(ctx, it);
-                        skip_ws<Opts>(ctx, it, end);
+                        GLZ_SKIP_WS;
+                        GLZ_MATCH_COLON;
+                        GLZ_SKIP_WS;
 
                         if constexpr (I == (N - 1)) {
                            ret = parse_value<Opts>(ctx, it, end);
@@ -626,9 +633,11 @@ namespace glz
                      }
                      else {
                         skip_value<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
                         if (*it != ',') {
-                           ret = unexpected(
-                              parse_error{error_code::key_not_found, static_cast<size_t>(std::distance(start, it))});
+                           ctx.error = error_code::key_not_found;
                            return;
                         }
                         ++it;
@@ -642,18 +651,25 @@ namespace glz
                   if constexpr (n) {
                      for_each<n.value()>([&](auto) {
                         skip_value<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]] {
+                           return;
+                        }
                         if (*it != ',') {
-                           ret = unexpected(parse_error{error_code::array_element_not_found,
-                                                        static_cast<size_t>(std::distance(start, it))});
+                           ctx.error = error_code::array_element_not_found;
                            return;
                         }
                         ++it;
                      });
-                     ret = parse_value<Opts>(ctx, it, end);
+
+                     GLZ_SKIP_WS;
+
+                     if constexpr (I == (N - 1)) {
+                        ret = parse_value<Opts>(ctx, it, end);
+                     }
+                     return;
                   }
                   else {
-                     ret = unexpected(parse_error{error_code::array_element_not_found,
-                                                  static_cast<size_t>(std::distance(start, it))});
+                     ctx.error = error_code::array_element_not_found;
                      return;
                   }
                }
@@ -661,46 +677,52 @@ namespace glz
             }
             else {
                match<'{'>(ctx, it);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
-               while (true) {
-                  skip_ws<Opts>(ctx, it, end);
+               while (it < end) {
+                  GLZ_SKIP_WS;
                   const auto k = parse_key(ctx, it, end);
                   if (bool(ctx.error)) [[unlikely]] {
-                     ret = unexpected(
-                        parse_error{error_code::syntax_error, static_cast<size_t>(std::distance(start, it))});
+                     return;
+                  }
+
+                  if (cx_string_cmp<key>(k)) {
+                     GLZ_SKIP_WS;
+                     GLZ_MATCH_COLON;
+                     GLZ_SKIP_WS;
+
+                     if constexpr (I == (N - 1)) {
+                        ret = parse_value<Opts>(ctx, it, end);
+                     }
                      return;
                   }
                   else {
-                     if (cx_string_cmp<key>(k)) {
-                        skip_ws<Opts>(ctx, it, end);
-                        match<':'>(ctx, it);
-                        skip_ws<Opts>(ctx, it, end);
-
-                        if constexpr (I == (N - 1)) {
-                           ret = parse_value<Opts>(ctx, it, end);
-                        }
+                     skip_value<Opts>(ctx, it, end);
+                     if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
-                     else {
-                        skip_value<Opts>(ctx, it, end);
-                        if (*it != ',') {
-                           ret = unexpected(
-                              parse_error{error_code::key_not_found, static_cast<size_t>(std::distance(start, it))});
-                           return;
-                        }
-                        ++it;
+                     if (*it != ',') {
+                        ctx.error = error_code::key_not_found;
+                        return;
                      }
+                     ++it;
                   }
                }
             }
          });
+
+         if (bool(ctx.error)) [[unlikely]] {
+            return result_t{unexpected(parse_error{ctx.error, size_t(it - start)})};
+         }
 
          return ret;
       }
    }
 
    template <class T, string_literal Str, auto Opts = opts{}>
-   [[nodiscard]] inline expected<T, parse_error> get_as_json(detail::contiguous auto&& buffer)
+   [[nodiscard]] inline expected<T, parse_error> get_as_json(contiguous auto&& buffer)
    {
       const auto str = glz::get_view_json<Str>(buffer);
       if (str) {
@@ -710,7 +732,7 @@ namespace glz
    }
 
    template <string_literal Str, auto Opts = opts{}>
-   [[nodiscard]] inline expected<sv, parse_error> get_sv_json(detail::contiguous auto&& buffer)
+   [[nodiscard]] inline expected<sv, parse_error> get_sv_json(contiguous auto&& buffer)
    {
       const auto s = glz::get_view_json<Str>(buffer);
       if (s) {

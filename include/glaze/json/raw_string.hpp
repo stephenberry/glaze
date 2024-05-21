@@ -18,6 +18,7 @@ namespace glz
       T& val;
    };
 
+   // oposite of raw_string_t, turns off the option
    template <class T>
    struct escaped_t
    {

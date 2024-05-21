@@ -10,6 +10,7 @@
 #include <cstring>
 #include <iterator>
 
+#include "glaze/core/context.hpp"
 #include "glaze/util/inline.hpp"
 
 namespace glz::tag
@@ -29,11 +30,22 @@ namespace glz::tag
 
 namespace glz::detail
 {
-   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(auto&& it, auto&&) noexcept
+   template <class T>
+   constexpr uint8_t byte_count = uint8_t(std::bit_width(sizeof(T)) - 1);
+
+   constexpr std::array<uint8_t, 8> byte_count_lookup{1, 2, 4, 8, 16, 32, 64, 128};
+
+   [[nodiscard]] GLZ_ALWAYS_INLINE constexpr size_t int_from_compressed(is_context auto&& ctx, auto&& it,
+                                                                        auto&& end) noexcept
    {
       uint8_t header;
-      std::memcpy(&header, &(*it), 1);
+      std::memcpy(&header, it, 1);
       const uint8_t config = header & 0b000000'11;
+
+      if ((it + byte_count_lookup[config]) > end) [[unlikely]] {
+         ctx.error = error_code::unexpected_end;
+         return 0;
+      }
 
       switch (config) {
       case 0:
@@ -41,20 +53,20 @@ namespace glz::detail
          return header >> 2;
       case 1: {
          uint16_t h;
-         std::memcpy(&h, &(*it), 2);
-         std::advance(it, 2);
+         std::memcpy(&h, it, 2);
+         it += 2;
          return h >> 2;
       }
       case 2: {
          uint32_t h;
-         std::memcpy(&h, &(*it), 4);
-         std::advance(it, 4);
+         std::memcpy(&h, it, 4);
+         it += 4;
          return h >> 2;
       }
       case 3: {
          uint64_t h;
-         std::memcpy(&h, &(*it), 8);
-         std::advance(it, 8);
+         std::memcpy(&h, it, 8);
+         it += 8;
          return h >> 2;
       }
       default:
@@ -62,35 +74,35 @@ namespace glz::detail
       }
    }
 
-   GLZ_ALWAYS_INLINE constexpr void skip_compressed_int(auto&& it, auto&&) noexcept
+   GLZ_ALWAYS_INLINE constexpr void skip_compressed_int(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       uint8_t header;
-      std::memcpy(&header, &(*it), 1);
+      std::memcpy(&header, it, 1);
       const uint8_t config = header & 0b000000'11;
+
+      if ((it + byte_count_lookup[config]) > end) [[unlikely]] {
+         ctx.error = error_code::unexpected_end;
+         return;
+      }
 
       switch (config) {
       case 0:
          ++it;
          return;
       case 1: {
-         std::advance(it, 2);
+         it += 2;
          return;
       }
       case 2: {
-         std::advance(it, 4);
+         it += 4;
          return;
       }
       case 3: {
-         std::advance(it, 8);
+         it += 8;
          return;
       }
       default:
          return;
       }
    }
-
-   template <class T>
-   inline constexpr uint8_t byte_count = uint8_t(std::bit_width(sizeof(T)) - 1);
-
-   inline constexpr std::array<uint8_t, 8> byte_count_lookup{1, 2, 4, 8, 16, 32, 64, 128};
 }

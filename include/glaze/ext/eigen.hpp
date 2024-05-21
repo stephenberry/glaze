@@ -3,7 +3,12 @@
 
 #pragma once
 
-#include <Eigen/Core> //Note: You are expected to provide eigen if including this header
+#if __has_include(<Eigen/Core>)
+#include <Eigen/Core>
+#else
+static_assert(false, "Eigen must be included to use glaze/ext/eigen.hpp");
+#endif
+
 #include <span>
 
 #include "glaze/api/std/array.hpp"

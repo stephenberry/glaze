@@ -17,15 +17,15 @@ namespace glz
       {
          static constexpr auto impl() noexcept
          {
-            const auto N = std::tuple_size_v<Tuple>;
+            const auto N = glz::tuple_size_v<Tuple>;
             if constexpr (I >= N) {
                return Str;
             }
             else if constexpr (I == N - 1) {
-               return expander<join_v<Str, name_v<std::tuple_element_t<I, Tuple>>>, Tuple, I + 1>::value;
+               return expander<join_v<Str, name_v<glz::tuple_element_t<I, Tuple>>>, Tuple, I + 1>::value;
             }
             else {
-               return expander<join_v<Str, name_v<std::tuple_element_t<I, Tuple>>, chars<",">>, Tuple, I + 1>::value;
+               return expander<join_v<Str, name_v<glz::tuple_element_t<I, Tuple>>, chars<",">>, Tuple, I + 1>::value;
             }
          }
 

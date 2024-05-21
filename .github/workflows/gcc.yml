@@ -15,12 +15,12 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     
     strategy:
       fail-fast: false
       matrix:
-        gcc: [11, 12, 13]
+        gcc: [12, 13, 14]
         build_type: [Debug, Release]
         std: [20, 23]
 
@@ -31,21 +31,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install gcc 13
-      if: matrix.gcc == 13
-      run: |
-        sudo apt-get update
-        sudo apt-get install software-properties-common
-        sudo add-apt-repository ppa:ubuntu-toolchain-r/ppa -y
-        sudo apt-get update
-        sudo apt-get install -y gcc-13 g++-13
-
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
 
     - name: Build
-      run: cmake --build build -j 2
+      run: cmake --build build -j $(nproc)
 
     - name: Test
       working-directory: build
-      run: ctest -j 2 --output-on-failure
+      run: ctest -j $(nproc) --output-on-failure

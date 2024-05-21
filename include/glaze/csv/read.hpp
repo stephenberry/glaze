@@ -16,6 +16,25 @@ namespace glz
 {
    namespace detail
    {
+#define GLZ_CSV_NL                             \
+   if (*it == '\n') {                          \
+      ++it;                                    \
+   }                                           \
+   else if (*it == '\r') {                     \
+      ++it;                                    \
+      if (*it == '\n') [[likely]] {            \
+         ++it;                                 \
+      }                                        \
+      else [[unlikely]] {                      \
+         ctx.error = error_code::syntax_error; \
+         return;                               \
+      }                                        \
+   }                                           \
+   else [[unlikely]] {                         \
+      ctx.error = error_code::syntax_error;    \
+      return;                                  \
+   }
+
       template <>
       struct read<csv>
       {
@@ -207,7 +226,12 @@ namespace glz
                ++it;
                start = it;
             }
-            else if (*it == '\n') {
+            else if (*it == '\r' || *it == '\n') {
+               if (*it == '\r' && it[1] != '\n') [[unlikely]] {
+                  ctx.error = error_code::syntax_error;
+                  return keys;
+               }
+
                if (start == it) {
                   // trailing comma or empty
                }
@@ -250,7 +274,7 @@ namespace glz
                      }
                   }
 
-                  match<','>(ctx, it);
+                  GLZ_MATCH_COMMA;
 
                   using key_type = typename std::decay_t<decltype(value)>::key_type;
                   auto& member = value[key_type(key)];
@@ -265,7 +289,18 @@ namespace glz
                            read<csv>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
                         }
 
-                        if (*it == '\n') {
+                        if (*it == '\r') {
+                           ++it;
+                           if (*it == '\n') {
+                              ++it;
+                              break;
+                           }
+                           else [[unlikely]] {
+                              ctx.error = error_code::syntax_error;
+                              return;
+                           }
+                        }
+                        else if (*it == '\n') {
                            ++it;
                            break;
                         }
@@ -285,7 +320,18 @@ namespace glz
                      while (it != end) {
                         read<csv>::op<Opts>(member, ctx, it, end);
 
-                        if (*it == '\n') {
+                        if (*it == '\r') {
+                           ++it;
+                           if (*it == '\n') {
+                              ++it;
+                              break;
+                           }
+                           else [[unlikely]] {
+                              ctx.error = error_code::syntax_error;
+                              return;
+                           }
+                        }
+                        else if (*it == '\n') {
                            ++it;
                            break;
                         }
@@ -309,13 +355,7 @@ namespace glz
                   return;
                }
 
-               if (*it == '\n') {
-                  ++it; // skip new line
-               }
-               else {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
+               GLZ_CSV_NL;
 
                const auto n_keys = keys.size();
 
@@ -344,8 +384,19 @@ namespace glz
                      }
                   }
 
-                  if (*it == '\n') {
-                     ++it; // skip new line
+                  if (*it == '\r') {
+                     ++it;
+                     if (*it == '\n') {
+                        ++it;
+                        ++row;
+                     }
+                     else [[unlikely]] {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+                  else if (*it == '\n') {
+                     ++it;
                      ++row;
                   }
                }
@@ -402,10 +453,7 @@ namespace glz
                      }
                   }
 
-                  match<','>(ctx, it);
-                  if (bool(ctx.error)) [[unlikely]] {
-                     return;
-                  }
+                  GLZ_MATCH_COMMA;
 
                   const auto& member_it = frozen_map.find(key);
 
@@ -424,7 +472,18 @@ namespace glz
                                     read<csv>::op<Opts>(member.emplace_back()[csv_index], ctx, it, end);
                                  }
 
-                                 if (*it == '\n') {
+                                 if (*it == '\r') {
+                                    ++it;
+                                    if (*it == '\n') {
+                                       ++it;
+                                       break;
+                                    }
+                                    else [[unlikely]] {
+                                       ctx.error = error_code::syntax_error;
+                                       return;
+                                    }
+                                 }
+                                 else if (*it == '\n') {
                                     ++it;
                                     break;
                                  }
@@ -447,7 +506,18 @@ namespace glz
                               while (it != end) {
                                  read<csv>::op<Opts>(member, ctx, it, end);
 
-                                 if (*it == '\n') {
+                                 if (*it == '\r') {
+                                    ++it;
+                                    if (*it == '\n') {
+                                       ++it;
+                                       break;
+                                    }
+                                    else [[unlikely]] {
+                                       ctx.error = error_code::syntax_error;
+                                       return;
+                                    }
+                                 }
+                                 else if (*it == '\n') {
                                     ++it;
                                     break;
                                  }
@@ -482,13 +552,7 @@ namespace glz
                   return;
                }
 
-               if (*it == '\n') [[likely]] {
-                  ++it; // skip new line
-               }
-               else [[unlikely]] {
-                  ctx.error = error_code::syntax_error;
-                  return;
-               }
+               GLZ_CSV_NL;
 
                const auto n_keys = keys.size();
 
@@ -530,16 +594,11 @@ namespace glz
                         }
                      }
                      if (!at_end) [[likely]] {
-                        if (*it == '\n') [[likely]] {
-                           ++it; // skip new line
-                           ++row;
-                           at_end = it == end;
-                           if (at_end) break;
-                        }
-                        else {
-                           ctx.error = error_code::syntax_error;
-                           return;
-                        }
+                        GLZ_CSV_NL;
+
+                        ++row;
+                        at_end = it == end;
+                        if (at_end) break;
                      }
                      else
                         break;

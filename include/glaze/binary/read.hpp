@@ -67,13 +67,20 @@ namespace glz
             }
 
             ++it;
+            if (it >= end) [[unlikely]] {
+               ctx.error = error_code::unexpected_end;
+               return;
+            }
 
-            const auto n = int_from_compressed(it, end);
+            const auto n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
 
             const auto num_bytes = (value.size() + 7) / 8;
             for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
                uint8_t byte;
-               std::memcpy(&byte, &*it, 1);
+               std::memcpy(&byte, it, 1);
                for (size_t bit_i = 0; bit_i < 8 && i < n; ++bit_i, ++i) {
                   value[i] = byte >> bit_i & uint8_t(1);
                }
@@ -97,13 +104,13 @@ namespace glz
          template <auto Opts, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&&, It0&& it, It1&&)
          {
-            constexpr auto N = std::tuple_size_v<meta_t<T>>;
+            constexpr auto N = glz::tuple_size_v<meta_t<T>>;
 
             constexpr auto Length = byte_length<T>();
             uint8_t data[Length];
 
-            std::memcpy(data, &(*it), Length);
-            std::advance(it, Length);
+            std::memcpy(data, it, Length);
+            it += Length;
 
             for_each<N>([&](auto I) {
                static constexpr auto item = glz::get<I>(meta_v<T>);
@@ -122,8 +129,8 @@ namespace glz
          {
             if constexpr (Opts.no_header) {
                using V = std::decay_t<T>;
-               std::memcpy(&value, &(*it), sizeof(V));
-               std::advance(it, sizeof(V));
+               std::memcpy(&value, it, sizeof(V));
+               it += sizeof(V);
             }
             else {
                constexpr uint8_t type =
@@ -139,8 +146,8 @@ namespace glz
                ++it;
 
                using V = std::decay_t<decltype(value)>;
-               std::memcpy(&value, &(*it), sizeof(V));
-               std::advance(it, sizeof(V));
+               std::memcpy(&value, it, sizeof(V));
+               it += sizeof(V);
             }
          }
       };
@@ -155,8 +162,8 @@ namespace glz
             using V = std::underlying_type_t<std::decay_t<T>>;
 
             if constexpr (Opts.no_header) {
-               std::memcpy(&value, &(*it), sizeof(V));
-               std::advance(it, sizeof(V));
+               std::memcpy(&value, it, sizeof(V));
+               it += sizeof(V);
             }
             else {
                constexpr uint8_t type =
@@ -171,8 +178,8 @@ namespace glz
 
                ++it;
 
-               std::memcpy(&value, &(*it), sizeof(V));
-               std::advance(it, sizeof(V));
+               std::memcpy(&value, it, sizeof(V));
+               it += sizeof(V);
             }
          }
       };
@@ -186,8 +193,8 @@ namespace glz
          {
             if constexpr (Opts.no_header) {
                using V = std::decay_t<T>;
-               std::memcpy(&value, &(*it), sizeof(V));
-               std::advance(it, sizeof(V));
+               std::memcpy(&value, it, sizeof(V));
+               it += sizeof(V);
             }
             else {
                constexpr uint8_t header = tag::extensions | 0b00011'000;
@@ -212,8 +219,8 @@ namespace glz
                }
                ++it;
 
-               std::memcpy(&value, &(*it), 2 * sizeof(V));
-               std::advance(it, 2 * sizeof(V));
+               std::memcpy(&value, it, 2 * sizeof(V));
+               it += 2 * sizeof(V);
             }
          }
       };
@@ -287,7 +294,7 @@ namespace glz
             }
             ++it;
 
-            const auto type_index = int_from_compressed(it, end);
+            const auto type_index = int_from_compressed(ctx, it, end);
             if (value.index() != type_index) {
                value = runtime_variant_map<T>()[type_index];
             }
@@ -305,10 +312,14 @@ namespace glz
             static_assert(sizeof(V) == 1);
 
             if constexpr (Opts.no_header) {
-               const auto n = int_from_compressed(it, end);
+               const auto n = int_from_compressed(ctx, it, end);
+               if ((it + n) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
                value.resize(n);
-               std::memcpy(value.data(), &(*it), n);
-               std::advance(it, n);
+               std::memcpy(value.data(), it, n);
+               it += n;
             }
             else {
                constexpr uint8_t header = tag::string;
@@ -321,17 +332,21 @@ namespace glz
 
                ++it;
 
-               const auto n = int_from_compressed(it, end);
+               const auto n = int_from_compressed(ctx, it, end);
+               if ((it + n) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
                value.resize(n);
-               std::memcpy(value.data(), &(*it), n);
-               std::advance(it, n);
+               std::memcpy(value.data(), it, n);
+               it += n;
             }
          }
       };
 
       // for set types
       template <class T>
-         requires(readable_array_t<T> && !emplace_backable<T> && !resizeable<T> && emplaceable<T>)
+         requires(readable_array_t<T> && !emplace_backable<T> && !resizable<T> && emplaceable<T>)
       struct from_binary<T> final
       {
          template <auto Opts>
@@ -352,14 +367,14 @@ namespace glz
 
                ++it;
 
-               const auto n = int_from_compressed(it, end);
+               const auto n = int_from_compressed(ctx, it, end);
 
                value.clear();
 
                const auto num_bytes = (value.size() + 7) / 8;
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
                   uint8_t byte;
-                  std::memcpy(&byte, &*it, 1);
+                  std::memcpy(&byte, it, 1);
                   for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
                      bool x = byte >> bit_i & uint8_t(1);
                      value.emplace(x);
@@ -378,14 +393,17 @@ namespace glz
 
                ++it;
 
-               const auto n = int_from_compressed(it, end);
+               const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                value.clear();
 
                for (size_t i = 0; i < n; ++i) {
                   V x;
-                  std::memcpy(&x, &*it, sizeof(V));
-                  std::advance(it, sizeof(V));
+                  std::memcpy(&x, it, sizeof(V));
+                  it += sizeof(V);
                   value.emplace(x);
                }
             }
@@ -401,16 +419,23 @@ namespace glz
 
                ++it;
 
-               const auto n = int_from_compressed(it, end);
+               const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                value.clear();
 
                for (size_t i = 0; i < n; ++i) {
-                  const auto length = int_from_compressed(it, end);
+                  const auto length = int_from_compressed(ctx, it, end);
+                  if ((it + length) > end) [[unlikely]] {
+                     ctx.error = error_code::unexpected_end;
+                     return;
+                  }
                   V str;
                   str.resize(length);
-                  std::memcpy(str.data(), &*it, length);
-                  std::advance(it, length);
+                  std::memcpy(str.data(), it, length);
+                  it += length;
                   value.emplace(std::move(str));
                }
             }
@@ -425,7 +450,10 @@ namespace glz
                }
                ++it;
 
-               const auto n = int_from_compressed(it, end);
+               const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                value.clear();
 
@@ -459,9 +487,12 @@ namespace glz
 
                ++it;
 
-               const auto n = int_from_compressed(it, end);
+               const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -472,7 +503,7 @@ namespace glz
                const auto num_bytes = (value.size() + 7) / 8;
                for (size_t byte_i{}, i{}; byte_i < num_bytes; ++byte_i, ++it) {
                   uint8_t byte;
-                  std::memcpy(&byte, &*it, 1);
+                  std::memcpy(&byte, it, 1);
                   for (size_t bit_i = 7; bit_i < 8 && i < n; --bit_i, ++i) {
                      value[i] = byte >> bit_i & uint8_t(1);
                   }
@@ -490,9 +521,17 @@ namespace glz
 
                ++it;
 
-               const auto n = int_from_compressed(it, end);
+               const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
-               if constexpr (resizeable<T>) {
+               if ((it + n * sizeof(V)) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -501,13 +540,13 @@ namespace glz
                }
 
                if constexpr (contiguous<T>) {
-                  std::memcpy(value.data(), &*it, n * sizeof(V));
-                  std::advance(it, n * sizeof(V));
+                  std::memcpy(value.data(), it, n * sizeof(V));
+                  it += n * sizeof(V);
                }
                else {
                   for (auto&& x : value) {
-                     std::memcpy(&x, &*it, sizeof(V));
-                     std::advance(it, sizeof(V));
+                     std::memcpy(&x, it, sizeof(V));
+                     it += sizeof(V);
                   }
                }
             }
@@ -523,9 +562,12 @@ namespace glz
 
                ++it;
 
-               const auto n = int_from_compressed(it, end);
+               const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -534,15 +576,18 @@ namespace glz
                }
 
                for (auto&& x : value) {
-                  const auto length = int_from_compressed(it, end);
+                  const auto length = int_from_compressed(ctx, it, end);
+                  if (bool(ctx.error)) [[unlikely]] {
+                     return;
+                  }
                   x.resize(length);
 
                   if constexpr (Opts.shrink_to_fit) {
                      value.shrink_to_fit();
                   }
 
-                  std::memcpy(x.data(), &*it, length);
-                  std::advance(it, length);
+                  std::memcpy(x.data(), it, length);
+                  it += length;
                }
             }
             else if constexpr (complex_t<V>) {
@@ -565,9 +610,17 @@ namespace glz
                }
                ++it;
 
-               const auto n = int_from_compressed(it, end);
+               const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
-               if constexpr (resizeable<T>) {
+               if ((it + n * sizeof(V)) > end) [[unlikely]] {
+                  ctx.error = error_code::unexpected_end;
+                  return;
+               }
+
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -576,13 +629,13 @@ namespace glz
                }
 
                if constexpr (contiguous<T>) {
-                  std::memcpy(value.data(), &*it, n * sizeof(V));
-                  std::advance(it, n * sizeof(V));
+                  std::memcpy(value.data(), it, n * sizeof(V));
+                  it += n * sizeof(V);
                }
                else {
                   for (auto&& x : value) {
-                     std::memcpy(&x, &*it, sizeof(V));
-                     std::advance(it, sizeof(V));
+                     std::memcpy(&x, it, sizeof(V));
+                     it += sizeof(V);
                   }
                }
             }
@@ -593,9 +646,12 @@ namespace glz
                }
                ++it;
 
-               const auto n = int_from_compressed(it, end);
+               const auto n = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
-               if constexpr (resizeable<T>) {
+               if constexpr (resizable<T>) {
                   value.resize(n);
 
                   if constexpr (Opts.shrink_to_fit) {
@@ -630,7 +686,10 @@ namespace glz
 
             ++it;
 
-            const auto n = int_from_compressed(it, end);
+            const auto n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
             if (n != 1) [[unlikely]] {
                ctx.error = error_code::syntax_error;
                return;
@@ -661,7 +720,10 @@ namespace glz
 
             ++it;
 
-            const auto n = int_from_compressed(it, end);
+            const auto n = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
 
             if constexpr (std::is_arithmetic_v<std::decay_t<Key>>) {
                Key key;
@@ -738,7 +800,7 @@ namespace glz
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (Opts.no_header) {
-               std::ignore = int_from_compressed(it, end);
+               skip_compressed_int(ctx, it, end);
             }
             else {
                constexpr uint8_t header = tag::string;
@@ -751,7 +813,7 @@ namespace glz
 
                ++it;
 
-               std::ignore = int_from_compressed(it, end);
+               skip_compressed_int(ctx, it, end);
             }
          }
       };
@@ -777,8 +839,11 @@ namespace glz
                ++it;
 
                using V = std::decay_t<T>;
-               constexpr auto N = std::tuple_size_v<meta_t<V>>;
-               skip_compressed_int(it, end);
+               constexpr auto N = glz::tuple_size_v<meta_t<V>>;
+               if (int_from_compressed(ctx, it, end) != N) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
 
                for_each<N>([&](auto I) {
                   static constexpr auto item = get<I>(meta_v<V>);
@@ -807,7 +872,10 @@ namespace glz
 
             constexpr auto N = reflection_count<T>;
 
-            const auto n_keys = int_from_compressed(it, end);
+            const auto n_keys = int_from_compressed(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]] {
+               return;
+            }
 
             decltype(auto) storage = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
@@ -826,11 +894,14 @@ namespace glz
             }();
 
             for (size_t i = 0; i < n_keys; ++i) {
-               const auto length = int_from_compressed(it, end);
+               const auto length = int_from_compressed(ctx, it, end);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
 
                const std::string_view key{it, length};
 
-               std::advance(it, length);
+               it += length;
 
                if constexpr (N > 0) {
                   if (const auto& p = storage.find(key); p != storage.end()) [[likely]] {
@@ -881,10 +952,14 @@ namespace glz
             }
             ++it;
 
-            skip_compressed_int(it, end);
-
             using V = std::decay_t<T>;
-            for_each<std::tuple_size_v<meta_t<V>>>(
+            constexpr auto N = glz::tuple_size_v<meta_t<V>>;
+            if (int_from_compressed(ctx, it, end) != N) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
+            for_each<N>(
                [&](auto I) { read<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, it, end); });
          }
       };
@@ -903,16 +978,18 @@ namespace glz
             }
             ++it;
 
-            skip_compressed_int(it, end);
-
             using V = std::decay_t<T>;
+            constexpr auto N = glz::tuple_size_v<V>;
+            if (int_from_compressed(ctx, it, end) != N) {
+               ctx.error = error_code::syntax_error;
+               return;
+            }
+
             if constexpr (is_std_tuple<T>) {
-               for_each<std::tuple_size_v<V>>(
-                  [&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+               for_each<N>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
             }
             else {
-               for_each<std::tuple_size_v<V>>(
-                  [&](auto I) { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+               for_each<N>([&](auto I) { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
             }
          }
       };

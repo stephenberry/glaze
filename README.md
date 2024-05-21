@@ -40,14 +40,14 @@ See [DOCS](https://github.com/stephenberry/glaze/tree/main/docs) for more docume
 
 | Library                                                      | Roundtrip Time (s) | Write (MB/s) | Read (MB/s) |
 | ------------------------------------------------------------ | ------------------ | ------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.20**           | **1078**     | **1081**    |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1198**    |
-| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.22**           | **1007**     | **1109**    |
-| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.88**           | **366**      | **560**     |
-| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.70**           | **289**      | **441**     |
-| [**Boost.JSON (direct)**](https://boost.org/libs/json)       | **4.78**           | **198**      | **441**     |
-| [**json_struct**](https://github.com/jorgen/json_struct)     | **5.49**           | **178**      | **336**     |
-| [**nlohmann**](https://github.com/nlohmann/json)             | **15.56**          | **84**       | **82**      |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **1.20**           | **1064**     | **1175**    |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **N/A**            | **N/A**      | **1201**    |
+| [**yyjson**](https://github.com/ibireme/yyjson)              | **1.23**           | **996**      | **1108**    |
+| [**daw_json_link**](https://github.com/beached/daw_json_link) | **2.90**           | **370**      | **554**     |
+| [**RapidJSON**](https://github.com/Tencent/rapidjson)        | **3.63**           | **295**      | **447**     |
+| [**Boost.JSON (direct)**](https://boost.org/libs/json)       | **4.66**           | **203**      | **437**     |
+| [**json_struct**](https://github.com/jorgen/json_struct)     | **5.47**           | **184**      | **331**     |
+| [**nlohmann**](https://github.com/nlohmann/json)             | **15.00**          | **86**       | **82**      |
 
 [Performance test code available here](https://github.com/stephenberry/json_performance)
 
@@ -59,8 +59,8 @@ See [DOCS](https://github.com/stephenberry/glaze/tree/main/docs) for more docume
 
 | Library                                                      | Read (MB/s) |
 | ------------------------------------------------------------ | ----------- |
-| [**Glaze**](https://github.com/stephenberry/glaze)           | **988**     |
-| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **110**     |
+| [**Glaze**](https://github.com/stephenberry/glaze)           | **1426**    |
+| [**simdjson (on demand)**](https://github.com/simdjson/simdjson) | **108**     |
 
 ## Binary Performance
 
@@ -155,12 +155,17 @@ auto ec = glz::read_file_json(obj, "./obj.json", std::string{});
 auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 ```
 
+> [!IMPORTANT]
+>
+> The file name (2nd argument), must be null terminated.
+
 ## Compiler/System Support
 
 - Requires C++20
-- Only designed and tested for 64bit little-endian systems
+- Only tested on 64bit systems
+- Only supports little-endian systems
 
-[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (15+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (2022), and [GCC](https://gcc.gnu.org) (11+) on apple, windows, and linux.
+[Actions](https://github.com/stephenberry/glaze/actions) build and test with [Clang](https://clang.llvm.org) (15+), [MSVC](https://visualstudio.microsoft.com/vs/features/cplusplus/) (2022), and [GCC](https://gcc.gnu.org) (12+) on apple, windows, and linux.
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
 
@@ -190,6 +195,14 @@ target_link_libraries(${PROJECT_NAME} PRIVATE glaze::glaze)
 find_package(glaze REQUIRED)
 
 target_link_libraries(main PRIVATE glaze::glaze)
+```
+
+### [build2](https://build2.org)
+
+- Available on [cppget](https://cppget.org/libglaze)
+
+```
+import libs = libglaze%lib{glaze}
 ```
 
 ### Arch Linux
@@ -405,7 +418,7 @@ This test case:
 Produces this error:
 
 ```
-1:17: syntax_error
+1:17: expected_comma
    {"Hello":"World"x, "color": "red"}
                    ^
 ```
@@ -419,7 +432,7 @@ Denoting that x is invalid here.
 Array types logically convert to JSON array values. Concepts are used to allow various containers and even user containers if they match standard library interfaces.
 
 - `glz::array` (compile time mixed types)
-- `std::tuple`
+- `std::tuple` (compile time mixed types)
 - `std::array`
 - `std::vector`
 - `std::deque`
@@ -436,6 +449,9 @@ Object types logically convert to JSON object values, such as maps. Like JSON, G
 - `glz::object` (compile time mixed types)
 - `std::map`
 - `std::unordered_map`
+- `std::pair` (enables dynamic keys in stack storage)
+
+> `std::pair` is handled as an object with a single key and value, but when `std::pair` is used in an array, Glaze concatenates the pairs into a single object. `std::vector<std::pair<...>>` will serialize as a single  object. If you don't want this behavior set the compile time option `.concatenate = false`.
 
 ## Variants
 
@@ -560,11 +576,24 @@ auto beautiful = glz::prettify_json(buffer);
 
 # Minify JSON
 
-To minify JSON:
+To write minified JSON:
 
 ```c++
-glz::write<glz::opts{.prettify = true}>(obj, buffer);
+glz::write_json(obj, buffer); // default is minified
+```
+
+To minify JSON text call:
+
+```c++
 std::string minified = glz::minify_json(buffer);
+```
+
+## Minified JSON Reading
+
+If you wish require minified JSON or know your input will always be minified, then you can gain a little more performance by using the compile time option `.minified = true`.
+
+```c++
+auto ec = glz::read<glz::opts{.minified = true}>(obj, buffer);
 ```
 
 ## Boolean Flags
@@ -668,25 +697,41 @@ The struct below shows the available options and the default behavior.
 ```c++
 struct opts {
   uint32_t format = json;
-  bool comments = false; // Write out comments
-  bool error_on_unknown_keys = true; // Error when an unknown key is encountered
-  bool skip_null_members = true; // Skip writing out params in an object if the value is null
-  bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
-  bool prettify = false; // Write out prettified JSON
-  char indentation_char = ' '; // Prettified JSON indentation char
-  uint8_t indentation_width = 3; // Prettified JSON indentation size
-  bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
-  bool write_type_info = true; // Write type info for meta objects in variants
-  bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
-  bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
-                                      // skip_null_members = false to require nullable members
-  bool error_on_const_read = false; // Error if attempt is made to read into a const value, by 
-                                    // default the value is skipped without error
-  uint32_t layout = rowwise; // CSV row wise output/input
-  bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
-  bool number = false; // read numbers as strings and write these string as numbers
-  bool raw = false; // write out string like values without quotes
-  bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
+      bool comments = false; // Write out comments
+      bool error_on_unknown_keys = true; // Error when an unknown key is encountered
+      bool skip_null_members = true; // Skip writing out params in an object if the value is null
+      bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
+      bool prettify = false; // Write out prettified JSON
+      bool minified = false; // Require minified input for JSON, which results in faster read performance
+      char indentation_char = ' '; // Prettified JSON indentation char
+      uint8_t indentation_width = 3; // Prettified JSON indentation size
+      bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
+      bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
+      bool write_type_info = true; // Write type info for meta objects in variants
+      bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
+      bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
+                                          // skip_null_members = false to require nullable members
+      
+      bool error_on_const_read =
+         false; // Error if attempt is made to read into a const value, by default the value is skipped without error
+
+      uint32_t layout = rowwise; // CSV row wise output/input
+
+      // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
+      float_precision float_max_write_precision{};
+
+      bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
+      bool number = false; // read numbers as strings and write these string as numbers
+      bool raw = false; // write out string like values without quotes
+      bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
+      bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies to reflectable and
+      
+      // glaze_object_t concepts
+      bool partial_read_nested = false; // Rewind forward the partially readed struct to the end of the struct
+      bool concatenate = true; // Concatenates ranges of std::pair into single objects when writing
+
+      bool hide_non_invocable =
+         true; // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
 };
 ```
 

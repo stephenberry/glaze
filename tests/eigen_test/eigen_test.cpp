@@ -40,7 +40,7 @@ int main()
    "binary"_test = [] {
       Eigen::Matrix<double, 2, 2> m{};
       m << 1, 2, 3, 4;
-      std::vector<std::byte> b;
+      std::string b;
       glz::write_binary(m, b);
       Eigen::Matrix<double, 2, 2> e{};
       expect(!glz::read_binary(e, b));
@@ -51,7 +51,7 @@ int main()
    "binary"_test = [] {
       Eigen::MatrixXd m(2, 2);
       m << 1, 2, 3, 4;
-      std::vector<std::byte> b;
+      std::string b;
       glz::write_binary(m, b);
       Eigen::MatrixXd e(2, 2);
       expect(!glz::read_binary(e, b));
@@ -62,7 +62,7 @@ int main()
    "beve_to_json"_test = [] {
       Eigen::MatrixXd m(2, 2);
       m << 1, 2, 3, 4;
-      std::vector<std::byte> b;
+      std::string b;
       glz::write_binary(m, b);
       std::string json{};
       expect(!glz::beve_to_json(b, json));
@@ -71,7 +71,7 @@ int main()
 
    "array"_test = [] {
       Eigen::Vector3d m{1, 2, 3};
-      std::vector<std::byte> b;
+      std::string b;
       glz::write_binary(m, b);
       Eigen::Vector3d e{};
       expect(!glz::read_binary(e, b));
@@ -97,7 +97,7 @@ int main()
       for (int i = 0; i < m.size(); ++i) {
          m[i] = i;
       }
-      std::vector<std::byte> b;
+      std::string b;
       glz::write_binary(m, b);
       Eigen::VectorXd e{};
       expect(!glz::read_binary(e, b));
@@ -110,7 +110,7 @@ int main()
       for (int i = 0; i < m.size(); ++i) {
          m[i] = {double(i), 2 * double(i)};
       }
-      std::vector<std::byte> b;
+      std::string b;
       glz::write_binary(m, b);
       Eigen::VectorXcd e{};
       expect(!glz::read_binary(e, b));
@@ -123,7 +123,7 @@ int main()
       for (int i = 0; i < m.size(); ++i) {
          m.array()(i) = {double(i), 2 * double(i)};
       }
-      std::vector<std::byte> b;
+      std::string b;
       glz::write_binary(m, b);
       Eigen::MatrixXcd e(3, 3);
       expect(!glz::read_binary(e, b));

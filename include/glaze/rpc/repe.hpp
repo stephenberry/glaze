@@ -98,19 +98,22 @@ namespace glz::repe
       if constexpr (Opts.format == json) {
          glz::context ctx{};
          auto [b, e] = read_iterators<Opts>(ctx, state.message);
+         if (bool(ctx.error)) [[unlikely]] {
+            return 0;
+         }
          auto start = b;
 
          glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
 
          if (bool(ctx.error)) {
-            parse_error ec{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
+            parse_error ec{ctx.error, size_t(b - start), ctx.includer_error};
             write_json(std::forward_as_tuple(header{.error = true},
                                              error_t{error_e::parse_error, format_error(ec, state.message)}),
                        response);
             return 0;
          }
 
-         return size_t(std::distance(start, b));
+         return size_t(b - start);
       }
       else {
          static_assert(false_v<Value>, "TODO: implement BEVE");
@@ -170,12 +173,14 @@ namespace glz::repe
       repe::header h;
       context ctx{};
       auto [b, e] = read_iterators<Opts>(ctx, buffer);
+      if (bool(ctx.error)) [[unlikely]] {
+         return error_t{error_e::parse_error};
+      }
       auto start = b;
 
-      // clang 14 won't build when capturing from structured binding
       auto handle_error = [&](auto& it) {
          ctx.error = error_code::syntax_error;
-         parse_error pe{ctx.error, size_t(std::distance(start, it)), ctx.includer_error};
+         parse_error pe{ctx.error, size_t(it - start), ctx.includer_error};
          return error_t{error_e::parse_error, format_error(pe, buffer)};
       };
 
@@ -189,7 +194,7 @@ namespace glz::repe
       glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
 
       if (bool(ctx.error)) {
-         parse_error pe{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
+         parse_error pe{ctx.error, size_t(b - start), ctx.includer_error};
          return {error_e::parse_error, format_error(pe, buffer)};
       }
 
@@ -210,7 +215,7 @@ namespace glz::repe
          glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
 
          if (bool(ctx.error)) {
-            parse_error pe{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
+            parse_error pe{ctx.error, size_t(b - start), ctx.includer_error};
             return {error_e::parse_error, format_error(pe, buffer)};
          }
       }
@@ -371,10 +376,10 @@ namespace glz::repe
             }
             else if constexpr (is_invocable_concrete<std::remove_cvref_t<Func>>) {
                using Tuple = invocable_args_t<std::remove_cvref_t<Func>>;
-               constexpr auto N = std::tuple_size_v<Tuple>;
+               constexpr auto N = glz::tuple_size_v<Tuple>;
                static_assert(N == 1, "Only one input is allowed for your function");
 
-               using Params = std::tuple_element_t<0, Tuple>;
+               using Params = glz::tuple_element_t<0, Tuple>;
                using Result = std::invoke_result_t<Func, Params>;
 
                methods[full_key] = [this, params = std::decay_t<Params>{}, result = std::decay_t<Result>{},
@@ -441,7 +446,7 @@ namespace glz::repe
                   using F = std::decay_t<Func>;
                   using Ret = typename return_type<F>::type;
                   using Tuple = typename inputs_as_tuple<F>::type;
-                  constexpr auto n_args = std::tuple_size_v<Tuple>;
+                  constexpr auto n_args = glz::tuple_size_v<Tuple>;
                   if constexpr (std::is_void_v<Ret>) {
                      if constexpr (n_args == 0) {
                         methods[full_key] = [&value, &func](repe::state&& state) {
@@ -456,7 +461,7 @@ namespace glz::repe
                         };
                      }
                      else if constexpr (n_args == 1) {
-                        using Input = std::decay_t<std::tuple_element_t<0, Tuple>>;
+                        using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
                         methods[full_key] = [this, &value, &func, input = Input{}](repe::state&& state) mutable {
                            if (!(state.header.action & empty)) {
                               if (read_params<Opts>(input, state, response) == 0) {
@@ -497,7 +502,7 @@ namespace glz::repe
                         };
                      }
                      else if constexpr (n_args == 1) {
-                        using Input = std::decay_t<std::tuple_element_t<0, Tuple>>;
+                        using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
                         methods[full_key] = [this, &value, &func, input = Input{}](repe::state&& state) mutable {
                            if (!(state.header.action & empty)) {
                               if (read_params<Opts>(input, state, response) == 0) {
@@ -579,11 +584,14 @@ namespace glz::repe
          header h;
          context ctx{};
          auto [b, e] = read_iterators<Opts>(ctx, msg);
+         if (bool(ctx.error)) [[unlikely]] {
+            return error_t{error_e::parse_error};
+         }
          auto start = b;
 
          auto handle_error = [&](auto& it) {
             ctx.error = error_code::syntax_error;
-            parse_error pe{ctx.error, size_t(std::distance(start, it)), ctx.includer_error};
+            parse_error pe{ctx.error, size_t(it - start), ctx.includer_error};
             write_json(
                std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(pe, msg)}),
                response);
@@ -600,7 +608,7 @@ namespace glz::repe
          glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
 
          if (bool(ctx.error)) {
-            parse_error pe{ctx.error, size_t(std::distance(start, b)), ctx.includer_error};
+            parse_error pe{ctx.error, size_t(b - start), ctx.includer_error};
             response = format_error(pe, msg);
             return !(h.action & notify);
          }
@@ -614,7 +622,7 @@ namespace glz::repe
          }
 
          if (auto it = methods.find(h.method); it != methods.end()) {
-            const sv body = msg.substr(size_t(std::distance(start, b)));
+            const sv body = msg.substr(size_t(b - start));
             it->second(state{body, h, response, error}); // handle the body
          }
          else {

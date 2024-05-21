@@ -46,7 +46,7 @@ namespace glz
 
                if constexpr (std::is_void_v<Ret>) {
                   using Tuple = typename inputs_as_tuple<M>::type;
-                  if constexpr (std::tuple_size_v<Tuple> == 0) {
+                  if constexpr (glz::tuple_size_v<Tuple> == 0) {
                      skip_array<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
@@ -71,7 +71,7 @@ namespace glz
 
                if constexpr (std::is_void_v<Ret>) {
                   using Tuple = typename function_traits<V>::arguments;
-                  if constexpr (std::tuple_size_v<Tuple> == 0) {
+                  if constexpr (glz::tuple_size_v<Tuple> == 0) {
                      skip_array<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
@@ -177,7 +177,7 @@ namespace glz
             using V = std::decay_t<decltype(value.func)>;
 
             using Tuple = typename function_traits<V>::arguments;
-            if constexpr (std::tuple_size_v<Tuple> == 0) {
+            if constexpr (glz::tuple_size_v<Tuple> == 0) {
                auto start = it;
                skip_array<Opts>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]

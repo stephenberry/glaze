@@ -63,10 +63,10 @@ inline void should_fail()
          expect(glz::read_json(v, s));
       }
       {
-         // TODO: Fix empty object reading for reflection
-         // empty_object obj{};
-         // expect(glz::read_json(obj, buffer));
-      } {
+         empty_object obj{};
+         expect(glz::read_json(obj, s));
+      }
+      {
          glz::json_t obj{};
          expect(glz::read_json(obj, s));
       }

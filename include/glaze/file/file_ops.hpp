@@ -45,13 +45,6 @@ namespace glz
    }
 
    template <class T>
-   [[nodiscard]] error_code file_to_buffer(T& buffer, const std::string& file_name) noexcept
-   {
-      auto* file = std::fopen(file_name.data(), "rb");
-      return file_to_buffer(buffer, file, file_name);
-   }
-
-   template <class T>
    [[nodiscard]] error_code file_to_buffer(T& buffer, const std::string_view file_name) noexcept
    {
       auto* file = std::fopen(file_name.data(), "rb");

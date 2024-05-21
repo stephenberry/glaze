@@ -137,7 +137,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE constexpr bool stoui64(uint64_t& res, auto& it) noexcept
    {
       static_assert(sizeof(*it) == sizeof(char));
-      const char* cur = reinterpret_cast<const char*>(&*it);
+      const char* cur = reinterpret_cast<const char*>(it);
       const char* beg = cur;
       if (stoui64(res, cur)) {
          it += (cur - beg);
@@ -150,6 +150,7 @@ namespace glz::detail
       requires(std::is_unsigned_v<T>)
    inline bool parse_int(auto& val, const CharType*& cur) noexcept
    {
+      using X = std::remove_volatile_t<T>;
       constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(val)>>;
       const CharType* sig_cut{}; // significant part cutting position for long number
       [[maybe_unused]] const CharType* sig_end{}; // significant part ending position
@@ -184,7 +185,7 @@ namespace glz::detail
       }
       cur += 19; /* skip continuous 19 digits */
       if (!digi_is_digit_or_fp(*cur)) {
-         val = static_cast<T>(sig);
+         val = static_cast<X>(sig);
          return true;
       }
       goto digi_intg_more; /* read more digits in integral part */
@@ -234,7 +235,7 @@ namespace glz::detail
             if ((sig < (U64_MAX / 10)) || (sig == (U64_MAX / 10) && num_tmp <= (U64_MAX % 10))) {
                sig = num_tmp + sig * 10;
                cur++;
-               val = static_cast<T>(sig);
+               val = static_cast<X>(sig);
                return true;
             }
          }
@@ -336,7 +337,7 @@ namespace glz::detail
       }
       if (exp_sig == 19) {
          if constexpr (is_volatile) {
-            val = val * T(powers_of_ten_int[exp_sig - 1]);
+            val = val * static_cast<X>(powers_of_ten_int[exp_sig - 1]);
             if (is_safe_multiplication10(val)) [[likely]] {
                val = val * 10;
                return val;
@@ -346,7 +347,7 @@ namespace glz::detail
             }
          }
          else {
-            val *= T(powers_of_ten_int[exp_sig - 1]);
+            val *= static_cast<X>(powers_of_ten_int[exp_sig - 1]);
             if (is_safe_multiplication10(val)) [[likely]] {
                return val *= 10;
             }
@@ -363,25 +364,25 @@ namespace glz::detail
    digi_finish:
 
       if (exp <= -20) [[unlikely]] {
-         val = T(0);
+         val = X(0);
          return true;
       }
 
-      val = static_cast<T>(sig);
+      val = static_cast<X>(sig);
       if constexpr (is_volatile) {
          if (exp >= 0) {
-            val = val * T(powers_of_ten_int[exp]);
+            val = val * static_cast<X>(powers_of_ten_int[exp]);
          }
          else {
-            val = val / T(powers_of_ten_int[-exp]);
+            val = val / static_cast<X>(powers_of_ten_int[-exp]);
          }
       }
       else {
          if (exp >= 0) {
-            val *= T(powers_of_ten_int[exp]);
+            val *= static_cast<X>(powers_of_ten_int[exp]);
          }
          else {
-            val /= T(powers_of_ten_int[-exp]);
+            val /= static_cast<X>(powers_of_ten_int[-exp]);
          }
       }
       return true;

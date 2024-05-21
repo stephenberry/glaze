@@ -10,17 +10,8 @@
 
 namespace glz::detail
 {
-   constexpr std::array<bool, 128> ascii_whitespace_table = [] {
-      std::array<bool, 128> t{};
-      t['\n'] = true;
-      t['\t'] = true;
-      t['\r'] = true;
-      t[' '] = true;
-      return t;
-   }();
-
    enum struct json_type : char {
-      Unset = -1,
+      Unset = 'x',
       String = '"',
       Comma = ',',
       Number = '-',
@@ -34,8 +25,8 @@ namespace glz::detail
       Comment = '/'
    };
 
-   constexpr std::array<json_type, 128> ascii_json_types = [] {
-      std::array<json_type, 128> t{};
+   constexpr std::array<json_type, 256> json_types = [] {
+      std::array<json_type, 256> t{};
       using enum json_type;
       t['"'] = String;
       t[','] = Comma;
@@ -74,7 +65,40 @@ namespace glz::detail
       }
    };
 
-   inline sv read_json_string(auto&& it, auto&& end) noexcept
+   template <opts Opts>
+      requires(Opts.is_padded)
+   sv read_json_string(auto&& it, auto&& end) noexcept
+   {
+      auto start = it;
+      ++it; // skip quote
+      while (it < end) [[likely]] {
+         uint64_t chunk;
+         std::memcpy(&chunk, it, 8);
+         const uint64_t quote = has_quote(chunk);
+         if (quote) {
+            it += (countr_zero(quote) >> 3);
+
+            auto* prev = it - 1;
+            while (*prev == '\\') {
+               --prev;
+            }
+            if (size_t(it - prev) % 2) {
+               ++it; // add quote
+               return {start, size_t(it - start)};
+            }
+            ++it; // skip escaped quote and continue
+         }
+         else {
+            it += 8;
+         }
+      }
+
+      return {};
+   }
+
+   template <opts Opts>
+      requires(!Opts.is_padded)
+   sv read_json_string(auto&& it, auto&& end) noexcept
    {
       auto start = it;
       ++it; // skip quote
@@ -83,7 +107,7 @@ namespace glz::detail
          std::memcpy(&chunk, it, 8);
          const uint64_t quote = has_quote(chunk);
          if (quote) {
-            it += (std::countr_zero(quote) >> 3);
+            it += (countr_zero(quote) >> 3);
 
             auto* prev = it - 1;
             while (*prev == '\\') {
@@ -126,9 +150,9 @@ namespace glz::detail
       for (const auto end_m7 = end - 7; it < end_m7;) {
          uint64_t chunk;
          std::memcpy(&chunk, it, 8);
-         const uint64_t slash = has_forward_slash(chunk);
+         const uint64_t slash = has_char<'/'>(chunk);
          if (slash) {
-            it += (std::countr_zero(slash) >> 3);
+            it += (countr_zero(slash) >> 3);
 
             if (it[-1] == '*') {
                ++it; // add slash
@@ -154,30 +178,10 @@ namespace glz::detail
       return {};
    }
 
-   constexpr std::array<bool, 128> numeric_ascii_table = [] {
-      std::array<bool, 128> t{};
-      t['0'] = true;
-      t['1'] = true;
-      t['2'] = true;
-      t['3'] = true;
-      t['4'] = true;
-      t['5'] = true;
-      t['6'] = true;
-      t['7'] = true;
-      t['8'] = true;
-      t['9'] = true;
-      t['.'] = true;
-      t['+'] = true;
-      t['-'] = true;
-      t['e'] = true;
-      t['E'] = true;
-      return t;
-   }();
-
-   inline sv read_json_number(auto&& it, auto&& end) noexcept
+   inline sv read_json_number(auto&& it) noexcept
    {
       auto start = it;
-      while (it < end && numeric_ascii_table[*it]) {
+      while (numeric_table[*it]) {
          ++it;
       }
       return {start, size_t(it - start)};

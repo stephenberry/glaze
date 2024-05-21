@@ -67,7 +67,7 @@ namespace glz
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
-            if constexpr (resizeable<T>) {
+            if constexpr (resizable<T>) {
                if constexpr (Opts.layout == rowwise) {
                   const auto n = value.size();
                   for (size_t i = 0; i < n; ++i) {
@@ -102,7 +102,7 @@ namespace glz
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
          {
-            dump(value, b, ix);
+            dump_maybe_empty(value, b, ix);
          }
       };
 
@@ -114,7 +114,7 @@ namespace glz
          {
             if constexpr (Opts.layout == rowwise) {
                for (auto& [name, data] : value) {
-                  dump(name, b, ix);
+                  dump_maybe_empty(name, b, ix);
                   dump<','>(b, ix);
                   const auto n = data.size();
                   for (size_t i = 0; i < n; ++i) {
@@ -131,7 +131,7 @@ namespace glz
                const auto n = value.size();
                size_t i = 0;
                for (auto& [name, data] : value) {
-                  dump(name, b, ix);
+                  dump_maybe_empty(name, b, ix);
                   ++i;
                   if (i < n) {
                      dump<','>(b, ix);

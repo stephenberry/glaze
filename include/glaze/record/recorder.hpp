@@ -121,14 +121,17 @@ namespace glz
                return;
             }
 
+            constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+
             if constexpr (!Options.opening_handled) {
-               skip_ws_no_pre_check<Options>(ctx, it, end);
+               GLZ_SKIP_WS;
                match<'{'>(ctx, it);
+               if (bool(ctx.error)) [[unlikely]] {
+                  return;
+               }
             }
 
-            skip_ws_no_pre_check<Options>(ctx, it, end);
-
-            constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
+            GLZ_SKIP_WS;
 
             // we read into available containers, we do not intialize here
             const size_t n = value.data.size();
@@ -138,7 +141,7 @@ namespace glz
                }
 
                // find the string, escape characters are not supported for recorders
-               skip_ws<Opts>(ctx, it, end);
+               GLZ_SKIP_WS;
                const auto name = parse_key(ctx, it, end);
 
                auto& [str, v] = value.data[i];
@@ -147,20 +150,20 @@ namespace glz
                   return;
                }
 
-               skip_ws<Opts>(ctx, it, end);
-               match<':'>(ctx, it);
-               skip_ws<Opts>(ctx, it, end);
+               GLZ_SKIP_WS;
+               GLZ_MATCH_COLON;
+               GLZ_SKIP_WS;
 
                std::visit([&](auto&& deq) { read<json>::op<Opts>(deq, ctx, it, end); }, v.first);
 
                if (i < n - 1) {
-                  skip_ws<Opts>(ctx, it, end);
-                  match<','>(ctx, it);
-                  skip_ws<Opts>(ctx, it, end);
+                  GLZ_SKIP_WS;
+                  GLZ_MATCH_COMMA;
+                  GLZ_SKIP_WS;
                }
             }
 
-            skip_ws<Opts>(ctx, it, end);
+            GLZ_SKIP_WS;
             match<'}'>(ctx, it);
          }
       };
@@ -175,7 +178,7 @@ namespace glz
                const size_t n = value.data.size();
                for (size_t i = 0; i < n; ++i) {
                   auto& [name, v] = value.data[i];
-                  dump(name, args...);
+                  dump_maybe_empty(name, args...);
 
                   dump<','>(args...);
 
@@ -195,7 +198,7 @@ namespace glz
                const auto n = value.data.size();
                size_t i = 0;
                for (auto& [name, data] : value.data) {
-                  dump(name, args...);
+                  dump_maybe_empty(name, args...);
                   ++i;
                   if (i < n) {
                      dump<','>(args...);
