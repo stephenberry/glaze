@@ -64,10 +64,10 @@ namespace glz
                return std::string{};
             }
          }();
-         using key_t = std::decay_t<decltype(key)>;
-         static_assert(std::is_same_v<key_t, std::string> || num_t<key_t>);
+         using Key = std::decay_t<decltype(key)>;
+         static_assert(std::is_same_v<Key, std::string> || num_t<Key>);
 
-         if constexpr (std::is_same_v<key_t, std::string>) {
+         if constexpr (std::is_same_v<Key, std::string>) {
             key.clear();
             size_t i = 1;
             for (; i < json_ptr.size(); ++i) {
@@ -88,9 +88,9 @@ namespace glz
             }
             json_ptr = json_ptr.substr(i);
          }
-         else if constexpr (std::is_floating_point_v<key_t>) {
+         else if constexpr (std::is_floating_point_v<Key>) {
             auto it = reinterpret_cast<const uint8_t*>(json_ptr.data());
-            auto s = parse_float<key_t>(key, it);
+            auto s = parse_float<Key>(key, it);
             if (!s) return false;
             json_ptr = json_ptr.substr(reinterpret_cast<const char*>(it) - json_ptr.data());
          }

@@ -699,7 +699,7 @@ namespace glz::detail
       static_assert(std::is_same_v<float, std::decay_t<T>> || std::is_same_v<double, std::decay_t<T>>);
       static_assert(sizeof(float) == 4 && sizeof(double) == 8);
 
-      using raw_t = std::conditional_t<std::is_same_v<float, std::decay_t<T>>, uint32_t, uint64_t>;
+      using Raw = std::conditional_t<std::is_same_v<float, std::decay_t<T>>, uint32_t, uint64_t>;
       const auto sig_leading_zeros = std::countl_zero(sig);
       const auto sig_norm = sig << sig_leading_zeros;
       const auto sig2_norm = sig2_from_exp10(exp);
@@ -709,7 +709,7 @@ namespace glz::detail
       constexpr uint64_t round_mask = uint64_t(1) << 63 >> (std::numeric_limits<T>::digits - 1);
       constexpr uint32_t exponent_bits =
          ceillog2(std::numeric_limits<T>::max_exponent - std::numeric_limits<T>::min_exponent + 1);
-      constexpr uint32_t mantisa_shift = exponent_bits + 1 + 64 - 8 * sizeof(raw_t);
+      constexpr uint32_t mantisa_shift = exponent_bits + 1 + 64 - 8 * sizeof(Raw);
       int32_t exp2 = exp2_from_exp10(exp) + static_cast<uint32_t>(-sig_leading_zeros + sig_product_starts_with_1);
 
       if (exp2 < std::numeric_limits<T>::min_exponent - 1) [[unlikely]] {
@@ -769,14 +769,14 @@ namespace glz::detail
          }
       }
 
-      auto num = raw_t(sign) << (sizeof(raw_t) * 8 - 1) | raw_t(mantisa >> mantisa_shift) |
-                 (raw_t(exp2 + std::numeric_limits<T>::max_exponent - 1) << (std::numeric_limits<T>::digits - 1));
+      auto num = Raw(sign) << (sizeof(Raw) * 8 - 1) | Raw(mantisa >> mantisa_shift) |
+                 (Raw(exp2 + std::numeric_limits<T>::max_exponent - 1) << (std::numeric_limits<T>::digits - 1));
       if constexpr (is_volatile) {
-         num = num + raw_t(round);
+         num = num + Raw(round);
          val = std::bit_cast<T>(num);
       }
       else {
-         num += raw_t(round);
+         num += Raw(round);
          std::memcpy(&val, &num, sizeof(T));
       }
       return true;
