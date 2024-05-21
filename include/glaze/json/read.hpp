@@ -274,9 +274,11 @@ namespace glz
                GLZ_SKIP_WS;
             }
 
-            if (size_t(end - it) < 4) [[unlikely]] {
-               ctx.error = error_code::expected_true_or_false;
-               return;
+            if constexpr (not Opts.is_padded) {
+               if (size_t(end - it) < 4) [[unlikely]] {
+                  ctx.error = error_code::expected_true_or_false;
+                  return;
+               }
             }
 
             uint64_t c{};
@@ -984,7 +986,7 @@ namespace glz
             const auto ws_start = it;
             GLZ_SKIP_WS;
 
-            if (*it == ']') [[unlikely]] {
+            if (*it == ']') {
                ++it;
                if constexpr (resizable<T>) {
                   value.clear();
@@ -1007,7 +1009,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
                GLZ_SKIP_WS;
-               if (*it == ',') [[likely]] {
+               if (*it == ',') {
                   ++it;
 
                   if constexpr (!Opts.minified) {
