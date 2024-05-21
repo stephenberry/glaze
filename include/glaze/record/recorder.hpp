@@ -125,10 +125,7 @@ namespace glz
 
             if constexpr (!Options.opening_handled) {
                GLZ_SKIP_WS;
-               match<'{'>(ctx, it);
-               if (bool(ctx.error)) [[unlikely]] {
-                  return;
-               }
+               GLZ_MATCH_OPEN_BRACE;
             }
 
             GLZ_SKIP_WS;

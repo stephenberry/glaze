@@ -223,9 +223,7 @@ namespace glz
             if constexpr (!Options.ws_handled) {
                GLZ_SKIP_WS;
             }
-            match<'['>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_MATCH_OPEN_BRACKET;
 
             auto* ptr = reinterpret_cast<typename T::value_type*>(&v);
             static_assert(sizeof(T) == sizeof(typename T::value_type) * 2);
@@ -242,7 +240,7 @@ namespace glz
                return;
 
             GLZ_SKIP_WS;
-            match<']'>(ctx, it, end);
+            GLZ_MATCH_CLOSE_BRACKET;
          }
       };
 
@@ -938,9 +936,7 @@ namespace glz
                GLZ_SKIP_WS;
             }
 
-            match<'['>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_MATCH_OPEN_BRACKET;
             GLZ_SKIP_WS;
 
             value.clear();
@@ -979,9 +975,7 @@ namespace glz
                GLZ_SKIP_WS;
             }
 
-            match<'['>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_MATCH_OPEN_BRACKET;
 
             const auto ws_start = it;
             GLZ_SKIP_WS;
@@ -1250,9 +1244,7 @@ namespace glz
                GLZ_SKIP_WS;
             }
 
-            match<'['>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_MATCH_OPEN_BRACKET;
             const auto n = number_of_array_elements<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]]
                return;
@@ -1293,9 +1285,7 @@ namespace glz
                GLZ_SKIP_WS;
             }
 
-            match<'['>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_MATCH_OPEN_BRACKET;
             GLZ_SKIP_WS;
 
             for_each<N>([&](auto I) {
@@ -1338,9 +1328,7 @@ namespace glz
                GLZ_SKIP_WS;
             }
 
-            match<'['>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_MATCH_OPEN_BRACKET;
 
             std::string& s = string_buffer();
 
@@ -1596,7 +1584,7 @@ namespace glz
                if constexpr (!Options.ws_handled) {
                   GLZ_SKIP_WS;
                }
-               match<'{'>(ctx, it);
+               GLZ_MATCH_OPEN_BRACE;
             }
             GLZ_SKIP_WS;
 
@@ -1651,7 +1639,7 @@ namespace glz
                if constexpr (!Options.ws_handled) {
                   GLZ_SKIP_WS;
                }
-               match<'{'>(ctx, it);
+               GLZ_MATCH_OPEN_BRACE;
             }
             const auto ws_start = it;
             GLZ_SKIP_WS;
@@ -1947,7 +1935,7 @@ namespace glz
                if constexpr (!Options.ws_handled) {
                   GLZ_SKIP_WS;
                }
-               match<'{'>(ctx, it);
+               GLZ_MATCH_OPEN_BRACE;
             }
             const auto ws_start = it;
             GLZ_SKIP_WS;
@@ -2479,9 +2467,7 @@ namespace glz
                GLZ_SKIP_WS;
             }
 
-            match<'['>(ctx, it);
-            if (bool(ctx.error)) [[unlikely]]
-               return;
+            GLZ_MATCH_OPEN_BRACKET;
             GLZ_SKIP_WS;
 
             // TODO Use key parsing for compiletime known keys
@@ -2564,9 +2550,7 @@ namespace glz
                         value = glz::unexpected(error);
                      }
                      GLZ_SKIP_WS;
-                     match<'}'>(ctx, it);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
+                     GLZ_MATCH_CLOSE_BRACE;
                   }
                   else {
                      it = start;

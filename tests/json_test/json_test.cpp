@@ -2493,7 +2493,7 @@ suite error_outputs = [] {
       auto ex = glz::read_json<error_comma_obj>(s);
       expect(!ex.has_value());
       auto err = glz::format_error(ex.error(), s);
-      expect(err == "10:6: syntax_error\n        ]\n        ^") << err;
+      expect(err == "10:6: expected_brace\n        ]\n        ^") << err;
    };
 };
 
