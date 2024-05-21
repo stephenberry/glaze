@@ -34,8 +34,8 @@ struct test_case
    glz::expected<glz::detail::schematic, glz::parse_error> obj{glz::read_json<glz::detail::schematic>(schema_str)};
 };
 
-template <auto Member>
-auto expect_property(test_case test, std::string_view key, auto value) {
+template <auto Member, typename Value>
+auto expect_property(test_case test, std::string_view key, Value value) {
    auto schematic = test.obj;
    expect(fatal(schematic.has_value())) << "hello world";
    expect(schematic->properties->contains(key) >> fatal);
@@ -44,9 +44,8 @@ auto expect_property(test_case test, std::string_view key, auto value) {
    expect(prop_value.has_value() >> fatal);
    using prop_value_t = std::decay_t<decltype(prop_value)>;
    if constexpr (std::same_as<prop_value_t, glz::schema::schema_number>) {
-      using input_value_t = std::decay_t<decltype(value)>;
-      expect(std::holds_alternative<input_value_t>(prop_value.value()) >> fatal);
-      expect(std::get<input_value_t>(prop_value.value()) == value);
+      expect(std::holds_alternative<Value>(prop_value.value()) >> fatal);
+      expect(std::get<Value>(prop_value.value()) == value);
    }
    else {
       expect(prop_value.value() == value);
