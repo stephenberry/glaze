@@ -48,7 +48,9 @@ namespace glz
       '0', '8', '1', '8', '2', '8', '3', '8', '4', '8', '5', '8', '6', '8', '7', '8', '8', '8', '9', '9', '0', '9', '1',
       '9', '2', '9', '3', '9', '4', '9', '5', '9', '6', '9', '7', '9', '8', '9', '9'};
 
-   inline auto* to_chars(auto* buf, uint32_t val) noexcept
+   template <class T>
+      requires std::same_as<T, std::remove_cvref_t<uint32_t>>
+   inline auto* to_chars(auto* buf, T val) noexcept
    {
       /* The maximum value of uint32_t is 4294967295 (10 digits), */
       /* these digits are named as 'aabbccddee' here.             */
@@ -128,14 +130,18 @@ namespace glz
       }
    }
 
-   inline auto* to_chars(auto* buf, int32_t x) noexcept
+   template <class T>
+      requires std::same_as<T, std::remove_cvref_t<int32_t>>
+   inline auto* to_chars(auto* buf, T x) noexcept
    {
       *buf = '-';
       // shifts are necessary to have the numeric_limits<int32_t>::min case
       return to_chars(buf + (x < 0), uint32_t(x ^ (x >> 31)) - (x >> 31));
    }
 
-   GLZ_ALWAYS_INLINE auto* to_chars_u64_len_8(auto* buf, uint32_t val) noexcept
+   template <class T>
+      requires(std::same_as<std::remove_cvref_t<T>, uint32_t>)
+   GLZ_ALWAYS_INLINE auto* to_chars_u64_len_8(auto* buf, T val) noexcept
    {
       /* 8 digits: aabbccdd */
       const uint32_t aabb = uint32_t((uint64_t(val) * 109951163) >> 40); /* (val / 10000) */
@@ -151,7 +157,9 @@ namespace glz
       return buf + 8;
    }
 
-   GLZ_ALWAYS_INLINE auto* to_chars_u64_len_4(auto* buf, uint32_t val) noexcept
+   template <class T>
+      requires(std::same_as<std::remove_cvref_t<T>, uint32_t>)
+   GLZ_ALWAYS_INLINE auto* to_chars_u64_len_4(auto* buf, T val) noexcept
    {
       /* 4 digits: aabb */
       const uint32_t aa = (val * 5243) >> 19; /* (val / 100) */
@@ -161,7 +169,9 @@ namespace glz
       return buf + 4;
    }
 
-   inline auto* to_chars_u64_len_1_8(auto* buf, uint32_t val) noexcept
+   template <class T>
+      requires(std::same_as<std::remove_cvref_t<T>, uint32_t>)
+   inline auto* to_chars_u64_len_1_8(auto* buf, T val) noexcept
    {
       uint32_t aa, bb, cc, dd, aabb, bbcc, ccdd, lz;
 
@@ -210,7 +220,9 @@ namespace glz
       }
    }
 
-   inline auto* to_chars_u64_len_5_8(auto* buf, uint32_t val) noexcept
+   template <class T>
+      requires(std::same_as<std::remove_cvref_t<T>, uint32_t>)
+   inline auto* to_chars_u64_len_5_8(auto* buf, T val) noexcept
    {
       if (val < 1000000) { /* 5-6 digits: aabbcc */
          const uint32_t aa = uint32_t((uint64_t(val) * 429497) >> 32); /* (val / 10000) */
@@ -242,7 +254,9 @@ namespace glz
       }
    }
 
-   inline auto* to_chars(auto* buf, uint64_t val) noexcept
+   template <class T>
+      requires(std::same_as<std::remove_cvref_t<T>, uint64_t>)
+   inline auto* to_chars(auto* buf, T val) noexcept
    {
       if (val < 100000000) { /* 1-8 digits */
          buf = to_chars_u64_len_1_8(buf, uint32_t(val));
@@ -267,7 +281,9 @@ namespace glz
       }
    }
 
-   inline auto* to_chars(auto* buf, int64_t x) noexcept
+   template <class T>
+      requires std::same_as<T, std::remove_cvref_t<int64_t>>
+   inline auto* to_chars(auto* buf, T x) noexcept
    {
       *buf = '-';
       // shifts are necessary to have the numeric_limits<int64_t>::min case

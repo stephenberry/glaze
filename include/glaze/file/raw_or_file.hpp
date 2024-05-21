@@ -80,7 +80,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
-            dump(value.str, b, ix);
+            dump_maybe_empty(value.str, b, ix);
          }
       };
    }

@@ -126,8 +126,7 @@ namespace glz
                   bytes[byte_i] |= uint8_t(value[i]) << uint8_t(bit_i);
                }
             }
-            // dump(bytes, args...);
-            dump(std::as_bytes(std::span{bytes}), args...);
+            dump(bytes, args...);
          }
       };
 
@@ -524,7 +523,7 @@ namespace glz
                write<binary>::op<Opts>(*value, ctx, args...);
             }
             else {
-               dump<std::byte(tag::null)>(args...);
+               dump<tag::null>(args...);
             }
          }
       };
@@ -606,7 +605,7 @@ namespace glz
                write<binary>::op<Opts>(t, ctx, args...);
             }
             else {
-               dump<std::byte(tag::generic_array)>(args...);
+               dump<tag::generic_array>(args...);
 
                using V = std::decay_t<T>;
                static constexpr auto N = glz::tuple_size_v<meta_t<V>>;
@@ -670,7 +669,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump<std::byte(tag::generic_array)>(args...);
+            dump<tag::generic_array>(args...);
 
             static constexpr auto N = glz::tuple_size_v<meta_t<T>>;
             dump_compressed_int<N>(args...);
@@ -688,7 +687,7 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            dump<std::byte(tag::generic_array)>(args...);
+            dump<tag::generic_array>(args...);
 
             static constexpr auto N = glz::tuple_size_v<T>;
             dump_compressed_int<N>(args...);

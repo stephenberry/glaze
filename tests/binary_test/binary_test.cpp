@@ -1785,6 +1785,41 @@ suite c_style_arrays = [] {
    };
 };
 
+suite error_outputs = [] {
+   "valid"_test = [] {
+      std::string v = "Hello World";
+      std::vector<std::byte> buffer{};
+      glz::write_binary(v, buffer);
+      buffer.emplace_back(std::byte('\0'));
+      v.clear();
+      auto ec = glz::read_binary(v, buffer);
+      expect(ec == glz::error_code::none);
+      [[maybe_unused]] auto err = glz::format_error(ec, buffer);
+   };
+
+   "invalid"_test = [] {
+      std::string v = "Hello World";
+      std::string buffer{};
+      glz::write_binary(int{5}, buffer);
+
+      auto ec = glz::read_binary(v, buffer);
+      expect(ec != glz::error_code::none);
+      buffer.clear();
+      [[maybe_unused]] auto err = glz::format_error(ec, buffer);
+      expect(err == "index 0: syntax_error") << err;
+   };
+
+   "invalid with buffer"_test = [] {
+      std::string v = "Hello World";
+      std::string buffer{};
+      glz::write_binary(int{5}, buffer);
+
+      auto ec = glz::read_binary(v, buffer);
+      expect(ec != glz::error_code::none);
+      [[maybe_unused]] auto err = glz::format_error(ec, buffer);
+   };
+};
+
 int main()
 {
    glz::trace_begin("binary_test");

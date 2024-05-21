@@ -35,8 +35,8 @@ jobs:
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{matrix.build_type}} -DCMAKE_CXX_STANDARD=${{matrix.std}}
 
     - name: Build
-      run: cmake --build build -j 2
+      run: cmake --build build -j $(nproc)
 
     - name: Test
       working-directory: build
-      run: ctest -j 2 --output-on-failure
+      run: ctest -j $(nproc) --output-on-failure

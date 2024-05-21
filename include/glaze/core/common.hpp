@@ -986,19 +986,12 @@ namespace glz
    [[nodiscard]] inline std::string format_error(const parse_error& pe, const auto& buffer)
    {
       static constexpr auto arr = detail::make_enum_to_string_array<error_code>();
-      const auto error_type_str = arr[static_cast<uint32_t>(pe.ec)];
+      const auto error_type_str = arr[uint32_t(pe.ec)];
 
       const auto info = detail::get_source_info(buffer, pe.location);
-      if (info) {
-         auto error_str = detail::generate_error_string(error_type_str, *info);
-         if (pe.includer_error.size()) {
-            error_str += pe.includer_error;
-         }
-         return error_str;
-      }
-      auto error_str = std::string(error_type_str);
+      auto error_str = detail::generate_error_string(error_type_str, info);
       if (pe.includer_error.size()) {
-         error_str += pe.includer_error;
+         error_str.append(pe.includer_error);
       }
       return error_str;
    }
@@ -1057,22 +1050,44 @@ namespace glz::detail
       // Allows us to remove a branch if the first item will always be written
       static constexpr bool first_will_be_written = [] {
          if constexpr (N > 0) {
-            using val_t = glaze_tuple_element_t<0, N, T>;
+            using Element = glaze_tuple_element<0, N, T>;
+            using V = std::remove_cvref_t<typename Element::type>;
 
-            if constexpr (null_t<val_t> && Opts.skip_null_members) {
+            if constexpr (null_t<V> && Opts.skip_null_members) {
                return false;
             }
 
-            // skip file_include
-            if constexpr (is_includer<val_t>) {
-               return false;
-            }
-            else if constexpr (std::is_same_v<val_t, hidden> || std::same_as<val_t, skip>) {
+            if constexpr (is_includer<V> || std::same_as<V, hidden> || std::same_as<V, skip>) {
                return false;
             }
             else {
                return true;
             }
+         }
+         else {
+            return false;
+         }
+      }();
+
+      static constexpr bool maybe_skipped = [] {
+         if constexpr (N > 0) {
+            bool found_maybe_skipped{};
+            for_each_short_circuit<N>([&](auto I) {
+               using Element = glaze_tuple_element<I, N, T>;
+               using V = std::remove_cvref_t<typename Element::type>;
+
+               if constexpr (Opts.skip_null_members && null_t<V>) {
+                  found_maybe_skipped = true;
+                  return true; // early exit
+               }
+
+               if constexpr (is_includer<V> || std::same_as<V, hidden> || std::same_as<V, skip>) {
+                  found_maybe_skipped = true;
+                  return true; // early exit
+               }
+               return false; // continue
+            });
+            return found_maybe_skipped;
          }
          else {
             return false;
