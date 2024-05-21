@@ -109,7 +109,7 @@ namespace glz
             constexpr auto Length = byte_length<T>();
             uint8_t data[Length];
 
-            std::memcpy(data, &(*it), Length);
+            std::memcpy(data, it, Length);
             it += Length;
 
             for_each<N>([&](auto I) {
@@ -129,7 +129,7 @@ namespace glz
          {
             if constexpr (Opts.no_header) {
                using V = std::decay_t<T>;
-               std::memcpy(&value, &(*it), sizeof(V));
+               std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
             }
             else {
@@ -146,7 +146,7 @@ namespace glz
                ++it;
 
                using V = std::decay_t<decltype(value)>;
-               std::memcpy(&value, &(*it), sizeof(V));
+               std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
             }
          }
@@ -162,7 +162,7 @@ namespace glz
             using V = std::underlying_type_t<std::decay_t<T>>;
 
             if constexpr (Opts.no_header) {
-               std::memcpy(&value, &(*it), sizeof(V));
+               std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
             }
             else {
@@ -178,7 +178,7 @@ namespace glz
 
                ++it;
 
-               std::memcpy(&value, &(*it), sizeof(V));
+               std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
             }
          }
@@ -193,7 +193,7 @@ namespace glz
          {
             if constexpr (Opts.no_header) {
                using V = std::decay_t<T>;
-               std::memcpy(&value, &(*it), sizeof(V));
+               std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
             }
             else {
@@ -219,7 +219,7 @@ namespace glz
                }
                ++it;
 
-               std::memcpy(&value, &(*it), 2 * sizeof(V));
+               std::memcpy(&value, it, 2 * sizeof(V));
                it += 2 * sizeof(V);
             }
          }
@@ -318,7 +318,7 @@ namespace glz
                   return;
                }
                value.resize(n);
-               std::memcpy(value.data(), &(*it), n);
+               std::memcpy(value.data(), it, n);
                it += n;
             }
             else {
@@ -338,7 +338,7 @@ namespace glz
                   return;
                }
                value.resize(n);
-               std::memcpy(value.data(), &(*it), n);
+               std::memcpy(value.data(), it, n);
                it += n;
             }
          }
