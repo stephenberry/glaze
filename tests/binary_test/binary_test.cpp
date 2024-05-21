@@ -1808,6 +1808,16 @@ suite error_outputs = [] {
       [[maybe_unused]] auto err = glz::format_error(ec, buffer);
       expect(err == "index 0: syntax_error") << err;
    };
+   
+   "invalid with buffer"_test = [] {
+      std::string v = "Hello World";
+      std::string buffer{};
+      glz::write_binary(int{5}, buffer);
+      
+      auto ec = glz::read_binary(v, buffer);
+      expect(ec != glz::error_code::none);
+      [[maybe_unused]] auto err = glz::format_error(ec, buffer);
+   };
 };
 
 int main()
