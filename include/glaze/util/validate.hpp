@@ -35,7 +35,7 @@ namespace glz
          }
       }
 
-      inline std::optional<source_info> get_source_info(const auto& buffer, const size_t index)
+      inline std::optional<source_info> get_source_info(const has_size auto& buffer, const size_t index)
       {
          if (index >= buffer.size()) {
             return std::nullopt;
@@ -86,6 +86,13 @@ namespace glz
 
          convert_tabs_to_single_spaces(context);
          return source_info{line, column, context, index, front_truncation, rear_truncation};
+      }
+      
+      template <class B>
+         requires (!has_size<B>)
+      inline std::optional<source_info> get_source_info(const B& buffer, const size_t index)
+      {
+         return get_source_info(sv{buffer}, index);
       }
 
       inline std::string generate_error_string(const std::string_view error, const source_info& info,
