@@ -89,10 +89,10 @@ namespace glz
             json_ptr = json_ptr.substr(i);
          }
          else if constexpr (std::is_floating_point_v<Key>) {
-            auto it = reinterpret_cast<const uint8_t*>(json_ptr.data());
+            auto it = json_ptr.data();
             auto s = parse_float<Key>(key, it);
             if (!s) return false;
-            json_ptr = json_ptr.substr(reinterpret_cast<const char*>(it) - json_ptr.data());
+            json_ptr = json_ptr.substr(size_t(it - json_ptr.data()));
          }
          else {
             auto [p, ec] = std::from_chars(&json_ptr[1], json_ptr.data() + json_ptr.size(), key);
@@ -273,10 +273,10 @@ namespace glz
       error_code ec{};
       detail::seek_impl(
          [&](auto&& val) {
-            if constexpr (!std::is_same_v<V, decay_keep_volatile_t<decltype(val)>>) {
+            if constexpr (not std::same_as<V, decay_keep_volatile_t<decltype(val)>>) {
                ec = error_code::get_wrong_type;
             }
-            else if constexpr (!std::is_lvalue_reference_v<decltype(val)>) {
+            else if constexpr (not std::is_lvalue_reference_v<decltype(val)>) {
                ec = error_code::cannot_be_referenced;
             }
             else {
@@ -365,7 +365,7 @@ namespace glz
       return result;
    }
 
-   inline constexpr size_t json_ptr_depth(const auto s)
+   constexpr size_t json_ptr_depth(const auto s)
    {
       size_t count = 0;
       for (size_t i = 0; (i = s.find('/', i)) != std::string::npos; ++i) {
@@ -375,7 +375,7 @@ namespace glz
    }
 
    // TODO: handle ~ and / characters for full JSON pointer support
-   inline constexpr std::pair<sv, sv> tokenize_json_ptr(sv s)
+   constexpr std::pair<sv, sv> tokenize_json_ptr(sv s)
    {
       if (s.empty()) {
          return {"", ""};
@@ -421,17 +421,17 @@ namespace glz
       return arr;
    }
 
-   inline constexpr auto json_ptrs(auto&&... args) { return std::array{sv{args}...}; }
+   constexpr auto json_ptrs(auto&&... args) { return std::array{sv{args}...}; }
 
    // must copy to allow mutation in constexpr context
-   inline constexpr auto sort_json_ptrs(auto arr)
+   constexpr auto sort_json_ptrs(auto arr)
    {
       std::sort(arr.begin(), arr.end());
       return arr;
    }
 
    // input array must be sorted
-   inline constexpr auto group_json_ptrs_impl(const auto& arr)
+   constexpr auto group_json_ptrs_impl(const auto& arr)
    {
       constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(arr)>>;
 
@@ -453,13 +453,13 @@ namespace glz
    }
 
    template <auto Arr, std::size_t... Is>
-   inline constexpr auto make_arrays(std::index_sequence<Is...>)
+   constexpr auto make_arrays(std::index_sequence<Is...>)
    {
       return glz::tuplet::make_tuple(std::pair{sv{}, std::array<sv, Arr[Is]>{}}...);
    }
 
    template <size_t N, auto& Arr>
-   inline constexpr auto sub_group(const auto start)
+   constexpr auto sub_group(const auto start)
    {
       std::array<sv, N> ret;
       std::transform(Arr.begin() + start, Arr.begin() + start + N, ret.begin(), remove_first_key);
@@ -467,7 +467,7 @@ namespace glz
    }
 
    template <auto& Arr>
-   inline constexpr auto group_json_ptrs()
+   constexpr auto group_json_ptrs()
    {
       constexpr auto group_info = group_json_ptrs_impl(Arr);
       constexpr auto n_items_per_group = glz::get<0>(group_info);
