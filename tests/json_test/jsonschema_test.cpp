@@ -65,11 +65,11 @@ suite schema_attributes = [] {
    };
    "min1"_test = [] {
       test_case const test{};
-      expect_property<&glz::schema::minimum>(test, "min1", 1L);
+      expect_property<&glz::schema::minimum>(test, "min1", std::int64_t{1});
    };
   "max2"_test = [] {
       test_case const test{};
-      expect_property<&glz::schema::maximum>(test, "max2", 2L);
+      expect_property<&glz::schema::maximum>(test, "max2", std::int64_t{2});
    };
    "pattern"_test = [] {
       test_case const test{};
