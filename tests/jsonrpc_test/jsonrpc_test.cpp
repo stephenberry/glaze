@@ -291,7 +291,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(response_vec.size() == 1);
       ut::expect(
          glz::write_json(response_vec) ==
-         R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   1\n   ^"},"id":null}])");
+         R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: expected_brace\n   1\n   ^"},"id":null}])");
       ut::expect(response_vec.at(0).error.has_value());
       ut::expect(response_vec.at(0).error->code == rpc::error_e::invalid_request);
    };
@@ -304,7 +304,7 @@ ut::suite struct_test_cases = [] {
       ut::expect(response_vec.size() == 3);
       ut::expect(
          glz::write_json(response_vec) ==
-         R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   1\n   ^"},"id":null},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   2\n   ^"},"id":null},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: syntax_error\n   3\n   ^"},"id":null}])");
+         R"([{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: expected_brace\n   1\n   ^"},"id":null},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: expected_brace\n   2\n   ^"},"id":null},{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request","data":"1:1: expected_brace\n   3\n   ^"},"id":null}])");
       for (auto& response : response_vec) {
          ut::expect(response.error.has_value());
          ut::expect(response.error->code == glz::rpc::error_e::invalid_request);
