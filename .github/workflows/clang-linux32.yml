@@ -36,6 +36,7 @@ jobs:
         sudo dpkg --add-architecture i386
         sudo apt-get update
         sudo apt-get install -y libc++-dev:i386 libc++abi-dev:i386 g++-multilib
+        sudo apt-get install -y clang-${{matrix.clang}}-runtime:i386
 
     - name: Configure CMake
       run: |
