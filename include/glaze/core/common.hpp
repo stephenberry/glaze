@@ -986,19 +986,12 @@ namespace glz
    [[nodiscard]] inline std::string format_error(const parse_error& pe, const auto& buffer)
    {
       static constexpr auto arr = detail::make_enum_to_string_array<error_code>();
-      const auto error_type_str = arr[static_cast<uint32_t>(pe.ec)];
+      const auto error_type_str = arr[uint32_t(pe.ec)];
 
       const auto info = detail::get_source_info(buffer, pe.location);
-      if (info) {
-         auto error_str = detail::generate_error_string(error_type_str, *info);
-         if (pe.includer_error.size()) {
-            error_str += pe.includer_error;
-         }
-         return error_str;
-      }
-      auto error_str = std::string(error_type_str);
+      auto error_str = detail::generate_error_string(error_type_str, info);
       if (pe.includer_error.size()) {
-         error_str += pe.includer_error;
+         error_str.append(pe.includer_error);
       }
       return error_str;
    }
