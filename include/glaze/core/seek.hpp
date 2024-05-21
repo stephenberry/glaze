@@ -13,8 +13,7 @@ namespace glz::detail
    bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept;
 
    template <class F, class T>
-      requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
-               is_std_tuple<std::decay_t<T>>
+      requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>
    bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept;
 
    template <class F, class T>
@@ -125,8 +124,7 @@ namespace glz::detail
    }
 
    template <class F, class T>
-      requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> ||
-               is_std_tuple<std::decay_t<T>>
+      requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || array_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>
    bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
    {
       if (json_ptr.empty()) {
@@ -152,9 +150,8 @@ namespace glz::detail
       else if constexpr (tuple_t<std::decay_t<T>> || is_std_tuple<std::decay_t<T>>) {
          if (index >= glz::tuple_size_v<std::decay_t<T>>) return false;
          auto tuple_element_ptr = get_runtime(value, index);
-         return std::visit(
-            [&](auto&& element_ptr) { return seek_impl(std::forward<F>(func), *element_ptr, json_ptr); },
-            tuple_element_ptr);
+         return std::visit([&](auto&& element_ptr) { return seek_impl(std::forward<F>(func), *element_ptr, json_ptr); },
+                           tuple_element_ptr);
       }
       else {
          return seek_impl(std::forward<F>(func), *std::next(value.begin(), index), json_ptr);
@@ -194,7 +191,7 @@ namespace glz
    {
       return detail::seek_impl(std::forward<F>(func), std::forward<T>(value), json_ptr);
    }
-   
+
    // Get a refrence to a value at the location of a json_ptr. Will error if
    // value doesnt exist or is wrong type
    template <class V, class T>
@@ -295,7 +292,7 @@ namespace glz
          std::forward<T>(root_value), json_ptr);
       return result;
    }
-   
+
    template <class R>
    using call_result_t = std::conditional_t<std::is_reference_v<R> || std::is_pointer_v<R>, std::decay_t<R>*, R>;
 
