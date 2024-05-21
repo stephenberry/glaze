@@ -37,55 +37,53 @@ namespace glz
 
       inline source_info get_source_info(const has_size auto& buffer, const size_t index)
       {
-         if (index >= buffer.size()) {
+         using V = std::decay_t<decltype(buffer[0])>;
+         
+         if constexpr (std::same_as<V, std::byte>) {
             return {.context = "", .index = index};
          }
-
-         using V = std::decay_t<decltype(buffer[0])>;
-         const auto start = std::begin(buffer) + index;
-         const auto line = size_t(std::count(std::begin(buffer), start, static_cast<V>('\n')) + 1);
-         const auto rstart = std::rbegin(buffer) + buffer.size() - index - 1;
-         const auto prev_new_line =
-            std::find((std::min)(rstart + 1, std::rend(buffer)), std::rend(buffer), static_cast<V>('\n'));
-         const auto column = size_t(std::distance(rstart, prev_new_line));
-         const auto next_new_line =
-            std::find((std::min)(start + 1, std::end(buffer)), std::end(buffer), static_cast<V>('\n'));
-
-         const auto offset = (prev_new_line == std::rend(buffer) ? 0 : index - column + 1);
-         auto context_begin = std::begin(buffer) + offset;
-         auto context_end = next_new_line;
-
-         size_t front_truncation = 0;
-         size_t rear_truncation = 0;
-
-         if (std::distance(context_begin, context_end) > 64) {
-            // reduce the context length so that we can more easily see errors, especially for non-prettified buffers
-            if (column <= 32) {
-               rear_truncation = 64;
-               context_end = context_begin + rear_truncation;
+         else
+         {
+            if (index >= buffer.size()) {
+               return {.context = "", .index = index};
             }
-            else {
-               front_truncation = column - 32;
-               context_begin += front_truncation;
-               if (std::distance(context_begin, context_end) > 64) {
-                  rear_truncation = front_truncation + 64;
-                  context_end = std::begin(buffer) + offset + rear_truncation;
+            
+            const auto start = std::begin(buffer) + index;
+            const auto line = size_t(std::count(std::begin(buffer), start, static_cast<V>('\n')) + 1);
+            const auto rstart = std::rbegin(buffer) + buffer.size() - index - 1;
+            const auto prev_new_line =
+               std::find((std::min)(rstart + 1, std::rend(buffer)), std::rend(buffer), static_cast<V>('\n'));
+            const auto column = size_t(std::distance(rstart, prev_new_line));
+            const auto next_new_line =
+               std::find((std::min)(start + 1, std::end(buffer)), std::end(buffer), static_cast<V>('\n'));
+
+            const auto offset = (prev_new_line == std::rend(buffer) ? 0 : index - column + 1);
+            auto context_begin = std::begin(buffer) + offset;
+            auto context_end = next_new_line;
+
+            size_t front_truncation = 0;
+            size_t rear_truncation = 0;
+
+            if (std::distance(context_begin, context_end) > 64) {
+               // reduce the context length so that we can more easily see errors, especially for non-prettified buffers
+               if (column <= 32) {
+                  rear_truncation = 64;
+                  context_end = context_begin + rear_truncation;
+               }
+               else {
+                  front_truncation = column - 32;
+                  context_begin += front_truncation;
+                  if (std::distance(context_begin, context_end) > 64) {
+                     rear_truncation = front_truncation + 64;
+                     context_end = std::begin(buffer) + offset + rear_truncation;
+                  }
                }
             }
+
+            std::string context{context_begin, context_end};
+            convert_tabs_to_single_spaces(context);
+            return {line, column, context, index, front_truncation, rear_truncation};
          }
-
-         std::string context = [&]() -> std::string {
-            if constexpr (std::same_as<V, std::byte>) {
-               return {reinterpret_cast<const char*>(&(*context_begin)),
-                       reinterpret_cast<const char*>(&(*context_end))};
-            }
-            else {
-               return {context_begin, context_end};
-            }
-         }();
-
-         convert_tabs_to_single_spaces(context);
-         return {line, column, context, index, front_truncation, rear_truncation};
       }
       
       template <class B>
