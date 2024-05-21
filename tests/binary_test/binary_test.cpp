@@ -1804,7 +1804,9 @@ suite error_outputs = [] {
       
       auto ec = glz::read_binary(v, buffer);
       expect(ec != glz::error_code::none);
+      buffer.clear();
       [[maybe_unused]] auto err = glz::format_error(ec, buffer);
+      expect(err == "index 0: syntax_error") << err;
    };
 };
 

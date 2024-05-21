@@ -35,10 +35,10 @@ namespace glz
          }
       }
 
-      inline std::optional<source_info> get_source_info(const has_size auto& buffer, const size_t index)
+      inline source_info get_source_info(const has_size auto& buffer, const size_t index)
       {
          if (index >= buffer.size()) {
-            return std::nullopt;
+            return {.context = "", .index = index};
          }
 
          using V = std::decay_t<decltype(buffer[0])>;
@@ -85,12 +85,12 @@ namespace glz
          }();
 
          convert_tabs_to_single_spaces(context);
-         return source_info{line, column, context, index, front_truncation, rear_truncation};
+         return {line, column, context, index, front_truncation, rear_truncation};
       }
       
       template <class B>
          requires (!has_size<B>)
-      inline std::optional<source_info> get_source_info(const B& buffer, const size_t index)
+      inline source_info get_source_info(const B* buffer, const size_t index)
       {
          return get_source_info(sv{buffer}, index);
       }
@@ -101,39 +101,48 @@ namespace glz
          std::string b{};
          b.resize(error.size() + info.context.size() + filename.size() + 128);
          size_t ix{};
-
+         
          if (not filename.empty()) {
             dump_not_empty(filename, b, ix);
             dump(':', b, ix);
          }
-
+         
          glz::context ctx{};
-         write_chars::op<opts{}>(info.line, ctx, b, ix);
-         dump(':', b, ix);
-         write_chars::op<opts{}>(info.column, ctx, b, ix);
-         dump<": ">(b, ix);
-         dump_maybe_empty(error, b, ix);
-         dump('\n', b, ix);
-         if (info.front_truncation) {
-            if (info.rear_truncation) {
-               dump<"...">(b, ix);
-               dump_maybe_empty(info.context, b, ix);
-               dump<"...\n   ">(b, ix);
+         
+         if (info.context.empty()) {
+            dump<"index ">(b, ix);
+            write_chars::op<opts{}>(info.index, ctx, b, ix);
+            dump<": ">(b, ix);
+            dump_maybe_empty(error, b, ix);
+         }
+         else {
+            write_chars::op<opts{}>(info.line, ctx, b, ix);
+            dump(':', b, ix);
+            write_chars::op<opts{}>(info.column, ctx, b, ix);
+            dump<": ">(b, ix);
+            dump_maybe_empty(error, b, ix);
+            dump('\n', b, ix);
+            if (info.front_truncation) {
+               if (info.rear_truncation) {
+                  dump<"...">(b, ix);
+                  dump_maybe_empty(info.context, b, ix);
+                  dump<"...\n   ">(b, ix);
+               }
+               else {
+                  dump<"...">(b, ix);
+                  dump_maybe_empty(info.context, b, ix);
+                  dump<"\n   ">(b, ix);
+               }
             }
             else {
-               dump<"...">(b, ix);
+               dump<"   ">(b, ix);
                dump_maybe_empty(info.context, b, ix);
                dump<"\n   ">(b, ix);
             }
+            dumpn<' '>(info.column - 1 - info.front_truncation, b, ix);
+            dump('^', b, ix);
          }
-         else {
-            dump<"   ">(b, ix);
-            dump_maybe_empty(info.context, b, ix);
-            dump<"\n   ">(b, ix);
-         }
-         dumpn<' '>(info.column - 1 - info.front_truncation, b, ix);
-         dump('^', b, ix);
-
+         
          b.resize(ix);
          return b;
       }
