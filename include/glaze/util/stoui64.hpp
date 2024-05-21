@@ -33,7 +33,7 @@ namespace glz::detail
       // maximum number of digits need is: 3, 5, 10, 20, for byte sizes of 1, 2, 4, 8
       // we need to store one extra space for a digit for sizes of 1, 2, and 4 because we avoid checking for overflow
       // since we store in a uint64_t
-      constexpr std::array<uint32_t, 4> max_digits_from_size = {4, 6, 11, 20};
+      constexpr std::array<size_t, 4> max_digits_from_size = {4, 6, 11, 20};
       constexpr auto N = max_digits_from_size[std::bit_width(sizeof(T)) - 1];
 
       std::array<uint8_t, N> digits{0};
@@ -120,7 +120,7 @@ namespace glz::detail
       }
       else {
          // a value of n == N would result in reading digits[N], which is invalid
-         if (n >= N) [[unlikely]] {
+         if (n >= static_cast<std::decay_t<decltype(n)>>(N)) [[unlikely]] {
             return false;
          }
          else [[likely]] {
