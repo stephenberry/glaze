@@ -38,16 +38,15 @@ namespace glz
       inline source_info get_source_info(const has_size auto& buffer, const size_t index)
       {
          using V = std::decay_t<decltype(buffer[0])>;
-         
+
          if constexpr (std::same_as<V, std::byte>) {
             return {.context = "", .index = index};
          }
-         else
-         {
+         else {
             if (index >= buffer.size()) {
                return {.context = "", .index = index};
             }
-            
+
             const auto start = std::begin(buffer) + index;
             const auto line = size_t(std::count(std::begin(buffer), start, static_cast<V>('\n')) + 1);
             const auto rstart = std::rbegin(buffer) + buffer.size() - index - 1;
@@ -85,9 +84,9 @@ namespace glz
             return {line, column, context, index, front_truncation, rear_truncation};
          }
       }
-      
+
       template <class B>
-         requires (!has_size<B>)
+         requires(!has_size<B>)
       inline source_info get_source_info(const B* buffer, const size_t index)
       {
          return get_source_info(sv{buffer}, index);
@@ -99,14 +98,14 @@ namespace glz
          std::string b{};
          b.resize(error.size() + info.context.size() + filename.size() + 128);
          size_t ix{};
-         
+
          if (not filename.empty()) {
             dump_not_empty(filename, b, ix);
             dump(':', b, ix);
          }
-         
+
          glz::context ctx{};
-         
+
          if (info.context.empty()) {
             dump<"index ">(b, ix);
             write_chars::op<opts{}>(info.index, ctx, b, ix);
@@ -140,7 +139,7 @@ namespace glz
             dumpn<' '>(info.column - 1 - info.front_truncation, b, ix);
             dump('^', b, ix);
          }
-         
+
          b.resize(ix);
          return b;
       }
