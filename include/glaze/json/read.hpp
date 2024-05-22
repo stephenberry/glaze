@@ -26,7 +26,7 @@
 namespace glz
 {
 
-   // forward declare from json/quoted.hpp to avoid circular include
+   // forward declare from json/wrappers.hpp to avoid circular include
    template <class T>
    struct quoted_t;
 
@@ -271,31 +271,47 @@ namespace glz
             if constexpr (!Opts.ws_handled) {
                GLZ_SKIP_WS;
             }
-
-            if constexpr (not Opts.is_padded) {
-               if (size_t(end - it) < 4) [[unlikely]] {
-                  ctx.error = error_code::expected_true_or_false;
+            
+            if constexpr (Opts.bools_as_numbers) {
+               if (*it == '1') {
+                  value = true;
+                  ++it;
+               }
+               else if (*it == '0') {
+                  value = false;
+                  ++it;
+               }
+               else {
+                  ctx.error = error_code::syntax_error;
                   return;
                }
-            }
-
-            uint64_t c{};
-            // Note that because our buffer must be null terminated, we can read one more index without checking:
-            std::memcpy(&c, it, 5);
-            constexpr uint64_t u_true = 0b00000000'00000000'00000000'00000000'01100101'01110101'01110010'01110100;
-            constexpr uint64_t u_false = 0b00000000'00000000'00000000'01100101'01110011'01101100'01100001'01100110;
-            // We have to wipe the 5th character for true testing
-            if ((c & 0xFF'FF'FF'00'FF'FF'FF'FF) == u_true) {
-               value = true;
-               it += 4;
             }
             else {
-               if (c != u_false) [[unlikely]] {
-                  ctx.error = error_code::expected_true_or_false;
-                  return;
+               if constexpr (not Opts.is_padded) {
+                  if (size_t(end - it) < 4) [[unlikely]] {
+                     ctx.error = error_code::expected_true_or_false;
+                     return;
+                  }
                }
-               value = false;
-               it += 5;
+
+               uint64_t c{};
+               // Note that because our buffer must be null terminated, we can read one more index without checking:
+               std::memcpy(&c, it, 5);
+               constexpr uint64_t u_true = 0b00000000'00000000'00000000'00000000'01100101'01110101'01110010'01110100;
+               constexpr uint64_t u_false = 0b00000000'00000000'00000000'01100101'01110011'01101100'01100001'01100110;
+               // We have to wipe the 5th character for true testing
+               if ((c & 0xFF'FF'FF'00'FF'FF'FF'FF) == u_true) {
+                  value = true;
+                  it += 4;
+               }
+               else {
+                  if (c != u_false) [[unlikely]] {
+                     ctx.error = error_code::expected_true_or_false;
+                     return;
+                  }
+                  value = false;
+                  it += 5;
+               }
             }
 
             if constexpr (Opts.quoted_num) {
