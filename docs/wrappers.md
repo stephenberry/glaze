@@ -21,9 +21,15 @@ glz::custom<&T::read, &T::write> // Calls custom read and write std::functions, 
 glz::manage<&T::x, &T::read_x, &T::write_x> // Calls read_x() after reading x and calls write_x() before writing x
 ```
 
+## Associated glz::opts
+
+`glz::opts` is the compile time options struct passed to most of Glaze functions to configure read/write behavior. Often wrappers are associated with compile time options and can also be set via `glz::opts`. For example, the `glz::quoted_num` wrapper is associated with the `quoted_num` boolean in `glz::opts`.
+
 ## quoted_num
 
 Read and write numbers as strings.
+
+Associated option: `glz::opts{.quoted_num = true};`
 
 ```c++
 struct foo {
@@ -90,6 +96,8 @@ expect(out == R"({"id":4848,"layouts":"{\"first layout\":[\"inner1\",\"inner2\"]
 
 Read JSON numbers into strings and write strings as JSON numbers.
 
+Associated option: `glz::opts{.number = true};`
+
 ```c++
 struct numbers_as_strings
 {
@@ -119,51 +127,13 @@ glz::write_json(obj, output);
 expect(input == output);
 ```
 
-## invoke
-
-Invoke a std::function or member function with n-arguments as an array input.
-
-```c++
-struct invoke_struct
-{
-   int y{};
-   std::function<void(int x)> square{};
-   void add_one() { ++y; }
-
-   // MSVC requires this constructor for 'this' to be captured
-   invoke_struct()
-   {
-      square = [&](int x) { y = x * x; };
-   }
-};
-
-template <>
-struct glz::meta<invoke_struct>
-{
-   using T = invoke_struct;
-   static constexpr auto value = object("square", invoke<&T::square>, "add_one", invoke<&T::add_one>);
-};
-```
-
-In use:
-
-```c++
-std::string s = R"(
-{
-	"square":[5],
-	"add_one":[]
-})";
-invoke_struct obj{};
-expect(!glz::read_json(obj, s));
-expect(obj.y == 26); // 5 * 5 + 1
-};
-```
-
 ## raw
 
 Write out string like types without quotes.
 
 > Useful for when a string is already in JSON format and doesn't need to be quoted.
+
+Associated option: `glz::opts{.raw = true};`
 
 ```c++
 struct raw_struct
@@ -194,6 +164,8 @@ suite raw_test = [] {
 Do not decode/encode escaped characters for strings (improves read/write performance).
 
 > If your code does not care about decoding escaped characters or you know your input will never have escaped characters, this wrapper makes reading/writing that string faster.
+
+Associated option: `glz::opts{.raw_string = true};`
 
 ```c++
 struct raw_stuff
@@ -270,6 +242,46 @@ glz::write_json(obj, buffer);
 expect(buffer == R"({"a":"Hello\nWorld","b":"","c":""})");
 ```
 
+## invoke
+
+Invoke a std::function or member function with n-arguments as an array input.
+
+```c++
+struct invoke_struct
+{
+   int y{};
+   std::function<void(int x)> square{};
+   void add_one() { ++y; }
+
+   // MSVC requires this constructor for 'this' to be captured
+   invoke_struct()
+   {
+      square = [&](int x) { y = x * x; };
+   }
+};
+
+template <>
+struct glz::meta<invoke_struct>
+{
+   using T = invoke_struct;
+   static constexpr auto value = object("square", invoke<&T::square>, "add_one", invoke<&T::add_one>);
+};
+```
+
+In use:
+
+```c++
+std::string s = R"(
+{
+	"square":[5],
+	"add_one":[]
+})";
+invoke_struct obj{};
+expect(!glz::read_json(obj, s));
+expect(obj.y == 26); // 5 * 5 + 1
+};
+```
+
 ## write_float32
 
 Writes out numbers with a maximum precision of `float32_t`.
@@ -302,6 +314,19 @@ Writes out numbers with a maximum precision of `float64_t`.
 ## write_float_full
 
 Writes out numbers with full precision  (turns off higher level float precision wrappers).
+
+## Associated glz::opts for float precision
+
+```c++
+enum struct float_precision : uint8_t { full, float32 = 4, float64 = 8, float128 = 16 };
+```
+
+glz::opts
+
+```c++
+// The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
+float_precision float_max_write_precision{};
+```
 
 ## custom
 
