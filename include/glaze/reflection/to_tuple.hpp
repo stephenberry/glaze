@@ -45,21 +45,6 @@ namespace glz
 #endif
          
          [[maybe_unused]] constexpr operator std::string_view() const { return {}; }
-
-#if !defined(_MSC_VER)
-         [[maybe_unused]] constexpr operator std::optional<std::string>() const { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<std::string_view>() const { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<int8_t>() const { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<uint8_t>() const { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<int16_t>() const { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<uint16_t>() const { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<int32_t>() const { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<uint32_t>() const { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<int64_t>() const { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<uint64_t>() const { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<float>() const { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<double>() const { return {}; }
-#endif
       };
 
       template <class T, class... Args>
