@@ -22,16 +22,16 @@ namespace glz
 #pragma clang diagnostic ignored "-Weverything"
          template <class T>
             requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
-         [[maybe_unused]] constexpr operator T();
+         [[maybe_unused]] constexpr operator T() const;
 #pragma clang diagnostic pop
 #elif defined(_MSC_VER)
          template <class T>
             requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
-         [[maybe_unused]] constexpr operator T();
+         [[maybe_unused]] constexpr operator T() const;
 
          template <class T>
             requires(is_specialization_v<T, std::optional>)
-         [[maybe_unused]] constexpr operator T()
+         [[maybe_unused]] constexpr operator T() const
          {
             return std::nullopt;
          }
@@ -40,25 +40,25 @@ namespace glz
 #pragma GCC diagnostic ignored "-Wmissing-declarations"
          template <class T>
             requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
-         [[maybe_unused]] constexpr operator T();
+         [[maybe_unused]] constexpr operator T() const;
 #pragma GCC diagnostic pop
 #endif
          
-         [[maybe_unused]] constexpr operator std::string_view() { return {}; }
+         [[maybe_unused]] constexpr operator std::string_view() const { return {}; }
 
 #if !defined(_MSC_VER)
-         [[maybe_unused]] constexpr operator std::optional<std::string>() { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<std::string_view>() { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<int8_t>() { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<uint8_t>() { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<int16_t>() { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<uint16_t>() { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<int32_t>() { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<uint32_t>() { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<int64_t>() { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<uint64_t>() { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<float>() { return {}; }
-         [[maybe_unused]] constexpr operator std::optional<double>() { return {}; }
+         [[maybe_unused]] constexpr operator std::optional<std::string>() const { return {}; }
+         [[maybe_unused]] constexpr operator std::optional<std::string_view>() const { return {}; }
+         [[maybe_unused]] constexpr operator std::optional<int8_t>() const { return {}; }
+         [[maybe_unused]] constexpr operator std::optional<uint8_t>() const { return {}; }
+         [[maybe_unused]] constexpr operator std::optional<int16_t>() const { return {}; }
+         [[maybe_unused]] constexpr operator std::optional<uint16_t>() const { return {}; }
+         [[maybe_unused]] constexpr operator std::optional<int32_t>() const { return {}; }
+         [[maybe_unused]] constexpr operator std::optional<uint32_t>() const { return {}; }
+         [[maybe_unused]] constexpr operator std::optional<int64_t>() const { return {}; }
+         [[maybe_unused]] constexpr operator std::optional<uint64_t>() const { return {}; }
+         [[maybe_unused]] constexpr operator std::optional<float>() const { return {}; }
+         [[maybe_unused]] constexpr operator std::optional<double>() const { return {}; }
 #endif
       };
 
