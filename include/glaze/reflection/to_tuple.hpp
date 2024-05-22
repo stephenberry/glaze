@@ -22,16 +22,16 @@ namespace glz
 #pragma clang diagnostic ignored "-Weverything"
          template <class T>
             requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
-         [[maybe_unused]] constexpr operator T();
+         [[maybe_unused]] constexpr operator T() const;
 #pragma clang diagnostic pop
 #elif defined(_MSC_VER)
          template <class T>
             requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
-         [[maybe_unused]] constexpr operator T();
+         [[maybe_unused]] constexpr operator T() const;
 
          template <class T>
             requires(is_specialization_v<T, std::optional>)
-         [[maybe_unused]] constexpr operator T()
+         [[maybe_unused]] constexpr operator T() const
          {
             return std::nullopt;
          }
@@ -40,11 +40,11 @@ namespace glz
 #pragma GCC diagnostic ignored "-Wmissing-declarations"
          template <class T>
             requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
-         [[maybe_unused]] constexpr operator T();
+         [[maybe_unused]] constexpr operator T() const;
 #pragma GCC diagnostic pop
 #endif
-
-         [[maybe_unused]] constexpr operator std::string_view() { return {}; }
+         
+         [[maybe_unused]] constexpr operator std::string_view() const { return {}; }
       };
 
       template <class T, class... Args>
