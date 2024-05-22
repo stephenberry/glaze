@@ -103,6 +103,10 @@ namespace glz
          return [](auto&& val) { return quoted_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
       }
    }
+   
+   // Read and write booleans as numbers
+   template <auto MemPtr>
+   constexpr auto bools_as_numbers = detail::opts_wrapper<MemPtr, &opts::bools_as_numbers>();
 
    // Read and write numbers as strings
    template <auto MemPtr>

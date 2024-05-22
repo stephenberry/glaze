@@ -7946,8 +7946,50 @@ struct glz::meta<raw_struct>
 };
 
 suite raw_test = [] {
-   raw_struct obj{.str = R"("Hello")"};
-   expect(glz::write_json(obj) == R"({"str":"Hello"})");
+   "raw"_test = [] {
+      raw_struct obj{.str = R"("Hello")"};
+      expect(glz::write_json(obj) == R"({"str":"Hello"})");
+   };
+};
+
+struct bools_as_numbers_struct
+{
+   bool a{};
+   bool b{};
+   bool c{};
+   bool d{};
+   
+   struct glaze {
+      using T = bools_as_numbers_struct;
+      static constexpr auto value = glz::object("a", glz::bools_as_numbers<&T::a>, "b", glz::bools_as_numbers<&T::b>, &T::c, &T::d);
+   };
+};
+
+suite bools_as_numbers_test = [] {
+   "bools_as_numbers"_test = [] {
+      std::string s = R"({"a":1,"b":0,"c":true,"d":false})";
+      bools_as_numbers_struct obj{};
+      expect(!glz::read_json(obj, s));
+      expect(obj.a == true);
+      expect(obj.b == false);
+      expect(glz::write_json(obj) == s);
+   };
+   
+   "bools_as_numbers_array"_test = [] {
+      std::string s = R"([1,0,1,0])";
+      std::array<bool, 4> obj{};
+      constexpr glz::opts opts{.bools_as_numbers = true};
+      expect(!glz::read<opts>(obj, s));
+      expect(glz::write<opts>(obj) == s);
+   };
+   
+   "bools_as_numbers_vector"_test = [] {
+      std::string s = R"([1,0,1,0])";
+      std::vector<bool> obj{};
+      constexpr glz::opts opts{.bools_as_numbers = true};
+      expect(!glz::read<opts>(obj, s));
+      expect(glz::write<opts>(obj) == s);
+   };
 };
 
 int main()
