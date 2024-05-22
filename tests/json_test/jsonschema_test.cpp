@@ -15,7 +15,11 @@ struct schema_obj
    // todo it is not currently supported to read glz::schema::schema_any, for reference see function variant_is_auto_deducible
    // std::int64_t default_val{1337};
    std::string pattern{"[a-z]+"};
+   bool is_deprecated{};
+   std::string_view examples{"this is an example"};
 };
+
+static constexpr auto example_arr = std::array<std::string_view, 1>{ "this is an example" };
 
 template <>
 struct glz::json_schema<schema_obj>
@@ -26,6 +30,8 @@ struct glz::json_schema<schema_obj>
    // todo it is not currently supported to read glz::schema::schema_any, for reference see function variant_is_auto_deducible
    // schema default_val{.defaultValue = 42L};
    schema pattern{.pattern = "[a-z]+"};
+   schema is_deprecated{.deprecated = true};
+   schema examples{.examples = example_arr};
 };
 
 struct test_case
@@ -47,6 +53,12 @@ auto expect_property(test_case test, std::string_view key, Value value) {
       expect(std::holds_alternative<Value>(prop_value.value()) >> fatal);
       expect(std::get<Value>(prop_value.value()) == value);
    }
+   else if constexpr (glz::is_specialization_v<prop_value_t, std::optional> && glz::is_specialization_v<typename prop_value_t::value_type, std::span>) {
+      expect(fatal(prop_value.value().size() == value.size()));
+      for (std::size_t i = 0; i < prop_value.value().size(); ++i) {
+        expect(prop_value.value()[i] == value[i]);
+      }
+   }
    else {
       expect(prop_value.value() == value);
    }
@@ -56,7 +68,7 @@ auto expect_property(test_case test, std::string_view key, Value value) {
 suite schema_attributes = [] {
    "parsing"_test = [] {
       test_case const test{};
-      expect(test.obj.has_value());// << format_error(test.obj.error(), test.schema_str);
+      expect(test.obj.has_value()) << format_error(!test.obj.has_value() ? test.obj.error() : glz::parse_error{}, test.schema_str);
       expect(fatal(test.obj.has_value()));
    };
    "description"_test = [] {
@@ -75,6 +87,14 @@ suite schema_attributes = [] {
       test_case const test{};
       expect_property<&glz::schema::pattern>(test, "pattern", std::string_view{"[a-z]+"});
   };
+   "deprecated"_test = [] {
+      test_case const test{};
+      expect_property<&glz::schema::deprecated>(test, "is_deprecated", true);
+   };
+   "examples"_test = [] {
+      test_case const test{};
+      expect_property<&glz::schema::examples>(test, "examples", std::span{ example_arr });
+   };
 };
 
 int main()
