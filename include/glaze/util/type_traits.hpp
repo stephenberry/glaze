@@ -20,15 +20,15 @@ namespace glz
    {};
 
    template <class... Args>
-   inline constexpr bool false_v = false_t<Args...>::value;
+   constexpr bool false_v = false_t<Args...>::value;
 
    // from
    // https://stackoverflow.com/questions/16337610/how-to-know-if-a-type-is-a-specialization-of-stdvector
    template <class, template <class...> class>
-   inline constexpr bool is_specialization_v = false;
+   constexpr bool is_specialization_v = false;
 
    template <template <class...> class T, class... Args>
-   inline constexpr bool is_specialization_v<T<Args...>, T> = true;
+   constexpr bool is_specialization_v<T<Args...>, T> = true;
 
    template <class T>
    struct member_value;

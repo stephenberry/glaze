@@ -15,17 +15,17 @@
 
 namespace glz::tag
 {
-   inline constexpr uint8_t null = 0;
-   inline constexpr uint8_t boolean = 0b00001'000;
-   inline constexpr uint8_t number = 1;
-   inline constexpr uint8_t string = 2;
-   inline constexpr uint8_t object = 3;
-   inline constexpr uint8_t typed_array = 4;
-   inline constexpr uint8_t generic_array = 5;
-   inline constexpr uint8_t extensions = 6;
+   constexpr uint8_t null = 0;
+   constexpr uint8_t boolean = 0b00001'000;
+   constexpr uint8_t number = 1;
+   constexpr uint8_t string = 2;
+   constexpr uint8_t object = 3;
+   constexpr uint8_t typed_array = 4;
+   constexpr uint8_t generic_array = 5;
+   constexpr uint8_t extensions = 6;
 
-   inline constexpr uint8_t bool_false = 0b000'01'000;
-   inline constexpr uint8_t bool_true = 0b000'11'000;
+   constexpr uint8_t bool_false = 0b000'01'000;
+   constexpr uint8_t bool_true = 0b000'11'000;
 }
 
 namespace glz::detail
