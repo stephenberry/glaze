@@ -609,13 +609,15 @@ suite empty_optional_tests = [] {
    };
 };
 
-struct target_t {
-    std::optional<std::string> label{"label_optional"};
-    std::string name{"name_string"};
-    std::vector<int> ints{};
+struct target_t
+{
+   std::optional<std::string> label{"label_optional"};
+   std::string name{"name_string"};
+   std::vector<int> ints{};
 };
 
-struct nested_target_t {
+struct nested_target_t
+{
    target_t target{};
    std::string test{"test"};
 };
@@ -624,7 +626,8 @@ suite nested_target_tests = [] {
    "nested_target"_test = [] {
       nested_target_t obj{};
       auto buffer = glz::write_json(obj);
-      expect(buffer == R"({"target":{"label":"label_optional","name":"name_string","ints":[]},"test":"test"})") << buffer;
+      expect(buffer == R"({"target":{"label":"label_optional","name":"name_string","ints":[]},"test":"test"})")
+         << buffer;
       expect(!glz::read_json(obj, buffer));
    };
 };

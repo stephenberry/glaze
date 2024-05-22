@@ -43,7 +43,7 @@ namespace glz
          [[maybe_unused]] constexpr operator T() const;
 #pragma GCC diagnostic pop
 #endif
-         
+
          [[maybe_unused]] constexpr operator std::string_view() const { return {}; }
       };
 
