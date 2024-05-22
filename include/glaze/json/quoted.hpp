@@ -11,15 +11,6 @@
 
 namespace glz
 {
-   // treat numbers as quoted or array-like types as having quoted numbers
-   template <class T>
-   struct quoted_num_t
-   {
-      static constexpr bool glaze_wrapper = true;
-      using value_type = T;
-      T& val;
-   };
-
    // treat a value as quoted to avoid double parsing into a value
    template <class T>
    struct quoted_t
@@ -28,38 +19,28 @@ namespace glz
       using value_type = T;
       T& val;
    };
-
-   // read numbers as strings and write these string as numbers
-   template <class T>
-   struct number_t
+   
+   template <class T, auto OptsMemPtr>
+   struct opts_wrapper_t
    {
       static constexpr bool glaze_wrapper = true;
+      static constexpr auto glaze_reflect = false;
+      static constexpr auto opts_member = OptsMemPtr;
       using value_type = T;
       T& val;
+   };
+   
+   template <class T>
+   concept is_opts_wrapper = requires {
+      requires T::glaze_wrapper == true;
+      requires T::glaze_reflect == false;
+      T::opts_member;
+      typename T::value_type;
+      requires std::is_lvalue_reference_v<decltype(T::val)>;
    };
 
    namespace detail
    {
-      template <class T>
-      struct from_json<quoted_num_t<T>>
-      {
-         template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args) noexcept
-         {
-            read<json>::op<opt_true<Opts, &opts::quoted_num>>(value.val, args...);
-         }
-      };
-
-      template <class T>
-      struct to_json<quoted_num_t<T>>
-      {
-         template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
-         {
-            write<json>::op<opt_true<Opts, &opts::quoted_num>>(value.val, ctx, args...);
-         }
-      };
-
       template <class T>
       struct from_json<quoted_t<T>>
       {
@@ -87,46 +68,33 @@ namespace glz
          }
       };
 
-      template <class T>
-      struct from_json<number_t<T>>
+      template <is_opts_wrapper T>
+      struct from_json<T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args) noexcept
          {
-            read<json>::op<opt_true<Opts, &opts::number>>(value.val, args...);
+            read<json>::op<opt_true<Opts, T::opts_member>>(value.val, args...);
          }
       };
 
-      template <class T>
-      struct to_json<number_t<T>>
+      template <is_opts_wrapper T>
+      struct to_json<T>
       {
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            write<json>::op<opt_true<Opts, &opts::number>>(value.val, ctx, args...);
+            write<json>::op<opt_true<Opts, T::opts_member>>(value.val, ctx, args...);
          }
       };
 
-      template <class T>
-      struct to_json<raw_t<T>>
+      template <auto MemPtr, auto OptsMemPtr>
+      inline constexpr decltype(auto) opts_wrapper() noexcept
       {
-         template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args) noexcept
-         {
-            write<json>::op<opt_true<Opts, &opts::raw>>(value.val, args...);
-         }
-      };
-
-      template <auto MemPtr>
-      inline constexpr decltype(auto) quoted_num_impl() noexcept
-      {
-         return [](auto&& val) { return quoted_num_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
-      }
-
-      template <auto MemPtr>
-      inline constexpr decltype(auto) number_impl() noexcept
-      {
-         return [](auto&& val) { return number_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
+         return [](auto&& val) {
+            using V = std::remove_reference_t<decltype(val.*MemPtr)>;
+            return opts_wrapper_t<V, OptsMemPtr>{val.*MemPtr};
+         };
       }
 
       template <auto MemPtr>
@@ -134,23 +102,21 @@ namespace glz
       {
          return [](auto&& val) { return quoted_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
       }
-
-      template <auto MemPtr>
-      inline constexpr decltype(auto) raw_impl() noexcept
-      {
-         return [](auto&& val) { return raw_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
-      }
    }
 
+   // Read and write numbers as strings
    template <auto MemPtr>
-   constexpr auto quoted_num = detail::quoted_num_impl<MemPtr>();
+   constexpr auto quoted_num = detail::opts_wrapper<MemPtr, &opts::quoted_num>();
 
+   // Read numbers as strings and write these string as numbers
    template <auto MemPtr>
-   constexpr auto number = detail::number_impl<MemPtr>();
+   constexpr auto number = detail::opts_wrapper<MemPtr, &opts::number>();
 
+   // Read a value as a string and unescape, to avoid the user having to parse twice
    template <auto MemPtr>
    constexpr auto quoted = detail::quoted_impl<MemPtr>();
 
+   // Write out string like types without quotes
    template <auto MemPtr>
-   constexpr auto raw = detail::raw_impl<MemPtr>();
+   constexpr auto raw = detail::opts_wrapper<MemPtr, &opts::raw>();
 }
