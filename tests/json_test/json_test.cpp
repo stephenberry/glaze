@@ -7958,10 +7958,12 @@ struct bools_as_numbers_struct
    bool b{};
    bool c{};
    bool d{};
-   
-   struct glaze {
+
+   struct glaze
+   {
       using T = bools_as_numbers_struct;
-      static constexpr auto value = glz::object("a", glz::bools_as_numbers<&T::a>, "b", glz::bools_as_numbers<&T::b>, &T::c, &T::d);
+      static constexpr auto value =
+         glz::object("a", glz::bools_as_numbers<&T::a>, "b", glz::bools_as_numbers<&T::b>, &T::c, &T::d);
    };
 };
 
@@ -7974,7 +7976,7 @@ suite bools_as_numbers_test = [] {
       expect(obj.b == false);
       expect(glz::write_json(obj) == s);
    };
-   
+
    "bools_as_numbers_array"_test = [] {
       std::string s = R"([1,0,1,0])";
       std::array<bool, 4> obj{};
@@ -7982,7 +7984,7 @@ suite bools_as_numbers_test = [] {
       expect(!glz::read<opts>(obj, s));
       expect(glz::write<opts>(obj) == s);
    };
-   
+
    "bools_as_numbers_vector"_test = [] {
       std::string s = R"([1,0,1,0])";
       std::vector<bool> obj{};

@@ -56,7 +56,7 @@ namespace glz
       float_precision float_max_write_precision{};
 
       bool bools_as_numbers = false; // Read and write booleans with 1's and 0's
-      
+
       bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool number = false; // read numbers as strings and write these string as numbers
       bool raw = false; // write out string like values without quotes

@@ -19,7 +19,7 @@ namespace glz
       using value_type = T;
       T& val;
    };
-   
+
    template <class T, auto OptsMemPtr>
    struct opts_wrapper_t
    {
@@ -29,7 +29,7 @@ namespace glz
       using value_type = T;
       T& val;
    };
-   
+
    template <class T>
    concept is_opts_wrapper = requires {
       requires T::glaze_wrapper == true;
@@ -103,7 +103,7 @@ namespace glz
          return [](auto&& val) { return quoted_t<std::remove_reference_t<decltype(val.*MemPtr)>>{val.*MemPtr}; };
       }
    }
-   
+
    // Read and write booleans as numbers
    template <auto MemPtr>
    constexpr auto bools_as_numbers = detail::opts_wrapper<MemPtr, &opts::bools_as_numbers>();

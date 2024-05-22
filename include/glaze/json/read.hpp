@@ -271,7 +271,7 @@ namespace glz
             if constexpr (!Opts.ws_handled) {
                GLZ_SKIP_WS;
             }
-            
+
             if constexpr (Opts.bools_as_numbers) {
                if (*it == '1') {
                   value = true;
