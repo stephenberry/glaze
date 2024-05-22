@@ -6,6 +6,9 @@
 #include "glaze/core/read.hpp"
 #include "glaze/core/write.hpp"
 
+// Use JSON Pointer syntax to seek to a specific element
+// https://github.com/stephenberry/JSON-Pointer
+
 namespace glz::detail
 {
    template <class F, class T>

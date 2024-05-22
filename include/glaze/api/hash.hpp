@@ -34,7 +34,7 @@ namespace glz
    {
       // convert an integer to a string_view at compile time
 
-      inline constexpr uint64_t num_digits(auto x) noexcept // number of digits needed, including minus sign
+      constexpr uint64_t num_digits(auto x) noexcept // number of digits needed, including minus sign
       {
          return x < 10 ? 1 : 1 + num_digits(x / 10);
       }
@@ -120,5 +120,5 @@ namespace glz
    };
 
    template <const std::string_view& Str>
-   inline constexpr std::string_view hash128_v = hash128<Str>::value;
+   constexpr std::string_view hash128_v = hash128<Str>::value;
 }

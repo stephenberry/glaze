@@ -33,7 +33,7 @@ namespace glz
       };
 
       template <const std::string_view& Str, class Tuple>
-      inline constexpr std::string_view expander_v = expander<Str, Tuple>::value;
+      constexpr std::string_view expander_v = expander<Str, Tuple>::value;
    }
 
    template <class T>
