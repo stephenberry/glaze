@@ -26,7 +26,7 @@
 namespace glz
 {
 
-   // forward declare from json/quoted.hpp to avoid circular include
+   // forward declare from json/wrappers.hpp to avoid circular include
    template <class T>
    struct quoted_t;
 
