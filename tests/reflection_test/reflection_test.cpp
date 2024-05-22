@@ -609,6 +609,19 @@ suite empty_optional_tests = [] {
    };
 };
 
+struct string_optional_t
+{
+   std::optional<std::string> opt{};
+   std::string value{};
+};
+
+suite string_optional_tests = [] {
+   "string_optional_t"_test = [] {
+      empty_optional_t obj{};
+      expect(glz::write_json(obj) == R"({"value":""})");
+   };
+};
+
 int main()
 { // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
