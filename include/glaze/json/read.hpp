@@ -1994,8 +1994,7 @@ namespace glz
                         if (*it == '{') [[unlikely]]
                            ++opening_counter;
                         ++it;
-                        if (opening_counter == 0)
-                           return;
+                        if (opening_counter == 0) return;
                      }
                   }
                   else
@@ -2110,7 +2109,7 @@ namespace glz
 
                         auto index = member_it - frozen_map.begin();
                         fields[index] = true;
-                        
+
                         std::visit(
                            [&](auto&& member_ptr) {
                               read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);

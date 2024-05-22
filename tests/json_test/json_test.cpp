@@ -7151,7 +7151,7 @@ suite partial_read_tests = [] {
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
-   
+
    "partial read don't read garbage"_test = [] {
       Header h{};
       std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"garbage})";
@@ -7178,7 +7178,7 @@ suite partial_read_tests = [] {
       expect(h.id == "51e2affb");
       expect(h.type.empty());
    };
-   
+
    "partial read HeaderFlipped"_test = [] {
       HeaderFlipped h{};
       std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value"})";
@@ -7187,7 +7187,7 @@ suite partial_read_tests = [] {
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
-   
+
    "partial read HeaderFlipped unknown key"_test = [] {
       HeaderFlipped h{};
       std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"})";
@@ -7196,7 +7196,7 @@ suite partial_read_tests = [] {
       expect(h.id == "51e2affb");
       expect(h.type.empty());
    };
-   
+
    "partial read unknown key 2 HeaderFlipped"_test = [] {
       HeaderFlipped h{};
       std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type","another_field":409845})";
@@ -7232,7 +7232,7 @@ suite nested_partial_read_tests = [] {
       expect(n.header.id == "51e2affb");
       expect(n.header.type == "message_type");
    };
-   
+
    "nested object partial read, don't read garbage"_test = [] {
       NestedPartialRead n{};
       std::string buf =
