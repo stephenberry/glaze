@@ -5133,7 +5133,7 @@ suite numbers_as_strings_suite = [] {
       numbers_as_strings obj{};
 
       std::string input = R"({"x":555,"y":3.14})";
-      expect(glz::read_json(obj, input) == glz::error_code::none);
+      expect(!glz::read_json(obj, input));
       expect(obj.x == "555");
       expect(obj.y == "3.14");
 
@@ -7931,6 +7931,23 @@ suite single_float_struct = [] {
       std::memcpy(out.data(), buf.data(), buf.size());
       expect(out == R"({"f":0})") << out;
    };
+};
+
+struct raw_struct
+{
+   std::string str{};
+};
+
+template <>
+struct glz::meta<raw_struct>
+{
+   using T = raw_struct;
+   static constexpr auto value = object("str", glz::raw<&T::str>);
+};
+
+suite raw_test = [] {
+   raw_struct obj{.str = R"("Hello")"};
+   expect(glz::write_json(obj) == R"({"str":"Hello"})");
 };
 
 int main()
