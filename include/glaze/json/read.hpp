@@ -1812,7 +1812,7 @@ namespace glz
                         if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
                            // This code should not error on valid unknown keys
                            // We arrived here because the key was perhaps found, but if the quote does not exist
-                           // then this does not necessarily mean have a syntax error.
+                           // then this does not necessarily mean we have a syntax error.
                            // We may have just found the prefix of a longer, unknown key.
                            if (*it != '"') [[unlikely]] {
                               auto* start = key.data();
@@ -1986,7 +1986,7 @@ namespace glz
 
             bool first = true;
             while (true) {
-               if ((all_fields & fields) == all_fields) [[unlikely]] {
+               if ((all_fields & fields) == all_fields) {
                   if constexpr (Opts.partial_read_nested) {
                      while (it != end) {
                         if (*it == '}') [[unlikely]]
@@ -1994,7 +1994,7 @@ namespace glz
                         if (*it == '{') [[unlikely]]
                            ++opening_counter;
                         ++it;
-                        if (opening_counter == 0) [[unlikely]]
+                        if (opening_counter == 0)
                            return;
                      }
                   }
@@ -2083,7 +2083,7 @@ namespace glz
                   if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
                      // This code should not error on valid unknown keys
                      // We arrived here because the key was perhaps found, but if the quote does not exist
-                     // then this does not necessarily mean have a syntax error.
+                     // then this does not necessarily mean we have a syntax error.
                      // We may have just found the prefix of a longer, unknown key.
                      if (*it != '"') [[unlikely]] {
                         auto* start = key.data();
@@ -2091,41 +2091,46 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                         key = {start, size_t(it - start)};
+                        ++it;
+
+                        parse_object_entry_sep<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+
+                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                     else {
+                        ++it; // skip the quote
+
+                        parse_object_entry_sep<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+
+                        auto index = member_it - frozen_map.begin();
+                        fields[index] = true;
+                        
+                        std::visit(
+                           [&](auto&& member_ptr) {
+                              read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
+                           },
+                           member_it->second);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                     }
+                  }
+                  else [[unlikely]] {
+                     if (*it != '"') {
+                        // we need to search until we find the ending quote of the key
+                        skip_string_view<Opts>(ctx, it, end);
+                        if (bool(ctx.error)) [[unlikely]]
+                           return;
+                        auto start = key.data();
+                        key = {start, size_t(it - start)};
                      }
                      ++it; // skip the quote
 
-                     parse_object_entry_sep<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
-                     // At the very least if we are going to do this add a get_index method to the maps and
-                     // call that
-                     auto index = member_it - frozen_map.begin();
-                     fields[index] = true;
-
-                     std::visit(
-                        [&](auto&& member_ptr) {
-                           read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
-                        },
-                        member_it->second);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
-                  else [[unlikely]] {
-                     it -= key.size(); // rewind to skip the potentially escaped key
-
-                     // Unknown key handler does not unescape keys. Unknown escaped keys
-                     // are handled by the user.
-
-                     const auto start = it;
-                     skip_string_view<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                     key = {start, size_t(it - start)};
-                     ++it;
-
-                     // We duplicate this code to avoid generating unreachable code
                      parse_object_entry_sep<Opts>(ctx, it, end);
                      if (bool(ctx.error)) [[unlikely]]
                         return;
