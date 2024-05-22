@@ -5,6 +5,7 @@ Glaze provides a number of wrappers that indicate at compile time how a value sh
 ## Available Wrappers
 
 ```c++
+glz::bools_as_numbers<&T::x> // Read and write booleans as numbers
 glz::quoted_num<&T::x> // Read and write numbers as strings
 glz::quoted<&T::x> // Read a value as a string and unescape, to avoid the user having to parse twice
 glz::number<&T::x> // Read a string as a number and writes the string as a number
@@ -24,6 +25,50 @@ glz::manage<&T::x, &T::read_x, &T::write_x> // Calls read_x() after reading x an
 ## Associated glz::opts
 
 `glz::opts` is the compile time options struct passed to most of Glaze functions to configure read/write behavior. Often wrappers are associated with compile time options and can also be set via `glz::opts`. For example, the `glz::quoted_num` wrapper is associated with the `quoted_num` boolean in `glz::opts`.
+
+## bools_as_numbers
+
+Read and write booleans as numbers
+
+Associated option: `glz::opts{.bools_as_numbers = true};`
+
+```c++
+struct bools_as_numbers_struct
+{
+   bool a{};
+   bool b{};
+   bool c{};
+   bool d{};
+   
+   struct glaze {
+      using T = bools_as_numbers_struct;
+      static constexpr auto value = glz::object("a", glz::bools_as_numbers<&T::a>, "b", glz::bools_as_numbers<&T::b>, &T::c, &T::d);
+   };
+};
+```
+
+In use:
+
+```c++
+std::string s = R"({"a":1,"b":0,"c":true,"d":false})";
+bools_as_numbers_struct obj{};
+expect(!glz::read_json(obj, s));
+expect(obj.a == true);
+expect(obj.b == false);
+expect(glz::write_json(obj) == s);
+```
+
+### bools_as_numbers from glz::opts
+
+You don't have to use wrappers if you want the global behavior to handle booleans as numbers.
+
+```c++
+std::string s = R"([1,0,1,0])";
+std::array<bool, 4> obj{};
+constexpr glz::opts opts{.bools_as_numbers = true};
+expect(!glz::read<opts>(obj, s));
+expect(glz::write<opts>(obj) == s);
+```
 
 ## quoted_num
 

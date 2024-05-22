@@ -163,20 +163,40 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(const bool value, is_context auto&&, Args&&... args) noexcept
          {
-            if constexpr (Opts.write_unchecked) {
-               if (value) {
-                  dump_unchecked<"true">(std::forward<Args>(args)...);
+            if constexpr (Opts.bools_as_numbers) {
+               if constexpr (Opts.write_unchecked) {
+                  if (value) {
+                     dump_unchecked<"1">(std::forward<Args>(args)...);
+                  }
+                  else {
+                     dump_unchecked<"0">(std::forward<Args>(args)...);
+                  }
                }
                else {
-                  dump_unchecked<"false">(std::forward<Args>(args)...);
+                  if (value) {
+                     dump<"1">(std::forward<Args>(args)...);
+                  }
+                  else {
+                     dump<"0">(std::forward<Args>(args)...);
+                  }
                }
             }
             else {
-               if (value) {
-                  dump<"true">(std::forward<Args>(args)...);
+               if constexpr (Opts.write_unchecked) {
+                  if (value) {
+                     dump_unchecked<"true">(std::forward<Args>(args)...);
+                  }
+                  else {
+                     dump_unchecked<"false">(std::forward<Args>(args)...);
+                  }
                }
                else {
-                  dump<"false">(std::forward<Args>(args)...);
+                  if (value) {
+                     dump<"true">(std::forward<Args>(args)...);
+                  }
+                  else {
+                     dump<"false">(std::forward<Args>(args)...);
+                  }
                }
             }
          }
