@@ -13,6 +13,10 @@ At times it is not necessary to read the entire JSON document, but rather just a
 
 When `partial_read` is `true`, parsing will end once all the keys defined in the struct have been parsed.
 
+## partial_read_nested
+
+If your object that you wish to only read part of is nested within other objects, set `partial_read_nested = true` so that Glaze will properly parse the parent objects by skipping to the end of the partially read object.
+
 ## Example
 
 ```c++
@@ -38,8 +42,6 @@ expect(glz::read_json(h, buf) == glz::error_code::none);
 expect(h.id == "51e2affb");
 expect(h.type == "message_type");
 ```
-
->  If `error_on_unknown_keys` is set to `false`, then the JSON will be parsed until the end.
 
 ## Unit Test Examples
 

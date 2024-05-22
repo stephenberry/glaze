@@ -7093,6 +7093,18 @@ struct glz::meta<Header>
    static constexpr auto partial_read = true;
 };
 
+struct HeaderFlipped
+{
+   std::string type{};
+   std::string id{};
+};
+
+template <>
+struct glz::meta<HeaderFlipped>
+{
+   static constexpr auto partial_read = true;
+};
+
 struct NestedPartialRead
 {
    std::string method{};
@@ -7107,7 +7119,7 @@ suite partial_read_tests = [] {
       Header h{};
       std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value"})";
 
-      expect(glz::read_json(h, buf) == glz::error_code::none);
+      expect(!glz::read_json(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
@@ -7115,9 +7127,9 @@ suite partial_read_tests = [] {
    "partial read 2"_test = [] {
       Header h{};
       // closing curly bracket is missing
-      std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value"})";
+      std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value")";
 
-      expect(glz::read_json(h, buf) == glz::error_code::none);
+      expect(!glz::read_json(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
@@ -7135,7 +7147,16 @@ suite partial_read_tests = [] {
       Header h{};
       std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"})";
 
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(h, buf) == glz::error_code::none);
+      expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(h, buf));
+      expect(h.id == "51e2affb");
+      expect(h.type == "message_type");
+   };
+   
+   "partial read don't read garbage"_test = [] {
+      Header h{};
+      std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"garbage})";
+
+      expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
@@ -7151,12 +7172,38 @@ suite partial_read_tests = [] {
 
    "partial read missing key 2"_test = [] {
       Header h{};
-      std::string buf = R"({"id":"51e2affb",""unknown key":"value"})";
+      std::string buf = R"({"id":"51e2affb","unknown key":"value"})";
 
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = false}>(h, buf) !=
-             glz::error_code::none);
+      expect(!glz::read<glz::opts{.error_on_unknown_keys = false, .error_on_missing_keys = false}>(h, buf));
       expect(h.id == "51e2affb");
       expect(h.type.empty());
+   };
+   
+   "partial read HeaderFlipped"_test = [] {
+      HeaderFlipped h{};
+      std::string buf = R"({"id":"51e2affb","type":"message_type","unknown key":"value"})";
+
+      expect(!glz::read_json(h, buf));
+      expect(h.id == "51e2affb");
+      expect(h.type == "message_type");
+   };
+   
+   "partial read HeaderFlipped unknown key"_test = [] {
+      HeaderFlipped h{};
+      std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type"})";
+
+      expect(glz::read_json(h, buf) == glz::error_code::unknown_key);
+      expect(h.id == "51e2affb");
+      expect(h.type.empty());
+   };
+   
+   "partial read unknown key 2 HeaderFlipped"_test = [] {
+      HeaderFlipped h{};
+      std::string buf = R"({"id":"51e2affb","unknown key":"value","type":"message_type","another_field":409845})";
+
+      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(h, buf) == glz::error_code::none);
+      expect(h.id == "51e2affb");
+      expect(h.type == "message_type");
    };
 };
 
@@ -7180,7 +7227,18 @@ suite nested_partial_read_tests = [] {
       std::string buf =
          R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value"},"number":51})";
 
-      expect(glz::read<glz::opts{.partial_read_nested = true}>(n, buf) == glz::error_code::none);
+      expect(!glz::read<glz::opts{.partial_read_nested = true}>(n, buf));
+      expect(n.method == "m1");
+      expect(n.header.id == "51e2affb");
+      expect(n.header.type == "message_type");
+   };
+   
+   "nested object partial read, don't read garbage"_test = [] {
+      NestedPartialRead n{};
+      std::string buf =
+         R"({"method":"m1","header":{"id":"51e2affb","type":"message_type","unknown key":"value",garbage},"number":51})";
+
+      expect(!glz::read<glz::opts{.partial_read_nested = true}>(n, buf));
       expect(n.method == "m1");
       expect(n.header.id == "51e2affb");
       expect(n.header.type == "message_type");
