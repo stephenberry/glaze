@@ -1655,31 +1655,6 @@ namespace glz
             match<'}'>(ctx, it);
          }
       };
-
-      template <size_t NumMembers>
-      struct fields_state
-      {
-         bit_array<NumMembers> fields{};
-         static constexpr bit_array<NumMembers> all_fields = [] {
-            bit_array<NumMembers> arr{};
-            for (size_t i = 0; i < NumMembers; ++i) {
-               arr[i] = true;
-            }
-            return arr;
-         }();
-      };
-
-      // In to avoid code dupplication we put fields_state state in a separate function with thread_local storage.
-      // This allows us to access this state only in constexpr branches that do partial reading.
-      // If we put this in the `op` function we would have to allocate even when not doing partial reading.
-      // Note: this sort of tracking does not work with nested objects
-      // that are trying to keep track of the read count at multiple levels
-      template <size_t NumMembers>
-      inline auto& get_fields_state() noexcept
-      {
-         static thread_local fields_state<NumMembers> state{};
-         return state;
-      }
       
       // similar to tracking fields, but for types like std::map
       // we simply count the number of allocated keys that we've read
@@ -1726,9 +1701,22 @@ namespace glz
                return;
             }
             else {
-               if constexpr (Opts.error_on_missing_keys || partial_read<T>) {
-                  get_fields_state<num_members>() = {}; // reinitialize
-               }
+               static constexpr bit_array<num_members> all_fields = [] {
+                  bit_array<num_members> arr{};
+                  for (size_t i = 0; i < num_members; ++i) {
+                     arr[i] = true;
+                  }
+                  return arr;
+               }();
+               
+               decltype(auto) fields = [&]() -> decltype(auto) {
+                  if constexpr (Opts.error_on_missing_keys || partial_read<T>) {
+                     return bit_array<num_members>{};
+                  }
+                  else {
+                     return nullptr;
+                  }
+               }();
                
                if constexpr (Opts.read_allocated) {
                   get_dynamic_object_read_count() = 0;
@@ -1758,8 +1746,6 @@ namespace glz
                bool first = true;
                while (true) {
                   if constexpr (partial_read<T>) {
-                     auto& [fields] = get_fields_state<num_members>();
-                     constexpr auto& all_fields = fields_state<num_members>::all_fields;
                      if ((all_fields & fields) == all_fields) {
                         if constexpr (Opts.partial_read_nested) {
                            skip_until_closed<Opts, '{', '}'>(ctx, it, end);
@@ -1775,7 +1761,6 @@ namespace glz
                      else {
                         ++it;
                         if constexpr (Opts.error_on_missing_keys) {
-                           auto& [fields] = get_fields_state<num_members>();
                            constexpr auto req_fields = required_fields<T, Opts>();
                            if ((req_fields & fields) != req_fields) {
                               ctx.error = error_code::missing_key;
@@ -1848,7 +1833,6 @@ namespace glz
                               return;
 
                            if constexpr (Opts.error_on_missing_keys || partial_read<T>) {
-                              auto& [fields] = get_fields_state<num_members>();
                               // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
                               // At the very least if we are going to do this add a get_index method to the maps and
                               // call that
@@ -1916,7 +1900,6 @@ namespace glz
                                  return;
 
                               if constexpr (Opts.error_on_missing_keys || partial_read<T>) {
-                                 auto& [fields] = get_fields_state<num_members>();
                                  // TODO: Kludge/hack. Should work but could easily cause memory issues with small
                                  // changes. At the very least if we are going to do this add a get_index method to the
                                  // maps and call that
