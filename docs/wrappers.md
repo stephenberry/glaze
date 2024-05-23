@@ -296,31 +296,6 @@ Reads into existing object and array elements and then exits without parsing the
 
 > `partial_read` is useful when parsing header information before deciding how to decode the rest of a document. Or, when you only care about the first few elements of an array.
 
-```c++
-struct partial_meta
-{
-   std::string string{};
-   int32_t integer{};
-};
-
-template <>
-struct glz::meta<partial_meta>
-{
-   using T = partial_meta;
-   static constexpr auto value = object("string", partial_read<&T::string>, "integer", partial_read<&T::integer>);
-};
-```
-
-In use:
-
-```c++
-std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
-partial_meta obj{};
-expect(!glz::read<glz::opts{.error_on_unknown_keys = false, .read_allocated = true}>(obj, s));
-expect(obj.string == "ha!");
-expect(obj.integer == 400);
-```
-
 ## invoke
 
 Invoke a std::function or member function with n-arguments as an array input.

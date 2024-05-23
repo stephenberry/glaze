@@ -8058,19 +8058,6 @@ struct partial_struct
    int32_t integer{};
 };
 
-struct partial_meta
-{
-   std::string string{};
-   int32_t integer{};
-};
-
-template <>
-struct glz::meta<partial_meta>
-{
-   using T = partial_meta;
-   static constexpr auto value = object("string", partial_read<&T::string>, "integer", partial_read<&T::integer>);
-};
-
 suite read_allocated_tests = [] {
    static constexpr glz::opts partial{.partial_read = true};
 
@@ -8110,14 +8097,6 @@ suite read_allocated_tests = [] {
    "partial_read partial_struct, error_on_unknown_keys = false"_test = [] {
       std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
       partial_struct obj{};
-      expect(!glz::read<glz::opts{.error_on_unknown_keys = false, .partial_read = true}>(obj, s));
-      expect(obj.string == "ha!");
-      expect(obj.integer == 400);
-   };
-   
-   "partial_read partial_meta, error_on_unknown_keys = false"_test = [] {
-      std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
-      partial_meta obj{};
       expect(!glz::read<glz::opts{.error_on_unknown_keys = false, .partial_read = true}>(obj, s));
       expect(obj.string == "ha!");
       expect(obj.integer == 400);

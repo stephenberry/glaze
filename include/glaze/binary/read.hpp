@@ -916,7 +916,24 @@ namespace glz
 
             ++it;
 
-            constexpr auto N = reflection_count<T>;
+            static constexpr auto N = reflection_count<T>;
+            
+            static constexpr bit_array<N> all_fields = [] {
+               bit_array<N> arr{};
+               for (size_t i = 0; i < N; ++i) {
+                  arr[i] = true;
+               }
+               return arr;
+            }();
+
+            decltype(auto) fields = [&]() -> decltype(auto) {
+               if constexpr (is_partial_read<T> || Opts.partial_read) {
+                  return bit_array<N>{};
+               }
+               else {
+                  return nullptr;
+               }
+            }();
 
             const auto n_keys = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
@@ -940,6 +957,12 @@ namespace glz
             }();
 
             for (size_t i = 0; i < n_keys; ++i) {
+               if constexpr (is_partial_read<T> || Opts.partial_read) {
+                  if ((all_fields & fields) == all_fields) {
+                     return;
+                  }
+               }
+               
                const auto length = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -951,6 +974,11 @@ namespace glz
 
                if constexpr (N > 0) {
                   if (const auto& p = storage.find(key); p != storage.end()) [[likely]] {
+                     if constexpr (is_partial_read<T> || Opts.partial_read) {
+                        auto index = p - storage.begin();
+                        fields[index] = true;
+                     }
+                     
                      std::visit(
                         [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
                         p->second);
