@@ -1047,7 +1047,7 @@ namespace glz
                   return;
                }
             }
-            
+
             if constexpr (Opts.read_allocated) {
                return;
             }
@@ -1337,7 +1337,7 @@ namespace glz
                }
                GLZ_SKIP_WS;
             });
-            
+
             if constexpr (Opts.read_allocated) {
                return;
             }
@@ -1695,7 +1695,7 @@ namespace glz
                   }
                   return arr;
                }();
-               
+
                decltype(auto) fields = [&]() -> decltype(auto) {
                   if constexpr (Opts.error_on_missing_keys || partial_read<T> || Opts.read_allocated) {
                      return bit_array<num_members>{};
@@ -1704,7 +1704,7 @@ namespace glz
                      return nullptr;
                   }
                }();
-               
+
                size_t read_count{}; // for read_allocated and dynamic objects
 
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
@@ -1932,7 +1932,7 @@ namespace glz
                            return;
 
                         parse_object_entry_sep<Opts>(ctx, it, end);
-                        
+
                         if constexpr (Opts.read_allocated) {
                            if (auto element = value.find(key); element != value.end()) {
                               ++read_count;
