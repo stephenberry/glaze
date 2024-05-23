@@ -941,12 +941,11 @@ namespace glz::detail
       }
    }
 
-   template <opts Opts, char open, char close>
+   template <opts Opts, char open, char close, size_t Depth = 1>
       requires(Opts.is_padded)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      ++it;
-      size_t depth = 1;
+      size_t depth = Depth;
 
       while (it < end) [[likely]] {
          uint64_t chunk;
@@ -997,12 +996,11 @@ namespace glz::detail
       ctx.error = error_code::unexpected_end;
    }
 
-   template <opts Opts, char open, char close>
+   template <opts Opts, char open, char close, size_t Depth = 1>
       requires(!Opts.is_padded)
    GLZ_ALWAYS_INLINE void skip_until_closed(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
-      ++it;
-      size_t depth = 1;
+      size_t depth = Depth;
 
       for (const auto fin = end - 7; it < fin;) {
          uint64_t chunk;
