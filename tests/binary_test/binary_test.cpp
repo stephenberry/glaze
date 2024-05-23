@@ -1834,13 +1834,37 @@ struct glz::meta<hide_struct> {
                                         "hello", hide{&T::hello});
 };
 
-/*suite hide_tests = [] {
+suite hide_tests = [] {
    "hide"_test = [] {
       hide_struct obj{};
       auto b = glz::write_binary(obj);
       expect(!glz::read_binary(obj, b));
    };
-};*/
+};
+
+struct skip_fields
+{
+   std::string str = "Hello";
+   int opt = 35;
+};
+
+struct skip_obj
+{
+   struct glaze
+   {
+      using T = skip_obj;
+      static constexpr auto value = glz::object("str", glz::skip{}, "opt", glz::skip{});
+   };
+};
+
+suite skip_tests = [] {
+   "skip"_test = [] {
+      skip_fields data{};
+      auto buffer = glz::write_binary(data);
+      skip_obj obj{};
+      expect(!glz::read_binary(obj, buffer));
+   };
+};
 
 int main()
 {
