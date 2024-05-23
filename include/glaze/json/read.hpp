@@ -1655,19 +1655,6 @@ namespace glz
             match<'}'>(ctx, it);
          }
       };
-      
-      // similar to tracking fields, but for types like std::map
-      // we simply count the number of allocated keys that we've read
-      // this means partial reading won't work for duplicate keys
-      // but this is more performant and duplicate keys are not
-      // usually seen in partial read contexts
-      // Note: this sort of tracking does not work with nested objects
-      // that are trying to keep track of the read count at multiple levels
-      inline auto& get_dynamic_object_read_count() noexcept
-      {
-         static thread_local size_t count{};
-         return count;
-      }
 
       template <class T>
          requires readable_map_t<T> || glaze_object_t<T> || reflectable<T>
@@ -1718,9 +1705,7 @@ namespace glz
                   }
                }();
                
-               if constexpr (Opts.read_allocated) {
-                  get_dynamic_object_read_count() = 0;
-               }
+               size_t read_count{}; // for read_allocated and dynamic objects
 
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T> && num_members > 0) {
@@ -1949,7 +1934,6 @@ namespace glz
                         parse_object_entry_sep<Opts>(ctx, it, end);
                         
                         if constexpr (Opts.read_allocated) {
-                           auto& read_count = get_dynamic_object_read_count();
                            if (auto element = value.find(key); element != value.end()) {
                               ++read_count;
                               read<json>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
@@ -1978,7 +1962,6 @@ namespace glz
                            return;
 
                         if constexpr (Opts.read_allocated) {
-                           auto& read_count = get_dynamic_object_read_count();
                            if (auto element = value.find(key); element != value.end()) {
                               ++read_count;
                               read<json>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
@@ -2016,7 +1999,6 @@ namespace glz
                            return;
 
                         if constexpr (Opts.read_allocated) {
-                           auto& read_count = get_dynamic_object_read_count();
                            if (auto element = value.find(key_value); element != value.end()) {
                               ++read_count;
                               read<json>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
