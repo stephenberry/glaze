@@ -1661,11 +1661,11 @@ namespace glz
       {
          bit_array<NumMembers> fields{};
          static constexpr bit_array<NumMembers> all_fields = [] {
-            bit_array<NumMembers> fields{};
+            bit_array<NumMembers> arr{};
             for (size_t i = 0; i < NumMembers; ++i) {
-               fields[i] = true;
+               arr[i] = true;
             }
-            return fields;
+            return arr;
          }();
       };
 
