@@ -7,6 +7,7 @@
 
 #include "glaze/binary/header.hpp"
 #include "glaze/core/opts.hpp"
+#include "glaze/core/reflection_tuple.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/util/dump.hpp"
@@ -102,6 +103,16 @@ namespace glz
          {
             using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
             to_binary<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Args>(args)...);
+         }
+      };
+      
+      template <>
+      struct to_binary<hidden>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&, auto&&...) noexcept
+         {
+            static_assert(false_v<decltype(value)>, "hidden type should not be written");
          }
       };
 
@@ -596,69 +607,92 @@ namespace glz
          requires(glaze_object_t<T> || reflectable<T>)
       struct to_binary<T> final
       {
+         static constexpr auto N = reflection_count<T>;
+         static constexpr size_t count_to_write = [] {
+            size_t count{};
+            for_each<N>([&](auto I) {
+               using Element = glaze_tuple_element<I, N, T>;
+               using V = std::remove_cvref_t<typename Element::type>;
+
+               if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
+                  // do not serialize
+                  // not serializing is_includer<V> would be a breaking change
+               }
+               else {
+                  ++count;
+               }
+            });
+            return count;
+         }();
+         
          template <auto Opts, class... Args>
             requires(Opts.structs_as_arrays == true)
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            if constexpr (reflectable<T>) {
-               const auto t = to_tuple(value);
-               write<binary>::op<Opts>(t, ctx, args...);
-            }
-            else {
-               dump<tag::generic_array>(args...);
-
-               using V = std::decay_t<T>;
-               static constexpr auto N = glz::tuple_size_v<meta_t<V>>;
-               dump_compressed_int<N>(args...);
-
-               for_each<N>([&](auto I) {
-                  static constexpr auto item = get<I>(meta_v<V>);
-                  using T0 = std::decay_t<decltype(get<0>(item))>;
-                  static constexpr bool use_reflection = std::is_member_pointer_v<T0>;
-                  static constexpr auto member_index = use_reflection ? 0 : 1;
-                  write<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, args...);
-               });
-            }
+            dump<tag::generic_array>(args...);
+            dump_compressed_int<count_to_write>(args...);
+            decltype(auto) t = reflection_tuple<T>(value);
+            for_each<N>([&](auto I) {
+               using Element = glaze_tuple_element<I, N, T>;
+               static constexpr size_t member_index = Element::member_index;
+               using val_t = std::remove_cvref_t<typename Element::type>;
+               
+               if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
+                  return;
+               }
+               else {
+                  decltype(auto) member = [&]() -> decltype(auto) {
+                     if constexpr (reflectable<T>) {
+                        return std::get<I>(t);
+                     }
+                     else {
+                        return get<member_index>(get<I>(meta_v<std::decay_t<T>>));
+                     }
+                  }();
+                  
+                  write<binary>::op<Opts>(get_member(value, member), ctx, args...);
+               }
+            });
          }
 
          template <auto Options, class... Args>
             requires(Options.structs_as_arrays == false)
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            using V = std::decay_t<T>;
-            static constexpr auto N = reflection_count<T>;
-
             if constexpr (!Options.opening_handled) {
                constexpr uint8_t type = 0; // string key
                constexpr uint8_t tag = tag::object | type;
                dump_type(tag, args...);
-               dump_compressed_int<N>(args...);
+               dump_compressed_int<count_to_write>(args...);
             }
             constexpr auto Opts = opening_handled_off<Options>();
-
-            if constexpr (reflectable<T>) {
-               constexpr auto members = member_names<T>;
-               const auto t = to_tuple(value);
-               for_each<N>([&](auto I) {
-                  write<binary>::no_header<Opts>(get<I>(members), ctx, args...);
-                  write<binary>::op<Opts>(std::get<I>(t), ctx, args...);
-               });
-            }
-            else {
-               for_each<N>([&](auto I) {
-                  static constexpr auto item = get<I>(meta_v<V>);
-                  using T0 = std::decay_t<decltype(get<0>(item))>;
-                  static constexpr bool use_reflection = std::is_member_pointer_v<T0>;
-                  static constexpr auto member_index = use_reflection ? 0 : 1;
-                  if constexpr (use_reflection) {
-                     write<binary>::no_header<Opts>(get_name<get<0>(item)>(), ctx, args...);
-                  }
-                  else {
-                     write<binary>::no_header<Opts>(get<0>(item), ctx, args...);
-                  }
-                  write<binary>::op<Opts>(get_member(value, get<member_index>(item)), ctx, args...);
-               });
-            }
+            
+            decltype(auto) t = reflection_tuple<T>(value);
+            for_each<N>([&](auto I) {
+               using Element = glaze_tuple_element<I, N, T>;
+               static constexpr size_t member_index = Element::member_index;
+               static constexpr bool use_reflection = Element::use_reflection;
+               using val_t = std::remove_cvref_t<typename Element::type>;
+               
+               if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
+                  return;
+               }
+               else {
+                  static constexpr sv key = key_name<I, T, use_reflection>;
+                  write<binary>::no_header<Opts>(key, ctx, args...);
+                  
+                  decltype(auto) member = [&]() -> decltype(auto) {
+                     if constexpr (reflectable<T>) {
+                        return std::get<I>(t);
+                     }
+                     else {
+                        return get<member_index>(get<I>(meta_v<std::decay_t<T>>));
+                     }
+                  }();
+                  
+                  write<binary>::op<Opts>(get_member(value, member), ctx, args...);
+               }
+            });
          }
       };
 
