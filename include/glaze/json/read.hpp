@@ -1644,12 +1644,12 @@ namespace glz
             match<'}'>(ctx, it);
          }
       };
-      
+
       template <size_t NumMembers>
       struct fields_state
       {
          bit_array<NumMembers> fields{};
-         static constexpr bit_array<NumMembers> all_fields = []{
+         static constexpr bit_array<NumMembers> all_fields = [] {
             bit_array<NumMembers> fields{};
             for (size_t i = 0; i < NumMembers; ++i) {
                fields[i] = true;
@@ -1657,12 +1657,13 @@ namespace glz
             return fields;
          }();
       };
-      
+
       // In to avoid code dupplication we put fields_state state in a separate function with thread_local storage.
       // This allows us to access this state only in constexpr branches that do partial reading.
       // If we put this in the `op` function we would have to allocate even when not doing partial reading.
       template <size_t NumMembers>
-      inline auto& get_fields_state() noexcept {
+      inline auto& get_fields_state() noexcept
+      {
          static thread_local fields_state<NumMembers> state{};
          return state;
       }
@@ -1678,7 +1679,7 @@ namespace glz
             if constexpr (num_members == 0 && partial_read<T>) {
                static_assert(false_v<T>, "No members to read for partial read");
             }
-            
+
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
             if constexpr (!Options.opening_handled) {
                if constexpr (!Options.ws_handled) {
@@ -1689,7 +1690,7 @@ namespace glz
             const auto ws_start = it;
             GLZ_SKIP_WS;
             const size_t ws_size = size_t(it - ws_start);
-            
+
             if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
                if (*it == '}') [[likely]] {
                   ++it;
@@ -1727,7 +1728,7 @@ namespace glz
                bool first = true;
                while (true) {
                   if constexpr (partial_read<T>) {
-                     auto&[fields] = get_fields_state<num_members>();
+                     auto& [fields] = get_fields_state<num_members>();
                      constexpr auto& all_fields = fields_state<num_members>::all_fields;
                      if ((all_fields & fields) == all_fields) {
                         if constexpr (Opts.partial_read_nested) {
@@ -1736,7 +1737,7 @@ namespace glz
                         return;
                      }
                   }
-                  
+
                   if (*it == '}') {
                      if constexpr (partial_read<T> && Opts.error_on_missing_keys) {
                         ctx.error = error_code::missing_key;
@@ -1744,7 +1745,7 @@ namespace glz
                      else {
                         ++it;
                         if constexpr (Opts.error_on_missing_keys) {
-                           auto&[fields] = get_fields_state<num_members>();
+                           auto& [fields] = get_fields_state<num_members>();
                            constexpr auto req_fields = required_fields<T, Opts>();
                            if ((req_fields & fields) != req_fields) {
                               ctx.error = error_code::missing_key;
@@ -1817,7 +1818,7 @@ namespace glz
                               return;
 
                            if constexpr (Opts.error_on_missing_keys || partial_read<T>) {
-                              auto&[fields] = get_fields_state<num_members>();
+                              auto& [fields] = get_fields_state<num_members>();
                               // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
                               // At the very least if we are going to do this add a get_index method to the maps and
                               // call that
@@ -1885,7 +1886,7 @@ namespace glz
                                  return;
 
                               if constexpr (Opts.error_on_missing_keys || partial_read<T>) {
-                                 auto&[fields] = get_fields_state<num_members>();
+                                 auto& [fields] = get_fields_state<num_members>();
                                  // TODO: Kludge/hack. Should work but could easily cause memory issues with small
                                  // changes. At the very least if we are going to do this add a get_index method to the
                                  // maps and call that
