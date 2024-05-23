@@ -53,7 +53,7 @@ auto expect_property(test_case test, std::string_view key, Value value) {
       expect(std::holds_alternative<Value>(prop_value.value()) >> fatal);
       expect(std::get<Value>(prop_value.value()) == value);
    }
-   else if constexpr (glz::is_specialization_v<prop_value_t, std::optional> && glz::is_specialization_v<typename prop_value_t::value_type, std::span>) {
+   else if constexpr (glz::is_specialization_v<prop_value_t, std::optional> && glz::detail::is_span<typename prop_value_t::value_type>) {
       expect(fatal(prop_value.value().size() == value.size()));
       for (std::size_t i = 0; i < prop_value.value().size(); ++i) {
         expect(prop_value.value()[i] == value[i]);
@@ -66,6 +66,7 @@ auto expect_property(test_case test, std::string_view key, Value value) {
 
 
 suite schema_attributes = [] {
+   using std::literals::operator""s;
    "parsing"_test = [] {
       test_case const test{};
       expect(test.obj.has_value()) << format_error(!test.obj.has_value() ? test.obj.error() : glz::parse_error{}, test.schema_str);
@@ -73,7 +74,7 @@ suite schema_attributes = [] {
    };
    "description"_test = [] {
       test_case const test{};
-      expect_property<&glz::schema::description>(test, "desc", "this is a description");
+      expect_property<&glz::schema::description>(test, "desc", "this is a description"s);
    };
    "min1"_test = [] {
       test_case const test{};
