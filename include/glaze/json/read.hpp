@@ -124,7 +124,7 @@ namespace glz
       };
 
       template <class T>
-         requires(glaze_value_t<T> && !specialized_with_custom_read<T>)
+         requires(glaze_value_t<T> && !custom_read<T>)
       struct from_json<T>
       {
          template <auto Opts, class Value, is_context Ctx, class It0, class It1>
@@ -857,7 +857,7 @@ namespace glz
       };
 
       template <class T>
-         requires(glaze_enum_t<T> && !specialized_with_custom_read<T>)
+         requires(glaze_enum_t<T> && !custom_read<T>)
       struct from_json<T>
       {
          template <auto Opts>
@@ -883,7 +883,7 @@ namespace glz
       };
 
       template <class T>
-         requires(std::is_enum_v<T> && !glaze_enum_t<T> && !specialized_with_custom_read<T>)
+         requires(std::is_enum_v<T> && !glaze_enum_t<T> && !custom_read<T>)
       struct from_json<T>
       {
          template <auto Opts>
