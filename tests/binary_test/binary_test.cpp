@@ -1872,36 +1872,37 @@ suite read_allocated_tests = [] {
       expect(v[1] == "2");
    };
    
-   /*"partial_read map"_test = [] {
-    std::string s = R"({"1":1,"2":2,"3":3})";
-    std::map<std::string, int> obj{{"2", 0}};
-    expect(!glz::read<partial>(obj, s));
-    expect(obj.size() == 1);
-    expect(obj.at("2") = 2);
+   "partial_read map"_test = [] {
+      std::map<std::string, int> input{{"1",1},{"2",2},{"3",3}};
+      auto s = glz::write_binary(input);
+      std::map<std::string, int> obj{{"2", 0}};
+      expect(!glz::read<partial>(obj, s));
+      expect(obj.size() == 1);
+      expect(obj.at("2") = 2);
     };
     
-    "partial_read partial_struct"_test = [] {
-    std::string s = R"({"integer":400,"string":"ha!",ignore})";
-    partial_struct obj{};
-    expect(!glz::read<glz::opts{.format = glz::binary, .partial_read = true}>(obj, s));
-    expect(obj.string == "ha!");
-    expect(obj.integer == 400);
+    /*"partial_read partial_struct"_test = [] {
+       std::string s = R"({"integer":400,"string":"ha!",ignore})";
+       partial_struct obj{};
+       expect(!glz::read<glz::opts{.format = glz::binary, .partial_read = true}>(obj, s));
+       expect(obj.string == "ha!");
+       expect(obj.integer == 400);
     };
     
     "partial_read partial_struct, error_on_unknown_keys = false"_test = [] {
-    std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
-    partial_struct obj{};
-    expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false, .partial_read = true}>(obj, s));
-    expect(obj.string == "ha!");
-    expect(obj.integer == 400);
+       std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
+       partial_struct obj{};
+       expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false, .partial_read = true}>(obj, s));
+       expect(obj.string == "ha!");
+       expect(obj.integer == 400);
     };
     
     "partial_read partial_meta, error_on_unknown_keys = false"_test = [] {
-    std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
-    partial_meta obj{};
-    expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false, .partial_read = true}>(obj, s));
-    expect(obj.string == "ha!");
-    expect(obj.integer == 400);
+       std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
+       partial_meta obj{};
+       expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false, .partial_read = true}>(obj, s));
+       expect(obj.string == "ha!");
+       expect(obj.integer == 400);
     };*/
 };
    

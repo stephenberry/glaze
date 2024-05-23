@@ -746,23 +746,43 @@ namespace glz
 
             ++it;
 
-            const auto n = int_from_compressed(ctx, it, end);
+            std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
+            }
+            
+            if constexpr (Opts.partial_read) {
+               n = value.size();
             }
 
             if constexpr (std::is_arithmetic_v<std::decay_t<Key>>) {
                Key key;
                for (size_t i = 0; i < n; ++i) {
-                  read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
-                  read<binary>::op<Opts>(value[key], ctx, it, end);
+                  if constexpr (Opts.partial_read) {
+                     read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
+                     if (auto element = value.find(key); element != value.end()) {
+                        read<binary>::op<Opts>(element->second, ctx, it, end);
+                     }
+                  }
+                  else {
+                     read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
+                     read<binary>::op<Opts>(value[key], ctx, it, end);
+                  }
                }
             }
             else {
                static thread_local Key key;
                for (size_t i = 0; i < n; ++i) {
-                  read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
-                  read<binary>::op<Opts>(value[key], ctx, it, end);
+                  if constexpr (Opts.partial_read) {
+                     read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
+                     if (auto element = value.find(key); element != value.end()) {
+                        read<binary>::op<Opts>(element->second, ctx, it, end);
+                     }
+                  }
+                  else {
+                     read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
+                     read<binary>::op<Opts>(value[key], ctx, it, end);
+                  }
                }
             }
          }
