@@ -50,6 +50,16 @@ namespace glz
          }
       };
 
+      template <>
+      struct from_binary<hidden>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&&...) noexcept
+         {
+            ctx.error = error_code::attempt_read_hidden;
+         }
+      };
+
       template <is_bitset T>
       struct from_binary<T>
       {
