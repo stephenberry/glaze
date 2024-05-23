@@ -1697,7 +1697,8 @@ namespace glz
                }();
 
                decltype(auto) fields = [&]() -> decltype(auto) {
-                  if constexpr ((glaze_object_t<T> || reflectable<T>) && (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read)) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>)&&(Opts.error_on_missing_keys ||
+                                                                        is_partial_read<T> || Opts.partial_read)) {
                      return bit_array<num_members>{};
                   }
                   else {
@@ -1730,7 +1731,7 @@ namespace glz
 
                bool first = true;
                while (true) {
-                  if constexpr ((glaze_object_t<T> || reflectable<T>) && (is_partial_read<T> || Opts.partial_read)) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>)&&(is_partial_read<T> || Opts.partial_read)) {
                      if ((all_fields & fields) == all_fields) {
                         if constexpr (Opts.partial_read_nested) {
                            skip_until_closed<Opts, '{', '}'>(ctx, it, end);
@@ -1740,7 +1741,8 @@ namespace glz
                   }
 
                   if (*it == '}') {
-                     if constexpr ((glaze_object_t<T> || reflectable<T>) && ((is_partial_read<T> || Opts.partial_read) && Opts.error_on_missing_keys)) {
+                     if constexpr ((glaze_object_t<T> || reflectable<T>)&&((is_partial_read<T> || Opts.partial_read) &&
+                                                                           Opts.error_on_missing_keys)) {
                         ctx.error = error_code::missing_key;
                      }
                      else {

@@ -29,7 +29,7 @@ namespace glz
          typename T::value_type;
          requires std::is_lvalue_reference_v<decltype(T::val)>;
       };
-      
+
       template <auto MemPtr, auto OptsMemPtr>
       inline constexpr decltype(auto) opts_wrapper() noexcept
       {
@@ -55,7 +55,7 @@ namespace glz
    // Write out string like types without quotes
    template <auto MemPtr>
    constexpr auto raw = detail::opts_wrapper<MemPtr, &opts::raw>();
-   
+
    // Reads into only existing fields and elements and then exits without parsing the rest of the input
    template <auto MemPtr>
    constexpr auto partial_read = detail::opts_wrapper<MemPtr, &opts::partial_read>();

@@ -535,7 +535,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               
+
                if constexpr (Opts.partial_read) {
                   n = value.size();
                }
@@ -580,7 +580,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               
+
                if constexpr (Opts.partial_read) {
                   n = value.size();
                }
@@ -632,7 +632,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               
+
                if constexpr (Opts.partial_read) {
                   n = value.size();
                }
@@ -672,7 +672,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
-               
+
                if constexpr (Opts.partial_read) {
                   n = value.size();
                }
@@ -750,7 +750,7 @@ namespace glz
             if (bool(ctx.error)) [[unlikely]] {
                return;
             }
-            
+
             if constexpr (Opts.partial_read) {
                n = value.size();
             }
@@ -917,7 +917,7 @@ namespace glz
             ++it;
 
             static constexpr auto N = reflection_count<T>;
-            
+
             static constexpr bit_array<N> all_fields = [] {
                bit_array<N> arr{};
                for (size_t i = 0; i < N; ++i) {
@@ -962,7 +962,7 @@ namespace glz
                      return;
                   }
                }
-               
+
                const auto length = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -978,7 +978,7 @@ namespace glz
                         auto index = p - storage.begin();
                         fields[index] = true;
                      }
-                     
+
                      std::visit(
                         [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
                         p->second);
@@ -1051,7 +1051,7 @@ namespace glz
                return;
             }
             ++it;
-            
+
             using V = std::decay_t<T>;
             constexpr auto N = glz::tuple_size_v<V>;
             if constexpr (Opts.partial_read) {
