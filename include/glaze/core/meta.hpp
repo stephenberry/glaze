@@ -286,17 +286,11 @@ namespace glz
    // Allows developers to add `static constexpr auto custom_read = true;` to their glz::meta to prevent ambiguous
    // partial specialization for custom parsers
    template <class T>
-   concept custom_read = requires { meta<T>::custom_read == true; };
+   concept custom_read = requires { requires meta<T>::custom_read == true ; };
 
    template <class T>
-   concept custom_write = requires { meta<T>::custom_write == true; };
+   concept custom_write = requires { requires meta<T>::custom_write == true; };
 
    template <class T>
-   concept partial_read = requires { meta<T>::partial_read == true; };
-
-   template <typename T>
-   concept specialized_with_custom_write = requires { requires(meta<T>::custom_write == true); };
-
-   template <typename T>
-   concept specialized_with_custom_read = requires { requires(meta<T>::custom_read == true); };
+   concept partial_read = requires { requires meta<T>::partial_read == true; };
 }

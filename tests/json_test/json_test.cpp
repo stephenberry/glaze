@@ -8052,6 +8052,57 @@ suite bools_as_numbers_test = [] {
    };
 };
 
+struct allocated_struct
+{
+   std::string string{};
+   int32_t integer{};
+};
+
+suite read_allocated_tests = [] {
+   static constexpr glz::opts allocated{.read_allocated = true};
+   
+   "read_allocated tuple"_test = [] {
+      std::string s = R"(["hello",88,"a string we don't care about"])";
+      std::tuple<std::string, int> obj{};
+      expect(!glz::read<allocated>(obj, s));
+      expect(std::get<0>(obj) == "hello");
+      expect(std::get<1>(obj) == 88);
+   };
+   
+   "read_allocated vector"_test = [] {
+      std::string s = R"([1,2,3,4,5])";
+      std::vector<int> v(2);
+      expect(!glz::read<allocated>(v, s));
+      expect(v.size() == 2);
+      expect(v[0] = 1);
+      expect(v[1] = 2);
+   };
+   
+   "read_allocated map"_test = [] {
+      std::string s = R"({"1":1,"2":2,"3":3})";
+      std::map<std::string, int> obj{{"2",0}};
+      expect(!glz::read<allocated>(obj, s));
+      expect(obj.size() == 1);
+      expect(obj.at("2") = 2);
+   };
+   
+   "read_allocated allocated_struct"_test = [] {
+      std::string s = R"({"integer":400,"string":"ha!",ignore})";
+      allocated_struct obj{};
+      expect(!glz::read<glz::opts{.read_allocated = true}>(obj, s));
+      expect(obj.string == "ha!");
+      expect(obj.integer == 400);
+   };
+   
+   "read_allocated allocated_struct, error_on_unknown_keys = false"_test = [] {
+      std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
+      allocated_struct obj{};
+      expect(!glz::read<glz::opts{.error_on_unknown_keys = false, .read_allocated = true}>(obj, s));
+      expect(obj.string == "ha!");
+      expect(obj.integer == 400);
+   };
+};
+
 int main()
 {
    trace.begin("json_test", "Full test suite duration.");
