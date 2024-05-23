@@ -12,6 +12,9 @@ glz::number<&T::x> // Read a string as a number and writes the string as a numbe
 glz::raw<&T::x> // Write out string like types without quotes
 glz::raw_string<&T::string> // Do not decode/encode escaped characters for strings (improves read/write performance)
 glz::escaped<&T::string> // Opposite of glz::raw_string, it turns off this behavior
+
+glz::read_allocated<&T::x> // Reads into only allocated memory and then exits without parsing the rest of the input
+
 glz::invoke<&T::func> // Invoke a std::function, lambda, or member function with n-arguments as an array input
   
 glz::write_float32<&T::x> // Writes out numbers with a maximum precision of float32_t
@@ -285,6 +288,37 @@ World)");
 buffer.clear();
 glz::write_json(obj, buffer);
 expect(buffer == R"({"a":"Hello\nWorld","b":"","c":""})");
+```
+
+## read_allocated
+
+Reads into only allocated memory and then exits without parsing the rest of the input. More documentation concerning `read_allocated` can be found in the [Partial Read documentation](./partial-read.md).
+
+> `read_allocated` is useful when parsing header information before deciding how to decode the rest of a document. Or, when you only care about the first few elements of an array.
+
+```c++
+struct allocated_meta
+{
+   std::string string{};
+   int32_t integer{};
+};
+
+template <>
+struct glz::meta<allocated_meta>
+{
+   using T = allocated_meta;
+   static constexpr auto value = object("string", read_allocated<&T::string>, "integer", read_allocated<&T::integer>);
+};
+```
+
+In use:
+
+```c++
+std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
+allocated_meta obj{};
+expect(!glz::read<glz::opts{.error_on_unknown_keys = false, .read_allocated = true}>(obj, s));
+expect(obj.string == "ha!");
+expect(obj.integer == 400);
 ```
 
 ## invoke

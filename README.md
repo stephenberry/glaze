@@ -26,11 +26,12 @@ Glaze also supports:
 - [Binary data](./docs/binary.md) through the same API for maximum performance
 - No exceptions (compiles with `-fno-exceptions`)
   - If you desire helpers that throw for cleaner syntax see [Glaze Exceptions](./docs/exceptions.md)
-
 - No runtime type information necessary (compiles with `-fno-rtti`)
 - Rapid error handling with short circuiting
 - [JSON-RPC 2.0 support](./docs/rpc/json-rpc.md)
 - [JSON Schema generation](./docs/json-schema.md)
+- Extremely portable, uses carefully optimized SWAR (SIMD Within A Register) for broad compatibility
+- [Partial Read](./docs/partial-read.md) and [Partial Write](./docs/partial-write.md) support
 - [CSV Reading/Writing](./docs/csv.md)
 - [Much more!](#more-features)
 
@@ -405,7 +406,7 @@ To generate more helpful error messages, call `format_error`:
 ```c++
 auto pe = glz::read_json(obj, buffer);
 if (pe) {
-  std::string descriptive_error = glz::format_error(pe, s);
+  std::string descriptive_error = glz::format_error(pe, buffer);
 }
 ```
 
@@ -697,41 +698,46 @@ The struct below shows the available options and the default behavior.
 ```c++
 struct opts {
   uint32_t format = json;
-      bool comments = false; // Write out comments
-      bool error_on_unknown_keys = true; // Error when an unknown key is encountered
-      bool skip_null_members = true; // Skip writing out params in an object if the value is null
-      bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
-      bool prettify = false; // Write out prettified JSON
-      bool minified = false; // Require minified input for JSON, which results in faster read performance
-      char indentation_char = ' '; // Prettified JSON indentation char
-      uint8_t indentation_width = 3; // Prettified JSON indentation size
-      bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
-      bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
-      bool write_type_info = true; // Write type info for meta objects in variants
-      bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
-      bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
-                                          // skip_null_members = false to require nullable members
-      
-      bool error_on_const_read =
-         false; // Error if attempt is made to read into a const value, by default the value is skipped without error
+  bool comments = false; // Write out comments
+  bool error_on_unknown_keys = true; // Error when an unknown key is encountered
+  bool skip_null_members = true; // Skip writing out params in an object if the value is null
+  bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
+  bool prettify = false; // Write out prettified JSON
+  bool minified = false; // Require minified input for JSON, which results in faster read performance
+  char indentation_char = ' '; // Prettified JSON indentation char
+  uint8_t indentation_width = 3; // Prettified JSON indentation size
+  bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
+  bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
+  bool write_type_info = true; // Write type info for meta objects in variants
+  bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
+  bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
+                                      // skip_null_members = false to require nullable members
 
-      uint32_t layout = rowwise; // CSV row wise output/input
+  bool error_on_const_read =
+     false; // Error if attempt is made to read into a const value, by default the value is skipped without error
 
-      // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
-      float_precision float_max_write_precision{};
+  uint32_t layout = rowwise; // CSV row wise output/input
 
-      bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
-      bool number = false; // read numbers as strings and write these string as numbers
-      bool raw = false; // write out string like values without quotes
-      bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
-      bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies to reflectable and
-      
-      // glaze_object_t concepts
-      bool partial_read_nested = false; // Rewind forward the partially readed struct to the end of the struct
-      bool concatenate = true; // Concatenates ranges of std::pair into single objects when writing
+  // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
+  float_precision float_max_write_precision{};
 
-      bool hide_non_invocable =
-         true; // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
+  bool bools_as_numbers = false; // Read and write booleans with 1's and 0's
+
+  bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
+  bool number = false; // read numbers as strings and write these string as numbers
+  bool raw = false; // write out string like values without quotes
+  bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
+  bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies to reflectable and
+
+  bool read_allocated =
+     false; // Reads into only allocated memory and then exits without parsing the rest of the input
+
+  // glaze_object_t concepts
+  bool partial_read_nested = false; // Advance the partially read struct to the end of the struct
+  bool concatenate = true; // Concatenates ranges of std::pair into single objects when writing
+
+  bool hide_non_invocable =
+     true; // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
 };
 ```
 
