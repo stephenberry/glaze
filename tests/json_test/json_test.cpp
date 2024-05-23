@@ -8052,6 +8052,27 @@ suite bools_as_numbers_test = [] {
    };
 };
 
+suite read_allocated_tests = [] {
+   static constexpr glz::opts options{.read_allocated = true};
+   
+   "read_allocated tuple"_test = [] {
+      std::string s = R"(["hello",88,"a string we don't care about"])";
+      std::tuple<std::string, int> obj{};
+      expect(!glz::read<options>(obj, s));
+      expect(std::get<0>(obj) == "hello");
+      expect(std::get<1>(obj) == 88);
+   };
+   
+   "read_allocated vector"_test = [] {
+      std::string s = R"([1,2,3,4,5])";
+      std::vector<int> v(2);
+      expect(!glz::read<options>(v, s));
+      expect(v.size() == 2);
+      expect(v[0] = 1);
+      expect(v[1] = 2);
+   };
+};
+
 int main()
 {
    trace.begin("json_test", "Full test suite duration.");
