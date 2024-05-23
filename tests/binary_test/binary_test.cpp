@@ -1852,14 +1852,24 @@ suite read_allocated_tests = [] {
       expect(std::get<1>(obj) == 88);
    };
 
-   "read_allocated vector"_test = [] {
+   "read_allocated vector<int>"_test = [] {
       std::vector<int> input{1,2,3,4,5};
       auto s = glz::write_binary(input);
       std::vector<int> v(2);
       expect(!glz::read<allocated>(v, s));
       expect(v.size() == 2);
-      expect(v[0] = 1);
-      expect(v[1] = 2);
+      expect(v[0] == 1);
+      expect(v[1] == 2);
+   };
+   
+   "read_allocated vector<string>"_test = [] {
+      std::vector<std::string> input{"1","2","3","4","5"};
+      auto s = glz::write_binary(input);
+      std::vector<std::string> v(2);
+      expect(!glz::read<allocated>(v, s));
+      expect(v.size() == 2);
+      expect(v[0] == "1");
+      expect(v[1] == "2");
    };
 
    /*"read_allocated map"_test = [] {

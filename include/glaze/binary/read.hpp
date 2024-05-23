@@ -566,9 +566,13 @@ namespace glz
 
                ++it;
 
-               const auto n = int_from_compressed(ctx, it, end);
+               std::conditional_t<Opts.read_allocated, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
+               }
+               
+               if constexpr (Opts.read_allocated) {
+                  n = value.size();
                }
 
                if constexpr (resizable<T>) {
@@ -614,9 +618,13 @@ namespace glz
                }
                ++it;
 
-               const auto n = int_from_compressed(ctx, it, end);
+               std::conditional_t<Opts.read_allocated, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
+               }
+               
+               if constexpr (Opts.read_allocated) {
+                  n = value.size();
                }
 
                if ((it + n * sizeof(V)) > end) [[unlikely]] {
@@ -650,9 +658,13 @@ namespace glz
                }
                ++it;
 
-               const auto n = int_from_compressed(ctx, it, end);
+               std::conditional_t<Opts.read_allocated, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
+               }
+               
+               if constexpr (Opts.read_allocated) {
+                  n = value.size();
                }
 
                if constexpr (resizable<T>) {

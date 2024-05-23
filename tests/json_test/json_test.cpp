@@ -8087,8 +8087,8 @@ suite read_allocated_tests = [] {
       std::vector<int> v(2);
       expect(!glz::read<allocated>(v, s));
       expect(v.size() == 2);
-      expect(v[0] = 1);
-      expect(v[1] = 2);
+      expect(v[0] == 1);
+      expect(v[1] == 2);
    };
 
    "read_allocated map"_test = [] {
@@ -8096,7 +8096,7 @@ suite read_allocated_tests = [] {
       std::map<std::string, int> obj{{"2", 0}};
       expect(!glz::read<allocated>(obj, s));
       expect(obj.size() == 1);
-      expect(obj.at("2") = 2);
+      expect(obj.at("2") == 2);
    };
 
    "read_allocated allocated_struct"_test = [] {
