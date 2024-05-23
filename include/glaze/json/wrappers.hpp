@@ -123,4 +123,8 @@ namespace glz
    // Write out string like types without quotes
    template <auto MemPtr>
    constexpr auto raw = detail::opts_wrapper<MemPtr, &opts::raw>();
+   
+   // Reads into only allocated memory and then exits without parsing the rest of the input
+   template <auto MemPtr>
+   constexpr auto read_allocated = detail::opts_wrapper<MemPtr, &opts::read_allocated>();
 }

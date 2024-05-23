@@ -8058,6 +8058,19 @@ struct allocated_struct
    int32_t integer{};
 };
 
+struct allocated_meta
+{
+   std::string string{};
+   int32_t integer{};
+};
+
+template <>
+struct glz::meta<allocated_meta>
+{
+   using T = allocated_meta;
+   static constexpr auto value = object("string", read_allocated<&T::string>, "integer", read_allocated<&T::integer>);
+};
+
 suite read_allocated_tests = [] {
    static constexpr glz::opts allocated{.read_allocated = true};
 
@@ -8097,6 +8110,14 @@ suite read_allocated_tests = [] {
    "read_allocated allocated_struct, error_on_unknown_keys = false"_test = [] {
       std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
       allocated_struct obj{};
+      expect(!glz::read<glz::opts{.error_on_unknown_keys = false, .read_allocated = true}>(obj, s));
+      expect(obj.string == "ha!");
+      expect(obj.integer == 400);
+   };
+   
+   "read_allocated allocated_meta, error_on_unknown_keys = false"_test = [] {
+      std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
+      allocated_meta obj{};
       expect(!glz::read<glz::opts{.error_on_unknown_keys = false, .read_allocated = true}>(obj, s));
       expect(obj.string == "ha!");
       expect(obj.integer == 400);
