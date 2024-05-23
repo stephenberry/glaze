@@ -8071,6 +8071,14 @@ suite read_allocated_tests = [] {
       expect(v[0] = 1);
       expect(v[1] = 2);
    };
+   
+   "read_allocated map"_test = [] {
+      std::string s = R"({"1":1,"2":2,"3":3})";
+      std::map<std::string, int> obj{{"2",0}};
+      expect(!glz::read<options>(obj, s));
+      expect(obj.size() == 1);
+      expect(obj.at("2") = 2);
+   };
 };
 
 int main()

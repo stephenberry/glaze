@@ -1255,6 +1255,7 @@ namespace glz
          unreachable();
       }
 
+      // For types like std::forward_list
       template <class T>
          requires readable_array_t<T> && (!emplace_backable<T> && resizable<T>)
       struct from_json<T>
@@ -1934,22 +1935,32 @@ namespace glz
                      }
                   }
                   else {
-                     // using k_t = std::conditional_t<heterogeneous_map<T>, sv, typename T::key_type>;
-                     using k_t = typename T::key_type;
-                     if constexpr (std::is_same_v<k_t, std::string>) {
-                        static thread_local k_t key;
+                     // using Key = std::conditional_t<heterogeneous_map<T>, sv, typename T::key_type>;
+                     using Key = typename T::key_type;
+                     if constexpr (std::is_same_v<Key, std::string>) {
+                        static thread_local Key key;
                         read<json>::op<Opts>(key, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
                         parse_object_entry_sep<Opts>(ctx, it, end);
-
-                        read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
+                        
+                        if constexpr (Opts.read_allocated) {
+                           if (auto element = value.find(key); element != value.end()) {
+                              read<json>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
+                           }
+                           else {
+                              skip_value<Opts>(ctx, it, end);
+                           }
+                        }
+                        else {
+                           read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
+                        }
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }
-                     else if constexpr (str_t<k_t>) {
-                        k_t key;
+                     else if constexpr (str_t<Key>) {
+                        Key key;
                         read<json>::op<Opts>(key, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -1958,21 +1969,31 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
+                        if constexpr (Opts.read_allocated) {
+                           if (auto element = value.find(key); element != value.end()) {
+                              read<json>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
+                           }
+                           else {
+                              skip_value<Opts>(ctx, it, end);
+                           }
+                        }
+                        else {
+                           read<json>::op<ws_handled<Opts>()>(value[key], ctx, it, end);
+                        }
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }
                      else {
-                        k_t key_value{};
-                        if constexpr (glaze_enum_t<k_t>) {
+                        Key key_value{};
+                        if constexpr (glaze_enum_t<Key>) {
                            read<json>::op<Opts>(key_value, ctx, it, end);
                         }
-                        else if constexpr (std::is_arithmetic_v<k_t>) {
+                        else if constexpr (std::is_arithmetic_v<Key>) {
                            // prefer over quoted_t below to avoid double parsing of quoted_t
                            read<json>::op<opt_true<Opts, &opts::quoted_num>>(key_value, ctx, it, end);
                         }
                         else {
-                           read<json>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<k_t>{key_value}, ctx, it, end);
+                           read<json>::op<opt_false<Opts, &opts::raw_string>>(quoted_t<Key>{key_value}, ctx, it, end);
                         }
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -1981,7 +2002,17 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        read<json>::op<Opts>(value[key_value], ctx, it, end);
+                        if constexpr (Opts.read_allocated) {
+                           if (auto element = value.find(key_value); element != value.end()) {
+                              read<json>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
+                           }
+                           else {
+                              skip_value<Opts>(ctx, it, end);
+                           }
+                        }
+                        else {
+                           read<json>::op<Opts>(value[key_value], ctx, it, end);
+                        }
                         if (bool(ctx.error)) [[unlikely]]
                            return;
                      }
