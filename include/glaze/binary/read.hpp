@@ -49,7 +49,7 @@ namespace glz
                                               std::forward<It0>(it), std::forward<It1>(end));
          }
       };
-      
+
       template <>
       struct from_binary<hidden>
       {

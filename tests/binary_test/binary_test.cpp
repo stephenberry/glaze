@@ -1820,16 +1820,18 @@ suite error_outputs = [] {
    };
 };
 
-struct hide_struct {
-  int i = 287;
-  double d = 3.14;
-  std::string hello = "Hello World";
+struct hide_struct
+{
+   int i = 287;
+   double d = 3.14;
+   std::string hello = "Hello World";
 };
 
 template <>
-struct glz::meta<hide_struct> {
+struct glz::meta<hide_struct>
+{
    using T = hide_struct;
-   static constexpr auto value = object(&T::i,  //
+   static constexpr auto value = object(&T::i, //
                                         &T::d, //
                                         "hello", hide{&T::hello});
 };
