@@ -1820,22 +1820,22 @@ suite error_outputs = [] {
    };
 };
 
-struct allocated_struct
+struct partial_struct
 {
    std::string string{};
    int32_t integer{};
 };
 
-struct allocated_meta
+struct partial_meta
 {
    std::string string{};
    int32_t integer{};
 };
 
 template <>
-struct glz::meta<allocated_meta>
+struct glz::meta<partial_meta>
 {
-   using T = allocated_meta;
+   using T = partial_meta;
    static constexpr auto value = object("string", partial_read<&T::string>, "integer", partial_read<&T::integer>);
 };
 
@@ -1880,25 +1880,25 @@ suite read_allocated_tests = [] {
     expect(obj.at("2") = 2);
     };
     
-    "partial_read allocated_struct"_test = [] {
+    "partial_read partial_struct"_test = [] {
     std::string s = R"({"integer":400,"string":"ha!",ignore})";
-    allocated_struct obj{};
+    partial_struct obj{};
     expect(!glz::read<glz::opts{.format = glz::binary, .partial_read = true}>(obj, s));
     expect(obj.string == "ha!");
     expect(obj.integer == 400);
     };
     
-    "partial_read allocated_struct, error_on_unknown_keys = false"_test = [] {
+    "partial_read partial_struct, error_on_unknown_keys = false"_test = [] {
     std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
-    allocated_struct obj{};
+    partial_struct obj{};
     expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false, .partial_read = true}>(obj, s));
     expect(obj.string == "ha!");
     expect(obj.integer == 400);
     };
     
-    "partial_read allocated_meta, error_on_unknown_keys = false"_test = [] {
+    "partial_read partial_meta, error_on_unknown_keys = false"_test = [] {
     std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
-    allocated_meta obj{};
+    partial_meta obj{};
     expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false, .partial_read = true}>(obj, s));
     expect(obj.string == "ha!");
     expect(obj.integer == 400);
