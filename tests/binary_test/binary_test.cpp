@@ -1852,8 +1852,9 @@ suite read_allocated_tests = [] {
       expect(std::get<1>(obj) == 88);
    };
 
-   /*"read_allocated vector"_test = [] {
-      std::string s = R"([1,2,3,4,5])";
+   "read_allocated vector"_test = [] {
+      std::vector<int> input{1,2,3,4,5};
+      auto s = glz::write_binary(input);
       std::vector<int> v(2);
       expect(!glz::read<allocated>(v, s));
       expect(v.size() == 2);
@@ -1861,7 +1862,7 @@ suite read_allocated_tests = [] {
       expect(v[1] = 2);
    };
 
-   "read_allocated map"_test = [] {
+   /*"read_allocated map"_test = [] {
       std::string s = R"({"1":1,"2":2,"3":3})";
       std::map<std::string, int> obj{{"2", 0}};
       expect(!glz::read<allocated>(obj, s));
