@@ -1672,11 +1672,26 @@ namespace glz
       // In to avoid code dupplication we put fields_state state in a separate function with thread_local storage.
       // This allows us to access this state only in constexpr branches that do partial reading.
       // If we put this in the `op` function we would have to allocate even when not doing partial reading.
+      // Note: this sort of tracking does not work with nested objects
+      // that are trying to keep track of the read count at multiple levels
       template <size_t NumMembers>
       inline auto& get_fields_state() noexcept
       {
          static thread_local fields_state<NumMembers> state{};
          return state;
+      }
+      
+      // similar to tracking fields, but for types like std::map
+      // we simply count the number of allocated keys that we've read
+      // this means partial reading won't work for duplicate keys
+      // but this is more performant and duplicate keys are not
+      // usually seen in partial read contexts
+      // Note: this sort of tracking does not work with nested objects
+      // that are trying to keep track of the read count at multiple levels
+      inline auto& get_dynamic_object_read_count() noexcept
+      {
+         static thread_local size_t count{};
+         return count;
       }
 
       template <class T>
@@ -1713,6 +1728,10 @@ namespace glz
             else {
                if constexpr (Opts.error_on_missing_keys || partial_read<T>) {
                   get_fields_state<num_members>() = {}; // reinitialize
+               }
+               
+               if constexpr (Opts.read_allocated) {
+                  get_dynamic_object_read_count() = 0;
                }
 
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
@@ -1935,6 +1954,7 @@ namespace glz
                      }
                   }
                   else {
+                     // For types like std::map, std::unordered_map
                      // using Key = std::conditional_t<heterogeneous_map<T>, sv, typename T::key_type>;
                      using Key = typename T::key_type;
                      if constexpr (std::is_same_v<Key, std::string>) {
@@ -1946,11 +1966,16 @@ namespace glz
                         parse_object_entry_sep<Opts>(ctx, it, end);
                         
                         if constexpr (Opts.read_allocated) {
+                           auto& read_count = get_dynamic_object_read_count();
                            if (auto element = value.find(key); element != value.end()) {
+                              ++read_count;
                               read<json>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
                            }
                            else {
                               skip_value<Opts>(ctx, it, end);
+                           }
+                           if (read_count == value.size()) {
+                              return;
                            }
                         }
                         else {
@@ -1970,11 +1995,16 @@ namespace glz
                            return;
 
                         if constexpr (Opts.read_allocated) {
+                           auto& read_count = get_dynamic_object_read_count();
                            if (auto element = value.find(key); element != value.end()) {
+                              ++read_count;
                               read<json>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
                            }
                            else {
                               skip_value<Opts>(ctx, it, end);
+                           }
+                           if (read_count == value.size()) {
+                              return;
                            }
                         }
                         else {
@@ -2003,11 +2033,16 @@ namespace glz
                            return;
 
                         if constexpr (Opts.read_allocated) {
+                           auto& read_count = get_dynamic_object_read_count();
                            if (auto element = value.find(key_value); element != value.end()) {
+                              ++read_count;
                               read<json>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
                            }
                            else {
                               skip_value<Opts>(ctx, it, end);
+                           }
+                           if (read_count == value.size()) {
+                              return;
                            }
                         }
                         else {
