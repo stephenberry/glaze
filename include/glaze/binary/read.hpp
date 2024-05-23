@@ -531,9 +531,13 @@ namespace glz
 
                ++it;
 
-               const auto n = int_from_compressed(ctx, it, end);
+               std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
+               }
+               
+               if constexpr (Opts.partial_read) {
+                  n = value.size();
                }
 
                if ((it + n * sizeof(V)) > end) [[unlikely]] {
@@ -572,9 +576,13 @@ namespace glz
 
                ++it;
 
-               const auto n = int_from_compressed(ctx, it, end);
+               std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
+               }
+               
+               if constexpr (Opts.partial_read) {
+                  n = value.size();
                }
 
                if constexpr (resizable<T>) {
@@ -620,9 +628,13 @@ namespace glz
                }
                ++it;
 
-               const auto n = int_from_compressed(ctx, it, end);
+               std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
+               }
+               
+               if constexpr (Opts.partial_read) {
+                  n = value.size();
                }
 
                if ((it + n * sizeof(V)) > end) [[unlikely]] {
@@ -656,9 +668,13 @@ namespace glz
                }
                ++it;
 
-               const auto n = int_from_compressed(ctx, it, end);
+               std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
+               }
+               
+               if constexpr (Opts.partial_read) {
+                  n = value.size();
                }
 
                if constexpr (resizable<T>) {
@@ -730,23 +746,43 @@ namespace glz
 
             ++it;
 
-            const auto n = int_from_compressed(ctx, it, end);
+            std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
                return;
+            }
+            
+            if constexpr (Opts.partial_read) {
+               n = value.size();
             }
 
             if constexpr (std::is_arithmetic_v<std::decay_t<Key>>) {
                Key key;
                for (size_t i = 0; i < n; ++i) {
-                  read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
-                  read<binary>::op<Opts>(value[key], ctx, it, end);
+                  if constexpr (Opts.partial_read) {
+                     read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
+                     if (auto element = value.find(key); element != value.end()) {
+                        read<binary>::op<Opts>(element->second, ctx, it, end);
+                     }
+                  }
+                  else {
+                     read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
+                     read<binary>::op<Opts>(value[key], ctx, it, end);
+                  }
                }
             }
             else {
                static thread_local Key key;
                for (size_t i = 0; i < n; ++i) {
-                  read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
-                  read<binary>::op<Opts>(value[key], ctx, it, end);
+                  if constexpr (Opts.partial_read) {
+                     read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
+                     if (auto element = value.find(key); element != value.end()) {
+                        read<binary>::op<Opts>(element->second, ctx, it, end);
+                     }
+                  }
+                  else {
+                     read<binary>::op<opt_true<Opts, &opts::no_header>>(key, ctx, it, end);
+                     read<binary>::op<Opts>(value[key], ctx, it, end);
+                  }
                }
             }
          }
@@ -880,7 +916,24 @@ namespace glz
 
             ++it;
 
-            constexpr auto N = reflection_count<T>;
+            static constexpr auto N = reflection_count<T>;
+            
+            static constexpr bit_array<N> all_fields = [] {
+               bit_array<N> arr{};
+               for (size_t i = 0; i < N; ++i) {
+                  arr[i] = true;
+               }
+               return arr;
+            }();
+
+            decltype(auto) fields = [&]() -> decltype(auto) {
+               if constexpr (is_partial_read<T> || Opts.partial_read) {
+                  return bit_array<N>{};
+               }
+               else {
+                  return nullptr;
+               }
+            }();
 
             const auto n_keys = int_from_compressed(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
@@ -904,6 +957,12 @@ namespace glz
             }();
 
             for (size_t i = 0; i < n_keys; ++i) {
+               if constexpr (is_partial_read<T> || Opts.partial_read) {
+                  if ((all_fields & fields) == all_fields) {
+                     return;
+                  }
+               }
+               
                const auto length = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
@@ -915,6 +974,11 @@ namespace glz
 
                if constexpr (N > 0) {
                   if (const auto& p = storage.find(key); p != storage.end()) [[likely]] {
+                     if constexpr (is_partial_read<T> || Opts.partial_read) {
+                        auto index = p - storage.begin();
+                        fields[index] = true;
+                     }
+                     
                      std::visit(
                         [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
                         p->second);
@@ -987,19 +1051,43 @@ namespace glz
                return;
             }
             ++it;
-
+            
             using V = std::decay_t<T>;
             constexpr auto N = glz::tuple_size_v<V>;
-            if (int_from_compressed(ctx, it, end) != N) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
+            if constexpr (Opts.partial_read) {
+               const auto n = int_from_compressed(ctx, it, end);
 
-            if constexpr (is_std_tuple<T>) {
-               for_each<N>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+               if constexpr (is_std_tuple<T>) {
+                  for_each_short_circuit<N>([&](auto I) {
+                     if (I < n) {
+                        read<binary>::op<Opts>(std::get<I>(value), ctx, it, end);
+                        return false; // continue
+                     }
+                     return true; // short circuit
+                  });
+               }
+               else {
+                  for_each_short_circuit<N>([&](auto I) {
+                     if (I < n) {
+                        read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end);
+                        return false; // continue
+                     }
+                     return true; // short circuit
+                  });
+               }
             }
             else {
-               for_each<N>([&](auto I) { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+               if (int_from_compressed(ctx, it, end) != N) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               if constexpr (is_std_tuple<T>) {
+                  for_each<N>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+               }
+               else {
+                  for_each<N>([&](auto I) { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+               }
             }
          }
       };

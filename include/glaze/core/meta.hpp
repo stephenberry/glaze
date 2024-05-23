@@ -292,5 +292,5 @@ namespace glz
    concept custom_write = requires { requires meta<T>::custom_write == true; };
 
    template <class T>
-   concept partial_read = requires { requires meta<T>::partial_read == true; };
+   concept is_partial_read = requires { requires meta<T>::partial_read == true; };
 }

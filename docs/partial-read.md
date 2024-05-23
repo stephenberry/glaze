@@ -1,6 +1,69 @@
 # Partial Read
 
-At times it is not necessary to read the entire JSON document, but rather just a header or some of the initial fields. Glaze supports this feature by providing a `partial_read` flag that can be set to `true` within the glaze metadata.
+At times it is not necessary to read the entire JSON document, but rather just a header or some of the initial fields. Glaze provides multiple solutions:
+
+-  `partial_read` in `glz::opts`
+-  `partial_read` in `glz::meta`
+- Partial reading via [JSON Pointer syntax](./json-pointer-syntax.md)
+
+# Partial reading with glz::opts
+
+`partial_read` is a compile time flag in `glz::opts` that indicates only existing array and object elements should be read into, and once the memory has been read, parsing returns without iterating through the rest of the document.
+
+> A [wrapper](./wrappers.md) by the same name also exists.
+
+Example: read only the first two elements into a `std::tuple`
+
+```c++
+std::string s = R"(["hello",88,"a string we don't care about"])";
+std::tuple<std::string, int> obj{};
+expect(!glz::read<glz::opts{.partial_read = true}>(obj, s));
+expect(std::get<0>(obj) == "hello");
+expect(std::get<1>(obj) == 88);
+```
+
+Example: read only the first two elements into a `std::vector`
+
+```c++
+std::string s = R"([1,2,3,4,5])";
+std::vector<int> v(2);
+expect(!glz::read<glz::opts{.partial_read = true}>(v, s));
+expect(v.size() == 2);
+expect(v[0] = 1);
+expect(v[1] = 2);
+```
+
+Example: read only the allocated element in a `std::map`
+
+```c++
+std::string s = R"({"1":1,"2":2,"3":3})";
+std::map<std::string, int> obj{{"2", 0}};
+expect(!glz::read<glz::opts{.partial_read = true}>(obj, s));
+expect(obj.size() == 1);
+expect(obj.at("2") = 2);
+```
+
+Example: read only the fields present in a struct
+
+```c++
+struct partial_struct
+{
+   std::string string{};
+   int32_t integer{};
+};
+```
+
+```c++
+std::string s = R"({"integer":400,"string":"ha!",ignore})";
+partial_struct obj{};
+expect(!glz::read<glz::opts{.partial_read = true}>(obj, s));
+expect(obj.string == "ha!");
+expect(obj.integer == 400);
+```
+
+# Partial reading with glz::meta
+
+Glaze allows a `partial_read` flag that can be set to `true` within the glaze metadata.
 
 ```json
 {

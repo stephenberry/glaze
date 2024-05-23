@@ -1048,7 +1048,7 @@ namespace glz
                }
             }
 
-            if constexpr (Opts.read_allocated) {
+            if constexpr (Opts.partial_read) {
                return;
             }
             else {
@@ -1338,7 +1338,7 @@ namespace glz
                GLZ_SKIP_WS;
             });
 
-            if constexpr (Opts.read_allocated) {
+            if constexpr (Opts.partial_read) {
                return;
             }
             else {
@@ -1664,7 +1664,7 @@ namespace glz
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             static constexpr auto num_members = reflection_count<T>;
-            if constexpr (num_members == 0 && partial_read<T>) {
+            if constexpr (num_members == 0 && is_partial_read<T>) {
                static_assert(false_v<T>, "No members to read for partial read");
             }
 
@@ -1697,7 +1697,7 @@ namespace glz
                }();
 
                decltype(auto) fields = [&]() -> decltype(auto) {
-                  if constexpr (Opts.error_on_missing_keys || partial_read<T> || Opts.read_allocated) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>) && (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read)) {
                      return bit_array<num_members>{};
                   }
                   else {
@@ -1705,7 +1705,7 @@ namespace glz
                   }
                }();
 
-               size_t read_count{}; // for read_allocated and dynamic objects
+               size_t read_count{}; // for partial_read and dynamic objects
 
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T> && num_members > 0) {
@@ -1730,7 +1730,7 @@ namespace glz
 
                bool first = true;
                while (true) {
-                  if constexpr (partial_read<T> || Opts.read_allocated) {
+                  if constexpr ((glaze_object_t<T> || reflectable<T>) && (is_partial_read<T> || Opts.partial_read)) {
                      if ((all_fields & fields) == all_fields) {
                         if constexpr (Opts.partial_read_nested) {
                            skip_until_closed<Opts, '{', '}'>(ctx, it, end);
@@ -1740,7 +1740,7 @@ namespace glz
                   }
 
                   if (*it == '}') {
-                     if constexpr ((partial_read<T> || Opts.read_allocated) && Opts.error_on_missing_keys) {
+                     if constexpr ((glaze_object_t<T> || reflectable<T>) && ((is_partial_read<T> || Opts.partial_read) && Opts.error_on_missing_keys)) {
                         ctx.error = error_code::missing_key;
                      }
                      else {
@@ -1817,7 +1817,7 @@ namespace glz
                            if (bool(ctx.error)) [[unlikely]]
                               return;
 
-                           if constexpr (Opts.error_on_missing_keys || partial_read<T> || Opts.read_allocated) {
+                           if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
                               // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
                               // At the very least if we are going to do this add a get_index method to the maps and
                               // call that
@@ -1884,7 +1884,7 @@ namespace glz
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
 
-                              if constexpr (Opts.error_on_missing_keys || partial_read<T> || Opts.read_allocated) {
+                              if constexpr (Opts.error_on_missing_keys || is_partial_read<T> || Opts.partial_read) {
                                  // TODO: Kludge/hack. Should work but could easily cause memory issues with small
                                  // changes. At the very least if we are going to do this add a get_index method to the
                                  // maps and call that
@@ -1933,7 +1933,7 @@ namespace glz
 
                         parse_object_entry_sep<Opts>(ctx, it, end);
 
-                        if constexpr (Opts.read_allocated) {
+                        if constexpr (Opts.partial_read) {
                            if (auto element = value.find(key); element != value.end()) {
                               ++read_count;
                               read<json>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
@@ -1961,7 +1961,7 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        if constexpr (Opts.read_allocated) {
+                        if constexpr (Opts.partial_read) {
                            if (auto element = value.find(key); element != value.end()) {
                               ++read_count;
                               read<json>::op<ws_handled<Opts>()>(element->second, ctx, it, end);
@@ -1998,7 +1998,7 @@ namespace glz
                         if (bool(ctx.error)) [[unlikely]]
                            return;
 
-                        if constexpr (Opts.read_allocated) {
+                        if constexpr (Opts.partial_read) {
                            if (auto element = value.find(key_value); element != value.end()) {
                               ++read_count;
                               read<json>::op<ws_handled<Opts>()>(element->second, ctx, it, end);

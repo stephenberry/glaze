@@ -12,6 +12,9 @@ glz::number<&T::x> // Read a string as a number and writes the string as a numbe
 glz::raw<&T::x> // Write out string like types without quotes
 glz::raw_string<&T::string> // Do not decode/encode escaped characters for strings (improves read/write performance)
 glz::escaped<&T::string> // Opposite of glz::raw_string, it turns off this behavior
+
+glz::partial_read<&T::x> // Reads into only existing fields and elements and then exits without parsing the rest of the input
+
 glz::invoke<&T::func> // Invoke a std::function, lambda, or member function with n-arguments as an array input
   
 glz::write_float32<&T::x> // Writes out numbers with a maximum precision of float32_t
@@ -286,6 +289,12 @@ buffer.clear();
 glz::write_json(obj, buffer);
 expect(buffer == R"({"a":"Hello\nWorld","b":"","c":""})");
 ```
+
+## partial_read
+
+Reads into existing object and array elements and then exits without parsing the rest of the input. More documentation concerning `partial_read` can be found in the [Partial Read documentation](./partial-read.md).
+
+> `partial_read` is useful when parsing header information before deciding how to decode the rest of a document. Or, when you only care about the first few elements of an array.
 
 ## invoke
 

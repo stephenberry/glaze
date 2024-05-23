@@ -1820,6 +1820,72 @@ suite error_outputs = [] {
    };
 };
 
+struct partial_struct
+{
+   std::string string{};
+   int32_t integer{};
+};
+
+struct full_struct
+{
+   std::string skip_me{};
+   std::string string{};
+   int32_t integer{};
+   std::vector<int> more_data_to_ignore{};
+};
+
+suite read_allocated_tests = [] {
+   static constexpr glz::opts partial{.format = glz::binary, .partial_read = true};
+   
+   "partial_read tuple"_test = [] {
+      std::tuple<std::string, int, std::string> input{"hello", 88, "a string we don't care about"};
+      auto s = glz::write_binary(input);
+      std::tuple<std::string, int> obj{};
+      auto ec = glz::read<partial>(obj, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(std::get<0>(obj) == "hello");
+      expect(std::get<1>(obj) == 88);
+   };
+   
+   "partial_read vector<int>"_test = [] {
+      std::vector<int> input{1,2,3,4,5};
+      auto s = glz::write_binary(input);
+      std::vector<int> v(2);
+      expect(!glz::read<partial>(v, s));
+      expect(v.size() == 2);
+      expect(v[0] == 1);
+      expect(v[1] == 2);
+   };
+   
+   "partial_read vector<string>"_test = [] {
+      std::vector<std::string> input{"1","2","3","4","5"};
+      auto s = glz::write_binary(input);
+      std::vector<std::string> v(2);
+      expect(!glz::read<partial>(v, s));
+      expect(v.size() == 2);
+      expect(v[0] == "1");
+      expect(v[1] == "2");
+   };
+   
+   "partial_read map"_test = [] {
+      std::map<std::string, int> input{{"1",1},{"2",2},{"3",3}};
+      auto s = glz::write_binary(input);
+      std::map<std::string, int> obj{{"2", 0}};
+      expect(!glz::read<partial>(obj, s));
+      expect(obj.size() == 1);
+      expect(obj.at("2") = 2);
+    };
+    
+    "partial_read partial_struct"_test = [] {
+       full_struct input{"garbage", "ha!", 400, {1,2,3}};
+       auto s = glz::write_binary(input);
+       partial_struct obj{};
+       expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false, .partial_read = true}>(obj, s));
+       expect(obj.string == "ha!");
+       expect(obj.integer == 400);
+    };
+};
+   
 struct hide_struct
 {
    int i = 287;
