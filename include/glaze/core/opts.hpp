@@ -63,8 +63,8 @@ namespace glz
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
       bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies to reflectable and
 
-      bool read_allocated =
-         false; // Reads into only allocated memory and then exits without parsing the rest of the input
+      bool partial_read =
+         false; // Reads into only existing fields and elements and then exits without parsing the rest of the input
 
       // glaze_object_t concepts
       bool partial_read_nested = false; // Advance the partially read struct to the end of the struct

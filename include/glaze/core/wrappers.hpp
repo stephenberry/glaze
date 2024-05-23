@@ -56,7 +56,7 @@ namespace glz
    template <auto MemPtr>
    constexpr auto raw = detail::opts_wrapper<MemPtr, &opts::raw>();
    
-   // Reads into only allocated memory and then exits without parsing the rest of the input
+   // Reads into only existing fields and elements and then exits without parsing the rest of the input
    template <auto MemPtr>
-   constexpr auto read_allocated = detail::opts_wrapper<MemPtr, &opts::read_allocated>();
+   constexpr auto partial_read = detail::opts_wrapper<MemPtr, &opts::partial_read>();
 }

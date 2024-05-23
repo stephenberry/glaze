@@ -531,12 +531,12 @@ namespace glz
 
                ++it;
 
-               std::conditional_t<Opts.read_allocated, size_t, const size_t> n = int_from_compressed(ctx, it, end);
+               std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
                
-               if constexpr (Opts.read_allocated) {
+               if constexpr (Opts.partial_read) {
                   n = value.size();
                }
 
@@ -576,12 +576,12 @@ namespace glz
 
                ++it;
 
-               std::conditional_t<Opts.read_allocated, size_t, const size_t> n = int_from_compressed(ctx, it, end);
+               std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
                
-               if constexpr (Opts.read_allocated) {
+               if constexpr (Opts.partial_read) {
                   n = value.size();
                }
 
@@ -628,12 +628,12 @@ namespace glz
                }
                ++it;
 
-               std::conditional_t<Opts.read_allocated, size_t, const size_t> n = int_from_compressed(ctx, it, end);
+               std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
                
-               if constexpr (Opts.read_allocated) {
+               if constexpr (Opts.partial_read) {
                   n = value.size();
                }
 
@@ -668,12 +668,12 @@ namespace glz
                }
                ++it;
 
-               std::conditional_t<Opts.read_allocated, size_t, const size_t> n = int_from_compressed(ctx, it, end);
+               std::conditional_t<Opts.partial_read, size_t, const size_t> n = int_from_compressed(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]] {
                   return;
                }
                
-               if constexpr (Opts.read_allocated) {
+               if constexpr (Opts.partial_read) {
                   n = value.size();
                }
 
@@ -1006,7 +1006,7 @@ namespace glz
             
             using V = std::decay_t<T>;
             constexpr auto N = glz::tuple_size_v<V>;
-            if constexpr (Opts.read_allocated) {
+            if constexpr (Opts.partial_read) {
                const auto n = int_from_compressed(ctx, it, end);
 
                if constexpr (is_std_tuple<T>) {
