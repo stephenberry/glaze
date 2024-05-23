@@ -1820,6 +1820,80 @@ suite error_outputs = [] {
    };
 };
 
+struct allocated_struct
+{
+   std::string string{};
+   int32_t integer{};
+};
+
+struct allocated_meta
+{
+   std::string string{};
+   int32_t integer{};
+};
+
+template <>
+struct glz::meta<allocated_meta>
+{
+   using T = allocated_meta;
+   static constexpr auto value = object("string", read_allocated<&T::string>, "integer", read_allocated<&T::integer>);
+};
+
+suite read_allocated_tests = [] {
+   static constexpr glz::opts allocated{.format = glz::binary, .read_allocated = true};
+
+   "read_allocated tuple"_test = [] {
+      std::tuple<std::string, int, std::string> input{"hello", 88, "a string we don't care about"};
+      auto s = glz::write_binary(input);
+      std::tuple<std::string, int> obj{};
+      auto ec = glz::read<allocated>(obj, s);
+      expect(!ec) << glz::format_error(ec, s);
+      expect(std::get<0>(obj) == "hello");
+      expect(std::get<1>(obj) == 88);
+   };
+
+   /*"read_allocated vector"_test = [] {
+      std::string s = R"([1,2,3,4,5])";
+      std::vector<int> v(2);
+      expect(!glz::read<allocated>(v, s));
+      expect(v.size() == 2);
+      expect(v[0] = 1);
+      expect(v[1] = 2);
+   };
+
+   "read_allocated map"_test = [] {
+      std::string s = R"({"1":1,"2":2,"3":3})";
+      std::map<std::string, int> obj{{"2", 0}};
+      expect(!glz::read<allocated>(obj, s));
+      expect(obj.size() == 1);
+      expect(obj.at("2") = 2);
+   };
+
+   "read_allocated allocated_struct"_test = [] {
+      std::string s = R"({"integer":400,"string":"ha!",ignore})";
+      allocated_struct obj{};
+      expect(!glz::read<glz::opts{.format = glz::binary, .read_allocated = true}>(obj, s));
+      expect(obj.string == "ha!");
+      expect(obj.integer == 400);
+   };
+
+   "read_allocated allocated_struct, error_on_unknown_keys = false"_test = [] {
+      std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
+      allocated_struct obj{};
+      expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false, .read_allocated = true}>(obj, s));
+      expect(obj.string == "ha!");
+      expect(obj.integer == 400);
+   };
+   
+   "read_allocated allocated_meta, error_on_unknown_keys = false"_test = [] {
+      std::string s = R"({"skip":null,"integer":400,"string":"ha!",ignore})";
+      allocated_meta obj{};
+      expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false, .read_allocated = true}>(obj, s));
+      expect(obj.string == "ha!");
+      expect(obj.integer == 400);
+   };*/
+};
+
 int main()
 {
    glz::trace_begin("binary_test");

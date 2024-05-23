@@ -977,19 +977,43 @@ namespace glz
                return;
             }
             ++it;
-
+            
             using V = std::decay_t<T>;
             constexpr auto N = glz::tuple_size_v<V>;
-            if (int_from_compressed(ctx, it, end) != N) {
-               ctx.error = error_code::syntax_error;
-               return;
-            }
+            if constexpr (Opts.read_allocated) {
+               const auto n = int_from_compressed(ctx, it, end);
 
-            if constexpr (is_std_tuple<T>) {
-               for_each<N>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+               if constexpr (is_std_tuple<T>) {
+                  for_each_short_circuit<N>([&](auto I) {
+                     if (I < n) {
+                        read<binary>::op<Opts>(std::get<I>(value), ctx, it, end);
+                        return false; // continue
+                     }
+                     return true; // short circuit
+                  });
+               }
+               else {
+                  for_each_short_circuit<N>([&](auto I) {
+                     if (I < n) {
+                        read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end);
+                        return false; // continue
+                     }
+                     return true; // short circuit
+                  });
+               }
             }
             else {
-               for_each<N>([&](auto I) { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+               if (int_from_compressed(ctx, it, end) != N) {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
+
+               if constexpr (is_std_tuple<T>) {
+                  for_each<N>([&](auto I) { read<binary>::op<Opts>(std::get<I>(value), ctx, it, end); });
+               }
+               else {
+                  for_each<N>([&](auto I) { read<binary>::op<Opts>(glz::get<I>(value), ctx, it, end); });
+               }
             }
          }
       };
