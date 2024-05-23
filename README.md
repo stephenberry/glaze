@@ -18,7 +18,6 @@ Glaze also supports:
 - Header only
 - Direct to memory serialization/deserialization
 - Compile time maps with constant time lookups and perfect hashing
-- Nearly zero intermediate allocations
 - Powerful wrappers to modify read/write behavior ([Wrappers](./docs/wrappers.md))
 - Use your own custom read/write functions ([Custom Read/Write](#custom-readwrite))
 - [Handle unknown keys](./docs/unknown-keys.md) in a fast and flexible manner
@@ -729,8 +728,8 @@ struct opts {
   bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
   bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies to reflectable and
 
-  bool read_allocated =
-     false; // Reads into only allocated memory and then exits without parsing the rest of the input
+  bool partial_read =
+     false; // Reads into only existing fields and elements and then exits without parsing the rest of the input
 
   // glaze_object_t concepts
   bool partial_read_nested = false; // Advance the partially read struct to the end of the struct
