@@ -11,6 +11,7 @@ namespace glz::detail
    GLZ_FLATTEN void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.force_conformance) {
+         ++it;
          skip_until_closed<Opts, '{', '}'>(ctx, it, end);
       }
       else {
@@ -47,6 +48,7 @@ namespace glz::detail
    GLZ_FLATTEN void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.force_conformance) {
+         ++it;
          skip_until_closed<Opts, '[', ']'>(ctx, it, end);
       }
       else {
@@ -79,11 +81,13 @@ namespace glz::detail
          while (true) {
             switch (*it) {
             case '{':
+               ++it;
                skip_until_closed<Opts, '{', '}'>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;
                break;
             case '[':
+               ++it;
                skip_until_closed<Opts, '[', ']'>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return;

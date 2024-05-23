@@ -296,13 +296,11 @@ namespace glz
 
    template <typename T>
    concept specialized_with_custom_write = requires {
-      meta<T>::custom_write;
       requires(meta<T>::custom_write == true);
    };
 
    template <typename T>
    concept specialized_with_custom_read = requires {
-      meta<T>::custom_write;
       requires(meta<T>::custom_read == true);
    };
 }

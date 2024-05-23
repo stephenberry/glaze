@@ -115,7 +115,7 @@ namespace glz::detail
 
       constexpr bit_array& flip() noexcept
       {
-         for (auto&& item : data) {
+         for (auto& item : data) {
             item = ~item;
          }
          return *this;

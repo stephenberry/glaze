@@ -1219,11 +1219,13 @@ namespace glz
                break;
             }
             case '{':
+               ++it;
                skip_until_closed<Opts, '{', '}'>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return {};
                break;
             case '[':
+               ++it;
                skip_until_closed<Opts, '[', ']'>(ctx, it, end);
                if (bool(ctx.error)) [[unlikely]]
                   return {};
@@ -1642,6 +1644,28 @@ namespace glz
             match<'}'>(ctx, it);
          }
       };
+      
+      template <size_t NumMembers>
+      struct fields_state
+      {
+         bit_array<NumMembers> fields{};
+         static constexpr bit_array<NumMembers> all_fields = []{
+            bit_array<NumMembers> fields{};
+            for (size_t i = 0; i < NumMembers; ++i) {
+               fields[i] = true;
+            }
+            return fields;
+         }();
+      };
+      
+      // In to avoid code dupplication we put fields_state state in a separate function with thread_local storage.
+      // This allows us to access this state only in constexpr branches that do partial reading.
+      // If we put this in the `op` function we would have to allocate even when not doing partial reading.
+      template <size_t NumMembers>
+      inline auto& get_fields_state() noexcept {
+         static thread_local fields_state<NumMembers> state{};
+         return state;
+      }
 
       template <class T>
          requires readable_map_t<T> || glaze_object_t<T> || reflectable<T>
@@ -1650,6 +1674,11 @@ namespace glz
          template <auto Options, string_literal tag = "">
          GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
+            static constexpr auto num_members = reflection_count<T>;
+            if constexpr (num_members == 0 && partial_read<T>) {
+               static_assert(false_v<T>, "No members to read for partial read");
+            }
+            
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
             if constexpr (!Options.opening_handled) {
                if constexpr (!Options.ws_handled) {
@@ -1660,8 +1689,7 @@ namespace glz
             const auto ws_start = it;
             GLZ_SKIP_WS;
             const size_t ws_size = size_t(it - ws_start);
-
-            static constexpr auto num_members = reflection_count<T>;
+            
             if constexpr ((glaze_object_t<T> || reflectable<T>)&&num_members == 0 && Opts.error_on_unknown_keys) {
                if (*it == '}') [[likely]] {
                   ++it;
@@ -1671,8 +1699,9 @@ namespace glz
                return;
             }
             else {
-               // Only used if error_on_missing_keys = true
-               bit_array<num_members * Opts.error_on_missing_keys> fields{};
+               if constexpr (Opts.error_on_missing_keys || partial_read<T>) {
+                  get_fields_state<num_members>() = {}; // reinitialize
+               }
 
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T> && num_members > 0) {
@@ -1697,12 +1726,29 @@ namespace glz
 
                bool first = true;
                while (true) {
+                  if constexpr (partial_read<T>) {
+                     auto&[fields] = get_fields_state<num_members>();
+                     constexpr auto& all_fields = fields_state<num_members>::all_fields;
+                     if ((all_fields & fields) == all_fields) {
+                        if constexpr (Opts.partial_read_nested) {
+                           skip_until_closed<Opts, '{', '}'>(ctx, it, end);
+                        }
+                        return;
+                     }
+                  }
+                  
                   if (*it == '}') {
-                     ++it;
-                     if constexpr (Opts.error_on_missing_keys) {
-                        constexpr auto req_fields = required_fields<T, Opts>();
-                        if ((req_fields & fields) != req_fields) {
-                           ctx.error = error_code::missing_key;
+                     if constexpr (partial_read<T> && Opts.error_on_missing_keys) {
+                        ctx.error = error_code::missing_key;
+                     }
+                     else {
+                        ++it;
+                        if constexpr (Opts.error_on_missing_keys) {
+                           auto&[fields] = get_fields_state<num_members>();
+                           constexpr auto req_fields = required_fields<T, Opts>();
+                           if ((req_fields & fields) != req_fields) {
+                              ctx.error = error_code::missing_key;
+                           }
                         }
                      }
                      return;
@@ -1770,7 +1816,8 @@ namespace glz
                            if (bool(ctx.error)) [[unlikely]]
                               return;
 
-                           if constexpr (Opts.error_on_missing_keys) {
+                           if constexpr (Opts.error_on_missing_keys || partial_read<T>) {
+                              auto&[fields] = get_fields_state<num_members>();
                               // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
                               // At the very least if we are going to do this add a get_index method to the maps and
                               // call that
@@ -1837,7 +1884,8 @@ namespace glz
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
 
-                              if constexpr (Opts.error_on_missing_keys) {
+                              if constexpr (Opts.error_on_missing_keys || partial_read<T>) {
+                                 auto&[fields] = get_fields_state<num_members>();
                                  // TODO: Kludge/hack. Should work but could easily cause memory issues with small
                                  // changes. At the very least if we are going to do this add a get_index method to the
                                  // maps and call that
@@ -1928,216 +1976,6 @@ namespace glz
                      }
                   }
                   skip_ws<Opts>(ctx, it, end);
-               }
-            }
-         }
-      };
-
-      template <class T>
-         requires(glaze_object_t<T> || reflectable<T>) && partial_read<T>
-      struct from_json<T>
-      {
-         template <auto Options, string_literal tag = "">
-         GLZ_FLATTEN static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
-         {
-            static constexpr auto num_members = reflection_count<T>;
-
-            if constexpr (num_members == 0) {
-               static_assert(false_v<T>, "No members to read for partial read");
-            }
-
-            constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
-            if constexpr (!Options.opening_handled) {
-               if constexpr (!Options.ws_handled) {
-                  GLZ_SKIP_WS;
-               }
-               GLZ_MATCH_OPEN_BRACE;
-            }
-            const auto ws_start = it;
-            GLZ_SKIP_WS;
-            const size_t ws_size = size_t(it - ws_start);
-
-            // Only used if partial_read_nested = true
-            [[maybe_unused]] uint32_t opening_counter = 1;
-
-            bit_array<num_members> fields{};
-            bit_array<num_members> all_fields{};
-            for_each<num_members>([&](auto I) constexpr { all_fields[I] = true; });
-
-            decltype(auto) frozen_map = [&]() -> decltype(auto) {
-               if constexpr (reflectable<T> && num_members > 0) {
-#if ((defined _MSC_VER) && (!defined __clang__))
-                  static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();
-#else
-                  static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
-#endif
-                  // We want to run this populate outside of the while loop
-                  populate_map(value, cmap); // Function required for MSVC to build
-                  return cmap;
-               }
-               else if constexpr (glaze_object_t<T> && num_members > 0) {
-                  static constexpr auto cmap = make_map<T, Opts.use_hash_comparison>();
-                  return cmap;
-               }
-               else {
-                  return nullptr;
-               }
-            }();
-
-            bool first = true;
-            while (true) {
-               if ((all_fields & fields) == all_fields) {
-                  if constexpr (Opts.partial_read_nested) {
-                     while (it != end) {
-                        if (*it == '}') [[unlikely]]
-                           --opening_counter;
-                        if (*it == '{') [[unlikely]]
-                           ++opening_counter;
-                        ++it;
-                        if (opening_counter == 0) return;
-                     }
-                  }
-                  else
-                     return;
-               }
-               else if (*it == '}') [[unlikely]] {
-                  if constexpr (Opts.error_on_missing_keys) {
-                     ctx.error = error_code::missing_key;
-                  }
-                  return;
-               }
-               else if (first) [[unlikely]] {
-                  first = false;
-               }
-               else [[likely]] {
-                  GLZ_MATCH_COMMA;
-
-                  if constexpr (num_members > 1 || !Opts.error_on_unknown_keys) {
-                     if (ws_size && ws_size < size_t(end - it)) {
-                        skip_matching_ws(ws_start, it, ws_size);
-                     }
-                  }
-
-                  GLZ_SKIP_WS;
-               }
-
-               std::conditional_t<Opts.error_on_unknown_keys, const sv, sv> key =
-                  parse_object_key<T, ws_handled<Opts>(), tag>(ctx, it, end);
-               if (bool(ctx.error)) [[unlikely]]
-                  return;
-
-               // Because parse_object_key does not necessarily return a valid JSON key, the logic for handling
-               // whitespace and the colon must run after checking if the key exists
-
-               if constexpr (Opts.error_on_unknown_keys) {
-                  if (*it != '"') [[unlikely]] {
-                     ctx.error = error_code::unknown_key;
-                     return;
-                  }
-                  ++it;
-
-                  if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
-                     parse_object_entry_sep<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     // TODO: Kludge/hack. Should work but could easily cause memory issues with small changes.
-                     // At the very least if we are going to do this add a get_index method to the maps and
-                     // call that
-                     auto index = member_it - frozen_map.begin();
-                     fields[index] = true;
-
-                     std::visit(
-                        [&](auto&& member_ptr) {
-                           read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
-                        },
-                        member_it->second);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
-                  else [[unlikely]] {
-                     if constexpr (tag.sv().empty()) {
-                        it -= int64_t(key.size());
-                        ctx.error = error_code::unknown_key;
-                        return;
-                     }
-                     else if (key != tag.sv()) {
-                        it -= int64_t(key.size());
-                        ctx.error = error_code::unknown_key;
-                        return;
-                     }
-                     else {
-                        // We duplicate this code to avoid generating unreachable code
-                        parse_object_entry_sep<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-
-                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                     }
-                  }
-               }
-               else {
-                  if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
-                     // This code should not error on valid unknown keys
-                     // We arrived here because the key was perhaps found, but if the quote does not exist
-                     // then this does not necessarily mean we have a syntax error.
-                     // We may have just found the prefix of a longer, unknown key.
-                     if (*it != '"') [[unlikely]] {
-                        auto* start = key.data();
-                        skip_string_view<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                        key = {start, size_t(it - start)};
-                        ++it;
-
-                        parse_object_entry_sep<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-
-                        read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                     }
-                     else {
-                        ++it; // skip the quote
-
-                        parse_object_entry_sep<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-
-                        auto index = member_it - frozen_map.begin();
-                        fields[index] = true;
-
-                        std::visit(
-                           [&](auto&& member_ptr) {
-                              read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
-                           },
-                           member_it->second);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                     }
-                  }
-                  else [[unlikely]] {
-                     if (*it != '"') {
-                        // we need to search until we find the ending quote of the key
-                        skip_string_view<Opts>(ctx, it, end);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return;
-                        auto start = key.data();
-                        key = {start, size_t(it - start)};
-                     }
-                     ++it; // skip the quote
-
-                     parse_object_entry_sep<Opts>(ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-
-                     read<json>::handle_unknown<Opts>(key, value, ctx, it, end);
-                     if (bool(ctx.error)) [[unlikely]]
-                        return;
-                  }
                }
             }
          }
