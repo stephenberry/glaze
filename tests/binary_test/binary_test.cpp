@@ -1986,6 +1986,22 @@ suite type_conversions = [] {
       expect(!glz::read_binary(v, b));
       expect(v == std::vector{1.0, 2.0, 3.0});
    };
+   
+   "vector<double> -> vector<int>"_test = [] {
+      std::vector<double> input{1.1, 2.2, 3.3};
+      auto b = glz::write_binary(input);
+      std::vector<int> v{};
+      expect(!glz::read_binary(v, b));
+      expect(v == std::vector{1, 2, 3});
+   };
+   
+   "map<int32_t, double> -> map<uint32_t, float>"_test = [] {
+      std::map<int32_t, double> input{{1, 1.1}, {2, 2.2}, {3, 3.3}};
+      auto b = glz::write_binary(input);
+      std::map<uint32_t, float> v{};
+      expect(!glz::read_binary(v, b));
+      expect(v == std::map<uint32_t, float>{{1, 1.1f}, {2, 2.2f}, {3, 3.3f}});
+   };
 };
 
 int main()

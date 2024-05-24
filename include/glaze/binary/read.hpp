@@ -870,8 +870,25 @@ namespace glz
 
             const auto tag = uint8_t(*it);
             if (tag != header) [[unlikely]] {
-               ctx.error = error_code::syntax_error;
-               return;
+               if constexpr (Opts.allow_conversions) {
+                  const auto key_type = tag & 0b000'11'000;
+                  if constexpr (str_t<Key>) {
+                     if (key_type != 0) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+                  else {
+                     if (key_type == 0) {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
+                  }
+               }
+               else {
+                  ctx.error = error_code::syntax_error;
+                  return;
+               }
             }
 
             ++it;
