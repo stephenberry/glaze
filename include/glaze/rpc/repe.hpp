@@ -112,50 +112,35 @@ namespace glz::repe
    template <opts Opts, class Value>
    size_t read_params(Value&& value, auto&& state, auto&& response)
    {
-      if constexpr (Opts.format == json) {
-         glz::context ctx{};
-         auto [b, e] = read_iterators<Opts>(ctx, state.message);
-         if (bool(ctx.error)) [[unlikely]] {
-            return 0;
-         }
-         auto start = b;
-
-         glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
-
-         if (bool(ctx.error)) {
-            parse_error ec{ctx.error, size_t(b - start), ctx.includer_error};
-            write_json(std::forward_as_tuple(header{.error = true},
-                                             error_t{error_e::parse_error, format_error(ec, state.message)}),
-                       response);
-            return 0;
-         }
-
-         return size_t(b - start);
+      glz::context ctx{};
+      auto [b, e] = read_iterators<Opts>(ctx, state.message);
+      if (bool(ctx.error)) [[unlikely]] {
+         return 0;
       }
-      else {
-         static_assert(false_v<Value>, "TODO: implement BEVE");
+      auto start = b;
+
+      glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
+
+      if (bool(ctx.error)) {
+         parse_error ec{ctx.error, size_t(b - start), ctx.includer_error};
+         write<Opts>(std::forward_as_tuple(header{.error = true},
+                                          error_t{error_e::parse_error, format_error(ec, state.message)}),
+                    response);
+         return 0;
       }
+
+      return size_t(b - start);
    }
 
    template <opts Opts, class Value>
    void write_response(Value&& value, is_state auto&& state)
    {
       if (state.error) {
-         if constexpr (Opts.format == json) {
-            write_json(std::forward_as_tuple(header{.error = true}, state.error), state.buffer);
-         }
-         else {
-            static_assert(false_v<Value>, "TODO: implement BEVE");
-         }
+         write<Opts>(std::forward_as_tuple(header{.error = true}, state.error), state.buffer);
       }
       else {
-         if constexpr (Opts.format == json) {
-            state.header.empty = false; // we are writing a response
-            write_json(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.buffer);
-         }
-         else {
-            static_assert(false_v<Value>, "TODO: implement BEVE");
-         }
+         state.header.empty = false; // we are writing a response
+         write<Opts>(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.buffer);
       }
    }
 
@@ -163,22 +148,12 @@ namespace glz::repe
    void write_response(is_state auto&& state)
    {
       if (state.error) {
-         if constexpr (Opts.format == json) {
-            write_json(std::forward_as_tuple(header{.error = true}, state.error), state.buffer);
-         }
-         else {
-            static_assert(false_v<decltype(Opts)>, "TODO: implement BEVE");
-         }
+         write<Opts>(std::forward_as_tuple(header{.error = true}, state.error), state.buffer);
       }
       else {
-         if constexpr (Opts.format == json) {
-            state.header.notify = false;
-            state.header.empty = true;
-            write_json(std::forward_as_tuple(state.header, nullptr), state.buffer);
-         }
-         else {
-            static_assert(false_v<decltype(Opts)>, "TODO: implement BEVE");
-         }
+         state.header.notify = false;
+         state.header.empty = true;
+         write<Opts>(std::forward_as_tuple(state.header, nullptr), state.buffer);
       }
    }
 
@@ -610,7 +585,7 @@ namespace glz::repe
          auto handle_error = [&](auto& it) {
             ctx.error = error_code::syntax_error;
             parse_error pe{ctx.error, size_t(it - start), ctx.includer_error};
-            write_json(
+            write<Opts>(
                std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(pe, msg)}),
                response);
          };
@@ -644,7 +619,7 @@ namespace glz::repe
             it->second(state{body, h, response, error}); // handle the body
          }
          else {
-            write_json(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
+            write<Opts>(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
          }
 
          return !h.notify;
