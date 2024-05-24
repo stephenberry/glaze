@@ -105,6 +105,16 @@ namespace glz
             to_binary<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Args>(args)...);
          }
       };
+      
+      template <always_null_t T>
+      struct to_binary<T>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
+         {
+            dump_type(uint8_t{0}, args...);
+         }
+      };
 
       template <>
       struct to_binary<hidden>

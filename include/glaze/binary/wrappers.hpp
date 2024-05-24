@@ -18,7 +18,7 @@ namespace glz::detail
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, auto&&... args) noexcept
       {
-         read<json>::op<opt_true<Opts, T::opts_member>>(value.val, args...);
+         read<binary>::op<opt_true<Opts, T::opts_member>>(value.val, args...);
       }
    };
 
@@ -28,7 +28,7 @@ namespace glz::detail
       template <auto Opts>
       GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
       {
-         write<json>::op<opt_true<Opts, T::opts_member>>(value.val, ctx, args...);
+         write<binary>::op<opt_true<Opts, T::opts_member>>(value.val, ctx, args...);
       }
    };
 }

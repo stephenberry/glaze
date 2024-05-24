@@ -235,6 +235,25 @@ suite structs_of_functions = [] {
    };
 };
 
+suite structs_of_functions_binary = [] {
+   "structs_of_functions"_test = [] {
+      repe::registry<glz::opts{.format = glz::binary}> server{};
+      
+      my_functions_t obj{};
+      
+      server.on(obj);
+      
+      obj.i = 55;
+      
+      {
+         auto request = repe::request_binary({"/i"});
+         server.call(request);
+      }
+      
+      // TODO: Expand testing
+   };
+};
+
 template <class T>
 struct wrapper_t
 {

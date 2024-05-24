@@ -236,6 +236,12 @@ namespace glz::repe
       header.empty = true; // because no value provided
       return glz::write_json(std::forward_as_tuple(header, nullptr));
    }
+   
+   inline auto request_binary(header&& header)
+   {
+      header.empty = true; // because no value provided
+      return glz::write_binary(std::forward_as_tuple(header, nullptr));
+   }
 
    inline auto request_json(const header& h)
    {
@@ -243,17 +249,36 @@ namespace glz::repe
       copy.empty = true; // because no value provided
       return request_json(std::move(copy));
    }
+   
+   inline auto request_binary(const header& h)
+   {
+      repe::header copy = h;
+      copy.empty = true; // because no value provided
+      return request_binary(std::move(copy));
+   }
 
    template <class Value>
    inline auto request_json(const header& header, Value&& value)
    {
       return glz::write_json(std::forward_as_tuple(header, std::forward<Value>(value)));
    }
+   
+   template <class Value>
+   inline auto request_binary(const header& header, Value&& value)
+   {
+      return glz::write_binary(std::forward_as_tuple(header, std::forward<Value>(value)));
+   }
 
    template <class Value>
    inline void request_json(const header& header, Value&& value, auto& buffer)
    {
       glz::write_json(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
+   }
+   
+   template <class Value>
+   inline void request_binary(const header& header, Value&& value, auto& buffer)
+   {
+      glz::write_binary(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
    }
 
    // DESIGN NOTE: It might appear that we are locking ourselves into a poor design choice by using a runtime
