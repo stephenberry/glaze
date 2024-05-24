@@ -79,7 +79,7 @@ namespace glz::detail
                   }
                }
                else {
-                  read<json>::op<Opts>(from, ctx, it, end);
+                  read<binary>::op<Opts>(from, ctx, it, end);
                }
             }
             else {
