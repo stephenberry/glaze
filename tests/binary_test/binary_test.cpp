@@ -10,6 +10,7 @@
 #include <deque>
 #include <list>
 #include <map>
+#include <numbers>
 #include <random>
 #include <set>
 #include <unordered_set>
@@ -1932,6 +1933,42 @@ suite skip_tests = [] {
       auto buffer = glz::write_binary(data);
       skip_obj obj{};
       expect(!glz::read_binary(obj, buffer));
+   };
+};
+
+suite type_conversions = [] {
+   "double -> float"_test = [] {
+      constexpr double pi64 = std::numbers::pi_v<double>;
+      auto b = glz::write_binary(pi64);
+      float pi32{};
+      expect(!glz::read_binary(pi32, b));
+      expect(pi32 == std::numbers::pi_v<float>);
+   };
+   
+   "float -> double"_test = [] {
+      constexpr float pi32 = std::numbers::pi_v<float>;
+      auto b = glz::write_binary(pi32);
+      double pi64{};
+      expect(!glz::read_binary(pi64, b));
+      expect(pi64 == std::numbers::pi_v<float>);
+   };
+   
+   "int8_t -> uint8_t"_test = [] {
+      auto b = glz::write_binary(int8_t{45});
+      uint8_t i{};
+      expect(!glz::read_binary(i, b));
+      expect(i == 45);
+      
+      b = glz::write_binary(int8_t{-1});
+      expect(!glz::read_binary(i, b));
+      expect(i == 255);
+   };
+   
+   "int8_t -> int32_t"_test = [] {
+      auto b = glz::write_binary(int8_t{127});
+      int32_t i{};
+      expect(!glz::read_binary(i, b));
+      expect(i == 127);
    };
 };
 

@@ -137,8 +137,8 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
          {
+            using V = std::decay_t<decltype(value)>;
             if constexpr (Opts.no_header) {
-               using V = std::decay_t<T>;
                std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
             }
@@ -149,13 +149,81 @@ namespace glz
 
                const auto tag = uint8_t(*it);
                if (tag != header) {
-                  ctx.error = error_code::syntax_error;
-                  return;
+                  if constexpr (Opts.allow_conversions) {
+                     if constexpr (num_t<T>) {
+                        if ((tag & 0b00000111) != tag::number) {
+                           ctx.error = error_code::syntax_error;
+                           return;
+                        }
+                        
+                        ++it;
+                        
+                        auto decode = [&](auto&& i) {
+                           std::memcpy(&i, it, sizeof(i));
+                           value = static_cast<V>(i);
+                           it += sizeof(i);
+                        };
+
+                        switch (tag)
+                        {
+                           case tag::f32: {
+                              static_assert(sizeof(float) == 4);
+                              // TODO: use float32_t in C++23
+                              decode(float{});
+                              return;
+                           }
+                           case tag::f64: {
+                              static_assert(sizeof(double) == 8);
+                              // TODO: use float64_t in C++23
+                              decode(double{});
+                              return;
+                           }
+                           case tag::i8: {
+                              decode(int8_t{});
+                              return;
+                           }
+                           case tag::i16: {
+                              decode(int16_t{});
+                              return;
+                           }
+                           case tag::i32: {
+                              decode(int32_t{});
+                              return;
+                           }
+                           case tag::i64: {
+                              decode(int64_t{});
+                              return;
+                           }
+                           case tag::u8: {
+                              decode(uint8_t{});
+                              return;
+                           }
+                           case tag::u16: {
+                              decode(uint16_t{});
+                              return;
+                           }
+                           case tag::u32: {
+                              decode(uint32_t{});
+                              return;
+                           }
+                           case tag::u64: {
+                              decode(uint64_t{});
+                              return;
+                           }
+                           default: {
+                              ctx.error = error_code::syntax_error;
+                              return;
+                           }
+                        }
+                     }
+                  }
+                  else {
+                     ctx.error = error_code::syntax_error;
+                     return;
+                  }
                }
 
                ++it;
-
-               using V = std::decay_t<decltype(value)>;
                std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
             }

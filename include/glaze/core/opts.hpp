@@ -61,7 +61,9 @@ namespace glz
       bool number = false; // read numbers as strings and write these string as numbers
       bool raw = false; // write out string like values without quotes
       bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
-      bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies to reflectable and
+      bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
+      bool allow_conversions = true; // Whether conversions between convertible types are
+      // allowed in binary, e.g. double -> float
 
       bool partial_read =
          false; // Reads into only existing fields and elements and then exits without parsing the rest of the input

@@ -26,6 +26,24 @@ namespace glz::tag
 
    constexpr uint8_t bool_false = 0b000'01'000;
    constexpr uint8_t bool_true = 0b000'11'000;
+   
+   constexpr uint8_t i8 = 0b000'01'001;
+   constexpr uint8_t i16 = 0b001'01'001;
+   constexpr uint8_t i32 = 0b010'01'001;
+   constexpr uint8_t i64 = 0b011'01'001;
+   constexpr uint8_t i128 = 0b100'01'001;
+   
+   constexpr uint8_t u8 = 0b000'10'001;
+   constexpr uint8_t u16 = 0b001'10'001;
+   constexpr uint8_t u32 = 0b010'10'001;
+   constexpr uint8_t u64 = 0b011'10'001;
+   constexpr uint8_t u128 = 0b100'10'001;
+   
+   constexpr uint8_t bf16 = 0b000'00'001; // brain float
+   constexpr uint8_t f16 = 0b001'00'001;
+   constexpr uint8_t f32 = 0b010'00'001;
+   constexpr uint8_t f64 = 0b011'00'001;
+   constexpr uint8_t f128 = 0b100'00'001;
 }
 
 namespace glz::detail
