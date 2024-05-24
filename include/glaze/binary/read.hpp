@@ -19,7 +19,7 @@ namespace glz
       struct read<binary>
       {
          template <auto Opts, class T, class Tag, is_context Ctx, class It0, class It1>
-            requires (Opts.no_header)
+            requires(Opts.no_header)
          GLZ_ALWAYS_INLINE static void op(T&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
             if constexpr (std::is_const_v<std::remove_reference_t<T>>) {
@@ -33,12 +33,13 @@ namespace glz
             }
             else {
                using V = std::remove_cvref_t<T>;
-               from_binary<V>::template op<Opts>(std::forward<T>(value), std::forward<Tag>(tag), std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
+               from_binary<V>::template op<Opts>(std::forward<T>(value), std::forward<Tag>(tag), std::forward<Ctx>(ctx),
+                                                 std::forward<It0>(it), std::forward<It1>(end));
             }
          }
-         
+
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
-            requires (not Opts.no_header)
+            requires(not Opts.no_header)
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
             if constexpr (std::is_const_v<std::remove_reference_t<T>>) {
@@ -157,13 +158,14 @@ namespace glz
          static constexpr uint8_t type =
             std::floating_point<T> ? 0 : (std::is_signed_v<T> ? 0b000'01'000 : 0b000'10'000);
          static constexpr uint8_t header = tag::number | type | (byte_count<T> << 5);
-         
+
          template <auto Opts>
-            requires (Opts.no_header)
-         GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it, auto&&) noexcept
+            requires(Opts.no_header)
+         GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it,
+                                          auto&&) noexcept
          {
             using V = std::decay_t<decltype(value)>;
-            
+
             if (tag != header) {
                if constexpr (Opts.allow_conversions) {
                   if constexpr (num_t<T>) {
@@ -171,63 +173,62 @@ namespace glz
                         ctx.error = error_code::syntax_error;
                         return;
                      }
-                     
+
                      auto decode = [&](auto&& i) {
                         std::memcpy(&i, it, sizeof(i));
                         value = static_cast<V>(i);
                         it += sizeof(i);
                      };
 
-                     switch (tag)
-                     {
-                        case tag::f32: {
-                           static_assert(sizeof(float) == 4);
-                           // TODO: use float32_t in C++23
-                           decode(float{});
-                           return;
-                        }
-                        case tag::f64: {
-                           static_assert(sizeof(double) == 8);
-                           // TODO: use float64_t in C++23
-                           decode(double{});
-                           return;
-                        }
-                        case tag::i8: {
-                           decode(int8_t{});
-                           return;
-                        }
-                        case tag::i16: {
-                           decode(int16_t{});
-                           return;
-                        }
-                        case tag::i32: {
-                           decode(int32_t{});
-                           return;
-                        }
-                        case tag::i64: {
-                           decode(int64_t{});
-                           return;
-                        }
-                        case tag::u8: {
-                           decode(uint8_t{});
-                           return;
-                        }
-                        case tag::u16: {
-                           decode(uint16_t{});
-                           return;
-                        }
-                        case tag::u32: {
-                           decode(uint32_t{});
-                           return;
-                        }
-                        case tag::u64: {
-                           decode(uint64_t{});
-                           return;
-                        }
-                        default: {
-                           ctx.error = error_code::syntax_error;
-                           return;
-                        }
+                     switch (tag) {
+                     case tag::f32: {
+                        static_assert(sizeof(float) == 4);
+                        // TODO: use float32_t in C++23
+                        decode(float{});
+                        return;
+                     }
+                     case tag::f64: {
+                        static_assert(sizeof(double) == 8);
+                        // TODO: use float64_t in C++23
+                        decode(double{});
+                        return;
+                     }
+                     case tag::i8: {
+                        decode(int8_t{});
+                        return;
+                     }
+                     case tag::i16: {
+                        decode(int16_t{});
+                        return;
+                     }
+                     case tag::i32: {
+                        decode(int32_t{});
+                        return;
+                     }
+                     case tag::i64: {
+                        decode(int64_t{});
+                        return;
+                     }
+                     case tag::u8: {
+                        decode(uint8_t{});
+                        return;
+                     }
+                     case tag::u16: {
+                        decode(uint16_t{});
+                        return;
+                     }
+                     case tag::u32: {
+                        decode(uint32_t{});
+                        return;
+                     }
+                     case tag::u64: {
+                        decode(uint64_t{});
+                        return;
+                     }
+                     default: {
+                        ctx.error = error_code::syntax_error;
+                        return;
+                     }
                      }
                   }
                }
@@ -240,9 +241,9 @@ namespace glz
             std::memcpy(&value, it, sizeof(V));
             it += sizeof(V);
          }
-         
+
          template <auto Opts>
-            requires (not Opts.no_header)
+            requires(not Opts.no_header)
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto tag = uint8_t(*it);
@@ -406,10 +407,11 @@ namespace glz
       {
          using V = typename std::decay_t<T>::value_type;
          static_assert(sizeof(V) == 1);
-         
+
          template <auto Opts>
-            requires (Opts.no_header)
-         GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+            requires(Opts.no_header)
+         GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t, is_context auto&& ctx, auto&& it,
+                                          auto&& end) noexcept
          {
             const auto n = int_from_compressed(ctx, it, end);
             if ((it + n) > end) [[unlikely]] {
@@ -420,9 +422,9 @@ namespace glz
             std::memcpy(value.data(), it, n);
             it += n;
          }
-         
+
          template <auto Opts>
-            requires (not Opts.no_header)
+            requires(not Opts.no_header)
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr uint8_t header = tag::string;
@@ -615,7 +617,7 @@ namespace glz
                constexpr uint8_t type =
                   std::floating_point<V> ? 0 : (std::is_signed_v<V> ? 0b000'01'000 : 0b000'10'000);
                constexpr uint8_t header = tag::typed_array | type | (byte_count<V> << 5);
-               
+
                auto prepare = [&](const size_t element_size) -> size_t {
                   ++it;
 
@@ -640,7 +642,7 @@ namespace glz
                         value.shrink_to_fit();
                      }
                   }
-                  
+
                   return n;
                };
 
@@ -652,13 +654,13 @@ namespace glz
                               ctx.error = error_code::syntax_error;
                               return;
                            }
-                           
+
                            const uint8_t byte_count = byte_count_lookup[tag >> 5];
                            prepare(byte_count);
                            if (bool(ctx.error)) [[unlikely]] {
                               return;
                            }
-                           
+
                            for (auto&& x : value) {
                               const auto number_tag = tag::number | (tag & 0b11111000);
                               read<binary>::op<opt_true<Opts, &opts::no_header>>(x, number_tag, ctx, it, end);

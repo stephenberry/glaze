@@ -1898,7 +1898,7 @@ suite read_allocated_tests = [] {
       expect(obj.string == "ha!");
       expect(obj.integer == 400);
    };
-   
+
    "partial_read"_test = [] {
       Header input{"51e2affb", "message_type"};
       auto buf = glz::write_binary(input);
@@ -1907,7 +1907,7 @@ suite read_allocated_tests = [] {
       expect(h.id == "51e2affb");
       expect(h.type == "message_type");
    };
-   
+
    "partial read unknown key 2"_test = [] {
       Header input{"51e2affb", "message_type"};
       auto buf = glz::write_binary(input);
@@ -1974,7 +1974,7 @@ suite type_conversions = [] {
       expect(!glz::read_binary(pi32, b));
       expect(pi32 == std::numbers::pi_v<float>);
    };
-   
+
    "float -> double"_test = [] {
       constexpr float pi32 = std::numbers::pi_v<float>;
       auto b = glz::write_binary(pi32);
@@ -1982,25 +1982,25 @@ suite type_conversions = [] {
       expect(!glz::read_binary(pi64, b));
       expect(pi64 == std::numbers::pi_v<float>);
    };
-   
+
    "int8_t -> uint8_t"_test = [] {
       auto b = glz::write_binary(int8_t{45});
       uint8_t i{};
       expect(!glz::read_binary(i, b));
       expect(i == 45);
-      
+
       b = glz::write_binary(int8_t{-1});
       expect(!glz::read_binary(i, b));
       expect(i == 255);
    };
-   
+
    "int8_t -> int32_t"_test = [] {
       auto b = glz::write_binary(int8_t{127});
       int32_t i{};
       expect(!glz::read_binary(i, b));
       expect(i == 127);
    };
-   
+
    "vector<double> -> vector<float>"_test = [] {
       std::vector<double> input{1.1, 2.2, 3.3};
       auto b = glz::write_binary(input);
@@ -2008,7 +2008,7 @@ suite type_conversions = [] {
       expect(!glz::read_binary(v, b));
       expect(v == std::vector{1.1f, 2.2f, 3.3f});
    };
-   
+
    "vector<float> -> vector<double>"_test = [] {
       std::vector<float> input{1.f, 2.f, 3.f};
       auto b = glz::write_binary(input);
@@ -2016,7 +2016,7 @@ suite type_conversions = [] {
       expect(!glz::read_binary(v, b));
       expect(v == std::vector{1.0, 2.0, 3.0});
    };
-   
+
    "vector<double> -> vector<int>"_test = [] {
       std::vector<double> input{1.1, 2.2, 3.3};
       auto b = glz::write_binary(input);
@@ -2024,7 +2024,7 @@ suite type_conversions = [] {
       expect(!glz::read_binary(v, b));
       expect(v == std::vector{1, 2, 3});
    };
-   
+
    "map<int32_t, double> -> map<uint32_t, float>"_test = [] {
       std::map<int32_t, double> input{{1, 1.1}, {2, 2.2}, {3, 3.3}};
       auto b = glz::write_binary(input);
