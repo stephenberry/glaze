@@ -1970,6 +1970,22 @@ suite type_conversions = [] {
       expect(!glz::read_binary(i, b));
       expect(i == 127);
    };
+   
+   "vector<double> -> vector<float>"_test = [] {
+      std::vector<double> input{1.1, 2.2, 3.3};
+      auto b = glz::write_binary(input);
+      std::vector<float> v{};
+      expect(!glz::read_binary(v, b));
+      expect(v == std::vector{1.1f, 2.2f, 3.3f});
+   };
+   
+   "vector<float> -> vector<double>"_test = [] {
+      std::vector<float> input{1.f, 2.f, 3.f};
+      auto b = glz::write_binary(input);
+      std::vector<double> v{};
+      expect(!glz::read_binary(v, b));
+      expect(v == std::vector{1.0, 2.0, 3.0});
+   };
 };
 
 int main()
