@@ -921,7 +921,7 @@ namespace glz
       };
 
       template <class T>
-         requires glaze_array_t<T> || tuple_t<std::decay_t<T>>
+         requires glaze_array_t<T> || tuple_t<std::decay_t<T>> || is_std_tuple<T>
       struct to_json<T>
       {
          template <auto Opts, class... Args>
@@ -946,6 +946,9 @@ namespace glz
                if constexpr (glaze_array_t<V>) {
                   write<json>::op<Opts>(get_member(value, glz::get<I>(meta_v<T>)), ctx, args...);
                }
+               else if constexpr (is_std_tuple<T>) {
+                  write<json>::op<Opts>(std::get<I>(value), ctx, args...);
+               }
                else {
                   write<json>::op<Opts>(glz::get<I>(value), ctx, args...);
                }
@@ -968,48 +971,6 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
          {}
-      };
-
-      template <class T>
-         requires is_std_tuple<std::decay_t<T>>
-      struct to_json<T>
-      {
-         template <auto Opts, class... Args>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
-         {
-            static constexpr auto N = []() constexpr {
-               if constexpr (glaze_array_t<std::decay_t<T>>) {
-                  return glz::tuple_size_v<meta_t<std::decay_t<T>>>;
-               }
-               else {
-                  return glz::tuple_size_v<std::decay_t<T>>;
-               }
-            }();
-
-            dump<'['>(args...);
-            if constexpr (N > 0 && Opts.prettify) {
-               ctx.indentation_level += Opts.indentation_width;
-               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
-            }
-            using V = std::decay_t<T>;
-            for_each<N>([&](auto I) {
-               if constexpr (glaze_array_t<V>) {
-                  write<json>::op<Opts>(value.*std::get<I>(meta_v<V>), ctx, args...);
-               }
-               else {
-                  write<json>::op<Opts>(std::get<I>(value), ctx, args...);
-               }
-               constexpr bool needs_comma = I < N - 1;
-               if constexpr (needs_comma) {
-                  write_entry_separator<Opts>(ctx, args...);
-               }
-            });
-            if constexpr (N > 0 && Opts.prettify) {
-               ctx.indentation_level -= Opts.indentation_width;
-               dump_newline_indent<Opts.indentation_char>(ctx.indentation_level, args...);
-            }
-            dump<']'>(args...);
-         }
       };
 
       template <const std::string_view& S>
