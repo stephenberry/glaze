@@ -119,7 +119,7 @@ namespace glz
       template <class Params>
       void notify(repe::header&& header, Params&& params)
       {
-         header.action |= repe::notify;
+         header.notify = true;
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
          send_buffer(*socket, buffer);
@@ -128,8 +128,8 @@ namespace glz
       template <class Result>
       [[nodiscard]] repe::error_t get(repe::header&& header, Result&& result)
       {
-         header.action &= ~repe::notify; // clear invalid notify
-         header.action |= repe::empty; // no params
+         header.notify = false;
+         header.empty = true; // no params
          repe::request<Opts>(std::move(header), nullptr, buffer);
 
          send_buffer(*socket, buffer);
@@ -141,8 +141,8 @@ namespace glz
       template <class Result = glz::raw_json>
       [[nodiscard]] glz::expected<Result, repe::error_t> get(repe::header&& header)
       {
-         header.action &= ~repe::notify; // clear invalid notify
-         header.action |= repe::empty; // no params
+         header.notify = false;
+         header.empty = true; // no params
          repe::request<Opts>(std::move(header), nullptr, buffer);
 
          send_buffer(*socket, buffer);
@@ -161,7 +161,7 @@ namespace glz
       template <class Params>
       [[nodiscard]] repe::error_t set(repe::header&& header, Params&& params)
       {
-         header.action &= ~repe::notify; // clear invalid notify
+         header.notify = false;
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
          send_buffer(*socket, buffer);
@@ -173,7 +173,7 @@ namespace glz
       template <class Params, class Result>
       [[nodiscard]] repe::error_t call(repe::header&& header, Params&& params, Result&& result)
       {
-         header.action &= ~repe::notify; // clear invalid notify
+         header.notify = false;
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
          send_buffer(*socket, buffer);
@@ -184,8 +184,8 @@ namespace glz
 
       [[nodiscard]] repe::error_t call(repe::header&& header)
       {
-         header.action &= ~repe::notify; // clear invalid notify
-         header.action |= repe::empty; // because no value provided
+         header.notify = false;
+         header.empty = true; // because no value provided
          glz::write_json(std::forward_as_tuple(std::move(header), nullptr), buffer);
 
          send_buffer(*socket, buffer);
@@ -200,7 +200,7 @@ namespace glz
          using Params = func_params_t<Func>;
          using Result = func_result_t<Func>;
          if constexpr (std::same_as<Params, void>) {
-            header.action |= repe::empty;
+            header.empty = true;
             return [this, h = std::move(header)]() mutable -> Result {
                std::decay_t<Result> result{};
                const auto e = call(repe::header{h}, result);
@@ -211,7 +211,7 @@ namespace glz
             };
          }
          else {
-            header.action &= ~repe::empty;
+            header.empty = false;
             return [this, h = std::move(header)](Params params) mutable -> Result {
                std::decay_t<Result> result{};
                const auto e = call(repe::header{h}, params, result);
@@ -226,7 +226,7 @@ namespace glz
       template <class Params>
       [[nodiscard]] std::string& call_raw(repe::header&& header, Params&& params)
       {
-         header.action &= ~repe::notify; // clear invalid notify
+         header.notify = false;
          repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
 
          send_buffer(*socket, buffer);
