@@ -88,9 +88,6 @@ namespace glz::repe
    template <class T>
    concept is_state = std::same_as<std::decay_t<T>, state>;
 
-   template <class T>
-   constexpr auto lvalue = std::is_lvalue_reference_v<T>;
-
    namespace detail
    {
       struct string_hash
@@ -574,7 +571,6 @@ namespace glz::repe
       // returns true if there is a result to send (not a notification)
       bool call(const sv msg)
       {
-         header h;
          context ctx{};
          auto [b, e] = read_iterators<Opts>(ctx, msg);
          if (bool(ctx.error)) [[unlikely]] {
@@ -589,6 +585,8 @@ namespace glz::repe
                std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(pe, msg)}),
                response);
          };
+         
+         header h{};
 
          if (*b == '[') {
             ++b;
