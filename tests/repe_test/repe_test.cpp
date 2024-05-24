@@ -250,6 +250,10 @@ suite structs_of_functions_binary = [] {
          server.call(request);
       }
       
+      /*std::string response{};
+      expect(!glz::beve_to_json(server.response, response));
+      expect(response  == R"([[0,0,2,"/name",null],null])") << response;*/
+      
       // TODO: Expand testing
    };
 };
