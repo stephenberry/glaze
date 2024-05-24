@@ -1835,6 +1835,18 @@ struct full_struct
    std::vector<int> more_data_to_ignore{};
 };
 
+struct Header
+{
+   std::string id{};
+   std::string type{};
+};
+
+template <>
+struct glz::meta<Header>
+{
+   static constexpr auto partial_read = true;
+};
+
 suite read_allocated_tests = [] {
    static constexpr glz::opts partial{.format = glz::binary, .partial_read = true};
 
@@ -1885,6 +1897,24 @@ suite read_allocated_tests = [] {
          !glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false, .partial_read = true}>(obj, s));
       expect(obj.string == "ha!");
       expect(obj.integer == 400);
+   };
+   
+   "partial_read"_test = [] {
+      Header input{"51e2affb", "message_type"};
+      auto buf = glz::write_binary(input);
+      Header h{};
+      expect(!glz::read_binary(h, buf));
+      expect(h.id == "51e2affb");
+      expect(h.type == "message_type");
+   };
+   
+   "partial read unknown key 2"_test = [] {
+      Header input{"51e2affb", "message_type"};
+      auto buf = glz::write_binary(input);
+      Header h{};
+      expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false}>(h, buf));
+      expect(h.id == "51e2affb");
+      expect(h.type == "message_type");
    };
 };
 
