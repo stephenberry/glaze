@@ -42,7 +42,7 @@ struct glz::json_schema<schema_obj>
       .maxContains = 2UL,
       .uniqueItems = true,
       // .enumeration = , // read of std::span is not supported
-      .outOfSpec = detail::out_of_spec{.unit_ascii = "m^2"},
+      .outOfSpec = detail::out_of_spec{.unit_ascii = "m^2", .unit_unicode = "m²", .advanced = true},
    };
    // schema examples{.examples = example_arr};
 };
@@ -178,7 +178,7 @@ suite schema_attributes = [] {
    };
    "outOfSpec"_test = [] {
       test_case const test{};
-      expect_property<&glz::schema::outOfSpec>(test, "variable", glz::detail::out_of_spec{.unit_ascii = "m^2"});
+      expect_property<&glz::schema::outOfSpec>(test, "variable", glz::detail::out_of_spec{.unit_ascii = "m^2", .unit_unicode = "m²", .advanced = true});
    };
 };
 
