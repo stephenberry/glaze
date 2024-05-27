@@ -82,8 +82,6 @@ auto expect_property(test_case test, std::string_view key, Value value)
 }
 
 suite schema_attributes = [] {
-   using std::literals::operator""s;
-   using std::literals::operator""sv;
    "parsing"_test = [] {
       test_case const test{};
       expect(test.obj.has_value()) << format_error(!test.obj.has_value() ? test.obj.error() : glz::parse_error{},
@@ -92,7 +90,7 @@ suite schema_attributes = [] {
    };
    "description"_test = [] {
       test_case const test{};
-      expect_property<&glz::schema::description>(test, "variable", "this is a description"s);
+      expect_property<&glz::schema::description>(test, "variable", std::string{"this is a description"});
    };
    "deprecated"_test = [] {
       test_case const test{};
@@ -112,7 +110,7 @@ suite schema_attributes = [] {
    };
    "constant"_test = [] {
       test_case const test{};
-      expect_property<&glz::schema::constant>(test, "variable", "some constant value"sv);
+      expect_property<&glz::schema::constant>(test, "variable", std::string_view{"some constant value"});
    };
    "minLength"_test = [] {
       test_case const test{};
@@ -124,7 +122,7 @@ suite schema_attributes = [] {
    };
    "pattern"_test = [] {
       test_case const test{};
-      expect_property<&glz::schema::pattern>(test, "variable", "[a-z]+"sv);
+      expect_property<&glz::schema::pattern>(test, "variable", std::string_view{"[a-z]+"});
    };
    "format"_test = [] {
       test_case const test{};
