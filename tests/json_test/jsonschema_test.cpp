@@ -28,6 +28,7 @@ struct glz::json_schema<schema_obj>
       .minLength = 1L,
       .maxLength = 2L,
       .pattern = "[a-z]+",
+      .format = detail::defined_formats::hostname,
       .minimum = 1L,
       .maximum = 2L,
       .exclusiveMinimum = 1L,
@@ -59,7 +60,7 @@ template <auto Member, typename Value>
 auto expect_property(test_case test, std::string_view key, Value value)
 {
    auto schematic = test.obj;
-   expect(fatal(schematic.has_value())) << "hello world";
+   expect(fatal(schematic.has_value()));
    expect(schematic->properties->contains(key) >> fatal);
    glz::schema prop = schematic->properties->at(key);
    auto prop_value = glz::detail::get_member(prop, Member);
@@ -124,6 +125,10 @@ suite schema_attributes = [] {
    "pattern"_test = [] {
       test_case const test{};
       expect_property<&glz::schema::pattern>(test, "variable", "[a-z]+"sv);
+   };
+   "format"_test = [] {
+      test_case const test{};
+      expect_property<&glz::schema::format>(test, "variable", glz::detail::defined_formats::hostname);
    };
    "minimum"_test = [] {
       test_case const test{};

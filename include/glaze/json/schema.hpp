@@ -23,6 +23,10 @@
 
 namespace glz
 {
+   namespace detail
+   {
+      enum struct defined_formats : std::uint8_t;
+   }
    struct schema final
    {
       bool reflection_helper{}; // needed to support automatic reflection, because ref is a std::optional
@@ -43,6 +47,8 @@ namespace glz
       std::optional<std::uint64_t> minLength{};
       std::optional<std::uint64_t> maxLength{};
       std::optional<std::string_view> pattern{};
+      // https://www.learnjsonschema.com/2020-12/format-annotation/format/
+      std::optional<detail::defined_formats> format{};
       // number only keywords
       schema_number minimum{};
       schema_number maximum{};
@@ -82,6 +88,7 @@ namespace glz
                                                    "minLength", &T::minLength, //
                                                    "maxLength", &T::maxLength, //
                                                    "pattern", &T::pattern, //
+                                                   "format", &T::format, //
                                                    "minimum", &T::minimum, //
                                                    "maximum", &T::maximum, //
                                                    "exclusiveMinimum", &T::exclusiveMinimum, //
@@ -116,8 +123,56 @@ namespace glz
          std::optional<std::vector<std::string_view>> required{};
          std::optional<std::vector<std::string_view>> examples{};
       };
+      enum struct defined_formats : std::uint8_t {
+         datetime,
+         date,
+         time,
+         duration,
+         email,
+         idn_email,
+         hostname,
+         idn_hostname,
+         ipv4,
+         ipv6,
+         uri,
+         uri_reference,
+         iri,
+         iri_reference,
+         uuid,
+         uri_template,
+         json_pointer,
+         relative_json_pointer,
+         regex
+       };
    }
 }
+
+
+template <>
+struct glz::meta<glz::detail::defined_formats> {
+   using enum detail::defined_formats;
+   static constexpr std::string_view name = "defined_formats";
+   static constexpr auto value = enumerate(
+       "date-time", datetime, //
+       "date", date, //
+       "time", time, //
+       "duration", duration, //
+       "email", email, //
+       "idn-email", idn_email, //
+       "hostname", hostname, //
+       "idn-hostname", idn_hostname, //
+       "ipv4", ipv4, //
+       "ipv6",ipv6, //
+       "uri", uri, //
+       "uri-reference", uri_reference, //
+       "iri",iri, //
+       "iri-reference", iri_reference, //
+       "uuid", uuid, //
+       "uri-template", uri_template, //
+       "json-pointer", json_pointer, //
+       "relative-json-pointer", relative_json_pointer, //
+       "regex", regex);
+};
 
 template <>
 struct glz::meta<glz::detail::schematic>
