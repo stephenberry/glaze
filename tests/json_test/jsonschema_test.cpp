@@ -1,9 +1,8 @@
-#include <cstdint>
-#include <string>
-
 #include <boost/ut.hpp>
+#include <cstdint>
 #include <glaze/json.hpp>
 #include <glaze/json/schema.hpp>
+#include <string>
 
 using namespace boost::ut;
 
@@ -43,6 +42,7 @@ struct glz::json_schema<schema_obj>
       .maxContains = 2UL,
       .uniqueItems = true,
       // .enumeration = , // read of std::span is not supported
+      .outOfSpec = detail::out_of_spec{.unit_ascii = "m^2"},
    };
    // schema examples{.examples = example_arr};
 };
@@ -177,6 +177,10 @@ suite schema_attributes = [] {
    "uniqueItems"_test = [] {
       test_case const test{};
       expect_property<&glz::schema::uniqueItems>(test, "variable", true);
+   };
+   "outOfSpec"_test = [] {
+      test_case const test{};
+      expect_property<&glz::schema::outOfSpec>(test, "variable", glz::detail::out_of_spec{.unit_ascii = "m^2"});
    };
 };
 

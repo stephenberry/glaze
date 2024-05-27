@@ -26,6 +26,15 @@ namespace glz
    namespace detail
    {
       enum struct defined_formats : std::uint8_t;
+      struct out_of_spec final
+      {
+         std::optional<std::string_view> unit_ascii{}; // ascii representation of the unit, e.g. "m^2" for square meters
+         std::optional<std::string_view>
+            unit_unicode{}; // unicode representation of the unit, e.g. "m²" for square meters
+         std::optional<bool>
+            advanced{}; // flag to indicate that the parameter is advanced and can be hidden in default views
+         constexpr bool operator==(const out_of_spec&) const noexcept = default;
+      };
    }
    struct schema final
    {
@@ -69,6 +78,9 @@ namespace glz
       // properties
       std::optional<std::span<const std::string_view>> enumeration{}; // enum
 
+      // out of spec
+      std::optional<detail::out_of_spec> outOfSpec{};
+
       static constexpr auto schema_attributes{true}; // allowance flag to indicate metadata within glz::object(...)
 
       // TODO switch to using variants when we have write support to get rid of nulls
@@ -103,7 +115,8 @@ namespace glz
                                                    "minContains", &T::minContains, //
                                                    "maxContains", &T::maxContains, //
                                                    "uniqueItems", &T::uniqueItems, //
-                                                   "enum", &T::enumeration);
+                                                   "enum", &T::enumeration, //
+                                                   "outOfSpec", &T::outOfSpec);
       };
    };
 
@@ -143,36 +156,9 @@ namespace glz
          json_pointer,
          relative_json_pointer,
          regex
-       };
+      };
    }
 }
-
-
-template <>
-struct glz::meta<glz::detail::defined_formats> {
-   using enum detail::defined_formats;
-   static constexpr std::string_view name = "defined_formats";
-   static constexpr auto value = enumerate(
-       "date-time", datetime, //
-       "date", date, //
-       "time", time, //
-       "duration", duration, //
-       "email", email, //
-       "idn-email", idn_email, //
-       "hostname", hostname, //
-       "idn-hostname", idn_hostname, //
-       "ipv4", ipv4, //
-       "ipv6",ipv6, //
-       "uri", uri, //
-       "uri-reference", uri_reference, //
-       "iri",iri, //
-       "iri-reference", iri_reference, //
-       "uuid", uuid, //
-       "uri-template", uri_template, //
-       "json-pointer", json_pointer, //
-       "relative-json-pointer", relative_json_pointer, //
-       "regex", regex);
-};
 
 template <>
 struct glz::meta<glz::detail::schematic>
@@ -190,6 +176,32 @@ struct glz::meta<glz::detail::schematic>
                                              "const", &T::constant, //
                                              "required", &T::required, //
                                              "examples", raw<&T::examples>);
+};
+
+template <>
+struct glz::meta<glz::detail::defined_formats>
+{
+   using enum detail::defined_formats;
+   static constexpr std::string_view name = "defined_formats";
+   static constexpr auto value = enumerate("date-time", datetime, //
+                                           "date", date, //
+                                           "time", time, //
+                                           "duration", duration, //
+                                           "email", email, //
+                                           "idn-email", idn_email, //
+                                           "hostname", hostname, //
+                                           "idn-hostname", idn_hostname, //
+                                           "ipv4", ipv4, //
+                                           "ipv6", ipv6, //
+                                           "uri", uri, //
+                                           "uri-reference", uri_reference, //
+                                           "iri", iri, //
+                                           "iri-reference", iri_reference, //
+                                           "uuid", uuid, //
+                                           "uri-template", uri_template, //
+                                           "json-pointer", json_pointer, //
+                                           "relative-json-pointer", relative_json_pointer, //
+                                           "regex", regex);
 };
 
 namespace glz
