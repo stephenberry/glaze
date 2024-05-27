@@ -26,14 +26,12 @@ namespace glz
    namespace detail
    {
       enum struct defined_formats : std::uint8_t;
-      struct out_of_spec final
+      struct ExtUnits final
       {
-         std::optional<std::string_view> unit_ascii{}; // ascii representation of the unit, e.g. "m^2" for square meters
+         std::optional<std::string_view> unitAscii{}; // ascii representation of the unit, e.g. "m^2" for square meters
          std::optional<std::string_view>
-            unit_unicode{}; // unicode representation of the unit, e.g. "m²" for square meters
-         std::optional<bool>
-            advanced{}; // flag to indicate that the parameter is advanced and can be hidden in default views
-         constexpr bool operator==(const out_of_spec&) const noexcept = default;
+            unitUnicode{}; // unicode representation of the unit, e.g. "m²" for square meters
+         constexpr bool operator==(const ExtUnits&) const noexcept = default;
       };
    }
    struct schema final
@@ -78,8 +76,10 @@ namespace glz
       // properties
       std::optional<std::span<const std::string_view>> enumeration{}; // enum
 
-      // out of spec
-      std::optional<detail::out_of_spec> outOfSpec{};
+      // out of json schema specification
+      std::optional<detail::ExtUnits> extUnits{};
+      std::optional<bool>
+         extAdvanced{}; // flag to indicate that the parameter is advanced and can be hidden in default views
 
       static constexpr auto schema_attributes{true}; // allowance flag to indicate metadata within glz::object(...)
 
@@ -116,7 +116,8 @@ namespace glz
                                                    "maxContains", &T::maxContains, //
                                                    "uniqueItems", &T::uniqueItems, //
                                                    "enum", &T::enumeration, //
-                                                   "outOfSpec", &T::outOfSpec);
+                                                   "extUnits", &T::extUnits, //
+                                                   "extAdvanced", &T::extAdvanced);
       };
    };
 
