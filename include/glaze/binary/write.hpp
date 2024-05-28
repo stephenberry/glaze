@@ -26,9 +26,9 @@ namespace glz
          if (ix + n > b.size()) [[unlikely]] {
             b.resize((std::max)(b.size() * 2, ix + n));
          }
-         
+
          constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
-         
+
          if constexpr (is_volatile) {
             const V temp = value;
             std::memcpy(b.data() + ix, &temp, n);
@@ -432,14 +432,15 @@ namespace glz
                dump_compressed_int<Opts>(value.size(), args...);
 
                if constexpr (contiguous<T>) {
-                  constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<std::remove_pointer_t<decltype(value.data())>>>;
-                  
+                  constexpr auto is_volatile =
+                     std::is_volatile_v<std::remove_reference_t<std::remove_pointer_t<decltype(value.data())>>>;
+
                   auto dump_array = [&](auto&& b, auto&& ix) {
                      const auto n = value.size() * sizeof(V);
                      if (ix + n > b.size()) [[unlikely]] {
                         b.resize((std::max)(b.size() * 2, ix + n));
                      }
-                     
+
                      if constexpr (is_volatile) {
                         V temp;
                         const auto n_elements = value.size();

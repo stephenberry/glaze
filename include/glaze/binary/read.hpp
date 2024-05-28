@@ -179,7 +179,7 @@ namespace glz
                                           auto&&) noexcept
          {
             using V = std::decay_t<decltype(value)>;
-            
+
             constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
 
             if (tag != header) {
@@ -715,8 +715,9 @@ namespace glz
                }
 
                if constexpr (contiguous<T>) {
-                  constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<std::remove_pointer_t<decltype(value.data())>>>;
-                  
+                  constexpr auto is_volatile =
+                     std::is_volatile_v<std::remove_reference_t<std::remove_pointer_t<decltype(value.data())>>>;
+
                   if constexpr (is_volatile) {
                      V temp;
                      for (size_t i = 0; i < n; ++i) {
