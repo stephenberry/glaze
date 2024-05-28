@@ -24,7 +24,8 @@ struct glz::json_schema<schema_obj>
       // .examples = {"foo", "bar"}, // read of std::span is not supported
       .readOnly = true,
       .writeOnly = true,
-      .constant = "some constant value",
+      // .constant = "some constant value", // todo it is not currently supported to read glz::schema::schema_any, for
+      // reference see function variant_is_auto_deducible
       .minLength = 1L,
       .maxLength = 2L,
       .pattern = "[a-z]+",
@@ -105,10 +106,6 @@ suite schema_attributes = [] {
       test_case const test{};
       expect_property<&glz::schema::writeOnly>(test, "variable", true);
    };
-   "constant"_test = [] {
-      test_case const test{};
-      expect_property<&glz::schema::constant>(test, "variable", std::string_view{"some constant value"});
-   };
    "minLength"_test = [] {
       test_case const test{};
       expect_property<&glz::schema::minLength>(test, "variable", std::uint64_t{1});
@@ -181,6 +178,204 @@ suite schema_attributes = [] {
    "extAdvanced"_test = [] {
       test_case const test{};
       expect_property<&glz::schema::ExtAdvanced>(test, "variable", true);
+   };
+};
+
+struct one_number
+{
+   std::int64_t some_var{42};
+};
+
+template <>
+struct glz::meta<one_number>
+{
+   static constexpr auto value = &one_number::some_var;
+};
+
+struct const_one_number
+{
+   static constexpr std::int64_t some_var{1337};
+};
+
+template <>
+struct glz::meta<const_one_number>
+{
+   static constexpr auto value = &const_one_number::some_var;
+};
+
+enum struct color : std::uint8_t { red = 0, green, blue };
+
+template <>
+struct glz::meta<color>
+{
+   using enum color;
+   static constexpr auto value = enumerate("red", red, "red description", //
+                                           "green", green, "green description", //
+                                           "blue", blue, schema{.description = "blue description"} //
+   );
+};
+
+struct const_one_enum
+{
+   static constexpr color some_var{color::green};
+};
+
+template <>
+struct glz::meta<const_one_enum>
+{
+   static constexpr auto value = &const_one_enum::some_var;
+};
+
+// This is a simplified version of the schematic struct
+// Since we cannot deduce the variant currently when reading when many number formats are available
+struct schematic_substitute
+{
+   using schema_number = std::optional<std::variant<std::int64_t, std::uint64_t, double>>;
+   std::optional<std::vector<std::string_view>> type{};
+   std::optional<std::vector<schematic_substitute>> oneOf{};
+   struct schema
+   {
+      std::optional<std::string_view> title{};
+      std::optional<std::string_view> description{};
+      std::optional<std::variant<std::monostate, bool, std::int64_t, std::string_view>> constant{};
+      schema_number minimum{};
+      schema_number maximum{};
+      std::optional<std::uint64_t> minItems{};
+      std::optional<std::uint64_t> maxItems{};
+   };
+   schema attributes{};
+   struct glaze
+   {
+      using T = schematic_substitute;
+      static constexpr auto value = glz::object(
+         "type", &T::type, //
+         "const", [](auto&& self) -> auto& { return self.attributes.constant; }, //
+         "minimum", [](auto&& self) -> auto& { return self.attributes.minimum; }, //
+         "maximum", [](auto&& self) -> auto& { return self.attributes.maximum; }, //
+         "oneOf", &T::oneOf, //
+         "title", [](auto&& self) -> auto& { return self.attributes.title; }, //
+         "description", [](auto&& self) -> auto& { return self.attributes.description; }, //
+         "minItems", [](auto&& self) -> auto& { return self.attributes.minItems; }, //
+         "maxItems", [](auto&& self) -> auto& { return self.attributes.maxItems; } //
+      );
+   };
+};
+
+auto read_json_ignore_unknown(auto&& value, auto&& buffer)
+{
+   glz::context ctx{};
+   return read<glz::opts{.error_on_unknown_keys = false}>(value, std::forward<decltype(buffer)>(buffer), ctx);
+}
+
+#if 0
+struct invalid_name
+{
+   int a{};
+};
+template <> struct glz::meta<invalid_name>
+{
+   static constexpr auto name = "invalid/name"; // slashes are not allowed in json schema
+};
+struct container_of_invalid_name
+{
+   invalid_name foo{};
+};
+suite compile_errors = [] {
+   "static_assert slash in name"_test = [] {
+      std::string schema_str = glz::write_json_schema<container_of_invalid_name>();
+   };
+};
+#endif
+
+suite schema_tests = [] {
+   "typeof directly accessed integer should only be integer"_test = []<typename T>(T) {
+      std::string schema_str = glz::write_json_schema<T>();
+      schematic_substitute obj{};
+      auto err = read_json_ignore_unknown(obj, schema_str);
+      expect(!err) << format_error(err, schema_str);
+      expect(obj.type->size() == 1);
+      expect(obj.type->at(0) == "integer");
+   } | std::tuple<one_number, const_one_number>{};
+
+   "Constexpr number is constant"_test = [] {
+      std::string schema_str = glz::write_json_schema<const_one_number>();
+      schematic_substitute obj{};
+      auto err = read_json_ignore_unknown(obj, schema_str);
+      expect(!err) << format_error(err, schema_str);
+      expect(fatal(obj.attributes.constant.has_value()));
+      expect(fatal(std::holds_alternative<std::int64_t>(obj.attributes.constant.value())));
+      expect(std::get<std::int64_t>(obj.attributes.constant.value()) == const_one_number::some_var);
+   };
+
+   "Constexpr enum is constant"_test = [] {
+      std::string schema_str = glz::write_json_schema<const_one_enum>();
+      schematic_substitute obj{};
+      auto err = read_json_ignore_unknown(obj, schema_str);
+      expect(!err) << format_error(err, schema_str);
+      expect(fatal(obj.attributes.constant.has_value()));
+      expect(fatal(std::holds_alternative<std::string_view>(obj.attributes.constant.value())));
+      expect(std::get<std::string_view>(obj.attributes.constant.value()) == "green");
+   };
+
+   "number has minimum"_test =
+      []<typename number_t> {
+         std::string schema_str = glz::write_json_schema<number_t>();
+         schematic_substitute obj{};
+         auto err = read_json_ignore_unknown(obj, schema_str);
+         expect(!err) << format_error(err, schema_str);
+         expect(fatal(obj.attributes.minimum.has_value()));
+         expect(fatal(std::holds_alternative<std::int64_t>(obj.attributes.minimum.value())));
+         expect(std::get<std::int64_t>(obj.attributes.minimum.value()) == std::numeric_limits<number_t>::lowest());
+      } |
+      std::tuple<std::int64_t, std::int8_t
+                 // , double // todo parse_number_failure when reading "minimum":-1.7976931348623157E308
+                 >{};
+
+   "always nullable type is constant null"_test = [] {
+      std::string schema_str = glz::write_json_schema<std::monostate>();
+      // reading null will of course leave the std::optional as empty, therefore check if
+      // null is actually written in the schema
+      expect(schema_str == R"({"type":["null"],"$defs":{},"const":null})");
+   };
+
+   "enum oneOf has title and constant"_test = [] {
+      std::string schema_str = glz::write_json_schema<color>();
+      schematic_substitute obj{};
+      auto err = read_json_ignore_unknown(obj, schema_str);
+      expect(!err) << format_error(err, schema_str);
+      expect(fatal(obj.oneOf.has_value()));
+      for (const auto& oneOf : obj.oneOf.value()) {
+         expect(fatal(oneOf.attributes.title.has_value()));
+         expect(fatal(oneOf.attributes.constant.has_value()));
+         expect(fatal(std::holds_alternative<std::string_view>(oneOf.attributes.constant.value())));
+         expect(std::get<std::string_view>(oneOf.attributes.constant.value()) == oneOf.attributes.title.value());
+      }
+   };
+
+   "enum description"_test = [] {
+      std::string schema_str = glz::write_json_schema<color>();
+      schematic_substitute obj{};
+      auto err = read_json_ignore_unknown(obj, schema_str);
+      expect(!err) << format_error(err, schema_str);
+      expect(fatal(obj.oneOf.has_value()));
+      for (const auto& oneOf : obj.oneOf.value()) {
+         expect(fatal(oneOf.attributes.description.has_value()));
+      }
+   };
+
+   "fixed array has fixed size"_test = [] {
+      std::string schema_str = glz::write_json_schema<std::array<std::int64_t, 42>>();
+      schematic_substitute obj{};
+      auto err = read_json_ignore_unknown(obj, schema_str);
+      expect(!err) << format_error(err, schema_str);
+      expect(fatal(obj.type.has_value()));
+      expect(obj.type->size() == 1);
+      expect(obj.type->at(0) == "array");
+      // check minItems and maxItems
+      expect(fatal(obj.attributes.minItems.has_value()));
+      expect(obj.attributes.minItems.value() == 42);
+      expect(fatal(obj.attributes.maxItems.has_value()));
+      expect(obj.attributes.maxItems.value() == 42);
    };
 };
 

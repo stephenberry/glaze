@@ -9,6 +9,7 @@
 #include <string>
 #include <type_traits>
 #include <vector>
+#include <array>
 
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/context.hpp"
@@ -274,18 +275,43 @@ namespace glz
       template <class T>
       concept is_no_reflect = requires(T t) { requires T::glaze_reflect == false; };
 
+      /// \brief check if container has fixed size and its subsequent T::value_type
       template <class T>
-      concept has_static_size = (is_span<T> && !is_dynamic_span<T>) || (requires(T container) {
-                                   {
-                                      std::bool_constant<(std::decay_t<T>{}.size(), true)>()
-                                   } -> std::same_as<std::true_type>;
-                                } && std::decay_t<T>{}.size() > 0);
+      concept has_static_size =
+          (is_span<T> && !is_dynamic_span<T>) ||
+          (requires(T container) {
+              {
+                  std::bool_constant<(std::decay_t<T>{}.size(), true)>()
+              } -> std::same_as<std::true_type>;
+          } && std::decay_t<T>{}.size() > 0 &&
+          requires {
+         typename T::value_type;
+         requires std::is_trivially_copyable_v<typename T::value_type>;
+      });
+      static_assert(has_static_size<std::array<int, 2>>);
+      static_assert(!has_static_size<std::array<std::string, 2>>);
+
+      template <class T>
+      constexpr bool is_std_array = false;
+      template <class T, std::size_t N>
+      constexpr bool is_std_array<std::array<T, N>> = true;
+
+      template <class T>
+      concept has_fixed_size_container = std::is_array_v<T> || is_std_array<T>;
+      static_assert(has_fixed_size_container<std::array<std::string, 2>>);
+      static_assert(has_fixed_size_container<int[54]>);
 
       template <class T>
       constexpr size_t get_size() noexcept
       {
          if constexpr (is_span<T>) {
             return T::extent;
+         }
+         else if constexpr (std::is_array_v<T>) {
+            return std::extent_v<T>;
+         }
+         else if constexpr (is_std_array<T>) {
+            return glz::tuple_size_v<T>;
          }
          else {
             return std::decay_t<T>{}.size();
