@@ -336,17 +336,26 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
+            const sv str = [&]() -> const sv {
+               if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
+                  return value ? value : "";
+               }
+               else {
+                  return value;
+               }
+            }();
+            
             constexpr uint8_t tag = tag::string;
 
             dump_type(tag, b, ix);
-            const auto n = value.size();
+            const auto n = str.size();
             dump_compressed_int<Opts>(n, b, ix);
 
             if (ix + n > b.size()) [[unlikely]] {
                b.resize((std::max)(b.size() * 2, ix + n));
             }
 
-            std::memcpy(b.data() + ix, value.data(), n);
+            std::memcpy(b.data() + ix, str.data(), n);
             ix += n;
          }
 

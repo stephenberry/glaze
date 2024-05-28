@@ -279,7 +279,7 @@ suite structs_of_functions_binary = [] {
       expect(response == R"([[0,0,0,"/get_number",null],42])");
    };
    
-   /*"nested_structs_of_functions"_test = [] {
+   "nested_structs_of_functions"_test = [] {
       repe::registry<glz::opts{.format = glz::binary}> server{};
 
       my_nested_functions_t obj{};
@@ -354,7 +354,7 @@ suite structs_of_functions_binary = [] {
       expect(!glz::beve_to_json(server.response, response));
       expect(response == R"([[0,0,0,"/my_functions/max",null],3.3])") << response;
 
-      {
+      /*{
          auto request = repe::request_binary({"/my_functions"});
          server.call(request);
       }
@@ -374,8 +374,8 @@ suite structs_of_functions_binary = [] {
       expect(
              response ==
          R"([[0,0,0,"",null],{"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""}])")
-         << response;
-   };*/
+         << response;*/
+   };
 };
 
 template <class T>
