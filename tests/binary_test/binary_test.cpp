@@ -2086,7 +2086,7 @@ suite volatile_tests = [] {
       expect(i == 42);
    };
 
-   /*"volatile struct_for_volatile"_test = [] {
+   "volatile struct_for_volatile"_test = [] {
       volatile struct_for_volatile obj{{1, 2, 3, 4}, true, -7, 9.9, 12};
       std::string s{};
       glz::write_binary(obj, s);
@@ -2105,7 +2105,7 @@ suite volatile_tests = [] {
       expect(obj.e == 12);
    };
 
-   "volatile my_volatile_struct"_test = [] {
+   /*"volatile my_volatile_struct"_test = [] {
       volatile my_volatile_struct obj{{1, 2, 3, 4}, true, -7, 9.9, 12};
       std::string s{};
       glz::write_binary(obj, s);

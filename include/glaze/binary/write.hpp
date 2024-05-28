@@ -442,7 +442,8 @@ namespace glz
                      
                      if constexpr (is_volatile) {
                         V temp;
-                        for (size_t i = 0; i < n; ++i) {
+                        const auto n_elements = value.size();
+                        for (size_t i = 0; i < n_elements; ++i) {
                            temp = value[i];
                            std::memcpy(b.data() + ix, &temp, sizeof(V));
                            ix += sizeof(V);

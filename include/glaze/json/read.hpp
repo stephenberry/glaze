@@ -441,7 +441,7 @@ namespace glz
                   if constexpr (std::is_volatile_v<std::remove_reference_t<decltype(value)>>) {
                      // Hardware may interact with value changes, so we parse into a temporary and assign in one place
                      V temp;
-                     auto s = parse_float<V, Opts.force_conformance>(value, it);
+                     auto s = parse_float<V, Opts.force_conformance>(temp, it);
                      if (!s) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
