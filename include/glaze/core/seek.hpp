@@ -5,6 +5,7 @@
 
 #include "glaze/core/read.hpp"
 #include "glaze/core/write.hpp"
+#include "glaze/reflection/reflect.hpp"
 
 // Use JSON Pointer syntax to seek to a specific element
 // https://github.com/stephenberry/JSON-Pointer

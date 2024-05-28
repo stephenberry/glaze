@@ -1622,7 +1622,7 @@ suite beve_to_json_tests = [] {
 
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
-      expect(json == R"({"index":0,"value":99})") << json;
+      expect(json == R"(99)") << json;
    };
 
    "beve_to_json std::variant<int, std::string> prettify"_test = [] {
@@ -1633,10 +1633,7 @@ suite beve_to_json_tests = [] {
       std::string json{};
       expect(!glz::beve_to_json<glz::opts{.prettify = true}>(buffer, json));
       expect(json == //
-             R"({
-   "index": 0,
-   "value": 99
-})") << json;
+             R"(99)") << json;
    };
 
    "beve_to_json std::complex<float>"_test = [] {

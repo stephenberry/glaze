@@ -9,7 +9,8 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflection_tuple.hpp"
 #include "glaze/core/write.hpp"
-#include "glaze/json/json_ptr.hpp"
+#include "glaze/core/seek.hpp"
+#include "glaze/reflection/reflect.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/variant.hpp"
@@ -105,6 +106,16 @@ namespace glz
             to_binary<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Args>(args)...);
          }
       };
+      
+      template <always_null_t T>
+      struct to_binary<T>
+      {
+         template <auto Opts>
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, auto&&... args) noexcept
+         {
+            dump_type(uint8_t{0}, args...);
+         }
+      };
 
       template <>
       struct to_binary<hidden>
@@ -197,8 +208,10 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
-         {}
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            write<binary>::op<Opts>(name_v<std::decay_t<decltype(value)>>, ctx, args...);
+         }
       };
 
       template <class T>
@@ -325,17 +338,26 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
+            const sv str = [&]() -> const sv {
+               if constexpr (!char_array_t<T> && std::is_pointer_v<std::decay_t<T>>) {
+                  return value ? value : "";
+               }
+               else {
+                  return value;
+               }
+            }();
+            
             constexpr uint8_t tag = tag::string;
 
             dump_type(tag, b, ix);
-            const auto n = value.size();
+            const auto n = str.size();
             dump_compressed_int<Opts>(n, b, ix);
 
             if (ix + n > b.size()) [[unlikely]] {
                b.resize((std::max)(b.size() * 2, ix + n));
             }
 
-            std::memcpy(b.data() + ix, value.data(), n);
+            std::memcpy(b.data() + ix, str.data(), n);
             ix += n;
          }
 
