@@ -208,8 +208,10 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
-         {}
+         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         {
+            write<binary>::op<Opts>(name_v<std::decay_t<decltype(value)>>, ctx, args...);
+         }
       };
 
       template <class T>
