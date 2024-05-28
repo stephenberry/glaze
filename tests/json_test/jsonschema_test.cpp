@@ -42,8 +42,8 @@ struct glz::json_schema<schema_obj>
       .maxContains = 2UL,
       .uniqueItems = true,
       // .enumeration = , // read of std::span is not supported
-      .extUnits = detail::ExtUnits{.unitAscii = "m^2", .unitUnicode = "m²"},
-      .extAdvanced = true,
+      .ExtUnits = detail::ExtUnits{.unitAscii = "m^2", .unitUnicode = "m²"},
+      .ExtAdvanced = true,
    };
    // schema examples{.examples = example_arr};
 };
@@ -179,12 +179,12 @@ suite schema_attributes = [] {
    };
    "extUnits"_test = [] {
       test_case const test{};
-      expect_property<&glz::schema::extUnits>(test, "variable",
+      expect_property<&glz::schema::ExtUnits>(test, "variable",
                                               glz::detail::ExtUnits{.unitAscii = "m^2", .unitUnicode = "m²"});
    };
    "extAdvanced"_test = [] {
       test_case const test{};
-      expect_property<&glz::schema::extAdvanced>(test, "variable", true);
+      expect_property<&glz::schema::ExtAdvanced>(test, "variable", true);
    };
 };
 

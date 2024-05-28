@@ -77,9 +77,9 @@ namespace glz
       std::optional<std::span<const std::string_view>> enumeration{}; // enum
 
       // out of json schema specification
-      std::optional<detail::ExtUnits> extUnits{};
+      std::optional<detail::ExtUnits> ExtUnits{};
       std::optional<bool>
-         extAdvanced{}; // flag to indicate that the parameter is advanced and can be hidden in default views
+         ExtAdvanced{}; // flag to indicate that the parameter is advanced and can be hidden in default views
 
       static constexpr auto schema_attributes{true}; // allowance flag to indicate metadata within glz::object(...)
 
@@ -116,8 +116,8 @@ namespace glz
                                                    "maxContains", &T::maxContains, //
                                                    "uniqueItems", &T::uniqueItems, //
                                                    "enum", &T::enumeration, //
-                                                   "extUnits", &T::extUnits, //
-                                                   "extAdvanced", &T::extAdvanced);
+                                                   "ExtUnits", &T::ExtUnits, //
+                                                   "ExtAdvanced", &T::ExtAdvanced);
       };
    };
 
