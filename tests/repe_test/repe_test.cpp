@@ -376,6 +376,58 @@ suite structs_of_functions_binary = [] {
          R"([[0,0,0,"",null],{"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""}])")
          << response;
    };
+   
+   "example_functions"_test = [] {
+      repe::registry<glz::opts{.format = glz::binary}> server{};
+
+      example_functions_t obj{};
+
+      server.on(obj);
+
+      {
+         auto request = repe::request_binary({"/name"}, "Susan");
+         server.call(request);
+      }
+
+      std::string response{};
+      expect(!glz::beve_to_json(server.response, response));
+      expect(response == R"([[0,0,2,"/name",null],null])") << response;
+
+      {
+         auto request = repe::request_binary({"/get_name"});
+         server.call(request);
+      }
+
+      expect(!glz::beve_to_json(server.response, response));
+      expect(response == R"([[0,0,0,"/get_name",null],"Susan"])") << response;
+
+      {
+         auto request = repe::request_binary({"/get_name"}, "Bob");
+         server.call(request);
+      }
+
+      expect(!glz::beve_to_json(server.response, response));
+      expect(obj.name == "Susan"); // we expect the name to not have changed because this function take no inputs
+      expect(response == R"([[0,0,2,"/get_name",null],null])") << response;
+
+      {
+         auto request = repe::request_binary({"/set_name"}, "Bob");
+         server.call(request);
+      }
+
+      expect(!glz::beve_to_json(server.response, response));
+      expect(obj.name == "Bob");
+      expect(response == R"([[0,0,2,"/set_name",null],null])") << response;
+
+      {
+         auto request = repe::request_binary({"/custom_name"}, "Alice");
+         server.call(request);
+      }
+
+      expect(!glz::beve_to_json(server.response, response));
+      expect(obj.name == "Alice");
+      expect(response == R"([[0,0,2,"/custom_name",null],null])") << response;
+   };
 };
 
 template <class T>
