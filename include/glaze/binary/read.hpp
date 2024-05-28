@@ -70,7 +70,7 @@ namespace glz
                                               std::forward<It0>(it), std::forward<It1>(end));
          }
       };
-      
+
       template <always_null_t T>
       struct from_binary<T>
       {
@@ -369,8 +369,7 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& ctx, auto&& it,
-                                          auto&& end) noexcept
+         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             skip_string_binary(ctx, it, end);
          }
@@ -458,7 +457,7 @@ namespace glz
                ctx.error = error_code::unexpected_end;
                return;
             }
-            
+
             if constexpr (string_view_t<T>) {
                value = {it, n};
             }

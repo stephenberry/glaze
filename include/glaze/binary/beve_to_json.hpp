@@ -346,10 +346,11 @@ namespace glz
                ++it;
                skip_compressed_int(ctx, it, end);
                if (bool(ctx.error)) return;
-               
+
                // IMPORTANT: Code was commented because variants should typically write out the JSON value directly
                // This makes sense for auto-deducible values, which should be the default behavior.
-               // In the future we may want a compile time option that dumps the index for cases that cannot be auto-deduced
+               // In the future we may want a compile time option that dumps the index for cases that cannot be
+               // auto-deduced
                /*const auto index = int_from_compressed(ctx, it, end);
 
                dump<'{'>(out, ix);

@@ -3,10 +3,10 @@
 
 #pragma once
 
-#include "glaze/core/wrappers.hpp"
-#include "glaze/core/seek.hpp"
 #include "glaze/binary/read.hpp"
 #include "glaze/binary/write.hpp"
+#include "glaze/core/seek.hpp"
+#include "glaze/core/wrappers.hpp"
 
 namespace glz::detail
 {

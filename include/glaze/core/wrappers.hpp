@@ -38,7 +38,7 @@ namespace glz
             return opts_wrapper_t<V, OptsMemPtr>{val.*MemPtr};
          };
       }
-      
+
       // custom_t allows a user to register member functions (and std::function members) to implement custom reading and
       // writing
       template <class T, class From, class To>
@@ -54,7 +54,7 @@ namespace glz
 
       template <class T, class From, class To>
       custom_t(T&, From, To) -> custom_t<T, From, To>;
-      
+
       template <auto From, auto To>
       inline constexpr auto custom_impl() noexcept
       {
@@ -81,7 +81,7 @@ namespace glz
    // Reads into only existing fields and elements and then exits without parsing the rest of the input
    template <auto MemPtr>
    constexpr auto partial_read = detail::opts_wrapper<MemPtr, &opts::partial_read>();
-   
+
    template <auto From, auto To>
    constexpr auto custom = detail::custom_impl<From, To>();
 }

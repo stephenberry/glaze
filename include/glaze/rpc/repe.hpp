@@ -12,7 +12,7 @@ namespace glz::repe
 {
    constexpr uint8_t notify = 0b00000001;
    constexpr uint8_t empty = 0b00000010;
-   
+
    // Note: The method and id are at the top of the class for easier initialization
    // The order in the serialized message follows the REPE specification
    struct header final
@@ -21,12 +21,12 @@ namespace glz::repe
       std::variant<std::monostate, uint64_t, std::string_view> id{}; // an identifier
       static constexpr uint8_t version = 0; // the REPE version
       uint8_t error = 0; // 0 denotes no error
-      
+
       // Action: These booleans are packed into the a uint8_t action in the REPE header
       bool notify{}; // no response returned
       bool empty{}; // the body should be ignored (considered empty)
    };
-   
+
    template <class T>
    concept is_header = std::same_as<std::decay_t<T>, header>;
 }
@@ -46,7 +46,8 @@ struct glz::meta<glz::repe::header>
       action |= (self.empty << 1);
       return action;
    };
-   static constexpr auto value = glz::array(&T::version, &T::error, custom<read_action, write_action>, &T::method, &T::id);
+   static constexpr auto value =
+      glz::array(&T::version, &T::error, custom<read_action, write_action>, &T::method, &T::id);
 };
 
 namespace glz::repe
@@ -121,8 +122,8 @@ namespace glz::repe
       if (bool(ctx.error)) {
          parse_error ec{ctx.error, size_t(b - start), ctx.includer_error};
          write<Opts>(std::forward_as_tuple(header{.error = true},
-                                          error_t{error_e::parse_error, format_error(ec, state.message)}),
-                    response);
+                                           error_t{error_e::parse_error, format_error(ec, state.message)}),
+                     response);
          return 0;
       }
 
@@ -236,7 +237,7 @@ namespace glz::repe
       header.empty = true; // because no value provided
       return glz::write_json(std::forward_as_tuple(header, nullptr));
    }
-   
+
    inline auto request_binary(header&& header)
    {
       header.empty = true; // because no value provided
@@ -249,7 +250,7 @@ namespace glz::repe
       copy.empty = true; // because no value provided
       return request_json(std::move(copy));
    }
-   
+
    inline auto request_binary(const header& h)
    {
       repe::header copy = h;
@@ -262,7 +263,7 @@ namespace glz::repe
    {
       return glz::write_json(std::forward_as_tuple(header, std::forward<Value>(value)));
    }
-   
+
    template <class Value>
    inline auto request_binary(const header& header, Value&& value)
    {
@@ -274,7 +275,7 @@ namespace glz::repe
    {
       glz::write_json(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
    }
-   
+
    template <class Value>
    inline void request_binary(const header& header, Value&& value, auto& buffer)
    {
@@ -610,9 +611,9 @@ namespace glz::repe
                std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(pe, msg)}),
                response);
          };
-         
+
          header h{};
-         
+
          if constexpr (Opts.format == json) {
             if (*b == '[') {
                ++b;

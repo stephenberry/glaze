@@ -8,8 +8,8 @@
 #include "glaze/binary/header.hpp"
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflection_tuple.hpp"
-#include "glaze/core/write.hpp"
 #include "glaze/core/seek.hpp"
+#include "glaze/core/write.hpp"
 #include "glaze/reflection/reflect.hpp"
 #include "glaze/util/dump.hpp"
 #include "glaze/util/for_each.hpp"
@@ -106,7 +106,7 @@ namespace glz
             to_binary<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Args>(args)...);
          }
       };
-      
+
       template <always_null_t T>
       struct to_binary<T>
       {
@@ -346,7 +346,7 @@ namespace glz
                   return value;
                }
             }();
-            
+
             constexpr uint8_t tag = tag::string;
 
             dump_type(tag, b, ix);
