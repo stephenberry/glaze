@@ -56,7 +56,7 @@ template <class T>
 concept is_optional = glz::is_specialization_v<T, std::optional>;
 
 template <auto Member, typename Value>
-auto expect_property(test_case const& test, std::string_view key, Value value)
+auto expect_property(const test_case& test, std::string_view key, Value value)
 {
    auto schematic = test.obj;
    expect(fatal(schematic.has_value()));
