@@ -348,7 +348,7 @@ namespace glz
                      static_assert(sizeof(*it) == sizeof(char));
                      const char* cur = reinterpret_cast<const char*>(it);
                      const char* beg = cur;
-                     if constexpr (std::is_volatile_v<decltype(value)>) {
+                     if constexpr (std::is_volatile_v<std::remove_reference_t<decltype(value)>>) {
                         // Hardware may interact with value changes, so we parse into a temporary and assign in one
                         // place
                         uint64_t i{};
@@ -438,7 +438,7 @@ namespace glz
                   it = ptr;
                }
                else {
-                  if constexpr (std::is_volatile_v<decltype(value)>) {
+                  if constexpr (std::is_volatile_v<std::remove_reference_t<decltype(value)>>) {
                      // Hardware may interact with value changes, so we parse into a temporary and assign in one place
                      V temp;
                      auto s = parse_float<V, Opts.force_conformance>(value, it);
