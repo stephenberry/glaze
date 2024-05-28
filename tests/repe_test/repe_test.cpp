@@ -466,6 +466,34 @@ suite wrapper_tests = [] {
    };
 };
 
+suite wrapper_tests_binary = [] {
+   "wrapper"_test = [] {
+      repe::registry<glz::opts{.format = glz::binary}> server{};
+
+      my_nested_functions_t instance{};
+      wrapper_t<my_nested_functions_t> obj{&instance};
+
+      server.on(obj);
+
+      {
+         auto request = repe::request_binary({"/sub/my_functions/void_func"});
+         server.call(request);
+      }
+
+      std::string response{};
+      expect(!glz::beve_to_json(server.response, response));
+      expect(response == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << response;
+
+      {
+         auto request = repe::request_binary({"/sub/my_functions/hello"});
+         server.call(request);
+      }
+
+      expect(!glz::beve_to_json(server.response, response));
+      expect(response == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
+   };
+};
+
 int main()
 {
    const auto result = boost::ut::cfg<>.run({.report_errors = true});

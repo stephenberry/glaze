@@ -369,9 +369,11 @@ namespace glz
       struct from_binary<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& /*ctx*/, auto&& /*it*/,
-                                          auto&& /*end*/) noexcept
-         {}
+         GLZ_ALWAYS_INLINE static void op(auto&& /*value*/, is_context auto&& ctx, auto&& it,
+                                          auto&& end) noexcept
+         {
+            skip_string_binary(ctx, it, end);
+         }
       };
 
       template <class T>
