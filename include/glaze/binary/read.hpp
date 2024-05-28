@@ -1135,11 +1135,12 @@ namespace glz
             }
 
             decltype(auto) storage = [&]() -> decltype(auto) {
+               using V = decay_keep_volatile_t<decltype(value)>;
                if constexpr (reflectable<T>) {
 #if ((defined _MSC_VER) && (!defined __clang__))
-                  static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();
+                  static thread_local auto cmap = make_map<V, Opts.use_hash_comparison>();
 #else
-                  static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+                  static thread_local constinit auto cmap = make_map<V, Opts.use_hash_comparison>();
 #endif
                   populate_map(value, cmap); // Function required for MSVC to build
                   return cmap;

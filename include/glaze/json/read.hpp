@@ -1709,8 +1709,8 @@ namespace glz
                size_t read_count{}; // for partial_read and dynamic objects
 
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
+                  using V = decay_keep_volatile_t<decltype(value)>;
                   if constexpr (reflectable<T> && num_members > 0) {
-                     using V = decay_keep_volatile_t<decltype(value)>;
 #if ((defined _MSC_VER) && (!defined __clang__))
                      static thread_local auto cmap = make_map<V, Opts.use_hash_comparison>();
 #else
