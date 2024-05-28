@@ -11,8 +11,6 @@ struct schema_obj
    std::int64_t variable{2};
 };
 
-// static constexpr auto example_arr = std::array<std::string_view, 1>{ "\"this is an example\"" };
-
 template <>
 struct glz::json_schema<schema_obj>
 {
@@ -21,6 +19,7 @@ struct glz::json_schema<schema_obj>
       // .defaultValue = 42L, // todo it is not currently supported to read glz::schema::schema_any, for reference see
       // function variant_is_auto_deducible
       .deprecated = true,
+      // .examples = {"foo", "bar"}, // read of std::span is not supported
       .readOnly = true,
       .writeOnly = true,
       .constant = "some constant value",
@@ -45,7 +44,6 @@ struct glz::json_schema<schema_obj>
       .ExtUnits = detail::ExtUnits{.unitAscii = "m^2", .unitUnicode = "m²"},
       .ExtAdvanced = true,
    };
-   // schema examples{.examples = example_arr};
 };
 
 struct test_case
@@ -58,7 +56,7 @@ template <class T>
 concept is_optional = glz::is_specialization_v<T, std::optional>;
 
 template <auto Member, typename Value>
-auto expect_property(test_case test, std::string_view key, Value value)
+auto expect_property(test_case const& test, std::string_view key, Value value)
 {
    auto schematic = test.obj;
    expect(fatal(schematic.has_value()));
@@ -97,10 +95,6 @@ suite schema_attributes = [] {
       test_case const test{};
       expect_property<&glz::schema::deprecated>(test, "variable", true);
    };
-   // skip / "examples"_test = [] {
-   //    test_case const test{};
-   //    expect_property<&glz::schema::examples>(test, "examples", std::span{ example_arr });
-   // };
    "readOnly"_test = [] {
       test_case const test{};
       expect_property<&glz::schema::readOnly>(test, "variable", true);
