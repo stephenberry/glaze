@@ -179,6 +179,8 @@ namespace glz
                                           auto&&) noexcept
          {
             using V = std::decay_t<decltype(value)>;
+            
+            constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<decltype(value)>>;
 
             if (tag != header) {
                if constexpr (Opts.allow_conversions) {
@@ -252,7 +254,14 @@ namespace glz
                }
             }
 
-            std::memcpy(&value, it, sizeof(V));
+            if constexpr (is_volatile) {
+               V temp;
+               std::memcpy(&temp, it, sizeof(V));
+               value = temp;
+            }
+            else {
+               std::memcpy(&value, it, sizeof(V));
+            }
             it += sizeof(V);
          }
 
@@ -706,8 +715,20 @@ namespace glz
                }
 
                if constexpr (contiguous<T>) {
-                  std::memcpy(value.data(), it, n * sizeof(V));
-                  it += n * sizeof(V);
+                  constexpr auto is_volatile = std::is_volatile_v<std::remove_reference_t<std::remove_pointer_t<decltype(value.data())>>>;
+                  
+                  if constexpr (is_volatile) {
+                     V temp;
+                     for (size_t i = 0; i < n; ++i) {
+                        std::memcpy(&temp, it, sizeof(V));
+                        value[i] = temp;
+                        it += sizeof(V);
+                     }
+                  }
+                  else {
+                     std::memcpy(value.data(), it, n * sizeof(V));
+                     it += n * sizeof(V);
+                  }
                }
                else {
                   for (auto&& x : value) {
@@ -1114,11 +1135,12 @@ namespace glz
             }
 
             decltype(auto) storage = [&]() -> decltype(auto) {
+               using V = decay_keep_volatile_t<decltype(value)>;
                if constexpr (reflectable<T>) {
 #if ((defined _MSC_VER) && (!defined __clang__))
-                  static thread_local auto cmap = make_map<T, Opts.use_hash_comparison>();
+                  static thread_local auto cmap = make_map<V, Opts.use_hash_comparison>();
 #else
-                  static thread_local constinit auto cmap = make_map<T, Opts.use_hash_comparison>();
+                  static thread_local constinit auto cmap = make_map<V, Opts.use_hash_comparison>();
 #endif
                   populate_map(value, cmap); // Function required for MSVC to build
                   return cmap;

@@ -348,7 +348,7 @@ namespace glz
                      static_assert(sizeof(*it) == sizeof(char));
                      const char* cur = reinterpret_cast<const char*>(it);
                      const char* beg = cur;
-                     if constexpr (std::is_volatile_v<decltype(value)>) {
+                     if constexpr (std::is_volatile_v<std::remove_reference_t<decltype(value)>>) {
                         // Hardware may interact with value changes, so we parse into a temporary and assign in one
                         // place
                         uint64_t i{};
@@ -438,10 +438,10 @@ namespace glz
                   it = ptr;
                }
                else {
-                  if constexpr (std::is_volatile_v<decltype(value)>) {
+                  if constexpr (std::is_volatile_v<std::remove_reference_t<decltype(value)>>) {
                      // Hardware may interact with value changes, so we parse into a temporary and assign in one place
                      V temp;
-                     auto s = parse_float<V, Opts.force_conformance>(value, it);
+                     auto s = parse_float<V, Opts.force_conformance>(temp, it);
                      if (!s) [[unlikely]] {
                         ctx.error = error_code::parse_number_failure;
                         return;
@@ -1709,8 +1709,8 @@ namespace glz
                size_t read_count{}; // for partial_read and dynamic objects
 
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
+                  using V = decay_keep_volatile_t<decltype(value)>;
                   if constexpr (reflectable<T> && num_members > 0) {
-                     using V = decay_keep_volatile_t<decltype(value)>;
 #if ((defined _MSC_VER) && (!defined __clang__))
                      static thread_local auto cmap = make_map<V, Opts.use_hash_comparison>();
 #else

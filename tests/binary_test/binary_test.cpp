@@ -20,6 +20,7 @@
 #include "glaze/binary/beve_to_json.hpp"
 #include "glaze/binary/read.hpp"
 #include "glaze/binary/write.hpp"
+#include "glaze/hardware/volatile_array.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/trace/trace.hpp"
@@ -2029,6 +2030,98 @@ suite type_conversions = [] {
       std::map<uint32_t, float> v{};
       expect(!glz::read_binary(v, b));
       expect(v == std::map<uint32_t, float>{{1, 1.1f}, {2, 2.2f}, {3, 3.3f}});
+   };
+};
+
+struct struct_for_volatile
+{
+   glz::volatile_array<uint16_t, 4> a{};
+   bool b{};
+   int32_t c{};
+   double d{};
+   uint32_t e{};
+};
+
+template <>
+struct glz::meta<struct_for_volatile>
+{
+   using T = struct_for_volatile;
+   static constexpr auto value = object(&T::a, &T::b, &T::c, &T::d, &T::e);
+};
+
+struct my_volatile_struct
+{
+   glz::volatile_array<uint16_t, 4> a{};
+   bool b{};
+   int32_t c{};
+   double d{};
+   uint32_t e{};
+};
+
+suite volatile_tests = [] {
+   "basic volatile"_test = [] {
+      volatile int i = 42;
+      std::string s{};
+      glz::write_binary(i, s);
+      i = 0;
+      expect(!glz::read_binary(i, s));
+      expect(i == 42);
+
+      volatile uint64_t u = 99;
+      glz::write_binary(u, s);
+      u = 0;
+      expect(!glz::read_binary(u, s));
+      expect(u == 99);
+   };
+
+   "basic volatile pointer"_test = [] {
+      volatile int i = 42;
+      volatile int* ptr = &i;
+      std::string s{};
+      glz::write_binary(ptr, s);
+
+      i = 0;
+      expect(!glz::read_binary(i, s));
+      expect(*ptr == 42);
+      expect(i == 42);
+   };
+
+   "volatile struct_for_volatile"_test = [] {
+      volatile struct_for_volatile obj{{1, 2, 3, 4}, true, -7, 9.9, 12};
+      std::string s{};
+      glz::write_binary(obj, s);
+
+      obj.a.fill(0);
+      obj.b = false;
+      obj.c = 0;
+      obj.d = 0.0;
+      obj.e = 0;
+
+      expect(!glz::read_binary(obj, s));
+      expect(obj.a == glz::volatile_array<uint16_t, 4>{1, 2, 3, 4});
+      expect(obj.b == true);
+      expect(obj.c == -7);
+      expect(obj.d == 9.9);
+      expect(obj.e == 12);
+   };
+
+   "volatile my_volatile_struct"_test = [] {
+      volatile my_volatile_struct obj{{1, 2, 3, 4}, true, -7, 9.9, 12};
+      std::string s{};
+      glz::write_binary(obj, s);
+
+      obj.a.fill(0);
+      obj.b = false;
+      obj.c = 0;
+      obj.d = 0.0;
+      obj.e = 0;
+
+      expect(!glz::read_binary(obj, s));
+      expect(obj.a == glz::volatile_array<uint16_t, 4>{1, 2, 3, 4});
+      expect(obj.b == true);
+      expect(obj.c == -7);
+      expect(obj.d == 9.9);
+      expect(obj.e == 12);
    };
 };
 
