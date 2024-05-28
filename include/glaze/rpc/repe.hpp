@@ -612,29 +612,47 @@ namespace glz::repe
          };
          
          header h{};
-
-         if (*b == '[') {
-            ++b;
+         
+         if constexpr (Opts.format == json) {
+            if (*b == '[') {
+               ++b;
+            }
+            else {
+               handle_error(b);
+               return !h.notify;
+            }
          }
          else {
-            handle_error(b);
-            return !h.notify;
+            if (*b == glz::tag::generic_array) {
+               ++b; // skip the tag
+               const auto n = glz::detail::int_from_compressed(ctx, b, e);
+               if (bool(ctx.error) || (n != 2)) [[unlikely]] {
+                  handle_error(b);
+                  return !h.notify;
+               }
+            }
+            else {
+               handle_error(b);
+               return !h.notify;
+            }
          }
 
          glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
 
-         if (bool(ctx.error)) {
+         if (bool(ctx.error)) [[unlikely]] {
             parse_error pe{ctx.error, size_t(b - start), ctx.includer_error};
             response = format_error(pe, msg);
             return !h.notify;
          }
 
-         if (*b == ',') {
-            ++b;
-         }
-         else {
-            handle_error(b);
-            return !h.notify;
+         if constexpr (Opts.format == json) {
+            if (*b == ',') {
+               ++b;
+            }
+            else {
+               handle_error(b);
+               return !h.notify;
+            }
          }
 
          if (auto it = methods.find(h.method); it != methods.end()) {
