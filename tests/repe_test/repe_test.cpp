@@ -11,7 +11,7 @@
 #include "glaze/ext/cli_menu.hpp"
 #include "glaze/glaze.hpp"
 
-using namespace boost::ut;
+using namespace ut;
 
 namespace repe = glz::repe;
 

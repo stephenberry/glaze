@@ -25,4 +25,13 @@ namespace glz
          (f(std::integral_constant<std::size_t, I>{}) || ...);
       }(std::make_index_sequence<N>{});
    }
+   
+   template <class Func, class Tuple>
+   constexpr void for_each_apply(Func&& f, Tuple&& t)
+   {
+      constexpr size_t N = glz::tuple_size_v<std::decay_t<Tuple>>;
+      [&]<std::size_t... I>(std::index_sequence<I...>) constexpr {
+         (f(std::get<I>(t)), ...);
+      }(std::make_index_sequence<N>{});
+   }
 }

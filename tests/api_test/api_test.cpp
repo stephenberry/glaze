@@ -97,7 +97,7 @@ glz::iface_fn glz_iface() noexcept { return glz::make_iface<my_api, my_api2>(); 
 
 void tests()
 {
-   using namespace boost::ut;
+   using namespace ut;
 
    std::shared_ptr<glz::iface> iface{glz_iface()()};
    auto io = (*iface)["my_api"]();

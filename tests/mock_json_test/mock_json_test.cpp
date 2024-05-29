@@ -9,7 +9,7 @@
 #include "glaze/compare/approx.hpp"
 #include "glaze/glaze.hpp"
 
-using namespace boost::ut;
+using namespace ut;
 
 struct fantasy_nation_t
 {

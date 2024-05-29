@@ -4,7 +4,7 @@
 #include <glaze/json/schema.hpp>
 #include <string>
 
-using namespace boost::ut;
+using namespace ut;
 
 struct schema_obj
 {

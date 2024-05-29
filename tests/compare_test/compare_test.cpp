@@ -10,7 +10,7 @@
 #include "boost/ut.hpp"
 #include "glaze/compare/approx.hpp"
 
-using namespace boost::ut;
+using namespace ut;
 
 struct float_compare_t
 {

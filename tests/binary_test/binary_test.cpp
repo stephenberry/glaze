@@ -1,9 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#ifndef BOOST_UT_DISABLE_MODULE
-#define BOOST_UT_DISABLE_MODULE
-#endif
+#define UT_RUN_TIME_ONLY
+
 #include <bit>
 #include <chrono>
 #include <complex>
@@ -15,7 +14,7 @@
 #include <set>
 #include <unordered_set>
 
-#include "boost/ut.hpp"
+#include "ut/ut.hpp"
 #include "glaze/api/impl.hpp"
 #include "glaze/binary/beve_to_json.hpp"
 #include "glaze/binary/read.hpp"
@@ -202,7 +201,7 @@ struct glz::meta<Thing>
 
 void write_tests()
 {
-   using namespace boost::ut;
+   using namespace ut;
 
    "round_trip"_test = [] {
       {
@@ -413,7 +412,7 @@ void write_tests()
 
 void bench()
 {
-   using namespace boost::ut;
+   using namespace ut;
    "bench"_test = [] {
       glz::trace_begin("bench");
       std::cout << "\nPerformance regresion test: \n";
@@ -452,7 +451,7 @@ void bench()
    };
 }
 
-using namespace boost::ut;
+using namespace ut;
 
 suite binary_helpers = [] {
    "binary_helpers"_test = [] {
@@ -592,7 +591,7 @@ void file_include_test()
 
 void container_types()
 {
-   using namespace boost::ut;
+   using namespace ut;
    "vector int roundtrip"_test = [] {
       std::vector<int> vec(100);
       for (auto& item : vec) item = rand();
@@ -2134,11 +2133,10 @@ int main()
    file_include_test();
    container_types();
 
-   auto result = boost::ut::cfg<>.run({.report_errors = true});
    glz::trace_end("binary_test");
    const auto ec = glz::write_file_trace("binary_test.trace.json", std::string{});
    if (ec) {
       std::cerr << "trace output failed\n";
    }
-   return result;
+   return 0;
 }

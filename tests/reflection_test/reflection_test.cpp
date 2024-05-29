@@ -5,7 +5,7 @@
 #include "boost/ut.hpp"
 #include "glaze/glaze.hpp"
 
-using namespace boost::ut;
+using namespace ut;
 
 struct my_struct
 {

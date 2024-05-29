@@ -19,7 +19,7 @@
 
 int main()
 {
-   using namespace boost::ut;
+   using namespace ut;
    "write_json"_test = [] {
       Eigen::Matrix<double, 2, 2> m{};
       m << 5, 1, 1, 7;

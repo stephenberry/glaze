@@ -9,7 +9,7 @@
 
 // Specification: https://datatracker.ietf.org/doc/html/rfc4180
 
-using namespace boost::ut;
+using namespace ut;
 
 struct my_struct
 {

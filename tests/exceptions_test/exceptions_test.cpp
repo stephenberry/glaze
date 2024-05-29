@@ -5,7 +5,7 @@
 #include "glaze/glaze_exceptions.hpp"
 #include "glaze/thread/threadpool.hpp"
 
-using namespace boost::ut;
+using namespace ut;
 
 struct my_struct
 {
@@ -48,7 +48,7 @@ suite starter = [] {
 };
 
 suite basic_types = [] {
-   using namespace boost::ut;
+   using namespace ut;
 
    "double write"_test = [] {
       std::string buffer{};

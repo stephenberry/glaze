@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#define UT_RUN_TIME_ONLY
+
 #include <any>
 #include <bitset>
 #include <chrono>
@@ -21,7 +23,7 @@
 #include <unordered_map>
 #include <variant>
 
-#include "boost/ut.hpp"
+#include "ut/ut.hpp"
 #include "glaze/api/impl.hpp"
 #include "glaze/file/hostname_include.hpp"
 #include "glaze/file/raw_or_file.hpp"
@@ -33,7 +35,7 @@
 #include "glaze/util/poly.hpp"
 #include "glaze/util/progress_bar.hpp"
 
-using namespace boost::ut;
+using namespace ut;
 
 glz::trace trace{};
 
@@ -354,7 +356,7 @@ suite escaping_tests = [] {
 };
 
 suite basic_types = [] {
-   using namespace boost::ut;
+   using namespace ut;
 
    "double write"_test = [] {
       std::string buffer{};
@@ -459,36 +461,36 @@ suite basic_types = [] {
       "empty"_test = [] {
          static constexpr std::string_view expected_empty{"\"\""};
          static constexpr std::string_view expected_nothing{};
-         expect(that % glz::write_json(std::string_view{}) == expected_empty);
-         expect(that % glz::write_json(std::string{}) == expected_empty);
-         expect(that % glz::write_json("") == expected_empty);
+         expect(glz::write_json(std::string_view{}) == expected_empty);
+         expect(glz::write_json(std::string{}) == expected_empty);
+         expect(glz::write_json("") == expected_empty);
 
          auto write_raw = [](const auto& input) {
             std::string result{};
             glz::write<glz::opts{.raw = true}>(input, result);
             return result;
          };
-         expect(that % write_raw(std::string_view{}) == expected_nothing);
-         expect(that % write_raw(std::string{}) == expected_nothing);
-         expect(that % write_raw("") == expected_nothing);
+         expect(write_raw(std::string_view{}) == expected_nothing);
+         expect(write_raw(std::string{}) == expected_nothing);
+         expect(write_raw("") == expected_nothing);
 
          auto write_raw_str = [](const auto& input) {
             std::string result{};
             glz::write<glz::opts{.raw_string = true}>(input, result);
             return result;
          };
-         expect(that % write_raw_str(std::string_view{}) == expected_empty);
-         expect(that % write_raw_str(std::string{}) == expected_empty);
-         expect(that % write_raw_str("") == expected_empty);
+         expect(write_raw_str(std::string_view{}) == expected_empty);
+         expect(write_raw_str(std::string{}) == expected_empty);
+         expect(write_raw_str("") == expected_empty);
 
          auto write_num = [](const auto& input) {
             std::string result{};
             glz::write<glz::opts{.number = true}>(input, result);
             return result;
          };
-         expect(that % write_num(std::string_view{}) == expected_nothing);
-         expect(that % write_num(std::string{}) == expected_nothing);
-         expect(that % write_num("") == expected_nothing);
+         expect(write_num(std::string_view{}) == expected_nothing);
+         expect(write_num(std::string{}) == expected_nothing);
+         expect(write_num("") == expected_nothing);
       };
    };
 
@@ -510,7 +512,7 @@ suite basic_types = [] {
 };
 
 suite container_types = [] {
-   using namespace boost::ut;
+   using namespace ut;
    "vector int roundtrip"_test = [] {
       std::vector<int> vec(100);
       for (auto& item : vec) item = rand();
@@ -689,7 +691,7 @@ suite container_types = [] {
 };
 
 suite nullable_types = [] {
-   using namespace boost::ut;
+   using namespace ut;
    "optional"_test = [] {
       std::optional<int> oint{};
       std::string buffer{};
@@ -747,7 +749,7 @@ suite nullable_types = [] {
 };
 
 suite enum_types = [] {
-   using namespace boost::ut;
+   using namespace ut;
    "enum"_test = [] {
       Color color = Color::Red;
       std::string buffer{};
@@ -769,7 +771,7 @@ suite enum_types = [] {
 };
 
 suite user_types = [] {
-   using namespace boost::ut;
+   using namespace ut;
 
    "user array"_test = [] {
       V3 v3{9.1, 7.2, 1.9};
@@ -1201,7 +1203,7 @@ struct large_length_range_t
 };
 
 suite large_length_range = [] {
-   using namespace boost::ut;
+   using namespace ut;
 
    "large_length_range"_test = [] {
       large_length_range_t obj{};
@@ -1213,7 +1215,7 @@ suite large_length_range = [] {
 };
 
 suite json_pointer = [] {
-   using namespace boost::ut;
+   using namespace ut;
 
    "seek"_test = [] {
       Thing thing{};
@@ -1301,7 +1303,7 @@ suite json_pointer = [] {
 };
 
 suite early_end = [] {
-   using namespace boost::ut;
+   using namespace ut;
 
    "early_end"_test = [] {
       Thing obj{};
@@ -1330,7 +1332,7 @@ suite early_end = [] {
 };
 
 suite minified_custom_object = [] {
-   using namespace boost::ut;
+   using namespace ut;
 
    "minified_custom_object"_test = [] {
       Thing obj{};
@@ -1352,7 +1354,7 @@ suite minified_custom_object = [] {
 };
 
 suite prettified_custom_object = [] {
-   using namespace boost::ut;
+   using namespace ut;
 
    "prettified_custom_object"_test = [] {
       Thing obj{};
@@ -1363,7 +1365,7 @@ suite prettified_custom_object = [] {
 };
 
 suite bench = [] {
-   using namespace boost::ut;
+   using namespace ut;
    "bench"_test = [] {
       trace.begin("bench");
       std::cout << "\nPerformance regresion test: \n";
@@ -1457,7 +1459,7 @@ template <typename Pair_key, typename Pair_value>
 Read_pair_test_case(Pair_key, Pair_value, std::string_view) -> Read_pair_test_case<Pair_key, Pair_value>;
 
 suite read_tests = [] {
-   using namespace boost::ut;
+   using namespace ut;
 
    "string read"_test = [] {
       std::string s{"3958713"};
@@ -1731,19 +1733,23 @@ suite read_tests = [] {
       expect(glz::read_json(v, in) != glz::error_code::none);
    };
 
-   "Read pair"_test =
-      [](const auto& test_case) {
+   "Read pair"_test = [] {
+      auto tester = [](const auto& test_case) {
          const std::pair expected{test_case.expected_key, test_case.expected_value};
          std::remove_cv_t<decltype(expected)> parsed{};
          const auto err = glz::read_json(parsed, test_case.input_json);
          expect(err == glz::error_code::none) << glz::format_error(err, test_case.input_json);
          expect(parsed == expected) << glz::write_json(parsed);
-      } |
-      std::tuple{
-         Read_pair_test_case{1, 2, R"({"1":2})"},
-         Read_pair_test_case{std::string{"key"}, 2, R"({"key":2})"},
-         Read_pair_test_case{std::string{"key"}, std::string{"value"}, R"({"key":"value"})"},
-         Read_pair_test_case{std::array{1, 2, 3}, std::array{4, 5, 6}, R"({"[1,2,3]":[4,5,6]})"},
+      };
+      
+         std::tuple tests{
+            Read_pair_test_case{1, 2, R"({"1":2})"},
+            Read_pair_test_case{std::string{"key"}, 2, R"({"key":2})"},
+            Read_pair_test_case{std::string{"key"}, std::string{"value"}, R"({"key":"value"})"},
+            Read_pair_test_case{std::array{1, 2, 3}, std::array{4, 5, 6}, R"({"[1,2,3]":[4,5,6]})"},
+         };
+      
+      glz::for_each_apply(tester, tests);
       };
 
    "Read map"_test = [] {
@@ -2058,7 +2064,7 @@ template <typename Pair_key, typename Pair_value>
 Write_pair_test_case(Pair_key, Pair_value, std::string_view) -> Write_pair_test_case<Pair_key, Pair_value>;
 
 suite write_tests = [] {
-   using namespace boost::ut;
+   using namespace ut;
 
    "Write floating point types"_test = [] {
       {
@@ -2304,12 +2310,13 @@ suite write_tests = [] {
       expect(s == glz::sv{R"({"b":13.4,"d":211.2})"});
    };
 
-   "Write pair"_test =
-      [](const auto& test_case) {
+   "Write pair"_test = [] {
+      auto tester = [](const auto& test_case) {
          const std::pair value{test_case.key, test_case.value};
          expect(glz::write_json(value) == test_case.expected_json);
-      } |
-      std::tuple{
+      };
+      
+      std::tuple tests{
          Write_pair_test_case{"key", "value", R"({"key":"value"})"},
          Write_pair_test_case{0, "value", R"({"0":"value"})"},
          Write_pair_test_case{0.78, std::array{1, 2, 3}, R"({"0.78":[1,2,3]})"},
@@ -2319,6 +2326,9 @@ suite write_tests = [] {
          Write_pair_test_case{"knot", std::nullopt, "{}"}, // nullopt_t, not std::optional
          Write_pair_test_case{"kmaybe", std::optional<int>{}, "{}"},
       };
+      
+      glz::for_each_apply(tester, tests);
+   };
 
 #ifdef __cpp_lib_ranges
    "Write map-like input range"_test = [] {
@@ -2960,27 +2970,27 @@ suite variant_tests = [] {
       // Auto deduce variant with no conflicting basic types
       std::variant<std::monostate, int, std::string, bool, std::map<std::string, double>, std::vector<std::string>> m{};
       expect(glz::read_json(m, R"("Hello World")") == glz::error_code::none);
-      expect(std::holds_alternative<std::string>(m) >> fatal);
+      expect[std::holds_alternative<std::string>(m)];
       expect(std::get<std::string>(m) == "Hello World");
 
       expect(glz::read_json(m, R"(872)") == glz::error_code::none);
-      expect(std::holds_alternative<int>(m) >> fatal);
+      expect[std::holds_alternative<int>(m)];
       expect(std::get<int>(m) == 872);
 
       expect(glz::read_json(m, R"({"pi":3.14})") == glz::error_code::none);
-      expect(std::holds_alternative<std::map<std::string, double>>(m) >> fatal);
+      expect[std::holds_alternative<std::map<std::string, double>>(m)];
       expect(std::get<std::map<std::string, double>>(m)["pi"] == 3.14);
 
       expect(glz::read_json(m, R"(true)") == glz::error_code::none);
-      expect(std::holds_alternative<bool>(m) >> fatal);
+      expect[std::holds_alternative<bool>(m)];
       expect(std::get<bool>(m) == true);
 
       expect(glz::read_json(m, R"(["a", "b", "c"])") == glz::error_code::none);
-      expect(std::holds_alternative<std::vector<std::string>>(m) >> fatal);
+      expect[std::holds_alternative<std::vector<std::string>>(m)];
       expect(std::get<std::vector<std::string>>(m)[1] == "b");
 
       expect(glz::read_json(m, "null") == glz::error_code::none);
-      expect(std::holds_alternative<std::monostate>(m) >> fatal);
+      expect[std::holds_alternative<std::monostate>(m)];
    };
 
    "variant_read_obj"_test = [] {
@@ -4962,10 +4972,9 @@ struct Arbitrary_key_test_case
 };
 
 suite arbitrary_key_maps = [] {
-   using namespace boost::ut;
-   using namespace boost::ut::operators;
-   "arbitrary_key_maps"_test =
-      [](const auto& test_case) {
+   using namespace ut;
+   "arbitrary_key_maps"_test = [] {
+      auto tester = [](const auto& test_case) {
          const auto& [name, input, serialized] = test_case;
          std::string buffer{};
          glz::write_json(input, buffer);
@@ -4974,8 +4983,9 @@ suite arbitrary_key_maps = [] {
          std::decay_t<decltype(input)> parsed{};
          expect(glz::read_json(parsed, serialized) == glz::error_code::none);
          expect(parsed.x == input.x);
-      } |
-      std::tuple{Arbitrary_key_test_case<array_map>{.name = "array_map",
+      };
+      
+      std::tuple tests{Arbitrary_key_test_case<array_map>{.name = "array_map",
                                                     .input = {.x = {{{1, 2, 3}, "hello"}, {{4, 5, 6}, "goodbye"}}},
                                                     .serialized = R"({"x":{"[1,2,3]":"hello","[4,5,6]":"goodbye"}})"},
                  Arbitrary_key_test_case<custom_key_map>{
@@ -4983,6 +4993,9 @@ suite arbitrary_key_maps = [] {
                     .input = {.x = {{{-1, "k.2"}, "value"}}},
                     .serialized = R"({"x":{"{\"field1\":-1,\"field2\":\"k.2\"}":"value"}})",
                  }};
+      
+      glz::for_each_apply(tester, tests);
+   };
 };
 
 suite char_array = [] {
@@ -5356,17 +5369,24 @@ suite constexpr_values_test = [] {
       std::variant<direct_cx_value_conversion_different_value, direct_cx_value_conversion,
                    string_direct_cx_value_conversion, string_two_direct_cx_value_conversion,
                    array_direct_cx_value_conversion, array_two_direct_cx_value_conversion, const_red, const_green>;
-   "constexpr blend with non constexpr variant string"_test = []<typename const_t>() {
-      const_only_variant var{const_t{}};
-      std::string s{};
-      glz::write_json(var, s);
-      std::string expected{};
-      glz::write_json(const_t::const_v, expected);
-      expect(s == expected) << s;
-      auto parse_err{glz::read_json(var, s)};
-      expect(parse_err == glz::error_code::none) << glz::format_error(parse_err, s);
-      expect(std::holds_alternative<const_t>(var));
-   } | variant_to_tuple<const_only_variant>::type{};
+   "constexpr blend with non constexpr variant string"_test = [] {
+      auto tester = [](auto& v) {
+         using const_t = std::remove_reference_t<decltype(v)>;
+            const_only_variant var{v};
+            std::string s{};
+            glz::write_json(var, s);
+            std::string expected{};
+            glz::write_json(const_t::const_v, expected);
+            expect(s == expected) << s;
+            auto parse_err{glz::read_json(var, s)};
+            expect(parse_err == glz::error_code::none) << glz::format_error(parse_err, s);
+            expect(std::holds_alternative<const_t>(var));
+      };
+      
+      variant_to_tuple<const_only_variant>::type tests{};
+      
+      glz::for_each_apply(tester, tests);
+   };
 
    "parse error direct_conversion_variant cx int"_test = [] {
       const_only_variant var{direct_cx_value_conversion{}};
@@ -7113,7 +7133,7 @@ struct NestedPartialRead
 };
 
 suite partial_read_tests = [] {
-   using namespace boost::ut;
+   using namespace ut;
 
    "partial read"_test = [] {
       Header h{};
@@ -7208,7 +7228,7 @@ suite partial_read_tests = [] {
 };
 
 suite nested_partial_read_tests = [] {
-   using namespace boost::ut;
+   using namespace ut;
 
    "nested object partial read"_test = [] {
       NestedPartialRead n{};
@@ -8108,13 +8128,12 @@ int main()
    trace.begin("json_test", "Full test suite duration.");
    // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
-   const auto result = boost::ut::cfg<>.run({.report_errors = true});
-
+   
    trace.end("json_test");
    const auto ec = glz::write_file_json(trace, "json_test.trace.json", std::string{});
    if (ec) {
       std::cerr << "trace output failed\n";
    }
 
-   return result;
+   return 0;
 }

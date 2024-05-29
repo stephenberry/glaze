@@ -14,7 +14,7 @@ glz::iface_fn glz_iface() noexcept { return glz::make_iface<>(); }
 
 void tests()
 {
-   using namespace boost::ut;
+   using namespace ut;
    glz::lib_loader lib(TEST_LIB_INTERFACE_LOCATION);
    auto io = lib["my_api"]();
 

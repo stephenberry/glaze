@@ -7,7 +7,7 @@
 #include "boost/ut.hpp"
 #include "glaze/glaze.hpp"
 
-using namespace boost::ut;
+using namespace ut;
 
 std::mt19937 gen{};
 
