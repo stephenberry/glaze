@@ -1,13 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#ifndef BOOST_UT_DISABLE_MODULE
-#define BOOST_UT_DISABLE_MODULE
-#endif
+#define UT_RUN_TIME_ONLY
 
 #include "glaze/compare/compare.hpp"
 
-#include "boost/ut.hpp"
+#include "ut/ut.hpp"
 #include "glaze/compare/approx.hpp"
 
 using namespace ut;

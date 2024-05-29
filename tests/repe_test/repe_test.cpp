@@ -1,13 +1,11 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#ifndef BOOST_UT_DISABLE_MODULE
-#define BOOST_UT_DISABLE_MODULE
-#endif
+#define UT_RUN_TIME_ONLY
 
 #include "glaze/rpc/repe.hpp"
 
-#include "boost/ut.hpp"
+#include "ut/ut.hpp"
 #include "glaze/ext/cli_menu.hpp"
 #include "glaze/glaze.hpp"
 
