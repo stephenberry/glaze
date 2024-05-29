@@ -458,6 +458,24 @@ ut::suite struct_test_cases = [] {
    };
 };
 
+struct MyParams {};
+struct MyResult {};
+using MyServer = rpc::server<
+    rpc::method<"MyMethod", MyParams, glz::expected<MyResult, rpc::error>>>;
+using MyClient = rpc::client<
+    rpc::method<"MyMethod", MyParams, glz::expected<MyResult, rpc::error>>>;
+
+ut::suite test_rpc_error = [] {
+   MyServer server;
+   server.on<"MyMethod">([](MyParams) { return rpc::error{}; });
+
+   MyClient client;
+   auto [req, _] = client.request<"MyMethod">(1, MyParams{}, [](auto /*val*/, auto /*id*/) {});
+   auto resp = server.call(req);
+   
+   ut::expect(resp == R"({"jsonrpc":"2.0","error":{"code":0,"message":"No error"},"id":1})") << resp;
+};
+
 auto main() -> int
 {
    const auto result = boost::ut::cfg<>.run({.report_errors = true});
