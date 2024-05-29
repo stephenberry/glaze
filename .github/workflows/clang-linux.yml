@@ -47,8 +47,8 @@ jobs:
           -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++ -lc++abi"
 
     - name: Build
-      run: cmake --build build -j 4
+      run: cmake --build build -j $(nproc)
 
     - name: Test
       working-directory: build
-      run: ctest -j 4 --output-on-failure
+      run: ctest -j $(nproc) --output-on-failure
