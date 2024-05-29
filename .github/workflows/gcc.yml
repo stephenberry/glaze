@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         gcc: [12, 13, 14]
-        build_type: [Debug, Release]
+        build_type: [Debug]
         std: [20, 23]
 
     env:

@@ -692,7 +692,7 @@ namespace glz
                            }
 
                            for (auto&& x : value) {
-                              const auto number_tag = tag::number | (tag & 0b11111000);
+                              const uint8_t number_tag = tag::number | (tag & 0b11111000);
                               read<binary>::op<opt_true<Opts, &opts::no_header>>(x, number_tag, ctx, it, end);
                            }
                            return;
@@ -895,7 +895,7 @@ namespace glz
                return;
             }
 
-            constexpr auto key_tag = type == 0 ? tag::string : (tag::number | (byte_cnt << 5));
+            constexpr uint8_t key_tag = type == 0 ? tag::string : (tag::number | (byte_cnt << 5));
             read<binary>::op<opt_true<Opts, &opts::no_header>>(value.first, key_tag, ctx, it, end);
             read<binary>::op<Opts>(value.second, ctx, it, end);
          }
@@ -948,7 +948,7 @@ namespace glz
             }
 
             if constexpr (std::is_arithmetic_v<std::decay_t<Key>>) {
-               constexpr auto key_tag = tag::number | type | (byte_cnt << 5);
+               constexpr uint8_t key_tag = tag::number | type | (byte_cnt << 5);
                Key key;
                for (size_t i = 0; i < n; ++i) {
                   if constexpr (Opts.partial_read) {
@@ -965,7 +965,7 @@ namespace glz
                }
             }
             else {
-               constexpr auto key_tag = tag::string;
+               constexpr uint8_t key_tag = tag::string;
                static thread_local Key key;
                for (size_t i = 0; i < n; ++i) {
                   if constexpr (Opts.partial_read) {
