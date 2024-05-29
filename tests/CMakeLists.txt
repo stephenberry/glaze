@@ -64,14 +64,10 @@ add_subdirectory(json_conformance)
 add_subdirectory(json_performance)
 add_subdirectory(json_test)
 add_subdirectory(jsonrpc_test)
+add_subdirectory(lib_test)
 add_subdirectory(mock_json_test)
 add_subdirectory(reflection_test)
 add_subdirectory(repe_test)
-
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|MSVC")
-#lib_test chokes with Github action runner on Clang-Linux
-add_subdirectory(lib_test)
-endif()
 
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
