@@ -1,10 +1,10 @@
 #define UT_RUN_TIME_ONLY
 
-#include <ut/ut.hpp>
 #include <cstdint>
 #include <glaze/json.hpp>
 #include <glaze/json/schema.hpp>
 #include <string>
+#include <ut/ut.hpp>
 
 using namespace ut;
 

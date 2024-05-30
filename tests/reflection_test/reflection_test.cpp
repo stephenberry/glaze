@@ -4,8 +4,8 @@
 #include <map>
 #include <unordered_map>
 
-#include "ut/ut.hpp"
 #include "glaze/glaze.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -634,7 +634,4 @@ suite nested_target_tests = [] {
    };
 };
 
-int main()
-{
-   return 0;
-}
+int main() { return 0; }

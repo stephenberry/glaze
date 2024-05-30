@@ -4,11 +4,11 @@
 #include <iostream>
 #include <tuple>
 
-#include "ut/ut.hpp"
 #include "glaze/api/impl.hpp"
 #include "glaze/api/std/deque.hpp"
 #include "glaze/api/std/span.hpp"
 #include "glaze/api/std/unordered_set.hpp"
+#include "ut/ut.hpp"
 
 struct my_struct
 {

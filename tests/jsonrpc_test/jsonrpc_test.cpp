@@ -1,8 +1,9 @@
 
 #include "glaze/ext/jsonrpc.hpp"
 
-#include "ut/ut.hpp"
 #include <string>
+
+#include "ut/ut.hpp"
 
 namespace rpc = glz::rpc;
 using ut::operator""_test;
@@ -456,7 +457,4 @@ ut::suite struct_test_cases = [] {
    };*/
 };
 
-int main()
-{
-   return 0;
-}
+int main() { return 0; }

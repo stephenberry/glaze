@@ -3,9 +3,9 @@
 
 #define UT_RUN_TIME_ONLY
 
-#include "ut/ut.hpp"
 #include "glaze/glaze_exceptions.hpp"
 #include "glaze/thread/threadpool.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -160,7 +160,4 @@ suite read_file_test = [] {
    };
 };*/
 
-int main()
-{
-   return 0;
-}
+int main() { return 0; }

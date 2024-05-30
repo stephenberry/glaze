@@ -12,12 +12,12 @@
 #include <iterator>
 #include <random>
 
-#include "ut/ut.hpp"
 #include "glaze/binary/beve_to_json.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/json/write.hpp"
+#include "ut/ut.hpp"
 
 int main()
 {

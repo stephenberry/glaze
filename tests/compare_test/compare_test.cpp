@@ -5,8 +5,8 @@
 
 #include "glaze/compare/compare.hpp"
 
-#include "ut/ut.hpp"
 #include "glaze/compare/approx.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -57,7 +57,4 @@ suite equality = [] {
    };
 };
 
-int main()
-{
-   return 0;
-}
+int main() { return 0; }

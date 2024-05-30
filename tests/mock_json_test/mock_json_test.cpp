@@ -3,9 +3,9 @@
 
 #define UT_RUN_TIME_ONLY
 
-#include "ut/ut.hpp"
 #include "glaze/compare/approx.hpp"
 #include "glaze/glaze.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -297,7 +297,4 @@ suite twitter_test = [] {
    };
 };
 
-int main()
-{
-   return 0;
-}
+int main() { return 0; }

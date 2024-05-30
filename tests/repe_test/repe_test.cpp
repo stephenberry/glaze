@@ -5,9 +5,9 @@
 
 #include "glaze/rpc/repe.hpp"
 
-#include "ut/ut.hpp"
 #include "glaze/ext/cli_menu.hpp"
 #include "glaze/glaze.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -492,7 +492,4 @@ suite wrapper_tests_binary = [] {
    };
 };
 
-int main()
-{
-   return 0;
-}
+int main() { return 0; }

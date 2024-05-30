@@ -6,8 +6,8 @@
 #include <random>
 #include <unordered_map>
 
-#include "ut/ut.hpp"
 #include "glaze/glaze.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -65,7 +65,4 @@ suite string_performance = [] {
    };
 };
 
-int main()
-{
-   return 0;
-}
+int main() { return 0; }

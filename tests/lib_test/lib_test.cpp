@@ -6,9 +6,9 @@
 #include <iostream>
 #include <tuple>
 
-#include "ut/ut.hpp"
 #include "glaze/api/api.hpp"
 #include "interface.hpp"
+#include "ut/ut.hpp"
 
 glz::iface_fn glz_iface() noexcept { return glz::make_iface<>(); }
 

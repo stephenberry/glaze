@@ -23,7 +23,6 @@
 #include <unordered_map>
 #include <variant>
 
-#include "ut/ut.hpp"
 #include "glaze/api/impl.hpp"
 #include "glaze/file/hostname_include.hpp"
 #include "glaze/file/raw_or_file.hpp"
@@ -34,6 +33,7 @@
 #include "glaze/trace/trace.hpp"
 #include "glaze/util/poly.hpp"
 #include "glaze/util/progress_bar.hpp"
+#include "ut/ut.hpp"
 
 using namespace ut;
 
@@ -1741,16 +1741,16 @@ suite read_tests = [] {
          expect(err == glz::error_code::none) << glz::format_error(err, test_case.input_json);
          expect(parsed == expected) << glz::write_json(parsed);
       };
-      
-         std::tuple tests{
-            Read_pair_test_case{1, 2, R"({"1":2})"},
-            Read_pair_test_case{std::string{"key"}, 2, R"({"key":2})"},
-            Read_pair_test_case{std::string{"key"}, std::string{"value"}, R"({"key":"value"})"},
-            Read_pair_test_case{std::array{1, 2, 3}, std::array{4, 5, 6}, R"({"[1,2,3]":[4,5,6]})"},
-         };
-      
-      glz::for_each_apply(tester, tests);
+
+      std::tuple tests{
+         Read_pair_test_case{1, 2, R"({"1":2})"},
+         Read_pair_test_case{std::string{"key"}, 2, R"({"key":2})"},
+         Read_pair_test_case{std::string{"key"}, std::string{"value"}, R"({"key":"value"})"},
+         Read_pair_test_case{std::array{1, 2, 3}, std::array{4, 5, 6}, R"({"[1,2,3]":[4,5,6]})"},
       };
+
+      glz::for_each_apply(tester, tests);
+   };
 
    "Read map"_test = [] {
       constexpr std::string_view in = R"(   { "as" : 1, "so" : 2, "make" : 3 } )";
@@ -2315,7 +2315,7 @@ suite write_tests = [] {
          const std::pair value{test_case.key, test_case.value};
          expect(glz::write_json(value) == test_case.expected_json);
       };
-      
+
       std::tuple tests{
          Write_pair_test_case{"key", "value", R"({"key":"value"})"},
          Write_pair_test_case{0, "value", R"({"0":"value"})"},
@@ -2326,7 +2326,7 @@ suite write_tests = [] {
          Write_pair_test_case{"knot", std::nullopt, "{}"}, // nullopt_t, not std::optional
          Write_pair_test_case{"kmaybe", std::optional<int>{}, "{}"},
       };
-      
+
       glz::for_each_apply(tester, tests);
    };
 
@@ -4984,16 +4984,17 @@ suite arbitrary_key_maps = [] {
          expect(glz::read_json(parsed, serialized) == glz::error_code::none);
          expect(parsed.x == input.x);
       };
-      
-      std::tuple tests{Arbitrary_key_test_case<array_map>{.name = "array_map",
-                                                    .input = {.x = {{{1, 2, 3}, "hello"}, {{4, 5, 6}, "goodbye"}}},
-                                                    .serialized = R"({"x":{"[1,2,3]":"hello","[4,5,6]":"goodbye"}})"},
-                 Arbitrary_key_test_case<custom_key_map>{
-                    .name = "custom_key_map",
-                    .input = {.x = {{{-1, "k.2"}, "value"}}},
-                    .serialized = R"({"x":{"{\"field1\":-1,\"field2\":\"k.2\"}":"value"}})",
-                 }};
-      
+
+      std::tuple tests{
+         Arbitrary_key_test_case<array_map>{.name = "array_map",
+                                            .input = {.x = {{{1, 2, 3}, "hello"}, {{4, 5, 6}, "goodbye"}}},
+                                            .serialized = R"({"x":{"[1,2,3]":"hello","[4,5,6]":"goodbye"}})"},
+         Arbitrary_key_test_case<custom_key_map>{
+            .name = "custom_key_map",
+            .input = {.x = {{{-1, "k.2"}, "value"}}},
+            .serialized = R"({"x":{"{\"field1\":-1,\"field2\":\"k.2\"}":"value"}})",
+         }};
+
       glz::for_each_apply(tester, tests);
    };
 };
@@ -5372,19 +5373,19 @@ suite constexpr_values_test = [] {
    "constexpr blend with non constexpr variant string"_test = [] {
       auto tester = [](auto& v) {
          using const_t = std::remove_reference_t<decltype(v)>;
-            const_only_variant var{v};
-            std::string s{};
-            glz::write_json(var, s);
-            std::string expected{};
-            glz::write_json(const_t::const_v, expected);
-            expect(s == expected) << s;
-            auto parse_err{glz::read_json(var, s)};
-            expect(parse_err == glz::error_code::none) << glz::format_error(parse_err, s);
-            expect(std::holds_alternative<const_t>(var));
+         const_only_variant var{v};
+         std::string s{};
+         glz::write_json(var, s);
+         std::string expected{};
+         glz::write_json(const_t::const_v, expected);
+         expect(s == expected) << s;
+         auto parse_err{glz::read_json(var, s)};
+         expect(parse_err == glz::error_code::none) << glz::format_error(parse_err, s);
+         expect(std::holds_alternative<const_t>(var));
       };
-      
+
       variant_to_tuple<const_only_variant>::type tests{};
-      
+
       glz::for_each_apply(tester, tests);
    };
 
@@ -8128,7 +8129,7 @@ int main()
    trace.begin("json_test", "Full test suite duration.");
    // Explicitly run registered test suites and report errors
    // This prevents potential issues with thread local variables
-   
+
    trace.end("json_test");
    const auto ec = glz::write_file_json(trace, "json_test.trace.json", std::string{});
    if (ec) {

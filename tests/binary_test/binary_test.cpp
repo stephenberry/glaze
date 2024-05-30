@@ -14,7 +14,6 @@
 #include <set>
 #include <unordered_set>
 
-#include "ut/ut.hpp"
 #include "glaze/api/impl.hpp"
 #include "glaze/binary/beve_to_json.hpp"
 #include "glaze/binary/read.hpp"
@@ -23,6 +22,7 @@
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/read.hpp"
 #include "glaze/trace/trace.hpp"
+#include "ut/ut.hpp"
 
 struct my_struct
 {
