@@ -6,7 +6,7 @@ set(BOOST_UT_DISABLE_MODULE ON CACHE INTERNAL "")
 FetchContent_Declare(
   ut
   GIT_REPOSITORY https://github.com/openalgz/ut
-  GIT_TAG v0.0.2
+  GIT_TAG v0.0.3
   GIT_SHALLOW TRUE
 )
 
