@@ -288,23 +288,27 @@ suite compile_errors = [] {
 #endif
 
 suite schema_tests = [] {
-   "typeof directly accessed integer should only be integer"_test = []<typename T>(T) {
-      std::string schema_str = glz::write_json_schema<T>();
-      schematic_substitute obj{};
-      auto err = read_json_ignore_unknown(obj, schema_str);
-      expect(!err) << format_error(err, schema_str);
-      expect(obj.type->size() == 1);
-      expect(obj.type->at(0) == "integer");
-   } | std::tuple<one_number, const_one_number>{};
+   "typeof directly accessed integer should only be integer"_test = [] {
+      auto test = []<typename T>(T){
+         std::string schema_str = glz::write_json_schema<T>();
+         schematic_substitute obj{};
+         auto err = read_json_ignore_unknown(obj, schema_str);
+         expect(!err) << format_error(err, schema_str);
+         expect(obj.type->size() == 1);
+         expect(obj.type->at(0) == "integer");
+      };
+      test(one_number{});
+      test(const_one_number{});
+   };
 
    "Constexpr number is constant"_test = [] {
       std::string schema_str = glz::write_json_schema<const_one_number>();
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
-      expect(fatal(obj.attributes.constant.has_value()));
-      expect(fatal(std::holds_alternative<std::int64_t>(obj.attributes.constant.value())));
-      expect(std::get<std::int64_t>(obj.attributes.constant.value()) == const_one_number::some_var);
+      expect[obj.attributes.constant.has_value()];
+      expect[std::holds_alternative<std::int64_t>(obj.attributes.constant.value())];
+      expect[std::get<std::int64_t>(obj.attributes.constant.value()) == const_one_number::some_var];
    };
 
    "Constexpr enum is constant"_test = [] {
@@ -312,24 +316,26 @@ suite schema_tests = [] {
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
-      expect(fatal(obj.attributes.constant.has_value()));
-      expect(fatal(std::holds_alternative<std::string_view>(obj.attributes.constant.value())));
+      expect[(obj.attributes.constant.has_value())];
+      expect[(std::holds_alternative<std::string_view>(obj.attributes.constant.value()))];
       expect(std::get<std::string_view>(obj.attributes.constant.value()) == "green");
    };
 
    "number has minimum"_test =
-      []<typename number_t> {
-         std::string schema_str = glz::write_json_schema<number_t>();
-         schematic_substitute obj{};
-         auto err = read_json_ignore_unknown(obj, schema_str);
-         expect(!err) << format_error(err, schema_str);
-         expect(fatal(obj.attributes.minimum.has_value()));
-         expect(fatal(std::holds_alternative<std::int64_t>(obj.attributes.minimum.value())));
-         expect(std::get<std::int64_t>(obj.attributes.minimum.value()) == std::numeric_limits<number_t>::lowest());
-      } |
-      std::tuple<std::int64_t, std::int8_t
-                 // , double // todo parse_number_failure when reading "minimum":-1.7976931348623157E308
-                 >{};
+      [] {
+         auto test = []<typename number_t>(number_t){
+            std::string schema_str = glz::write_json_schema<number_t>();
+            schematic_substitute obj{};
+            auto err = read_json_ignore_unknown(obj, schema_str);
+            expect(!err) << format_error(err, schema_str);
+            expect[(obj.attributes.minimum.has_value())];
+            expect[(std::holds_alternative<std::int64_t>(obj.attributes.minimum.value()))];
+            expect(std::get<std::int64_t>(obj.attributes.minimum.value()) == std::numeric_limits<number_t>::lowest());
+         };
+         test(std::int64_t{});
+         test(std::uint8_t{});
+         // double todo parse_number_failure when reading "minimum":-1.7976931348623157E308
+      };
 
    "always nullable type is constant null"_test = [] {
       std::string schema_str = glz::write_json_schema<std::monostate>();
@@ -343,11 +349,11 @@ suite schema_tests = [] {
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
-      expect(fatal(obj.oneOf.has_value()));
+      expect[(obj.oneOf.has_value())];
       for (const auto& oneOf : obj.oneOf.value()) {
-         expect(fatal(oneOf.attributes.title.has_value()));
-         expect(fatal(oneOf.attributes.constant.has_value()));
-         expect(fatal(std::holds_alternative<std::string_view>(oneOf.attributes.constant.value())));
+         expect[(oneOf.attributes.title.has_value())];
+         expect[(oneOf.attributes.constant.has_value())];
+         expect[(std::holds_alternative<std::string_view>(oneOf.attributes.constant.value()))];
          expect(std::get<std::string_view>(oneOf.attributes.constant.value()) == oneOf.attributes.title.value());
       }
    };
@@ -357,9 +363,9 @@ suite schema_tests = [] {
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
-      expect(fatal(obj.oneOf.has_value()));
+      expect[(obj.oneOf.has_value())];
       for (const auto& oneOf : obj.oneOf.value()) {
-         expect(fatal(oneOf.attributes.description.has_value()));
+         expect[(oneOf.attributes.description.has_value())];
       }
    };
 
@@ -368,13 +374,13 @@ suite schema_tests = [] {
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
-      expect(fatal(obj.type.has_value()));
+      expect[(obj.type.has_value())];
       expect(obj.type->size() == 1);
       expect(obj.type->at(0) == "array");
       // check minItems and maxItems
-      expect(fatal(obj.attributes.minItems.has_value()));
+      expect[(obj.attributes.minItems.has_value())];
       expect(obj.attributes.minItems.value() == 42);
-      expect(fatal(obj.attributes.maxItems.has_value()));
+      expect[(obj.attributes.maxItems.has_value())];
       expect(obj.attributes.maxItems.value() == 42);
    };
 };

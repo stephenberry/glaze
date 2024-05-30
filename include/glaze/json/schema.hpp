@@ -303,12 +303,14 @@ namespace glz
             using V = std::decay_t<T>;
             if constexpr (std::integral<V>) {
                s.type = {"integer"};
+               s.attributes.minimum = static_cast<std::int64_t>(std::numeric_limits<V>::lowest());
+               s.attributes.maximum = static_cast<std::uint64_t>(std::numeric_limits<V>::max());
             }
             else {
                s.type = {"number"};
+               s.attributes.minimum = std::numeric_limits<V>::lowest();
+               s.attributes.maximum = std::numeric_limits<V>::max();
             }
-            s.attributes.minimum = std::numeric_limits<V>::lowest();
-            s.attributes.maximum = std::numeric_limits<V>::max();
          }
       };
 
