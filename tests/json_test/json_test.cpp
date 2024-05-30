@@ -135,7 +135,7 @@ struct glz::meta<sub_thing2>
 
 struct V3
 {
-   double x{3.14};
+   double x{3.14}
    double y{2.7};
    double z{6.5};
 
