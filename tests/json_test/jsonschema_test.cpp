@@ -1,10 +1,12 @@
-#include <boost/ut.hpp>
+#define UT_RUN_TIME_ONLY
+
+#include <ut/ut.hpp>
 #include <cstdint>
 #include <glaze/json.hpp>
 #include <glaze/json/schema.hpp>
 #include <string>
 
-using namespace boost::ut;
+using namespace ut;
 
 struct schema_obj
 {
@@ -59,14 +61,14 @@ template <auto Member, typename Value>
 auto expect_property(const test_case& test, std::string_view key, Value value)
 {
    auto schematic = test.obj;
-   expect(fatal(schematic.has_value()));
-   expect(schematic->properties->contains(key) >> fatal);
+   expect[schematic.has_value()];
+   expect[schematic->properties->contains(key)];
    glz::schema prop = schematic->properties->at(key);
    auto prop_value = glz::detail::get_member(prop, Member);
-   expect(prop_value.has_value() >> fatal);
+   expect[prop_value.has_value()];
    using prop_value_t = std::decay_t<decltype(prop_value)>;
    if constexpr (is_optional<prop_value_t> && glz::is_variant<typename prop_value_t::value_type>) {
-      expect(std::holds_alternative<Value>(prop_value.value()) >> fatal);
+      expect[std::holds_alternative<Value>(prop_value.value())];
       expect(std::get<Value>(prop_value.value()) == value);
    }
    else if constexpr (is_optional<prop_value_t> && glz::detail::is_span<typename prop_value_t::value_type>) {
@@ -85,7 +87,7 @@ suite schema_attributes = [] {
       test_case const test{};
       expect(test.obj.has_value()) << format_error(!test.obj.has_value() ? test.obj.error() : glz::parse_error{},
                                                    test.schema_str);
-      expect(fatal(test.obj.has_value()));
+      expect[test.obj.has_value()];
    };
    "description"_test = [] {
       test_case const test{};
@@ -182,4 +184,4 @@ suite schema_attributes = [] {
    };
 };
 
-int main() { return boost::ut::cfg<>.run({.report_errors = true}); }
+int main() { return 0; }

@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#define UT_RUN_TIME_ONLY
+
 #include "glaze/ext/eigen.hpp"
 
 #include <Eigen/Core>
@@ -10,7 +12,7 @@
 #include <iterator>
 #include <random>
 
-#include "boost/ut.hpp"
+#include "ut/ut.hpp"
 #include "glaze/binary/beve_to_json.hpp"
 #include "glaze/json/json_ptr.hpp"
 #include "glaze/json/ptr.hpp"
@@ -19,7 +21,7 @@
 
 int main()
 {
-   using namespace boost::ut;
+   using namespace ut;
    "write_json"_test = [] {
       Eigen::Matrix<double, 2, 2> m{};
       m << 5, 1, 1, 7;

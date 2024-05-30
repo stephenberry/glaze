@@ -1,11 +1,13 @@
+#define UT_RUN_TIME_ONLY
+
 #include <deque>
 #include <map>
 #include <unordered_map>
 
-#include "boost/ut.hpp"
+#include "ut/ut.hpp"
 #include "glaze/glaze.hpp"
 
-using namespace boost::ut;
+using namespace ut;
 
 struct my_struct
 {
@@ -633,8 +635,6 @@ suite nested_target_tests = [] {
 };
 
 int main()
-{ // Explicitly run registered test suites and report errors
-   // This prevents potential issues with thread local variables
-   const auto result = boost::ut::cfg<>.run({.report_errors = true});
-   return result;
+{
+   return 0;
 }

@@ -1,15 +1,13 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#ifndef BOOST_UT_DISABLE_MODULE
-#define BOOST_UT_DISABLE_MODULE
-#endif
+#define UT_RUN_TIME_ONLY
 
-#include "boost/ut.hpp"
+#include "ut/ut.hpp"
 #include "glaze/compare/approx.hpp"
 #include "glaze/glaze.hpp"
 
-using namespace boost::ut;
+using namespace ut;
 
 struct fantasy_nation_t
 {
@@ -301,6 +299,5 @@ suite twitter_test = [] {
 
 int main()
 {
-   const auto result = boost::ut::cfg<>.run({.report_errors = true});
-   return result;
+   return 0;
 }

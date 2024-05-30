@@ -1,15 +1,17 @@
+#define UT_RUN_TIME_ONLY
+
 #include <deque>
 #include <map>
 #include <unordered_map>
 
-#include "boost/ut.hpp"
+#include "ut/ut.hpp"
 #include "glaze/csv/read.hpp"
 #include "glaze/csv/write.hpp"
 #include "glaze/record/recorder.hpp"
 
 // Specification: https://datatracker.ietf.org/doc/html/rfc4180
 
-using namespace boost::ut;
+using namespace ut;
 
 struct my_struct
 {
@@ -587,4 +589,4 @@ suite fish_record = [] {
    };
 };
 
-int main() { return boost::ut::cfg<>.run({.report_errors = true}); }
+int main() { return 0; }

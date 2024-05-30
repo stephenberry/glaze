@@ -1,16 +1,14 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#ifndef BOOST_UT_DISABLE_MODULE
-#define BOOST_UT_DISABLE_MODULE
-#endif
+#define UT_RUN_TIME_ONLY
 
 #include "glaze/compare/compare.hpp"
 
-#include "boost/ut.hpp"
+#include "ut/ut.hpp"
 #include "glaze/compare/approx.hpp"
 
-using namespace boost::ut;
+using namespace ut;
 
 struct float_compare_t
 {
@@ -61,6 +59,5 @@ suite equality = [] {
 
 int main()
 {
-   const auto result = boost::ut::cfg<>.run({.report_errors = true});
-   return result;
+   return 0;
 }

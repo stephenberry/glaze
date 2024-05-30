@@ -5,8 +5,8 @@ set(BOOST_UT_DISABLE_MODULE ON CACHE INTERNAL "")
 
 FetchContent_Declare(
   ut
-  GIT_REPOSITORY https://github.com/boost-ext/ut
-  GIT_TAG master
+  GIT_REPOSITORY https://github.com/openalgz/ut
+  GIT_TAG v0.0.3
   GIT_SHALLOW TRUE
 )
 
@@ -23,7 +23,7 @@ add_code_coverage_all_targets()
 
 add_library(glz_test_common INTERFACE)
 target_compile_features(glz_test_common INTERFACE cxx_std_20)
-target_link_libraries(glz_test_common INTERFACE Boost::ut glaze::glaze)
+target_link_libraries(glz_test_common INTERFACE ut::ut glaze::glaze)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(glz_test_common INTERFACE -fno-exceptions -fno-rtti)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -43,7 +43,7 @@ endif()
 
 add_library(glz_test_exceptions INTERFACE)
 target_compile_features(glz_test_exceptions INTERFACE cxx_std_20)
-target_link_libraries(glz_test_exceptions INTERFACE Boost::ut glaze::glaze)
+target_link_libraries(glz_test_exceptions INTERFACE ut::ut glaze::glaze)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(glz_test_exceptions INTERFACE)
     target_compile_options(glz_test_exceptions INTERFACE -Wall -Wextra -pedantic)

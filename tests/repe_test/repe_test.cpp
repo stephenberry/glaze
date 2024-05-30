@@ -1,17 +1,15 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#ifndef BOOST_UT_DISABLE_MODULE
-#define BOOST_UT_DISABLE_MODULE
-#endif
+#define UT_RUN_TIME_ONLY
 
 #include "glaze/rpc/repe.hpp"
 
-#include "boost/ut.hpp"
+#include "ut/ut.hpp"
 #include "glaze/ext/cli_menu.hpp"
 #include "glaze/glaze.hpp"
 
-using namespace boost::ut;
+using namespace ut;
 
 namespace repe = glz::repe;
 
@@ -496,6 +494,5 @@ suite wrapper_tests_binary = [] {
 
 int main()
 {
-   const auto result = boost::ut::cfg<>.run({.report_errors = true});
-   return result;
+   return 0;
 }
