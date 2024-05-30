@@ -1,13 +1,11 @@
 
 #include "glaze/ext/jsonrpc.hpp"
 
-#include <boost/ut.hpp>
+#include "ut/ut.hpp"
 #include <string>
 
 namespace rpc = glz::rpc;
-namespace ut = boost::ut;
 using ut::operator""_test;
-using ut::operator/;
 
 ut::suite valid_vector_test_cases_server = [] {
    using vec_t = std::vector<int>;
@@ -441,7 +439,7 @@ ut::suite struct_test_cases = [] {
    };
 
    // glaze currently does not support required members, so the user will get default constructed.
-   ut::skip / "server individual request parameters error"_test = [&server] {
+   /*"server individual request parameters error"_test = [&server] {
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(R"(
       [
           {"jsonrpc":"2.0","method":"bar","params":{"bar_b":"hello world"},"id": 25},
@@ -455,11 +453,10 @@ ut::suite struct_test_cases = [] {
             ut::expect(response.error->code == glz::rpc::error_e::invalid_params);
          }
       }
-   };
+   };*/
 };
 
-auto main() -> int
+int main()
 {
-   const auto result = boost::ut::cfg<>.run({.report_errors = true});
-   return result;
+   return 0;
 }

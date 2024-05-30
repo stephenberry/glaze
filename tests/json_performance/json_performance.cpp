@@ -1,3 +1,5 @@
+#define UT_RUN_TIME_ONLY
+
 #include <deque>
 #include <iostream>
 #include <map>
@@ -64,8 +66,6 @@ suite string_performance = [] {
 };
 
 int main()
-{ // Explicitly run registered test suites and report errors
-   // This prevents potential issues with thread local variables
-   const auto result = boost::ut::cfg<>.run({.report_errors = true});
-   return result;
+{
+   return 0;
 }
