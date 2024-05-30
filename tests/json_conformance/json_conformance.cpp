@@ -1,3 +1,5 @@
+#define UT_RUN_TIME_ONLY
+
 #include <deque>
 #include <iostream>
 #include <map>
@@ -110,7 +112,7 @@ inline void should_fail()
 
    if constexpr (Opts.force_conformance) {
       // TODO: Add force_conformance testing after parse
-      skip / "comma after close"_test = [] {
+      /*skip / "comma after close"_test = [] {
          constexpr sv s = R"(["Comma after the close"],)";
          {
             std::vector<std::string> v;
@@ -132,7 +134,7 @@ inline void should_fail()
             bool_object obj{};
             expect(glz::read_json(obj, s));
          }
-      };
+      };*/
    }
 
    "illegal expression"_test = [] {
@@ -160,7 +162,7 @@ inline void should_fail()
    };
 
    // TODO: Support this error in all cases
-   skip / "numbers cannot have leading zeroes"_test = [] {
+   /*skip / "numbers cannot have leading zeroes"_test = [] {
       constexpr sv s = R"({"i": 013})";
       {
          int_object obj{};
@@ -170,7 +172,7 @@ inline void should_fail()
          glz::json_t obj{};
          expect(glz::read_json(obj, s));
       }
-   };
+   };*/
 
    "numbers cannot be hex"_test = [] {
       constexpr sv s = R"({"i": 0x14})";
@@ -289,7 +291,7 @@ inline void should_fail()
    };
 
    // TODO: This should be an error
-   skip / "0e"_test = [] {
+   /*skip / "0e"_test = [] {
       constexpr sv s = R"(0e)";
       {
          double v{};
@@ -303,9 +305,9 @@ inline void should_fail()
          int v{};
          expect(glz::read_json(v, s));
       }
-   };
+   };*/
 
-   skip / "0e+"_test = [] {
+   /*skip / "0e+"_test = [] {
       constexpr sv s = R"(0e+)";
       {
          double v{};
@@ -319,7 +321,7 @@ inline void should_fail()
          int v{};
          expect(glz::read_json(v, s));
       }
-   };
+   };*/
 }
 
 template <glz::opts Opts>
@@ -362,8 +364,6 @@ suite json_conformance = [] {
 };
 
 int main()
-{ // Explicitly run registered test suites and report errors
-   // This prevents potential issues with thread local variables
-   const auto result = boost::ut::cfg<>.run({.report_errors = true});
-   return result;
+{
+   return 0;
 }

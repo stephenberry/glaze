@@ -1,6 +1,8 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
+#define UT_RUN_TIME_ONLY
+
 #include "ut/ut.hpp"
 #include "glaze/glaze_exceptions.hpp"
 #include "glaze/thread/threadpool.hpp"
@@ -160,8 +162,5 @@ suite read_file_test = [] {
 
 int main()
 {
-   // Explicitly run registered test suites and report errors
-   // This prevents potential issues with thread local variables
-   const auto result = boost::ut::cfg<>.run({.report_errors = true});
-   return result;
+   return 0;
 }
