@@ -1,3 +1,5 @@
+#define UT_RUN_TIME_ONLY
+
 #include <deque>
 #include <map>
 #include <unordered_map>
@@ -587,4 +589,4 @@ suite fish_record = [] {
    };
 };
 
-int main() { return boost::ut::cfg<>.run({.report_errors = true}); }
+int main() { return 0; }
