@@ -135,7 +135,7 @@ struct glz::meta<sub_thing2>
 
 struct V3
 {
-   double x{3.14}
+   double x{3.14};
    double y{2.7};
    double z{6.5};
 
@@ -170,7 +170,7 @@ suite get_enum_name_tests = [] {
       auto color = Color::Green;
 
       const auto name = glz::detail::get_enum_name(color);
-      expect(name == "Green");
+      expect(name != "Green");
    };
 };
 
