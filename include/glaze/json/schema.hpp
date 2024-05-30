@@ -39,7 +39,7 @@ namespace glz
       bool reflection_helper{}; // needed to support automatic reflection, because ref is a std::optional
       std::optional<std::string_view> ref{};
       using schema_number = std::optional<std::variant<std::int64_t, std::uint64_t, double>>;
-      using schema_any = std::variant<bool, std::int64_t, std::uint64_t, double, std::string_view>;
+      using schema_any = std::variant<std::monostate, bool, std::int64_t, std::uint64_t, double, std::string_view>;
       // meta data keywords, ref: https://www.learnjsonschema.com/2020-12/meta-data/
       std::optional<std::string_view> title{};
       std::optional<std::string_view> description{};
@@ -49,7 +49,7 @@ namespace glz
       std::optional<bool> readOnly{};
       std::optional<bool> writeOnly{};
       // hereafter validation keywords, ref: https://www.learnjsonschema.com/2020-12/validation/
-      std::optional<std::variant<bool, std::string_view>> constant{};
+      std::optional<schema_any> constant{};
       // string only keywords
       std::optional<std::uint64_t> minLength{};
       std::optional<std::uint64_t> maxLength{};
@@ -126,16 +126,14 @@ namespace glz
       struct schematic final
       {
          std::optional<std::vector<std::string_view>> type{};
-         std::optional<std::string_view> constant{};
-         std::optional<std::string_view> description{};
          std::optional<std::map<std::string_view, schema, std::less<>>> properties{}; // glaze_object
          std::optional<schema> items{}; // array
          std::optional<std::variant<bool, schema>> additionalProperties{}; // map
          std::optional<std::map<std::string_view, schematic, std::less<>>> defs{};
-         std::optional<std::vector<std::string_view>> enumeration{}; // enum
          std::optional<std::vector<schematic>> oneOf{};
          std::optional<std::vector<std::string_view>> required{};
          std::optional<std::vector<std::string_view>> examples{};
+         schema attributes{};
       };
       enum struct defined_formats : std::uint8_t {
          datetime,
@@ -166,17 +164,42 @@ struct glz::meta<glz::detail::schematic>
 {
    static constexpr std::string_view name = "glz::detail::schema";
    using T = detail::schematic;
-   static constexpr auto value = glz::object("type", &T::type, //
-                                             "description", &T::description, //
-                                             "properties", &T::properties, //
-                                             "items", &T::items, //
-                                             "additionalProperties", &T::additionalProperties, //
-                                             "$defs", &T::defs, //
-                                             "enum", &T::enumeration, //
-                                             "oneOf", &T::oneOf, //
-                                             "const", &T::constant, //
-                                             "required", &T::required, //
-                                             "examples", raw<&T::examples>);
+   static constexpr auto value = glz::object(
+      "type", &T::type, //
+      "properties", &T::properties, //
+      "items", &T::items, //
+      "additionalProperties", &T::additionalProperties, //
+      "$defs", &T::defs, //
+      "oneOf", &T::oneOf, //
+      "examples", raw<&T::examples>, //
+      "required", &T::required, //
+      "title", [](auto&& self) -> auto& { return self.attributes.title; }, //
+      "description", [](auto&& self) -> auto& { return self.attributes.description; }, //
+      "default", [](auto&& self) -> auto& { return self.attributes.defaultValue; }, //
+      "deprecated", [](auto&& self) -> auto& { return self.attributes.deprecated; }, //
+      "readOnly", [](auto&& self) -> auto& { return self.attributes.readOnly; }, //
+      "writeOnly", [](auto&& self) -> auto& { return self.attributes.writeOnly; }, //
+      "const", [](auto&& self) -> auto& { return self.attributes.constant; }, //
+      "minLength", [](auto&& self) -> auto& { return self.attributes.minLength; }, //
+      "maxLength", [](auto&& self) -> auto& { return self.attributes.maxLength; }, //
+      "pattern", [](auto&& self) -> auto& { return self.attributes.pattern; }, //
+      "format", [](auto&& self) -> auto& { return self.attributes.format; }, //
+      "minimum", [](auto&& self) -> auto& { return self.attributes.minimum; }, //
+      "maximum", [](auto&& self) -> auto& { return self.attributes.maximum; }, //
+      "exclusiveMinimum", [](auto&& self) -> auto& { return self.attributes.exclusiveMinimum; }, //
+      "exclusiveMaximum", [](auto&& self) -> auto& { return self.attributes.exclusiveMaximum; }, //
+      "multipleOf", [](auto&& self) -> auto& { return self.attributes.multipleOf; }, //
+      "minProperties", [](auto&& self) -> auto& { return self.attributes.minProperties; }, //
+      "maxProperties", [](auto&& self) -> auto& { return self.attributes.maxProperties; }, //
+      //               "dependentRequired", [](auto&& self) -> auto& { return self.attributes.dependent_required; }, //
+      "minItems", [](auto&& self) -> auto& { return self.attributes.minItems; }, //
+      "maxItems", [](auto&& self) -> auto& { return self.attributes.maxItems; }, //
+      "minContains", [](auto&& self) -> auto& { return self.attributes.minContains; }, //
+      "maxContains", [](auto&& self) -> auto& { return self.attributes.maxContains; }, //
+      "uniqueItems", [](auto&& self) -> auto& { return self.attributes.uniqueItems; }, //
+      "enum", [](auto&& self) -> auto& { return self.attributes.enumeration; }, //
+      "ExtUnits", [](auto&& self) -> auto& { return self.attributes.ExtUnits; }, //
+      "ExtAdvanced", [](auto&& self) -> auto& { return self.attributes.ExtAdvanced; });
 };
 
 template <>
@@ -234,9 +257,28 @@ namespace glz
       struct to_json_schema
       {
          template <auto Opts>
-         static void op(auto& s, auto&) noexcept
+         static void op(auto& s, auto& defs) noexcept
          {
-            s.type = {"number", "string", "boolean", "object", "array", "null"};
+            // &T::member
+            if constexpr (glaze_t<T> && std::is_member_object_pointer_v<meta_wrapper_t<T>>) {
+               using val_t = member_t<T, meta_wrapper_t<T>>;
+               to_json_schema<val_t>::template op<Opts>(s, defs);
+            }
+            else if constexpr (glaze_const_value_t<T>) { // &T::constexpr_member
+               using constexpr_val_t = member_t<T, meta_wrapper_t<T>>;
+               static constexpr auto val_v{*glz::meta_wrapper_v<T>};
+               if constexpr (glz::detail::glaze_enum_t<constexpr_val_t>) {
+                  s.attributes.constant = glz::enum_name_v<val_v>;
+               }
+               else {
+                  // General case, needs to be convertible to schema_any
+                  s.attributes.constant = val_v;
+               }
+               to_json_schema<constexpr_val_t>::template op<Opts>(s, defs);
+            }
+            else {
+               s.type = {"number", "string", "boolean", "object", "array", "null"};
+            }
          }
       };
 
@@ -258,11 +300,16 @@ namespace glz
          template <auto Opts>
          static void op(auto& s, auto&) noexcept
          {
-            if constexpr (std::integral<T>) {
+            using V = std::decay_t<T>;
+            if constexpr (std::integral<V>) {
                s.type = {"integer"};
+               s.attributes.minimum = static_cast<std::int64_t>(std::numeric_limits<V>::lowest());
+               s.attributes.maximum = static_cast<std::uint64_t>(std::numeric_limits<V>::max());
             }
             else {
                s.type = {"number"};
+               s.attributes.minimum = std::numeric_limits<V>::lowest();
+               s.attributes.maximum = std::numeric_limits<V>::max();
             }
          }
       };
@@ -285,6 +332,7 @@ namespace glz
          static void op(auto& s, auto&) noexcept
          {
             s.type = {"null"};
+            s.attributes.constant = std::monostate{};
          }
       };
 
@@ -309,12 +357,24 @@ namespace glz
                static constexpr auto item = get<I>(meta_v<V>);
                using T0 = std::decay_t<decltype(get<0>(item))>;
                auto& enumeration = (*s.oneOf)[I];
-               enumeration.constant = get_enum_key<V, I>();
                static constexpr size_t member_index = std::is_enum_v<T0> ? 0 : 1;
                static constexpr size_t comment_index = member_index + 1;
                constexpr auto Size = glz::tuple_size_v<decltype(item)>;
                if constexpr (Size > comment_index) {
-                  enumeration.description = get<comment_index>(item);
+                  using additional_data_type = decltype(get<comment_index>(item));
+                  if constexpr (std::is_convertible_v<additional_data_type, std::string_view>) {
+                     enumeration.attributes.description = get<comment_index>(item);
+                  }
+                  else if constexpr (std::is_convertible_v<additional_data_type, schema>) {
+                     enumeration.attributes = get<comment_index>(item);
+                  }
+               }
+               // Do not override if already set
+               if (!enumeration.attributes.constant.has_value()) {
+                  enumeration.attributes.constant = get_enum_key<V, I>();
+               }
+               if (!enumeration.attributes.title.has_value()) {
+                  enumeration.attributes.title = get_enum_key<V, I>();
                }
             });
          }
@@ -338,6 +398,10 @@ namespace glz
          {
             using V = std::decay_t<range_value_t<std::decay_t<T>>>;
             s.type = {"array"};
+            if constexpr (has_fixed_size_container<std::decay_t<T>>) {
+               s.attributes.minItems = get_size<std::decay_t<T>>();
+               s.attributes.maxItems = get_size<std::decay_t<T>>();
+            }
             auto& def = defs[name_v<V>];
             if (!def.type) {
                to_json_schema<V>::template op<Opts>(def, defs);
@@ -467,6 +531,21 @@ namespace glz
          }
       }
 
+      auto consteval has_slash(std::string_view str) noexcept -> bool
+      {
+         return std::ranges::any_of(str, [](const auto character) { return character == '/'; });
+      }
+      template <const std::string_view& ref>
+      auto consteval validate_ref() noexcept -> void
+      {
+#if __cpp_static_assert >= 202306L
+         static_assert(!has_slash(ref),
+                       join_v<chars<"Slash in name: \"">, ref, chars<"\" in json schema references is not allowed">>);
+#else
+         static_assert(!has_slash(ref), "Slashes in json schema references are not allowed");
+#endif
+      }
+
       template <class T>
          requires((glaze_object_t<T> || reflectable<T>))
       struct to_json_schema<T>
@@ -509,9 +588,6 @@ namespace glz
                using val_t = std::decay_t<typename Element::type>;
 
                auto& def = defs[name_v<val_t>];
-               if (!def.type) {
-                  to_json_schema<val_t>::template op<Opts>(def, defs);
-               }
 
                constexpr sv key = key_name<I, T, Element::use_reflection>;
 
@@ -523,6 +599,7 @@ namespace glz
                   }
                }
                if (!ref_val.ref) {
+                  validate_ref<name_v<val_t>>();
                   ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
                }
 
@@ -537,8 +614,13 @@ namespace glz
                   }
                   else if constexpr (std::is_convertible_v<additional_data_type, schema>) {
                      ref_val = get<comment_index>(item);
+                     validate_ref<name_v<val_t>>();
                      ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
                   }
+               }
+
+               if (!def.type) {
+                  to_json_schema<val_t>::template op<Opts>(def, defs);
                }
 
                (*s.properties)[key] = ref_val;
