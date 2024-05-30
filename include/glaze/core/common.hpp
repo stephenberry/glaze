@@ -3,13 +3,13 @@
 
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <iterator>
 #include <optional>
 #include <string>
 #include <type_traits>
 #include <vector>
-#include <array>
 
 #include "glaze/concepts/container_concepts.hpp"
 #include "glaze/core/context.hpp"
@@ -278,16 +278,16 @@ namespace glz
       /// \brief check if container has fixed size and its subsequent T::value_type
       template <class T>
       concept has_static_size =
-          (is_span<T> && !is_dynamic_span<T>) ||
-          (requires(T container) {
-              {
-                  std::bool_constant<(std::decay_t<T>{}.size(), true)>()
-              } -> std::same_as<std::true_type>;
-          } && std::decay_t<T>{}.size() > 0 &&
-          requires {
-         typename T::value_type;
-         requires std::is_trivially_copyable_v<typename T::value_type>;
-      });
+         (is_span<T> && !is_dynamic_span<T>) || (
+                                                   requires(T container) {
+                                                      {
+                                                         std::bool_constant<(std::decay_t<T>{}.size(), true)>()
+                                                      } -> std::same_as<std::true_type>;
+                                                   } && std::decay_t<T>{}.size() > 0 &&
+                                                   requires {
+                                                      typename T::value_type;
+                                                      requires std::is_trivially_copyable_v<typename T::value_type>;
+                                                   });
       static_assert(has_static_size<std::array<int, 2>>);
       static_assert(!has_static_size<std::array<std::string, 2>>);
 

@@ -289,7 +289,7 @@ suite compile_errors = [] {
 
 suite schema_tests = [] {
    "typeof directly accessed integer should only be integer"_test = [] {
-      auto test = []<typename T>(T){
+      auto test = []<typename T>(T) {
          std::string schema_str = glz::write_json_schema<T>();
          schematic_substitute obj{};
          auto err = read_json_ignore_unknown(obj, schema_str);
@@ -321,21 +321,20 @@ suite schema_tests = [] {
       expect(std::get<std::string_view>(obj.attributes.constant.value()) == "green");
    };
 
-   "number has minimum"_test =
-      [] {
-         auto test = []<typename number_t>(number_t){
-            std::string schema_str = glz::write_json_schema<number_t>();
-            schematic_substitute obj{};
-            auto err = read_json_ignore_unknown(obj, schema_str);
-            expect(!err) << format_error(err, schema_str);
-            expect[(obj.attributes.minimum.has_value())];
-            expect[(std::holds_alternative<std::int64_t>(obj.attributes.minimum.value()))];
-            expect(std::get<std::int64_t>(obj.attributes.minimum.value()) == std::numeric_limits<number_t>::lowest());
-         };
-         test(std::int64_t{});
-         test(std::uint8_t{});
-         // double todo parse_number_failure when reading "minimum":-1.7976931348623157E308
+   "number has minimum"_test = [] {
+      auto test = []<typename number_t>(number_t) {
+         std::string schema_str = glz::write_json_schema<number_t>();
+         schematic_substitute obj{};
+         auto err = read_json_ignore_unknown(obj, schema_str);
+         expect(!err) << format_error(err, schema_str);
+         expect[(obj.attributes.minimum.has_value())];
+         expect[(std::holds_alternative<std::int64_t>(obj.attributes.minimum.value()))];
+         expect(std::get<std::int64_t>(obj.attributes.minimum.value()) == std::numeric_limits<number_t>::lowest());
       };
+      test(std::int64_t{});
+      test(std::uint8_t{});
+      // double todo parse_number_failure when reading "minimum":-1.7976931348623157E308
+   };
 
    "always nullable type is constant null"_test = [] {
       std::string schema_str = glz::write_json_schema<std::monostate>();
