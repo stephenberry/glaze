@@ -170,7 +170,7 @@ suite get_enum_name_tests = [] {
       auto color = Color::Green;
 
       const auto name = glz::detail::get_enum_name(color);
-      expect(name != "Green");
+      expect(name == "Green");
    };
 };
 
