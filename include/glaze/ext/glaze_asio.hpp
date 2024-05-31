@@ -296,8 +296,9 @@ namespace glz
 
             while (true) {
                co_await co_receive_buffer(socket, buffer);
-               if (registry.call(buffer)) {
-                  co_await co_send_buffer(socket, registry.response);
+               auto response = registry.call(buffer);
+               if (response) {
+                  co_await co_send_buffer(socket, response->value());
                }
             }
          }
