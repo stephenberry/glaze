@@ -288,6 +288,24 @@ namespace glz::repe
    // This is made possible by constinit, and the same approach used for compile time maps and struct reflection.
    // This will then be an opt-in performance improvement where a bit more code must be written by the user to
    // list the method names.
+   
+   namespace detail
+   {
+      static constexpr std::string_view empty_path = "";
+   }
+   
+   template <class T, const std::string_view& parent = detail::empty_path>
+      requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
+   constexpr auto make_mutex_map()
+   {
+      using Mtx = std::mutex;
+      using namespace glz::detail;
+      constexpr auto N = reflection_count<T>;
+      return [&]<size_t... I>(std::index_sequence<I...>) {
+         return normal_map<sv, Mtx, N>(
+                                       {pair<sv, Mtx>{join_v<parent, chars<"/">, key_name_v<I, T>>, Mtx{}}...});
+      }(std::make_index_sequence<N>{});
+   }
 
    // This server is designed to be lightweight, and meant to be constructed on a per client basis
    // This server does not support adding methods from RPC calls or adding methods once RPC calls can be made
@@ -303,14 +321,14 @@ namespace glz::repe
 
       error_t error{};
 
-      static constexpr std::string_view empty_path = "";
-
-      template <const std::string_view& root = empty_path, class T, const std::string_view& parent = root>
+      template <const std::string_view& root = detail::empty_path, class T, const std::string_view& parent = root>
          requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
       void on(T& value)
       {
          using namespace glz::detail;
          static constexpr auto N = reflection_count<T>;
+         
+         [[maybe_unused]] static constexpr auto mutexes = make_mutex_map<T, parent>();
 
          [[maybe_unused]] decltype(auto) t = [&] {
             if constexpr (reflectable<T>) {
@@ -324,6 +342,8 @@ namespace glz::repe
          if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
             // build read/write calls to the top level object
             methods[root] = [this, &value](repe::state&& state) {
+               //std::unique_lock lock{mutexes.at(root)};
+               
                if (not state.header.empty) {
                   if (read_params<Opts>(value, state, response) == 0) {
                      return;
@@ -346,7 +366,7 @@ namespace glz::repe
          for_each<N>([&](auto I) {
             using Element = glaze_tuple_element<I, N, T>;
             static constexpr std::string_view full_key = [&] {
-               if constexpr (parent == empty_path) {
+               if constexpr (parent == detail::empty_path) {
                   return join_v<chars<"/">, key_name<I, T, Element::use_reflection>>;
                }
                else {

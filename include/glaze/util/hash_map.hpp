@@ -37,6 +37,21 @@
 // we allow hashing algorithms to return the seed when a hash does not need to be performed.
 // To improve performance, we can ensure that the seed never hashes with any of the buckets as well.
 
+namespace glz
+{
+   template <class T1, class T2>
+   struct pair
+   {
+      using first_type = T1;
+      using second_type = T2;
+      T1 first{};
+      T2 second{};
+   };
+   
+   template <class T1, class T2>
+   pair(T1, T2) -> pair<T1, T2>;
+}
+
 namespace glz::detail
 {
    constexpr size_t naive_map_max_size = 32;
@@ -326,7 +341,7 @@ namespace glz::detail
       // using a ton of memory.
       static constexpr auto N = D.N;
       using hash_alg = naive_hash<D.use_hash_comparison>;
-      std::array<std::pair<std::string_view, Value>, N> items{};
+      std::array<pair<std::string_view, Value>, N> items{};
       std::array<uint64_t, N * D.use_hash_comparison> hashes{};
       std::array<uint8_t, D.bucket_size> table{};
 
@@ -358,7 +373,7 @@ namespace glz::detail
 
    template <class T, naive_map_desc D>
       requires(D.N <= naive_map_max_size)
-   constexpr auto make_naive_map(const std::array<std::pair<std::string_view, T>, D.N>& pairs)
+   constexpr auto make_naive_map(const std::array<pair<std::string_view, T>, D.N>& pairs)
    {
       naive_map<T, D> ht{pairs};
 
@@ -407,7 +422,7 @@ namespace glz::detail
       std::array<int64_t, N> buckets{};
       using storage_type = decltype(fit_unsigned_type<N>());
       std::array<storage_type, storage_size> table{};
-      std::array<std::pair<Key, Value>, N> items{};
+      std::array<pair<Key, Value>, N> items{};
       std::array<uint64_t, N + 1> hashes{}; // Save one more hash value of 0 for unknown keys
 
       constexpr decltype(auto) begin() const noexcept { return items.begin(); }
@@ -475,8 +490,9 @@ namespace glz::detail
          }
          return items.begin() + index;
       }
-
-      explicit constexpr normal_map(const std::array<std::pair<Key, Value>, N>& pairs) : items(pairs)
+      
+      template <class... Args>
+      constexpr normal_map(Args&&... args) : items(std::forward<Args>(args)...)
       {
          find_perfect_hash();
       }
@@ -615,7 +631,7 @@ namespace glz::detail
    struct single_char_map
    {
       static constexpr auto N = D.N;
-      std::array<std::pair<std::string_view, T>, N> items{};
+      std::array<pair<std::string_view, T>, N> items{};
       static constexpr size_t N_table = D.back - D.front + 1;
       std::array<uint8_t, N_table> table{};
 
@@ -654,7 +670,7 @@ namespace glz::detail
 
    template <class T, single_char_hash_desc D>
       requires(D.N < 256)
-   constexpr auto make_single_char_map(std::initializer_list<std::pair<std::string_view, T>> pairs)
+   constexpr auto make_single_char_map(std::initializer_list<pair<std::string_view, T>> pairs)
    {
       constexpr auto N = D.N;
       if (pairs.size() != N) {
@@ -686,7 +702,7 @@ namespace glz::detail
    template <class T, const std::string_view& S>
    struct micro_map1
    {
-      std::array<std::pair<std::string_view, T>, 1> items{};
+      std::array<pair<std::string_view, T>, 1> items{};
 
       constexpr decltype(auto) begin() const noexcept { return items.begin(); }
       constexpr decltype(auto) end() const noexcept { return items.end(); }
@@ -721,7 +737,7 @@ namespace glz::detail
    template <class T, const std::string_view& S0, const std::string_view& S1>
    struct micro_map2
    {
-      std::array<std::pair<std::string_view, T>, 2> items{};
+      std::array<pair<std::string_view, T>, 2> items{};
 
       static constexpr bool same_size =
          S0.size() == S1.size(); // if we need to check the size again on the second compare

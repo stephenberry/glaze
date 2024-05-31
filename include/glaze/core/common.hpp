@@ -485,10 +485,10 @@ namespace glz
          constexpr auto first = get<0>(get<I>(meta_v<T>));
          using T0 = std::decay_t<decltype(first)>;
          if constexpr (std::is_member_pointer_v<T0>) {
-            return std::pair<sv, value_t>{get_name<first>(), first};
+            return pair<sv, value_t>{get_name<first>(), first};
          }
          else {
-            return std::pair<sv, value_t>{sv(first), get<1>(get<I>(meta_v<T>))};
+            return pair<sv, value_t>{sv(first), get<1>(get<I>(meta_v<T>))};
          }
       }
 
@@ -606,7 +606,7 @@ namespace glz
          constexpr auto N = glz::tuple_size_v<meta_t<T>>;
          return [&]<size_t... I>(std::index_sequence<I...>) {
             return normal_map<sv, size_t, glz::tuple_size_v<meta_t<T>>>(
-               {std::make_pair<sv, size_t>(get_enum_key<T, I>(), I)...});
+                                                                        {pair<sv, size_t>{get_enum_key<T, I>(), I}...});
          }(std::make_index_sequence<N>{});
       }
 
@@ -617,7 +617,7 @@ namespace glz
          return [&]<size_t... I>(std::index_sequence<I...>) {
             using key_t = std::underlying_type_t<T>;
             return normal_map<key_t, sv, N>(
-               {std::make_pair<key_t, sv>(static_cast<key_t>(get_enum_value<T, I>()), get_enum_key<T, I>())...});
+                                            {pair<key_t, sv>{static_cast<key_t>(get_enum_value<T, I>()), get_enum_key<T, I>()}...});
          }(std::make_index_sequence<N>{});
       }
 
@@ -635,7 +635,7 @@ namespace glz
       {
          constexpr auto N = glz::tuple_size_v<meta_t<T>>;
          return [&]<size_t... I>(std::index_sequence<I...>) {
-            return normal_map<sv, T, N>({std::pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
+            return normal_map<sv, T, N>({pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
          }(std::make_index_sequence<N>{});
       }
 
@@ -708,7 +708,7 @@ namespace glz
       consteval auto make_variant_deduction_base_map(std::index_sequence<I...>, auto&& keys)
       {
          using V = bit_array<std::variant_size_v<T>>;
-         return normal_map<sv, V, sizeof...(I)>({std::make_pair<sv, V>(sv(std::get<I>(keys)), V{})...});
+         return normal_map<sv, V, sizeof...(I)>({pair<sv, V>{sv(std::get<I>(keys)), V{}}...});
       }
 
       template <class T>
@@ -749,7 +749,7 @@ namespace glz
       template <is_variant T, size_t... I>
       constexpr auto make_variant_id_map_impl(std::index_sequence<I...>, auto&& variant_ids)
       {
-         return normal_map<sv, size_t, std::variant_size_v<T>>({std::make_pair<sv, size_t>(sv(variant_ids[I]), I)...});
+         return normal_map<sv, size_t, std::variant_size_v<T>>({pair<sv, size_t>{sv(variant_ids[I]), I}...});
       }
 
       template <is_variant T>
@@ -1122,13 +1122,29 @@ namespace glz::detail
    };
 
    template <size_t I, class T, bool use_reflection>
-   static constexpr auto key_name = [] {
+   constexpr auto key_name = [] {
       if constexpr (reflectable<T>) {
          return get<I>(member_names<T>);
       }
       else {
          using V = std::decay_t<T>;
          if constexpr (use_reflection) {
+            return get_name<get<0>(get<I>(meta_v<V>))>();
+         }
+         else {
+            return get<0>(get<I>(meta_v<V>));
+         }
+      }
+   }();
+   
+   template <size_t I, class T>
+   constexpr auto key_name_v = [] {
+      if constexpr (reflectable<T>) {
+         return get<I>(member_names<T>);
+      }
+      else {
+         using V = std::decay_t<T>;
+         if constexpr (glaze_tuple_element<I, reflection_count<T>, T>::use_reflection) {
             return get_name<get<0>(get<I>(meta_v<V>))>();
          }
          else {
