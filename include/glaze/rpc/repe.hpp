@@ -17,10 +17,10 @@ namespace glz::repe
    // The order in the serialized message follows the REPE specification
    struct header final
    {
-      std::string_view method = ""; // the RPC method to call
+      std::string_view method = ""; // the RPC method (JSON pointer path) to call or member to access/assign (GET/POST)
       std::variant<std::monostate, uint64_t, std::string_view> id{}; // an identifier
       static constexpr uint8_t version = 0; // the REPE version
-      uint8_t error = 0; // 0 denotes no error
+      uint8_t error = 0; // 0 denotes no error (boolean: 0 or 1)
 
       // Action: These booleans are packed into the a uint8_t action in the REPE header
       bool notify{}; // no response returned
