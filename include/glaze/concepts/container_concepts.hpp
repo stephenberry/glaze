@@ -101,12 +101,8 @@ namespace glz::detail
 
    template <class T>
    concept pair_t = requires(T pair) {
-      {
-         pair.first
-      } -> std::same_as<typename T::first_type&>;
-      {
-         pair.second
-      } -> std::same_as<typename T::second_type&>;
+      { pair.first };
+      { pair.second };
    };
 
    template <class T>

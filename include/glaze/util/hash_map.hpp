@@ -17,6 +17,7 @@
 #include <span>
 #include <string_view>
 
+#include "glaze/concepts/container_concepts.hpp"
 #include "glaze/util/compare.hpp"
 
 #ifdef _MSC_VER
@@ -50,6 +51,20 @@ namespace glz
    
    template <class T1, class T2>
    pair(T1, T2) -> pair<T1, T2>;
+   
+   template <size_t I, detail::pair_t T>
+   constexpr decltype(auto) get(T&& p) noexcept
+   {
+      if constexpr (I == 0) {
+         return p.first;
+      }
+      else if constexpr (I == 1) {
+         return p.second;
+      }
+      else {
+         static_assert(false_v<decltype(p)>, "Invalid get for pair");
+      }
+   }
 }
 
 namespace glz::detail

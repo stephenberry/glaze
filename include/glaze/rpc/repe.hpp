@@ -298,12 +298,12 @@ namespace glz::repe
       requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
    constexpr auto make_mutex_map()
    {
-      using Mtx = std::mutex;
+      using Mtx = std::mutex*;
       using namespace glz::detail;
       constexpr auto N = reflection_count<T>;
       return [&]<size_t... I>(std::index_sequence<I...>) {
          return normal_map<sv, Mtx, N>(
-                                       {pair<sv, Mtx>{join_v<parent, chars<"/">, key_name_v<I, T>>, Mtx{}}...});
+                                       std::array<pair<sv, Mtx>, N>{pair<sv, Mtx>{join_v<parent, chars<"/">, key_name_v<I, T>>, Mtx{}}...});
       }(std::make_index_sequence<N>{});
    }
 
