@@ -1419,7 +1419,7 @@ namespace glz
 
                      static constexpr auto group = glz::get<I>(groups);
 
-                     static constexpr auto key = std::get<0>(group);
+                     static constexpr auto key = get<0>(group);
                      constexpr auto mem_it = std::find(members.begin(), members.end(), key);
                      static_assert(mem_it != members.end(), "Invalid key passed to partial write");
 
@@ -1428,7 +1428,7 @@ namespace glz
                         ;
                      dump<quoted_key>(b, ix);
 
-                     static constexpr auto sub_partial = std::get<1>(group);
+                     static constexpr auto sub_partial = get<1>(group);
                      auto member_it = cmap.find(key); // we verified at compile time that this exists
                      std::visit(
                         [&](auto&& member_ptr) {
