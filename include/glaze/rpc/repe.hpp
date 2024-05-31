@@ -82,7 +82,7 @@ namespace glz::repe
    {
       const std::string_view message{};
       repe::header& header;
-      std::string& buffer;
+      std::string& response;
       error_t& error;
    };
 
@@ -134,11 +134,11 @@ namespace glz::repe
    void write_response(Value&& value, is_state auto&& state)
    {
       if (state.error) {
-         write<Opts>(std::forward_as_tuple(header{.error = true}, state.error), state.buffer);
+         write<Opts>(std::forward_as_tuple(header{.error = true}, state.error), state.response);
       }
       else {
          state.header.empty = false; // we are writing a response
-         write<Opts>(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.buffer);
+         write<Opts>(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.response);
       }
    }
 
@@ -146,12 +146,12 @@ namespace glz::repe
    void write_response(is_state auto&& state)
    {
       if (state.error) {
-         write<Opts>(std::forward_as_tuple(header{.error = true}, state.error), state.buffer);
+         write<Opts>(std::forward_as_tuple(header{.error = true}, state.error), state.response);
       }
       else {
          state.header.notify = false;
          state.header.empty = true;
-         write<Opts>(std::forward_as_tuple(state.header, nullptr), state.buffer);
+         write<Opts>(std::forward_as_tuple(state.header, nullptr), state.response);
       }
    }
 
@@ -306,18 +306,76 @@ namespace glz::repe
                                        std::array<pair<sv, Mtx>, N>{pair<sv, Mtx>{join_v<parent, chars<"/">, key_name_v<I, T>>, Mtx{}}...});
       }(std::make_index_sequence<N>{});
    }
+   
+   struct buffer_pool
+   {
+      std::mutex mtx{};
+      std::deque<std::string> buffers{2};
+      std::vector<size_t> available{0,1}; // indices of available buffers
+      
+      // provides a pointer to a buffer and an index
+      std::tuple<std::string*, size_t> get() {
+         std::unique_lock lock{mtx};
+         if (available.empty()) {
+            const auto current_size = buffers.size();
+            const auto new_size = buffers.size() * 2;
+            buffers.resize(new_size);
+            for (size_t i = current_size; i < new_size; ++i) {
+               available.emplace_back(i);
+            }
+         }
+         
+         const auto index = available.back();
+         available.pop_back();
+         return {&buffers[index], index};
+      }
+      
+      void free(const size_t index) {
+         std::unique_lock lock{mtx};
+         available.emplace_back(index);
+      }
+   };
+   
+   struct unique_buffer
+   {
+      buffer_pool* pool{};
+      std::string* ptr{};
+      size_t index{};
+      
+      std::string& value() {
+         return *ptr;
+      }
+      
+      const std::string& value() const {
+         return *ptr;
+      }
+      
+      unique_buffer(buffer_pool* input_pool) : pool(input_pool) {
+         std::tie(ptr, index) = pool->get();
+      }
+      unique_buffer(const unique_buffer&) = default;
+      unique_buffer(unique_buffer&&) = default;
+      unique_buffer& operator=(const unique_buffer&) = default;
+      unique_buffer& operator=(unique_buffer&&) = default;
+      
+      ~unique_buffer() {
+         pool->free(index);
+      }
+   };
+   
+   using shared_buffer = std::shared_ptr<unique_buffer>;
 
-   // This server is designed to be lightweight, and meant to be constructed on a per client basis
-   // This server does not support adding methods from RPC calls or adding methods once RPC calls can be made
-   // Each instance of this server is expected to be accessed by a single thread, so a single std::string response
-   // buffer is used.
+   // This server does not support adding methods from RPC calls or adding methods once RPC calls can be made.
    template <opts Opts = opts{}>
    struct registry
    {
       using procedure = std::function<void(state&&)>; // RPC method
       std::unordered_map<std::string_view, procedure, detail::string_hash, std::equal_to<>> methods;
-
-      std::string response{};
+      
+      // TODO: replace this std::map with a std::flat_map with a std::deque (to not invalidate references)
+      std::map<std::string_view, std::shared_mutex> mtxs; // only hashes during initialization
+      
+      buffer_pool buffers{};
 
       error_t error{};
 
@@ -327,8 +385,6 @@ namespace glz::repe
       {
          using namespace glz::detail;
          static constexpr auto N = reflection_count<T>;
-         
-         [[maybe_unused]] static constexpr auto mutexes = make_mutex_map<T, parent>();
 
          [[maybe_unused]] decltype(auto) t = [&] {
             if constexpr (reflectable<T>) {
@@ -341,11 +397,10 @@ namespace glz::repe
 
          if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
             // build read/write calls to the top level object
-            methods[root] = [this, &value](repe::state&& state) {
-               //std::unique_lock lock{mutexes.at(root)};
-               
+            methods[root] = [&value, &mtx = mtxs[root]](repe::state&& state) {
                if (not state.header.empty) {
-                  if (read_params<Opts>(value, state, response) == 0) {
+                  std::unique_lock lock{mtx};
+                  if (read_params<Opts>(value, state, state.response) == 0) {
                      return;
                   }
                }
@@ -355,6 +410,7 @@ namespace glz::repe
                }
 
                if (state.header.empty) {
+                  std::shared_lock lock{mtx};
                   write_response<Opts>(value, state);
                }
                else {
@@ -415,10 +471,10 @@ namespace glz::repe
                using Params = glz::tuple_element_t<0, Tuple>;
                using Result = std::invoke_result_t<Func, Params>;
 
-               methods[full_key] = [this, params = std::decay_t<Params>{}, result = std::decay_t<Result>{},
+               methods[full_key] = [params = std::decay_t<Params>{}, result = std::decay_t<Result>{},
                                     callback = func](repe::state&& state) mutable {
                   // no need to lock locals
-                  if (read_params<Opts>(params, state, response) == 0) {
+                  if (read_params<Opts>(params, state, state.response) == 0) {
                      return;
                   }
                   result = callback(params);
@@ -432,9 +488,9 @@ namespace glz::repe
                on<root, std::decay_t<E>, full_key>(get_member(value, func));
 
                // build read/write calls to the object as a variable
-               methods[full_key] = [this, &func](repe::state&& state) {
+               methods[full_key] = [&func](repe::state&& state) {
                   if (not state.header.empty) {
-                     if (read_params<Opts>(func, state, response) == 0) {
+                     if (read_params<Opts>(func, state, state.response) == 0) {
                         return;
                      }
                   }
@@ -453,9 +509,9 @@ namespace glz::repe
             }
             else if constexpr (!std::is_lvalue_reference_v<Func>) {
                // For glz::custom, glz::manage, etc.
-               methods[full_key] = [this, func](repe::state&& state) mutable {
+               methods[full_key] = [func](repe::state&& state) mutable {
                   if (not state.header.empty) {
-                     if (read_params<Opts>(func, state, response) == 0) {
+                     if (read_params<Opts>(func, state, state.response) == 0) {
                         return;
                      }
                   }
@@ -495,9 +551,9 @@ namespace glz::repe
                      }
                      else if constexpr (n_args == 1) {
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
-                        methods[full_key] = [this, &value, &func, input = Input{}](repe::state&& state) mutable {
+                        methods[full_key] = [&value, &func, input = Input{}](repe::state&& state) mutable {
                            if (not state.header.empty) {
-                              if (read_params<Opts>(input, state, response) == 0) {
+                              if (read_params<Opts>(input, state, state.response) == 0) {
                                  return;
                               }
                            }
@@ -538,7 +594,7 @@ namespace glz::repe
                         using Input = std::decay_t<glz::tuple_element_t<0, Tuple>>;
                         methods[full_key] = [this, &value, &func, input = Input{}](repe::state&& state) mutable {
                            if (not state.header.empty) {
-                              if (read_params<Opts>(input, state, response) == 0) {
+                              if (read_params<Opts>(input, state, state.response) == 0) {
                                  return;
                               }
                            }
@@ -564,9 +620,9 @@ namespace glz::repe
                }
                else {
                   // this is a variable and not a function, so we build RPC read/write calls
-                  methods[full_key] = [this, &func](repe::state&& state) {
+                  methods[full_key] = [&func](repe::state&& state) {
                      if (not state.header.empty) {
-                        if (read_params<Opts>(func, state, response) == 0) {
+                        if (read_params<Opts>(func, state, state.response) == 0) {
                            return;
                         }
                      }
@@ -611,14 +667,14 @@ namespace glz::repe
          return call(request<Opts>(header, std::forward<Value>(value), buffer));
       }
 
-      // returns true if there is a result to send (not a notification)
-      bool call(const sv msg)
+      // returns null for notifications
+      shared_buffer call(const sv msg)
       {
+         shared_buffer u_buffer = std::make_shared<unique_buffer>(&buffers);
+         auto& response = *(u_buffer->ptr);
+         
          context ctx{};
          auto [b, e] = read_iterators<Opts>(ctx, msg);
-         if (bool(ctx.error)) [[unlikely]] {
-            return error_t{error_e::parse_error};
-         }
          auto start = b;
 
          auto handle_error = [&](auto& it) {
@@ -630,6 +686,20 @@ namespace glz::repe
          };
 
          header h{};
+         
+         auto finish = [&]() -> std::shared_ptr<unique_buffer> {
+            if (h.notify) {
+               return {};
+            }
+            else {
+               return u_buffer;
+            }
+         };
+         
+         if (bool(ctx.error)) [[unlikely]] {
+            // TODO: What should we do if we have read_iterators errors?
+            return finish();
+         }
 
          if constexpr (Opts.format == json) {
             if (*b == '[') {
@@ -637,7 +707,7 @@ namespace glz::repe
             }
             else {
                handle_error(b);
-               return !h.notify;
+               return finish();
             }
          }
          else {
@@ -646,12 +716,12 @@ namespace glz::repe
                const auto n = glz::detail::int_from_compressed(ctx, b, e);
                if (bool(ctx.error) || (n != 2)) [[unlikely]] {
                   handle_error(b);
-                  return !h.notify;
+                  return finish();
                }
             }
             else {
                handle_error(b);
-               return !h.notify;
+               return finish();
             }
          }
 
@@ -660,7 +730,7 @@ namespace glz::repe
          if (bool(ctx.error)) [[unlikely]] {
             parse_error pe{ctx.error, size_t(b - start), ctx.includer_error};
             response = format_error(pe, msg);
-            return !h.notify;
+            return finish();
          }
 
          if constexpr (Opts.format == json) {
@@ -669,7 +739,7 @@ namespace glz::repe
             }
             else {
                handle_error(b);
-               return !h.notify;
+               return finish();
             }
          }
 
@@ -681,7 +751,7 @@ namespace glz::repe
             write<Opts>(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
          }
 
-         return !h.notify;
+         return finish();
       }
    };
 }
