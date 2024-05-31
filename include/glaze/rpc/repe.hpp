@@ -292,10 +292,7 @@ namespace glz::repe
    // This server is designed to be lightweight, and meant to be constructed on a per client basis
    // This server does not support adding methods from RPC calls or adding methods once RPC calls can be made
    // Each instance of this server is expected to be accessed by a single thread, so a single std::string response
-   // buffer is used. You can register object memory as the input parameter and the output parameter, which can improve
-   // performance or may be required for hardware interfaces or restricted memory interfaces Access to this registered
-   // memory is thread safe across server instances No thread locks are needed if you don't pass input and output
-   // parameters by reference
+   // buffer is used.
    template <opts Opts = opts{}>
    struct registry
    {
@@ -306,9 +303,9 @@ namespace glz::repe
 
       error_t error{};
 
-      static constexpr std::string_view default_parent = "";
+      static constexpr std::string_view empty_path = "";
 
-      template <class T, const std::string_view& parent = default_parent>
+      template <const std::string_view& root = empty_path, class T, const std::string_view& parent = root>
          requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
       void on(T& value)
       {
@@ -324,9 +321,9 @@ namespace glz::repe
             }
          }();
 
-         if constexpr (parent == "" && (glaze_object_t<T> || reflectable<T>)) {
+         if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
             // build read/write calls to the top level object
-            methods[""] = [this, &value](repe::state&& state) {
+            methods[root] = [this, &value](repe::state&& state) {
                if (not state.header.empty) {
                   if (read_params<Opts>(value, state, response) == 0) {
                      return;
@@ -349,7 +346,7 @@ namespace glz::repe
          for_each<N>([&](auto I) {
             using Element = glaze_tuple_element<I, N, T>;
             static constexpr std::string_view full_key = [&] {
-               if constexpr (parent == "") {
+               if constexpr (parent == empty_path) {
                   return join_v<chars<"/">, key_name<I, T, Element::use_reflection>>;
                }
                else {
@@ -412,7 +409,7 @@ namespace glz::repe
                };
             }
             else if constexpr (glaze_object_t<E> || reflectable<E>) {
-               on<std::decay_t<E>, full_key>(get_member(value, func));
+               on<root, std::decay_t<E>, full_key>(get_member(value, func));
 
                // build read/write calls to the object as a variable
                methods[full_key] = [this, &func](repe::state&& state) {
