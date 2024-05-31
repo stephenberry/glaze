@@ -47,7 +47,7 @@ namespace glz
 
    template <string_literal Str>
    constexpr std::string_view chars = Str.sv();
-   
+
    template <string_literal Str>
    constexpr std::string_view root = Str.sv();
 

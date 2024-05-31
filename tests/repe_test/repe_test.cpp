@@ -469,7 +469,7 @@ suite root_tests = [] {
       repe::registry server{};
 
       my_nested_functions_t obj{};
-      
+
       server.on<glz::root<"/sub">>(obj);
 
       {
