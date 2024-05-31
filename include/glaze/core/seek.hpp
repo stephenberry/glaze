@@ -405,7 +405,7 @@ namespace glz
 
    // TODO: handle ~ and / characters for full JSON pointer support
    template <auto& Str>
-   inline constexpr auto split_json_ptr()
+   constexpr auto split_json_ptr()
    {
       constexpr auto str = Str;
       constexpr auto N = std::count(str.begin(), str.end(), '/');
@@ -415,6 +415,53 @@ namespace glz
          std::tie(arr[i], s) = tokenize_json_ptr(s);
       }
       return arr;
+   }
+   
+   namespace detail
+   {
+      inline std::pair<sv, sv> tokenize_json_ptr_children(sv s) {
+          if (s.empty()) {
+              return {"", ""};
+          }
+          auto next = s.substr(1);
+          if (next.find('/') == std::string::npos) {
+              return {s, ""};
+          }
+          const auto i = next.find_first_of('/');
+          return {s.substr(0, i + 1), next.substr(i, next.size() - i)};
+      };
+      
+      // Get each full JSON pointer path at increasing depth
+      inline auto json_ptr_children(sv s, std::vector<sv>& v) {
+          const auto n = std::count(s.begin(), s.end(), '/');
+          v.resize(n);
+          auto* start = s.data();
+          for (auto i = 0; i < n; ++i) {
+              std::tie(v[i], s) = tokenize_json_ptr_children(s);
+          }
+
+          for (auto i = 0; i < n; ++i) {
+              v[i] = sv{start, size_t((v[i].data() + v[i].size()) - start)};
+          }
+      }
+      
+      template <auto& Str>
+      constexpr auto json_ptr_children()
+      {
+         constexpr auto str = Str;
+         constexpr auto N = std::count(str.begin(), str.end(), '/');
+         auto* start = str.data();
+         std::array<sv, N> v;
+         sv s = str;
+         for (auto i = 0; i < N; ++i) {
+            std::tie(v[i], s) = tokenize_json_ptr_children(s);
+         }
+         
+         for (auto i = 0; i < N; ++i) {
+             v[i] = sv{start, size_t((v[i].data() + v[i].size()) - start)};
+         }
+         return v;
+      }
    }
 
    constexpr auto json_ptrs(auto&&... args) { return std::array{sv{args}...}; }
