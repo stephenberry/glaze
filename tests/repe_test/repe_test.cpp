@@ -464,6 +464,30 @@ suite wrapper_tests = [] {
    };
 };
 
+suite root_tests = [] {
+   "root /sub"_test = [] {
+      repe::registry server{};
+
+      my_nested_functions_t obj{};
+      
+      server.on<glz::root<"/sub">>(obj);
+
+      {
+         auto request = repe::request_json({"/sub/my_functions/void_func"});
+         server.call(request);
+      }
+
+      expect(server.response == R"([[0,0,2,"/sub/my_functions/void_func",null],null])") << server.response;
+
+      {
+         auto request = repe::request_json({"/sub/my_functions/hello"});
+         server.call(request);
+      }
+
+      expect(server.response == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
+   };
+};
+
 suite wrapper_tests_binary = [] {
    "wrapper"_test = [] {
       repe::registry<glz::opts{.format = glz::binary}> server{};
