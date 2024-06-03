@@ -529,8 +529,7 @@ namespace glz::repe
       
       chain_t get_chain(const sv json_ptr)
       {
-         std::vector<sv> paths{};
-         glz::detail::json_ptr_children(json_ptr, paths);
+         std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr);
          chain_t v{};
          v.reserve(paths.size());
          for (auto& path : paths) {
@@ -540,35 +539,53 @@ namespace glz::repe
       }
       
       // used for writing to C++ memory
-      auto unique_lock(const sv json_ptr)
-      {
-         static thread_local std::vector<sv> paths{};
-         glz::detail::json_ptr_children(json_ptr, paths);
-         static thread_local chain_t chain{};
-         chain.resize(paths.size());
-         for (size_t i = 0; i < paths.size(); ++i) {
-            chain[i] = &mtxs[paths[i]];
-         }
-         return chain_read_lock{chain};
-      }
-      
       template <string_literal json_ptr>
       auto unique_lock()
       {
-         static thread_local std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv(), paths);
          // TODO: use a std::array and calculate number of path segments
-         static thread_local chain_t chain{};
-         chain.resize(paths.size());
-         for (size_t i = 0; i < paths.size(); ++i) {
-            chain[i] = &mtxs[paths[i]];
-         }
+         static thread_local chain_t chain = [&]{
+            std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv());
+            chain_t chain{};
+            chain.resize(paths.size());
+            for (size_t i = 0; i < paths.size(); ++i) {
+               chain[i] = &mtxs[paths[i]];
+            }
+            return chain;
+         }();
          return chain_read_lock{chain};
       }
       
       // used for reading from C++ memory
-      auto shared_lock(const sv)
+      template <string_literal json_ptr>
+      auto shared_lock()
       {
-         
+         // TODO: use a std::array and calculate number of path segments
+         static thread_local chain_t chain = [&]{
+            std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv());
+            chain_t chain{};
+            chain.resize(paths.size());
+            for (size_t i = 0; i < paths.size(); ++i) {
+               chain[i] = &mtxs[paths[i]];
+            }
+            return chain;
+         }();
+         return chain_write_lock{chain};
+      }
+      
+      template <string_literal json_ptr>
+      auto invoke_lock()
+      {
+         // TODO: use a std::array and calculate number of path segments
+         static thread_local chain_t chain = [&]{
+            std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv());
+            chain_t chain{};
+            chain.resize(paths.size());
+            for (size_t i = 0; i < paths.size(); ++i) {
+               chain[i] = &mtxs[paths[i]];
+            }
+            return chain;
+         }();
+         return chain_invoke_lock{chain};
       }
       
       buffer_pool buffers{};

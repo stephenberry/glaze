@@ -10,6 +10,7 @@
 #include "ut/ut.hpp"
 
 #include <thread>
+#include <latch>
 
 using namespace ut;
 
@@ -552,52 +553,73 @@ suite multi_threading_tests = [] {
       
       constexpr size_t N = 10'000;
       
-      auto read_i = repe::request_json({"/str"});
+      auto read_str = repe::request_json({"/str"});
       
-      std::thread reader([&]{
+      std::thread reader_str([&]{
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
-            const auto response = registry.call(read_i);
+            const auto response = registry.call(read_str);
             response_counter += response->value().size();
          }
-         std::cout << "read response_counter: " << response_counter << '\n';
+         std::cout << "read str response_counter: " << response_counter << '\n';
       });
       
-      std::thread writer([&]{
+      auto read_integer = repe::request_json({"/integer"});
+      
+      std::thread reader_integer([&]{
+         size_t response_counter{};
+         for (size_t i = 0; i < N; ++i) {
+            const auto response = registry.call(read_integer);
+            response_counter += response->value().size();
+         }
+         std::cout << "read integer response_counter: " << response_counter << '\n';
+      });
+      
+      std::latch latch{1};
+      
+      std::thread writer_str([&]{
          size_t response_counter{};
          std::string message;
          for (size_t i = 0; i < N; ++i) {
             message.append("x");
-            auto write_i = repe::request_json({"/str"}, message);
-            const auto response = registry.call(write_i);
+            auto write_str = repe::request_json({"/str"}, message);
+            const auto response = registry.call(write_str);
+            response_counter += response->value().size();
+            
+            if (i == 50) {
+               latch.count_down();
+            }
+         }
+         std::cout << "write str response_counter: " << response_counter << '\n';
+      });
+      
+      std::thread writer_integer([&]{
+         size_t response_counter{};
+         for (size_t i = 0; i < N; ++i) {
+            auto write_str = repe::request_json({"/integer"}, i);
+            const auto response = registry.call(write_str);
             response_counter += response->value().size();
          }
-         std::cout << "write response_counter: " << response_counter << '\n';
+         std::cout << "write integer response_counter: " << response_counter << '\n';
       });
       
       {
-         auto lock = registry.unique_lock<"/str">();
-         // do stuff with obj.str
-         //obj.integer = 5; // this is bad!
-         std::cout << obj.str << '\n';
+         latch.wait();
+         auto lock = registry.shared_lock<"/str">();
+         bool valid = true;
+         for (char c : obj.str) {
+              if (c != 'x') {
+                  valid = false;
+                 break;
+              }
+          }
+         expect(valid);
       }
       
-      /*{
-         auto lock = registry.shared_lock("/str");
-         // server and clients can read
-         obj.str = "hello"; // this is bad!
-         std::cout << obj.str << '\n';
-      }
-      
-      {
-         auto lock = registry.unique_lock("");
-         // do stuff with the entire obj
-         std::cout << obj.str << '\n';
-      }*/
-      
-      
-      reader.join();
-      writer.join();
+      reader_str.join();
+      reader_integer.join();
+      writer_str.join();
+      writer_integer.join();
    };
 };
 
