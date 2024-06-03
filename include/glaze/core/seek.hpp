@@ -432,7 +432,8 @@ namespace glz
       };
       
       // Get each full JSON pointer path at increasing depth
-      inline auto json_ptr_children(sv s, std::vector<sv>& v) {
+      inline auto json_ptr_children(sv s) {
+         std::vector<sv> v{};
           const auto n = std::count(s.begin(), s.end(), '/');
           v.resize(n);
           auto* start = s.data();
@@ -443,6 +444,7 @@ namespace glz
           for (auto i = 0; i < n; ++i) {
               v[i] = sv{start, size_t((v[i].data() + v[i].size()) - start)};
           }
+         return v;
       }
       
       template <auto& Str>
