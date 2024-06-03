@@ -235,14 +235,7 @@ namespace glz
       }
    };
 
-   template <class T>
-   concept is_registry = requires(T t) {
-      {
-         t.call(std::declval<std::string&>())
-      };
-   };
-
-   template <is_registry Registry>
+   template <opts Opts = opts{}>
    struct asio_server
    {
       uint16_t port{};
@@ -257,7 +250,14 @@ namespace glz
       std::shared_ptr<asio::io_context> ctx{};
       std::shared_ptr<asio::signal_set> signals{};
 
-      std::function<void(Registry&)> init_registry{};
+      repe::registry<Opts> registry{};
+      
+      template <const std::string_view& Root = repe::detail::empty_path, class T>
+         requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
+      void on(T& value)
+      {
+         registry.template on<Root>(value);
+      }
 
       bool initialized = false;
 
@@ -286,14 +286,9 @@ namespace glz
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {
          socket.set_option(asio::ip::tcp::no_delay(true));
-         Registry registry{};
          std::string buffer{};
 
          try {
-            if (init_registry) {
-               init_registry(registry);
-            }
-
             while (true) {
                co_await co_receive_buffer(socket, buffer);
                auto response = registry.call(buffer);

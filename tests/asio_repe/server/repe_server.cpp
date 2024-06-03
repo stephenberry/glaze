@@ -20,9 +20,9 @@ void run_server()
    std::cout << "Server active...\n";
 
    try {
-      glz::asio_server<glz::repe::registry<>> server{.port = 8080};
+      glz::asio_server<> server{.port = 8080};
       api methods{};
-      server.init_registry = [&](glz::repe::registry<>& registry) { registry.on(methods); };
+      server.on(methods);
       server.run();
    }
    catch (const std::exception& e) {
