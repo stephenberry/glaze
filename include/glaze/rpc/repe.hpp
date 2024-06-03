@@ -892,12 +892,6 @@ namespace glz::repe
          });
       }
 
-      // TODO: Implement JSON Pointer lock free path access when paths do not collide
-      /*template <class Params, class Result, class Callback>
-      void on(const sv name, Params&& params, Result&& result, Callback&& callback) {
-
-      }*/
-
       template <class Value>
       bool call(const header& header)
       {
