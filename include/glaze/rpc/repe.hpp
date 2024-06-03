@@ -540,7 +540,7 @@ namespace glz::repe
       
       // used for writing to C++ memory
       template <string_literal json_ptr>
-      auto unique_lock()
+      auto lock()
       {
          // TODO: use a std::array and calculate number of path segments
          static thread_local chain_t chain = [&]{
