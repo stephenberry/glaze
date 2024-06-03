@@ -364,12 +364,6 @@ namespace glz::repe
    };
    
    using shared_buffer = std::shared_ptr<unique_buffer>;
-   
-   struct mutex_select
-   {
-      std::mutex parent{};
-      std::mutex child{};
-   };
 
    // This server does not support adding methods from RPC calls or adding methods once RPC calls can be made.
    template <opts Opts = opts{}>
@@ -379,7 +373,7 @@ namespace glz::repe
       std::unordered_map<sv, procedure, detail::string_hash, std::equal_to<>> methods;
       
       // TODO: replace this std::map with a std::flat_map with a std::deque (to not invalidate references)
-      std::map<sv, mutex_select> mtxs; // only hashes during initialization
+      std::map<sv, std::shared_mutex> mtxs; // only hashes during initialization
       
       buffer_pool buffers{};
 
@@ -405,7 +399,7 @@ namespace glz::repe
             // build read/write calls to the top level object
             methods[root] = [&value, &mtx = mtxs[root]](repe::state&& state) {
                if (not state.header.empty) {
-                  std::scoped_lock lock{mtx.parent, mtx.child};
+                  std::unique_lock lock{mtx};
                   if (read_params<Opts>(value, state, state.response) == 0) {
                      return;
                   }
@@ -416,7 +410,7 @@ namespace glz::repe
                }
 
                if (state.header.empty) {
-                  std::scoped_lock lock{mtx.parent, mtx.child};
+                  std::unique_lock lock{mtx};
                   write_response<Opts>(value, state);
                }
                else {
