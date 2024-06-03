@@ -529,13 +529,46 @@ namespace glz::repe
       
       chain_t get_chain(const sv json_ptr)
       {
-         const auto paths = glz::detail::json_ptr_children(json_ptr);
+         std::vector<sv> paths{};
+         glz::detail::json_ptr_children(json_ptr, paths);
          chain_t v{};
          v.reserve(paths.size());
          for (auto& path : paths) {
             v.emplace_back(&mtxs[path]);
          }
          return v;
+      }
+      
+      // used for writing to C++ memory
+      auto unique_lock(const sv json_ptr)
+      {
+         static thread_local std::vector<sv> paths{};
+         glz::detail::json_ptr_children(json_ptr, paths);
+         static thread_local chain_t chain{};
+         chain.resize(paths.size());
+         for (size_t i = 0; i < paths.size(); ++i) {
+            chain[i] = &mtxs[paths[i]];
+         }
+         return chain_read_lock{chain};
+      }
+      
+      template <string_literal json_ptr>
+      auto unique_lock()
+      {
+         static thread_local std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv(), paths);
+         // TODO: use a std::array and calculate number of path segments
+         static thread_local chain_t chain{};
+         chain.resize(paths.size());
+         for (size_t i = 0; i < paths.size(); ++i) {
+            chain[i] = &mtxs[paths[i]];
+         }
+         return chain_read_lock{chain};
+      }
+      
+      // used for reading from C++ memory
+      auto shared_lock(const sv)
+      {
+         
       }
       
       buffer_pool buffers{};

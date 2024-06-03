@@ -9,6 +9,8 @@
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
+#include <thread>
+
 using namespace ut;
 
 namespace repe = glz::repe;
@@ -531,6 +533,71 @@ suite wrapper_tests_binary = [] {
 
       expect(!glz::beve_to_json(response->value(), res));
       expect(res == R"([[0,0,0,"/sub/my_functions/hello",null],"Hello"])");
+   };
+};
+
+struct tester
+{
+   int integer{};
+   double number{};
+   std::string str{};
+};
+
+suite multi_threading_tests = [] {
+   "multi-threading"_test = [] {
+      repe::registry registry{};
+      tester obj{};
+      
+      registry.on(obj);
+      
+      constexpr size_t N = 10'000;
+      
+      auto read_i = repe::request_json({"/str"});
+      
+      std::thread reader([&]{
+         size_t response_counter{};
+         for (size_t i = 0; i < N; ++i) {
+            const auto response = registry.call(read_i);
+            response_counter += response->value().size();
+         }
+         std::cout << "read response_counter: " << response_counter << '\n';
+      });
+      
+      std::thread writer([&]{
+         size_t response_counter{};
+         std::string message;
+         for (size_t i = 0; i < N; ++i) {
+            message.append("x");
+            auto write_i = repe::request_json({"/str"}, message);
+            const auto response = registry.call(write_i);
+            response_counter += response->value().size();
+         }
+         std::cout << "write response_counter: " << response_counter << '\n';
+      });
+      
+      {
+         auto lock = registry.unique_lock<"/str">();
+         // do stuff with obj.str
+         //obj.integer = 5; // this is bad!
+         std::cout << obj.str << '\n';
+      }
+      
+      /*{
+         auto lock = registry.shared_lock("/str");
+         // server and clients can read
+         obj.str = "hello"; // this is bad!
+         std::cout << obj.str << '\n';
+      }
+      
+      {
+         auto lock = registry.unique_lock("");
+         // do stuff with the entire obj
+         std::cout << obj.str << '\n';
+      }*/
+      
+      
+      reader.join();
+      writer.join();
    };
 };
 
