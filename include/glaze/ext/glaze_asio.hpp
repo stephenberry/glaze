@@ -244,7 +244,7 @@ namespace glz
       std::shared_ptr<asio::signal_set> signals{};
 
       repe::registry<Opts> registry{};
-      
+
       template <const std::string_view& Root = repe::detail::empty_path, class T>
          requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
       void on(T& value)

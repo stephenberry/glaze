@@ -48,10 +48,10 @@ namespace glz
       T1 first{};
       T2 second{};
    };
-   
+
    template <class T1, class T2>
    pair(T1, T2) -> pair<T1, T2>;
-   
+
    template <size_t I, detail::pair_t T>
    constexpr decltype(auto) get(T&& p) noexcept
    {
@@ -505,7 +505,7 @@ namespace glz::detail
          }
          return items.begin() + index;
       }
-      
+
       template <class... Args>
       constexpr normal_map(Args&&... args) : items(std::forward<Args>(args)...)
       {

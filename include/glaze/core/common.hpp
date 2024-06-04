@@ -581,7 +581,8 @@ namespace glz
                         return glz::detail::make_naive_map<value_t, naive_desc>({key_value<T, I>()...});
                      }
                      else {
-                        return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(std::array{key_value<T, I>()...});
+                        return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
+                           std::array{key_value<T, I>()...});
                      }
                   }
                }
@@ -605,8 +606,7 @@ namespace glz
       {
          constexpr auto N = glz::tuple_size_v<meta_t<T>>;
          return [&]<size_t... I>(std::index_sequence<I...>) {
-            return normal_map<sv, size_t, glz::tuple_size_v<meta_t<T>>>(
-                                                                        pair<sv, size_t>{get_enum_key<T, I>(), I}...);
+            return normal_map<sv, size_t, glz::tuple_size_v<meta_t<T>>>(pair<sv, size_t>{get_enum_key<T, I>(), I}...);
          }(std::make_index_sequence<N>{});
       }
 
@@ -616,8 +616,8 @@ namespace glz
          constexpr auto N = glz::tuple_size_v<meta_t<T>>;
          return [&]<size_t... I>(std::index_sequence<I...>) {
             using key_t = std::underlying_type_t<T>;
-            return normal_map<key_t, sv, N>(
-                                            std::array<pair<key_t, sv>, N>{pair<key_t, sv>{static_cast<key_t>(get_enum_value<T, I>()), get_enum_key<T, I>()}...});
+            return normal_map<key_t, sv, N>(std::array<pair<key_t, sv>, N>{
+               pair<key_t, sv>{static_cast<key_t>(get_enum_value<T, I>()), get_enum_key<T, I>()}...});
          }(std::make_index_sequence<N>{});
       }
 
@@ -635,7 +635,8 @@ namespace glz
       {
          constexpr auto N = glz::tuple_size_v<meta_t<T>>;
          return [&]<size_t... I>(std::index_sequence<I...>) {
-            return normal_map<sv, T, N>(std::array<pair<sv, T>, N>{pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
+            return normal_map<sv, T, N>(
+               std::array<pair<sv, T>, N>{pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
          }(std::make_index_sequence<N>{});
       }
 
@@ -708,7 +709,8 @@ namespace glz
       consteval auto make_variant_deduction_base_map(std::index_sequence<I...>, auto&& keys)
       {
          using V = bit_array<std::variant_size_v<T>>;
-         return normal_map<sv, V, sizeof...(I)>(std::array<pair<sv, V>, sizeof...(I)>{pair<sv, V>{sv(std::get<I>(keys)), V{}}...});
+         return normal_map<sv, V, sizeof...(I)>(
+            std::array<pair<sv, V>, sizeof...(I)>{pair<sv, V>{sv(std::get<I>(keys)), V{}}...});
       }
 
       template <class T>
@@ -1136,7 +1138,7 @@ namespace glz::detail
          }
       }
    }();
-   
+
    template <size_t I, class T>
    constexpr auto key_name_v = [] {
       if constexpr (reflectable<T>) {

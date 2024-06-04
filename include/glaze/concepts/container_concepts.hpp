@@ -101,8 +101,12 @@ namespace glz::detail
 
    template <class T>
    concept pair_t = requires(T pair) {
-      { pair.first };
-      { pair.second };
+      {
+         pair.first
+      };
+      {
+         pair.second
+      };
    };
 
    template <class T>

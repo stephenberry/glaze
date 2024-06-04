@@ -5,12 +5,12 @@
 
 #include "glaze/rpc/repe.hpp"
 
+#include <latch>
+#include <thread>
+
 #include "glaze/ext/cli_menu.hpp"
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
-
-#include <thread>
-#include <latch>
 
 using namespace ut;
 
@@ -72,7 +72,7 @@ suite structs_of_functions = [] {
       server.on(obj);
 
       obj.i = 55;
-      
+
       glz::repe::shared_buffer response{};
 
       {
@@ -110,7 +110,7 @@ suite structs_of_functions = [] {
       my_nested_functions_t obj{};
 
       server.on(obj);
-      
+
       glz::repe::shared_buffer response{};
 
       {
@@ -199,7 +199,7 @@ suite structs_of_functions = [] {
       example_functions_t obj{};
 
       server.on(obj);
-      
+
       glz::repe::shared_buffer response{};
 
       {
@@ -251,7 +251,7 @@ suite structs_of_functions_binary = [] {
       server.on(obj);
 
       obj.i = 55;
-      
+
       glz::repe::shared_buffer response{};
 
       {
@@ -294,7 +294,7 @@ suite structs_of_functions_binary = [] {
       my_nested_functions_t obj{};
 
       server.on(obj);
-      
+
       glz::repe::shared_buffer response{};
 
       {
@@ -372,7 +372,7 @@ suite structs_of_functions_binary = [] {
 
       expect(!glz::beve_to_json(response->value(), res));
       expect(
-             res ==
+         res ==
          R"([[0,0,0,"/my_functions",null],{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"}])")
          << res;
 
@@ -383,7 +383,7 @@ suite structs_of_functions_binary = [] {
 
       expect(!glz::beve_to_json(response->value(), res));
       expect(
-             res ==
+         res ==
          R"([[0,0,0,"",null],{"my_functions":{"i":0,"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>","void_func":"std::function<void()>","max":"std::function<double(std::vector<double>&)>"},"meta_functions":{"hello":"std::function<std::string_view()>","world":"std::function<std::string_view()>","get_number":"std::function<int32_t()>"},"append_awesome":"std::function<std::string(const std::string&)>","my_string":""}])")
          << res;
    };
@@ -394,7 +394,7 @@ suite structs_of_functions_binary = [] {
       example_functions_t obj{};
 
       server.on(obj);
-      
+
       glz::repe::shared_buffer response{};
 
       {
@@ -449,7 +449,7 @@ struct wrapper_t
    T* sub{};
 
    // TODO: support meta wrappers and not only reflectable wrappers (I don't know why this isn't working)
-   //struct glaze {
+   // struct glaze {
    //   static constexpr auto value = glz::object(&wrapper_t::sub);
    //};
 };
@@ -462,7 +462,7 @@ suite wrapper_tests = [] {
       wrapper_t<my_nested_functions_t> obj{&instance};
 
       server.on(obj);
-      
+
       glz::repe::shared_buffer response{};
 
       {
@@ -488,7 +488,7 @@ suite root_tests = [] {
       my_nested_functions_t obj{};
 
       server.on<glz::root<"/sub">>(obj);
-      
+
       glz::repe::shared_buffer response{};
 
       {
@@ -515,7 +515,7 @@ suite wrapper_tests_binary = [] {
       wrapper_t<my_nested_functions_t> obj{&instance};
 
       server.on(obj);
-      
+
       glz::repe::shared_buffer response{};
 
       {
@@ -548,14 +548,14 @@ suite multi_threading_tests = [] {
    "multi-threading"_test = [] {
       repe::registry registry{};
       tester obj{};
-      
+
       registry.on(obj);
-      
+
       constexpr size_t N = 10'000;
-      
+
       auto read_str = repe::request_json({"/str"});
-      
-      std::thread reader_str([&]{
+
+      std::thread reader_str([&] {
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
             const auto response = registry.call(read_str);
@@ -563,10 +563,10 @@ suite multi_threading_tests = [] {
          }
          std::cout << "read str response_counter: " << response_counter << '\n';
       });
-      
+
       auto read_integer = repe::request_json({"/integer"});
-      
-      std::thread reader_integer([&]{
+
+      std::thread reader_integer([&] {
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
             const auto response = registry.call(read_integer);
@@ -574,10 +574,10 @@ suite multi_threading_tests = [] {
          }
          std::cout << "read integer response_counter: " << response_counter << '\n';
       });
-      
+
       auto read_full = repe::request_json({""});
-      
-      std::thread reader_full([&]{
+
+      std::thread reader_full([&] {
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
             const auto response = registry.call(read_full);
@@ -585,10 +585,10 @@ suite multi_threading_tests = [] {
          }
          std::cout << "read full response_counter: " << response_counter << '\n';
       });
-      
+
       std::latch latch{1};
-      
-      std::thread writer_str([&]{
+
+      std::thread writer_str([&] {
          size_t response_counter{};
          std::string message;
          for (size_t i = 0; i < N; ++i) {
@@ -596,15 +596,15 @@ suite multi_threading_tests = [] {
             auto write_str = repe::request_json({"/str"}, message);
             const auto response = registry.call(write_str);
             response_counter += response->value().size();
-            
+
             if (i == 50) {
                latch.count_down();
             }
          }
          std::cout << "write str response_counter: " << response_counter << '\n';
       });
-      
-      std::thread writer_integer([&]{
+
+      std::thread writer_integer([&] {
          size_t response_counter{};
          for (size_t i = 0; i < N; ++i) {
             auto write_str = repe::request_json({"/integer"}, i);
@@ -613,21 +613,21 @@ suite multi_threading_tests = [] {
          }
          std::cout << "write integer response_counter: " << response_counter << '\n';
       });
-      
+
       {
          latch.wait();
          auto lock = registry.read_only_lock<"/str">();
          expect(lock);
          bool valid = true;
          for (char c : obj.str) {
-              if (c != 'x') {
-                  valid = false;
-                 break;
-              }
-          }
+            if (c != 'x') {
+               valid = false;
+               break;
+            }
+         }
          expect(valid);
       }
-      
+
       reader_str.join();
       reader_integer.join();
       reader_full.join();
