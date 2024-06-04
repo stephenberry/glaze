@@ -32,7 +32,7 @@ namespace glz
    {
       // USER CONFIGURABLE
       uint32_t format = json;
-      bool comments = false; // Write out comments
+      bool comments = false; // Write out or support reading in JSONC style comments
       bool error_on_unknown_keys = true; // Error when an unknown key is encountered
       bool skip_null_members = true; // Skip writing out params in an object if the value is null
       bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
@@ -43,7 +43,7 @@ namespace glz
       bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
       bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
       bool write_type_info = true; // Write type info for meta objects in variants
-      bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
+      bool force_conformance = false; // Do not allow invalid json normally accepted such as nan, inf.
       bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
 

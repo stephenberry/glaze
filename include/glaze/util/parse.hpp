@@ -523,7 +523,7 @@ namespace glz::detail
 
 #define GLZ_SKIP_WS                                \
    if constexpr (!Opts.minified) {                 \
-      if constexpr (!Opts.force_conformance) {     \
+      if constexpr (Opts.comments) {               \
          while (whitespace_comment_table[*it]) {   \
             if (*it == '/') [[unlikely]] {         \
                skip_comment(ctx, it, end);         \
@@ -548,7 +548,7 @@ namespace glz::detail
    GLZ_ALWAYS_INLINE void skip_ws(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.minified) {
-         if constexpr (!Opts.force_conformance) {
+         if constexpr (Opts.comments) {
             while (whitespace_comment_table[*it]) {
                if (*it == '/') [[unlikely]] {
                   skip_comment(ctx, it, end);

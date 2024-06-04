@@ -46,10 +46,41 @@ namespace glz::ex
       return ex.value();
    }
 
+   template <class T, class Buffer>
+   void read_jsonc(T& value, Buffer&& buffer)
+   {
+      const auto ec = glz::read_jsonc(value, std::forward<Buffer>(buffer));
+      if (ec) {
+         throw std::runtime_error("read_json error: " + glz::format_error(ec, buffer));
+      }
+   }
+
+   template <class T, class Buffer>
+   [[nodiscard]] T read_jsonc(Buffer&& buffer)
+   {
+      const auto ex = glz::read_jsonc<T>(std::forward<Buffer>(buffer));
+      if (!ex) {
+         throw std::runtime_error("read_json error: " + glz::format_error(ex.error(), buffer));
+      }
+      return ex.value();
+   }
+
    template <auto Opts = opts{}, class T>
    void read_file_json(T& value, const sv file_name, auto&& buffer)
    {
       const auto ec = glz::read_file_json<Opts, T>(value, file_name, buffer);
+      if (ec == glz::error_code::file_open_failure) {
+         throw std::runtime_error("file failed to open: " + std::string(file_name));
+      }
+      else if (ec) {
+         throw std::runtime_error("read_file_json error: " + glz::format_error(ec, buffer));
+      }
+   }
+
+   template <auto Opts = opts{}, class T>
+   void read_file_jsonc(T& value, const sv file_name, auto&& buffer)
+   {
+      const auto ec = glz::read_file_jsonc<Opts, T>(value, file_name, buffer);
       if (ec == glz::error_code::file_open_failure) {
          throw std::runtime_error("file failed to open: " + std::string(file_name));
       }

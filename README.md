@@ -515,7 +515,9 @@ expect(buffer == "\"Red\"");
 
 Comments are supported with the specification defined here: [JSONC](https://github.com/stephenberry/JSONC)
 
-Comments may also be included in the `glz::meta` description for your types. These comments can be written out to provide a description of your JSON interface. Calling `write_jsonc` as opposed to `write_json` will write out any comments included in the `meta` description.
+Read support for comments is provided with `glz::read_jsonc` or `glz::read<glz::opts{.comments = true}>(...)`.
+
+Comments may be included in the `glz::meta` description for your types. These comments can be written out to provide a description of your JSON interface. Calling `write_jsonc` as opposed to `write_json` will write out any comments included in the `meta` description.
 
 ```c++
 struct thing {
@@ -697,7 +699,7 @@ The struct below shows the available options and the default behavior.
 ```c++
 struct opts {
   uint32_t format = json;
-  bool comments = false; // Write out comments
+  bool comments = false; // Write out or support reading in JSONC style comments
   bool error_on_unknown_keys = true; // Error when an unknown key is encountered
   bool skip_null_members = true; // Skip writing out params in an object if the value is null
   bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
@@ -708,7 +710,7 @@ struct opts {
   bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
   bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
   bool write_type_info = true; // Write type info for meta objects in variants
-  bool force_conformance = false; // Do not allow invalid json normally accepted such as comments, nan, inf.
+  bool force_conformance = false; // Do not allow invalid json normally accepted such as nan, inf.
   bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                       // skip_null_members = false to require nullable members
 

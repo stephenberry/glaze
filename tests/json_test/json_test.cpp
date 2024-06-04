@@ -794,13 +794,14 @@ suite user_types = [] {
 
       // Should skip invalid keys
       // glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false}>(obj,
-                                                                  R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
+      expect(glz::read<glz::opts{.comments = true, .error_on_unknown_keys = false}>(
+                obj,
+                R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
 /**/, "a":322})") == glz::error_code::none);
 
       // glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
-      auto ec = glz::read_json(obj,
-                               R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
+      auto ec = glz::read<glz::opts{.comments = true}>(obj,
+                                                       R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
    /**/, "a":322})");
       expect(ec != glz::error_code::none);
       expect(obj.a == 322.0 && obj.b == "fox");
@@ -830,7 +831,7 @@ suite user_types = [] {
          buffer ==
          R"({"thing":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"thing2array":[{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/,"c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":[3.14,2.7,6.5],"list":[6,7,8,2],"deque":[9,6.7,3.1],"vector":[[9,6.7,3.1],[3.14,2.7,6.5]],"i":8,"d":2/*double is the best type*/,"b":false,"c":"W","v":{"x":0},"color":"Green","vb":[true,false,false,true,true,true,true],"sptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/},"array":["as\"df\\ghjkl","pie","42","foo"],"map":{"a":4,"b":12,"f":7},"mapi":{"2":9.63,"5":3.14,"7":7.42},"thing_ptr":{"a":3.14/*Test comment 1*/,"b":"stuff"/*Test comment 2*/}})")
          << buffer;
-      expect(glz::read_json(obj, buffer) == glz::error_code::none);
+      expect(glz::read_jsonc(obj, buffer) == glz::error_code::none);
    };
 
    "complex user obect opts prettify"_test = [] {
@@ -1125,10 +1126,10 @@ suite user_types = [] {
 })";
 
       expect(thing_pretty == buffer);
-      expect(!glz::read_json(obj, buffer));
+      expect(!glz::read_jsonc(obj, buffer));
       const auto minified = glz::minify_jsonc(thing_pretty);
       expect(json == minified);
-      expect(!glz::read_json(obj, minified));
+      expect(!glz::read_jsonc(obj, minified));
    };
 
    "complex user obect roundtrip"_test = [] {
@@ -1568,14 +1569,14 @@ suite read_tests = [] {
       {
          std::string b = "1/*a comment*/00";
          int a{};
-         expect(glz::read_json(a, b) == glz::error_code::none);
+         expect(glz::read_jsonc(a, b) == glz::error_code::none);
          expect(a == 1);
       }
       {
          std::string b = R"([100, // a comment
 20])";
          std::vector<int> a{};
-         expect(glz::read_json(a, b) == glz::error_code::none);
+         expect(glz::read_jsonc(a, b) == glz::error_code::none);
          expect(a[0] == 100);
          expect(a[1] == 20);
       }
@@ -6916,7 +6917,7 @@ suite hostname_include_test = [] {
       std::string_view s = R"(
 // testing opening whitespace and comment
 {"hostname_include": "../{}_config.json", "i": 100})";
-      const auto ec = glz::read_json(obj, s);
+      const auto ec = glz::read_jsonc(obj, s);
       expect(ec == glz::error_code::none) << glz::format_error(ec, s);
 
       expect(obj.str == "Hello") << obj.str;
@@ -6925,12 +6926,12 @@ suite hostname_include_test = [] {
       obj.str = "";
 
       std::string buffer{};
-      expect(!glz::read_file_json(obj, file_name, buffer));
+      expect(!glz::read_file_jsonc(obj, file_name, buffer));
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
 
       s = R"({"i": 100, "hostname_include": "../{}_config.json"})";
-      expect(!glz::read_json(obj, s));
+      expect(!glz::read_jsonc(obj, s));
 
       expect(obj.str == "Hello") << obj.str;
       expect(obj.i == 55) << obj.i;
