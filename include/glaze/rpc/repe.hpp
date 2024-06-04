@@ -578,14 +578,14 @@ namespace glz::repe
    };
 
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
-   template <opts Opts = opts{}>
+   template <opts Opts = opts{}, class Mutex = std::shared_mutex>
    struct registry
    {
       using procedure = std::function<void(state&&)>; // RPC method
       std::unordered_map<sv, procedure, detail::string_hash, std::equal_to<>> methods;
       
-      using mutex_link_t = mutex_link<std::shared_mutex>;
-      using mutex_chain_t = mutex_chain<std::shared_mutex>;
+      using mutex_link_t = mutex_link<Mutex>;
+      using mutex_chain_t = mutex_chain<Mutex>;
       
       // TODO: replace this std::map with a std::flat_map with a std::deque (to not invalidate references)
       std::map<sv, mutex_link_t> mtxs; // only hashes during initialization
