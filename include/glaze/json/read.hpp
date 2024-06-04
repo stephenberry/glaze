@@ -2588,6 +2588,25 @@ namespace glz
       }
       return value;
    }
+   
+   template <read_json_supported T, class Buffer>
+   [[nodiscard]] inline parse_error read_jsonc(T& value, Buffer&& buffer) noexcept
+   {
+      context ctx{};
+      return read<opts{.comments = true}>(value, std::forward<Buffer>(buffer), ctx);
+   }
+
+   template <read_json_supported T, class Buffer>
+   [[nodiscard]] inline expected<T, parse_error> read_jsonc(Buffer&& buffer) noexcept
+   {
+      T value{};
+      context ctx{};
+      const parse_error ec = read<opts{.comments = true}>(value, std::forward<Buffer>(buffer), ctx);
+      if (ec) {
+         return unexpected<parse_error>(ec);
+      }
+      return value;
+   }
 
    template <auto Opts = opts{}, read_json_supported T>
    [[nodiscard]] inline parse_error read_file_json(T& value, const sv file_name, auto&& buffer) noexcept
@@ -2602,5 +2621,21 @@ namespace glz
       }
 
       return read<set_json<Opts>()>(value, buffer, ctx);
+   }
+   
+   template <auto Opts = opts{}, read_json_supported T>
+   [[nodiscard]] inline parse_error read_file_jsonc(T& value, const sv file_name, auto&& buffer) noexcept
+   {
+      context ctx{};
+      ctx.current_file = file_name;
+
+      const auto ec = file_to_buffer(buffer, ctx.current_file);
+
+      if (bool(ec)) {
+         return {ec};
+      }
+
+      constexpr auto Options = opt_true<set_json<Opts>(), &opts::comments>;
+      return read<Options>(value, buffer, ctx);
    }
 }
