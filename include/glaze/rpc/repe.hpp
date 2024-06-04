@@ -66,6 +66,43 @@ namespace glz::repe
       
       static constexpr int32_t timeout = -6000;
    };
+   
+   inline constexpr std::string_view error_code_to_sv(const int32_t e) noexcept {
+      switch (e)
+      {
+         case error_e::no_error: {
+            return "0 [no_error]";
+         }
+         case error_e::server_error_lower: {
+            return "-32000 [server_error_lower]";
+         }
+         case error_e::server_error_upper: {
+            return "-32099 [server_error_upper]";
+         }
+         case error_e::invalid_request: {
+            return "-32600 [invalid_request]";
+         }
+         case error_e::method_not_found: {
+            return "-32601 [method_not_found]";
+         }
+         case error_e::invalid_params: {
+            return "-32602 [invalid_params]";
+         }
+         case error_e::internal: {
+            return "-32603 [internal]";
+         }
+         case error_e::parse_error: {
+            return "-32700 [parse_error]";
+         }
+         case error_e::timeout: {
+            return "-6000 [timeout]";
+         }
+         default: {
+            return "unknown_error_code";
+            break;
+         }
+      };
+   }
 
    struct error_t final
    {
@@ -80,6 +117,14 @@ namespace glz::repe
          static constexpr auto value = glz::array(&T::code, &T::message);
       };
    };
+   
+   inline std::string format_error(const error_t& e) noexcept
+   {
+      std::string result = "error: " + std::string(error_code_to_sv(e.code));
+      result += "\n";
+      result += e.message;
+      return result;
+   }
 
    struct state final
    {
@@ -101,12 +146,6 @@ namespace glz::repe
          [[nodiscard]] size_t operator()(std::string_view txt) const { return std::hash<std::string_view>{}(txt); }
          [[nodiscard]] size_t operator()(const std::string& txt) const { return std::hash<std::string>{}(txt); }
       };
-   }
-
-   inline auto& get_shared_mutex()
-   {
-      static std::shared_mutex mtx{};
-      return mtx;
    }
 
    // returns 0 on error
