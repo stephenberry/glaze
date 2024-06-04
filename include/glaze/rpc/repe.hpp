@@ -5,6 +5,7 @@
 
 #include <mutex>
 #include <shared_mutex>
+#include <thread>
 
 #include "glaze/glaze.hpp"
 
@@ -62,6 +63,8 @@ namespace glz::repe
       static constexpr int32_t invalid_params = -32602;
       static constexpr int32_t internal = -32603;
       static constexpr int32_t parse_error = -32700;
+      
+      static constexpr int32_t timeout = -6000;
    };
 
    struct error_t final
@@ -365,67 +368,129 @@ namespace glz::repe
    
    using shared_buffer = std::shared_ptr<unique_buffer>;
    
-   template <class Mutex>
    struct mutex_link
    {
-      Mutex route{};
-      Mutex endpoint{};
+      std::shared_mutex route{};
+      std::shared_mutex endpoint{};
    };
    
-   template <class Mutex>
-   using mutex_chain = std::vector<mutex_link<Mutex>*>;
+   using mutex_chain = std::vector<mutex_link*>;
    
-   template <class Mutex>
+   [[nodiscard]] inline uint64_t& timeout_duration_ns()
+   {
+      static thread_local uint64_t timeout_ns = 1'000'000'000; // 1 second default
+      return timeout_ns;
+   }
+   
    struct exclusive_mutex {
-      exclusive_mutex(Mutex& mtx) : mtx_(mtx) {}
+      exclusive_mutex(std::shared_mutex& mtx) : mtx_(mtx) {}
        void lock() { mtx_.lock(); }
        void unlock() { mtx_.unlock(); }
       bool try_lock() { return mtx_.try_lock(); }
    private:
-      Mutex& mtx_;
+      std::shared_mutex& mtx_;
    };
    
-   template <class Mutex>
    struct shared_mutex {
-      shared_mutex(Mutex& mtx) : mtx_(mtx) {}
+      shared_mutex(std::shared_mutex& mtx) : mtx_(mtx) {}
        void lock() { mtx_.lock_shared(); }
        void unlock() { mtx_.unlock_shared(); }
       bool try_lock() { return mtx_.try_lock_shared(); }
    private:
-      Mutex& mtx_;
+      std::shared_mutex& mtx_;
    };
    
-   inline void lock_shared(auto& mtx0, auto& mtx1)
+   template <class Clock, class Duration, class L0, class L1>
+   [[nodiscard]] inline bool try_lock_until(std::chrono::time_point<Clock, Duration> t, L0& l0, L1& l1)
+   {
+       while (true)
+       {
+           {
+               std::unique_lock<L0> u0(l0);
+               if (l1.try_lock())
+               {
+                  u0.release();
+                   break;
+               }
+           }
+          std::this_thread::yield();
+           {
+               std::unique_lock<L1> u1(l1);
+               if (l0.try_lock())
+               {
+                  u1.release();
+                   break;
+               }
+           }
+          std::this_thread::yield();
+          if (std::chrono::steady_clock::now() >= t) {
+             return false;
+          }
+       }
+      return true;
+   }
+   
+   template <class L0, class L1>
+   [[nodiscard]] inline bool try_lock_for(L0& l0, L1& l1)
+   {
+      return try_lock_until(std::chrono::steady_clock::now() + std::chrono::nanoseconds(timeout_duration_ns()), l0, l1);
+   }
+   
+   [[nodiscard]] inline bool lock_shared(auto& mtx0, auto& mtx1)
    {
       shared_mutex wrapper0{mtx0};
       shared_mutex wrapper1{mtx1};
-      std::lock(wrapper0, wrapper1);
+      return try_lock_for(wrapper0, wrapper1);
+   }
+   
+   template <class Clock, class Duration, class L0>
+   [[nodiscard]] inline bool try_lock_until(std::chrono::time_point<Clock, Duration> t, L0& l0)
+   {
+       while (true)
+       {
+          if (l0.try_lock())
+          {
+              break;
+          }
+          std::this_thread::yield();
+          if (std::chrono::steady_clock::now() >= t) {
+             return false;
+          }
+       }
+      return true;
+   }
+   
+   template <class L0>
+   [[nodiscard]] inline bool try_lock_for(L0& l0)
+   {
+      return try_lock_until(std::chrono::steady_clock::now() + std::chrono::nanoseconds(timeout_duration_ns()), l0);
    }
    
    namespace detail
    {
       // lock reading into a value (writing to C++ memory)
-      template <class MutexChain>
-      inline void lock_read(MutexChain& chain) {
+      [[nodiscard]] inline bool lock_read(mutex_chain& chain) {
          const auto n = chain.size();
          if (n == 0) {
-            return;
+            return true;
          }
          else if (n == 1) {
-            std::lock(chain[0]->route, chain[0]->endpoint);
+            return try_lock_for(chain[0]->route, chain[0]->endpoint);
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
                shared_mutex route{chain[i]->route};
                exclusive_mutex endpoint{chain[i]->endpoint};
-               std::lock(route, endpoint);
+               const auto valid = try_lock_for(route, endpoint);
+               if (not valid) {
+                  return false;
+               }
             }
-            std::lock(chain[n - 1]->route, chain[n - 1]->endpoint);
+            return try_lock_for(chain.back()->route, chain.back()->endpoint);
          }
       }
       
-      template <class MutexChain>
-      inline void unlock_read(MutexChain& chain) {
+      inline void unlock_read(mutex_chain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
@@ -439,31 +504,33 @@ namespace glz::repe
                chain[i]->endpoint.unlock();
                chain[i]->route.unlock_shared();
             }
-            chain[n - 1]->endpoint.unlock();
-            chain[n - 1]->route.unlock();
+            chain.back()->endpoint.unlock();
+            chain.back()->route.unlock();
          }
       }
       
       // lock writing out a value (reading from C++ memory)
-      template <class MutexChain>
-      inline void lock_write(MutexChain& chain) {
+      [[nodiscard]] inline bool lock_write(mutex_chain& chain) {
          const auto n = chain.size();
          if (n == 0) {
-            return;
+            return true;
          }
          else if (n == 1) {
-            lock_shared(chain[0]->route, chain[0]->endpoint);
+            return lock_shared(chain[0]->route, chain[0]->endpoint);
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
-               chain[i]->route.lock_shared();
+               shared_mutex route{chain[i]->route};
+               const bool valid = try_lock_for(route);
+               if (not valid) {
+                  return false;
+               }
             }
-            lock_shared(chain[n - 1]->route, chain[n - 1]->endpoint);
+            return lock_shared(chain.back()->route, chain.back()->endpoint);
          }
       }
       
-      template <class MutexChain>
-      inline void unlock_write(MutexChain& chain) {
+      inline void unlock_write(mutex_chain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
@@ -476,37 +543,41 @@ namespace glz::repe
             for (size_t i = 0; i < (n - 1); ++i) {
                chain[i]->route.unlock_shared();
             }
-            chain[n - 1]->endpoint.unlock_shared();
-            chain[n - 1]->route.unlock_shared();
+            chain.back()->endpoint.unlock_shared();
+            chain.back()->route.unlock_shared();
          }
       }
       
       // lock invoking a function, which locks same depth and lower (supports member functions that manipulate class state)
       // treated as writing to C++ memory at the function depth and its parent depth
-      template <class MutexChain>
-      inline void lock_invoke(MutexChain& chain) {
+      [[nodiscard]] inline bool lock_invoke(mutex_chain& chain) {
          const auto n = chain.size();
          if (n == 0) {
-            return;
+            return true;
          }
          else if (n == 1) {
             shared_mutex route{chain[0]->route};
             exclusive_mutex endpoint{chain[0]->endpoint};
-            std::lock(route, endpoint);
+            return try_lock_for(route, endpoint);
          }
          else {
             for (size_t i = 0; i < (n - 2); ++i) {
                shared_mutex route{chain[i]->route};
                exclusive_mutex endpoint{chain[i]->endpoint};
-               std::lock(route, endpoint);
+               const bool valid = try_lock_for(route, endpoint);
+               if (not valid) {
+                  return false;
+               }
             }
-            std::lock(chain[n - 2]->route, chain[n - 2]->endpoint);
-            std::lock(chain[n - 1]->route, chain[n - 1]->endpoint);
+            auto valid = try_lock_for(chain[n - 2]->route, chain[n - 2]->endpoint);
+            if (not valid) {
+               return false;
+            }
+            return try_lock_for(chain.back()->route, chain.back()->endpoint);
          }
       }
       
-      template <class MutexChain>
-      inline void unlock_invoke(MutexChain& chain) {
+      inline void unlock_invoke(mutex_chain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
@@ -520,21 +591,23 @@ namespace glz::repe
                chain[i]->endpoint.unlock();
                chain[i]->route.unlock_shared();
             }
-            chain[n - 1]->endpoint.unlock();
+            chain.back()->endpoint.unlock();
+            chain.back()->route.unlock();
             chain[n - 2]->endpoint.unlock();
-            chain[n - 1]->route.unlock();
             chain[n - 2]->route.unlock();
          }
       }
    }
    
-   template <class MutexChain>
    struct chain_read_lock final
    {
-      MutexChain& chain;
-      chain_read_lock(MutexChain& input) : chain(input) {
-         detail::lock_read(chain);
+      mutex_chain& chain;
+      chain_read_lock(mutex_chain& input) : chain(input) {}
+      
+      [[nodiscard]] bool try_lock() {
+         return detail::lock_read(chain);
       }
+      
       chain_read_lock(const chain_read_lock&) = delete;
       chain_read_lock(chain_read_lock&&) = default;
       chain_read_lock& operator=(const chain_read_lock&) = delete;
@@ -545,13 +618,15 @@ namespace glz::repe
       }
    };
    
-   template <class MutexChain>
    struct chain_write_lock final
    {
-      MutexChain& chain;
-      chain_write_lock(MutexChain& input) : chain(input) {
-         detail::lock_write(chain);
+      mutex_chain& chain;
+      chain_write_lock(mutex_chain& input) : chain(input) {}
+      
+      [[nodiscard]] bool try_lock() {
+         return detail::lock_write(chain);
       }
+      
       chain_write_lock(const chain_write_lock&) = delete;
       chain_write_lock(chain_write_lock&&) = default;
       chain_write_lock& operator=(const chain_write_lock&) = delete;
@@ -562,13 +637,15 @@ namespace glz::repe
       }
    };
    
-   template <class MutexChain>
    struct chain_invoke_lock final
    {
-      MutexChain& chain;
-      chain_invoke_lock(MutexChain& input) : chain(input) {
-         detail::lock_invoke(chain);
+      mutex_chain& chain;
+      chain_invoke_lock(mutex_chain& input) : chain(input) {}
+      
+      [[nodiscard]] bool try_lock() {
+         return detail::lock_invoke(chain);
       }
+      
       chain_invoke_lock(const chain_invoke_lock&) = delete;
       chain_invoke_lock(chain_invoke_lock&&) = default;
       chain_invoke_lock& operator=(const chain_invoke_lock&) = delete;
@@ -580,22 +657,19 @@ namespace glz::repe
    };
 
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
-   template <opts Opts = opts{}, class Mutex = std::shared_timed_mutex>
+   template <opts Opts = opts{}>
    struct registry
    {
       using procedure = std::function<void(state&&)>; // RPC method
       std::unordered_map<sv, procedure, detail::string_hash, std::equal_to<>> methods;
       
-      using mutex_link_t = mutex_link<Mutex>;
-      using mutex_chain_t = mutex_chain<Mutex>;
-      
       // TODO: replace this std::map with a std::flat_map with a std::deque (to not invalidate references)
-      std::map<sv, mutex_link_t> mtxs; // only hashes during initialization
+      std::map<sv, mutex_link> mtxs; // only hashes during initialization
       
-      mutex_chain_t get_chain(const sv json_ptr)
+      mutex_chain get_chain(const sv json_ptr)
       {
          std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr);
-         mutex_chain_t v{};
+         mutex_chain v{};
          v.reserve(paths.size());
          for (auto& path : paths) {
             v.emplace_back(&mtxs[path]);
@@ -608,9 +682,9 @@ namespace glz::repe
       auto lock()
       {
          // TODO: use a std::array and calculate number of path segments
-         static thread_local mutex_chain_t chain = [&]{
+         static thread_local mutex_chain chain = [&]{
             std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv());
-            mutex_chain_t chain{};
+            mutex_chain chain{};
             chain.resize(paths.size());
             for (size_t i = 0; i < paths.size(); ++i) {
                chain[i] = &mtxs[paths[i]];
@@ -625,9 +699,9 @@ namespace glz::repe
       auto read_only_lock()
       {
          // TODO: use a std::array and calculate number of path segments
-         static thread_local mutex_chain_t chain = [&]{
+         static thread_local mutex_chain chain = [&]{
             std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv());
-            mutex_chain_t chain{};
+            mutex_chain chain{};
             chain.resize(paths.size());
             for (size_t i = 0; i < paths.size(); ++i) {
                chain[i] = &mtxs[paths[i]];
@@ -641,9 +715,9 @@ namespace glz::repe
       auto invoke_lock()
       {
          // TODO: use a std::array and calculate number of path segments
-         static thread_local mutex_chain_t chain = [&]{
+         static thread_local mutex_chain chain = [&]{
             std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv());
-            mutex_chain_t chain{};
+            mutex_chain chain{};
             chain.resize(paths.size());
             for (size_t i = 0; i < paths.size(); ++i) {
                chain[i] = &mtxs[paths[i]];
@@ -676,6 +750,11 @@ namespace glz::repe
             methods[root] = [&value, chain = get_chain(root)](repe::state&& state) mutable {
                if (not state.header.empty) {
                   chain_read_lock lock{chain};
+                  if (not lock.try_lock()) {
+                     state.error = {error_e::timeout, std::string(root)};
+                     write_response<Opts>(state);
+                     return;
+                  }
                   if (read_params<Opts>(value, state, state.response) == 0) {
                      return;
                   }
@@ -687,6 +766,11 @@ namespace glz::repe
 
                if (state.header.empty) {
                   chain_write_lock lock{chain};
+                  if (not lock.try_lock()) {
+                     state.error = {error_e::timeout, std::string(root)};
+                     write_response<Opts>(state);
+                     return;
+                  }
                   write_response<Opts>(value, state);
                }
                else {
@@ -724,6 +808,11 @@ namespace glz::repe
                   methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      {
                         chain_invoke_lock lock{chain};
+                        if (not lock.try_lock()) {
+                           state.error = {error_e::timeout, std::string(full_key)};
+                           write_response<Opts>(state);
+                           return;
+                        }
                         callback();
                         if (state.header.notify) {
                            return;
@@ -737,6 +826,11 @@ namespace glz::repe
                      static thread_local Result result{};
                      {
                         chain_invoke_lock lock{chain};
+                        if (not lock.try_lock()) {
+                           state.error = {error_e::timeout, std::string(full_key)};
+                           write_response<Opts>(state);
+                           return;
+                        }
                         result = callback();
                         if (state.header.notify) {
                            return;
@@ -764,6 +858,11 @@ namespace glz::repe
                   
                   {
                      chain_invoke_lock lock{chain};
+                     if (not lock.try_lock()) {
+                        state.error = {error_e::timeout, std::string(full_key)};
+                        write_response<Opts>(state);
+                        return;
+                     }
                      result = callback(params);
                      if (state.header.notify) {
                         return;
@@ -780,6 +879,11 @@ namespace glz::repe
                methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {
                   if (not state.header.empty) {
                      chain_read_lock lock{chain};
+                     if (not lock.try_lock()) {
+                        state.error = {error_e::timeout, std::string(full_key)};
+                        write_response<Opts>(state);
+                        return;
+                     }
                      if (read_params<Opts>(func, state, state.response) == 0) {
                         return;
                      }
@@ -791,6 +895,11 @@ namespace glz::repe
 
                   if (state.header.empty) {
                      chain_write_lock lock{chain};
+                     if (not lock.try_lock()) {
+                        state.error = {error_e::timeout, std::string(full_key)};
+                        write_response<Opts>(state);
+                        return;
+                     }
                      write_response<Opts>(func, state);
                   }
                   else {
@@ -803,6 +912,11 @@ namespace glz::repe
                methods[full_key] = [func, chain = get_chain(full_key)](repe::state&& state) mutable {
                   if (not state.header.empty) {
                      chain_read_lock lock{chain};
+                     if (not lock.try_lock()) {
+                        state.error = {error_e::timeout, std::string(full_key)};
+                        write_response<Opts>(state);
+                        return;
+                     }
                      if (read_params<Opts>(func, state, state.response) == 0) {
                         return;
                      }
@@ -814,6 +928,11 @@ namespace glz::repe
 
                   if (state.header.empty) {
                      chain_write_lock lock{chain};
+                     if (not lock.try_lock()) {
+                        state.error = {error_e::timeout, std::string(full_key)};
+                        write_response<Opts>(state);
+                        return;
+                     }
                      write_response<Opts>(func, state);
                   }
                   else {
@@ -834,6 +953,11 @@ namespace glz::repe
                         methods[full_key] = [&value, &func, chain = get_chain(full_key)](repe::state&& state) mutable {
                            {
                               chain_invoke_lock lock{chain};
+                              if (not lock.try_lock()) {
+                                 state.error = {error_e::timeout, std::string(full_key)};
+                                 write_response<Opts>(state);
+                                 return;
+                              }
                               (value.*func)();
                            }
 
@@ -857,6 +981,11 @@ namespace glz::repe
 
                            {
                               chain_invoke_lock lock{chain};
+                              if (not lock.try_lock()) {
+                                 state.error = {error_e::timeout, std::string(full_key)};
+                                 write_response<Opts>(state);
+                                 return;
+                              }
                               (value.*func)(input);
                            }
 
@@ -880,6 +1009,11 @@ namespace glz::repe
                            static thread_local Result result{};
                            {
                               chain_invoke_lock lock{chain};
+                              if (not lock.try_lock()) {
+                                 state.error = {error_e::timeout, std::string(full_key)};
+                                 write_response<Opts>(state);
+                                 return;
+                              }
                               result = (value.*func)();
                            }
 
@@ -910,6 +1044,11 @@ namespace glz::repe
                            static thread_local Result result{};
                            {
                               chain_invoke_lock lock{chain};
+                              if (not lock.try_lock()) {
+                                 state.error = {error_e::timeout, std::string(full_key)};
+                                 write_response<Opts>(state);
+                                 return;
+                              }
                               result = (value.*func)(input);
                            }
 
@@ -935,6 +1074,11 @@ namespace glz::repe
                   methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      if (not state.header.empty) {
                         chain_read_lock lock{chain};
+                        if (not lock.try_lock()) {
+                           state.error = {error_e::timeout, std::string(full_key)};
+                           write_response<Opts>(state);
+                           return;
+                        }
                         if (read_params<Opts>(func, state, state.response) == 0) {
                            return;
                         }
@@ -946,6 +1090,11 @@ namespace glz::repe
 
                      if (state.header.empty) {
                         chain_write_lock lock{chain};
+                        if (not lock.try_lock()) {
+                           state.error = {error_e::timeout, std::string(full_key)};
+                           write_response<Opts>(state);
+                           return;
+                        }
                         write_response<Opts>(func, state);
                      }
                      else {
