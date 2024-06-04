@@ -375,22 +375,24 @@ namespace glz::repe
    template <class Mutex>
    using mutex_chain = std::vector<mutex_link<Mutex>*>;
    
+   template <class Mutex>
    struct exclusive_mutex {
-      exclusive_mutex(std::shared_mutex& mtx) : mtx_(mtx) {}
+      exclusive_mutex(Mutex& mtx) : mtx_(mtx) {}
        void lock() { mtx_.lock(); }
        void unlock() { mtx_.unlock(); }
       bool try_lock() { return mtx_.try_lock(); }
    private:
-       std::shared_mutex& mtx_;
+      Mutex& mtx_;
    };
    
+   template <class Mutex>
    struct shared_mutex {
-      shared_mutex(std::shared_mutex& mtx) : mtx_(mtx) {}
+      shared_mutex(Mutex& mtx) : mtx_(mtx) {}
        void lock() { mtx_.lock_shared(); }
        void unlock() { mtx_.unlock_shared(); }
       bool try_lock() { return mtx_.try_lock_shared(); }
    private:
-       std::shared_mutex& mtx_;
+      Mutex& mtx_;
    };
    
    inline void lock_shared(auto& mtx0, auto& mtx1)
@@ -578,7 +580,7 @@ namespace glz::repe
    };
 
    // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
-   template <opts Opts = opts{}, class Mutex = std::shared_mutex>
+   template <opts Opts = opts{}, class Mutex = std::shared_timed_mutex>
    struct registry
    {
       using procedure = std::function<void(state&&)>; // RPC method
