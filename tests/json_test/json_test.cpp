@@ -794,7 +794,7 @@ suite user_types = [] {
 
       // Should skip invalid keys
       // glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
-      expect(glz::read<glz::opts{.error_on_unknown_keys = false, .comments = true}>(obj,
+      expect(glz::read<glz::opts{.comments = true, .error_on_unknown_keys = false}>(obj,
                                                                   R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
 /**/, "a":322})") == glz::error_code::none);
 
