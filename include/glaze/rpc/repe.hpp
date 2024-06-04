@@ -382,15 +382,6 @@ namespace glz::repe
       return timeout_ns;
    }
    
-   struct exclusive_mutex {
-      exclusive_mutex(std::shared_mutex& mtx) : mtx_(mtx) {}
-       void lock() { mtx_.lock(); }
-       void unlock() { mtx_.unlock(); }
-      bool try_lock() { return mtx_.try_lock(); }
-   private:
-      std::shared_mutex& mtx_;
-   };
-   
    struct shared_mutex {
       shared_mutex(std::shared_mutex& mtx) : mtx_(mtx) {}
        void lock() { mtx_.lock_shared(); }
@@ -480,8 +471,7 @@ namespace glz::repe
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
                shared_mutex route{chain[i]->route};
-               exclusive_mutex endpoint{chain[i]->endpoint};
-               const auto valid = try_lock_for(route, endpoint);
+               const auto valid = try_lock_for(route, chain[i]->endpoint);
                if (not valid) {
                   return false;
                }
@@ -557,14 +547,12 @@ namespace glz::repe
          }
          else if (n == 1) {
             shared_mutex route{chain[0]->route};
-            exclusive_mutex endpoint{chain[0]->endpoint};
-            return try_lock_for(route, endpoint);
+            return try_lock_for(route, chain[0]->endpoint);
          }
          else {
             for (size_t i = 0; i < (n - 2); ++i) {
                shared_mutex route{chain[i]->route};
-               exclusive_mutex endpoint{chain[i]->endpoint};
-               const bool valid = try_lock_for(route, endpoint);
+               const bool valid = try_lock_for(route, chain[i]->endpoint);
                if (not valid) {
                   return false;
                }
