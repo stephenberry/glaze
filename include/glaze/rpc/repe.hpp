@@ -365,13 +365,15 @@ namespace glz::repe
    
    using shared_buffer = std::shared_ptr<unique_buffer>;
    
+   template <class Mutex>
    struct mutex_link
    {
-      std::shared_mutex route{};
-      std::shared_mutex endpoint{};
+      Mutex route{};
+      Mutex endpoint{};
    };
    
-   using mutex_chain = std::vector<mutex_link*>;
+   template <class Mutex>
+   using mutex_chain = std::vector<mutex_link<Mutex>*>;
    
    struct exclusive_mutex {
       exclusive_mutex(std::shared_mutex& mtx) : mtx_(mtx) {}
@@ -401,7 +403,8 @@ namespace glz::repe
    namespace detail
    {
       // lock reading into a value (writing to C++ memory)
-      inline void lock_read(mutex_chain& chain) {
+      template <class MutexChain>
+      inline void lock_read(MutexChain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
@@ -419,7 +422,8 @@ namespace glz::repe
          }
       }
       
-      inline void unlock_read(mutex_chain& chain) {
+      template <class MutexChain>
+      inline void unlock_read(MutexChain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
@@ -439,7 +443,8 @@ namespace glz::repe
       }
       
       // lock writing out a value (reading from C++ memory)
-      inline void lock_write(mutex_chain& chain) {
+      template <class MutexChain>
+      inline void lock_write(MutexChain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
@@ -455,7 +460,8 @@ namespace glz::repe
          }
       }
       
-      inline void unlock_write(mutex_chain& chain) {
+      template <class MutexChain>
+      inline void unlock_write(MutexChain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
@@ -475,7 +481,8 @@ namespace glz::repe
       
       // lock invoking a function, which locks same depth and lower (supports member functions that manipulate class state)
       // treated as writing to C++ memory at the function depth and its parent depth
-      inline void lock_invoke(mutex_chain& chain) {
+      template <class MutexChain>
+      inline void lock_invoke(MutexChain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
@@ -496,7 +503,8 @@ namespace glz::repe
          }
       }
       
-      inline void unlock_invoke(mutex_chain& chain) {
+      template <class MutexChain>
+      inline void unlock_invoke(MutexChain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
@@ -518,10 +526,11 @@ namespace glz::repe
       }
    }
    
+   template <class MutexChain>
    struct chain_read_lock final
    {
-      mutex_chain& chain;
-      chain_read_lock(mutex_chain& input) : chain(input) {
+      MutexChain& chain;
+      chain_read_lock(MutexChain& input) : chain(input) {
          detail::lock_read(chain);
       }
       chain_read_lock(const chain_read_lock&) = delete;
@@ -534,10 +543,11 @@ namespace glz::repe
       }
    };
    
+   template <class MutexChain>
    struct chain_write_lock final
    {
-      mutex_chain& chain;
-      chain_write_lock(mutex_chain& input) : chain(input) {
+      MutexChain& chain;
+      chain_write_lock(MutexChain& input) : chain(input) {
          detail::lock_write(chain);
       }
       chain_write_lock(const chain_write_lock&) = delete;
@@ -550,10 +560,11 @@ namespace glz::repe
       }
    };
    
+   template <class MutexChain>
    struct chain_invoke_lock final
    {
-      mutex_chain& chain;
-      chain_invoke_lock(mutex_chain& input) : chain(input) {
+      MutexChain& chain;
+      chain_invoke_lock(MutexChain& input) : chain(input) {
          detail::lock_invoke(chain);
       }
       chain_invoke_lock(const chain_invoke_lock&) = delete;
@@ -573,13 +584,16 @@ namespace glz::repe
       using procedure = std::function<void(state&&)>; // RPC method
       std::unordered_map<sv, procedure, detail::string_hash, std::equal_to<>> methods;
       
-      // TODO: replace this std::map with a std::flat_map with a std::deque (to not invalidate references)
-      std::map<sv, mutex_link> mtxs; // only hashes during initialization
+      using mutex_link_t = mutex_link<std::shared_mutex>;
+      using mutex_chain_t = mutex_chain<std::shared_mutex>;
       
-      mutex_chain get_chain(const sv json_ptr)
+      // TODO: replace this std::map with a std::flat_map with a std::deque (to not invalidate references)
+      std::map<sv, mutex_link_t> mtxs; // only hashes during initialization
+      
+      mutex_chain_t get_chain(const sv json_ptr)
       {
          std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr);
-         mutex_chain v{};
+         mutex_chain_t v{};
          v.reserve(paths.size());
          for (auto& path : paths) {
             v.emplace_back(&mtxs[path]);
@@ -592,9 +606,9 @@ namespace glz::repe
       auto lock()
       {
          // TODO: use a std::array and calculate number of path segments
-         static thread_local mutex_chain chain = [&]{
+         static thread_local mutex_chain_t chain = [&]{
             std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv());
-            mutex_chain chain{};
+            mutex_chain_t chain{};
             chain.resize(paths.size());
             for (size_t i = 0; i < paths.size(); ++i) {
                chain[i] = &mtxs[paths[i]];
@@ -609,9 +623,9 @@ namespace glz::repe
       auto read_only_lock()
       {
          // TODO: use a std::array and calculate number of path segments
-         static thread_local mutex_chain chain = [&]{
+         static thread_local mutex_chain_t chain = [&]{
             std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv());
-            mutex_chain chain{};
+            mutex_chain_t chain{};
             chain.resize(paths.size());
             for (size_t i = 0; i < paths.size(); ++i) {
                chain[i] = &mtxs[paths[i]];
@@ -625,9 +639,9 @@ namespace glz::repe
       auto invoke_lock()
       {
          // TODO: use a std::array and calculate number of path segments
-         static thread_local mutex_chain chain = [&]{
+         static thread_local mutex_chain_t chain = [&]{
             std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv());
-            mutex_chain chain{};
+            mutex_chain_t chain{};
             chain.resize(paths.size());
             for (size_t i = 0; i < paths.size(); ++i) {
                chain[i] = &mtxs[paths[i]];
