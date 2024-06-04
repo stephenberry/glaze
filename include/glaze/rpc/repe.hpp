@@ -380,7 +380,7 @@ namespace glz::repe
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
-               chain[i]->lock_shared();
+               chain[i]->lock();
             }
             chain[n - 1]->lock();
          }
@@ -396,25 +396,21 @@ namespace glz::repe
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
-               chain[i]->unlock_shared();
+               chain[i]->unlock();
             }
             chain[n - 1]->unlock();
          }
       }
       
       // lock writing out a value (reading from C++ memory)
+      // we only lock the access point and don't need to lock down the chain for reading from memory
       inline void lock_write(chain_t& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
          }
-         else if (n == 1) {
-            chain[0]->lock_shared();
-         }
          else {
-            for (size_t i = 0; i < n; ++i) {
-               chain[i]->lock_shared();
-            }
+            chain.back()->lock_shared();
          }
       }
       
@@ -423,17 +419,13 @@ namespace glz::repe
          if (n == 0) {
             return;
          }
-         else if (n == 1) {
-            chain[0]->unlock_shared();
-         }
          else {
-            for (size_t i = 0; i < n; ++i) {
-               chain[i]->unlock_shared();
-            }
+            chain.back()->unlock_shared();
          }
       }
       
       // lock invoking a function, which locks same depth and lower (supports member functions that manipulate class state)
+      // treated as writing to C++ memory at the function depth and its parent depth
       inline void lock_invoke(chain_t& chain) {
          const auto n = chain.size();
          if (n == 0) {
@@ -444,7 +436,7 @@ namespace glz::repe
          }
          else {
             for (size_t i = 0; i < (n - 2); ++i) {
-               chain[i]->lock_shared();
+               chain[i]->lock();
             }
             chain[n - 2]->lock();
             chain[n - 1]->lock();
@@ -461,7 +453,7 @@ namespace glz::repe
          }
          else {
             for (size_t i = 0; i < (n - 2); ++i) {
-               chain[i]->unlock_shared();
+               chain[i]->unlock();
             }
             chain[n - 2]->unlock();
             chain[n - 1]->unlock();
@@ -517,7 +509,7 @@ namespace glz::repe
       }
    };
 
-   // This server does not support adding methods from RPC calls or adding methods once RPC calls can be made.
+   // This registry does not support adding methods from RPC calls or adding methods once RPC calls can be made.
    template <opts Opts = opts{}>
    struct registry
    {

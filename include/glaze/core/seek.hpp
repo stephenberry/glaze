@@ -434,14 +434,15 @@ namespace glz
       // Get each full JSON pointer path at increasing depth
       inline auto json_ptr_children(sv s) {
          std::vector<sv> v{};
-          const auto n = std::count(s.begin(), s.end(), '/');
+          const auto n = std::count(s.begin(), s.end(), '/') + 1; // +1 for root ""
           v.resize(n);
+         v[0] = "";
           auto* start = s.data();
-          for (auto i = 0; i < n; ++i) {
+          for (auto i = 1; i < n; ++i) {
               std::tie(v[i], s) = tokenize_json_ptr_children(s);
           }
 
-          for (auto i = 0; i < n; ++i) {
+          for (auto i = 1; i < n; ++i) {
               v[i] = sv{start, size_t((v[i].data() + v[i].size()) - start)};
           }
          return v;
@@ -451,15 +452,16 @@ namespace glz
       constexpr auto json_ptr_children()
       {
          constexpr auto str = Str;
-         constexpr auto N = std::count(str.begin(), str.end(), '/');
+         constexpr auto N = std::count(str.begin(), str.end(), '/') + 1; // +1 for root ""
          auto* start = str.data();
          std::array<sv, N> v;
+         v[0] = "";
          sv s = str;
-         for (auto i = 0; i < N; ++i) {
+         for (auto i = 1; i < N; ++i) {
             std::tie(v[i], s) = tokenize_json_ptr_children(s);
          }
          
-         for (auto i = 0; i < N; ++i) {
+         for (auto i = 1; i < N; ++i) {
              v[i] = sv{start, size_t((v[i].data() + v[i].size()) - start)};
          }
          return v;

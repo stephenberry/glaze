@@ -575,6 +575,17 @@ suite multi_threading_tests = [] {
          std::cout << "read integer response_counter: " << response_counter << '\n';
       });
       
+      auto read_full = repe::request_json({""});
+      
+      std::thread reader_full([&]{
+         size_t response_counter{};
+         for (size_t i = 0; i < N; ++i) {
+            const auto response = registry.call(read_full);
+            response_counter += response->value().size();
+         }
+         std::cout << "read full response_counter: " << response_counter << '\n';
+      });
+      
       std::latch latch{1};
       
       std::thread writer_str([&]{
@@ -618,6 +629,7 @@ suite multi_threading_tests = [] {
       
       reader_str.join();
       reader_integer.join();
+      reader_full.join();
       writer_str.join();
       writer_integer.join();
    };
