@@ -794,13 +794,14 @@ suite user_types = [] {
 
       // Should skip invalid keys
       // glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
-      expect(glz::read<glz::opts{.comments = true, .error_on_unknown_keys = false}>(obj,
-                                                                  R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
+      expect(glz::read<glz::opts{.comments = true, .error_on_unknown_keys = false}>(
+                obj,
+                R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
 /**/, "a":322})") == glz::error_code::none);
 
       // glaze::read_json(obj,"{/**/ \"b\":\"fox\", \"c\":7.7/**/, \"d\": {\"a\": \"}\"} //\n   /**/, \"a\":322}");
       auto ec = glz::read<glz::opts{.comments = true}>(obj,
-                               R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
+                                                       R"({/**/ "b":"fox", "c":7.7/**/, "d": {"a": "}"} //
    /**/, "a":322})");
       expect(ec != glz::error_code::none);
       expect(obj.a == 322.0 && obj.b == "fox");

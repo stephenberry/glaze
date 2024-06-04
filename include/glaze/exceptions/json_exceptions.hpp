@@ -45,7 +45,7 @@ namespace glz::ex
       }
       return ex.value();
    }
-   
+
    template <class T, class Buffer>
    void read_jsonc(T& value, Buffer&& buffer)
    {
@@ -76,7 +76,7 @@ namespace glz::ex
          throw std::runtime_error("read_file_json error: " + glz::format_error(ec, buffer));
       }
    }
-   
+
    template <auto Opts = opts{}, class T>
    void read_file_jsonc(T& value, const sv file_name, auto&& buffer)
    {

@@ -523,7 +523,7 @@ namespace glz::detail
 
 #define GLZ_SKIP_WS                                \
    if constexpr (!Opts.minified) {                 \
-      if constexpr (Opts.comments) {         \
+      if constexpr (Opts.comments) {               \
          while (whitespace_comment_table[*it]) {   \
             if (*it == '/') [[unlikely]] {         \
                skip_comment(ctx, it, end);         \

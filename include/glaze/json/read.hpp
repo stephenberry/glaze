@@ -2588,7 +2588,7 @@ namespace glz
       }
       return value;
    }
-   
+
    template <read_json_supported T, class Buffer>
    [[nodiscard]] inline parse_error read_jsonc(T& value, Buffer&& buffer) noexcept
    {
@@ -2622,7 +2622,7 @@ namespace glz
 
       return read<set_json<Opts>()>(value, buffer, ctx);
    }
-   
+
    template <auto Opts = opts{}, read_json_supported T>
    [[nodiscard]] inline parse_error read_file_jsonc(T& value, const sv file_name, auto&& buffer) noexcept
    {
