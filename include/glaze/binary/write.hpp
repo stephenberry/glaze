@@ -852,13 +852,13 @@ namespace glz
 
                   static constexpr auto group = glz::get<I>(groups);
 
-                  static constexpr auto key = std::get<0>(group);
-                  static constexpr auto sub_partial = std::get<1>(group);
+                  static constexpr auto key = get<0>(group);
+                  static constexpr auto sub_partial = get<1>(group);
                   static constexpr auto frozen_map = detail::make_map<T>();
                   static constexpr auto member_it = frozen_map.find(key);
                   static_assert(member_it != frozen_map.end(), "Invalid key passed to partial write");
                   static constexpr auto index = member_it->second.index();
-                  static constexpr decltype(auto) member_ptr = std::get<index>(member_it->second);
+                  static constexpr decltype(auto) member_ptr = get<index>(member_it->second);
 
                   detail::write<binary>::no_header<Opts>(key, ctx, b, ix);
                   we = write_partial<binary>::op<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), ctx, b,
@@ -873,8 +873,8 @@ namespace glz
 
                   static constexpr auto group = glz::get<I>(groups);
 
-                  static constexpr auto key_value = std::get<0>(group);
-                  static constexpr auto sub_partial = std::get<1>(group);
+                  static constexpr auto key_value = get<0>(group);
+                  static constexpr auto sub_partial = get<1>(group);
                   if constexpr (findable<std::decay_t<T>, decltype(key_value)>) {
                      detail::write<binary>::no_header<Opts>(key_value, ctx, b, ix);
                      auto it = value.find(key_value);

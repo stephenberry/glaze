@@ -1383,18 +1383,18 @@ namespace glz
 
                      static constexpr auto group = glz::get<I>(groups);
 
-                     static constexpr auto key = std::get<0>(group);
+                     static constexpr auto key = get<0>(group);
                      static constexpr auto quoted_key = join_v < chars<"\"">, key,
                                            Opts.prettify ? chars<"\": "> : chars < "\":" >>
                         ;
                      dump<quoted_key>(b, ix);
 
-                     static constexpr auto sub_partial = std::get<1>(group);
+                     static constexpr auto sub_partial = get<1>(group);
                      static constexpr auto frozen_map = make_map<T>();
                      static constexpr auto member_it = frozen_map.find(key);
                      static_assert(member_it != frozen_map.end(), "Invalid key passed to partial write");
                      static constexpr auto index = member_it->second.index();
-                     static constexpr decltype(auto) member_ptr = std::get<index>(member_it->second);
+                     static constexpr decltype(auto) member_ptr = get<index>(member_it->second);
 
                      we = write_partial<json>::op<sub_partial, Opts>(get_member(value, member_ptr), ctx, b, ix);
                      if constexpr (I != N - 1) {
@@ -1419,7 +1419,7 @@ namespace glz
 
                      static constexpr auto group = glz::get<I>(groups);
 
-                     static constexpr auto key = std::get<0>(group);
+                     static constexpr auto key = get<0>(group);
                      constexpr auto mem_it = std::find(members.begin(), members.end(), key);
                      static_assert(mem_it != members.end(), "Invalid key passed to partial write");
 
@@ -1428,7 +1428,7 @@ namespace glz
                         ;
                      dump<quoted_key>(b, ix);
 
-                     static constexpr auto sub_partial = std::get<1>(group);
+                     static constexpr auto sub_partial = get<1>(group);
                      auto member_it = cmap.find(key); // we verified at compile time that this exists
                      std::visit(
                         [&](auto&& member_ptr) {

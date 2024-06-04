@@ -47,11 +47,11 @@ namespace glz
          }
          else if constexpr (n == 1) {
             return micro_map1<value_t, named_member<T, I>::value...>{
-               std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...};
+               pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...};
          }
          else if constexpr (n == 2) {
             return micro_map2<value_t, named_member<T, I>::value...>{
-               std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...};
+               pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...};
          }
          else if constexpr (n < 64) // don't even attempt a first character hash if we have too many keys
          {
@@ -81,11 +81,11 @@ namespace glz
                   else {
                      if constexpr (n <= naive_map_max_size) {
                         constexpr auto naive_desc = naive_map_hash<use_hash_comparison, n>(keys);
-                        return glz::detail::make_naive_map<value_t, naive_desc>({std::pair<sv, value_t>{
+                        return glz::detail::make_naive_map<value_t, naive_desc>({pair<sv, value_t>{
                            get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
                      }
                      else {
-                        return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({std::pair<sv, value_t>{
+                        return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({pair<sv, value_t>{
                            get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
                      }
                   }
@@ -94,7 +94,7 @@ namespace glz
          }
          else {
             return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
-               {std::pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
+               {pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
          }
       }
 

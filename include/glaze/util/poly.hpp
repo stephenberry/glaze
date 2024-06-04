@@ -26,8 +26,8 @@ namespace glz
    inline constexpr auto make_mem_fn_wrapper_map_impl(std::index_sequence<I...>)
    {
       constexpr auto N = glz::tuple_size_v<meta_t<Spec>>;
-      return detail::normal_map<sv, fn_variant<Spec>, N>({std::make_pair<sv, fn_variant<Spec>>(
-         sv(get<0>(get<I>(meta_v<Spec>))), get_argument<get<1>(get<I>(meta_v<Spec>))>())...});
+      return detail::normal_map<sv, fn_variant<Spec>, N>(std::array{pair<sv, fn_variant<Spec>>{
+         sv(get<0>(get<I>(meta_v<Spec>))), get_argument<get<1>(get<I>(meta_v<Spec>))>()}...});
    }
 
    template <class Spec>
