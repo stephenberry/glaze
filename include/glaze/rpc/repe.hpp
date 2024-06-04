@@ -403,14 +403,19 @@ namespace glz::repe
       }
       
       // lock writing out a value (reading from C++ memory)
-      // we only lock the access point and don't need to lock down the chain for reading from memory
       inline void lock_write(chain_t& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
          }
+         else if (n == 1) {
+            chain[0]->lock_shared();
+         }
          else {
-            chain.back()->lock_shared();
+            for (size_t i = 0; i < (n - 1); ++i) {
+               chain[i]->lock_shared();
+            }
+            chain[n - 1]->lock_shared();
          }
       }
       
@@ -419,8 +424,14 @@ namespace glz::repe
          if (n == 0) {
             return;
          }
+         else if (n == 1) {
+            chain[0]->unlock_shared();
+         }
          else {
-            chain.back()->unlock_shared();
+            for (size_t i = 0; i < (n - 1); ++i) {
+               chain[i]->unlock_shared();
+            }
+            chain[n - 1]->unlock_shared();
          }
       }
       
