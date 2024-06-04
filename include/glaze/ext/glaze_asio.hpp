@@ -141,20 +141,13 @@ namespace glz
       template <class Result = glz::raw_json>
       [[nodiscard]] glz::expected<Result, repe::error_t> get(repe::header&& header)
       {
-         header.notify = false;
-         header.empty = true; // no params
-         repe::request<Opts>(std::move(header), nullptr, buffer);
-
-         send_buffer(*socket, buffer);
-         receive_buffer(*socket, buffer);
-
          std::decay_t<Result> result{};
-         const auto error = repe::decode_response<Opts>(result, buffer);
+         const auto error = get<Result>(std::move(header), result);
          if (error) {
             return glz::unexpected(error);
          }
          else {
-            return result;
+            return {result};
          }
       }
 
