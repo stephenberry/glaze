@@ -602,10 +602,14 @@ namespace glz::repe
    struct chain_read_lock final
    {
       mutex_chain& chain;
-      chain_read_lock(mutex_chain& input) : chain(input) {}
+      bool lock_aquired = false;
       
-      [[nodiscard]] bool try_lock() {
-         return detail::lock_read(chain);
+      chain_read_lock(mutex_chain& input) : chain(input) {
+         lock_aquired = detail::lock_read(chain);
+      }
+      
+      operator bool() const {
+         return lock_aquired;
       }
       
       chain_read_lock(const chain_read_lock&) = delete;
@@ -621,10 +625,14 @@ namespace glz::repe
    struct chain_write_lock final
    {
       mutex_chain& chain;
-      chain_write_lock(mutex_chain& input) : chain(input) {}
+      bool lock_aquired = false;
       
-      [[nodiscard]] bool try_lock() {
-         return detail::lock_write(chain);
+      chain_write_lock(mutex_chain& input) : chain(input) {
+         lock_aquired = detail::lock_write(chain);
+      }
+      
+      operator bool() const {
+         return lock_aquired;
       }
       
       chain_write_lock(const chain_write_lock&) = delete;
@@ -640,10 +648,14 @@ namespace glz::repe
    struct chain_invoke_lock final
    {
       mutex_chain& chain;
-      chain_invoke_lock(mutex_chain& input) : chain(input) {}
+      bool lock_aquired = false;
       
-      [[nodiscard]] bool try_lock() {
-         return detail::lock_invoke(chain);
+      chain_invoke_lock(mutex_chain& input) : chain(input) {
+         lock_aquired = detail::lock_invoke(chain);
+      }
+      
+      operator bool() const {
+         return lock_aquired;
       }
       
       chain_invoke_lock(const chain_invoke_lock&) = delete;
@@ -750,7 +762,7 @@ namespace glz::repe
             methods[root] = [&value, chain = get_chain(root)](repe::state&& state) mutable {
                if (not state.header.empty) {
                   chain_read_lock lock{chain};
-                  if (not lock.try_lock()) {
+                  if (not lock) {
                      state.error = {error_e::timeout, std::string(root)};
                      write_response<Opts>(state);
                      return;
@@ -766,7 +778,7 @@ namespace glz::repe
 
                if (state.header.empty) {
                   chain_write_lock lock{chain};
-                  if (not lock.try_lock()) {
+                  if (not lock) {
                      state.error = {error_e::timeout, std::string(root)};
                      write_response<Opts>(state);
                      return;
@@ -808,7 +820,7 @@ namespace glz::repe
                   methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      {
                         chain_invoke_lock lock{chain};
-                        if (not lock.try_lock()) {
+                        if (not lock) {
                            state.error = {error_e::timeout, std::string(full_key)};
                            write_response<Opts>(state);
                            return;
@@ -826,7 +838,7 @@ namespace glz::repe
                      static thread_local Result result{};
                      {
                         chain_invoke_lock lock{chain};
-                        if (not lock.try_lock()) {
+                        if (not lock) {
                            state.error = {error_e::timeout, std::string(full_key)};
                            write_response<Opts>(state);
                            return;
@@ -858,7 +870,7 @@ namespace glz::repe
                   
                   {
                      chain_invoke_lock lock{chain};
-                     if (not lock.try_lock()) {
+                     if (not lock) {
                         state.error = {error_e::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
@@ -879,7 +891,7 @@ namespace glz::repe
                methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {
                   if (not state.header.empty) {
                      chain_read_lock lock{chain};
-                     if (not lock.try_lock()) {
+                     if (not lock) {
                         state.error = {error_e::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
@@ -895,7 +907,7 @@ namespace glz::repe
 
                   if (state.header.empty) {
                      chain_write_lock lock{chain};
-                     if (not lock.try_lock()) {
+                     if (not lock) {
                         state.error = {error_e::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
@@ -912,7 +924,7 @@ namespace glz::repe
                methods[full_key] = [func, chain = get_chain(full_key)](repe::state&& state) mutable {
                   if (not state.header.empty) {
                      chain_read_lock lock{chain};
-                     if (not lock.try_lock()) {
+                     if (not lock) {
                         state.error = {error_e::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
@@ -928,7 +940,7 @@ namespace glz::repe
 
                   if (state.header.empty) {
                      chain_write_lock lock{chain};
-                     if (not lock.try_lock()) {
+                     if (not lock) {
                         state.error = {error_e::timeout, std::string(full_key)};
                         write_response<Opts>(state);
                         return;
@@ -953,7 +965,7 @@ namespace glz::repe
                         methods[full_key] = [&value, &func, chain = get_chain(full_key)](repe::state&& state) mutable {
                            {
                               chain_invoke_lock lock{chain};
-                              if (not lock.try_lock()) {
+                              if (not lock) {
                                  state.error = {error_e::timeout, std::string(full_key)};
                                  write_response<Opts>(state);
                                  return;
@@ -981,7 +993,7 @@ namespace glz::repe
 
                            {
                               chain_invoke_lock lock{chain};
-                              if (not lock.try_lock()) {
+                              if (not lock) {
                                  state.error = {error_e::timeout, std::string(full_key)};
                                  write_response<Opts>(state);
                                  return;
@@ -1009,7 +1021,7 @@ namespace glz::repe
                            static thread_local Result result{};
                            {
                               chain_invoke_lock lock{chain};
-                              if (not lock.try_lock()) {
+                              if (not lock) {
                                  state.error = {error_e::timeout, std::string(full_key)};
                                  write_response<Opts>(state);
                                  return;
@@ -1044,7 +1056,7 @@ namespace glz::repe
                            static thread_local Result result{};
                            {
                               chain_invoke_lock lock{chain};
-                              if (not lock.try_lock()) {
+                              if (not lock) {
                                  state.error = {error_e::timeout, std::string(full_key)};
                                  write_response<Opts>(state);
                                  return;
@@ -1074,7 +1086,7 @@ namespace glz::repe
                   methods[full_key] = [&func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      if (not state.header.empty) {
                         chain_read_lock lock{chain};
-                        if (not lock.try_lock()) {
+                        if (not lock) {
                            state.error = {error_e::timeout, std::string(full_key)};
                            write_response<Opts>(state);
                            return;
@@ -1090,7 +1102,7 @@ namespace glz::repe
 
                      if (state.header.empty) {
                         chain_write_lock lock{chain};
-                        if (not lock.try_lock()) {
+                        if (not lock) {
                            state.error = {error_e::timeout, std::string(full_key)};
                            write_response<Opts>(state);
                            return;

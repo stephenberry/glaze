@@ -617,9 +617,8 @@ suite multi_threading_tests = [] {
       {
          latch.wait();
          auto lock = registry.read_only_lock<"/str">();
-         auto valid = lock.try_lock();
-         expect(valid);
-         valid = true;
+         expect(lock);
+         bool valid = true;
          for (char c : obj.str) {
               if (c != 'x') {
                   valid = false;
