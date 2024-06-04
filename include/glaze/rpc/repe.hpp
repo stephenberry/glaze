@@ -373,8 +373,8 @@ namespace glz::repe
    
    using mutex_chain = std::vector<mutex_link*>;
    
-   struct exclusive_lock {
-      exclusive_lock(std::shared_mutex& mtx) : mtx_(mtx) {}
+   struct exclusive_mutex {
+      exclusive_mutex(std::shared_mutex& mtx) : mtx_(mtx) {}
        void lock() { mtx_.lock(); }
        void unlock() { mtx_.unlock(); }
       bool try_lock() { return mtx_.try_lock(); }
@@ -382,8 +382,8 @@ namespace glz::repe
        std::shared_mutex& mtx_;
    };
    
-   struct shared_lock {
-      shared_lock(std::shared_mutex& mtx) : mtx_(mtx) {}
+   struct shared_mutex {
+      shared_mutex(std::shared_mutex& mtx) : mtx_(mtx) {}
        void lock() { mtx_.lock_shared(); }
        void unlock() { mtx_.unlock_shared(); }
       bool try_lock() { return mtx_.try_lock_shared(); }
@@ -393,8 +393,8 @@ namespace glz::repe
    
    inline void lock_shared(auto& mtx0, auto& mtx1)
    {
-      shared_lock wrapper0{mtx0};
-      shared_lock wrapper1{mtx1};
+      shared_mutex wrapper0{mtx0};
+      shared_mutex wrapper1{mtx1};
       std::lock(wrapper0, wrapper1);
    }
    
@@ -411,8 +411,8 @@ namespace glz::repe
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
-               shared_lock route{chain[i]->route};
-               exclusive_lock endpoint{chain[i]->endpoint};
+               shared_mutex route{chain[i]->route};
+               exclusive_mutex endpoint{chain[i]->endpoint};
                std::lock(route, endpoint);
             }
             std::lock(chain[n - 1]->route, chain[n - 1]->endpoint);
@@ -481,14 +481,14 @@ namespace glz::repe
             return;
          }
          else if (n == 1) {
-            shared_lock route{chain[0]->route};
-            exclusive_lock endpoint{chain[0]->endpoint};
+            shared_mutex route{chain[0]->route};
+            exclusive_mutex endpoint{chain[0]->endpoint};
             std::lock(route, endpoint);
          }
          else {
             for (size_t i = 0; i < (n - 2); ++i) {
-               shared_lock route{chain[i]->route};
-               exclusive_lock endpoint{chain[i]->endpoint};
+               shared_mutex route{chain[i]->route};
+               exclusive_mutex endpoint{chain[i]->endpoint};
                std::lock(route, endpoint);
             }
             std::lock(chain[n - 2]->route, chain[n - 2]->endpoint);
