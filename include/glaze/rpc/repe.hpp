@@ -365,117 +365,163 @@ namespace glz::repe
    
    using shared_buffer = std::shared_ptr<unique_buffer>;
    
-   using chain_t = std::vector<std::shared_mutex*>;
+   struct mutex_link
+   {
+      std::shared_mutex route{};
+      std::shared_mutex endpoint{};
+   };
+   
+   using mutex_chain = std::vector<mutex_link*>;
+   
+   struct exclusive_lock {
+      exclusive_lock(std::shared_mutex& mtx) : mtx_(mtx) {}
+       void lock() { mtx_.lock(); }
+       void unlock() { mtx_.unlock(); }
+      bool try_lock() { return mtx_.try_lock(); }
+   private:
+       std::shared_mutex& mtx_;
+   };
+   
+   struct shared_lock {
+      shared_lock(std::shared_mutex& mtx) : mtx_(mtx) {}
+       void lock() { mtx_.lock_shared(); }
+       void unlock() { mtx_.unlock_shared(); }
+      bool try_lock() { return mtx_.try_lock_shared(); }
+   private:
+       std::shared_mutex& mtx_;
+   };
+   
+   inline void lock_shared(auto& mtx0, auto& mtx1)
+   {
+      shared_lock wrapper0{mtx0};
+      shared_lock wrapper1{mtx1};
+      std::lock(wrapper0, wrapper1);
+   }
    
    namespace detail
    {
       // lock reading into a value (writing to C++ memory)
-      inline void lock_read(chain_t& chain) {
+      inline void lock_read(mutex_chain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
          }
          else if (n == 1) {
-            chain[0]->lock();
+            std::lock(chain[0]->route, chain[0]->endpoint);
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
-               chain[i]->lock();
+               shared_lock route{chain[i]->route};
+               exclusive_lock endpoint{chain[i]->endpoint};
+               std::lock(route, endpoint);
             }
-            chain[n - 1]->lock();
+            std::lock(chain[n - 1]->route, chain[n - 1]->endpoint);
          }
       }
       
-      inline void unlock_read(chain_t& chain) {
+      inline void unlock_read(mutex_chain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
          }
          else if (n == 1) {
-            chain[0]->unlock();
+            chain[0]->endpoint.unlock();
+            chain[0]->route.unlock();
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
-               chain[i]->unlock();
+               chain[i]->endpoint.unlock();
+               chain[i]->route.unlock_shared();
             }
-            chain[n - 1]->unlock();
+            chain[n - 1]->endpoint.unlock();
+            chain[n - 1]->route.unlock();
          }
       }
       
       // lock writing out a value (reading from C++ memory)
-      inline void lock_write(chain_t& chain) {
+      inline void lock_write(mutex_chain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
          }
          else if (n == 1) {
-            chain[0]->lock_shared();
+            lock_shared(chain[0]->route, chain[0]->endpoint);
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
-               chain[i]->lock_shared();
+               chain[i]->route.lock_shared();
             }
-            chain[n - 1]->lock_shared();
+            lock_shared(chain[n - 1]->route, chain[n - 1]->endpoint);
          }
       }
       
-      inline void unlock_write(chain_t& chain) {
+      inline void unlock_write(mutex_chain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
          }
          else if (n == 1) {
-            chain[0]->unlock_shared();
+            chain[0]->endpoint.unlock_shared();
+            chain[0]->route.unlock_shared();
          }
          else {
             for (size_t i = 0; i < (n - 1); ++i) {
-               chain[i]->unlock_shared();
+               chain[i]->route.unlock_shared();
             }
-            chain[n - 1]->unlock_shared();
+            chain[n - 1]->endpoint.unlock_shared();
+            chain[n - 1]->route.unlock_shared();
          }
       }
       
       // lock invoking a function, which locks same depth and lower (supports member functions that manipulate class state)
       // treated as writing to C++ memory at the function depth and its parent depth
-      inline void lock_invoke(chain_t& chain) {
+      inline void lock_invoke(mutex_chain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
          }
          else if (n == 1) {
-            chain[0]->lock();
+            shared_lock route{chain[0]->route};
+            exclusive_lock endpoint{chain[0]->endpoint};
+            std::lock(route, endpoint);
          }
          else {
             for (size_t i = 0; i < (n - 2); ++i) {
-               chain[i]->lock();
+               shared_lock route{chain[i]->route};
+               exclusive_lock endpoint{chain[i]->endpoint};
+               std::lock(route, endpoint);
             }
-            chain[n - 2]->lock();
-            chain[n - 1]->lock();
+            std::lock(chain[n - 2]->route, chain[n - 2]->endpoint);
+            std::lock(chain[n - 1]->route, chain[n - 1]->endpoint);
          }
       }
       
-      inline void unlock_invoke(chain_t& chain) {
+      inline void unlock_invoke(mutex_chain& chain) {
          const auto n = chain.size();
          if (n == 0) {
             return;
          }
          else if (n == 1) {
-            chain[0]->unlock();
+            chain[0]->endpoint.unlock();
+            chain[0]->route.unlock_shared();
          }
          else {
             for (size_t i = 0; i < (n - 2); ++i) {
-               chain[i]->unlock();
+               chain[i]->endpoint.unlock();
+               chain[i]->route.unlock_shared();
             }
-            chain[n - 2]->unlock();
-            chain[n - 1]->unlock();
+            chain[n - 1]->endpoint.unlock();
+            chain[n - 2]->endpoint.unlock();
+            chain[n - 1]->route.unlock();
+            chain[n - 2]->route.unlock();
          }
       }
    }
    
    struct chain_read_lock final
    {
-      chain_t& chain;
-      chain_read_lock(chain_t& input) : chain(input) {
+      mutex_chain& chain;
+      chain_read_lock(mutex_chain& input) : chain(input) {
          detail::lock_read(chain);
       }
       chain_read_lock(const chain_read_lock&) = delete;
@@ -490,8 +536,8 @@ namespace glz::repe
    
    struct chain_write_lock final
    {
-      chain_t& chain;
-      chain_write_lock(chain_t& input) : chain(input) {
+      mutex_chain& chain;
+      chain_write_lock(mutex_chain& input) : chain(input) {
          detail::lock_write(chain);
       }
       chain_write_lock(const chain_write_lock&) = delete;
@@ -506,8 +552,8 @@ namespace glz::repe
    
    struct chain_invoke_lock final
    {
-      chain_t& chain;
-      chain_invoke_lock(chain_t& input) : chain(input) {
+      mutex_chain& chain;
+      chain_invoke_lock(mutex_chain& input) : chain(input) {
          detail::lock_invoke(chain);
       }
       chain_invoke_lock(const chain_invoke_lock&) = delete;
@@ -528,12 +574,12 @@ namespace glz::repe
       std::unordered_map<sv, procedure, detail::string_hash, std::equal_to<>> methods;
       
       // TODO: replace this std::map with a std::flat_map with a std::deque (to not invalidate references)
-      std::map<sv, std::shared_mutex> mtxs; // only hashes during initialization
+      std::map<sv, mutex_link> mtxs; // only hashes during initialization
       
-      chain_t get_chain(const sv json_ptr)
+      mutex_chain get_chain(const sv json_ptr)
       {
          std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr);
-         chain_t v{};
+         mutex_chain v{};
          v.reserve(paths.size());
          for (auto& path : paths) {
             v.emplace_back(&mtxs[path]);
@@ -546,9 +592,9 @@ namespace glz::repe
       auto lock()
       {
          // TODO: use a std::array and calculate number of path segments
-         static thread_local chain_t chain = [&]{
+         static thread_local mutex_chain chain = [&]{
             std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv());
-            chain_t chain{};
+            mutex_chain chain{};
             chain.resize(paths.size());
             for (size_t i = 0; i < paths.size(); ++i) {
                chain[i] = &mtxs[paths[i]];
@@ -560,12 +606,12 @@ namespace glz::repe
       
       // used for reading from C++ memory
       template <string_literal json_ptr>
-      auto shared_lock()
+      auto read_only_lock()
       {
          // TODO: use a std::array and calculate number of path segments
-         static thread_local chain_t chain = [&]{
+         static thread_local mutex_chain chain = [&]{
             std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv());
-            chain_t chain{};
+            mutex_chain chain{};
             chain.resize(paths.size());
             for (size_t i = 0; i < paths.size(); ++i) {
                chain[i] = &mtxs[paths[i]];
@@ -579,9 +625,9 @@ namespace glz::repe
       auto invoke_lock()
       {
          // TODO: use a std::array and calculate number of path segments
-         static thread_local chain_t chain = [&]{
+         static thread_local mutex_chain chain = [&]{
             std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv());
-            chain_t chain{};
+            mutex_chain chain{};
             chain.resize(paths.size());
             for (size_t i = 0; i < paths.size(); ++i) {
                chain[i] = &mtxs[paths[i]];
