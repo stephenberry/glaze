@@ -827,7 +827,7 @@ Glaze supports [Newline Delimited JSON](http://ndjson.org) for array-like types 
 ```c++
 std::vector<std::string> x = { "Hello", "World", "Ice", "Cream" };
 std::string s = glz::write_ndjson(x);
-glz::read_ndjson(x, s);
+auto ec = glz::read_ndjson(x, s);
 ```
 
 # More Features

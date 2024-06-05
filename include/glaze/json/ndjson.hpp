@@ -257,7 +257,7 @@ namespace glz
    } // namespace detail
 
    template <read_ndjson_supported T, class Buffer>
-   [[nodiscard]] inline auto read_ndjson(T& value, Buffer&& buffer)
+   [[nodiscard]] inline auto read_ndjson(T& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return read<opts{.format = ndjson}>(value, std::forward<Buffer>(buffer), ctx);
@@ -276,7 +276,7 @@ namespace glz
    }
 
    template <auto Opts = opts{.format = ndjson}, read_ndjson_supported T>
-   [[nodiscard]] inline parse_error read_file_ndjson(T& value, const sv file_name)
+   [[nodiscard]] inline parse_error read_file_ndjson(T& value, const sv file_name) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;
@@ -293,13 +293,13 @@ namespace glz
    }
 
    template <write_ndjson_supported T, class Buffer>
-   [[nodiscard]] inline auto write_ndjson(T&& value, Buffer&& buffer)
+   [[nodiscard]] inline auto write_ndjson(T&& value, Buffer&& buffer) noexcept
    {
       return write<opts{.format = ndjson}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <write_ndjson_supported T>
-   [[nodiscard]] inline auto write_ndjson(T&& value)
+   [[nodiscard]] inline auto write_ndjson(T&& value) noexcept
    {
       std::string buffer{};
       write<opts{.format = ndjson}>(std::forward<T>(value), buffer);
