@@ -348,7 +348,7 @@ x,1,2,3,4,5)");
 33,Krakow)";
       glz::context ctx{};
       issue_768_test_struct value;
-      glz::parse_error glaze_err{
+      glz::error_ctx glaze_err{
          glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(value, std::string{valid_record}, ctx)};
       expect(!bool(glaze_err));
    };
@@ -361,7 +361,7 @@ x,1,2,3,4,5)");
 77,Reda)";
       glz::context ctx{};
       issue_768_test_struct value;
-      glz::parse_error glaze_err{
+      glz::error_ctx glaze_err{
          glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(value, std::string{invalid_record_1}, ctx)};
       expect(bool(glaze_err));
    };
@@ -375,7 +375,7 @@ x,1,2,3,4,5)");
 77,Reda)";
       glz::context ctx{};
       issue_768_test_struct value;
-      glz::parse_error glaze_err{
+      glz::error_ctx glaze_err{
          glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(value, std::string{invalid_record_2}, ctx)};
       expect(bool(glaze_err));
    };

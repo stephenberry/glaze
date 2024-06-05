@@ -52,7 +52,7 @@ struct glz::json_schema<schema_obj>
 struct test_case
 {
    std::string schema_str = glz::write_json_schema<schema_obj>();
-   glz::expected<glz::detail::schematic, glz::parse_error> obj{glz::read_json<glz::detail::schematic>(schema_str)};
+   glz::expected<glz::detail::schematic, glz::error_ctx> obj{glz::read_json<glz::detail::schematic>(schema_str)};
 };
 
 template <class T>
@@ -86,7 +86,7 @@ auto expect_property(const test_case& test, std::string_view key, Value value)
 suite schema_attributes = [] {
    "parsing"_test = [] {
       test_case const test{};
-      expect(test.obj.has_value()) << format_error(!test.obj.has_value() ? test.obj.error() : glz::parse_error{},
+      expect(test.obj.has_value()) << format_error(!test.obj.has_value() ? test.obj.error() : glz::error_ctx{},
                                                    test.schema_str);
       expect[test.obj.has_value()];
    };

@@ -251,7 +251,7 @@ ut::suite struct_test_cases = [] {
          R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:66: expected_colon\n..._method_name\",\"params\":{},\"id:\"uuid\"}\"\n                                  ^"},"id":null}])")
          << s;
       ut::expect(response_vec.at(0).error.has_value());
-      ut::expect(response_vec.at(0).error->code == rpc::error_e::parse_error);
+      ut::expect(response_vec.at(0).error->code == rpc::error_e::error_ctx);
    };
 
    ut::test("server invalid json batch") = [&server] {
@@ -267,7 +267,7 @@ ut::suite struct_test_cases = [] {
          R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:132: syntax_error\n...\"invalid_method_name\",\"params\":]\"\n                                  ^"},"id":null}])")
          << s;
       ut::expect(response_vec.at(0).error.has_value());
-      ut::expect(response_vec.at(0).error->code == rpc::error_e::parse_error);
+      ut::expect(response_vec.at(0).error->code == rpc::error_e::error_ctx);
    };
 
    ut::test("server invalid json batch empty array") = [&server] {

@@ -62,7 +62,7 @@ namespace glz::repe
       static constexpr int32_t method_not_found = -32601;
       static constexpr int32_t invalid_params = -32602;
       static constexpr int32_t internal = -32603;
-      static constexpr int32_t parse_error = -32700;
+      static constexpr int32_t error_ctx = -32700;
 
       static constexpr int32_t timeout = -6000;
    };
@@ -91,8 +91,8 @@ namespace glz::repe
       case error_e::internal: {
          return "-32603 [internal]";
       }
-      case error_e::parse_error: {
-         return "-32700 [parse_error]";
+      case error_e::error_ctx: {
+         return "-32700 [error_ctx]";
       }
       case error_e::timeout: {
          return "-6000 [timeout]";
@@ -162,9 +162,9 @@ namespace glz::repe
       glz::detail::read<Opts.format>::template op<Opts>(std::forward<Value>(value), ctx, b, e);
 
       if (bool(ctx.error)) {
-         parse_error ec{ctx.error, size_t(b - start), ctx.includer_error};
+         error_ctx ec{ctx.error, size_t(b - start), ctx.includer_error};
          write<Opts>(std::forward_as_tuple(header{.error = true},
-                                           error_t{error_e::parse_error, format_error(ec, state.message)}),
+                                           error_t{error_e::error_ctx, format_error(ec, state.message)}),
                      response);
          return 0;
       }
@@ -207,14 +207,14 @@ namespace glz::repe
       context ctx{};
       auto [b, e] = read_iterators<Opts>(ctx, buffer);
       if (bool(ctx.error)) [[unlikely]] {
-         return error_t{error_e::parse_error};
+         return error_t{error_e::error_ctx};
       }
       auto start = b;
 
       auto handle_error = [&](auto& it) {
          ctx.error = error_code::syntax_error;
-         parse_error pe{ctx.error, size_t(it - start), ctx.includer_error};
-         return error_t{error_e::parse_error, format_error(pe, buffer)};
+         error_ctx pe{ctx.error, size_t(it - start), ctx.includer_error};
+         return error_t{error_e::error_ctx, format_error(pe, buffer)};
       };
 
       if (*b == '[') {
@@ -227,8 +227,8 @@ namespace glz::repe
       glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
 
       if (bool(ctx.error)) {
-         parse_error pe{ctx.error, size_t(b - start), ctx.includer_error};
-         return {error_e::parse_error, format_error(pe, buffer)};
+         error_ctx pe{ctx.error, size_t(b - start), ctx.includer_error};
+         return {error_e::error_ctx, format_error(pe, buffer)};
       }
 
       if (*b == ',') {
@@ -248,8 +248,8 @@ namespace glz::repe
          glz::detail::read<Opts.format>::template op<Opts>(result, ctx, b, e);
 
          if (bool(ctx.error)) {
-            parse_error pe{ctx.error, size_t(b - start), ctx.includer_error};
-            return {error_e::parse_error, format_error(pe, buffer)};
+            error_ctx pe{ctx.error, size_t(b - start), ctx.includer_error};
+            return {error_e::error_ctx, format_error(pe, buffer)};
          }
       }
 
@@ -1155,9 +1155,9 @@ namespace glz::repe
 
          auto handle_error = [&](auto& it) {
             ctx.error = error_code::syntax_error;
-            parse_error pe{ctx.error, size_t(it - start), ctx.includer_error};
+            error_ctx pe{ctx.error, size_t(it - start), ctx.includer_error};
             write<Opts>(
-               std::forward_as_tuple(header{.error = true}, error_t{error_e::parse_error, format_error(pe, msg)}),
+               std::forward_as_tuple(header{.error = true}, error_t{error_e::error_ctx, format_error(pe, msg)}),
                response);
          };
 
@@ -1204,7 +1204,7 @@ namespace glz::repe
          glz::detail::read<Opts.format>::template op<Opts>(h, ctx, b, e);
 
          if (bool(ctx.error)) [[unlikely]] {
-            parse_error pe{ctx.error, size_t(b - start), ctx.includer_error};
+            error_ctx pe{ctx.error, size_t(b - start), ctx.includer_error};
             response = format_error(pe, msg);
             return finish();
          }

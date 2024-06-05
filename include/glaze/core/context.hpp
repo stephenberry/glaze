@@ -64,20 +64,11 @@ namespace glz
       includer_error
    };
 
-   struct parse_error final
+   struct error_ctx final
    {
       error_code ec{};
       size_t location{};
       std::string_view includer_error{}; // error from a nested file includer
-
-      operator bool() const { return ec != error_code::none; }
-
-      bool operator==(const error_code e) const { return ec == e; }
-   };
-
-   struct write_error final
-   {
-      error_code ec{};
 
       operator bool() const { return ec != error_code::none; }
 

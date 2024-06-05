@@ -36,12 +36,12 @@ namespace glz
 
       // using span_t = std::span<std::remove_pointer_t<std::remove_reference_t<decltype(it)>>>;
       using span_t = std::span<const char>; // TODO: should be more generic, but currently broken with mingw
-      using result_t = expected<span_t, parse_error>;
+      using result_t = expected<span_t, error_ctx>;
 
       auto start = it;
 
       if (bool(ctx.error)) [[unlikely]] {
-         return result_t{unexpected(parse_error{ctx.error, 0})};
+         return result_t{unexpected(error_ctx{ctx.error, 0})};
       }
 
       if constexpr (N == 0) {
@@ -160,7 +160,7 @@ namespace glz
          });
 
          if (bool(ctx.error)) [[unlikely]] {
-            return result_t{unexpected(parse_error{ctx.error, size_t(it - start)})};
+            return result_t{unexpected(error_ctx{ctx.error, size_t(it - start)})};
          }
 
          return ret;
@@ -168,7 +168,7 @@ namespace glz
    }
 
    template <class T, string_literal Str, auto Opts = opts{}>
-   [[nodiscard]] inline expected<T, parse_error> get_as_json(contiguous auto&& buffer)
+   [[nodiscard]] inline expected<T, error_ctx> get_as_json(contiguous auto&& buffer)
    {
       const auto str = glz::get_view_json<Str>(buffer);
       if (str) {
@@ -178,7 +178,7 @@ namespace glz
    }
 
    template <string_literal Str, auto Opts = opts{}>
-   [[nodiscard]] inline expected<sv, parse_error> get_sv_json(contiguous auto&& buffer)
+   [[nodiscard]] inline expected<sv, error_ctx> get_sv_json(contiguous auto&& buffer)
    {
       const auto s = glz::get_view_json<Str>(buffer);
       if (s) {

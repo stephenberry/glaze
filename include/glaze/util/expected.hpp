@@ -64,7 +64,7 @@ namespace glz
 
    template <class T>
    concept is_expected =
-      std::same_as<std::remove_cvref_t<T>, expected<typename T::value_type, typename T::error_type> >;
+      std::same_as<std::remove_cvref_t<T>, expected<typename T::value_type, typename T::error_ctx> >;
 
 #ifdef __clang__
    template <class Unexpected>
@@ -261,7 +261,7 @@ namespace glz
 
       template <typename T>
       concept is_expected =
-         std::same_as<std::remove_cvref_t<T>, expected<typename T::value_type, typename T::error_type> >;
+         std::same_as<std::remove_cvref_t<T>, expected<typename T::value_type, typename T::error_ctx> >;
 
       // This function makes sure expected doesn't get into valueless_by_exception
       // state due to any exception while assignment
@@ -301,11 +301,11 @@ namespace glz
    {
      public:
       using value_type = T;
-      using error_type = E;
+      using error_ctx = E;
       using unexpected_type = unexpected<E>;
 
       template <class U>
-      using rebind = expected<U, error_type>;
+      using rebind = expected<U, error_ctx>;
 
       // constructors
       // postcondition: has_value() = true
@@ -722,7 +722,7 @@ namespace glz
       }
 
       template <class F, class V = T&, class U = std::remove_cvref_t<std::invoke_result_t<F, V> > >
-         requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> &&
+         requires detail::is_expected<U> && std::is_same_v<typename U::error_ctx, E> &&
                   std::is_copy_constructible_v<E> && std::is_copy_constructible_v<T>
       constexpr auto and_then(F&& f) &
       {
@@ -733,7 +733,7 @@ namespace glz
       }
 
       template <class F, class V = const T&, class U = std::remove_cvref_t<std::invoke_result_t<F, V> > >
-         requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> &&
+         requires detail::is_expected<U> && std::is_same_v<typename U::error_ctx, E> &&
                   std::is_copy_constructible_v<E> && std::is_copy_constructible_v<T>
       constexpr auto and_then(F&& f) const&
       {
@@ -744,7 +744,7 @@ namespace glz
       }
 
       template <class F, class V = T&&, class U = std::remove_cvref_t<std::invoke_result_t<F, V> > >
-         requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> &&
+         requires detail::is_expected<U> && std::is_same_v<typename U::error_ctx, E> &&
                   std::is_move_constructible_v<E> && std::is_move_constructible_v<T>
       constexpr auto and_then(F&& f) &&
       {
@@ -755,7 +755,7 @@ namespace glz
       }
 
       template <class F, class V = const T&&, class U = std::remove_cvref_t<std::invoke_result_t<F, V> > >
-         requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> &&
+         requires detail::is_expected<U> && std::is_same_v<typename U::error_ctx, E> &&
                   std::is_move_constructible_v<E> && std::is_move_constructible_v<T>
       constexpr auto and_then(F&& f) const&&
       {
@@ -1013,11 +1013,11 @@ namespace glz
    {
      public:
       using value_type = void;
-      using error_type = E;
+      using error_ctx = E;
       using unexpected_type = unexpected<E>;
 
       template <class U>
-      using rebind = expected<U, error_type>;
+      using rebind = expected<U, error_ctx>;
 
       // constructors
 
@@ -1253,7 +1253,7 @@ namespace glz
 
       // monadic
       template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F> > >
-         requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> && std::is_copy_constructible_v<E>
+         requires detail::is_expected<U> && std::is_same_v<typename U::error_ctx, E> && std::is_copy_constructible_v<E>
       constexpr auto and_then(F&& f) &
       {
          if (has_value()) {
@@ -1263,7 +1263,7 @@ namespace glz
       }
 
       template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F> > >
-         requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> && std::is_copy_constructible_v<E>
+         requires detail::is_expected<U> && std::is_same_v<typename U::error_ctx, E> && std::is_copy_constructible_v<E>
       constexpr auto and_then(F&& f) const&
       {
          if (has_value()) {
@@ -1273,7 +1273,7 @@ namespace glz
       }
 
       template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F> > >
-         requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> && std::is_move_constructible_v<E>
+         requires detail::is_expected<U> && std::is_same_v<typename U::error_ctx, E> && std::is_move_constructible_v<E>
       constexpr auto and_then(F&& f) &&
       {
          if (has_value()) {
@@ -1283,7 +1283,7 @@ namespace glz
       }
 
       template <class F, class U = std::remove_cvref_t<std::invoke_result_t<F> > >
-         requires detail::is_expected<U> && std::is_same_v<typename U::error_type, E> && std::is_move_constructible_v<E>
+         requires detail::is_expected<U> && std::is_same_v<typename U::error_ctx, E> && std::is_move_constructible_v<E>
       constexpr auto and_then(F&& f) const&&
       {
          if (has_value()) {

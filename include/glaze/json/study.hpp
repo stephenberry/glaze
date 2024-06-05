@@ -144,11 +144,11 @@ namespace glz
 
          [[nodiscard]] expected<State, error_code> generate() { return generate(index++); }
 
-         expected<param_set, parse_error> param_set_from_dist(const param& dist)
+         expected<param_set, error_ctx> param_set_from_dist(const param& dist)
          {
             param_set param_set;
 
-            parse_error pe{};
+            error_ctx pe{};
             bool found = detail::seek_impl(
                [&](auto&& val) {
                   if constexpr (std::is_assignable_v<basic, std::decay_t<decltype(val)>>) {
@@ -188,7 +188,7 @@ namespace glz
             }
             else if (dist.distribution == "linspace") {
                if (dist.range.size() != 3) {
-                  return unexpected(parse_error{
+                  return unexpected(error_ctx{
                      error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
                }
 
@@ -215,7 +215,7 @@ namespace glz
                }
             }
             else {
-               return unexpected(parse_error{error_code::unknown_distribution});
+               return unexpected(error_ctx{error_code::unknown_distribution});
             }
 
             return param_set;
@@ -336,11 +336,11 @@ namespace glz
             reset();
          }
 
-         expected<random_param, parse_error> param_from_dist(const param& dist)
+         expected<random_param, error_ctx> param_from_dist(const param& dist)
          {
             random_param result{};
 
-            parse_error pe{};
+            error_ctx pe{};
             bool found = detail::seek_impl(
                [&](auto&& val) {
                   if constexpr (std::is_assignable_v<basic, std::decay_t<decltype(val)>>) {
@@ -363,7 +363,7 @@ namespace glz
 
             if (dist.distribution == "elements") {
                if (dist.range.size() == 0) {
-                  return unexpected(parse_error{error_code::invalid_distribution_elements});
+                  return unexpected(error_ctx{error_code::invalid_distribution_elements});
                }
                std::vector<basic> elements{};
                std::visit(
@@ -383,7 +383,7 @@ namespace glz
             }
             else if (dist.distribution == "linspace") {
                if (dist.range.size() != 3) {
-                  return unexpected(parse_error{
+                  return unexpected(error_ctx{
                      error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
                }
 
@@ -407,7 +407,7 @@ namespace glz
             }
             else if (dist.distribution == "uniform") {
                if (dist.range.size() != 2) {
-                  return unexpected(parse_error{
+                  return unexpected(error_ctx{
                      error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
                }
 
@@ -431,7 +431,7 @@ namespace glz
             }
             else if (dist.distribution == "normal") {
                if (dist.range.size() != 2) {
-                  return unexpected(parse_error{
+                  return unexpected(error_ctx{
                      error_code::invalid_distribution_elements}); // distribution's range must have 3 elements
                }
 
@@ -450,7 +450,7 @@ namespace glz
                };
             }
             else {
-               return unexpected(parse_error{error_code::unknown_distribution});
+               return unexpected(error_ctx{error_code::unknown_distribution});
             }
          }
       };

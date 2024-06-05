@@ -51,7 +51,7 @@ suite string_performance = [] {
 
       vec.clear();
       t0 = std::chrono::steady_clock::now();
-      glz::parse_error e;
+      glz::error_ctx e;
       for (auto i = 0; i < 100; ++i) {
          vec.clear();
          e = glz::read_json(vec, buffer);

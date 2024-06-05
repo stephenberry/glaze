@@ -505,7 +505,7 @@ namespace glz
    }
 
    template <glz::opts Opts = glz::opts{}, class BEVEBuffer, class JSONBuffer>
-   [[nodiscard]] inline write_error beve_to_json(const BEVEBuffer& beve, JSONBuffer& out) noexcept
+   [[nodiscard]] inline error_ctx beve_to_json(const BEVEBuffer& beve, JSONBuffer& out) noexcept
    {
       size_t ix{}; // write index
 

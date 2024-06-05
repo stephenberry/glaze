@@ -1305,13 +1305,13 @@ namespace glz
    }
 
    template <read_binary_supported T, class Buffer>
-   [[nodiscard]] inline parse_error read_binary(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline error_ctx read_binary(T&& value, Buffer&& buffer) noexcept
    {
       return read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
    }
 
    template <read_binary_supported T, class Buffer>
-   [[nodiscard]] inline expected<T, parse_error> read_binary(Buffer&& buffer) noexcept
+   [[nodiscard]] inline expected<T, error_ctx> read_binary(Buffer&& buffer) noexcept
    {
       T value{};
       const auto pe = read<opts{.format = binary}>(value, std::forward<Buffer>(buffer));
@@ -1322,7 +1322,7 @@ namespace glz
    }
 
    template <opts Opts = opts{}, read_binary_supported T>
-   [[nodiscard]] inline parse_error read_file_binary(T& value, const sv file_name, auto&& buffer) noexcept
+   [[nodiscard]] inline error_ctx read_file_binary(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;
@@ -1330,21 +1330,21 @@ namespace glz
       const auto file_error = file_to_buffer(buffer, ctx.current_file);
 
       if (bool(file_error)) [[unlikely]] {
-         return parse_error{file_error};
+         return error_ctx{file_error};
       }
 
       return read<set_binary<Opts>()>(value, buffer, ctx);
    }
 
    template <read_binary_supported T, class Buffer>
-   [[nodiscard]] inline parse_error read_binary_untagged(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline error_ctx read_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
       return read<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value),
                                                                      std::forward<Buffer>(buffer));
    }
 
    template <read_binary_supported T, class Buffer>
-   [[nodiscard]] inline expected<T, parse_error> read_binary_untagged(Buffer&& buffer) noexcept
+   [[nodiscard]] inline expected<T, error_ctx> read_binary_untagged(Buffer&& buffer) noexcept
    {
       T value{};
       const auto pe = read<opts{.format = binary, .structs_as_arrays = true}>(value, std::forward<Buffer>(buffer));
@@ -1355,7 +1355,7 @@ namespace glz
    }
 
    template <opts Opts = opts{}, read_binary_supported T>
-   [[nodiscard]] inline parse_error read_file_binary_untagged(T& value, const std::string& file_name,
+   [[nodiscard]] inline error_ctx read_file_binary_untagged(T& value, const std::string& file_name,
                                                               auto&& buffer) noexcept
    {
       return read_file_binary<opt_true<Opts, &opts::structs_as_arrays>>(value, file_name, buffer);

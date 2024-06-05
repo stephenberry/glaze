@@ -13,9 +13,9 @@ namespace glz
 {
    // Given a JSON pointer path, reads from the buffer into the object
    template <opts Opts, class T, class B>
-   [[nodiscard]] parse_error read_as(T&& root_value, const sv json_ptr, B&& buffer)
+   [[nodiscard]] error_ctx read_as(T&& root_value, const sv json_ptr, B&& buffer)
    {
-      parse_error pe{};
+      error_ctx pe{};
       bool b =
          detail::seek_impl([&](auto&& val) { pe = read<Opts>(val, buffer); }, std::forward<T>(root_value), json_ptr);
       if (b) {

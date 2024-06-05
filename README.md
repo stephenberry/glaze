@@ -115,7 +115,11 @@ struct my_struct
 
 ```c++
 my_struct s{};
-std::string buffer = glz::write_json(s);
+auto buffer = glz::write_json(s, err);
+if (buffer) // check std::expected<std::string, glz::write_error>
+{
+  buffer.value(); // value contains the resulting buffer
+}
 ```
 
 or
@@ -123,7 +127,7 @@ or
 ```c++
 my_struct s{};
 std::string buffer{};
-glz::write_json(s, buffer);
+auto ec = glz::write_json(s, buffer);
 ```
 
 **Read JSON**

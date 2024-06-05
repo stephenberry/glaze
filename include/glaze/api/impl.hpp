@@ -41,7 +41,7 @@ namespace glz
 
       bool read(const uint32_t format, const sv path, const sv data) noexcept override
       {
-         parse_error pe{};
+         error_ctx pe{};
          bool success;
 
          if (format == json) {

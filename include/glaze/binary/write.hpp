@@ -808,7 +808,7 @@ namespace glz
       struct write_partial<binary>
       {
          template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
-         [[nodiscard]] GLZ_ALWAYS_INLINE static write_error op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
+         [[nodiscard]] GLZ_ALWAYS_INLINE static error_ctx op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
                detail::write<binary>::op<Opts>(value, ctx, b, ix);
@@ -830,9 +830,9 @@ namespace glz
       struct to_binary_partial<T> final
       {
          template <auto& Partial, auto Opts, class... Args>
-         GLZ_FLATTEN static write_error op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         GLZ_FLATTEN static error_ctx op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
-            write_error we{};
+            error_ctx we{};
 
             static constexpr auto sorted = sort_json_ptrs(Partial);
             static constexpr auto groups = glz::group_json_ptrs<sorted>();
@@ -927,7 +927,7 @@ namespace glz
 
    // requires file_name to be null terminated
    template <opts Opts = opts{}, write_binary_supported T>
-   [[nodiscard]] inline write_error write_file_binary(T&& value, const sv file_name, auto&& buffer) noexcept
+   [[nodiscard]] inline error_ctx write_file_binary(T&& value, const sv file_name, auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
@@ -960,7 +960,7 @@ namespace glz
    }
 
    template <opts Opts = opts{}, write_binary_supported T>
-   [[nodiscard]] inline write_error write_file_binary_untagged(T&& value, const std::string& file_name,
+   [[nodiscard]] inline error_ctx write_file_binary_untagged(T&& value, const std::string& file_name,
                                                                auto&& buffer) noexcept
    {
       return write_file_binary<opt_true<Opts, &opts::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);

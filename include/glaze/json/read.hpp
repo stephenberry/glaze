@@ -2444,8 +2444,8 @@ namespace glz
                      }
                      else {
                         // set value to unexpected
-                        using error_type = typename std::decay_t<decltype(value)>::error_type;
-                        std::decay_t<error_type> error{};
+                        using error_ctx = typename std::decay_t<decltype(value)>::error_ctx;
+                        std::decay_t<error_ctx> error{};
                         read<json>::op<Opts>(error, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
                            return;
@@ -2555,7 +2555,7 @@ namespace glz
    } // namespace detail
 
    template <class Buffer>
-   [[nodiscard]] inline parse_error validate_json(Buffer&& buffer) noexcept
+   [[nodiscard]] inline error_ctx validate_json(Buffer&& buffer) noexcept
    {
       context ctx{};
       glz::skip skip_value{};
@@ -2563,7 +2563,7 @@ namespace glz
    }
 
    template <class Buffer>
-   [[nodiscard]] inline parse_error validate_jsonc(Buffer&& buffer) noexcept
+   [[nodiscard]] inline error_ctx validate_jsonc(Buffer&& buffer) noexcept
    {
       context ctx{};
       glz::skip skip_value{};
@@ -2571,45 +2571,45 @@ namespace glz
    }
 
    template <read_json_supported T, class Buffer>
-   [[nodiscard]] inline parse_error read_json(T& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline error_ctx read_json(T& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <read_json_supported T, class Buffer>
-   [[nodiscard]] inline expected<T, parse_error> read_json(Buffer&& buffer) noexcept
+   [[nodiscard]] inline expected<T, error_ctx> read_json(Buffer&& buffer) noexcept
    {
       T value{};
       context ctx{};
-      const parse_error ec = read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
+      const error_ctx ec = read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
       if (ec) {
-         return unexpected<parse_error>(ec);
+         return unexpected<error_ctx>(ec);
       }
       return value;
    }
 
    template <read_json_supported T, class Buffer>
-   [[nodiscard]] inline parse_error read_jsonc(T& value, Buffer&& buffer) noexcept
+   [[nodiscard]] inline error_ctx read_jsonc(T& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return read<opts{.comments = true}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <read_json_supported T, class Buffer>
-   [[nodiscard]] inline expected<T, parse_error> read_jsonc(Buffer&& buffer) noexcept
+   [[nodiscard]] inline expected<T, error_ctx> read_jsonc(Buffer&& buffer) noexcept
    {
       T value{};
       context ctx{};
-      const parse_error ec = read<opts{.comments = true}>(value, std::forward<Buffer>(buffer), ctx);
+      const error_ctx ec = read<opts{.comments = true}>(value, std::forward<Buffer>(buffer), ctx);
       if (ec) {
-         return unexpected<parse_error>(ec);
+         return unexpected<error_ctx>(ec);
       }
       return value;
    }
 
    template <auto Opts = opts{}, read_json_supported T>
-   [[nodiscard]] inline parse_error read_file_json(T& value, const sv file_name, auto&& buffer) noexcept
+   [[nodiscard]] inline error_ctx read_file_json(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;
@@ -2624,7 +2624,7 @@ namespace glz
    }
 
    template <auto Opts = opts{}, read_json_supported T>
-   [[nodiscard]] inline parse_error read_file_jsonc(T& value, const sv file_name, auto&& buffer) noexcept
+   [[nodiscard]] inline error_ctx read_file_jsonc(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;

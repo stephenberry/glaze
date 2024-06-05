@@ -50,7 +50,7 @@ namespace glz
 
    template <opts Opts, class T>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] parse_error read(T& value, contiguous auto&& buffer, is_context auto&& ctx) noexcept
+   [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer, is_context auto&& ctx) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
       using Buffer = std::remove_reference_t<decltype(buffer)>;
@@ -108,7 +108,7 @@ namespace glz
 
    template <opts Opts, class T>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] parse_error read(T& value, contiguous auto&& buffer) noexcept
+   [[nodiscard]] error_ctx read(T& value, contiguous auto&& buffer) noexcept
    {
       context ctx{};
       return read<Opts>(value, buffer, ctx);
@@ -120,7 +120,7 @@ namespace glz
    // for char array input
    template <opts Opts, class T, c_style_char_buffer Buffer>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] parse_error read(T& value, Buffer&& buffer, auto&& ctx) noexcept
+   [[nodiscard]] error_ctx read(T& value, Buffer&& buffer, auto&& ctx) noexcept
    {
       const auto str = std::string_view{std::forward<Buffer>(buffer)};
       if (str.empty()) {
@@ -131,7 +131,7 @@ namespace glz
 
    template <opts Opts, class T, c_style_char_buffer Buffer>
       requires read_supported<Opts.format, T>
-   [[nodiscard]] parse_error read(T& value, Buffer&& buffer) noexcept
+   [[nodiscard]] error_ctx read(T& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return read<Opts>(value, std::forward<Buffer>(buffer), ctx);

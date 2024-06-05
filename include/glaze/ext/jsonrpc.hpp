@@ -19,7 +19,7 @@ namespace glz::rpc
       method_not_found = -32601,
       invalid_params = -32602,
       internal = -32603,
-      parse_error = -32700,
+      error_ctx = -32700,
    };
 
    inline constexpr std::string_view code_as_sv(const error_e error_code) noexcept
@@ -27,7 +27,7 @@ namespace glz::rpc
       switch (error_code) {
       case error_e::no_error:
          return "No error";
-      case error_e::parse_error:
+      case error_e::error_ctx:
          return "Parse error";
       case error_e::server_error_lower:
       case error_e::server_error_upper:
@@ -69,7 +69,7 @@ namespace glz::rpc
       error& operator=(const error&) = default;
       error& operator=(error&&) = default;
 
-      static error invalid(const parse_error& pe, auto& buffer)
+      static error invalid(const error_ctx& pe, auto& buffer)
       {
          std::string format_err{format_error(pe, buffer)};
          return {error_e::invalid_request, format_err.empty() ? std::nullopt : std::optional{format_err},
@@ -315,7 +315,7 @@ namespace glz::rpc
 
          if (auto parse_err{glz::validate_json(json_request)}) {
             return return_helper(
-               raw_response_t{rpc::error{error_e::parse_error, format_error(parse_err, json_request)}});
+               raw_response_t{rpc::error{error_e::error_ctx, format_error(parse_err, json_request)}});
          }
 
          auto batch_requests{glz::read_json<std::vector<glz::raw_json_view>>(json_request)};
@@ -337,7 +337,7 @@ namespace glz::rpc
      private:
       auto per_request(std::string_view json_request) -> std::optional<response_t<glz::raw_json>>
       {
-         expected<generic_request_t, glz::parse_error> request{glz::read_json<generic_request_t>(json_request)};
+         expected<generic_request_t, glz::error_ctx> request{glz::read_json<generic_request_t>(json_request)};
 
          if (!request.has_value()) {
             // Failed, but let's try to extract the `id`
@@ -408,10 +408,10 @@ namespace glz::rpc
 
       rpc::error call(std::string_view json_response)
       {
-         expected<generic_response_t, glz::parse_error> response{glz::read_json<generic_response_t>(json_response)};
+         expected<generic_response_t, glz::error_ctx> response{glz::read_json<generic_response_t>(json_response)};
 
          if (!response.has_value()) {
-            return rpc::error{rpc::error_e::parse_error, format_error(response.error(), json_response)};
+            return rpc::error{rpc::error_e::error_ctx, format_error(response.error(), json_response)};
          }
 
          auto& res{response.value()};
@@ -423,11 +423,11 @@ namespace glz::rpc
             if (auto it{method.pending_requests.find(res.id)}; it != std::end(method.pending_requests)) {
                auto [id, callback] = *it;
 
-               expected<typename meth_t::response_t, glz::parse_error> response{
+               expected<typename meth_t::response_t, glz::error_ctx> response{
                   glz::read_json<typename meth_t::response_t>(json_response)};
 
                if (!response.has_value()) {
-                  return_v = rpc::error{rpc::error_e::parse_error, format_error(response.error(), json_response)};
+                  return_v = rpc::error{rpc::error_e::error_ctx, format_error(response.error(), json_response)};
                }
                else {
                   auto& res_typed{response.value()};
@@ -438,7 +438,7 @@ namespace glz::rpc
                      std::invoke(callback, unexpected(res_typed.error.value()), res_typed.id);
                   }
                   else {
-                     return_v = rpc::error{rpc::error_e::parse_error, R"(Missing key "result" or "error" in response)"};
+                     return_v = rpc::error{rpc::error_e::error_ctx, R"(Missing key "result" or "error" in response)"};
                   }
                }
                method.pending_requests.erase(it);
