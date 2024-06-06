@@ -805,7 +805,7 @@ namespace glz::repe
 
          for_each<N>([&](auto I) {
             using Element = glaze_tuple_element<I, N, T>;
-            
+
             // size_t Index is to fix MSVC
             decltype(auto) func = [&]<size_t Index>() -> decltype(auto) {
                if constexpr (reflectable<T>) {
@@ -817,7 +817,7 @@ namespace glz::repe
                   return get_member(value, get<LocalElement::member_index>(get<I>(meta_v<T>)));
                }
             }.template operator()<I>();
-            
+
             static constexpr std::string_view full_key = [&] {
                if constexpr (parent == detail::empty_path) {
                   return join_v<chars<"/">, key_name<I, T, Element::use_reflection>>;
@@ -832,7 +832,7 @@ namespace glz::repe
             // This logic chain should match glz::cli_menu
             using Func = decltype(func);
             if constexpr (std::is_invocable_v<Func>) {
-               using Result = std::invoke_result_t<Func>;
+               using Result = std::decay_t<std::invoke_result_t<Func>>;
                if constexpr (std::same_as<Result, void>) {
                   methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
                      {
@@ -852,7 +852,6 @@ namespace glz::repe
                }
                else {
                   methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
-                     static thread_local Result result{};
                      {
                         chain_invoke_lock lock{chain};
                         if (not lock) {
@@ -860,12 +859,12 @@ namespace glz::repe
                            write_response<Opts>(state);
                            return;
                         }
-                        result = callback();
                         if (state.header.notify) {
+                           std::ignore = callback();
                            return;
                         }
+                        write_response<Opts>(callback(), state);
                      }
-                     write_response<Opts>(result, state);
                   };
                }
             }
@@ -875,11 +874,10 @@ namespace glz::repe
                static_assert(N == 1, "Only one input is allowed for your function");
 
                using Params = glz::tuple_element_t<0, Tuple>;
-               using Result = std::invoke_result_t<Func, Params>;
+               // using Result = std::invoke_result_t<Func, Params>;
 
                methods[full_key] = [callback = func, chain = get_chain(full_key)](repe::state&& state) mutable {
                   static thread_local std::decay_t<Params> params{};
-                  static thread_local std::decay_t<Result> result{};
                   // no need lock locals
                   if (read_params<Opts>(params, state, state.response) == 0) {
                      return;
@@ -892,13 +890,13 @@ namespace glz::repe
                         write_response<Opts>(state);
                         return;
                      }
-                     result = callback(params);
+
                      if (state.header.notify) {
+                        std::ignore = callback(params);
                         return;
                      }
+                     write_response<Opts>(callback(params), state);
                   }
-
-                  write_response<Opts>(result, state);
                };
             }
             else if constexpr (glaze_object_t<E> || reflectable<E>) {
@@ -1034,8 +1032,7 @@ namespace glz::repe
                      // Member function pointers
                      if constexpr (n_args == 0) {
                         methods[full_key] = [&value, &func, chain = get_chain(full_key)](repe::state&& state) mutable {
-                           using Result = std::decay_t<decltype((value.*func)())>;
-                           static thread_local Result result{};
+                           // using Result = std::decay_t<decltype((value.*func)())>;
                            {
                               chain_invoke_lock lock{chain};
                               if (not lock) {
@@ -1043,18 +1040,13 @@ namespace glz::repe
                                  write_response<Opts>(state);
                                  return;
                               }
-                              result = (value.*func)();
-                           }
 
-                           if (state.header.notify) {
-                              return;
-                           }
+                              if (state.header.notify) {
+                                 std::ignore = (value.*func)();
+                                 return;
+                              }
 
-                           if (state.header.empty) {
-                              write_response<Opts>(result, state);
-                           }
-                           else {
-                              write_response<Opts>(state);
+                              write_response<Opts>((value.*func)(), state);
                            }
                         };
                      }
@@ -1070,8 +1062,7 @@ namespace glz::repe
                               }
                            }
 
-                           using Result = std::decay_t<decltype((value.*func)(input))>;
-                           static thread_local Result result{};
+                           // using Result = std::decay_t<decltype((value.*func)(input))>;
                            {
                               chain_invoke_lock lock{chain};
                               if (not lock) {
@@ -1079,18 +1070,13 @@ namespace glz::repe
                                  write_response<Opts>(state);
                                  return;
                               }
-                              result = (value.*func)(input);
-                           }
 
-                           if (state.header.notify) {
-                              return;
-                           }
+                              if (state.header.notify) {
+                                 std::ignore = (value.*func)(input);
+                                 return;
+                              }
 
-                           if (state.header.empty) {
-                              write_response<Opts>(result, state);
-                           }
-                           else {
-                              write_response<Opts>(state);
+                              write_response<Opts>((value.*func)(input), state);
                            }
                         };
                      }
