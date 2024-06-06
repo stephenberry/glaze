@@ -815,13 +815,13 @@ namespace glz::repe
             }();
 
             using E = typename Element::type;
-            static constexpr auto member_index = Element::member_index;
-            decltype(auto) func = [&] {
+            decltype(auto) func = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
                   return std::get<I>(t);
                }
                else {
-                  return get_member(value, get<member_index>(get<I>(meta_v<T>)));
+                  // Explicilty putting glaze_tuple_element here so that MSVC will build
+                  return get_member(value, get<glaze_tuple_element<I, N, T>::member_index>(get<I>(meta_v<T>)));
                }
             }();
 
