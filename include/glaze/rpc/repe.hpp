@@ -725,12 +725,12 @@ namespace glz::repe
          // TODO: use a std::array and calculate number of path segments
          static thread_local mutex_chain chain = [&] {
             std::vector<sv> paths = glz::detail::json_ptr_children(json_ptr.sv());
-            mutex_chain chain{};
-            chain.resize(paths.size());
+            mutex_chain mtx_chain{};
+            mtx_chain.resize(paths.size());
             for (size_t i = 0; i < paths.size(); ++i) {
-               chain[i] = &mtxs[paths[i]];
+               mtx_chain[i] = &mtxs[paths[i]];
             }
-            return chain;
+            return mtx_chain;
          }();
          return chain_write_lock{chain};
       }
@@ -820,7 +820,7 @@ namespace glz::repe
                   return std::get<I>(t);
                }
                else {
-                  return get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
+                  return get_member(value, get<E::member_index>(get<I>(meta_v<T>)));
                }
             }();
 
