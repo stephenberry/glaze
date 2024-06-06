@@ -49,7 +49,7 @@ suite fantasy_nations = [] {
       expect(std::filesystem::exists(CURRENT_DIRECTORY "/json/fantasy_nations.json"))
          << "File doesn't exist: " CURRENT_DIRECTORY "/json/fantasy_nations.json";
       expect(!ec) << (glz::format_error(ec, buffer) + (" at: " CURRENT_DIRECTORY));
-      std::string s = glz::write_json(v);
+      std::string s = glz::write_json(v).value_or("error");
       std::string original{};
       expect(glz::file_to_buffer(original, CURRENT_DIRECTORY "/json/fantasy_nations.json") == glz::error_code::none);
       expect(s == original);
@@ -81,7 +81,7 @@ suite stock_trades = [] {
       std::string buffer{};
       auto ec = glz::read_file_json(v, CURRENT_DIRECTORY "/json/stock_trades.json", buffer);
       expect(!ec) << glz::format_error(ec, buffer);
-      std::string s = glz::write_json(v);
+      std::string s = glz::write_json(v).value_or("error");
       // expect(glz::buffer_to_file(s, CURRENT_DIRECTORY "/json/stock_trades_out.json") == glz::error_code::none);
       std::string original{};
       expect(glz::file_to_buffer(original, CURRENT_DIRECTORY "/json/stock_trades.json") == glz::error_code::none);
@@ -289,7 +289,7 @@ suite twitter_test = [] {
       std::string buffer{};
       auto ec = glz::read_file_json(v, CURRENT_DIRECTORY "/json/twitter.json", buffer);
       expect(!ec) << glz::format_error(ec, buffer);
-      std::string s = glz::write_json(v);
+      std::string s = glz::write_json(v).value_or("error");
       // expect(glz::buffer_to_file(s, CURRENT_DIRECTORY "/json/twitter_out.json") == glz::error_code::none);
       std::string original{};
       expect(glz::file_to_buffer(original, CURRENT_DIRECTORY "/json/twitter.json") == glz::error_code::none);
