@@ -43,7 +43,7 @@ suite string_performance = [] {
       std::string buffer;
       auto t0 = std::chrono::steady_clock::now();
       for (auto i = 0; i < 100; ++i) {
-         glz::write_json(vec, buffer);
+         expect(not glz::write_json(vec, buffer));
       }
       auto t1 = std::chrono::steady_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
