@@ -163,7 +163,7 @@ namespace glz::repe
 
       if (bool(ctx.error)) {
          error_ctx ec{ctx.error, size_t(b - start), ctx.includer_error};
-         write<Opts>(std::forward_as_tuple(header{.error = true},
+         std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true},
                                            error_t{error_e::error_ctx, format_error(ec, state.message)}),
                      response);
          return 0;
@@ -176,11 +176,14 @@ namespace glz::repe
    void write_response(Value&& value, is_state auto&& state)
    {
       if (state.error) {
-         write<Opts>(std::forward_as_tuple(header{.error = true}, state.error), state.response);
+         std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true}, state.error), state.response);
       }
       else {
          state.header.empty = false; // we are writing a response
-         write<Opts>(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.response);
+         const auto ec = write<Opts>(std::forward_as_tuple(state.header, std::forward<Value>(value)), state.response);
+         if (bool(ec)) [[unlikely]] {
+            std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true}, ec.ec), state.response);
+         }
       }
    }
 
@@ -188,12 +191,15 @@ namespace glz::repe
    void write_response(is_state auto&& state)
    {
       if (state.error) {
-         write<Opts>(std::forward_as_tuple(header{.error = true}, state.error), state.response);
+         std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true}, state.error), state.response);
       }
       else {
          state.header.notify = false;
          state.header.empty = true;
-         write<Opts>(std::forward_as_tuple(state.header, nullptr), state.response);
+         const auto ec = write<Opts>(std::forward_as_tuple(state.header, nullptr), state.response);
+         if (bool(ec)) [[unlikely]] {
+            std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true}, ec.ec), state.response);
+         }
       }
    }
 
@@ -1125,7 +1131,6 @@ namespace glz::repe
          });
       }
 
-      template <class Value>
       bool call(const header& header)
       {
          return call(request<Opts>(header));
@@ -1156,7 +1161,7 @@ namespace glz::repe
          auto handle_error = [&](auto& it) {
             ctx.error = error_code::syntax_error;
             error_ctx pe{ctx.error, size_t(it - start), ctx.includer_error};
-            write<Opts>(
+            std::ignore = write<Opts>(
                std::forward_as_tuple(header{.error = true}, error_t{error_e::error_ctx, format_error(pe, msg)}),
                response);
          };
@@ -1225,7 +1230,7 @@ namespace glz::repe
             it->second(state{body, h, response, error}); // handle the body
          }
          else {
-            write<Opts>(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
+            std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
          }
 
          return finish();
