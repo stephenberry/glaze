@@ -19,7 +19,7 @@ namespace glz::rpc
       method_not_found = -32601,
       invalid_params = -32602,
       internal = -32603,
-      error_ctx = -32700,
+      parse_error = -32700,
    };
 
    inline constexpr std::string_view code_as_sv(const error_e error_code) noexcept
@@ -27,7 +27,7 @@ namespace glz::rpc
       switch (error_code) {
       case error_e::no_error:
          return "No error";
-      case error_e::error_ctx:
+      case error_e::parse_error:
          return "Parse error";
       case error_e::server_error_lower:
       case error_e::server_error_upper:
@@ -303,7 +303,7 @@ namespace glz::rpc
       {
          constexpr auto return_helper = []<class Input>(Input&& response) -> auto {
             if constexpr (std::same_as<return_t, std::string>) {
-               return glz::write_json(std::forward<Input>(response));
+               return glz::write_json(std::forward<Input>(response)).value_or(R"("write error")");
             }
             else if constexpr (std::same_as<Input, raw_response_t>) {
                return std::vector<raw_response_t>{std::forward<Input>(response)};
@@ -315,7 +315,7 @@ namespace glz::rpc
 
          if (auto parse_err{glz::validate_json(json_request)}) {
             return return_helper(
-               raw_response_t{rpc::error{error_e::error_ctx, format_error(parse_err, json_request)}});
+               raw_response_t{rpc::error{error_e::parse_error, format_error(parse_err, json_request)}});
          }
 
          auto batch_requests{glz::read_json<std::vector<glz::raw_json_view>>(json_request)};
@@ -364,10 +364,16 @@ namespace glz::rpc
                expected<typename meth_t::result_t, rpc::error> result{
                   std::invoke(method.callback, params_request->params)};
                if (result.has_value()) {
-                  return_v = raw_response_t{std::move(req.id), glz::write_json(result)};
-                  if (std::holds_alternative<glz::json_t::null_t>(req.id)) {
-                     // rpc notification requires no response
-                     return_v = std::nullopt;
+                  auto json_result = glz::write_json(result);
+                  if (json_result) {
+                     return_v = raw_response_t{std::move(req.id), std::move(json_result.value())};
+                     if (std::holds_alternative<glz::json_t::null_t>(req.id)) {
+                        // rpc notification requires no response
+                        return_v = std::nullopt;
+                     }
+                  }
+                  else {
+                     return_v = raw_response_t{std::move(req.id), rpc::error{error_e::parse_error, format_error(json_result.error())}};
                   }
                }
                else {
@@ -411,7 +417,7 @@ namespace glz::rpc
          expected<generic_response_t, glz::error_ctx> response{glz::read_json<generic_response_t>(json_response)};
 
          if (!response.has_value()) {
-            return rpc::error{rpc::error_e::error_ctx, format_error(response.error(), json_response)};
+            return rpc::error{rpc::error_e::parse_error, format_error(response.error(), json_response)};
          }
 
          auto& res{response.value()};
@@ -427,7 +433,7 @@ namespace glz::rpc
                   glz::read_json<typename meth_t::response_t>(json_response)};
 
                if (!response.has_value()) {
-                  return_v = rpc::error{rpc::error_e::error_ctx, format_error(response.error(), json_response)};
+                  return_v = rpc::error{rpc::error_e::parse_error, format_error(response.error(), json_response)};
                }
                else {
                   auto& res_typed{response.value()};
@@ -438,7 +444,7 @@ namespace glz::rpc
                      std::invoke(callback, unexpected(res_typed.error.value()), res_typed.id);
                   }
                   else {
-                     return_v = rpc::error{rpc::error_e::error_ctx, R"(Missing key "result" or "error" in response)"};
+                     return_v = rpc::error{rpc::error_e::parse_error, R"(Missing key "result" or "error" in response)"};
                   }
                }
                method.pending_requests.erase(it);
@@ -454,7 +460,7 @@ namespace glz::rpc
                                         "id: '" + std::string(std::get<std::string_view>(res.id)) + "' not found"};
                }
                else {
-                  return_v = rpc::error{error_e::internal, "id: " + glz::write_json(res.id) + " not found"};
+                  return_v = rpc::error{error_e::internal, "id: " + glz::write_json(res.id).value_or("interal write error") + " not found"};
                }
             }
          }
@@ -483,7 +489,7 @@ namespace glz::rpc
          rpc::request_t req{std::forward<decltype(id)>(id), Name.sv(), std::forward<decltype(params)>(params)};
 
          if (std::holds_alternative<glz::json_t::null_t>(id)) {
-            return {glz::write_json(std::move(req)), false};
+            return {glz::write_json(std::move(req)).value_or(R"("write error")"), false};
          }
 
          // Some bookkeeping store the callback
@@ -500,7 +506,7 @@ namespace glz::rpc
             }
          });
 
-         return {glz::write_json(std::move(req)), inserted};
+         return {glz::write_json(std::move(req)).value_or(R"("write error")"), inserted};
       }
 
       template <string_literal Name>

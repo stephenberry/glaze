@@ -62,7 +62,7 @@ namespace glz::repe
       static constexpr int32_t method_not_found = -32601;
       static constexpr int32_t invalid_params = -32602;
       static constexpr int32_t internal = -32603;
-      static constexpr int32_t error_ctx = -32700;
+      static constexpr int32_t parse_error = -32700;
 
       static constexpr int32_t timeout = -6000;
    };

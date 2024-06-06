@@ -1023,6 +1023,12 @@ namespace glz
       }
       return error_str;
    }
+   
+   [[nodiscard]] inline std::string format_error(const error_ctx& pe)
+   {
+      static constexpr auto arr = detail::make_enum_to_string_array<error_code>();
+      return std::string{std::string_view{arr[uint32_t(pe.ec)]}};
+   }
 }
 
 namespace glz::detail

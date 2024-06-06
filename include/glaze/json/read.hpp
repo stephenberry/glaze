@@ -2555,7 +2555,7 @@ namespace glz
    } // namespace detail
 
    template <class Buffer>
-   [[nodiscard]] inline error_ctx validate_json(Buffer&& buffer) noexcept
+   [[nodiscard]] error_ctx validate_json(Buffer&& buffer) noexcept
    {
       context ctx{};
       glz::skip skip_value{};
@@ -2563,7 +2563,7 @@ namespace glz
    }
 
    template <class Buffer>
-   [[nodiscard]] inline error_ctx validate_jsonc(Buffer&& buffer) noexcept
+   [[nodiscard]] error_ctx validate_jsonc(Buffer&& buffer) noexcept
    {
       context ctx{};
       glz::skip skip_value{};
@@ -2571,14 +2571,14 @@ namespace glz
    }
 
    template <read_json_supported T, class Buffer>
-   [[nodiscard]] inline error_ctx read_json(T& value, Buffer&& buffer) noexcept
+   [[nodiscard]] error_ctx read_json(T& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return read<opts{}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <read_json_supported T, class Buffer>
-   [[nodiscard]] inline expected<T, error_ctx> read_json(Buffer&& buffer) noexcept
+   [[nodiscard]] expected<T, error_ctx> read_json(Buffer&& buffer) noexcept
    {
       T value{};
       context ctx{};
@@ -2590,14 +2590,14 @@ namespace glz
    }
 
    template <read_json_supported T, class Buffer>
-   [[nodiscard]] inline error_ctx read_jsonc(T& value, Buffer&& buffer) noexcept
+   [[nodiscard]] error_ctx read_jsonc(T& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return read<opts{.comments = true}>(value, std::forward<Buffer>(buffer), ctx);
    }
 
    template <read_json_supported T, class Buffer>
-   [[nodiscard]] inline expected<T, error_ctx> read_jsonc(Buffer&& buffer) noexcept
+   [[nodiscard]] expected<T, error_ctx> read_jsonc(Buffer&& buffer) noexcept
    {
       T value{};
       context ctx{};
@@ -2609,7 +2609,7 @@ namespace glz
    }
 
    template <auto Opts = opts{}, read_json_supported T>
-   [[nodiscard]] inline error_ctx read_file_json(T& value, const sv file_name, auto&& buffer) noexcept
+   [[nodiscard]] error_ctx read_file_json(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;
@@ -2624,7 +2624,7 @@ namespace glz
    }
 
    template <auto Opts = opts{}, read_json_supported T>
-   [[nodiscard]] inline error_ctx read_file_jsonc(T& value, const sv file_name, auto&& buffer) noexcept
+   [[nodiscard]] error_ctx read_file_jsonc(T& value, const sv file_name, auto&& buffer) noexcept
    {
       context ctx{};
       ctx.current_file = file_name;
