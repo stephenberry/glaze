@@ -556,13 +556,13 @@ suite container_types = [] {
       std::vector<std::pair<int, int>> v;
       expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
       static_assert(glz::detail::writable_map_t<decltype(v)>);
-      const auto s = glz::write_json(v);
+      const auto s = glz::write_json(v).value_or("error");
       expect(s == R"({"1":2,"3":4})") << s;
    };
    "vector pair"_test = [] {
       std::vector<std::pair<int, int>> v;
       expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
-      const auto s = glz::write<glz::opts{.prettify = true}>(v);
+      const auto s = glz::write<glz::opts{.prettify = true}>(v).value_or("error");
       expect(s == R"({
    "1": 2,
    "3": 4
@@ -571,13 +571,13 @@ suite container_types = [] {
    "vector pair roundtrip"_test = [] {
       std::vector<std::pair<int, int>> v;
       expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
-      const auto s = glz::write<glz::opts{.concatenate = false}>(v);
+      const auto s = glz::write<glz::opts{.concatenate = false}>(v).value_or("error");
       expect(s == R"([{"1":2},{"3":4}])") << s;
    };
    "vector pair roundtrip"_test = [] {
       std::vector<std::pair<int, int>> v;
       expect(!glz::read_json(v, R"([{"1":2},{"3":4}])"));
-      const auto s = glz::write<glz::opts{.prettify = true, .concatenate = false}>(v);
+      const auto s = glz::write<glz::opts{.prettify = true, .concatenate = false}>(v).value_or("error");
       expect(s == R"([
    {
       "1": 2
@@ -1740,7 +1740,7 @@ suite read_tests = [] {
          std::remove_cv_t<decltype(expected)> parsed{};
          const auto err = glz::read_json(parsed, test_case.input_json);
          expect(err == glz::error_code::none) << glz::format_error(err, test_case.input_json);
-         expect(parsed == expected) << glz::write_json(parsed);
+         expect(parsed == expected) << glz::write_json(parsed).value_or("error");
       };
 
       std::tuple tests{
@@ -2688,7 +2688,7 @@ suite raw_json_tests = [] {
 suite json_helpers = [] {
    "json_helpers"_test = [] {
       my_struct v{};
-      auto json = glz::write_json(v);
+      auto json = glz::write_json(v).value_or("error");
       expect(json == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
 
       v = glz::read_json<my_struct>(json).value();
@@ -2887,7 +2887,7 @@ suite tagged_variant_tests = [] {
    };
 
    "tagged_variant_schema_tests"_test = [] {
-      auto s = glz::write_json_schema<tagged_variant>();
+      auto s = glz::write_json_schema<tagged_variant>().value_or("error");
       expect(
          s ==
          R"({"type":["object"],"$defs":{"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"action":{"const":"PUT"},"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"}},"additionalProperties":false,"required":["action"]},{"type":["object"],"properties":{"action":{"const":"DELETE"},"data":{"$ref":"#/$defs/std::string"}},"additionalProperties":false,"required":["action"]}]})")
@@ -2902,11 +2902,11 @@ suite tagged_variant_tests = [] {
       std::string b = R"({"num":["float", 3.14]})";
       expect(ec == glz::error_code::none) << glz::format_error(ec, b);
       expect(std::get<float>(obj.num) == 3.14f);
-      expect(glz::read_json(obj, R"({"num":["uint64_t", 5]})") == glz::error_code::none);
+      expect(not glz::read_json(obj, R"({"num":["uint64_t", 5]})"));
       expect(std::get<uint64_t>(obj.num) == 5);
-      expect(glz::read_json(obj, R"({"num":["int8_t", -3]})") == glz::error_code::none);
+      expect(not glz::read_json(obj, R"({"num":["int8_t", -3]})"));
       expect(std::get<int8_t>(obj.num) == -3);
-      expect(glz::read_json(obj, R"({"num":["int32_t", -2]})") == glz::error_code::none);
+      expect(not glz::read_json(obj, R"({"num":["int32_t", -2]})"));
       expect(std::get<int32_t>(obj.num) == -2);
 
       obj.num = 5.0;
@@ -2922,7 +2922,7 @@ suite tagged_variant_tests = [] {
    };
 
    "shared_ptr variant schema"_test = [] {
-      const auto schema = glz::write_json_schema<std::shared_ptr<tagged_variant2>>();
+      const auto schema = glz::write_json_schema<std::shared_ptr<tagged_variant2>>().value_or("error");
       expect(
          schema ==
          R"({"type":["object","null"],"$defs":{"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::map<std::string,int32_t>":{"type":["object"],"additionalProperties":{"$ref":"#/$defs/int32_t"}},"std::string":{"type":["string"]}},"oneOf":[{"type":["object"],"properties":{"data":{"$ref":"#/$defs/std::map<std::string,int32_t>"},"type":{"const":"put_action"}},"additionalProperties":false,"required":["type"]},{"type":["object"],"properties":{"data":{"$ref":"#/$defs/std::string"},"type":{"const":"delete_action"}},"additionalProperties":false,"required":["type"]},{"type":["null"],"const":null}]})")
@@ -3010,14 +3010,14 @@ suite variant_tests = [] {
       request["password"] = "123456";
       request["remember"] = true;
 
-      auto str = glz::write_json(request);
+      auto str = glz::write_json(request).value_or("error");
 
       expect(str == R"({"password":"123456","remember":true,"username":"paulo"})") << str;
    };
 
    "variant write/read enum"_test = [] {
       std::variant<Color, std::uint16_t> var{Color::Red};
-      auto res{glz::write_json(var)};
+      auto res{glz::write_json(var).value_or("error")};
       expect(res == "\"Red\"") << res;
       auto read{glz::read_json<std::variant<Color, std::uint16_t>>(res)};
       expect(read.has_value());
@@ -3440,7 +3440,7 @@ suite ndjson_test = [] {
    "ndjson_object"_test = [] {
       std::tuple<my_struct, sub_thing> x{};
 
-      std::string s = glz::write_ndjson(x);
+      std::string s = glz::write_ndjson(x).value_or("");
 
       expect(s ==
              R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}
@@ -3806,7 +3806,7 @@ suite json_performance = [] {
 suite json_schema = [] {
    "json schema"_test = [] {
       Thing obj{};
-      std::string schema = glz::write_json_schema<Thing>();
+      std::string schema = glz::write_json_schema<Thing>().value_or("error");
       // Note: Check schema and sample output against a json schema validator like https://www.jsonschemavalidator.net/
       // when you update this string
       expect(
@@ -4238,7 +4238,7 @@ suite sets = [] {
         {"five": 5}
       ])";
       expect(!glz::read_json(things, input_string));
-      auto s = glz::write_json(things);
+      auto s = glz::write_json(things).value_or("error");
       expect(s == R"([{"five":5},{"four":4},{"one":1},{"three":3},{"two":2}])") << s;
    };
 };
@@ -5552,7 +5552,7 @@ suite obj_handling = [] {
          expect(i == glz::get<1>(vec[i].value));
       }
 
-      auto s = glz::write_json(vec);
+      auto s = glz::write_json(vec).value_or("error");
       expect(s == R"([{"cnt":0},{"cnt":1},{"cnt":2},{"cnt":3},{"cnt":4}])") << s;
    };
 };
@@ -5572,7 +5572,7 @@ suite obj_nested_merge = [] {
       expect(
          !glz::read_json(json, "{\"key1\":42,\"key2\":\"hello world\",\"v\":[1,2,3],\"m\":{\"a\":1,\"b\":2,\"c\":3}}"));
       glz::obj obj{"not", "important"};
-      auto s = glz::write_json(glz::merge{obj, json});
+      auto s = glz::write_json(glz::merge{obj, json}).value_or("error");
       expect(s == R"({"not":"important","key1":42,"key2":"hello world","m":{"a":1,"b":2,"c":3},"v":[1,2,3]})") << s;
    };
 };
@@ -5588,7 +5588,7 @@ suite write_to_map = [] {
          }
       });
 
-      auto s = glz::write_json(map);
+      auto s = glz::write_json(map).value_or("error");
       expect(s == R"({"arr":[1,2,3],"hello":"world"})") << s;
    };
 
@@ -5601,7 +5601,7 @@ suite write_to_map = [] {
          map[key] = glz::write_json(value).value_or("error");
       }
 
-      auto s = glz::write_json(map);
+      auto s = glz::write_json(map).value_or("error");
       expect(s == R"({"arr":[1,2,3],"hello":"world"})") << s;
    };
 };
@@ -6266,7 +6266,7 @@ suite empty_variant_objects = [] {
    };
 
    "empty_variant_objects schema"_test = [] {
-      const auto s = glz::write_json_schema<var_schema>();
+      const auto s = glz::write_json_schema<var_schema>().value_or("error");
       expect(
          s ==
          R"({"type":["object"],"properties":{"$schema":{"$ref":"#/$defs/std::string"},"variant":{"$ref":"#/$defs/vari"}},"additionalProperties":false,"$defs":{"std::string":{"type":["string"]},"vari":{"type":["object"],"oneOf":[{"type":["object"],"properties":{"type":{"const":"varx"}},"additionalProperties":false,"required":["type"]},{"type":["object"],"properties":{"type":{"const":"vary"}},"additionalProperties":false,"required":["type"]}]}}})")
@@ -6737,7 +6737,7 @@ suite key_reflection_tests = [] {
 suite write_buffer_generator = [] {
    "write_buffer_generator"_test = [] {
       key_reflection obj{};
-      auto s = glz::write_json(obj);
+      auto s = glz::write_json(obj).value_or("error");
 
       expect(s == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})") << s;
    };
@@ -6759,7 +6759,7 @@ suite value_lambda_test = [] {
       lambda_tester obj{};
       obj.x = 55;
 
-      auto s = glz::write_json(obj);
+      auto s = glz::write_json(obj).value_or("error");
       expect(s == "55") << s;
 
       obj.x = 0;
@@ -7299,7 +7299,7 @@ suite meta_schema_tests = [] {
       expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
 
-      const auto json_schema = glz::write_json_schema<meta_schema_t>();
+      const auto json_schema = glz::write_json_schema<meta_schema_t>().value_or("error");
       expect(
          json_schema ==
          R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer"}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}}})")
@@ -7312,7 +7312,7 @@ suite meta_schema_tests = [] {
       expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
 
-      const auto json_schema = glz::write_json_schema<meta_schema_t, glz::opts{.prettify = true}>();
+      const auto json_schema = glz::write_json_schema<meta_schema_t, glz::opts{.prettify = true}>().value_or("error");
       expect(json_schema ==
              R"({
    "type": [
@@ -7387,7 +7387,7 @@ suite raw_or_file_tests = [] {
 
       const std::string secondary_file = "./secondary.json";
       glz::obj primary{"input", secondary_file, "name", "Edward"};
-      const auto primary_json = glz::write_json(primary);
+      const auto primary_json = glz::write_json(primary).value_or("error");
 
       {
          std::vector<int> x{1, 2, 3};
@@ -7474,7 +7474,7 @@ suite error_on_unknown_keys_test = [] {
       auto input = R"({"f1":"main","f1misc":"this should be dropped silently"})";
       S0 obj{};
       expect(!glz::read<glz::opts{.error_on_unknown_keys = false}>(obj, input));
-      const auto s = glz::write_json(obj);
+      const auto s = glz::write_json(obj).value_or("error");
       expect(s == R"({"f1":"main"})") << s;
       expect(obj.f1 == "main");
    };
@@ -7756,7 +7756,7 @@ suite c_style_arrays = [] {
    "struct_c_arrays_meta"_test = [] {
       struct_c_arrays_meta obj{};
       std::string s{};
-      glz::write_binary(obj, s);
+      expect(not glz::write_binary(obj, s));
 
       obj.ints[0] = 0;
       obj.ints[1] = 1;
@@ -7786,7 +7786,7 @@ struct glz::meta<sum_hash_obj_t>
 suite sum_hash_obj_test = [] {
    "sum_hash_obj"_test = [] {
       sum_hash_obj_t obj{};
-      const auto s = glz::write_json(obj);
+      const auto s = glz::write_json(obj).value_or("error");
       expect(s == R"({"aa":0,"aab":0,"cab":0,"zac":0})");
       expect(!glz::read_json(obj, s));
    };
@@ -7824,7 +7824,7 @@ suite max_write_precision_tests = [] {
 
    "write_precision_t"_test = [] {
       write_precision_t obj{};
-      std::string json_float = glz::write_json(obj);
+      std::string json_float = glz::write_json(obj).value_or("error");
       expect(json_float == R"({"pi":3.1415927})") << json_float;
    };
 };
@@ -7846,7 +7846,7 @@ suite short_keys_tests = [] {
    "short_keys"_test = [] {
       short_keys_t obj{};
       std::string s{};
-      glz::write_json(obj, s);
+      expect(not glz::write_json(obj, s));
       expect(s == R"({"a":1,"aa":2,"ab":3,"ba":4,"bab":5,"aaa":6,"cab":7,"bca":8,"cca":9})") << s;
       expect(!glz::read_json(obj, s));
    };
@@ -7869,7 +7869,7 @@ suite long_keys_tests = [] {
    "long_keys"_test = [] {
       long_keys_t obj{};
       std::string s{};
-      expect(not glz::write_json(obj, s);
+      expect(not glz::write_json(obj, s));
       expect(!glz::read_json(obj, s));
    };
 };
@@ -7927,7 +7927,7 @@ struct glz::meta<Address>
 suite stack_allocated_string = [] {
    "stack_allocated_string"_test = [] {
       Address obj{};
-      std::string s = glz::write_json(obj);
+      std::string s = glz::write_json(obj).value_or("error");
       expect(s == R"("Hello")");
    };
 };
@@ -7981,7 +7981,7 @@ suite ticker_tests = [] {
 
       const auto ec = glz::read_json(obj, json);
       expect(!ec) << glz::format_error(ec, json);
-      std::string s = glz::write_json(obj);
+      std::string s = glz::write_json(obj).value_or("error");
       expect(s == glz::minify_json(json)) << s;
    };
 
@@ -7992,7 +7992,7 @@ suite ticker_tests = [] {
          expect(!glz::read_json(v[i], json));
       }
 
-      std::string s = glz::write_json(v);
+      std::string s = glz::write_json(v).value_or("error");
       const auto ec = glz::read_json(v, s);
       expect(!ec) << glz::format_error(ec, s);
    };
@@ -8007,7 +8007,7 @@ suite single_float_struct = [] {
    "single_float_struct"_test = [] {
       std::vector<uint8_t> buf;
       my_float_struct obj{};
-      glz::write_json(obj, buf);
+      expect(not glz::write_json(obj, buf));
       std::string out{};
       out.resize(buf.size());
       std::memcpy(out.data(), buf.data(), buf.size());

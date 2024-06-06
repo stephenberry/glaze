@@ -115,11 +115,7 @@ struct my_struct
 
 ```c++
 my_struct s{};
-auto buffer = glz::write_json(s, err);
-if (buffer) // check std::expected<std::string, glz::write_error>
-{
-  buffer.value(); // value contains the resulting buffer
-}
+std::string buffer = glz::write_json(s).value_or("error");
 ```
 
 or
@@ -128,6 +124,9 @@ or
 my_struct s{};
 std::string buffer{};
 auto ec = glz::write_json(s, buffer);
+if (ec) {
+  // handle error
+}
 ```
 
 **Read JSON**
@@ -349,7 +348,7 @@ suite custom_encoding_test = [] {
       std::string s = R"({"x":"3","y":"world","z":[1,2,3]})";
       expect(!glz::read_json(obj, s));
       std::string out{};
-      glz::write_json(obj, out);
+      expect(not glz::write_json(obj, out));
       expect(out == R"({"x":3,"y":"helloworld","z":[5,2,3]})");
    };
 };
@@ -474,16 +473,16 @@ Nullable types may be allocated by valid input or nullified by the `null` keywor
 ```c++
 std::unique_ptr<int> ptr{};
 std::string buffer{};
-glz::write_json(ptr, buffer);
+expect(not glz::write_json(ptr, buffer));
 expect(buffer == "null");
 
-glz::read_json(ptr, "5");
+expect(not glz::read_json(ptr, "5"));
 expect(*ptr == 5);
 buffer.clear();
-glz::write_json(ptr, buffer);
+expect(not glz::write_json(ptr, buffer));
 expect(buffer == "5");
 
-glz::read_json(ptr, "null");
+expect(not glz::read_json(ptr, "null"));
 expect(!bool(ptr));
 ```
 
@@ -555,7 +554,7 @@ Prettified output:
 Formatted JSON can be written out directly via a compile time option:
 
 ```c++
-glz::write<glz::opts{.prettify = true}>(obj, buffer);
+auto ec = glz::write<glz::opts{.prettify = true}>(obj, buffer);
 ```
 
 Or, JSON text can be formatted with the `glz::prettify_json` function:
@@ -585,7 +584,7 @@ auto beautiful = glz::prettify_json(buffer);
 To write minified JSON:
 
 ```c++
-glz::write_json(obj, buffer); // default is minified
+auto ec = glz::write_json(obj, buffer); // default is minified
 ```
 
 To minify JSON text call:
@@ -641,7 +640,7 @@ Below is an example of building an object, which also contains an array, and wri
 auto obj = glz::obj{"pi", 3.14, "happy", true, "name", "Stephen", "arr", glz::arr{"Hello", "World", 2}};
 
 std::string s{};
-glz::write_json(obj, s);
+expect(not glz::write_json(obj, s));
 expect(s == R"({"pi":3.14,"happy":true,"name":"Stephen","arr":["Hello","World",2]})");
 ```
 
@@ -679,7 +678,7 @@ Glaze is just about as fast writing to a `std::string` as it is writing to a raw
 
 ```
 glz::read_json(obj, buffer);
-const auto n = glz::write_json(obj, buffer.data());
+const auto n = glz::write_json(obj, buffer.data()).value_or(0);
 buffer.resize(n);
 ```
 
@@ -831,7 +830,7 @@ Glaze supports [Newline Delimited JSON](http://ndjson.org) for array-like types 
 ```c++
 std::vector<std::string> x = { "Hello", "World", "Ice", "Cream" };
 std::string s = glz::write_ndjson(x);
-auto ec = glz::read_ndjson(x, s);
+glz::read_ndjson(x, s);
 ```
 
 # More Features

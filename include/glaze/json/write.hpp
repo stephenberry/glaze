@@ -1541,7 +1541,10 @@ namespace glz
    template <opts Opts = opts{}, write_json_supported T>
    [[nodiscard]] error_ctx write_file_json(T&& value, const sv file_name, auto&& buffer) noexcept
    {
-      write<set_json<Opts>()>(std::forward<T>(value), buffer);
+      const auto ec = write<set_json<Opts>()>(std::forward<T>(value), buffer);
+      if (bool(ec)) [[unlikely]] {
+         return ec;
+      }
       return {buffer_to_file(buffer, file_name)};
    }
 }
