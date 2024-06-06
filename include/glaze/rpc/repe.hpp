@@ -807,22 +807,21 @@ namespace glz::repe
             using Element = glaze_tuple_element<I, N, T>;
             static constexpr size_t member_index = Element::member_index;
             
+            decltype(auto) func = [&]() -> decltype(auto) {
+               if constexpr (reflectable<T>) {
+                  return std::get<I>(t);
+               }
+               else {
+                  return get_member(value, get<member_index>(get<I>(meta_v<T>)));
+               }
+            }();
+            
             static constexpr std::string_view full_key = [&] {
                if constexpr (parent == detail::empty_path) {
                   return join_v<chars<"/">, key_name<I, T, Element::use_reflection>>;
                }
                else {
                   return join_v<parent, chars<"/">, key_name<I, T, Element::use_reflection>>;
-               }
-            }();
-            
-            decltype(auto) func = [&]() -> decltype(auto) {
-               if constexpr (reflectable<T>) {
-                  return std::get<I>(t);
-               }
-               else {
-                  // Explicilty putting glaze_tuple_element here so that MSVC will build
-                  return get_member(value, get<member_index>(get<I>(meta_v<T>)));
                }
             }();
             
