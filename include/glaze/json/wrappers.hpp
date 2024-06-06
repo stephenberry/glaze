@@ -44,7 +44,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
-            static thread_local std::string s(' ', 128);
+            static thread_local std::string s(128, ' ');
             size_t ix = 0; // overwrite index
             write<json>::op<Opts>(value.val, ctx, s, ix);
             s.resize(ix);
