@@ -799,6 +799,19 @@ namespace glz::repe
 
          for_each<N>([&](auto I) {
             using Element = glaze_tuple_element<I, N, T>;
+            
+            // size_t Index is to fix MSVC
+            decltype(auto) func = [&]<size_t Index>() -> decltype(auto) {
+               if constexpr (reflectable<T>) {
+                  return std::get<I>(t);
+               }
+               else {
+                  // To fix MSVC
+                  using LocalElement = glaze_tuple_element<Index, N, T>;
+                  return get_member(value, get<LocalElement::member_index>(get<I>(meta_v<T>)));
+               }
+            }.template operator()<I>();
+            
             static constexpr std::string_view full_key = [&] {
                if constexpr (parent == detail::empty_path) {
                   return join_v<chars<"/">, key_name<I, T, Element::use_reflection>>;
@@ -807,16 +820,8 @@ namespace glz::repe
                   return join_v<parent, chars<"/">, key_name<I, T, Element::use_reflection>>;
                }
             }();
-
+            
             using E = typename Element::type;
-            decltype(auto) func = [&]() -> decltype(auto) {
-               if constexpr (reflectable<T>) {
-                  return std::get<I>(t);
-               }
-               else {
-                  return get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
-               }
-            }();
 
             // This logic chain should match glz::cli_menu
             using Func = decltype(func);
