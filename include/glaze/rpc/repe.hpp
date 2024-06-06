@@ -806,16 +806,17 @@ namespace glz::repe
          for_each<N>([&](auto I) {
             using Element = glaze_tuple_element<I, N, T>;
             
-            decltype(auto) func = [&]() -> decltype(auto) {
+            // size_t Index is to fix MSVC
+            decltype(auto) func = [&]<size_t Index>() -> decltype(auto) {
                if constexpr (reflectable<T>) {
                   return std::get<I>(t);
                }
                else {
                   // To fix MSVC
-                  using LocalElement = glaze_tuple_element<I, N, T>;
+                  using LocalElement = glaze_tuple_element<Index, N, T>;
                   return get_member(value, get<LocalElement::member_index>(get<I>(meta_v<T>)));
                }
-            }();
+            }.template operator()<I>();
             
             static constexpr std::string_view full_key = [&] {
                if constexpr (parent == detail::empty_path) {
