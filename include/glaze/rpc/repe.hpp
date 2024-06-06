@@ -805,14 +805,15 @@ namespace glz::repe
 
          for_each<N>([&](auto I) {
             using Element = glaze_tuple_element<I, N, T>;
-            static constexpr size_t member_index = Element::member_index;
             
             decltype(auto) func = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
                   return std::get<I>(t);
                }
                else {
-                  return get_member(value, get<member_index>(get<I>(meta_v<T>)));
+                  // To fix MSVC
+                  using LocalElement = glaze_tuple_element<I, N, T>;
+                  return get_member(value, get<LocalElement::member_index>(get<I>(meta_v<T>)));
                }
             }();
             
