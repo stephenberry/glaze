@@ -929,8 +929,11 @@ namespace glz
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
-      write<set_binary<Opts>()>(std::forward<T>(value), buffer);
-
+      const auto ec = write<set_binary<Opts>()>(std::forward<T>(value), buffer);
+      if (bool(ec)) [[unlikely]] {
+         return ec;
+      }
+      
       std::ofstream file(file_name.data(), std::ios::binary);
 
       if (file) {

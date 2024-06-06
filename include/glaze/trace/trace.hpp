@@ -191,7 +191,10 @@ namespace glz
    template <opts Opts = opts{}>
    [[nodiscard]] error_ctx write_file_trace(const std::string& file_name, auto&& buffer) noexcept
    {
-      write<set_json<Opts>()>(global_trace<0>(), buffer);
+      const auto ec = write<set_json<Opts>()>(global_trace<0>(), buffer);
+      if (bool(ec)) [[unlikely]] {
+         return ec;
+      }
       return {buffer_to_file(buffer, file_name)};
    }
 
