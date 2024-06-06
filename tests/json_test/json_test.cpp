@@ -6202,11 +6202,10 @@ suite manage_test = [] {
    };
 
    "manage_test_struct"_test = [] {
-      // manage_test_struct obj{.a="aaa", .b="bbb"};
-      // std::string s{};
-      //  TODO: We need write error support
-      // glz::write<glz::opts{}>(obj, s);
-      // expect(s == R"({"a":"aaa","b":"bbb"})") << s;
+      manage_test_struct obj{.a="aaa", .b="bbb"};
+      std::string s{};
+      const auto ec = glz::write<glz::opts{}>(obj, s);
+      expect(ec != glz::error_code::none);
    };
 };
 
@@ -6555,7 +6554,7 @@ suite float128_test = [] {
       std::float128_t x = 3.14;
 
       std::string s{};
-      expect(not glz::write_json(x, s);
+      expect(not glz::write_json(x, s));
 
       x = 0.0;
       expect(!glz::read_json(x, s));
