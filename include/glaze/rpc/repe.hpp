@@ -815,12 +815,13 @@ namespace glz::repe
             }();
 
             using E = typename Element::type;
+            constexpr auto member_index = Element::member_index;
             decltype(auto) func = [&]() -> decltype(auto) {
                if constexpr (reflectable<T>) {
                   return std::get<I>(t);
                }
                else {
-                  return get_member(value, get<E::member_index>(get<I>(meta_v<T>)));
+                  return get_member(value, get<member_index>(get<I>(meta_v<T>)));
                }
             }();
 
