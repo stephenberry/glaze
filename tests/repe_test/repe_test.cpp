@@ -222,7 +222,7 @@ suite structs_of_functions = [] {
       }
 
       expect(obj.name == "Susan"); // we expect the name to not have changed because this function take no inputs
-      expect(response->value() == R"([[0,0,2,"/get_name",null],null])") << response->value();
+      expect(response->value() == R"([[0,0,0,"/get_name",null],"Susan"])") << response->value();
 
       {
          auto request = repe::request_json({"/set_name"}, "Bob");
@@ -421,7 +421,7 @@ suite structs_of_functions_binary = [] {
 
       expect(!glz::beve_to_json(response->value(), res));
       expect(obj.name == "Susan"); // we expect the name to not have changed because this function take no inputs
-      expect(res == R"([[0,0,2,"/get_name",null],null])") << response;
+      expect(res == R"([[0,0,0,"/get_name",null],"Susan"])") << res;
 
       {
          auto request = repe::request_binary({"/set_name"}, "Bob");
