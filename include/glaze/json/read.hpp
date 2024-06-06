@@ -2444,7 +2444,7 @@ namespace glz
                      }
                      else {
                         // set value to unexpected
-                        using error_ctx = typename std::decay_t<decltype(value)>::error_ctx;
+                        using error_ctx = typename std::decay_t<decltype(value)>::error_type;
                         std::decay_t<error_ctx> error{};
                         read<json>::op<Opts>(error, ctx, it, end);
                         if (bool(ctx.error)) [[unlikely]]
