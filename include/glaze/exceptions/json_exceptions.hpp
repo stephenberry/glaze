@@ -126,13 +126,22 @@ namespace glz::ex
    template <class T, class Buffer>
    void write_json(T&& value, Buffer&& buffer)
    {
-      glz::write_json(std::forward<T>(value), std::forward<Buffer>(buffer));
+      const auto ec = glz::write_json(std::forward<T>(value), std::forward<Buffer>(buffer));
+      if (bool(ec)) [[unlikely]] {
+         throw std::runtime_error("write_json error: " + glz::format_error(ec, buffer));
+      }
    }
 
    template <class T>
    [[nodiscard]] auto write_json(T&& value)
    {
-      return glz::write_json(std::forward<T>(value));
+      auto result = glz::write_json(std::forward<T>(value));
+      if (result) {
+         return result.value();
+      }
+      else {
+         throw std::runtime_error("write_json error: " + glz::format_error(result.error));
+      }
    }
 
    template <class T, class Buffer>
