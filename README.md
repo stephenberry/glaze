@@ -3,7 +3,7 @@ One of the fastest JSON libraries in the world. Glaze reads and writes from obje
 
 > [!IMPORTANT]
 >
-> Version 2.8.0 adds write error handling which matches the read API.
+> Version 2.8.0 adds write error handling which matches the read API. [See v2.8.0 Release notes](https://github.com/stephenberry/glaze/releases/tag/v2.8.0)
 
 Glaze also supports:
 
