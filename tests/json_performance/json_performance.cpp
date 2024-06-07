@@ -5,7 +5,6 @@
 #include <map>
 #include <random>
 #include <unordered_map>
-// #include <format>
 
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
@@ -32,7 +31,11 @@ inline std::string generate_string()
 
 suite string_performance = [] {
    "string_performance"_test = [] {
-      constexpr size_t n = 10000; // make this number bigger when profiling
+#ifdef NDEBUG
+      constexpr size_t n = 10000;
+#else
+      constexpr size_t n = 100;
+#endif
 
       std::vector<std::string> vec;
       vec.reserve(n);
@@ -158,7 +161,7 @@ struct glz::meta<obj_t>
 [[maybe_unused]] constexpr size_t iterations = 100'000;
 #endif
 
-/*struct results
+struct results
 {
    std::string_view name{};
    std::string_view url{};
@@ -236,35 +239,6 @@ struct glz::meta<obj_t>
       }
 
       std::cout << "\n---\n" << std::endl;
-   }
-
-   std::string json_stats(bool use_minified = true) const {
-      static constexpr std::string_view s = R"(| [**{}**]({}) | **{}** | **{}** | **{}** |)";
-      const std::string roundtrip = json_roundtrip ? std::format("{:.2f}", *json_roundtrip) : "N/A";
-      if (json_byte_length) {
-         const auto byte_length = use_minified ? minified_byte_length : *json_byte_length;
-         const std::string write = json_write ? std::format("{}", static_cast<size_t>(iterations * byte_length /
-(*json_write * 1048576))) : "N/A"; const std::string read = json_read ? std::format("{}", static_cast<size_t>(iterations
-* byte_length / (*json_read * 1048576)))  : "N/A"; return std::format(s, name, url, roundtrip, write, read);
-      }
-      else {
-         const std::string write = json_write ? std::format("{:.2f}", *json_write)  : "N/A";
-         const std::string read = json_read ? std::format("{:.2f}", *json_read)  : "N/A";
-         return std::format(s, name, url, roundtrip, write, read);
-      }
-   }
-
-   std::string json_stats_read(bool use_minified = true) const {
-      static constexpr std::string_view s = R"(| [**{}**]({}) | **{}** |)";
-      if (json_byte_length) {
-         const auto byte_length = use_minified ? minified_byte_length : *json_byte_length;
-         const std::string read = json_read ? std::format("{}", static_cast<size_t>(iterations * byte_length /
-(*json_read * 1048576)))  : "N/A"; return std::format(s, name, url, read);
-      }
-      else {
-         const std::string read = json_read ? std::format("{:.2f}", *json_read)  : "N/A";
-         return std::format(s, name, url, read);
-      }
    }
 };
 
@@ -383,6 +357,6 @@ suite object_performance = [] {
    "object_performance"_test = [] {
       glaze_test<glz::opts{}>();
    };
-};*/
+};
 
 int main() { return 0; }
