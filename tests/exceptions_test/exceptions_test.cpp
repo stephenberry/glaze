@@ -81,18 +81,18 @@ suite basic_types = [] {
       glz::ex::write_json(true, buffer);
       expect(buffer == "true");
    };
-   
+
    "bool write"_test = [] {
       std::string buffer = glz::ex::write_json(true);
       expect(buffer == "true");
    };
-   
+
    "bool write"_test = [] {
       std::string buffer{};
       glz::ex::write<glz::opts{}>(true, buffer);
       expect(buffer == "true");
    };
-   
+
    "bool write"_test = [] {
       std::string buffer = glz::ex::write<glz::opts{}>(true);
       expect(buffer == "true");

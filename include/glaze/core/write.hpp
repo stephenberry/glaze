@@ -71,8 +71,7 @@ namespace glz
 
    template <opts Opts, class T, raw_buffer Buffer>
       requires write_supported<Opts.format, T>
-   [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer,
-                                                               is_context auto&& ctx) noexcept
+   [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer, is_context auto&& ctx) noexcept
    {
       size_t ix = 0;
       detail::write<Opts.format>::template op<Opts>(std::forward<T>(value), ctx, buffer, ix);
