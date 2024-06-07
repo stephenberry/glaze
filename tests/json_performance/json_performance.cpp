@@ -170,11 +170,11 @@ struct glz::meta<obj_t> {
 
 // We scale all speeds by the minified JSON byte length, so that libraries which do not efficiently write JSON do not get an unfair advantage
 // We want to know how fast the libraries will serialize/deserialize with repsect to one another
-size_t minified_byte_length{};
+[[maybe_unused]] size_t minified_byte_length{};
 #ifdef NDEBUG
-constexpr size_t iterations = 1'000'000;
+[[maybe_unused]] constexpr size_t iterations = 1'000'000;
 #else
-constexpr size_t iterations = 100'000;
+[[maybe_unused]] constexpr size_t iterations = 100'000;
 #endif
 
 /*struct results

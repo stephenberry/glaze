@@ -13,7 +13,7 @@ namespace glz
    // For writing to a std::string, std::vector<char>, std::deque<char> and the like
    template <opts Opts, class T, output_buffer Buffer>
       requires write_supported<Opts.format, T>
-   [[nodiscard]] inline error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer, is_context auto&& ctx) noexcept
    {
       if constexpr (resizable<Buffer>) {
          if (buffer.empty()) {
@@ -31,7 +31,7 @@ namespace glz
 
    template <auto& Partial, opts Opts, class T, output_buffer Buffer>
       requires write_supported<Opts.format, T>
-   [[nodiscard]] inline error_ctx write(T&& value, Buffer& buffer) noexcept
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer) noexcept
    {
       if constexpr (resizable<Buffer>) {
          if (buffer.empty()) {
@@ -50,7 +50,7 @@ namespace glz
 
    template <opts Opts, class T, output_buffer Buffer>
       requires write_supported<Opts.format, T>
-   [[nodiscard]] inline error_ctx write(T&& value, Buffer& buffer) noexcept
+   [[nodiscard]] error_ctx write(T&& value, Buffer& buffer) noexcept
    {
       context ctx{};
       return write<Opts>(std::forward<T>(value), buffer, ctx);
@@ -58,7 +58,7 @@ namespace glz
 
    template <opts Opts, class T>
       requires write_supported<Opts.format, T>
-   [[nodiscard]] inline glz::expected<std::string, error_ctx> write(T&& value) noexcept
+   [[nodiscard]] glz::expected<std::string, error_ctx> write(T&& value) noexcept
    {
       std::string buffer{};
       context ctx{};
@@ -71,7 +71,7 @@ namespace glz
 
    template <opts Opts, class T, raw_buffer Buffer>
       requires write_supported<Opts.format, T>
-   [[nodiscard]] inline glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer,
+   [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer,
                                                                is_context auto&& ctx) noexcept
    {
       size_t ix = 0;
@@ -84,7 +84,7 @@ namespace glz
 
    template <opts Opts, class T, raw_buffer Buffer>
       requires write_supported<Opts.format, T>
-   [[nodiscard]] inline glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer&& buffer) noexcept
    {
       context ctx{};
       return write<Opts>(std::forward<T>(value), std::forward<Buffer>(buffer), ctx);
