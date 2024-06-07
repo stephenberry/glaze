@@ -8127,9 +8127,10 @@ suite read_allocated_tests = [] {
    };
 };
 
-struct Trade {
-  int64_t T{};
-  char s[16];
+struct Trade
+{
+   int64_t T{};
+   char s[16];
 };
 
 suite raw_char_buffer_tests = [] {
@@ -8144,7 +8145,6 @@ suite raw_char_buffer_tests = [] {
       expect(result.has_value()) << glz::format_error(result, payload);
    };
 };
-
 
 int main()
 {
