@@ -249,7 +249,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class B>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&&, B&& b, auto&& ix) noexcept
          {
             if constexpr (Opts.number) {
                dump_maybe_empty(value, b, ix);
@@ -588,7 +588,7 @@ namespace glz
       struct to_json<T>
       {
          template <glz::opts Opts, class B, class Ix>
-         GLZ_ALWAYS_INLINE static void op(const T& value, is_context auto&& ctx, B&& b, Ix&& ix) noexcept
+         static void op(const T& value, is_context auto&& ctx, B&& b, Ix&& ix) noexcept
          {
             const auto& [key, val] = value;
             if (skip_member<Opts>(val)) {
@@ -634,7 +634,7 @@ namespace glz
 
          template <glz::opts Opts, class... Args>
             requires(Opts.concatenate)
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if constexpr (!Opts.opening_handled) {
                dump<'{'>(args...);
@@ -810,7 +810,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             std::visit(
                [&](auto&& val) {
@@ -862,7 +862,7 @@ namespace glz
       struct to_json<array_variant_wrapper<T>>
       {
          template <auto Opts, class... Args>
-         GLZ_FLATTEN static void op(auto&& wrapper, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& wrapper, is_context auto&& ctx, Args&&... args) noexcept
          {
             auto& value = wrapper.value;
             dump<'['>(args...);
@@ -890,7 +890,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using V = std::decay_t<decltype(value.value)>;
             static constexpr auto N = glz::tuple_size_v<V>;
@@ -925,7 +925,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<std::decay_t<T>>) {
@@ -965,12 +965,14 @@ namespace glz
          }
       };
 
-      template <class T>
-      struct to_json<includer<T>>
+      template <is_includer T>
+      struct to_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
-         {}
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&... args) noexcept
+         {
+            dump<R"("")">(args...); // dump an empty string
+         }
       };
 
       template <const std::string_view& S>
@@ -997,7 +999,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Options>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             if constexpr (!Options.opening_handled) {
                dump<'{'>(b, ix);
@@ -1071,7 +1073,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Options>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             if constexpr (!Options.opening_handled) {
                dump<'{'>(b, ix);
@@ -1106,7 +1108,7 @@ namespace glz
       struct to_json<T>
       {
          template <auto Options, class V>
-         GLZ_FLATTEN static void op(V&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         static void op(V&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             using ValueType = std::decay_t<V>;
             if constexpr (detail::has_unknown_writer<ValueType> && Options.write_unknown) {
@@ -1134,7 +1136,7 @@ namespace glz
 
          // handles glaze_object_t without extra unknown fields
          template <auto Options, class B>
-         GLZ_FLATTEN static void op_base(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
+         static void op_base(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
          {
             if constexpr (!Options.opening_handled) {
                if constexpr (Options.prettify) {
@@ -1355,7 +1357,7 @@ namespace glz
       struct to_json_partial<T> final
       {
          template <auto& Partial, auto Opts, class... Args>
-         GLZ_FLATTEN static error_ctx op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         static error_ctx op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             if constexpr (!Opts.opening_handled) {
                dump<'{'>(b, ix);

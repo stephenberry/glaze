@@ -5,6 +5,8 @@
 
 #if __cpp_exceptions
 
+#include "glaze/exceptions/core_exceptions.hpp"
+#include "glaze/exceptions/json_schema_exceptions.hpp"
 #include "glaze/glaze.hpp"
 
 namespace glz::ex
@@ -140,7 +142,7 @@ namespace glz::ex
          return result.value();
       }
       else {
-         throw std::runtime_error("write_json error: " + glz::format_error(result.error));
+         throw std::runtime_error("write_json error: " + glz::format_error(result.error()));
       }
    }
 

@@ -8,7 +8,7 @@
 namespace glz::detail
 {
    template <opts Opts>
-   GLZ_FLATTEN void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   void skip_object(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.force_conformance) {
          ++it;
@@ -45,7 +45,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   GLZ_FLATTEN void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   void skip_array(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.force_conformance) {
          ++it;
@@ -72,7 +72,7 @@ namespace glz::detail
    }
 
    template <opts Opts>
-   GLZ_FLATTEN void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
+   void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.force_conformance) {
          if constexpr (!Opts.ws_handled) {

@@ -189,7 +189,7 @@ namespace glz
          {}
       };
 
-      // // write includers as empty strings
+      // write includers as empty strings
       template <is_includer T>
       struct to_binary<T>
       {
@@ -540,7 +540,7 @@ namespace glz
       struct to_binary<T> final
       {
          template <auto Opts, class... Args>
-         GLZ_FLATTEN static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static auto op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             using Key = typename T::key_type;
 
@@ -589,7 +589,7 @@ namespace glz
       struct to_binary<T>
       {
          template <auto Options>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&&... args) noexcept
          {
             using V = std::decay_t<decltype(value.value)>;
             static constexpr auto N = glz::tuple_size_v<V> / 2;
@@ -632,7 +632,7 @@ namespace glz
       struct to_binary<T>
       {
          template <auto Opts>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             using V = std::decay_t<decltype(value.value)>;
             static constexpr auto N = glz::tuple_size_v<V>;
@@ -672,7 +672,7 @@ namespace glz
 
          template <auto Opts, class... Args>
             requires(Opts.structs_as_arrays == true)
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             dump<tag::generic_array>(args...);
             dump_compressed_int<count_to_write>(args...);
@@ -702,7 +702,7 @@ namespace glz
 
          template <auto Options, class... Args>
             requires(Options.structs_as_arrays == false)
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
+         static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if constexpr (!Options.opening_handled) {
                constexpr uint8_t type = 0; // string key
@@ -830,7 +830,7 @@ namespace glz
       struct to_binary_partial<T> final
       {
          template <auto& Partial, auto Opts, class... Args>
-         GLZ_FLATTEN static error_ctx op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         static error_ctx op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             error_ctx we{};
 

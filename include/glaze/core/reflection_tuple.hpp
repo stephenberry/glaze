@@ -9,7 +9,7 @@
 namespace glz::detail
 {
    template <class T>
-   GLZ_FLATTEN decltype(auto) reflection_tuple(auto&& value, auto&&...) noexcept
+   decltype(auto) reflection_tuple(auto&& value, auto&&...) noexcept
    {
       if constexpr (reflectable<T>) {
          using V = decay_keep_volatile_t<decltype(value)>;
