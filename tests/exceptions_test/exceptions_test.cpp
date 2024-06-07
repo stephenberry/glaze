@@ -47,6 +47,17 @@ suite starter = [] {
    ]
 })");
    };
+   
+   "json_schema"_test = [] {
+      const std::string schema = glz::ex::write_json_schema<my_struct>();
+      expect(schema == R"({"type":["object"],"properties":{"arr":{"$ref":"#/$defs/std::array<uint64_t,3>"},"d":{"$ref":"#/$defs/double"},"hello":{"$ref":"#/$defs/std::string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<uint64_t,3>":{"type":["array"],"items":{"$ref":"#/$defs/uint64_t"},"minItems":3,"maxItems":3},"std::string":{"type":["string"]},"uint64_t":{"type":["integer"],"minimum":0,"maximum":18446744073709551615}}})") << schema;
+   };
+   
+   "json_schema"_test = [] {
+      std::string schema;
+      glz::ex::write_json_schema<my_struct>(schema);
+      expect(schema == R"({"type":["object"],"properties":{"arr":{"$ref":"#/$defs/std::array<uint64_t,3>"},"d":{"$ref":"#/$defs/double"},"hello":{"$ref":"#/$defs/std::string"},"i":{"$ref":"#/$defs/int32_t"}},"additionalProperties":false,"$defs":{"double":{"type":["number"],"minimum":-1.7976931348623157E308,"maximum":1.7976931348623157E308},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::array<uint64_t,3>":{"type":["array"],"items":{"$ref":"#/$defs/uint64_t"},"minItems":3,"maxItems":3},"std::string":{"type":["string"]},"uint64_t":{"type":["integer"],"minimum":0,"maximum":18446744073709551615}}})") << schema;
+   };
 };
 
 suite basic_types = [] {
@@ -106,6 +117,12 @@ suite basic_types = [] {
 
    "bool read valid"_test = [] {
       bool val = glz::ex::read_json<bool>("true");
+      expect(val == true);
+   };
+   
+   "bool read valid"_test = [] {
+      bool val{};
+      glz::ex::read<glz::opts{}>(val, "true");
       expect(val == true);
    };
 

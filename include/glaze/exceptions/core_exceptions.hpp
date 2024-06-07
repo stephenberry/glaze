@@ -12,19 +12,9 @@ namespace glz::ex
 {
    template <opts Opts, class T>
       requires read_supported<Opts.format, T>
-   void read(T& value, contiguous auto&& buffer)
+   void read(T&& value, auto&& buffer)
    {
-      const auto ec = read<Opts>(value, buffer);
-      if (bool(ec)) [[unlikely]] {
-         throw std::runtime_error(format_error(ec, buffer));
-      }
-   }
-
-   template <opts Opts, class T, c_style_char_buffer Buffer>
-      requires read_supported<Opts.format, T>
-   void read(T& value, Buffer&& buffer)
-   {
-      const auto ec = read<Opts>(value, buffer);
+      const auto ec = glz::read<Opts>(std::forward<T>(value), buffer);
       if (bool(ec)) [[unlikely]] {
          throw std::runtime_error(format_error(ec, buffer));
       }
@@ -48,7 +38,7 @@ namespace glz::ex
       requires write_supported<Opts.format, T>
    void write(T&& value, Buffer& buffer)
    {
-      const auto ec = write(std::forward<T>(value), buffer);
+      const auto ec = glz::write(std::forward<T>(value), buffer);
       if (bool(ec)) [[unlikely]] {
          throw std::runtime_error(format_error(ec, buffer));
       }
