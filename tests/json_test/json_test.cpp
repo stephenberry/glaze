@@ -8127,6 +8127,25 @@ suite read_allocated_tests = [] {
    };
 };
 
+struct Trade {
+  int64_t T{};
+  char s[16];
+};
+
+suite raw_char_buffer_tests = [] {
+   "binance_trade"_test = [] {
+      const auto* payload = R"(
+            {
+                "T": 123456788,
+                "s": "ETHBTC"
+            }
+        )";
+      auto result = glz::read_json<Trade>(payload);
+      expect(result.has_value()) << glz::format_error(result, payload);
+   };
+};
+
+
 int main()
 {
    trace.begin("json_test", "Full test suite duration.");
