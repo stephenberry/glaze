@@ -145,6 +145,20 @@ namespace glz
             ctx.error = error_code::attempt_member_func_read;
          }
       };
+      
+      template <is_includer T>
+      struct from_json<T>
+      {
+         template <auto Opts, class... Args>
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         {
+            if constexpr (!Opts.ws_handled) {
+               GLZ_SKIP_WS;
+            }
+            
+            match<R"("")", Opts>(ctx, it, end);
+         }
+      };
 
       template <is_bitset T>
       struct from_json<T>
