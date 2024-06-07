@@ -6202,7 +6202,7 @@ suite manage_test = [] {
    };
 
    "manage_test_struct"_test = [] {
-      manage_test_struct obj{.a="aaa", .b="bbb"};
+      manage_test_struct obj{.a = "aaa", .b = "bbb"};
       std::string s{};
       const auto ec = glz::write<glz::opts{}>(obj, s);
       expect(ec != glz::error_code::none);

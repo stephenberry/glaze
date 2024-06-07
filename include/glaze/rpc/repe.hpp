@@ -163,9 +163,10 @@ namespace glz::repe
 
       if (bool(ctx.error)) {
          error_ctx ec{ctx.error, size_t(b - start), ctx.includer_error};
-         std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true},
-                                           error_t{error_e::parse_error, format_error(ec, state.message)}),
-                     response);
+         std::ignore =
+            write<Opts>(std::forward_as_tuple(header{.error = true},
+                                              error_t{error_e::parse_error, format_error(ec, state.message)}),
+                        response);
          return 0;
       }
 
@@ -826,7 +827,7 @@ namespace glz::repe
                   return join_v<parent, chars<"/">, key_name<I, T, Element::use_reflection>>;
                }
             }();
-            
+
             using E = typename Element::type;
 
             // This logic chain should match glz::cli_menu
@@ -1122,10 +1123,7 @@ namespace glz::repe
          });
       }
 
-      bool call(const header& header)
-      {
-         return call(request<Opts>(header));
-      }
+      bool call(const header& header) { return call(request<Opts>(header)); }
 
       template <class Value>
       bool call(const header& header, Value&& value)
@@ -1221,7 +1219,8 @@ namespace glz::repe
             it->second(state{body, h, response, error}); // handle the body
          }
          else {
-            std::ignore = write<Opts>(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
+            std::ignore =
+               write<Opts>(std::forward_as_tuple(header{.error = true}, error_t{error_e::method_not_found}), response);
          }
 
          return finish();

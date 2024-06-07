@@ -1461,7 +1461,8 @@ namespace variants
       "variants"_test = [] {
          std::vector<uint8_t> out;
          D d{};
-         expect(not glz::write<glz::opts{.format = glz::binary, .structs_as_arrays = true}>(d, out)); // testing compilation
+         expect(
+            not glz::write<glz::opts{.format = glz::binary, .structs_as_arrays = true}>(d, out)); // testing compilation
       };
    };
 }

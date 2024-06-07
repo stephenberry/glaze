@@ -1034,7 +1034,7 @@ namespace glz
          return "";
       }
    }
-   
+
    [[nodiscard]] inline std::string format_error(const error_ctx& pe)
    {
       static constexpr auto arr = detail::make_enum_to_string_array<error_code>();

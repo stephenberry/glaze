@@ -373,7 +373,8 @@ namespace glz::rpc
                      }
                   }
                   else {
-                     return_v = raw_response_t{std::move(req.id), rpc::error{error_e::parse_error, format_error(json_result.error())}};
+                     return_v = raw_response_t{std::move(req.id),
+                                               rpc::error{error_e::parse_error, format_error(json_result.error())}};
                   }
                }
                else {
@@ -460,7 +461,9 @@ namespace glz::rpc
                                         "id: '" + std::string(std::get<std::string_view>(res.id)) + "' not found"};
                }
                else {
-                  return_v = rpc::error{error_e::internal, "id: " + glz::write_json(res.id).value_or("interal write error") + " not found"};
+                  return_v =
+                     rpc::error{error_e::internal,
+                                "id: " + glz::write_json(res.id).value_or("interal write error") + " not found"};
                }
             }
          }

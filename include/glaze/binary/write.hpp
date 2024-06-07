@@ -933,7 +933,7 @@ namespace glz
       if (bool(ec)) [[unlikely]] {
          return ec;
       }
-      
+
       std::ofstream file(file_name.data(), std::ios::binary);
 
       if (file) {
@@ -949,7 +949,8 @@ namespace glz
    template <write_binary_supported T, class Buffer>
    [[nodiscard]] error_ctx write_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
-      return write<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value),
+                                                                      std::forward<Buffer>(buffer));
    }
 
    template <write_binary_supported T>
@@ -959,8 +960,7 @@ namespace glz
    }
 
    template <opts Opts = opts{}, write_binary_supported T>
-   [[nodiscard]] error_ctx write_file_binary_untagged(T&& value, const std::string& file_name,
-                                                               auto&& buffer) noexcept
+   [[nodiscard]] error_ctx write_file_binary_untagged(T&& value, const std::string& file_name, auto&& buffer) noexcept
    {
       return write_file_binary<opt_true<Opts, &opts::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);
    }
