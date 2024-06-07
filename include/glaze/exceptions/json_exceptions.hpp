@@ -6,6 +6,7 @@
 #if __cpp_exceptions
 
 #include "glaze/exceptions/core_exceptions.hpp"
+#include "glaze/exceptions/json_schema_exceptions.hpp"
 #include "glaze/glaze.hpp"
 
 namespace glz::ex
