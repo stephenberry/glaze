@@ -41,7 +41,7 @@ namespace glz
 
       bool read(const uint32_t format, const sv path, const sv data) noexcept override
       {
-         parse_error pe{};
+         error_ctx pe{};
          bool success;
 
          if (format == json) {
@@ -63,11 +63,12 @@ namespace glz
 
       bool write(const uint32_t format, const sv path, std::string& data) noexcept override
       {
+         // TODO: Support write errors when seeking
          if (format == json) {
-            return detail::seek_impl([&](auto&& val) { glz::write_json(val, data); }, user, path);
+            return detail::seek_impl([&](auto&& val) { std::ignore = glz::write_json(val, data); }, user, path);
          }
          else {
-            return detail::seek_impl([&](auto&& val) { glz::write_binary(val, data); }, user, path);
+            return detail::seek_impl([&](auto&& val) { std::ignore = glz::write_binary(val, data); }, user, path);
          }
       }
 

@@ -69,7 +69,7 @@ namespace glz::rpc
       error& operator=(const error&) = default;
       error& operator=(error&&) = default;
 
-      static error invalid(const parse_error& pe, auto& buffer)
+      static error invalid(const error_ctx& pe, auto& buffer)
       {
          std::string format_err{format_error(pe, buffer)};
          return {error_e::invalid_request, format_err.empty() ? std::nullopt : std::optional{format_err},
@@ -303,7 +303,7 @@ namespace glz::rpc
       {
          constexpr auto return_helper = []<class Input>(Input&& response) -> auto {
             if constexpr (std::same_as<return_t, std::string>) {
-               return glz::write_json(std::forward<Input>(response));
+               return glz::write_json(std::forward<Input>(response)).value_or(R"("write error")");
             }
             else if constexpr (std::same_as<Input, raw_response_t>) {
                return std::vector<raw_response_t>{std::forward<Input>(response)};
@@ -337,7 +337,7 @@ namespace glz::rpc
      private:
       auto per_request(std::string_view json_request) -> std::optional<response_t<glz::raw_json>>
       {
-         expected<generic_request_t, glz::parse_error> request{glz::read_json<generic_request_t>(json_request)};
+         expected<generic_request_t, glz::error_ctx> request{glz::read_json<generic_request_t>(json_request)};
 
          if (!request.has_value()) {
             // Failed, but let's try to extract the `id`
@@ -364,10 +364,16 @@ namespace glz::rpc
                expected<typename meth_t::result_t, rpc::error> result{
                   std::invoke(method.callback, params_request->params)};
                if (result.has_value()) {
-                  return_v = raw_response_t{std::move(req.id), glz::write_json(result)};
-                  if (std::holds_alternative<glz::json_t::null_t>(req.id)) {
-                     // rpc notification requires no response
-                     return_v = std::nullopt;
+                  auto json_result = glz::write_json(result);
+                  if (json_result) {
+                     return_v = raw_response_t{std::move(req.id), std::move(json_result.value())};
+                     if (std::holds_alternative<glz::json_t::null_t>(req.id)) {
+                        // rpc notification requires no response
+                        return_v = std::nullopt;
+                     }
+                  }
+                  else {
+                     return_v = raw_response_t{std::move(req.id), rpc::error{error_e::parse_error, format_error(json_result.error())}};
                   }
                }
                else {
@@ -408,7 +414,7 @@ namespace glz::rpc
 
       rpc::error call(std::string_view json_response)
       {
-         expected<generic_response_t, glz::parse_error> response{glz::read_json<generic_response_t>(json_response)};
+         expected<generic_response_t, glz::error_ctx> response{glz::read_json<generic_response_t>(json_response)};
 
          if (!response.has_value()) {
             return rpc::error{rpc::error_e::parse_error, format_error(response.error(), json_response)};
@@ -423,7 +429,7 @@ namespace glz::rpc
             if (auto it{method.pending_requests.find(res.id)}; it != std::end(method.pending_requests)) {
                auto [id, callback] = *it;
 
-               expected<typename meth_t::response_t, glz::parse_error> response{
+               expected<typename meth_t::response_t, glz::error_ctx> response{
                   glz::read_json<typename meth_t::response_t>(json_response)};
 
                if (!response.has_value()) {
@@ -454,7 +460,7 @@ namespace glz::rpc
                                         "id: '" + std::string(std::get<std::string_view>(res.id)) + "' not found"};
                }
                else {
-                  return_v = rpc::error{error_e::internal, "id: " + glz::write_json(res.id) + " not found"};
+                  return_v = rpc::error{error_e::internal, "id: " + glz::write_json(res.id).value_or("interal write error") + " not found"};
                }
             }
          }
@@ -483,7 +489,7 @@ namespace glz::rpc
          rpc::request_t req{std::forward<decltype(id)>(id), Name.sv(), std::forward<decltype(params)>(params)};
 
          if (std::holds_alternative<glz::json_t::null_t>(id)) {
-            return {glz::write_json(std::move(req)), false};
+            return {glz::write_json(std::move(req)).value_or(R"("write error")"), false};
          }
 
          // Some bookkeeping store the callback
@@ -500,7 +506,7 @@ namespace glz::rpc
             }
          });
 
-         return {glz::write_json(std::move(req)), inserted};
+         return {glz::write_json(std::move(req)).value_or(R"("write error")"), inserted};
       }
 
       template <string_literal Name>

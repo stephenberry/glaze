@@ -1333,7 +1333,7 @@ namespace glz
       struct write_partial<json>
       {
          template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
-         [[nodiscard]] GLZ_ALWAYS_INLINE static write_error op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
+         [[nodiscard]] GLZ_ALWAYS_INLINE static error_ctx op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
                detail::write<json>::op<Opts>(value, ctx, b, ix);
@@ -1355,7 +1355,7 @@ namespace glz
       struct to_json_partial<T> final
       {
          template <auto& Partial, auto Opts, class... Args>
-         GLZ_FLATTEN static write_error op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         GLZ_FLATTEN static error_ctx op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             if constexpr (!Opts.opening_handled) {
                dump<'{'>(b, ix);
@@ -1366,7 +1366,7 @@ namespace glz
                }
             }
 
-            write_error we{};
+            error_ctx we{};
 
             static constexpr auto sorted = sort_json_ptrs(Partial);
             static constexpr auto groups = glz::group_json_ptrs<sorted>();
@@ -1502,44 +1502,49 @@ namespace glz
       };
    } // namespace detail
 
-   template <write_json_supported T, class Buffer>
-   [[nodiscard]] inline auto write_json(T&& value, Buffer&& buffer) noexcept
+   template <write_json_supported T, output_buffer Buffer>
+   [[nodiscard]] error_ctx write_json(T&& value, Buffer&& buffer) noexcept
+   {
+      return write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+   }
+   
+   template <write_json_supported T, raw_buffer Buffer>
+   [[nodiscard]] glz::expected<size_t, error_ctx> write_json(T&& value, Buffer&& buffer) noexcept
    {
       return write<opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <write_json_supported T>
-   [[nodiscard]] inline auto write_json(T&& value) noexcept
+   [[nodiscard]] glz::expected<std::string, error_ctx> write_json(T&& value) noexcept
    {
-      std::string buffer{};
-      write<opts{}>(std::forward<T>(value), buffer);
-      return buffer;
+      return write<opts{}>(std::forward<T>(value));
    }
 
    template <auto& Partial, write_json_supported T, class Buffer>
-   [[nodiscard]] inline auto write_json(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] error_ctx write_json(T&& value, Buffer&& buffer) noexcept
    {
       return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <write_json_supported T, class Buffer>
-   inline void write_jsonc(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] error_ctx write_jsonc(T&& value, Buffer&& buffer) noexcept
    {
-      write<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<opts{.comments = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <write_json_supported T>
-   [[nodiscard]] inline auto write_jsonc(T&& value) noexcept
+   [[nodiscard]] glz::expected<std::string, error_ctx> write_jsonc(T&& value) noexcept
    {
-      std::string buffer{};
-      write<opts{.comments = true}>(std::forward<T>(value), buffer);
-      return buffer;
+      return write<opts{.comments = true}>(std::forward<T>(value));
    }
 
    template <opts Opts = opts{}, write_json_supported T>
-   [[nodiscard]] inline write_error write_file_json(T&& value, const sv file_name, auto&& buffer) noexcept
+   [[nodiscard]] error_ctx write_file_json(T&& value, const sv file_name, auto&& buffer) noexcept
    {
-      write<set_json<Opts>()>(std::forward<T>(value), buffer);
+      const auto ec = write<set_json<Opts>()>(std::forward<T>(value), buffer);
+      if (bool(ec)) [[unlikely]] {
+         return ec;
+      }
       return {buffer_to_file(buffer, file_name)};
    }
 }

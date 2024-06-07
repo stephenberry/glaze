@@ -33,7 +33,7 @@ suite reflection = [] {
       expect(obj.arr == std::array<uint64_t, 3>{1, 2, 3});
 
       buffer.clear();
-      glz::write_json(obj, buffer);
+      expect(not glz::write_json(obj, buffer));
 
       expect(buffer == R"({"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]})");
    };
@@ -44,7 +44,7 @@ suite reflection = [] {
       expect(!glz::read_json(obj, buffer));
 
       buffer.clear();
-      glz::write<glz::opts{.prettify = true}>(obj, buffer);
+      expect(not glz::write<glz::opts{.prettify = true}>(obj, buffer));
 
       expect(buffer == R"({
    "i": 287,
@@ -85,7 +85,7 @@ suite nested_reflection = [] {
       expect(obj.thing.arr == std::array<uint64_t, 3>{1, 2, 3});
 
       buffer.clear();
-      glz::write_json(obj, buffer);
+      expect(not glz::write_json(obj, buffer));
 
       expect(buffer == R"({"str":"reflection","thing":{"i":287,"d":3.14,"hello":"Hello World","arr":[1,2,3]}})")
          << buffer;
@@ -173,14 +173,14 @@ suite user_types = [] {
    "complex user obect"_test = [] {
       Thing obj{};
       std::string buffer{};
-      glz::write_json(obj, buffer);
+      expect(not glz::write_json(obj, buffer));
       expect(
          buffer ==
          R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":{"x":3.14,"y":2.7,"z":6.5},"array":["as\"df\\ghjkl","pie","42","foo"],"vector":[{"x":9,"y":6.7,"z":3.1},{"x":3.14,"y":2.7,"z":6.5}],"i":8,"d":2,"b":false,"c":"W","color":"Green","vb":[true,false,false,true,true,true,true],"thing_ptr":{"a":3.14,"b":"stuff"},"map":{"eleven":11,"twelve":12}})")
          << buffer;
 
       buffer.clear();
-      glz::write<glz::opts{.skip_null_members = false}>(obj, buffer);
+      expect(not glz::write<glz::opts{.skip_null_members = false}>(obj, buffer));
       expect(
          buffer ==
          R"({"thing":{"a":3.14,"b":"stuff"},"thing2array":[{"a":3.14,"b":"stuff","c":999.342494903,"d":1E-12,"e":203082348402.1,"f":89.089,"g":12380.00000013,"h":1000000.000001}],"vec3":{"x":3.14,"y":2.7,"z":6.5},"array":["as\"df\\ghjkl","pie","42","foo"],"vector":[{"x":9,"y":6.7,"z":3.1},{"x":3.14,"y":2.7,"z":6.5}],"i":8,"d":2,"b":false,"c":"W","color":"Green","vb":[true,false,false,true,true,true,true],"optional":null,"thing_ptr":{"a":3.14,"b":"stuff"},"map":{"eleven":11,"twelve":12}})")
@@ -210,11 +210,11 @@ suite user_types = [] {
       }
 
       std::string out;
-      expect(glz::seek([&](auto& value) { glz::write_json(value, out); }, obj, "/d"));
+      expect(glz::seek([&](auto& value) { std::ignore = glz::write_json(value, out); }, obj, "/d"));
 
       expect(out == "2");
 
-      expect(glz::seek([&](auto& value) { glz::write_json(value, out); }, obj, "/thing_ptr/b"));
+      expect(glz::seek([&](auto& value) { std::ignore = glz::write_json(value, out); }, obj, "/thing_ptr/b"));
 
       expect(out == R"("stuff")");
    };
@@ -226,7 +226,7 @@ suite user_types = [] {
    "thing_wrapper seek"_test = [] {
       thing_wrapper obj{};
       std::string out;
-      expect(glz::seek([&](auto& value) { glz::write_json(value, out); }, obj, "/thing_ptr/b"));
+      expect(glz::seek([&](auto& value) { std::ignore = glz::write_json(value, out); }, obj, "/thing_ptr/b"));
 
       expect(out == R"("stuff")");
    };
@@ -242,7 +242,7 @@ suite single_test = [] {
    "single_t"_test = [] {
       single_t obj{};
       std::string buffer{};
-      glz::write_json(obj, buffer);
+      expect(not glz::write_json(obj, buffer));
 
       expect(!glz::read_json(obj, buffer));
    };
@@ -258,7 +258,7 @@ suite two_elements_test = [] {
    "two_elements_t"_test = [] {
       two_elements_t obj{};
       std::string buffer{};
-      glz::write_json(obj, buffer);
+      expect(not glz::write_json(obj, buffer));
 
       expect(!glz::read_json(obj, buffer));
    };
@@ -385,7 +385,7 @@ suite testing_structures = [] {
    "testing_structures"_test = [] {
       testing::UD obj{};
       std::string buffer{};
-      glz::write_json(obj, buffer);
+      expect(not glz::write_json(obj, buffer));
 
       expect(!glz::read_json(obj, buffer));
    };
@@ -408,7 +408,7 @@ suite const_object_test = [] {
 
       static_assert(std::is_const_v<std::remove_reference_t<decltype(const_obj)>>);
       std::string s{};
-      glz::write_json(const_obj, s);
+      expect(not glz::write_json(const_obj, s));
       expect(buffer == s);
    };
 };
@@ -442,7 +442,7 @@ suite error_on_missing_keys_test = [] {
 suite json_schema = [] {
    "json schema"_test = [] {
       Thing obj{};
-      std::string schema = glz::write_json_schema<Thing>();
+      std::string schema = glz::write_json_schema<Thing>().value_or("error");
       // Note: Check schema and sample output against a json schema validator like https://www.jsonschemavalidator.net/
       // when you update this string
       expect(
@@ -492,7 +492,7 @@ static_assert(glz::detail::count_members<V2Wrapper> == 1);
 suite v2_wrapper_test = [] {
    "v2_wrapper"_test = [] {
       V2Wrapper obj;
-      auto s = glz::write_json(obj);
+      auto s = glz::write_json(obj).value_or("error");
       expect(s == R"({"x":{"x":0,"y":0}})") << s;
    };
 };
@@ -549,10 +549,10 @@ suite meta_schema_reflection_tests = [] {
    "meta_schema_reflection"_test = [] {
       meta_schema_t obj;
       std::string buffer{};
-      glz::write_json(obj, buffer);
+      expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
 
-      const auto json_schema = glz::write_json_schema<meta_schema_t>();
+      const auto json_schema = glz::write_json_schema<meta_schema_t>().value_or("error");
       expect(
          json_schema ==
          R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer","minimum":1}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}}})")
@@ -562,10 +562,10 @@ suite meta_schema_reflection_tests = [] {
    "local_schema"_test = [] {
       local_schema_t obj;
       std::string buffer{};
-      glz::write_json(obj, buffer);
+      expect(not glz::write_json(obj, buffer));
       expect(buffer == R"({"x":0,"file_name":"","is_valid":false})") << buffer;
 
-      const auto json_schema = glz::write_json_schema<local_schema_t>();
+      const auto json_schema = glz::write_json_schema<local_schema_t>().value_or("error");
       expect(
          json_schema ==
          R"({"type":["object"],"properties":{"file_name":{"$ref":"#/$defs/std::string","description":"provide a file name to load"},"is_valid":{"$ref":"#/$defs/bool","description":"for validation"},"x":{"$ref":"#/$defs/int32_t","description":"x is a special integer","minimum":1}},"additionalProperties":false,"$defs":{"bool":{"type":["boolean"]},"int32_t":{"type":["integer"],"minimum":-2147483648,"maximum":2147483647},"std::string":{"type":["string"]}}})")
@@ -627,7 +627,7 @@ struct nested_target_t
 suite nested_target_tests = [] {
    "nested_target"_test = [] {
       nested_target_t obj{};
-      auto buffer = glz::write_json(obj);
+      auto buffer = glz::write_json(obj).value_or("error");
       expect(buffer == R"({"target":{"label":"label_optional","name":"name_string","ints":[]},"test":"test"})")
          << buffer;
       expect(!glz::read_json(obj, buffer));

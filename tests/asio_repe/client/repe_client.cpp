@@ -39,7 +39,7 @@ void asio_client_test()
 
             int sum{};
             if (auto e_call = client.call({"/sum"}, data, sum); e_call) {
-               std::cerr << glz::write_json(e_call) << '\n';
+               std::cerr << glz::write_json(e_call).value_or("error") << '\n';
             }
             else {
                std::cout << "i: " << i << ", " << sum << '\n';

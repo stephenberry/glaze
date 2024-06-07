@@ -73,7 +73,7 @@ suite csv_tests = [] {
 
       std::string out{};
 
-      glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out);
+      expect(not glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out));
       expect(out ==
              R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -103,7 +103,7 @@ suite csv_tests = [] {
 
       std::string out{};
 
-      glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out);
+      expect(not glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out));
       expect(out ==
              R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -138,7 +138,7 @@ suite csv_tests = [] {
 
       std::string out{};
 
-      glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out);
+      expect(not glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out));
       expect(out ==
              R"(id,udl
 1,BRN
@@ -169,7 +169,7 @@ v3s[2],1,2,3,4)";
 
       std::string out{};
 
-      glz::write<glz::opts{.format = glz::csv}>(obj, out);
+      expect(not glz::write<glz::opts{.format = glz::csv}>(obj, out));
       expect(out ==
              R"(num1,11,33,55,77
 num2,22,44,66,88
@@ -195,7 +195,7 @@ v3s[2],1,2,3,4)");
 
       std::string out{};
 
-      glz::write<glz::opts{.format = glz::csv}>(obj, out);
+      expect(not glz::write<glz::opts{.format = glz::csv}>(obj, out));
       expect(out ==
              R"(num1,11,33,55,77
 num2,22,44,66,88
@@ -218,13 +218,13 @@ v3s[2],1,2,3,4)");
       }
 
       std::string out{};
-      glz::write<glz::opts{.format = glz::csv}>(m, out);
+      expect(not glz::write<glz::opts{.format = glz::csv}>(m, out));
       expect(out == R"(x,0,1,2,3,4,5,6,7,8,9
 y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
-      glz::write<glz::opts{.format = glz::csv}>(m, out);
+      expect(not glz::write<glz::opts{.format = glz::csv}>(m, out));
 
       m.clear();
       expect(!glz::read<glz::opts{.format = glz::csv}>(m, out));
@@ -244,7 +244,7 @@ y,1,2,3,4,5,6,7,8,9,10
       }
 
       std::string out{};
-      glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(m, out);
+      expect(not glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(m, out));
       expect(out == R"(x,y
 0,1
 1,2
@@ -259,7 +259,7 @@ y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
-      glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(m, out);
+      expect(not glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(m, out));
 
       m.clear();
       expect(!glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(m, out));
@@ -279,7 +279,7 @@ y,1,2,3,4,5,6,7,8,9,10
       }
 
       std::string out{};
-      glz::write<glz::opts{.format = glz::csv}>(m, out);
+      expect(not glz::write<glz::opts{.format = glz::csv}>(m, out));
       expect(out == R"(y,1,2,3,4,5,6,7,8,9,10
 x,0,1,2,3,4,5,6,7,8,9
 )" || out == R"(x,0,1,2,3,4,5,6,7,8,9
@@ -287,7 +287,7 @@ y,1,2,3,4,5,6,7,8,9,10
 )");
 
       out.clear();
-      glz::write<glz::opts{.format = glz::csv}>(m, out);
+      expect(not glz::write<glz::opts{.format = glz::csv}>(m, out));
 
       m.clear();
       expect(!glz::read<glz::opts{.format = glz::csv}>(m, out));
@@ -330,7 +330,7 @@ x,1,2,3,4,5)");
       }
 
       std::string s;
-      write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(recorder, s);
+      expect(not write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(recorder, s));
       expect(s ==
              R"(t,x
 0,1
@@ -348,7 +348,7 @@ x,1,2,3,4,5)");
 33,Krakow)";
       glz::context ctx{};
       issue_768_test_struct value;
-      glz::parse_error glaze_err{
+      glz::error_ctx glaze_err{
          glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(value, std::string{valid_record}, ctx)};
       expect(!bool(glaze_err));
    };
@@ -361,7 +361,7 @@ x,1,2,3,4,5)");
 77,Reda)";
       glz::context ctx{};
       issue_768_test_struct value;
-      glz::parse_error glaze_err{
+      glz::error_ctx glaze_err{
          glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(value, std::string{invalid_record_1}, ctx)};
       expect(bool(glaze_err));
    };
@@ -375,7 +375,7 @@ x,1,2,3,4,5)");
 77,Reda)";
       glz::context ctx{};
       issue_768_test_struct value;
-      glz::parse_error glaze_err{
+      glz::error_ctx glaze_err{
          glz::read<glz::opts{.format = glz::csv, .layout = glz::colwise}>(value, std::string{invalid_record_2}, ctx)};
       expect(bool(glaze_err));
    };
@@ -412,7 +412,7 @@ suite reflect_my_struct_test = [] {
 
       std::string out{};
 
-      glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out);
+      expect(not glz::write<glz::opts{.format = glz::csv, .layout = glz::colwise}>(obj, out));
       expect(out ==
              R"(num1,num2,maybe,v3s[0],v3s[1],v3s[2]
 11,22,1,1,1,1
@@ -443,7 +443,7 @@ v3s[2],1,2,3,4)";
 
       std::string out{};
 
-      glz::write<glz::opts{.format = glz::csv}>(obj, out);
+      expect(not glz::write<glz::opts{.format = glz::csv}>(obj, out));
       expect(out ==
              R"(num1,11,33,55,77
 num2,22,44,66,88
@@ -518,7 +518,7 @@ suite unicode_keys_test = [] {
    "unicode_keys"_test = [] {
       unicode_keys obj{};
       std::string buffer{};
-      glz::write_csv(obj, buffer);
+      expect(not glz::write_csv(obj, buffer));
 
       expect(!glz::read_csv(obj, buffer));
    };
@@ -526,7 +526,7 @@ suite unicode_keys_test = [] {
    "unicode_keys2"_test = [] {
       unicode_keys2 obj{};
       std::string buffer{};
-      glz::write_csv(obj, buffer);
+      expect(not glz::write_csv(obj, buffer));
 
       expect(!glz::read_csv(obj, buffer));
    };
@@ -534,7 +534,7 @@ suite unicode_keys_test = [] {
    "unicode_keys3"_test = [] {
       unicode_keys3 obj{};
       std::string buffer{};
-      glz::write_csv(obj, buffer);
+      expect(not glz::write_csv(obj, buffer));
 
       expect(!glz::read_csv(obj, buffer));
    };
@@ -583,7 +583,7 @@ suite fish_record = [] {
    "fish_record"_test = [] {
       FishRecord obj{};
       std::string buffer{};
-      glz::write_csv<glz::colwise>(obj, buffer);
+      expect(not glz::write_csv<glz::colwise>(obj, buffer));
 
       expect(!glz::read_csv<glz::colwise>(obj, buffer));
    };

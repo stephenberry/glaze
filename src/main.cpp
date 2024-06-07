@@ -24,7 +24,7 @@ struct TestMsg
 std::vector<uint8_t> serialize(const TestMsg& msg)
 {
    std::vector<uint8_t> buf;
-   glz::write_json(msg, buf);
+   std::ignore = glz::write_json(msg, buf);
    buf.push_back('\0');
    return buf;
 }

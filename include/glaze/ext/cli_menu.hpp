@@ -101,7 +101,7 @@ namespace glz
                         func();
                      }
                      else {
-                        const auto result = glz::write<Opts>(func());
+                        const auto result = glz::write<Opts>(func()).value_or("result serialization error");
                         std::printf("%.*s\n", int(result.size()), result.data());
                      }
                   }
@@ -137,7 +137,7 @@ namespace glz
                               func(params);
                            }
                            else {
-                              const auto result = glz::write<Opts>(func(params));
+                              const auto result = glz::write<Opts>(func(params)).value_or("result serialization error");
                               std::printf("%.*s\n", int(result.size()), result.data());
                            }
                         }

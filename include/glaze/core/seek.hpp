@@ -199,7 +199,7 @@ namespace glz
    // Get a refrence to a value at the location of a json_ptr. Will error if
    // value doesnt exist or is wrong type
    template <class V, class T>
-   expected<std::reference_wrapper<V>, parse_error> get(T&& root_value, sv json_ptr) noexcept
+   expected<std::reference_wrapper<V>, error_ctx> get(T&& root_value, sv json_ptr) noexcept
    {
       V* result{};
       error_code ec{};
@@ -217,10 +217,10 @@ namespace glz
          },
          std::forward<T>(root_value), json_ptr);
       if (!result) {
-         return unexpected(parse_error{error_code::get_nonexistent_json_ptr});
+         return unexpected(error_ctx{error_code::get_nonexistent_json_ptr});
       }
       else if (bool(ec)) {
-         return unexpected(parse_error{ec});
+         return unexpected(error_ctx{ec});
       }
       return std::ref(*result);
    }

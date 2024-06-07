@@ -245,7 +245,7 @@ ut::suite struct_test_cases = [] {
          R"({"jsonrpc":"2.0","method":"invalid_method_name","params":{},"id:"uuid"}")");
       ut::expect(response_vec.size() == 1);
       [[maybe_unused]] auto dbg{glz::write_json(response_vec)};
-      auto s = glz::write_json(response_vec);
+      auto s = glz::write_json(response_vec).value_or("error");
       ut::expect(
          s ==
          R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:66: expected_colon\n..._method_name\",\"params\":{},\"id:\"uuid\"}\"\n                                  ^"},"id":null}])")
@@ -261,7 +261,7 @@ ut::suite struct_test_cases = [] {
       auto response_vec = server.call<std::vector<rpc::response_t<glz::raw_json>>>(
          R"([{"jsonrpc":"2.0","method":"invalid_method_name","params":{},"id":"uuid"},{"jsonrpc":"2.0","method":"invalid_method_name","params":]")");
       ut::expect(response_vec.size() == 1);
-      auto s = glz::write_json(response_vec);
+      auto s = glz::write_json(response_vec).value_or("error");
       ut::expect(
          s ==
          R"([{"jsonrpc":"2.0","error":{"code":-32700,"message":"Parse error","data":"1:132: syntax_error\n...\"invalid_method_name\",\"params\":]\"\n                                  ^"},"id":null}])")

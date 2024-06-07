@@ -1011,7 +1011,7 @@ namespace glz
       }
    }();
 
-   [[nodiscard]] inline std::string format_error(const parse_error& pe, const auto& buffer)
+   [[nodiscard]] inline std::string format_error(const error_ctx& pe, const auto& buffer)
    {
       static constexpr auto arr = detail::make_enum_to_string_array<error_code>();
       const auto error_type_str = arr[uint32_t(pe.ec)];
@@ -1025,7 +1025,7 @@ namespace glz
    }
 
    template <class T>
-   [[nodiscard]] std::string format_error(const expected<T, parse_error>& pe, const auto& buffer)
+   [[nodiscard]] std::string format_error(const expected<T, error_ctx>& pe, const auto& buffer)
    {
       if (not pe) {
          return format_error(pe.error(), buffer);
@@ -1033,6 +1033,12 @@ namespace glz
       else {
          return "";
       }
+   }
+   
+   [[nodiscard]] inline std::string format_error(const error_ctx& pe)
+   {
+      static constexpr auto arr = detail::make_enum_to_string_array<error_code>();
+      return std::string{std::string_view{arr[uint32_t(pe.ec)]}};
    }
 }
 

@@ -107,7 +107,7 @@ namespace glz
          event->ts = std::chrono::duration_cast<std::chrono::microseconds>(tnow - t0.value()).count();
          event->tid = std::hash<std::thread::id>{}(std::this_thread::get_id());
          if constexpr (sizeof...(Args) > 0) {
-            glz::write_json(std::forward<Args>(args)..., event->args.str);
+            std::ignore = glz::write_json(std::forward<Args>(args)..., event->args.str);
          }
       }
 
@@ -154,7 +154,7 @@ namespace glz
          event->tid = std::hash<std::thread::id>{}(std::this_thread::get_id());
          event->id = std::hash<std::string_view>{}(name);
          if constexpr (sizeof...(Args) > 0) {
-            glz::write_json(std::forward<Args>(args)..., event->args.str);
+            std::ignore = glz::write_json(std::forward<Args>(args)..., event->args.str);
          }
       }
    };
@@ -189,9 +189,12 @@ namespace glz
    }
 
    template <opts Opts = opts{}>
-   [[nodiscard]] write_error write_file_trace(const std::string& file_name, auto&& buffer) noexcept
+   [[nodiscard]] error_ctx write_file_trace(const std::string& file_name, auto&& buffer) noexcept
    {
-      write<set_json<Opts>()>(global_trace<0>(), buffer);
+      const auto ec = write<set_json<Opts>()>(global_trace<0>(), buffer);
+      if (bool(ec)) [[unlikely]] {
+         return ec;
+      }
       return {buffer_to_file(buffer, file_name)};
    }
 

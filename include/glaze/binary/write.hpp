@@ -808,7 +808,7 @@ namespace glz
       struct write_partial<binary>
       {
          template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
-         [[nodiscard]] GLZ_ALWAYS_INLINE static write_error op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
+         [[nodiscard]] GLZ_ALWAYS_INLINE static error_ctx op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
                detail::write<binary>::op<Opts>(value, ctx, b, ix);
@@ -830,9 +830,9 @@ namespace glz
       struct to_binary_partial<T> final
       {
          template <auto& Partial, auto Opts, class... Args>
-         GLZ_FLATTEN static write_error op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         GLZ_FLATTEN static error_ctx op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
-            write_error we{};
+            error_ctx we{};
 
             static constexpr auto sorted = sort_json_ptrs(Partial);
             static constexpr auto groups = glz::group_json_ptrs<sorted>();
@@ -906,33 +906,34 @@ namespace glz
    }
 
    template <write_binary_supported T, class Buffer>
-   inline void write_binary(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] error_ctx write_binary(T&& value, Buffer&& buffer) noexcept
    {
-      write<opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <opts Opts = opts{}, write_binary_supported T>
-   inline auto write_binary(T&& value) noexcept
+   [[nodiscard]] glz::expected<std::string, error_ctx> write_binary(T&& value) noexcept
    {
-      std::string buffer{};
-      write<set_binary<Opts>()>(std::forward<T>(value), buffer);
-      return buffer;
+      return write<set_binary<Opts>()>(std::forward<T>(value));
    }
 
    template <auto& Partial, write_binary_supported T, class Buffer>
-   inline auto write_binary(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] error_ctx write_binary(T&& value, Buffer&& buffer) noexcept
    {
       return write<Partial, opts{.format = binary}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    // requires file_name to be null terminated
    template <opts Opts = opts{}, write_binary_supported T>
-   [[nodiscard]] inline write_error write_file_binary(T&& value, const sv file_name, auto&& buffer) noexcept
+   [[nodiscard]] error_ctx write_file_binary(T&& value, const sv file_name, auto&& buffer) noexcept
    {
       static_assert(sizeof(decltype(*buffer.data())) == 1);
 
-      write<set_binary<Opts>()>(std::forward<T>(value), buffer);
-
+      const auto ec = write<set_binary<Opts>()>(std::forward<T>(value), buffer);
+      if (bool(ec)) [[unlikely]] {
+         return ec;
+      }
+      
       std::ofstream file(file_name.data(), std::ios::binary);
 
       if (file) {
@@ -946,21 +947,19 @@ namespace glz
    }
 
    template <write_binary_supported T, class Buffer>
-   inline void write_binary_untagged(T&& value, Buffer&& buffer) noexcept
+   [[nodiscard]] error_ctx write_binary_untagged(T&& value, Buffer&& buffer) noexcept
    {
-      write<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+      return write<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
 
    template <write_binary_supported T>
-   inline auto write_binary_untagged(T&& value) noexcept
+   [[nodiscard]] error_ctx write_binary_untagged(T&& value) noexcept
    {
-      std::string buffer{};
-      write<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value), buffer);
-      return buffer;
+      return write<opts{.format = binary, .structs_as_arrays = true}>(std::forward<T>(value));
    }
 
    template <opts Opts = opts{}, write_binary_supported T>
-   [[nodiscard]] inline write_error write_file_binary_untagged(T&& value, const std::string& file_name,
+   [[nodiscard]] error_ctx write_file_binary_untagged(T&& value, const std::string& file_name,
                                                                auto&& buffer) noexcept
    {
       return write_file_binary<opt_true<Opts, &opts::structs_as_arrays>>(std::forward<T>(value), file_name, buffer);

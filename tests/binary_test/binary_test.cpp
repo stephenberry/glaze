@@ -219,7 +219,7 @@ void write_tests()
       {
          bool b = true;
          std::string out;
-         glz::write_binary(b, out);
+         expect(not glz::write_binary(b, out));
          bool b2{};
          expect(!glz::read_binary(b2, out));
          expect(b == b2);
@@ -230,7 +230,7 @@ void write_tests()
       {
          float f = 1.5f;
          std::string out;
-         glz::write_binary(f, out);
+         expect(not glz::write_binary(f, out));
          float f2{};
          expect(!glz::read_binary(f2, out));
          expect(f == f2);
@@ -241,7 +241,7 @@ void write_tests()
       {
          std::string s = "Hello World";
          std::string out;
-         glz::write_binary(s, out);
+         expect(not glz::write_binary(s, out));
          std::string s2{};
          expect(!glz::read_binary(s2, out));
          expect(s == s2);
@@ -252,7 +252,7 @@ void write_tests()
       {
          std::array<float, 3> arr = {1.2f, 3434.343f, 0.f};
          std::string out;
-         glz::write_binary(arr, out);
+         expect(not glz::write_binary(arr, out));
          std::array<float, 3> arr2{};
          expect(!glz::read_binary(arr2, out));
          expect(arr == arr2);
@@ -263,7 +263,7 @@ void write_tests()
       {
          std::vector<float> v = {1.2f, 3434.343f, 0.f};
          std::string out;
-         glz::write_binary(v, out);
+         expect(not glz::write_binary(v, out));
          std::vector<float> v2;
          expect(!glz::read_binary(v2, out));
          expect(v == v2);
@@ -275,7 +275,7 @@ void write_tests()
       s.i = 5;
       s.hello = "Wow!";
       std::string out;
-      glz::write_binary(s, out);
+      expect(not glz::write_binary(s, out));
       my_struct s2{};
       expect(!glz::read_binary(s2, out));
       expect(s.i == s2.i);
@@ -286,7 +286,7 @@ void write_tests()
       std::string out;
 
       std::optional<int> op_int{};
-      glz::write_binary(op_int, out);
+      expect(not glz::write_binary(op_int, out));
 
       std::optional<int> new_op{};
       expect(!glz::read_binary(new_op, out));
@@ -296,7 +296,7 @@ void write_tests()
       op_int = 10;
       out.clear();
 
-      glz::write_binary(op_int, out);
+      expect(not glz::write_binary(op_int, out));
       expect(!glz::read_binary(new_op, out));
 
       expect(op_int == new_op);
@@ -304,7 +304,7 @@ void write_tests()
       out.clear();
 
       std::shared_ptr<float> sh_float = std::make_shared<float>(5.55f);
-      glz::write_binary(sh_float, out);
+      expect(not glz::write_binary(sh_float, out));
 
       std::shared_ptr<float> out_flt;
       expect(!glz::read_binary(out_flt, out));
@@ -314,7 +314,7 @@ void write_tests()
       out.clear();
 
       std::unique_ptr<double> uni_dbl = std::make_unique<double>(5.55);
-      glz::write_binary(uni_dbl, out);
+      expect(not glz::write_binary(uni_dbl, out));
 
       std::shared_ptr<double> out_dbl;
       expect(!glz::read_binary(out_dbl, out));
@@ -327,7 +327,7 @@ void write_tests()
 
       std::map<std::string, int> str_map{{"a", 1}, {"b", 10}, {"c", 100}, {"d", 1000}};
 
-      glz::write_binary(str_map, out);
+      expect(not glz::write_binary(str_map, out));
 
       std::map<std::string, int> str_read;
 
@@ -340,7 +340,7 @@ void write_tests()
       out.clear();
 
       std::map<int, double> dbl_map{{1, 5.55}, {3, 7.34}, {8, 44.332}, {0, 0.000}};
-      glz::write_binary(dbl_map, out);
+      expect(not glz::write_binary(dbl_map, out));
 
       std::map<int, double> dbl_read{};
       expect(!glz::read_binary(dbl_read, out));
@@ -353,7 +353,7 @@ void write_tests()
    "enum"_test = [] {
       Color color = Color::Green;
       std::string buffer{};
-      glz::write_binary(color, buffer);
+      expect(not glz::write_binary(color, buffer));
 
       Color color_read = Color::Red;
       expect(!glz::read_binary(color_read, buffer));
@@ -383,7 +383,7 @@ void write_tests()
       obj.map = {{"a", 7}, {"f", 3}, {"b", 4}};
       obj.mapi = {{5, 5.0}, {7, 7.1}, {2, 2.22222}};
 
-      glz::write_binary(obj, buffer);
+      expect(not glz::write_binary(obj, buffer));
 
       Thing obj2{};
       expect(!glz::read_binary(obj2, buffer));
@@ -429,7 +429,7 @@ void bench()
       auto tstart = std::chrono::high_resolution_clock::now();
       for (size_t i{}; i < repeat; ++i) {
          buffer.clear();
-         glz::write_binary(thing, buffer);
+         expect(not glz::write_binary(thing, buffer));
       }
       auto tend = std::chrono::high_resolution_clock::now();
       auto duration = std::chrono::duration_cast<std::chrono::duration<double>>(tend - tstart).count();
@@ -459,7 +459,7 @@ suite binary_helpers = [] {
 
       std::string b;
 
-      b = glz::write_binary(v);
+      b = glz::write_binary(v).value_or("error");
 
       auto res = glz::read_binary<my_struct>(b);
       expect(bool(res));
@@ -597,7 +597,7 @@ void container_types()
       for (auto& item : vec) item = rand();
       std::string buffer{};
       std::vector<int> vec2{};
-      glz::write_binary(vec, buffer);
+      expect(not glz::write_binary(vec, buffer));
       expect(!glz::read_binary(vec2, buffer));
       expect(vec == vec2);
    };
@@ -609,7 +609,7 @@ void container_types()
       for (auto& item : vec) item = dist(gen);
       std::string buffer{};
       std::vector<uint64_t> vec2{};
-      glz::write_binary(vec, buffer);
+      expect(not glz::write_binary(vec, buffer));
       expect(!glz::read_binary(vec2, buffer));
       expect(vec == vec2);
    };
@@ -618,7 +618,7 @@ void container_types()
       for (auto& item : vec) item = rand() / (1.0 + rand());
       std::string buffer{};
       std::vector<double> vec2{};
-      glz::write_binary(vec, buffer);
+      expect(not glz::write_binary(vec, buffer));
       expect(!glz::read_binary(vec2, buffer));
       expect(vec == vec2);
    };
@@ -627,7 +627,7 @@ void container_types()
       for (auto&& item : vec) item = rand() / (1.0 + rand()) > 0.5;
       std::string buffer{};
       std::vector<bool> vec2{};
-      glz::write_binary(vec, buffer);
+      expect(not glz::write_binary(vec, buffer));
       expect(!glz::read_binary(vec2, buffer));
       expect(vec == vec2);
    };
@@ -636,7 +636,7 @@ void container_types()
       for (auto& item : deq) item = rand();
       std::string buffer{};
       std::vector<int> deq2{};
-      glz::write_binary(deq, buffer);
+      expect(not glz::write_binary(deq, buffer));
       expect(!glz::read_binary(deq2, buffer));
       expect(deq == deq2);
    };
@@ -645,7 +645,7 @@ void container_types()
       for (auto& item : lis) item = rand();
       std::string buffer{};
       std::list<int> lis2{};
-      glz::write_binary(lis, buffer);
+      expect(not glz::write_binary(lis, buffer));
       expect(!glz::read_binary(lis2, buffer));
       expect(lis == lis2);
    };
@@ -659,7 +659,7 @@ void container_types()
       }
       std::string buffer{};
       std::map<std::string, int> map2{};
-      glz::write_binary(map1, buffer);
+      expect(not glz::write_binary(map1, buffer));
       expect(!glz::read_binary(map2, buffer));
       for (auto& it : map1) {
          expect(map2[it.first] == it.second);
@@ -672,7 +672,7 @@ void container_types()
       }
       std::string buffer{};
       std::map<int, int> map2{};
-      glz::write_binary(map1, buffer);
+      expect(not glz::write_binary(map1, buffer));
       expect(!glz::read_binary(map2, buffer));
       for (auto& it : map1) {
          expect(map2[it.first] == it.second);
@@ -685,7 +685,7 @@ void container_types()
       }
       std::string buffer{};
       std::unordered_map<int, int> map2{};
-      glz::write_binary(map1, buffer);
+      expect(not glz::write_binary(map1, buffer));
       expect(!glz::read_binary(map2, buffer));
       for (auto& it : map1) {
          expect(map2[it.first] == it.second);
@@ -695,7 +695,7 @@ void container_types()
       auto tuple1 = std::make_tuple(3, 2.7, std::string("curry"));
       decltype(tuple1) tuple2{};
       std::string buffer{};
-      glz::write_binary(tuple1, buffer);
+      expect(not glz::write_binary(tuple1, buffer));
       expect(!glz::read_binary(tuple2, buffer));
       expect(tuple1 == tuple2);
    };
@@ -703,7 +703,7 @@ void container_types()
       auto pair = std::make_pair(std::string("water"), 5.2);
       decltype(pair) pair2{};
       std::string buffer{};
-      glz::write_binary(pair, buffer);
+      expect(not glz::write_binary(pair, buffer));
       expect(!glz::read_binary(pair2, buffer));
       expect(pair == pair2);
    };
@@ -738,7 +738,7 @@ suite value_test = [] {
 
       value_t v{};
       v.x = 5;
-      glz::write_binary(v, s);
+      expect(not glz::write_binary(v, s));
       v.x = 0;
 
       expect(!glz::read_binary(v, s));
@@ -750,7 +750,7 @@ suite value_test = [] {
 
       lambda_value_t v{};
       v.x = 5;
-      glz::write_binary(v, s);
+      expect(not glz::write_binary(v, s));
       v.x = 0;
 
       expect(!glz::read_binary(v, s));
@@ -778,7 +778,7 @@ suite byte_buffer = [] {
       msg.id = 5;
       msg.val = "hello";
       std::vector<std::byte> buffer{};
-      glz::write_binary(msg, buffer);
+      expect(not glz::write_binary(msg, buffer));
 
       buffer.emplace_back(static_cast<std::byte>('\0'));
 
@@ -795,7 +795,7 @@ suite byte_buffer = [] {
       msg.id = 5;
       msg.val = "hello";
       std::vector<uint8_t> buffer{};
-      glz::write_binary(msg, buffer);
+      expect(not glz::write_binary(msg, buffer));
 
       buffer.emplace_back('\0');
 
@@ -812,7 +812,7 @@ suite byte_buffer = [] {
       msg.id = 5;
       msg.val = "hello";
       std::string buffer{};
-      glz::write_binary(msg, buffer);
+      expect(not glz::write_binary(msg, buffer));
 
       msg.id = 0;
       msg.val = "";
@@ -827,7 +827,7 @@ suite byte_buffer = [] {
       msg.id = 5;
       msg.val = "hello";
       std::vector<char8_t> buffer{};
-      glz::write_binary(msg, buffer);
+      expect(not glz::write_binary(msg, buffer));
 
       buffer.emplace_back('\0');
 
@@ -859,7 +859,7 @@ suite flag_test = [] {
       flags_t s{};
 
       std::string b{};
-      glz::write_binary(s, b);
+      expect(not glz::write_binary(s, b));
 
       s.x = false;
       s.z = false;
@@ -900,7 +900,7 @@ suite falcon_test = [] {
    "partial read"_test = [] {
       falcon0 f0{3.14};
       std::string s;
-      glz::write_binary(f0, s);
+      expect(not glz::write_binary(f0, s));
 
       falcon1 f1{};
       expect(!glz::read_binary(f1, s));
@@ -912,7 +912,7 @@ suite complex_test = [] {
    "std::complex"_test = [] {
       std::complex<double> c{1.0, 0.5};
       std::string s{};
-      glz::write_binary(c, s);
+      expect(not glz::write_binary(c, s));
 
       c = {0.0, 0.0};
       expect(!glz::read_binary(c, s));
@@ -923,7 +923,7 @@ suite complex_test = [] {
    "std::vector<std::complex<double>>"_test = [] {
       std::vector<std::complex<double>> vc = {{1.0, 0.5}, {2.0, 1.0}, {3.0, 1.5}};
       std::string s{};
-      glz::write_binary(vc, s);
+      expect(not glz::write_binary(vc, s));
 
       vc.clear();
       expect(!glz::read_binary(vc, s));
@@ -935,7 +935,7 @@ suite complex_test = [] {
    "std::vector<std::complex<float>>"_test = [] {
       std::vector<std::complex<float>> vc = {{1.0f, 0.5f}, {2.0f, 1.0f}, {3.0f, 1.5f}};
       std::string s{};
-      glz::write_binary(vc, s);
+      expect(not glz::write_binary(vc, s));
 
       vc.clear();
       expect(!glz::read_binary(vc, s));
@@ -986,7 +986,7 @@ suite skip_test = [] {
    "skip"_test = [] {
       full f{};
       std::string s{};
-      glz::write_binary(f, s);
+      expect(not glz::write_binary(f, s));
 
       skipper obj{};
       expect(!glz::read_binary(obj, s));
@@ -997,7 +997,7 @@ suite skip_test = [] {
    "no error on unknown keys"_test = [] {
       full f{};
       std::string s{};
-      glz::write_binary(f, s);
+      expect(not glz::write_binary(f, s));
 
       nothing obj{};
       expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false}>(obj, s));
@@ -1009,7 +1009,7 @@ suite set_tests = [] {
       std::unordered_set<std::string> set{"one", "two", "three"};
 
       std::string s{};
-      glz::write_binary(set, s);
+      expect(not glz::write_binary(set, s));
 
       set.clear();
 
@@ -1023,7 +1023,7 @@ suite set_tests = [] {
       std::unordered_set<uint32_t> set{0, 1, 2};
 
       std::string s{};
-      glz::write_binary(set, s);
+      expect(not glz::write_binary(set, s));
 
       set.clear();
 
@@ -1037,7 +1037,7 @@ suite set_tests = [] {
       std::set<std::string> set{"one", "two", "three"};
 
       std::string s{};
-      glz::write_binary(set, s);
+      expect(not glz::write_binary(set, s));
 
       set.clear();
 
@@ -1051,7 +1051,7 @@ suite set_tests = [] {
       std::set<uint32_t> set{0, 1, 2};
 
       std::string s{};
-      glz::write_binary(set, s);
+      expect(not glz::write_binary(set, s));
 
       set.clear();
 
@@ -1067,7 +1067,7 @@ suite bitset = [] {
       std::bitset<8> b = 0b10101010;
 
       std::string s{};
-      glz::write_binary(b, s);
+      expect(not glz::write_binary(b, s));
 
       b.reset();
       expect(!glz::read_binary(b, s));
@@ -1078,7 +1078,7 @@ suite bitset = [] {
       std::bitset<16> b = 0b10010010'00000010;
 
       std::string s{};
-      glz::write_binary(b, s);
+      expect(not glz::write_binary(b, s));
 
       b.reset();
       expect(!glz::read_binary(b, s));
@@ -1110,7 +1110,7 @@ suite key_reflection_tests = [] {
    "reflect keys from glz::meta"_test = [] {
       std::string s;
       key_reflection obj{};
-      glz::write_binary(obj, s);
+      expect(not glz::write_binary(obj, s));
 
       obj.i = 0;
       obj.d = 0;
@@ -1154,7 +1154,7 @@ suite signal_tests = [] {
    "signal"_test = [] {
       std::string s;
       signal_t obj{{true, "header description"}, {1.0, 2.0}, {1, 2, 3, 4, 5}};
-      glz::write_binary(obj, s);
+      expect(not glz::write_binary(obj, s));
 
       obj = {};
       expect(!glz::read_binary(obj, s));
@@ -1181,7 +1181,7 @@ suite vector_tests = [] {
 
       auto copy = v;
 
-      glz::write_binary(v, s);
+      expect(not glz::write_binary(v, s));
 
       v.clear();
 
@@ -1205,7 +1205,7 @@ suite vector_tests = [] {
 
       auto copy = v;
 
-      glz::write_binary(v, s);
+      expect(not glz::write_binary(v, s));
 
       v.clear();
 
@@ -1229,7 +1229,7 @@ suite vector_tests = [] {
 
       auto copy = v;
 
-      glz::write_binary(v, s);
+      expect(not glz::write_binary(v, s));
 
       v.clear();
 
@@ -1253,7 +1253,7 @@ suite vector_tests = [] {
 
       auto copy = v;
 
-      glz::write_binary(v, s);
+      expect(not glz::write_binary(v, s));
 
       v.clear();
 
@@ -1302,7 +1302,7 @@ suite glz_obj_tests = [] {
    "glz::obj"_test = [] {
       std::string s;
       std::vector<double> data;
-      glz::write_binary(glz::obj{"data", data}, s);
+      expect(not glz::write_binary(glz::obj{"data", data}, s));
 
       something_t obj;
       expect(!glz::read_binary(obj, s));
@@ -1325,7 +1325,7 @@ suite reflection_test = [] {
    "reflectable_t"_test = [] {
       std::string s;
       reflectable_t obj{};
-      glz::write_binary(obj, s);
+      expect(not glz::write_binary(obj, s));
 
       reflectable_t compare{};
       expect(!glz::read_binary(compare, s));
@@ -1348,7 +1348,7 @@ suite example_reflection_test = [] {
    "example_reflection"_test = [] {
       std::string s;
       my_example obj{};
-      glz::write_binary(obj, s);
+      expect(not glz::write_binary(obj, s));
 
       my_example compare{};
       compare.i = 0;
@@ -1366,10 +1366,10 @@ suite example_reflection_without_keys_test = [] {
       std::string without_keys;
       my_example obj{.i = 55, .d = 3.14, .hello = "happy"};
       constexpr glz::opts options{.format = glz::binary, .structs_as_arrays = true};
-      glz::write<options>(obj, without_keys);
+      expect(not glz::write<options>(obj, without_keys));
 
       std::string with_keys;
-      glz::write_binary(obj, with_keys);
+      expect(not glz::write_binary(obj, with_keys));
 
       expect(without_keys.find("hello") == std::string::npos);
       expect(with_keys.find("hello") != std::string::npos);
@@ -1386,10 +1386,10 @@ suite example_reflection_without_keys_test = [] {
    "example_reflection_without_keys_function_wrappers"_test = [] {
       std::string without_keys;
       my_example obj{.i = 55, .d = 3.14, .hello = "happy"};
-      glz::write_binary_untagged(obj, without_keys);
+      expect(not glz::write_binary_untagged(obj, without_keys));
 
       std::string with_keys;
-      glz::write_binary(obj, with_keys);
+      expect(not glz::write_binary(obj, with_keys));
 
       expect(without_keys.find("hello") == std::string::npos);
       expect(with_keys.find("hello") != std::string::npos);
@@ -1409,10 +1409,10 @@ suite my_struct_without_keys_test = [] {
       std::string without_keys;
       my_struct obj{.i = 55, .d = 3.14, .hello = "happy"};
       constexpr glz::opts options{.format = glz::binary, .structs_as_arrays = true};
-      glz::write<options>(obj, without_keys);
+      expect(not glz::write<options>(obj, without_keys));
 
       std::string with_keys;
-      glz::write_binary(obj, with_keys);
+      expect(not glz::write_binary(obj, with_keys));
 
       expect(without_keys.find("hello") == std::string::npos);
       expect(with_keys.find("hello") != std::string::npos);
@@ -1461,7 +1461,7 @@ namespace variants
       "variants"_test = [] {
          std::vector<uint8_t> out;
          D d{};
-         glz::write<glz::opts{.format = glz::binary, .structs_as_arrays = true}>(d, out); // testing compilation
+         expect(not glz::write<glz::opts{.format = glz::binary, .structs_as_arrays = true}>(d, out)); // testing compilation
       };
    };
 }
@@ -1479,7 +1479,7 @@ suite empty_object_test = [] {
    "empty_object"_test = [] {
       std::string s;
       empty_t empty{};
-      glz::write_binary(empty, s);
+      expect(not glz::write_binary(empty, s));
 
       empty_t obj;
       expect(!glz::read_binary(obj, s));
@@ -1503,7 +1503,7 @@ suite sub_enum = [] {
    "sub_enum"_test = [] {
       A obj{.b = sub::END};
       std::string s{};
-      glz::write_binary(obj, s);
+      expect(not glz::write_binary(obj, s));
 
       obj = {};
       expect(!glz::read_binary(obj, s));
@@ -1515,7 +1515,7 @@ suite glz_text_tests = [] {
    "glz_text"_test = [] {
       glz::text text = "Hello World";
       std::string out{};
-      glz::write_binary(text, out);
+      expect(not glz::write_binary(text, out));
 
       text.str.clear();
       expect(!glz::read_binary(text, out));
@@ -1527,7 +1527,7 @@ suite beve_to_json_tests = [] {
    "beve_to_json bool"_test = [] {
       bool b = true;
       std::string buffer{};
-      glz::write_binary(b, buffer);
+      expect(not glz::write_binary(b, buffer));
 
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
@@ -1537,7 +1537,7 @@ suite beve_to_json_tests = [] {
    "beve_to_json float"_test = [] {
       float v = 3.14f;
       std::string buffer{};
-      glz::write_binary(v, buffer);
+      expect(not glz::write_binary(v, buffer));
 
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
@@ -1550,7 +1550,7 @@ suite beve_to_json_tests = [] {
    "beve_to_json string"_test = [] {
       std::string v = "Hello World";
       std::string buffer{};
-      glz::write_binary(v, buffer);
+      expect(not glz::write_binary(v, buffer));
 
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
@@ -1560,7 +1560,7 @@ suite beve_to_json_tests = [] {
    "beve_to_json std::map"_test = [] {
       std::map<std::string, int> v = {{"first", 1}, {"second", 2}, {"third", 3}};
       std::string buffer{};
-      glz::write_binary(v, buffer);
+      expect(not glz::write_binary(v, buffer));
 
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
@@ -1578,7 +1578,7 @@ suite beve_to_json_tests = [] {
    "beve_to_json std::vector<int32_t>"_test = [] {
       std::vector<int32_t> v = {1, 2, 3, 4, 5};
       std::string buffer{};
-      glz::write_binary(v, buffer);
+      expect(not glz::write_binary(v, buffer));
 
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
@@ -1588,7 +1588,7 @@ suite beve_to_json_tests = [] {
    "beve_to_json std::vector<double>"_test = [] {
       std::vector<double> v = {1.0, 2.0, 3.0, 4.0, 5.0};
       std::string buffer{};
-      glz::write_binary(v, buffer);
+      expect(not glz::write_binary(v, buffer));
 
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
@@ -1598,7 +1598,7 @@ suite beve_to_json_tests = [] {
    "beve_to_json std::vector<std::string>"_test = [] {
       std::vector<std::string> v = {"one", "two", "three"};
       std::string buffer{};
-      glz::write_binary(v, buffer);
+      expect(not glz::write_binary(v, buffer));
 
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
@@ -1608,7 +1608,7 @@ suite beve_to_json_tests = [] {
    "beve_to_json std::tuple<int, std::string>"_test = [] {
       std::tuple<int, std::string> v = {99, "spiders"};
       std::string buffer{};
-      glz::write_binary(v, buffer);
+      expect(not glz::write_binary(v, buffer));
 
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
@@ -1618,7 +1618,7 @@ suite beve_to_json_tests = [] {
    "beve_to_json std::variant<int, std::string>"_test = [] {
       std::variant<int, std::string> v = 99;
       std::string buffer{};
-      glz::write_binary(v, buffer);
+      expect(not glz::write_binary(v, buffer));
 
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
@@ -1628,7 +1628,7 @@ suite beve_to_json_tests = [] {
    "beve_to_json std::variant<int, std::string> prettify"_test = [] {
       std::variant<int, std::string> v = 99;
       std::string buffer{};
-      glz::write_binary(v, buffer);
+      expect(not glz::write_binary(v, buffer));
 
       std::string json{};
       expect(!glz::beve_to_json<glz::opts{.prettify = true}>(buffer, json));
@@ -1640,7 +1640,7 @@ suite beve_to_json_tests = [] {
    "beve_to_json std::complex<float>"_test = [] {
       std::complex<float> v{1.f, 2.f};
       std::string buffer{};
-      glz::write_binary(v, buffer);
+      expect(not glz::write_binary(v, buffer));
 
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
@@ -1650,7 +1650,7 @@ suite beve_to_json_tests = [] {
    "beve_to_json std::vector<std::complex<float>>"_test = [] {
       std::vector<std::complex<float>> v{{1.f, 2.f}, {2.f, 3.f}};
       std::string buffer{};
-      glz::write_binary(v, buffer);
+      expect(not glz::write_binary(v, buffer));
 
       std::string json{};
       expect(!glz::beve_to_json(buffer, json));
@@ -1662,7 +1662,7 @@ suite merge_tests = [] {
    "merge"_test = [] {
       my_struct v{};
 
-      const auto bin = glz::write_binary(glz::merge{glz::obj{"a", v}, glz::obj{"c", "d"}});
+      const auto bin = glz::write_binary(glz::merge{glz::obj{"a", v}, glz::obj{"c", "d"}}).value_or("error");
 
       std::string json{};
       expect(!glz::beve_to_json(bin, json));
@@ -1686,7 +1686,7 @@ struct glz::meta<path_test_struct>
 suite filesystem_tests = [] {
    "std::filesystem::path"_test = [] {
       std::filesystem::path p{"./my_path"};
-      std::string buffer = glz::write_binary(p);
+      std::string buffer = glz::write_binary(p).value_or("error");
 
       p = "./bogus";
       expect(!glz::read_binary(p, buffer));
@@ -1695,7 +1695,7 @@ suite filesystem_tests = [] {
 
    "path_test_struct"_test = [] {
       path_test_struct obj{};
-      std::string buffer = glz::write_binary(obj);
+      std::string buffer = glz::write_binary(obj).value_or("error");
 
       obj.p.clear();
       expect(!glz::read_binary(obj, buffer));
@@ -1726,7 +1726,7 @@ suite c_style_arrays = [] {
    "uint32_t c array"_test = [] {
       uint32_t arr[4] = {1, 2, 3, 4};
       std::string s{};
-      glz::write_binary(arr, s);
+      expect(not glz::write_binary(arr, s));
       std::memset(arr, 0, 4 * sizeof(uint32_t));
       expect(arr[0] == 0);
       expect(!glz::read_binary(arr, s));
@@ -1739,13 +1739,13 @@ suite c_style_arrays = [] {
    "const double c array"_test = [] {
       const double arr[4] = {1.1, 2.2, 3.3, 4.4};
       std::string s{};
-      glz::write_binary(arr, s);
+      expect(not glz::write_binary(arr, s));
    };
 
    "double c array"_test = [] {
       double arr[4] = {1.1, 2.2, 3.3, 4.4};
       std::string s{};
-      glz::write_binary(arr, s);
+      expect(not glz::write_binary(arr, s));
       std::memset(arr, 0, 4 * sizeof(double));
       expect(arr[0] == 0.0);
       expect(!glz::read_binary(arr, s));
@@ -1758,7 +1758,7 @@ suite c_style_arrays = [] {
    "struct_c_arrays"_test = [] {
       struct_c_arrays obj{};
       std::string s{};
-      glz::write_binary(obj, s);
+      expect(not glz::write_binary(obj, s));
 
       obj.ints[0] = 0;
       obj.ints[1] = 1;
@@ -1772,7 +1772,7 @@ suite c_style_arrays = [] {
    "struct_c_arrays_meta"_test = [] {
       struct_c_arrays_meta obj{};
       std::string s{};
-      glz::write_binary(obj, s);
+      expect(not glz::write_binary(obj, s));
 
       obj.ints[0] = 0;
       obj.ints[1] = 1;
@@ -1788,7 +1788,7 @@ suite error_outputs = [] {
    "valid"_test = [] {
       std::string v = "Hello World";
       std::vector<std::byte> buffer{};
-      glz::write_binary(v, buffer);
+      expect(not glz::write_binary(v, buffer));
       buffer.emplace_back(std::byte('\0'));
       v.clear();
       auto ec = glz::read_binary(v, buffer);
@@ -1799,7 +1799,7 @@ suite error_outputs = [] {
    "invalid"_test = [] {
       std::string v = "Hello World";
       std::string buffer{};
-      glz::write_binary(int{5}, buffer);
+      expect(not glz::write_binary(int{5}, buffer));
 
       auto ec = glz::read_binary(v, buffer);
       expect(ec != glz::error_code::none);
@@ -1811,7 +1811,7 @@ suite error_outputs = [] {
    "invalid with buffer"_test = [] {
       std::string v = "Hello World";
       std::string buffer{};
-      glz::write_binary(int{5}, buffer);
+      expect(not glz::write_binary(int{5}, buffer));
 
       auto ec = glz::read_binary(v, buffer);
       expect(ec != glz::error_code::none);
@@ -1850,7 +1850,7 @@ suite read_allocated_tests = [] {
 
    "partial_read tuple"_test = [] {
       std::tuple<std::string, int, std::string> input{"hello", 88, "a string we don't care about"};
-      auto s = glz::write_binary(input);
+      auto s = glz::write_binary(input).value_or("error");
       std::tuple<std::string, int> obj{};
       auto ec = glz::read<partial>(obj, s);
       expect(!ec) << glz::format_error(ec, s);
@@ -1860,7 +1860,7 @@ suite read_allocated_tests = [] {
 
    "partial_read vector<int>"_test = [] {
       std::vector<int> input{1, 2, 3, 4, 5};
-      auto s = glz::write_binary(input);
+      auto s = glz::write_binary(input).value_or("error");
       std::vector<int> v(2);
       expect(!glz::read<partial>(v, s));
       expect(v.size() == 2);
@@ -1870,7 +1870,7 @@ suite read_allocated_tests = [] {
 
    "partial_read vector<string>"_test = [] {
       std::vector<std::string> input{"1", "2", "3", "4", "5"};
-      auto s = glz::write_binary(input);
+      auto s = glz::write_binary(input).value_or("error");
       std::vector<std::string> v(2);
       expect(!glz::read<partial>(v, s));
       expect(v.size() == 2);
@@ -1880,7 +1880,7 @@ suite read_allocated_tests = [] {
 
    "partial_read map"_test = [] {
       std::map<std::string, int> input{{"1", 1}, {"2", 2}, {"3", 3}};
-      auto s = glz::write_binary(input);
+      auto s = glz::write_binary(input).value_or("error");
       std::map<std::string, int> obj{{"2", 0}};
       expect(!glz::read<partial>(obj, s));
       expect(obj.size() == 1);
@@ -1889,7 +1889,7 @@ suite read_allocated_tests = [] {
 
    "partial_read partial_struct"_test = [] {
       full_struct input{"garbage", "ha!", 400, {1, 2, 3}};
-      auto s = glz::write_binary(input);
+      auto s = glz::write_binary(input).value_or("error");
       partial_struct obj{};
       expect(
          !glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false, .partial_read = true}>(obj, s));
@@ -1899,7 +1899,7 @@ suite read_allocated_tests = [] {
 
    "partial_read"_test = [] {
       Header input{"51e2affb", "message_type"};
-      auto buf = glz::write_binary(input);
+      auto buf = glz::write_binary(input).value_or("error");
       Header h{};
       expect(!glz::read_binary(h, buf));
       expect(h.id == "51e2affb");
@@ -1908,7 +1908,7 @@ suite read_allocated_tests = [] {
 
    "partial read unknown key 2"_test = [] {
       Header input{"51e2affb", "message_type"};
-      auto buf = glz::write_binary(input);
+      auto buf = glz::write_binary(input).value_or("error");
       Header h{};
       expect(!glz::read<glz::opts{.format = glz::binary, .error_on_unknown_keys = false}>(h, buf));
       expect(h.id == "51e2affb");
@@ -1935,7 +1935,7 @@ struct glz::meta<hide_struct>
 suite hide_tests = [] {
    "hide"_test = [] {
       hide_struct obj{};
-      auto b = glz::write_binary(obj);
+      auto b = glz::write_binary(obj).value_or("error");
       expect(!glz::read_binary(obj, b));
    };
 };
@@ -1958,7 +1958,7 @@ struct skip_obj
 suite skip_tests = [] {
    "skip"_test = [] {
       skip_fields data{};
-      auto buffer = glz::write_binary(data);
+      auto buffer = glz::write_binary(data).value_or("error");
       skip_obj obj{};
       expect(!glz::read_binary(obj, buffer));
    };
@@ -1967,7 +1967,7 @@ suite skip_tests = [] {
 suite type_conversions = [] {
    "double -> float"_test = [] {
       constexpr double pi64 = std::numbers::pi_v<double>;
-      auto b = glz::write_binary(pi64);
+      auto b = glz::write_binary(pi64).value_or("error");
       float pi32{};
       expect(!glz::read_binary(pi32, b));
       expect(pi32 == std::numbers::pi_v<float>);
@@ -1975,25 +1975,25 @@ suite type_conversions = [] {
 
    "float -> double"_test = [] {
       constexpr float pi32 = std::numbers::pi_v<float>;
-      auto b = glz::write_binary(pi32);
+      auto b = glz::write_binary(pi32).value_or("error");
       double pi64{};
       expect(!glz::read_binary(pi64, b));
       expect(pi64 == std::numbers::pi_v<float>);
    };
 
    "int8_t -> uint8_t"_test = [] {
-      auto b = glz::write_binary(int8_t{45});
+      auto b = glz::write_binary(int8_t{45}).value_or("error");
       uint8_t i{};
       expect(!glz::read_binary(i, b));
       expect(i == 45);
 
-      b = glz::write_binary(int8_t{-1});
+      b = glz::write_binary(int8_t{-1}).value_or("error");
       expect(!glz::read_binary(i, b));
       expect(i == 255);
    };
 
    "int8_t -> int32_t"_test = [] {
-      auto b = glz::write_binary(int8_t{127});
+      auto b = glz::write_binary(int8_t{127}).value_or("error");
       int32_t i{};
       expect(!glz::read_binary(i, b));
       expect(i == 127);
@@ -2001,7 +2001,7 @@ suite type_conversions = [] {
 
    "vector<double> -> vector<float>"_test = [] {
       std::vector<double> input{1.1, 2.2, 3.3};
-      auto b = glz::write_binary(input);
+      auto b = glz::write_binary(input).value_or("error");
       std::vector<float> v{};
       expect(!glz::read_binary(v, b));
       expect(v == std::vector{1.1f, 2.2f, 3.3f});
@@ -2009,7 +2009,7 @@ suite type_conversions = [] {
 
    "vector<float> -> vector<double>"_test = [] {
       std::vector<float> input{1.f, 2.f, 3.f};
-      auto b = glz::write_binary(input);
+      auto b = glz::write_binary(input).value_or("error");
       std::vector<double> v{};
       expect(!glz::read_binary(v, b));
       expect(v == std::vector{1.0, 2.0, 3.0});
@@ -2017,7 +2017,7 @@ suite type_conversions = [] {
 
    "vector<double> -> vector<int>"_test = [] {
       std::vector<double> input{1.1, 2.2, 3.3};
-      auto b = glz::write_binary(input);
+      auto b = glz::write_binary(input).value_or("error");
       std::vector<int> v{};
       expect(!glz::read_binary(v, b));
       expect(v == std::vector{1, 2, 3});
@@ -2025,7 +2025,7 @@ suite type_conversions = [] {
 
    "map<int32_t, double> -> map<uint32_t, float>"_test = [] {
       std::map<int32_t, double> input{{1, 1.1}, {2, 2.2}, {3, 3.3}};
-      auto b = glz::write_binary(input);
+      auto b = glz::write_binary(input).value_or("error");
       std::map<uint32_t, float> v{};
       expect(!glz::read_binary(v, b));
       expect(v == std::map<uint32_t, float>{{1, 1.1f}, {2, 2.2f}, {3, 3.3f}});
@@ -2061,13 +2061,13 @@ suite volatile_tests = [] {
    "basic volatile"_test = [] {
       volatile int i = 42;
       std::string s{};
-      glz::write_binary(i, s);
+      expect(not glz::write_binary(i, s));
       i = 0;
       expect(!glz::read_binary(i, s));
       expect(i == 42);
 
       volatile uint64_t u = 99;
-      glz::write_binary(u, s);
+      expect(not glz::write_binary(u, s));
       u = 0;
       expect(!glz::read_binary(u, s));
       expect(u == 99);
@@ -2077,7 +2077,7 @@ suite volatile_tests = [] {
       volatile int i = 42;
       volatile int* ptr = &i;
       std::string s{};
-      glz::write_binary(ptr, s);
+      expect(not glz::write_binary(ptr, s));
 
       i = 0;
       expect(!glz::read_binary(i, s));
@@ -2088,7 +2088,7 @@ suite volatile_tests = [] {
    "volatile struct_for_volatile"_test = [] {
       volatile struct_for_volatile obj{{1, 2, 3, 4}, true, -7, 9.9, 12};
       std::string s{};
-      glz::write_binary(obj, s);
+      expect(not glz::write_binary(obj, s));
 
       obj.a.fill(0);
       obj.b = false;
@@ -2107,7 +2107,7 @@ suite volatile_tests = [] {
    "volatile my_volatile_struct"_test = [] {
       volatile my_volatile_struct obj{{1, 2, 3, 4}, true, -7, 9.9, 12};
       std::string s{};
-      glz::write_binary(obj, s);
+      expect(not glz::write_binary(obj, s));
 
       obj.a.fill(0);
       obj.b = false;

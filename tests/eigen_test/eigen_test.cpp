@@ -26,7 +26,7 @@ int main()
       Eigen::Matrix<double, 2, 2> m{};
       m << 5, 1, 1, 7;
       std::string json{};
-      glz::write_json(m, json);
+      expect(not glz::write_json(m, json));
       expect(json == "[5,1,1,7]");
    };
 
@@ -43,7 +43,7 @@ int main()
       Eigen::Matrix<double, 2, 2> m{};
       m << 1, 2, 3, 4;
       std::string b;
-      glz::write_binary(m, b);
+      expect(not glz::write_binary(m, b));
       Eigen::Matrix<double, 2, 2> e{};
       expect(!glz::read_binary(e, b));
       const bool boolean = m == e;
@@ -54,7 +54,7 @@ int main()
       Eigen::MatrixXd m(2, 2);
       m << 1, 2, 3, 4;
       std::string b;
-      glz::write_binary(m, b);
+      expect(not glz::write_binary(m, b));
       Eigen::MatrixXd e(2, 2);
       expect(!glz::read_binary(e, b));
       const bool boolean = m == e;
@@ -65,7 +65,7 @@ int main()
       Eigen::MatrixXd m(2, 2);
       m << 1, 2, 3, 4;
       std::string b;
-      glz::write_binary(m, b);
+      expect(not glz::write_binary(m, b));
       std::string json{};
       expect(!glz::beve_to_json(b, json));
       expect(json == R"({"layout":"layout_right","extents":[2,2],"value":[1,3,2,4]})") << json;
@@ -74,7 +74,7 @@ int main()
    "array"_test = [] {
       Eigen::Vector3d m{1, 2, 3};
       std::string b;
-      glz::write_binary(m, b);
+      expect(not glz::write_binary(m, b));
       Eigen::Vector3d e{};
       expect(!glz::read_binary(e, b));
       const bool boolean = m == e;
@@ -87,7 +87,7 @@ int main()
          m[i] = i;
       }
       std::string b;
-      glz::write_json(m, b);
+      expect(not glz::write_json(m, b));
       Eigen::VectorXd e{};
       expect(glz::read_json(e, b) == glz::error_code::none);
       const bool boolean = m == e;
@@ -100,7 +100,7 @@ int main()
          m[i] = i;
       }
       std::string b;
-      glz::write_binary(m, b);
+      expect(not glz::write_binary(m, b));
       Eigen::VectorXd e{};
       expect(!glz::read_binary(e, b));
       const bool boolean = m == e;
@@ -113,7 +113,7 @@ int main()
          m[i] = {double(i), 2 * double(i)};
       }
       std::string b;
-      glz::write_binary(m, b);
+      expect(not glz::write_binary(m, b));
       Eigen::VectorXcd e{};
       expect(!glz::read_binary(e, b));
       const bool boolean = m == e;
@@ -126,7 +126,7 @@ int main()
          m.array()(i) = {double(i), 2 * double(i)};
       }
       std::string b;
-      glz::write_binary(m, b);
+      expect(not glz::write_binary(m, b));
       Eigen::MatrixXcd e(3, 3);
       expect(!glz::read_binary(e, b));
       const bool boolean = m == e;

@@ -51,8 +51,8 @@ struct glz::json_schema<schema_obj>
 
 struct test_case
 {
-   std::string schema_str = glz::write_json_schema<schema_obj>();
-   glz::expected<glz::detail::schematic, glz::parse_error> obj{glz::read_json<glz::detail::schematic>(schema_str)};
+   std::string schema_str = glz::write_json_schema<schema_obj>().value_or("error");
+   glz::expected<glz::detail::schematic, glz::error_ctx> obj{glz::read_json<glz::detail::schematic>(schema_str)};
 };
 
 template <class T>
@@ -86,7 +86,7 @@ auto expect_property(const test_case& test, std::string_view key, Value value)
 suite schema_attributes = [] {
    "parsing"_test = [] {
       test_case const test{};
-      expect(test.obj.has_value()) << format_error(!test.obj.has_value() ? test.obj.error() : glz::parse_error{},
+      expect(test.obj.has_value()) << format_error(!test.obj.has_value() ? test.obj.error() : glz::error_ctx{},
                                                    test.schema_str);
       expect[test.obj.has_value()];
    };
@@ -290,7 +290,7 @@ suite compile_errors = [] {
 suite schema_tests = [] {
    "typeof directly accessed integer should only be integer"_test = [] {
       auto test = []<typename T>(T) {
-         std::string schema_str = glz::write_json_schema<T>();
+         std::string schema_str = glz::write_json_schema<T>().value_or("error");
          schematic_substitute obj{};
          auto err = read_json_ignore_unknown(obj, schema_str);
          expect(!err) << format_error(err, schema_str);
@@ -302,7 +302,7 @@ suite schema_tests = [] {
    };
 
    "Constexpr number is constant"_test = [] {
-      std::string schema_str = glz::write_json_schema<const_one_number>();
+      std::string schema_str = glz::write_json_schema<const_one_number>().value_or("error");
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
@@ -312,7 +312,7 @@ suite schema_tests = [] {
    };
 
    "Constexpr enum is constant"_test = [] {
-      std::string schema_str = glz::write_json_schema<const_one_enum>();
+      std::string schema_str = glz::write_json_schema<const_one_enum>().value_or("error");
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
@@ -323,7 +323,7 @@ suite schema_tests = [] {
 
    "number has minimum"_test = [] {
       auto test = []<typename number_t>(number_t) {
-         std::string schema_str = glz::write_json_schema<number_t>();
+         std::string schema_str = glz::write_json_schema<number_t>().value_or("error");
          schematic_substitute obj{};
          auto err = read_json_ignore_unknown(obj, schema_str);
          expect(!err) << format_error(err, schema_str);
@@ -337,14 +337,14 @@ suite schema_tests = [] {
    };
 
    "always nullable type is constant null"_test = [] {
-      std::string schema_str = glz::write_json_schema<std::monostate>();
+      std::string schema_str = glz::write_json_schema<std::monostate>().value_or("error");
       // reading null will of course leave the std::optional as empty, therefore check if
       // null is actually written in the schema
       expect(schema_str == R"({"type":["null"],"$defs":{},"const":null})");
    };
 
    "enum oneOf has title and constant"_test = [] {
-      std::string schema_str = glz::write_json_schema<color>();
+      std::string schema_str = glz::write_json_schema<color>().value_or("error");
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
@@ -358,7 +358,7 @@ suite schema_tests = [] {
    };
 
    "enum description"_test = [] {
-      std::string schema_str = glz::write_json_schema<color>();
+      std::string schema_str = glz::write_json_schema<color>().value_or("error");
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
@@ -369,7 +369,7 @@ suite schema_tests = [] {
    };
 
    "fixed array has fixed size"_test = [] {
-      std::string schema_str = glz::write_json_schema<std::array<std::int64_t, 42>>();
+      std::string schema_str = glz::write_json_schema<std::array<std::int64_t, 42>>().value_or("error");
       schematic_substitute obj{};
       auto err = read_json_ignore_unknown(obj, schema_str);
       expect(!err) << format_error(err, schema_str);
