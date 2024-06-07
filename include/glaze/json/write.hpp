@@ -964,13 +964,15 @@ namespace glz
             dump<']'>(args...);
          }
       };
-
-      template <class T>
-      struct to_json<includer<T>>
+      
+      template <is_includer T>
+      struct to_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&...) noexcept
-         {}
+         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&&, Args&&... args) noexcept
+         {
+            dump<R"("")">(args...); // dump an empty string
+         }
       };
 
       template <const std::string_view& S>

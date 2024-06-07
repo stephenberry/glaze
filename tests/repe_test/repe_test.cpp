@@ -636,4 +636,20 @@ suite multi_threading_tests = [] {
    };
 };
 
+struct glaze_types
+{
+   glz::file_include include{};
+};
+
+suite glaze_types_test = [] {
+   "glaze_types"_test = [] {
+      glaze_types obj{};
+      
+      glz::repe::registry<> registry{};
+      registry.on(obj);
+      
+      
+   };
+};
+
 int main() { return 0; }
