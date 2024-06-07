@@ -964,7 +964,7 @@ namespace glz
             dump<']'>(args...);
          }
       };
-      
+
       template <is_includer T>
       struct to_json<T>
       {

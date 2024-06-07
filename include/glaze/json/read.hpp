@@ -145,7 +145,7 @@ namespace glz
             ctx.error = error_code::attempt_member_func_read;
          }
       };
-      
+
       template <is_includer T>
       struct from_json<T>
       {
@@ -155,7 +155,7 @@ namespace glz
             if constexpr (!Opts.ws_handled) {
                GLZ_SKIP_WS;
             }
-            
+
             match<R"("")", Opts>(ctx, it, end);
          }
       };

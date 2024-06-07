@@ -644,11 +644,9 @@ struct glaze_types
 suite glaze_types_test = [] {
    "glaze_types"_test = [] {
       glaze_types obj{};
-      
+
       glz::repe::registry<> registry{};
       registry.on(obj);
-      
-      
    };
 };
 
