@@ -108,6 +108,12 @@ suite basic_types = [] {
       bool val = glz::ex::read_json<bool>("true");
       expect(val == true);
    };
+   
+   "bool read valid"_test = [] {
+      bool val{};
+      glz::ex::read<glz::opts{}>(val, "true");
+      expect(val == true);
+   };
 
    "bool read invalid"_test = [] {
       expect(throws([] {
