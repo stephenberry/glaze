@@ -771,7 +771,7 @@ namespace glz
                if (bool(ctx.error)) [[unlikely]]
                   return;
                value = {start, size_t(it - start)};
-               ++it;
+               ++it; // skip closing quote
             }
             else if constexpr (char_array_t<T>) {
                skip_string_view<Opts>(ctx, it, end);
@@ -785,6 +785,7 @@ namespace glz
                }
                std::memcpy(value, start, n);
                value[n] = '\0';
+               ++it; // skip closing quote
             }
          }
       };
