@@ -1023,6 +1023,17 @@ namespace glz
       }
       return error_str;
    }
+
+   template <class T>
+   [[nodiscard]] std::string format_error(const expected<T, parse_error>& pe, const auto& buffer)
+   {
+      if (not pe) {
+         return format_error(pe.error(), buffer);
+      }
+      else {
+         return "";
+      }
+   }
    
    [[nodiscard]] inline std::string format_error(const error_ctx& pe)
    {
