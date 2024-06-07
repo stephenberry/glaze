@@ -140,7 +140,7 @@ namespace glz::ex
          return result.value();
       }
       else {
-         throw std::runtime_error("write_json error: " + glz::format_error(result.error));
+         throw std::runtime_error("write_json error: " + glz::format_error(result.error()));
       }
    }
 
