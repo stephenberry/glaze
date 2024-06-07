@@ -469,7 +469,7 @@ namespace glz
       {
          template <auto Opts, class It, class End>
             requires(Opts.is_padded)
-         GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
+         static void op(auto& value, is_context auto&& ctx, It&& it, End&& end) noexcept
          {
             if constexpr (Opts.number) {
                auto start = it;
@@ -862,7 +862,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Opts.ws_handled) {
                GLZ_SKIP_WS;
@@ -902,7 +902,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto& /*value*/, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto& /*value*/, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Opts.ws_handled) {
                GLZ_SKIP_WS;
@@ -946,7 +946,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (!Options.ws_handled) {
@@ -985,7 +985,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (!Options.ws_handled) {
@@ -1262,7 +1262,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (!Options.ws_handled) {
@@ -1295,7 +1295,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_FLATTEN static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<T>) {
@@ -1352,7 +1352,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Opts.ws_handled) {
                GLZ_SKIP_WS;
@@ -1434,7 +1434,7 @@ namespace glz
 
       // TODO: count the maximum number of escapes that can be seen if error_on_unknown_keys is true
       template <glaze_object_t T>
-      GLZ_ALWAYS_INLINE constexpr bool keys_may_contain_escape()
+      constexpr bool keys_may_contain_escape()
       {
          auto is_unicode = [](const auto c) { return (static_cast<uint8_t>(c) >> 7) > 0; };
 
@@ -1466,13 +1466,13 @@ namespace glz
       }
 
       template <reflectable T>
-      inline constexpr bool keys_may_contain_escape()
+      constexpr bool keys_may_contain_escape()
       {
          return false; // escapes are not valid in C++ names
       }
 
       template <is_variant T>
-      GLZ_ALWAYS_INLINE constexpr bool keys_may_contain_escape()
+      constexpr bool keys_may_contain_escape()
       {
          bool may_escape = false;
          constexpr auto N = std::variant_size_v<T>;
@@ -1492,7 +1492,7 @@ namespace glz
       // only use this if the keys cannot contain escape characters
       template <class T, string_literal tag = "">
          requires(glaze_object_t<T> || reflectable<T>)
-      GLZ_ALWAYS_INLINE constexpr auto key_stats()
+      constexpr auto key_stats()
       {
          key_stats_t stats{};
          if constexpr (!tag.sv().empty()) {
@@ -1524,7 +1524,7 @@ namespace glz
       }
 
       template <is_variant T, string_literal tag = "">
-      GLZ_ALWAYS_INLINE constexpr auto key_stats()
+      constexpr auto key_stats()
       {
          key_stats_t stats{};
          if constexpr (!tag.sv().empty()) {
@@ -1607,7 +1607,7 @@ namespace glz
       struct from_json<T>
       {
          template <opts Options, string_literal tag = "">
-         GLZ_FLATTEN static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(T& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
             if constexpr (!Options.opening_handled) {
@@ -1662,7 +1662,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options, string_literal tag = "">
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             static constexpr auto num_members = reflection_count<T>;
             if constexpr (num_members == 0 && is_partial_read<T>) {
@@ -2110,7 +2110,7 @@ namespace glz
       struct process_arithmetic_boolean_string_or_array
       {
          template <auto Options>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             if constexpr (glz::tuple_size_v<Tuple> < 1) {
                ctx.error = error_code::no_matching_variant_type;
@@ -2158,7 +2158,7 @@ namespace glz
       {
          // Note that items in the variant are required to be default constructable for us to switch types
          template <auto Options>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (variant_is_auto_deducible<T>()) {
@@ -2361,7 +2361,7 @@ namespace glz
       struct from_json<array_variant_wrapper<T>>
       {
          template <auto Options>
-         GLZ_FLATTEN static void op(auto&& wrapper, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto&& wrapper, is_context auto&& ctx, auto&& it, auto&& end)
          {
             auto& value = wrapper.value;
 
@@ -2407,7 +2407,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Opts.ws_handled) {
                GLZ_SKIP_WS;
@@ -2496,7 +2496,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (!Options.ws_handled) {

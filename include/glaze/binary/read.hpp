@@ -1065,7 +1065,7 @@ namespace glz
       {
          template <auto Opts>
             requires(Opts.structs_as_arrays == true)
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (reflectable<T>) {
                auto t = to_tuple(value);
@@ -1098,7 +1098,7 @@ namespace glz
 
          template <auto Opts>
             requires(Opts.structs_as_arrays == false)
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr uint8_t type = 0; // string key
             constexpr uint8_t header = tag::object | type;
