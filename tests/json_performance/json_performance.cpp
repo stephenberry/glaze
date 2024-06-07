@@ -158,7 +158,7 @@ struct glz::meta<obj_t>
 [[maybe_unused]] constexpr size_t iterations = 100'000;
 #endif
 
-struct results
+/*struct results
 {
    std::string_view name{};
    std::string_view url{};
@@ -383,6 +383,6 @@ suite object_performance = [] {
    "object_performance"_test = [] {
       glaze_test<glz::opts{}>();
    };
-};
+};*/
 
 int main() { return 0; }
