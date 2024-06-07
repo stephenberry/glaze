@@ -687,10 +687,8 @@ namespace glz::repe
    {
       using procedure = std::function<void(state&&)>; // RPC method
       std::unordered_map<sv, procedure, detail::string_hash, std::equal_to<>> methods;
-      
-      void clear() {
-         methods.clear();
-      }
+
+      void clear() { methods.clear(); }
 
       // TODO: replace this std::map with a std::flat_map with a std::deque (to not invalidate references)
       std::map<sv, mutex_link> mtxs; // only hashes during initialization

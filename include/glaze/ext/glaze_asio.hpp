@@ -256,10 +256,8 @@ namespace glz
       std::shared_ptr<asio::signal_set> signals{};
 
       repe::registry<Opts> registry{};
-      
-      void clear_registry() {
-         registry.clear();
-      }
+
+      void clear_registry() { registry.clear(); }
 
       template <const std::string_view& Root = repe::detail::empty_path, class T>
          requires(glz::detail::glaze_object_t<T> || glz::detail::reflectable<T>)
