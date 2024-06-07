@@ -5,7 +5,6 @@
 #include <map>
 #include <random>
 #include <unordered_map>
-#include <format>
 
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
@@ -178,7 +177,7 @@ constexpr size_t iterations = 1'000'000;
 constexpr size_t iterations = 100'000;
 #endif
 
-struct results
+/*struct results
 {
    std::string_view name{};
    std::string_view url{};
@@ -403,6 +402,6 @@ suite object_performance = [] {
    "object_performance"_test = [] {
       glaze_test<glz::opts{}>();
    };
-};
+};*/
 
 int main() { return 0; }
