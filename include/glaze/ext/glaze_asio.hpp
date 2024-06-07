@@ -3,8 +3,13 @@
 
 #pragma once
 
-#if __has_include(<asio.hpp>)
+#if __has_include(<asio.hpp>) && !defined(GLZ_USE_BOOST_ASIO)
 #include <asio.hpp>
+#elif __has_include(<boost/asio.hpp>)
+#ifndef GLZ_USING_BOOST_ASIO
+#define GLZ_USING_BOOST_ASIO
+#endif
+#include <boost/asio.hpp>
 #else
 static_assert(false, "standalone asio must be included to use glaze/ext/glaze_asio.hpp");
 #endif
@@ -17,6 +22,9 @@ static_assert(false, "standalone asio must be included to use glaze/ext/glaze_as
 
 namespace glz
 {
+#if defined(GLZ_USING_BOOST_ASIO)
+   namespace asio = boost::asio;
+#endif
    inline void send_buffer(asio::ip::tcp::socket& socket, const std::string_view str)
    {
       const uint64_t size = str.size();
@@ -108,7 +116,11 @@ namespace glz
          socket = std::make_shared<asio::ip::tcp::socket>(*ctx);
          asio::ip::tcp::resolver resolver{*ctx};
          const auto endpoint = resolver.resolve(host, service);
+#if !defined(GLZ_USING_BOOST_ASIO)
          std::error_code ec{};
+#else
+         boost::system::error_code ec{};
+#endif
          asio::connect(*socket, endpoint, ec);
          if (ec) {
             return ec;
