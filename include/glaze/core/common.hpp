@@ -589,7 +589,7 @@ namespace glz
             }
          }
          else {
-            return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>({key_value<T, I>()...});
+            return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(std::array{key_value<T, I>()...});
          }
       }
 
