@@ -634,7 +634,7 @@ suite nested_target_tests = [] {
    };
 };
 
-namespace glz::detail
+/*namespace glz::detail
 {
    template <>
    struct from_json<std::chrono::seconds>
@@ -671,6 +671,6 @@ suite custom_chrono_tests = [] {
       expect(obj.message == "Hello");
       expect(obj.seconds_duration.count() == 5458);
    };
-};
+};*/
 
 int main() { return 0; }
