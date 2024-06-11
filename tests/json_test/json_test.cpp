@@ -8017,19 +8017,20 @@ suite single_float_struct = [] {
 struct raw_struct
 {
    std::string str{};
+   Color color{};
 };
 
 template <>
 struct glz::meta<raw_struct>
 {
    using T = raw_struct;
-   static constexpr auto value = object("str", glz::raw<&T::str>);
+   static constexpr auto value = object("str", glz::raw<&T::str>, "color", glz::raw<&T::color>);
 };
 
 suite raw_test = [] {
    "raw"_test = [] {
-      raw_struct obj{.str = R"("Hello")"};
-      expect(glz::write_json(obj) == R"({"str":"Hello"})");
+      raw_struct obj{.str = R"("Hello")", .color = Color::Blue};
+      expect(glz::write_json(obj) == R"({"str":"Hello","color":Blue})");
    };
 };
 
