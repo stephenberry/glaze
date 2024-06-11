@@ -129,12 +129,16 @@ namespace glz
       }
 
       template <class Params>
-      void notify(repe::header&& header, Params&& params)
+      [[nodiscard]] repe::error_t notify(repe::header&& header, Params&& params)
       {
          header.notify = true;
-         repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
+         const auto ec = repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
+         if (bool(ec)) [[unlikely]] {
+            return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
+         }
 
          send_buffer(*socket, buffer);
+         return {};
       }
 
       template <class Result>
@@ -142,7 +146,10 @@ namespace glz
       {
          header.notify = false;
          header.empty = true; // no params
-         repe::request<Opts>(std::move(header), nullptr, buffer);
+         const auto ec = repe::request<Opts>(std::move(header), nullptr, buffer);
+         if (bool(ec)) [[unlikely]] {
+            return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
+         }
 
          send_buffer(*socket, buffer);
          receive_buffer(*socket, buffer);
@@ -167,7 +174,10 @@ namespace glz
       [[nodiscard]] repe::error_t set(repe::header&& header, Params&& params)
       {
          header.notify = false;
-         repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
+         const auto ec = repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
+         if (bool(ec)) [[unlikely]] {
+            return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
+         }
 
          send_buffer(*socket, buffer);
          receive_buffer(*socket, buffer);
@@ -179,7 +189,10 @@ namespace glz
       [[nodiscard]] repe::error_t call(repe::header&& header, Params&& params, Result&& result)
       {
          header.notify = false;
-         repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
+         const auto ec = repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
+         if (bool(ec)) [[unlikely]] {
+            return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
+         }
 
          send_buffer(*socket, buffer);
          receive_buffer(*socket, buffer);
@@ -191,7 +204,10 @@ namespace glz
       {
          header.notify = false;
          header.empty = true; // because no value provided
-         glz::write_json(std::forward_as_tuple(std::move(header), nullptr), buffer);
+         const auto ec = glz::write_json(std::forward_as_tuple(std::move(header), nullptr), buffer);
+         if (bool(ec)) [[unlikely]] {
+            return {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
+         }
 
          send_buffer(*socket, buffer);
          receive_buffer(*socket, buffer);
@@ -229,10 +245,14 @@ namespace glz
       }
 
       template <class Params>
-      [[nodiscard]] std::string& call_raw(repe::header&& header, Params&& params)
+      [[nodiscard]] std::string& call_raw(repe::header&& header, Params&& params, repe::error_t& error)
       {
          header.notify = false;
-         repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
+         const auto ec = repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
+         if (bool(ec)) [[unlikely]] {
+            error = {repe::error_e::invalid_params, glz::format_error(ec, buffer)};
+            return buffer;
+         }
 
          send_buffer(*socket, buffer);
          receive_buffer(*socket, buffer);
