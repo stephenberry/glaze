@@ -1528,7 +1528,7 @@ namespace glz
    {
       return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }
-   
+
    template <auto& Partial, write_json_supported T, raw_buffer Buffer>
    [[nodiscard]] glz::expected<size_t, error_ctx> write_json(T&& value, Buffer&& buffer) noexcept
    {

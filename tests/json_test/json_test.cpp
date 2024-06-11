@@ -7461,7 +7461,7 @@ suite partial_write_tests = [] {
       expect(!ec);
       expect(s == R"({"animals":{"tiger":"Tiger"},"name":"My Awesome Zoo"})") << s;
    };
-   
+
    "partial write with raw buffer"_test = [] {
       static constexpr auto json_ptrs = glz::json_ptrs("/name");
       zoo_t obj{};

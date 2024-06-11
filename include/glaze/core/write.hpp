@@ -46,7 +46,7 @@ namespace glz
       }
       return {ctx.error};
    }
-   
+
    template <auto& Partial, opts Opts, class T, raw_buffer Buffer>
       requires write_supported<Opts.format, T>
    [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer& buffer) noexcept

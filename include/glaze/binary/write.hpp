@@ -858,8 +858,7 @@ namespace glz
                   static constexpr decltype(auto) member_ptr = get<index>(member_it->second);
 
                   detail::write<binary>::no_header<Opts>(key, ctx, b, ix);
-                  write_partial<binary>::op<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), ctx, b,
-                                                                    ix);
+                  write_partial<binary>::op<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), ctx, b, ix);
                });
             }
             else if constexpr (writable_map_t<T>) {
