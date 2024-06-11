@@ -1762,7 +1762,7 @@ namespace glz
                      }
                      else {
                         ++it;
-                        if constexpr (Opts.error_on_missing_keys) {
+                        if constexpr ((glaze_object_t<T> || reflectable<T>)&&Opts.error_on_missing_keys) {
                            constexpr auto req_fields = required_fields<T, Opts>();
                            if ((req_fields & fields) != req_fields) {
                               ctx.error = error_code::missing_key;
