@@ -7461,6 +7461,15 @@ suite partial_write_tests = [] {
       expect(!ec);
       expect(s == R"({"animals":{"tiger":"Tiger"},"name":"My Awesome Zoo"})") << s;
    };
+   
+   "partial write with raw buffer"_test = [] {
+      static constexpr auto json_ptrs = glz::json_ptrs("/name");
+      zoo_t obj{};
+      char buf[32]{};
+      const auto length = glz::write_json<json_ptrs>(obj, buf);
+      expect(length.has_value());
+      expect(std::string_view{buf} == R"({"name":"My Awesome Zoo"})");
+   };
 };
 
 struct S0
