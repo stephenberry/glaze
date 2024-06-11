@@ -441,9 +441,13 @@ namespace glz
                const sv str = {member_it->second.data(), member_it->second.size()};
                // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
                // TODO: Could create a pre quoted map for better performance
-               dump<'"'>(args...);
+               if constexpr (not Opts.raw) {
+                  dump<'"'>(args...);
+               }
                dump_maybe_empty(str, args...);
-               dump<'"'>(args...);
+               if constexpr (not Opts.raw) {
+                  dump<'"'>(args...);
+               }
             }
             else [[unlikely]] {
                // What do we want to happen if the value doesnt have a mapped string
