@@ -7461,6 +7461,15 @@ suite partial_write_tests = [] {
       expect(!ec);
       expect(s == R"({"animals":{"tiger":"Tiger"},"name":"My Awesome Zoo"})") << s;
    };
+
+   "partial write with raw buffer"_test = [] {
+      static constexpr auto json_ptrs = glz::json_ptrs("/name");
+      zoo_t obj{};
+      char buf[32]{};
+      const auto length = glz::write_json<json_ptrs>(obj, buf);
+      expect(length.has_value());
+      expect(std::string_view{buf} == R"({"name":"My Awesome Zoo"})");
+   };
 };
 
 struct S0
@@ -8017,19 +8026,20 @@ suite single_float_struct = [] {
 struct raw_struct
 {
    std::string str{};
+   Color color{};
 };
 
 template <>
 struct glz::meta<raw_struct>
 {
    using T = raw_struct;
-   static constexpr auto value = object("str", glz::raw<&T::str>);
+   static constexpr auto value = object("str", glz::raw<&T::str>, "color", glz::raw<&T::color>);
 };
 
 suite raw_test = [] {
    "raw"_test = [] {
-      raw_struct obj{.str = R"("Hello")"};
-      expect(glz::write_json(obj) == R"({"str":"Hello"})");
+      raw_struct obj{.str = R"("Hello")", .color = Color::Blue};
+      expect(glz::write_json(obj) == R"({"str":"Hello","color":Blue})");
    };
 };
 
@@ -8142,6 +8152,57 @@ suite raw_char_buffer_tests = [] {
         )";
       auto result = glz::read_json<Trade>(payload);
       expect(result.has_value()) << glz::format_error(result, payload);
+   };
+};
+
+struct single_symbol_info_js
+{
+   std::string symbol;
+   std::string contractType;
+   std::vector<std::unordered_map<std::string, std::variant<std::string, int64_t>>> filters;
+};
+
+suite error_on_missing_keys_symbols_tests = [] {
+   "error_on_missing_keys_symbols"_test = [] {
+      std::string_view payload = R"(
+              {
+                  "symbol": "BTCUSDT",
+                  "contractType": "PERPETUAL",
+                  "filters": [
+                      {
+                          "filterType": "PRICE_FILTER",
+                          "minPrice": "0.01",
+                          "maxPrice": "1000000",
+                          "tickSize": "0.01"
+                      },
+                      {
+                          "filterType": "MAX_NUM_ORDERS",
+                          "maxNumOrders": 200
+                      },
+                      {
+                          "filterType": "MAX_NUM_ALGO_ORDERS",
+                          "maxNumAlgoOrders": 5
+                      },
+                      {
+                          "filterType": "MAX_NUM_ICEBERG_ORDERS",
+                          "maxNumIcebergOrders": 10
+                      },
+                      {
+                          "filterType": "MAX_POSITION",
+                          "maxPosition": 1000000
+                      }
+                  ]
+              }
+          )";
+
+      single_symbol_info_js result;
+      auto ec = glz::read<glz::opts{
+                             .error_on_unknown_keys = false,
+                             .error_on_missing_keys = true,
+                             .quoted_num = false,
+                          },
+                          single_symbol_info_js>(result, payload);
+      expect(not ec);
    };
 };
 

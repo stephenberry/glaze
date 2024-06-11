@@ -441,9 +441,13 @@ namespace glz
                const sv str = {member_it->second.data(), member_it->second.size()};
                // TODO: Assumes people dont use strings with chars that need to be escaped for their enum names
                // TODO: Could create a pre quoted map for better performance
-               dump<'"'>(args...);
+               if constexpr (not Opts.raw) {
+                  dump<'"'>(args...);
+               }
                dump_maybe_empty(str, args...);
-               dump<'"'>(args...);
+               if constexpr (not Opts.raw) {
+                  dump<'"'>(args...);
+               }
             }
             else [[unlikely]] {
                // What do we want to happen if the value doesnt have a mapped string
@@ -1335,14 +1339,13 @@ namespace glz
       struct write_partial<json>
       {
          template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
-         [[nodiscard]] GLZ_ALWAYS_INLINE static error_ctx op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
+         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
                detail::write<json>::op<Opts>(value, ctx, b, ix);
-               return {};
             }
             else if constexpr (write_json_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
-               return to_json_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(
+               to_json_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(
                   std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
             }
             else {
@@ -1357,7 +1360,7 @@ namespace glz
       struct to_json_partial<T> final
       {
          template <auto& Partial, auto Opts, class... Args>
-         static error_ctx op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
             if constexpr (!Opts.opening_handled) {
                dump<'{'>(b, ix);
@@ -1368,8 +1371,6 @@ namespace glz
                }
             }
 
-            error_ctx we{};
-
             static constexpr auto sorted = sort_json_ptrs(Partial);
             static constexpr auto groups = glz::group_json_ptrs<sorted>();
             static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
@@ -1379,7 +1380,7 @@ namespace glz
             if constexpr ((num_members > 0) && (glaze_object_t<T> || reflectable<T>)) {
                if constexpr (glaze_object_t<T>) {
                   for_each<N>([&](auto I) {
-                     if (we) {
+                     if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
 
@@ -1398,7 +1399,7 @@ namespace glz
                      static constexpr auto index = member_it->second.index();
                      static constexpr decltype(auto) member_ptr = get<index>(member_it->second);
 
-                     we = write_partial<json>::op<sub_partial, Opts>(get_member(value, member_ptr), ctx, b, ix);
+                     write_partial<json>::op<sub_partial, Opts>(get_member(value, member_ptr), ctx, b, ix);
                      if constexpr (I != N - 1) {
                         write_entry_separator<Opts>(ctx, b, ix);
                      }
@@ -1415,7 +1416,7 @@ namespace glz
                   static constexpr auto members = member_names<T>;
 
                   for_each<N>([&](auto I) {
-                     if (we) {
+                     if (bool(ctx.error)) [[unlikely]] {
                         return;
                      }
 
@@ -1441,7 +1442,7 @@ namespace glz
                               decltype(auto) member = get_member(value, member_ptr);
                               using M = std::decay_t<decltype(member)>;
                               if constexpr (glaze_object_t<M> || writable_map_t<M> || reflectable<M>) {
-                                 we = write_partial<json>::op<sub_partial, Opts>(member, ctx, b, ix);
+                                 write_partial<json>::op<sub_partial, Opts>(member, ctx, b, ix);
                               }
                               else {
                                  detail::write<json>::op<Opts>(member, ctx, b, ix);
@@ -1457,7 +1458,7 @@ namespace glz
             }
             else if constexpr (writable_map_t<T>) {
                for_each<N>([&](auto I) {
-                  if (we) {
+                  if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
 
@@ -1473,20 +1474,22 @@ namespace glz
                   if constexpr (findable<std::decay_t<T>, decltype(key)>) {
                      auto it = value.find(key);
                      if (it != value.end()) {
-                        we = write_partial<json>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                        write_partial<json>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                      }
                      else {
-                        we.ec = error_code::invalid_partial_key;
+                        ctx.error = error_code::invalid_partial_key;
+                        return;
                      }
                   }
                   else {
                      static thread_local auto k = typename std::decay_t<T>::key_type(key);
                      auto it = value.find(k);
                      if (it != value.end()) {
-                        we = write_partial<json>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                        write_partial<json>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                      }
                      else {
-                        we.ec = error_code::invalid_partial_key;
+                        ctx.error = error_code::invalid_partial_key;
+                        return;
                      }
                   }
                   if constexpr (I != N - 1) {
@@ -1495,11 +1498,9 @@ namespace glz
                });
             }
 
-            if (!we) [[likely]] {
+            if (not bool(ctx.error)) [[likely]] {
                dump<'}'>(b, ix);
             }
-
-            return we;
          }
       };
    } // namespace detail
@@ -1522,8 +1523,14 @@ namespace glz
       return write<opts{}>(std::forward<T>(value));
    }
 
-   template <auto& Partial, write_json_supported T, class Buffer>
+   template <auto& Partial, write_json_supported T, output_buffer Buffer>
    [[nodiscard]] error_ctx write_json(T&& value, Buffer&& buffer) noexcept
+   {
+      return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
+   }
+
+   template <auto& Partial, write_json_supported T, raw_buffer Buffer>
+   [[nodiscard]] glz::expected<size_t, error_ctx> write_json(T&& value, Buffer&& buffer) noexcept
    {
       return write<Partial, opts{}>(std::forward<T>(value), std::forward<Buffer>(buffer));
    }

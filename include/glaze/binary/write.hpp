@@ -808,14 +808,13 @@ namespace glz
       struct write_partial<binary>
       {
          template <auto& Partial, auto Opts, class T, is_context Ctx, class B, class IX>
-         [[nodiscard]] GLZ_ALWAYS_INLINE static error_ctx op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
+         static void op(T&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
             if constexpr (std::count(Partial.begin(), Partial.end(), "") > 0) {
                detail::write<binary>::op<Opts>(value, ctx, b, ix);
-               return {};
             }
             else if constexpr (write_binary_partial_invocable<Partial, Opts, T, Ctx, B, IX>) {
-               return to_binary_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(
+               to_binary_partial<std::remove_cvref_t<T>>::template op<Partial, Opts>(
                   std::forward<T>(value), std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
             }
             else {
@@ -830,10 +829,8 @@ namespace glz
       struct to_binary_partial<T> final
       {
          template <auto& Partial, auto Opts, class... Args>
-         static error_ctx op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& b, auto&& ix) noexcept
          {
-            error_ctx we{};
-
             static constexpr auto sorted = sort_json_ptrs(Partial);
             static constexpr auto groups = glz::group_json_ptrs<sorted>();
             static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
@@ -846,7 +843,7 @@ namespace glz
 
             if constexpr (glaze_object_t<T>) {
                for_each<N>([&](auto I) {
-                  if (we) {
+                  if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
 
@@ -861,13 +858,12 @@ namespace glz
                   static constexpr decltype(auto) member_ptr = get<index>(member_it->second);
 
                   detail::write<binary>::no_header<Opts>(key, ctx, b, ix);
-                  we = write_partial<binary>::op<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), ctx, b,
-                                                                    ix);
+                  write_partial<binary>::op<sub_partial, Opts>(glz::detail::get_member(value, member_ptr), ctx, b, ix);
                });
             }
             else if constexpr (writable_map_t<T>) {
                for_each<N>([&](auto I) {
-                  if (we) {
+                  if (bool(ctx.error)) [[unlikely]] {
                      return;
                   }
 
@@ -879,10 +875,11 @@ namespace glz
                      detail::write<binary>::no_header<Opts>(key_value, ctx, b, ix);
                      auto it = value.find(key_value);
                      if (it != value.end()) {
-                        we = write_partial<binary>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                        write_partial<binary>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                      }
                      else {
-                        we.ec = error_code::invalid_partial_key;
+                        ctx.error = error_code::invalid_partial_key;
+                        return;
                      }
                   }
                   else {
@@ -891,16 +888,15 @@ namespace glz
                      detail::write<binary>::no_header<Opts>(key, ctx, b, ix);
                      auto it = value.find(key);
                      if (it != value.end()) {
-                        we = write_partial<binary>::op<sub_partial, Opts>(it->second, ctx, b, ix);
+                        write_partial<binary>::op<sub_partial, Opts>(it->second, ctx, b, ix);
                      }
                      else {
-                        we.ec = error_code::invalid_partial_key;
+                        ctx.error = error_code::invalid_partial_key;
+                        return;
                      }
                   }
                });
             }
-
-            return we;
          }
       };
    }

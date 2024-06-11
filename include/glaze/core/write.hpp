@@ -40,12 +40,24 @@ namespace glz
       }
       context ctx{};
       size_t ix = 0;
-      const auto error =
-         detail::write_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
+      detail::write_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
       if constexpr (resizable<Buffer>) {
          buffer.resize(ix);
       }
-      return error;
+      return {ctx.error};
+   }
+
+   template <auto& Partial, opts Opts, class T, raw_buffer Buffer>
+      requires write_supported<Opts.format, T>
+   [[nodiscard]] glz::expected<size_t, error_ctx> write(T&& value, Buffer& buffer) noexcept
+   {
+      context ctx{};
+      size_t ix = 0;
+      detail::write_partial<Opts.format>::template op<Partial, Opts>(std::forward<T>(value), ctx, buffer, ix);
+      if (bool(ctx.error)) [[unlikely]] {
+         return glz::unexpected(error_ctx{ctx.error});
+      }
+      return {ix};
    }
 
    template <opts Opts, class T, output_buffer Buffer>
