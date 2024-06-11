@@ -269,66 +269,42 @@ namespace glz::repe
       return decode_response<Opts>(ignore_result{}, buffer);
    }
 
-   template <opts Opts, class Value>
-   inline auto request(const header& header, Value&& value)
+   template <opts Opts, class Value, class H = header>
+   [[nodiscard]] auto request(H&& header, Value&& value)
    {
-      return glz::write<Opts>(std::forward_as_tuple(header, std::forward<Value>(value)));
+      return glz::write<Opts>(std::forward_as_tuple(std::forward<H>(header), std::forward<Value>(value)));
    }
 
-   template <opts Opts, class Value>
-   inline auto request(const header& header, Value&& value, auto& buffer)
+   template <opts Opts, class Value, class H = header>
+   [[nodiscard]] auto request(H&& header, Value&& value, auto& buffer)
    {
-      return glz::write<Opts>(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
+      return glz::write<Opts>(std::forward_as_tuple(std::forward<H>(header), std::forward<Value>(value)), buffer);
    }
 
-   inline auto request_json(header&& header)
+   template <class H = header>
+   [[nodiscard]] auto request_binary(H&& header)
    {
       header.empty = true; // because no value provided
-      return glz::write_json(std::forward_as_tuple(header, nullptr));
+      return glz::write_binary(std::forward_as_tuple(std::forward<H>(header), nullptr));
    }
 
-   inline auto request_binary(header&& header)
+   template <class H = header>
+   [[nodiscard]] auto request_json(H&& h)
    {
-      header.empty = true; // because no value provided
-      return glz::write_binary(std::forward_as_tuple(header, nullptr));
+      h.empty = true; // because no value provided
+      return glz::write_json(std::forward_as_tuple(std::forward<H>(h), nullptr));
    }
 
-   inline auto request_json(const header& h)
+   template <class Value, class H = header>
+   [[nodiscard]] auto request_json(H&& header, Value&& value)
    {
-      repe::header copy = h;
-      copy.empty = true; // because no value provided
-      return request_json(std::move(copy));
+      return glz::write_json(std::forward_as_tuple(std::forward<H>(header), std::forward<Value>(value)));
    }
 
-   inline auto request_binary(const header& h)
+   template <class Value, class H = header>
+   [[nodiscard]] auto request_binary(H&& header, Value&& value)
    {
-      repe::header copy = h;
-      copy.empty = true; // because no value provided
-      return request_binary(std::move(copy));
-   }
-
-   template <class Value>
-   inline auto request_json(const header& header, Value&& value)
-   {
-      return glz::write_json(std::forward_as_tuple(header, std::forward<Value>(value)));
-   }
-
-   template <class Value>
-   inline auto request_binary(const header& header, Value&& value)
-   {
-      return glz::write_binary(std::forward_as_tuple(header, std::forward<Value>(value)));
-   }
-
-   template <class Value>
-   inline void request_json(const header& header, Value&& value, auto& buffer)
-   {
-      glz::write_json(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
-   }
-
-   template <class Value>
-   inline void request_binary(const header& header, Value&& value, auto& buffer)
-   {
-      glz::write_binary(std::forward_as_tuple(header, std::forward<Value>(value)), buffer);
+      return glz::write_binary(std::forward_as_tuple(std::forward<H>(header), std::forward<Value>(value)));
    }
 
    // DESIGN NOTE: It might appear that we are locking ourselves into a poor design choice by using a runtime
@@ -1125,22 +1101,20 @@ namespace glz::repe
          });
       }
 
-      bool call(const header& header) { return call(request<Opts>(header)); }
-
-      template <class Value>
-      bool call(const header& header, Value&& value)
+      template <class Value, class H = header>
+      [[nodiscard]] bool call(H&& header, Value&& value)
       {
-         return call(request<Opts>(header, std::forward<Value>(value)));
+         return call(request<Opts>(std::forward<H>(header), std::forward<Value>(value)));
       }
 
-      template <class Value>
-      bool call(const header& header, Value&& value, auto& buffer)
+      template <class Value, class H = header>
+      [[nodiscard]] bool call(H&& header, Value&& value, auto& buffer)
       {
-         return call(request<Opts>(header, std::forward<Value>(value), buffer));
+         return call(request<Opts>(std::forward<H>(header), std::forward<Value>(value), buffer));
       }
 
       // returns null for notifications
-      shared_buffer call(const sv msg)
+      [[nodiscard]] shared_buffer call(const sv msg)
       {
          shared_buffer u_buffer = std::make_shared<unique_buffer>(&buffers);
          auto& response = *(u_buffer->ptr);
