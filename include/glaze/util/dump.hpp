@@ -19,7 +19,7 @@ namespace glz::detail
    template <class T>
    [[nodiscard]] GLZ_ALWAYS_INLINE auto data_ptr(T& buffer) noexcept
    {
-      if constexpr (resizable<T>) {
+      if constexpr (has_data<T>) {
          return buffer.data();
       }
       else {
