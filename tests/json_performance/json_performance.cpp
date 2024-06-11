@@ -245,7 +245,7 @@ struct results
 template <glz::opts Opts>
 auto glaze_test()
 {
-   std::string buffer{ json_minified };
+   std::string buffer{json_minified};
 
    obj_t obj;
 
@@ -264,7 +264,7 @@ auto glaze_test()
 
    auto t1 = std::chrono::steady_clock::now();
 
-   results r{ Opts.minified ? "Glaze (.minified)" : "Glaze", "https://github.com/stephenberry/glaze", iterations };
+   results r{Opts.minified ? "Glaze (.minified)" : "Glaze", "https://github.com/stephenberry/glaze", iterations};
    r.json_roundtrip = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count() * 1e-6;
 
    // write performance
@@ -353,10 +353,6 @@ auto glaze_test()
    return r;
 }
 
-suite object_performance = [] {
-   "object_performance"_test = [] {
-      glaze_test<glz::opts{}>();
-   };
-};
+suite object_performance = [] { "object_performance"_test = [] { glaze_test<glz::opts{}>(); }; };
 
 int main() { return 0; }
