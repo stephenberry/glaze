@@ -8146,6 +8146,56 @@ suite raw_char_buffer_tests = [] {
    };
 };
 
+struct single_symbol_info_js {
+  std::string symbol;
+  std::string contractType;
+  std::vector<std::unordered_map<std::string, std::variant<std::string, int64_t>>> filters;
+};
+
+suite error_on_missing_keys_symbols_tests = [] {
+   "error_on_missing_keys_symbols"_test = [] {
+      std::string_view payload = R"(
+              {
+                  "symbol": "BTCUSDT",
+                  "contractType": "PERPETUAL",
+                  "filters": [
+                      {
+                          "filterType": "PRICE_FILTER",
+                          "minPrice": "0.01",
+                          "maxPrice": "1000000",
+                          "tickSize": "0.01"
+                      },
+                      {
+                          "filterType": "MAX_NUM_ORDERS",
+                          "maxNumOrders": 200
+                      },
+                      {
+                          "filterType": "MAX_NUM_ALGO_ORDERS",
+                          "maxNumAlgoOrders": 5
+                      },
+                      {
+                          "filterType": "MAX_NUM_ICEBERG_ORDERS",
+                          "maxNumIcebergOrders": 10
+                      },
+                      {
+                          "filterType": "MAX_POSITION",
+                          "maxPosition": 1000000
+                      }
+                  ]
+              }
+          )";
+      
+      single_symbol_info_js result;
+        auto ec = glz::read<glz::opts{
+                                .error_on_unknown_keys = false,
+                                .error_on_missing_keys = true,
+                                .quoted_num = false,
+                            },
+                            single_symbol_info_js>(result, payload);
+      expect(not ec);
+   };
+};
+
 int main()
 {
    trace.begin("json_test", "Full test suite duration.");

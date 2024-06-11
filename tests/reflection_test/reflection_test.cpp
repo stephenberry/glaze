@@ -634,4 +634,43 @@ suite nested_target_tests = [] {
    };
 };
 
+namespace glz::detail
+{
+   template <>
+   struct from_json<std::chrono::seconds>
+   {
+      template <auto Opts>
+      static void op(std::chrono::seconds& value, is_context auto&& ctx, auto&&... args)
+      {
+         int32_t sec_count{};
+         read<json>::op<Opts>(sec_count, ctx, args...);
+         if (glz::error_code::none == ctx.error)
+            value = std::chrono::seconds{ sec_count };
+      }
+   };
+} // namespace glz::detail
+
+struct chrono_data
+{
+   std::string  message{};
+   std::chrono::seconds seconds_duration;
+};
+
+suite custom_chrono_tests = [] {
+   "custom_chrono"_test = [] {
+      constexpr std::string_view json =  R"(
+         {
+            "message": "Hello",
+            "seconds_duration": 5458
+         }
+      )";
+      
+      chrono_data obj{};
+      expect(not glz::read_json(obj, json));
+      
+      expect(obj.message == "Hello");
+      expect(obj.seconds_duration.count() == 5458);
+   };
+};
+
 int main() { return 0; }
