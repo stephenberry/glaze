@@ -664,10 +664,10 @@ suite custom_chrono_tests = [] {
             "seconds_duration": 5458
          }
       )";
-      
+
       chrono_data obj{};
       expect(not glz::read_json(obj, json));
-      
+
       expect(obj.message == "Hello");
       expect(obj.seconds_duration.count() == 5458);
    };

@@ -8146,10 +8146,11 @@ suite raw_char_buffer_tests = [] {
    };
 };
 
-struct single_symbol_info_js {
-  std::string symbol;
-  std::string contractType;
-  std::vector<std::unordered_map<std::string, std::variant<std::string, int64_t>>> filters;
+struct single_symbol_info_js
+{
+   std::string symbol;
+   std::string contractType;
+   std::vector<std::unordered_map<std::string, std::variant<std::string, int64_t>>> filters;
 };
 
 suite error_on_missing_keys_symbols_tests = [] {
@@ -8184,14 +8185,14 @@ suite error_on_missing_keys_symbols_tests = [] {
                   ]
               }
           )";
-      
+
       single_symbol_info_js result;
-        auto ec = glz::read<glz::opts{
-                                .error_on_unknown_keys = false,
-                                .error_on_missing_keys = true,
-                                .quoted_num = false,
-                            },
-                            single_symbol_info_js>(result, payload);
+      auto ec = glz::read<glz::opts{
+                             .error_on_unknown_keys = false,
+                             .error_on_missing_keys = true,
+                             .quoted_num = false,
+                          },
+                          single_symbol_info_js>(result, payload);
       expect(not ec);
    };
 };
