@@ -181,8 +181,7 @@ suite read_file_test = [] {
    };
 };
 
-// TODO: Is Clang right to complain about: AddressSanitizer: alloc-dealloc-mismatch (operator new vs free)
-/*suite thread_pool = [] {
+suite thread_pool = [] {
    "thread pool throw"_test = [] {
       glz::pool pool{1};
 
@@ -197,6 +196,6 @@ suite read_file_test = [] {
          future.get();
       }));
    };
-};*/
+};
 
 int main() { return 0; }
