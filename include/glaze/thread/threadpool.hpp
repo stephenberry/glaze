@@ -30,7 +30,9 @@ namespace glz
          threads.clear();
          threads.reserve(n);
          for (size_t i = 0; i < n; ++i) {
-            threads.emplace_back(std::thread(&pool::worker, this, i));
+            threads.emplace_back([this, i]{
+               worker(i);
+            });
          }
       }
 
