@@ -827,14 +827,14 @@ struct glz::meta<A> {
 
 The quoted JSON numbers will be parsed directly into the `double` and `std::vector<uint32_t>`. The `glz::quoted` function works for nested objects and arrays as well.
 
-## NDJSON Support
+## JSON Lines (NDJSON) Support
 
-Glaze supports [Newline Delimited JSON](http://ndjson.org) for array-like types (e.g. `std::vector` and `std::tuple`).
+Glaze supports [JSON Lines](https://jsonlines.org) (or Newline Delimited JSON) for array-like types (e.g. `std::vector` and `std::tuple`).
 
 ```c++
 std::vector<std::string> x = { "Hello", "World", "Ice", "Cream" };
-std::string s = glz::write_ndjson(x);
-glz::read_ndjson(x, s);
+std::string s = glz::write_ndjson(x).value_or("error");
+auto ec = glz::read_ndjson(x, s);
 ```
 
 # More Features
