@@ -47,7 +47,7 @@ namespace glz
 
          auto promise = std::make_shared<std::promise<result_type>>();
          
-         queue.emplace_back() = std::make_shared<callable_t>([promise, f = std::move(func)](const size_t /*thread_number*/) {
+         queue.emplace_back() = std::make_shared<callable_t>([promise, f = std::forward<F>(func)](const size_t /*thread_number*/) {
 #if __cpp_exceptions
             try {
                if constexpr (std::is_void_v<result_type>) {
@@ -86,7 +86,7 @@ namespace glz
 
          auto promise = std::make_shared<std::promise<result_type>>();
          
-         queue.emplace_back() = std::make_shared<callable_t>([promise, f = std::move(func)](const size_t thread_number) {
+         queue.emplace_back() = std::make_shared<callable_t>([promise, f = std::forward<F>(func)](const size_t thread_number) {
 #if __cpp_exceptions
             try {
                if constexpr (std::is_void_v<result_type>) {
