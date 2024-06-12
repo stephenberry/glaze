@@ -32,9 +32,8 @@ namespace glz
          for (size_t i = 0; i < n; ++i) {
             threads.emplace_back([this, thread_number = i]{
                while (true) {
-                  // Wait for work
                   std::unique_lock lock(mtx);
-                  work_cv.wait(lock, [this] { return closed || !queue.empty(); });
+                  work_cv.wait(lock, [this] { return closed || !queue.empty(); }); // Wait for work
                   if (queue.empty()) {
                      if (closed) {
                         return;
