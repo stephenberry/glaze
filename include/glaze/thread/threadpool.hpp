@@ -128,14 +128,14 @@ namespace glz
       ~pool() { finish_work(); }
 
      private:
-      std::vector<std::thread> threads;
+      std::vector<std::thread> threads{};
       // using std::deque for the queue causes random function call issues
-      std::list<std::function<void(const size_t)>> queue;
+      std::list<std::function<void(const size_t)>> queue{};
       std::atomic<uint32_t> working = 0;
       std::atomic<bool> closed = false;
-      std::mutex mtx;
-      std::condition_variable work_cv;
-      std::condition_variable done_cv;
+      std::mutex mtx{};
+      std::condition_variable work_cv{};
+      std::condition_variable done_cv{};
 
       void finish_work()
       {
