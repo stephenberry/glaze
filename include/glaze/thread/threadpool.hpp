@@ -49,8 +49,6 @@ namespace glz
 
                      (*work)(thread_number);
 
-                     lock.lock();
-
                      // Notify that work is finished
                      --working;
                      done_cv.notify_all();
