@@ -2,7 +2,7 @@
 
 While Glaze is focused on strongly typed data, there is basic support for completely generic JSON.
 
-If absolutely nothing is known about the JSON structure, then [glz::json_t](https://github.com/stephenberry/glaze/blob/main/include/glaze/json/json_t.hpp) may be helpful, but it comes at a hefty performance cost due to the heavy use of dynamic memory allocations.
+If absolutely nothing is known about the JSON structure, then [glz::json_t](https://github.com/stephenberry/glaze/blob/main/include/glaze/json/json_t.hpp) may be helpful, but it comes at a performance cost due to the use of dynamic memory allocations.
 
 ```c++
 glz::json_t json{};
@@ -30,6 +30,26 @@ std::string buffer{};
 glz::write_json(json, buffer);
 expect(buffer == R"({"answer":{"everything":42},"happy":true,"list":[1,0,2],"name":"Stephen","object":{"currency":"USD","value":42.99},"pi":3.141})");
 ```
+
+## Type Checking json_t
+
+`glz::json_t` has member functions to check the JSON type:
+
+- `.is_object()`
+- `.is_array()`
+- `.is_string()`
+- `.is_number()`
+- `.is_null()`
+
+There are also free functions of these, such as `glz::is_object(...)`
+
+## .empty()
+
+Calling `.empty()` on a `json_t` value will return true if it contains an empty object, array, or string, or a null value. Otherwise, returns false.
+
+## .size()
+
+Calling `.size()` on a `json_t` value will return the number of items in an object or array, or the size of a string. Otherwise, returns zero.
 
 ## glz::raw_json
 
