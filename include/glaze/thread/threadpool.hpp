@@ -41,9 +41,9 @@ namespace glz
       using callable_t = std::function<void(const size_t)>;
 
       template <class F>
-      std::future<std::invoke_result_t<std::decay_t<F>>> emplace_back(F&& func)
+      std::future<std::invoke_result_t<F>> emplace_back(F&& func)
       {
-         using result_type = std::invoke_result_t<std::decay_t<F>>;
+         using result_type = std::invoke_result_t<F>;
 
          std::lock_guard lock(mtx);
 
@@ -79,10 +79,10 @@ namespace glz
 
       // Takes a function whose input is the thread number (size_t)
       template <class F>
-         requires std::invocable<std::decay_t<F>, size_t>
-      std::future<std::invoke_result_t<std::decay_t<F>, size_t>> emplace_back(F&& func)
+         requires std::invocable<F, size_t>
+      std::future<std::invoke_result_t<F, size_t>> emplace_back(F&& func)
       {
-         using result_type = std::invoke_result_t<std::decay_t<F>, size_t>;
+         using result_type = std::invoke_result_t<F, size_t>;
 
          std::lock_guard lock(mtx);
 
