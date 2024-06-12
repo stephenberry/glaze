@@ -166,30 +166,21 @@ namespace glz
          // Can be used for string_view and the like
          return get<std::string>();
       }
-      
-      [[nodiscard]] bool is_array() const noexcept {
-         return holds<json_t::array_t>();
-      }
-      
-      [[nodiscard]] bool is_object() const noexcept {
-         return holds<json_t::object_t>();
-      }
-      
-      [[nodiscard]] bool is_number() const noexcept {
-         return holds<double>();
-      }
-      
-      [[nodiscard]] bool is_string() const noexcept {
-         return holds<std::string>();
-      }
-      
-      [[nodiscard]] bool is_null() const noexcept {
-         return holds<std::nullptr_t>();
-      }
-      
+
+      [[nodiscard]] bool is_array() const noexcept { return holds<json_t::array_t>(); }
+
+      [[nodiscard]] bool is_object() const noexcept { return holds<json_t::object_t>(); }
+
+      [[nodiscard]] bool is_number() const noexcept { return holds<double>(); }
+
+      [[nodiscard]] bool is_string() const noexcept { return holds<std::string>(); }
+
+      [[nodiscard]] bool is_null() const noexcept { return holds<std::nullptr_t>(); }
+
       // empty() returns true if the value is an empty JSON object, array, or string, or a null value
       // otherwise returns false
-      [[nodiscard]] bool empty() const noexcept {
+      [[nodiscard]] bool empty() const noexcept
+      {
          if (auto* v = get_if<object_t>(); v) {
             return v->empty();
          }
@@ -206,9 +197,10 @@ namespace glz
             return false;
          }
       }
-      
+
       // returns the count of items in an object or an array, or the size of a string, otherwise returns zero
-      [[nodiscard]] size_t size() const noexcept {
+      [[nodiscard]] size_t size() const noexcept
+      {
          if (auto* v = get_if<object_t>(); v) {
             return v->size();
          }
@@ -223,15 +215,15 @@ namespace glz
          }
       }
    };
-   
+
    [[nodiscard]] inline bool is_array(const json_t& value) { return value.is_array(); }
-   
+
    [[nodiscard]] inline bool is_object(const json_t& value) { return value.is_object(); }
-   
+
    [[nodiscard]] inline bool is_number(const json_t& value) { return value.is_number(); }
-   
+
    [[nodiscard]] inline bool is_string(const json_t& value) { return value.is_string(); }
-   
+
    [[nodiscard]] inline bool is_null(const json_t& value) { return value.is_null(); }
 }
 

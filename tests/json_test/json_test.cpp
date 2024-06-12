@@ -3112,7 +3112,7 @@ suite generic_json_tests = [] {
       expect(not glz::write_json(glz::json_t(*(glz::read_json<glz::json_t>("{}"))), s));
       expect(s == "{}") << s;
    };
-   
+
    "json_t is_object"_test = [] {
       glz::json_t json{};
       expect(not glz::read_json(json, "{}"));
@@ -3121,7 +3121,7 @@ suite generic_json_tests = [] {
       expect(json.empty());
       expect(json.size() == 0);
    };
-   
+
    "json_t is_object"_test = [] {
       glz::json_t json{};
       expect(not glz::read_json(json, R"({"age":"22","name":"Noah"})"));
@@ -3130,7 +3130,7 @@ suite generic_json_tests = [] {
       expect(not json.empty());
       expect(json.size() == 2);
    };
-   
+
    "json_t is_array"_test = [] {
       glz::json_t json{};
       expect(not glz::read_json(json, "[]"));
@@ -3139,7 +3139,7 @@ suite generic_json_tests = [] {
       expect(json.empty());
       expect(json.size() == 0);
    };
-   
+
    "json_t is_array"_test = [] {
       glz::json_t json{};
       expect(not glz::read_json(json, "[1,2,3]"));
@@ -3148,7 +3148,7 @@ suite generic_json_tests = [] {
       expect(not json.empty());
       expect(json.size() == 3);
    };
-   
+
    "json_t is_string"_test = [] {
       glz::json_t json{};
       expect(not glz::read_json(json, R"("")"));
@@ -3157,7 +3157,7 @@ suite generic_json_tests = [] {
       expect(json.empty());
       expect(json.size() == 0);
    };
-   
+
    "json_t is_string"_test = [] {
       glz::json_t json{};
       expect(not glz::read_json(json, R"("Beautiful beginning")"));
@@ -3166,7 +3166,7 @@ suite generic_json_tests = [] {
       expect(not json.empty());
       expect(json.size() == 19);
    };
-   
+
    "json_t is_number"_test = [] {
       glz::json_t json{};
       expect(not glz::read_json(json, "3.882e2"));
@@ -3175,7 +3175,7 @@ suite generic_json_tests = [] {
       expect(not json.empty());
       expect(json.size() == 0);
    };
-   
+
    "json_t is_null"_test = [] {
       glz::json_t json{};
       expect(not glz::read_json(json, "null"));
