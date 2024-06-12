@@ -23,31 +23,31 @@ namespace glz
       val_t data{};
 
       template <class T>
-      T& get()
+      [[nodiscard]] T& get()
       {
          return std::get<T>(data);
       }
 
       template <class T>
-      const T& get() const
+      [[nodiscard]] const T& get() const
       {
          return std::get<T>(data);
       }
 
       template <class T>
-      T* get_if() noexcept
+      [[nodiscard]] T* get_if() noexcept
       {
          return std::get_if<T>(&data);
       }
 
       template <class T>
-      const T* get_if() const noexcept
+      [[nodiscard]] const T* get_if() const noexcept
       {
          return std::get_if<T>(&data);
       }
 
       template <class T>
-      bool holds() const noexcept
+      [[nodiscard]] bool holds() const noexcept
       {
          return std::holds_alternative<T>(data);
       }
@@ -79,11 +79,11 @@ namespace glz
          return iter->second;
       }
 
-      json_t& at(std::convertible_to<std::string_view> auto&& key) { return operator[](key); }
+      [[nodiscard]] json_t& at(std::convertible_to<std::string_view> auto&& key) { return operator[](key); }
 
-      const json_t& at(std::convertible_to<std::string_view> auto&& key) const { return operator[](key); }
+      [[nodiscard]] const json_t& at(std::convertible_to<std::string_view> auto&& key) const { return operator[](key); }
 
-      bool contains(std::convertible_to<std::string_view> auto&& key) const
+      [[nodiscard]] bool contains(std::convertible_to<std::string_view> auto&& key) const
       {
          if (!holds<object_t>()) return false;
          auto& object = std::get<object_t>(data);
@@ -145,7 +145,7 @@ namespace glz
       }
 
       template <class T>
-      T as() const
+      [[nodiscard]] T as() const
       {
          // Prefer get becuase it returns a reference
          return get<T>();
@@ -153,7 +153,7 @@ namespace glz
 
       template <class T>
          requires std::convertible_to<double, T>
-      T as() const
+      [[nodiscard]] T as() const
       {
          // Can be used for int and the like
          return static_cast<T>(get<double>());
@@ -161,12 +161,78 @@ namespace glz
 
       template <class T>
          requires std::convertible_to<std::string, T>
-      T as() const
+      [[nodiscard]] T as() const
       {
          // Can be used for string_view and the like
          return get<std::string>();
       }
+      
+      [[nodiscard]] bool is_array() const noexcept {
+         return holds<json_t::array_t>();
+      }
+      
+      [[nodiscard]] bool is_object() const noexcept {
+         return holds<json_t::object_t>();
+      }
+      
+      [[nodiscard]] bool is_number() const noexcept {
+         return holds<double>();
+      }
+      
+      [[nodiscard]] bool is_string() const noexcept {
+         return holds<std::string>();
+      }
+      
+      [[nodiscard]] bool is_null() const noexcept {
+         return holds<std::nullptr_t>();
+      }
+      
+      // empty() returns true if the value is an empty JSON object, array, or string, or a null value
+      // otherwise returns false
+      [[nodiscard]] bool empty() const noexcept {
+         if (auto* v = get_if<object_t>(); v) {
+            return v->empty();
+         }
+         else if (auto* v = get_if<array_t>(); v) {
+            return v->empty();
+         }
+         else if (auto* v = get_if<std::string>(); v) {
+            return v->empty();
+         }
+         else if (is_null()) {
+            return true;
+         }
+         else {
+            return false;
+         }
+      }
+      
+      // returns the count of items in an object or an array, or the size of a string, otherwise returns zero
+      [[nodiscard]] size_t size() const noexcept {
+         if (auto* v = get_if<object_t>(); v) {
+            return v->size();
+         }
+         else if (auto* v = get_if<array_t>(); v) {
+            return v->size();
+         }
+         else if (auto* v = get_if<std::string>(); v) {
+            return v->size();
+         }
+         else {
+            return 0;
+         }
+      }
    };
+   
+   [[nodiscard]] inline bool is_array(const json_t& value) { return value.is_array(); }
+   
+   [[nodiscard]] inline bool is_object(const json_t& value) { return value.is_object(); }
+   
+   [[nodiscard]] inline bool is_number(const json_t& value) { return value.is_number(); }
+   
+   [[nodiscard]] inline bool is_string(const json_t& value) { return value.is_string(); }
+   
+   [[nodiscard]] inline bool is_null(const json_t& value) { return value.is_null(); }
 }
 
 template <>
