@@ -148,6 +148,8 @@ namespace glz
             closed = true;
             work_cv.notify_all();
          }
+         
+         wait(); // wait for work to finish
 
          for (auto& t : threads) {
             if (t.joinable()) t.join();
@@ -159,7 +161,7 @@ namespace glz
          while (true) {
             // Wait for work
             std::unique_lock lock(mtx);
-            work_cv.wait(lock, [this]() { return closed || !queue.empty(); });
+            work_cv.wait(lock, [this] { return closed || !queue.empty(); });
             if (queue.empty()) {
                if (closed) {
                   return;
