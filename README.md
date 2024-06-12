@@ -176,6 +176,8 @@ auto ec = glz::write_file_json(obj, "./obj.json", std::string{});
 
 ![clang build](https://github.com/stephenberry/glaze/actions/workflows/clang.yml/badge.svg) ![gcc build](https://github.com/stephenberry/glaze/actions/workflows/gcc.yml/badge.svg) ![msvc build](https://github.com/stephenberry/glaze/actions/workflows/msvc.yml/badge.svg) 
 
+> Glaze seeks to maintain compatibility with the latest three versions of GCC and Clang, as well as the latest version of MSVC and Apple Clang.
+
 ## How To Use Glaze
 
 ### [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html)
