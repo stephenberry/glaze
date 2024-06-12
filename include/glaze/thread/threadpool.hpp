@@ -35,6 +35,8 @@ namespace glz
       }
 
       size_t concurrency() const noexcept { return std::thread::hardware_concurrency(); }
+      
+      using callable_t = std::function<void(const size_t)>;
 
       template <class F>
       std::future<std::invoke_result_t<std::decay_t<F>>> emplace_back(F&& func)
@@ -44,8 +46,8 @@ namespace glz
          std::lock_guard lock(mtx);
 
          auto promise = std::make_shared<std::promise<result_type>>();
-
-         queue.emplace_back([promise, f = std::move(func)](const size_t /*thread_number*/) {
+         
+         queue.emplace_back() = std::make_shared<callable_t>([promise, f = std::move(func)](const size_t /*thread_number*/) {
 #if __cpp_exceptions
             try {
                if constexpr (std::is_void_v<result_type>) {
@@ -83,8 +85,8 @@ namespace glz
          std::lock_guard lock(mtx);
 
          auto promise = std::make_shared<std::promise<result_type>>();
-
-         queue.emplace_back([promise, f = std::move(func)](const size_t thread_number) {
+         
+         queue.emplace_back() = std::make_shared<callable_t>([promise, f = std::move(func)](const size_t thread_number) {
 #if __cpp_exceptions
             try {
                if constexpr (std::is_void_v<result_type>) {
@@ -120,7 +122,7 @@ namespace glz
       {
          std::unique_lock lock(mtx);
          if (queue.empty() && (working == 0)) return;
-         done_cv.wait(lock, [&]() { return queue.empty() && (working == 0); });
+         done_cv.wait(lock, [&] { return queue.empty() && (working == 0); });
       }
 
       size_t size() const { return threads.size(); }
@@ -129,8 +131,7 @@ namespace glz
 
      private:
       std::vector<std::thread> threads{};
-      // using std::deque for the queue causes random function call issues
-      std::list<std::function<void(const size_t)>> queue{};
+      std::deque<std::shared_ptr<callable_t>> queue{};
       std::atomic<uint32_t> working = 0;
       std::atomic<bool> closed = false;
       std::mutex mtx{};
@@ -164,11 +165,11 @@ namespace glz
             else {
                // Grab work
                ++working;
-               auto work = std::move(queue.front());
+               auto work = queue.front();
                queue.pop_front();
                lock.unlock();
 
-               work(thread_number);
+               (*work)(thread_number);
 
                lock.lock();
 
