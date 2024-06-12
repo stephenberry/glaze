@@ -30,8 +30,32 @@ namespace glz
          threads.clear();
          threads.reserve(n);
          for (size_t i = 0; i < n; ++i) {
-            threads.emplace_back([this, i]{
-               worker(i);
+            threads.emplace_back([this, thread_number = i]{
+               while (true) {
+                  // Wait for work
+                  std::unique_lock lock(mtx);
+                  work_cv.wait(lock, [this] { return closed || !queue.empty(); });
+                  if (queue.empty()) {
+                     if (closed) {
+                        return;
+                     }
+                  }
+                  else {
+                     // Grab work
+                     ++working;
+                     auto work = queue.front();
+                     queue.pop_front();
+                     lock.unlock();
+
+                     (*work)(thread_number);
+
+                     lock.lock();
+
+                     // Notify that work is finished
+                     --working;
+                     done_cv.notify_all();
+                  }
+               }
             });
          }
       }
@@ -153,35 +177,6 @@ namespace glz
 
          for (auto& t : threads) {
             if (t.joinable()) t.join();
-         }
-      }
-
-      void worker(const size_t thread_number)
-      {
-         while (true) {
-            // Wait for work
-            std::unique_lock lock(mtx);
-            work_cv.wait(lock, [this] { return closed || !queue.empty(); });
-            if (queue.empty()) {
-               if (closed) {
-                  return;
-               }
-            }
-            else {
-               // Grab work
-               ++working;
-               auto work = queue.front();
-               queue.pop_front();
-               lock.unlock();
-
-               (*work)(thread_number);
-
-               lock.lock();
-
-               // Notify that work is finished
-               --working;
-               done_cv.notify_all();
-            }
          }
       }
    };
