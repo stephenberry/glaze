@@ -3112,6 +3112,78 @@ suite generic_json_tests = [] {
       expect(not glz::write_json(glz::json_t(*(glz::read_json<glz::json_t>("{}"))), s));
       expect(s == "{}") << s;
    };
+   
+   "json_t is_object"_test = [] {
+      glz::json_t json{};
+      expect(not glz::read_json(json, "{}"));
+      expect(json.is_object());
+      expect(glz::is_object(json));
+      expect(json.empty());
+      expect(json.size() == 0);
+   };
+   
+   "json_t is_object"_test = [] {
+      glz::json_t json{};
+      expect(not glz::read_json(json, R"({"age":"22","name":"Noah"})"));
+      expect(json.is_object());
+      expect(glz::is_object(json));
+      expect(not json.empty());
+      expect(json.size() == 2);
+   };
+   
+   "json_t is_array"_test = [] {
+      glz::json_t json{};
+      expect(not glz::read_json(json, "[]"));
+      expect(json.is_array());
+      expect(glz::is_array(json));
+      expect(json.empty());
+      expect(json.size() == 0);
+   };
+   
+   "json_t is_array"_test = [] {
+      glz::json_t json{};
+      expect(not glz::read_json(json, "[1,2,3]"));
+      expect(json.is_array());
+      expect(glz::is_array(json));
+      expect(not json.empty());
+      expect(json.size() == 3);
+   };
+   
+   "json_t is_string"_test = [] {
+      glz::json_t json{};
+      expect(not glz::read_json(json, R"("")"));
+      expect(json.is_string());
+      expect(glz::is_string(json));
+      expect(json.empty());
+      expect(json.size() == 0);
+   };
+   
+   "json_t is_string"_test = [] {
+      glz::json_t json{};
+      expect(not glz::read_json(json, R"("Beautiful beginning")"));
+      expect(json.is_string());
+      expect(glz::is_string(json));
+      expect(not json.empty());
+      expect(json.size() == 19);
+   };
+   
+   "json_t is_number"_test = [] {
+      glz::json_t json{};
+      expect(not glz::read_json(json, "3.882e2"));
+      expect(json.is_number());
+      expect(glz::is_number(json));
+      expect(not json.empty());
+      expect(json.size() == 0);
+   };
+   
+   "json_t is_null"_test = [] {
+      glz::json_t json{};
+      expect(not glz::read_json(json, "null"));
+      expect(json.is_null());
+      expect(glz::is_null(json));
+      expect(json.empty());
+      expect(json.size() == 0);
+   };
 };
 
 struct holder0_t
@@ -4412,12 +4484,6 @@ suite validation_tests = [] {
       auto ec_fail17 = glz::read<glz::opts{.force_conformance = true}>(json, fail17);
       expect(ec_fail17 != glz::error_code::none);
       expect(glz::validate_json(fail17) != glz::error_code::none);
-
-      // JSON spec does not specify a nesting limit to my knowledge
-      // std::string fail18 = R"([[[[[[[[[[[[[[[[[[[["Too deep"]]]]]]]]]]]]]]]]]]]])";
-      // auto ec_fail18 = glz::read<glz::opts{.force_conformance = true}>(json, fail18);
-      // expect(ec_fail18 != glz::error_code::none);
-      // expect(glz::validate_json(fail18) != glz::error_code::none);
 
       std::string fail19 = R"({"Missing colon" null})";
       auto ec_fail19 = glz::read<glz::opts{.force_conformance = true}>(json, fail19);
