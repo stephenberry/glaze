@@ -309,6 +309,13 @@ namespace glz
 
          ctx->run();
       }
+      
+      // stop the server
+      void stop() {
+         if (ctx) {
+            ctx->stop();
+         }
+      }
 
       asio::awaitable<void> run_instance(asio::ip::tcp::socket socket)
       {
