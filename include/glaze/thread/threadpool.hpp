@@ -143,10 +143,11 @@ namespace glz
       void finish_work()
       {
          // Close the queue and finish all the remaining work
-         std::unique_lock lock(mtx);
-         closed = true;
-         work_cv.notify_all();
-         lock.unlock();
+         {
+            std::unique_lock lock(mtx);
+            closed = true;
+            work_cv.notify_all();
+         }
 
          for (auto& t : threads) {
             if (t.joinable()) t.join();
