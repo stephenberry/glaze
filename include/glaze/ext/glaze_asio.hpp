@@ -309,9 +309,10 @@ namespace glz
 
          ctx->run();
       }
-      
+
       // stop the server
-      void stop() {
+      void stop()
+      {
          if (ctx) {
             ctx->stop();
          }
