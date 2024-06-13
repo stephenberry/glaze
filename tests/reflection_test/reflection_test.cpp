@@ -722,4 +722,12 @@ suite custom_chrono_tests = [] {
    };
 };
 
+struct S1
+{
+   int    a{};
+   int    b{};
+   std::filesystem::path   fn{};
+};
+static_assert( glz::detail::count_members<S1> == 3 );
+
 int main() { return 0; }
