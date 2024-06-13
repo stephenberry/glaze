@@ -8313,15 +8313,20 @@ template <>
 struct glz::meta<large_struct_t>
 {
    using T = large_struct_t;
-   static constexpr auto value = object(&T::a, &T::b, &T::c, &T::d, &T::e, &T::f, &T::g, &T::h, &T::i, &T::j, &T::k, &T::l, &T::m, &T::n, &T::o, &T::p, &T::q, &T::r, &T::s, &T::t, &T::u, &T::v, &T::w, &T::x, &T::y, &T::z, &T::one, &T::two, &T::three, &T::four, &T::five, &T::six, &T::seven);
+   static constexpr auto value =
+      object(&T::a, &T::b, &T::c, &T::d, &T::e, &T::f, &T::g, &T::h, &T::i, &T::j, &T::k, &T::l, &T::m, &T::n, &T::o,
+             &T::p, &T::q, &T::r, &T::s, &T::t, &T::u, &T::v, &T::w, &T::x, &T::y, &T::z, &T::one, &T::two, &T::three,
+             &T::four, &T::five, &T::six, &T::seven);
 };
 
-suite large_struct_tests = []
-{
+suite large_struct_tests = [] {
    "large_struct"_test = [] {
       large_struct_t obj{};
       std::string s = glz::write_json(obj).value_or("error");
-      expect(s == R"({"a":false,"b":false,"c":false,"d":false,"e":false,"f":false,"g":false,"h":false,"i":false,"j":false,"k":false,"l":false,"m":false,"n":false,"o":false,"p":false,"q":false,"r":false,"s":false,"t":false,"u":false,"v":false,"w":false,"x":false,"y":false,"z":false,"one":false,"two":false,"three":false,"four":false,"five":false,"six":false,"seven":false})") << s;
+      expect(
+         s ==
+         R"({"a":false,"b":false,"c":false,"d":false,"e":false,"f":false,"g":false,"h":false,"i":false,"j":false,"k":false,"l":false,"m":false,"n":false,"o":false,"p":false,"q":false,"r":false,"s":false,"t":false,"u":false,"v":false,"w":false,"x":false,"y":false,"z":false,"one":false,"two":false,"three":false,"four":false,"five":false,"six":false,"seven":false})")
+         << s;
       expect(not glz::read_json(obj, s));
    };
 };
