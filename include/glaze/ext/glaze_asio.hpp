@@ -133,7 +133,7 @@ namespace glz
       {
          repe::unique_buffer ubuffer{buffer_pool.get()};
          auto& buffer = ubuffer.value();
-         
+
          header.notify = true;
          const auto ec = repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
          if (bool(ec)) [[unlikely]] {
@@ -149,7 +149,7 @@ namespace glz
       {
          repe::unique_buffer ubuffer{buffer_pool.get()};
          auto& buffer = ubuffer.value();
-         
+
          header.notify = false;
          header.empty = true; // no params
          const auto ec = repe::request<Opts>(std::move(header), nullptr, buffer);
@@ -181,7 +181,7 @@ namespace glz
       {
          repe::unique_buffer ubuffer{buffer_pool.get()};
          auto& buffer = ubuffer.value();
-         
+
          header.notify = false;
          const auto ec = repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
          if (bool(ec)) [[unlikely]] {
@@ -199,7 +199,7 @@ namespace glz
       {
          repe::unique_buffer ubuffer{buffer_pool.get()};
          auto& buffer = ubuffer.value();
-         
+
          header.notify = false;
          const auto ec = repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
          if (bool(ec)) [[unlikely]] {
@@ -216,7 +216,7 @@ namespace glz
       {
          repe::unique_buffer ubuffer{buffer_pool.get()};
          auto& buffer = ubuffer.value();
-         
+
          header.notify = false;
          header.empty = true; // because no value provided
          const auto ec = glz::write_json(std::forward_as_tuple(std::move(header), nullptr), buffer);
@@ -260,10 +260,11 @@ namespace glz
       }
 
       template <class Params>
-      [[deprecated("We use a buffer pool now, so this would cause allocations")]] [[nodiscard]] std::string call_raw(repe::header&& header, Params&& params, repe::error_t& error)
+      [[deprecated("We use a buffer pool now, so this would cause allocations")]] [[nodiscard]] std::string call_raw(
+         repe::header&& header, Params&& params, repe::error_t& error)
       {
          std::string buffer{};
-         
+
          header.notify = false;
          const auto ec = repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
          if (bool(ec)) [[unlikely]] {
