@@ -506,11 +506,7 @@ namespace glz::detail
          return items.begin() + index;
       }
 
-      template <class... Args>
-      constexpr normal_map(Args&&... args) : items(std::forward<Args>(args)...)
-      {
-         find_perfect_hash();
-      }
+      constexpr normal_map(const std::array<pair<Key, Value>, N>& pairs) : items(pairs) { find_perfect_hash(); }
 
       // Not a very good combine but much like the hash it doesnt matter
       static constexpr uint64_t combine(uint64_t a, uint64_t b) { return hash_alg::bitmix(a ^ b); }

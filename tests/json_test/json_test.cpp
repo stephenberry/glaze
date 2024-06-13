@@ -3118,6 +3118,7 @@ suite generic_json_tests = [] {
       expect(glz::is_object(json));
       expect(json.empty());
       expect(json.size() == 0);
+      expect(json.get_object().size() == 0);
    };
 
    "json_t is_object"_test = [] {
@@ -3127,6 +3128,7 @@ suite generic_json_tests = [] {
       expect(glz::is_object(json));
       expect(not json.empty());
       expect(json.size() == 2);
+      expect(json.get_object().size() == 2);
    };
 
    "json_t is_array"_test = [] {
@@ -3136,6 +3138,7 @@ suite generic_json_tests = [] {
       expect(glz::is_array(json));
       expect(json.empty());
       expect(json.size() == 0);
+      expect(json.get_array().size() == 0);
    };
 
    "json_t is_array"_test = [] {
@@ -3145,6 +3148,7 @@ suite generic_json_tests = [] {
       expect(glz::is_array(json));
       expect(not json.empty());
       expect(json.size() == 3);
+      expect(json.get_array().size() == 3);
    };
 
    "json_t is_string"_test = [] {
@@ -3154,6 +3158,7 @@ suite generic_json_tests = [] {
       expect(glz::is_string(json));
       expect(json.empty());
       expect(json.size() == 0);
+      expect(json.get_string() == "");
    };
 
    "json_t is_string"_test = [] {
@@ -3163,6 +3168,7 @@ suite generic_json_tests = [] {
       expect(glz::is_string(json));
       expect(not json.empty());
       expect(json.size() == 19);
+      expect(json.get_string() == "Beautiful beginning");
    };
 
    "json_t is_number"_test = [] {
@@ -3172,6 +3178,17 @@ suite generic_json_tests = [] {
       expect(glz::is_number(json));
       expect(not json.empty());
       expect(json.size() == 0);
+      expect(json.get_number() == 3.882e2);
+   };
+
+   "json_t is_boolean"_test = [] {
+      glz::json_t json{};
+      expect(not glz::read_json(json, "true"));
+      expect(json.is_boolean());
+      expect(glz::is_boolean(json));
+      expect(not json.empty());
+      expect(json.size() == 0);
+      expect(json.get_boolean());
    };
 
    "json_t is_null"_test = [] {
@@ -3530,6 +3547,33 @@ suite ndjson_test = [] {
       expect(first.arr[0] = 1);
       expect(second.a == 3.14);
       expect(second.b == "stuff");
+   };
+
+   "ndjson json_t"_test = [] {
+      std::string buffer = R"({"arr":[1,2,3],"d":3.14,"hello":"Hello World","i":287}
+{"a":3.14,"b":"stuff"})";
+
+      std::vector<glz::json_t> x{};
+      expect(not glz::read_ndjson(x, buffer));
+
+      auto out = glz::write_ndjson(x).value_or("error");
+      expect(out == buffer) << out;
+   };
+
+   "ndjson json_t"_test = [] {
+      std::string json = R"({"arr":[1,2,3],"d":3.14,"hello":"Hello World","i":287}
+{"a":3.14,"b":"stuff"})";
+      std::vector<std::byte> buffer(json.size());
+      std::memcpy(buffer.data(), json.data(), json.size());
+      buffer.emplace_back(std::byte('\0'));
+
+      std::vector<glz::json_t> x{};
+      expect(not glz::read_ndjson(x, buffer));
+
+      std::vector<std::byte> out{};
+      expect(not glz::write_ndjson(x, out));
+      out.emplace_back(std::byte('\0'));
+      expect(out == buffer);
    };
 };
 
@@ -8267,6 +8311,65 @@ suite error_on_missing_keys_symbols_tests = [] {
                           },
                           single_symbol_info_js>(result, payload);
       expect(not ec);
+   };
+};
+
+struct large_struct_t
+{
+   bool a = false;
+   bool b = false;
+   bool c = false;
+   bool d = false;
+   bool e = false;
+   bool f = false;
+   bool g = false;
+   bool h = false;
+   bool i = false;
+   bool j = false;
+   bool k = false;
+   bool l = false;
+   bool m = false;
+   bool n = false;
+   bool o = false;
+   bool p = false;
+   bool q = false;
+   bool r = false;
+   bool s = false;
+   bool t = false;
+   bool u = false;
+   bool v = false;
+   bool w = false;
+   bool x = false;
+   bool y = false;
+   bool z = false;
+   bool one = false;
+   bool two = false;
+   bool three = false;
+   bool four = false;
+   bool five = false;
+   bool six = false;
+   bool seven = false;
+};
+
+template <>
+struct glz::meta<large_struct_t>
+{
+   using T = large_struct_t;
+   static constexpr auto value =
+      object(&T::a, &T::b, &T::c, &T::d, &T::e, &T::f, &T::g, &T::h, &T::i, &T::j, &T::k, &T::l, &T::m, &T::n, &T::o,
+             &T::p, &T::q, &T::r, &T::s, &T::t, &T::u, &T::v, &T::w, &T::x, &T::y, &T::z, &T::one, &T::two, &T::three,
+             &T::four, &T::five, &T::six, &T::seven);
+};
+
+suite large_struct_tests = [] {
+   "large_struct"_test = [] {
+      large_struct_t obj{};
+      std::string s = glz::write_json(obj).value_or("error");
+      expect(
+         s ==
+         R"({"a":false,"b":false,"c":false,"d":false,"e":false,"f":false,"g":false,"h":false,"i":false,"j":false,"k":false,"l":false,"m":false,"n":false,"o":false,"p":false,"q":false,"r":false,"s":false,"t":false,"u":false,"v":false,"w":false,"x":false,"y":false,"z":false,"one":false,"two":false,"three":false,"four":false,"five":false,"six":false,"seven":false})")
+         << s;
+      expect(not glz::read_json(obj, s));
    };
 };
 

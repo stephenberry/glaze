@@ -20,7 +20,12 @@ namespace glz::detail
    [[nodiscard]] GLZ_ALWAYS_INLINE auto data_ptr(T& buffer) noexcept
    {
       if constexpr (has_data<T>) {
-         return buffer.data();
+         if constexpr (std::same_as<std::decay_t<typename T::value_type>, std::byte>) {
+            return reinterpret_cast<char*>(buffer.data());
+         }
+         else {
+            return buffer.data();
+         }
       }
       else {
          return buffer;
