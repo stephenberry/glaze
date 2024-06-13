@@ -58,16 +58,17 @@ namespace glz
             }
          }
       };
-
-      template <glaze_value_t T>
+      
+      template <class T>
+         requires(glaze_value_t<T> && !custom_read<T>)
       struct from_binary<T>
       {
-         template <auto Opts, is_context Ctx, class It0, class It1>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&& ctx, It0&& it, It1&& end)
+         template <auto Opts, class Value, is_context Ctx, class It0, class It1>
+         GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
-            using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
-            from_binary<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Ctx>(ctx),
-                                              std::forward<It0>(it), std::forward<It1>(end));
+            using V = std::decay_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
+            from_binary<V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+                                            std::forward<Ctx>(ctx), std::forward<It0>(it), std::forward<It1>(end));
          }
       };
 

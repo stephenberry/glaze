@@ -3120,6 +3120,7 @@ suite generic_json_tests = [] {
       expect(glz::is_object(json));
       expect(json.empty());
       expect(json.size() == 0);
+      expect(json.get_object().size() == 0);
    };
 
    "json_t is_object"_test = [] {
@@ -3129,6 +3130,7 @@ suite generic_json_tests = [] {
       expect(glz::is_object(json));
       expect(not json.empty());
       expect(json.size() == 2);
+      expect(json.get_object().size() == 2);
    };
 
    "json_t is_array"_test = [] {
@@ -3138,6 +3140,7 @@ suite generic_json_tests = [] {
       expect(glz::is_array(json));
       expect(json.empty());
       expect(json.size() == 0);
+      expect(json.get_array().size() == 0);
    };
 
    "json_t is_array"_test = [] {
@@ -3147,6 +3150,7 @@ suite generic_json_tests = [] {
       expect(glz::is_array(json));
       expect(not json.empty());
       expect(json.size() == 3);
+      expect(json.get_array().size() == 3);
    };
 
    "json_t is_string"_test = [] {
@@ -3156,6 +3160,7 @@ suite generic_json_tests = [] {
       expect(glz::is_string(json));
       expect(json.empty());
       expect(json.size() == 0);
+      expect(json.get_string() == "");
    };
 
    "json_t is_string"_test = [] {
@@ -3165,6 +3170,7 @@ suite generic_json_tests = [] {
       expect(glz::is_string(json));
       expect(not json.empty());
       expect(json.size() == 19);
+      expect(json.get_string() == "Beautiful beginning");
    };
 
    "json_t is_number"_test = [] {
@@ -3174,6 +3180,17 @@ suite generic_json_tests = [] {
       expect(glz::is_number(json));
       expect(not json.empty());
       expect(json.size() == 0);
+      expect(json.get_number() == 3.882e2);
+   };
+   
+   "json_t is_boolean"_test = [] {
+      glz::json_t json{};
+      expect(not glz::read_json(json, "true"));
+      expect(json.is_boolean());
+      expect(glz::is_boolean(json));
+      expect(not json.empty());
+      expect(json.size() == 0);
+      expect(json.get_boolean());
    };
 
    "json_t is_null"_test = [] {
