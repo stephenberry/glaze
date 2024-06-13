@@ -64,16 +64,16 @@ namespace glz
       template <class F>
       std::future<std::invoke_result_t<F>> emplace_back(F&& func)
       {
-         using result_type = std::invoke_result_t<F>;
+         using result_t = std::invoke_result_t<F>;
 
          std::lock_guard lock(mtx);
 
-         auto promise = std::make_shared<std::promise<result_type>>();
+         auto promise = std::make_shared<std::promise<result_t>>();
          
          queue.emplace_back() = std::make_shared<callable_t>([promise, f = std::forward<F>(func)](const size_t /*thread_number*/) {
 #if __cpp_exceptions
             try {
-               if constexpr (std::is_void_v<result_type>) {
+               if constexpr (std::is_void_v<result_t>) {
                   f();
                }
                else {
@@ -84,7 +84,7 @@ namespace glz
                promise->set_exception(std::current_exception());
             }
 #else
-            if constexpr (std::is_void_v<result_type>) {
+            if constexpr (std::is_void_v<result_t>) {
                f();
             }
             else {
@@ -103,16 +103,16 @@ namespace glz
          requires std::invocable<F, size_t>
       std::future<std::invoke_result_t<F, size_t>> emplace_back(F&& func)
       {
-         using result_type = std::invoke_result_t<F, size_t>;
+         using result_t = std::invoke_result_t<F, size_t>;
 
          std::lock_guard lock(mtx);
 
-         auto promise = std::make_shared<std::promise<result_type>>();
+         auto promise = std::make_shared<std::promise<result_t>>();
          
          queue.emplace_back() = std::make_shared<callable_t>([promise, f = std::forward<F>(func)](const size_t thread_number) {
 #if __cpp_exceptions
             try {
-               if constexpr (std::is_void_v<result_type>) {
+               if constexpr (std::is_void_v<result_t>) {
                   f(thread_number);
                }
                else {
@@ -123,7 +123,7 @@ namespace glz
                promise->set_exception(std::current_exception());
             }
 #else
-            if constexpr (std::is_void_v<result_type>) {
+            if constexpr (std::is_void_v<result_t>) {
                f(thread_number);
             }
             else {
