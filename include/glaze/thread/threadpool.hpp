@@ -62,7 +62,7 @@ namespace glz
       using callable_t = std::function<void(const size_t)>;
 
       template <class F>
-      std::future<std::invoke_result_t<F>> emplace_back(F&& func)
+      auto emplace_back(F&& func)
       {
          using result_t = std::invoke_result_t<F>;
 
@@ -101,7 +101,7 @@ namespace glz
       // Takes a function whose input is the thread number (size_t)
       template <class F>
          requires std::invocable<F, size_t>
-      std::future<std::invoke_result_t<F, size_t>> emplace_back(F&& func)
+      auto emplace_back(F&& func)
       {
          using result_t = std::invoke_result_t<F, size_t>;
 
