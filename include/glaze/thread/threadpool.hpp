@@ -30,7 +30,7 @@ namespace glz
          threads.clear();
          threads.reserve(n);
          for (size_t i = 0; i < n; ++i) {
-            threads.emplace_back([this, thread_number = i]{
+            threads.emplace_back([this, thread_number = i] {
                while (true) {
                   std::unique_lock lock(mtx);
                   work_cv.wait(lock, [this] { return closed || !queue.empty(); }); // Wait for work
@@ -58,11 +58,11 @@ namespace glz
       }
 
       size_t concurrency() const noexcept { return std::thread::hardware_concurrency(); }
-      
+
       using callable_t = std::function<void(const size_t)>;
 
       template <class F>
-       requires (not std::invocable<F, size_t>)
+         requires(not std::invocable<F, size_t>)
       auto emplace_back(F&& func)
       {
          using result_t = std::invoke_result_t<F>;
@@ -70,10 +70,23 @@ namespace glz
          std::lock_guard lock(mtx);
 
          auto promise = std::make_shared<std::promise<result_t>>();
-         
-         queue.emplace_back() = std::make_shared<callable_t>([promise, f = std::forward<F>(func)](const size_t /*thread_number*/) {
+
+         queue.emplace_back() =
+            std::make_shared<callable_t>([promise, f = std::forward<F>(func)](const size_t /*thread_number*/) {
 #if __cpp_exceptions
-            try {
+               try {
+                  if constexpr (std::is_void_v<result_t>) {
+                     f();
+                     promise->set_value();
+                  }
+                  else {
+                     promise->set_value(f());
+                  }
+               }
+               catch (...) {
+                  promise->set_exception(std::current_exception());
+               }
+#else
                if constexpr (std::is_void_v<result_t>) {
                   f();
                   promise->set_value();
@@ -81,20 +94,8 @@ namespace glz
                else {
                   promise->set_value(f());
                }
-            }
-            catch (...) {
-               promise->set_exception(std::current_exception());
-            }
-#else
-            if constexpr (std::is_void_v<result_t>) {
-               f();
-               promise->set_value();
-            }
-            else {
-               promise->set_value(f());
-            }
 #endif
-         });
+            });
 
          work_cv.notify_one();
 
@@ -111,10 +112,23 @@ namespace glz
          std::lock_guard lock(mtx);
 
          auto promise = std::make_shared<std::promise<result_t>>();
-         
-         queue.emplace_back() = std::make_shared<callable_t>([promise, f = std::forward<F>(func)](const size_t thread_number) {
+
+         queue.emplace_back() =
+            std::make_shared<callable_t>([promise, f = std::forward<F>(func)](const size_t thread_number) {
 #if __cpp_exceptions
-            try {
+               try {
+                  if constexpr (std::is_void_v<result_t>) {
+                     f(thread_number);
+                     promise->set_value();
+                  }
+                  else {
+                     promise->set_value(f(thread_number));
+                  }
+               }
+               catch (...) {
+                  promise->set_exception(std::current_exception());
+               }
+#else
                if constexpr (std::is_void_v<result_t>) {
                   f(thread_number);
                   promise->set_value();
@@ -122,20 +136,8 @@ namespace glz
                else {
                   promise->set_value(f(thread_number));
                }
-            }
-            catch (...) {
-               promise->set_exception(std::current_exception());
-            }
-#else
-            if constexpr (std::is_void_v<result_t>) {
-               f(thread_number);
-               promise->set_value();
-            }
-            else {
-               promise->set_value(f(thread_number));
-            }
 #endif
-         });
+            });
 
          work_cv.notify_one();
 
@@ -174,7 +176,7 @@ namespace glz
             closed = true;
             work_cv.notify_all();
          }
-         
+
          wait(); // wait for work to finish
 
          for (auto& t : threads) {
