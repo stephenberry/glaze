@@ -8373,6 +8373,50 @@ suite large_struct_tests = [] {
    };
 };
 
+struct thread_msg
+{
+   uint64_t id{};
+   std::string val{};
+};
+
+suite threading_tests = [] {
+   "threading"_test = [] {
+      auto serialize = [](const auto& msg) {
+         std::vector<uint8_t> buf{};
+         if (glz::write_json(msg, buf)) {
+            std::abort();
+         }
+         buf.push_back('\0');
+         return buf;
+      };
+      
+      auto deserialize = [](std::vector<uint8_t>&& stream) -> std::optional<thread_msg>
+      {
+         thread_msg msg{};
+         auto err = glz::read_json(msg, stream);
+
+         if (err) {
+            return {};
+         }
+         return {msg};
+      };
+      
+      std::array<std::future<void>, 8> threads{};
+      for (uint_fast32_t i = 0; i < threads.size(); i++) {
+         threads[i] = std::async([&] {
+            thread_msg msg{20, "five hundred"};
+            for (size_t j = 0; j < 1'000; ++j) {
+               auto res = serialize(msg);
+               auto msg2 = deserialize(std::move(res));
+               if (msg2->id != msg.id || msg2->val != msg.val) {
+                  std::abort();
+               }
+            }
+         });
+      }
+   };
+};
+
 int main()
 {
    trace.begin("json_test", "Full test suite duration.");
