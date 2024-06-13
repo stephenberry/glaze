@@ -62,6 +62,7 @@ namespace glz
       using callable_t = std::function<void(const size_t)>;
 
       template <class F>
+       requires (not std::invocable<F, size_t>)
       auto emplace_back(F&& func)
       {
          using result_t = std::invoke_result_t<F>;
@@ -75,6 +76,7 @@ namespace glz
             try {
                if constexpr (std::is_void_v<result_t>) {
                   f();
+                  promise->set_value();
                }
                else {
                   promise->set_value(f());
@@ -86,6 +88,7 @@ namespace glz
 #else
             if constexpr (std::is_void_v<result_t>) {
                f();
+               promise->set_value();
             }
             else {
                promise->set_value(f());
@@ -114,6 +117,7 @@ namespace glz
             try {
                if constexpr (std::is_void_v<result_t>) {
                   f(thread_number);
+                  promise->set_value();
                }
                else {
                   promise->set_value(f(thread_number));
@@ -125,6 +129,7 @@ namespace glz
 #else
             if constexpr (std::is_void_v<result_t>) {
                f(thread_number);
+               promise->set_value();
             }
             else {
                promise->set_value(f(thread_number));
