@@ -104,7 +104,7 @@ namespace glz
                                                                         std::forward<B>(b), std::forward<IX>(ix));
          }
       };
-      
+
       template <class T>
          requires(glaze_value_t<T> && !custom_write<T>)
       struct to_binary<T>
@@ -114,7 +114,7 @@ namespace glz
          {
             using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
             to_binary<V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
-                                          std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
+                                            std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 

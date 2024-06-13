@@ -3182,7 +3182,7 @@ suite generic_json_tests = [] {
       expect(json.size() == 0);
       expect(json.get_number() == 3.882e2);
    };
-   
+
    "json_t is_boolean"_test = [] {
       glz::json_t json{};
       expect(not glz::read_json(json, "true"));

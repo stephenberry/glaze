@@ -174,23 +174,23 @@ namespace glz
       [[nodiscard]] bool is_number() const noexcept { return holds<double>(); }
 
       [[nodiscard]] bool is_string() const noexcept { return holds<std::string>(); }
-      
+
       [[nodiscard]] bool is_boolean() const noexcept { return holds<bool>(); }
 
       [[nodiscard]] bool is_null() const noexcept { return holds<std::nullptr_t>(); }
-      
+
       [[nodiscard]] array_t& get_array() noexcept { return get<array_t>(); }
       [[nodiscard]] const array_t& get_array() const noexcept { return get<array_t>(); }
-      
+
       [[nodiscard]] object_t& get_object() noexcept { return get<object_t>(); }
       [[nodiscard]] const object_t& get_object() const noexcept { return get<object_t>(); }
-      
+
       [[nodiscard]] double& get_number() noexcept { return get<double>(); }
       [[nodiscard]] const double& get_number() const noexcept { return get<double>(); }
-      
+
       [[nodiscard]] std::string& get_string() noexcept { return get<std::string>(); }
       [[nodiscard]] const std::string& get_string() const noexcept { return get<std::string>(); }
-      
+
       [[nodiscard]] bool& get_boolean() noexcept { return get<bool>(); }
       [[nodiscard]] const bool& get_boolean() const noexcept { return get<bool>(); }
 
@@ -240,7 +240,7 @@ namespace glz
    [[nodiscard]] inline bool is_number(const json_t& value) { return value.is_number(); }
 
    [[nodiscard]] inline bool is_string(const json_t& value) { return value.is_string(); }
-   
+
    [[nodiscard]] inline bool is_boolean(const json_t& value) { return value.is_boolean(); }
 
    [[nodiscard]] inline bool is_null(const json_t& value) { return value.is_null(); }
