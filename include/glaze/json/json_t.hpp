@@ -11,6 +11,12 @@
 #include "glaze/core/meta.hpp"
 #include "glaze/util/expected.hpp"
 
+#ifdef _MSC_VER
+// Turn off broken MSVC warning for "declaration of 'v' hides previous local declaration"
+#pragma warning(push)
+#pragma warning(disable : 4456)
+#endif
+
 namespace glz
 {
    // Generic json type.
@@ -253,3 +259,8 @@ struct glz::meta<glz::json_t>
    using T = glz::json_t;
    static constexpr auto value = &T::data;
 };
+
+#ifdef _MSC_VER
+// restore disabled warning
+#pragma warning(pop)
+#endif
