@@ -11,6 +11,12 @@
 #include "glaze/core/meta.hpp"
 #include "glaze/util/expected.hpp"
 
+#ifdef _MSC_VER
+// Turn off broken MSVC warning for "declaration of 'v' hides previous local declaration"
+#pragma warning(push)
+#pragma warning(disable : 4456)
+#endif
+
 namespace glz
 {
    // Generic json type.
@@ -198,13 +204,13 @@ namespace glz
       // otherwise returns false
       [[nodiscard]] bool empty() const noexcept
       {
-         if (auto* v = get_if<object_t>(); v) {
+         if (auto* v = get_if<object_t>()) {
             return v->empty();
          }
-         else if (auto* v = get_if<array_t>(); v) {
+         else if (auto* v = get_if<array_t>()) {
             return v->empty();
          }
-         else if (auto* v = get_if<std::string>(); v) {
+         else if (auto* v = get_if<std::string>()) {
             return v->empty();
          }
          else if (is_null()) {
@@ -218,13 +224,13 @@ namespace glz
       // returns the count of items in an object or an array, or the size of a string, otherwise returns zero
       [[nodiscard]] size_t size() const noexcept
       {
-         if (auto* v = get_if<object_t>(); v) {
+         if (auto* v = get_if<object_t>()) {
             return v->size();
          }
-         else if (auto* v = get_if<array_t>(); v) {
+         else if (auto* v = get_if<array_t>()) {
             return v->size();
          }
-         else if (auto* v = get_if<std::string>(); v) {
+         else if (auto* v = get_if<std::string>()) {
             return v->size();
          }
          else {
@@ -253,3 +259,8 @@ struct glz::meta<glz::json_t>
    using T = glz::json_t;
    static constexpr auto value = &T::data;
 };
+
+#ifdef _MSC_VER
+// restore disabled warning
+#pragma warning(pop)
+#endif
