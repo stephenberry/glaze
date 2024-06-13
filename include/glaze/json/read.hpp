@@ -2167,6 +2167,15 @@ namespace glz
          }
       };
 
+      template <typename T>
+      struct extract_variant_types;
+
+      template <typename... Ts>
+      struct extract_variant_types<std::variant<Ts...>>
+      {
+         using type = std::tuple<Ts...>;
+      };
+
       template <is_variant T>
       struct from_json<T>
       {
@@ -2186,13 +2195,13 @@ namespace glz
                   return;
                case '{':
                   ++it;
-                  using object_types = typename variant_types<T>::object_types;
-                  if constexpr (glz::tuple_size_v<object_types> < 1) {
+                  using object_types = typename extract_variant_types<T>::type;
+                  if constexpr (std::tuple_size_v<object_types> < 1) {
                      ctx.error = error_code::no_matching_variant_type;
                      return;
                   }
-                  else if constexpr (glz::tuple_size_v<object_types> == 1) {
-                     using V = glz::tuple_element_t<0, object_types>;
+                  else if constexpr (std::tuple_size_v<object_types> == 1) {
+                     using V = std::tuple_element_t<0, object_types>;
                      if (!std::holds_alternative<V>(value)) value = V{};
                      read<json>::op<opening_handled<Opts>()>(std::get<V>(value), ctx, it, end);
                      return;
@@ -2239,9 +2248,14 @@ namespace glz
                                        [&](auto&& v) {
                                           using V = std::decay_t<decltype(v)>;
                                           constexpr bool is_object = glaze_object_t<V> || reflectable<V>;
-                                          if constexpr (is_object) {
-                                             from_json<V>::template op<opening_handled<Opts>(), tag_literal>(v, ctx, it,
-                                                                                                             end);
+                                          if constexpr (is_variant<V>) {
+                                             from_json<V>::template op<Options>(v, ctx, std::prev(it), end);
+                                          }
+                                          else {
+                                             if constexpr (is_object) {
+                                                from_json<V>::template op<opening_handled<Opts>(), tag_literal>(
+                                                   v, ctx, it, end);
+                                             }
                                           }
                                        },
                                        value);
