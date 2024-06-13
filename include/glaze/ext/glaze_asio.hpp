@@ -95,9 +95,9 @@ namespace glz
    template <opts Opts = opts{}>
    struct asio_client
    {
-      std::string host{"localhost"};
-      std::string service{""};
-      uint32_t concurrency{1};
+      std::string host{"localhost"}; // host name
+      std::string service{""}; // often the port
+      uint32_t concurrency{1}; // how many threads to use
 
       struct glaze
       {
@@ -282,7 +282,7 @@ namespace glz
    struct asio_server
    {
       uint16_t port{};
-      uint32_t concurrency{1};
+      uint32_t concurrency{1}; // how many threads to use
 
       struct glaze
       {
