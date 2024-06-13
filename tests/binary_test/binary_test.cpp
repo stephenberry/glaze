@@ -2135,6 +2135,40 @@ suite json_t_tests = [] {
       expect(json.is_string());
       expect(json.get_string() == "Hello World");
    };
+   
+   "json_t"_test = [] {
+      glz::json_t json{{"i", 42}};
+      auto b = glz::write_binary(json).value_or("error");
+      
+      json = nullptr;
+      expect(not glz::read_binary(json, b));
+      expect(json.is_object());
+      expect(json.get_object().size() == 1);
+      expect(json["i"].get_number() == 42);
+   };
+   
+   "json_t"_test = [] {
+      glz::json_t json{{"str", "somewhere"}, {"arr", {1,2,3}}};
+      auto b = glz::write_binary(json).value_or("error");
+      
+      json = nullptr;
+      expect(not glz::read_binary(json, b));
+      expect(json.is_object());
+      expect(json.get_object().size() == 2);
+      expect(json["str"].get_string() == "somewhere");
+      expect(json["arr"].get_array().size() == 3);
+   };
+   
+   "json_t"_test = [] {
+      glz::json_t json{1, 2, 3};
+      auto b = glz::write_binary(json).value_or("error");
+      
+      json = nullptr;
+      expect(not glz::read_binary(json, b));
+      expect(json.is_array());
+      expect(json.get_array().size() == 3);
+      expect(json[0].get_number() == 1);
+   };
 };
 
 int main()
