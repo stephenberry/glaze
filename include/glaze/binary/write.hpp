@@ -104,15 +104,17 @@ namespace glz
                                                                         std::forward<B>(b), std::forward<IX>(ix));
          }
       };
-
-      template <glaze_value_t T>
+      
+      template <class T>
+         requires(glaze_value_t<T> && !custom_write<T>)
       struct to_binary<T>
       {
-         template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, Args&&... args) noexcept
+         template <auto Opts, class Value, is_context Ctx, class B, class IX>
+         GLZ_ALWAYS_INLINE static void op(Value&& value, Ctx&& ctx, B&& b, IX&& ix) noexcept
          {
-            using V = decltype(get_member(std::declval<T>(), meta_wrapper_v<T>));
-            to_binary<V>::template op<Opts>(get_member(value, meta_wrapper_v<T>), std::forward<Args>(args)...);
+            using V = std::remove_cvref_t<decltype(get_member(std::declval<Value>(), meta_wrapper_v<T>))>;
+            to_binary<V>::template op<Opts>(get_member(std::forward<Value>(value), meta_wrapper_v<T>),
+                                          std::forward<Ctx>(ctx), std::forward<B>(b), std::forward<IX>(ix));
          }
       };
 

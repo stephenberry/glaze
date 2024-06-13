@@ -2125,6 +2125,18 @@ suite volatile_tests = [] {
    };
 };
 
+suite json_t_tests = [] {
+   "json_t"_test = [] {
+      glz::json_t json("Hello World");
+      auto b = glz::write_binary(json).value_or("error");
+      
+      json = nullptr;
+      expect(not glz::read_binary(json, b));
+      expect(json.is_string());
+      expect(json.get_string() == "Hello World");
+   };
+};
+
 int main()
 {
    glz::trace_begin("binary_test");
