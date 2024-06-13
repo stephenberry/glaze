@@ -86,7 +86,7 @@ namespace glz
                      }
                      else {
                         return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
-                           {pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
+                                                                                            std::array{pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
                      }
                   }
                }
@@ -94,7 +94,7 @@ namespace glz
          }
          else {
             return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
-               {pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
+                                                                                std::array{pair<sv, value_t>{get<I>(members), std::add_pointer_t<glz::tuple_element_t<I, V>>{}}...});
          }
       }
 

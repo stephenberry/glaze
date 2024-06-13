@@ -634,6 +634,53 @@ suite nested_target_tests = [] {
    };
 };
 
+struct large_struct_t
+{
+   bool a = false;
+   bool b = false;
+   bool c = false;
+   bool d = false;
+   bool e = false;
+   bool f = false;
+   bool g = false;
+   bool h = false;
+   bool i = false;
+   bool j = false;
+   bool k = false;
+   bool l = false;
+   bool m = false;
+   bool n = false;
+   bool o = false;
+   bool p = false;
+   bool q = false;
+   bool r = false;
+   bool s = false;
+   bool t = false;
+   bool u = false;
+   bool v = false;
+   bool w = false;
+   bool x = false;
+   bool y = false;
+   bool z = false;
+   bool one = false;
+   bool two = false;
+   bool three = false;
+   bool four = false;
+   bool five = false;
+   bool six = false;
+   bool seven = false;
+};
+
+suite large_struct_tests = []
+{
+   "large_struct"_test = [] {
+      large_struct_t obj{};
+      std::string s = glz::write_json(obj).value_or("error");
+      expect(s == R"({"a":false,"b":false,"c":false,"d":false,"e":false,"f":false,"g":false,"h":false,"i":false,"j":false,"k":false,"l":false,"m":false,"n":false,"o":false,"p":false,"q":false,"r":false,"s":false,"t":false,"u":false,"v":false,"w":false,"x":false,"y":false,"z":false,"one":false,"two":false,"three":false,"four":false,"five":false,"six":false,"seven":false})") << s;
+      expect(not glz::read_json(obj, s));
+   };
+};
+
 /*namespace glz::detail
 {
    template <>
