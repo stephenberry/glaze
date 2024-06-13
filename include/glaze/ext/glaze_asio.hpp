@@ -108,7 +108,7 @@ namespace glz
       std::shared_ptr<asio::io_context> ctx{};
       std::shared_ptr<asio::ip::tcp::socket> socket{};
 
-      std::string buffer{};
+      std::shared_ptr<repe::buffer_pool> buffer_pool = std::make_shared<repe::buffer_pool>();
 
       [[nodiscard]] std::error_code init()
       {
@@ -131,6 +131,9 @@ namespace glz
       template <class Params>
       [[nodiscard]] repe::error_t notify(repe::header&& header, Params&& params)
       {
+         repe::unique_buffer ubuffer{buffer_pool.get()};
+         auto& buffer = ubuffer.value();
+         
          header.notify = true;
          const auto ec = repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
          if (bool(ec)) [[unlikely]] {
@@ -144,6 +147,9 @@ namespace glz
       template <class Result>
       [[nodiscard]] repe::error_t get(repe::header&& header, Result&& result)
       {
+         repe::unique_buffer ubuffer{buffer_pool.get()};
+         auto& buffer = ubuffer.value();
+         
          header.notify = false;
          header.empty = true; // no params
          const auto ec = repe::request<Opts>(std::move(header), nullptr, buffer);
@@ -173,6 +179,9 @@ namespace glz
       template <class Params>
       [[nodiscard]] repe::error_t set(repe::header&& header, Params&& params)
       {
+         repe::unique_buffer ubuffer{buffer_pool.get()};
+         auto& buffer = ubuffer.value();
+         
          header.notify = false;
          const auto ec = repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
          if (bool(ec)) [[unlikely]] {
@@ -188,6 +197,9 @@ namespace glz
       template <class Params, class Result>
       [[nodiscard]] repe::error_t call(repe::header&& header, Params&& params, Result&& result)
       {
+         repe::unique_buffer ubuffer{buffer_pool.get()};
+         auto& buffer = ubuffer.value();
+         
          header.notify = false;
          const auto ec = repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
          if (bool(ec)) [[unlikely]] {
@@ -202,6 +214,9 @@ namespace glz
 
       [[nodiscard]] repe::error_t call(repe::header&& header)
       {
+         repe::unique_buffer ubuffer{buffer_pool.get()};
+         auto& buffer = ubuffer.value();
+         
          header.notify = false;
          header.empty = true; // because no value provided
          const auto ec = glz::write_json(std::forward_as_tuple(std::move(header), nullptr), buffer);
@@ -245,8 +260,10 @@ namespace glz
       }
 
       template <class Params>
-      [[nodiscard]] std::string& call_raw(repe::header&& header, Params&& params, repe::error_t& error)
+      [[deprecated("We use a buffer pool now, so this would cause allocations")]] [[nodiscard]] std::string call_raw(repe::header&& header, Params&& params, repe::error_t& error)
       {
+         std::string buffer{};
+         
          header.notify = false;
          const auto ec = repe::request<Opts>(std::move(header), std::forward<Params>(params), buffer);
          if (bool(ec)) [[unlikely]] {
