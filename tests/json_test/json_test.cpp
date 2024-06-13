@@ -2522,8 +2522,7 @@ struct glz::meta<study_obj>
    static constexpr auto value = object("x", &T::x, "y", &T::y);
 };
 
-// TODO: Is Clang right to complain about: AddressSanitizer: alloc-dealloc-mismatch (operator new vs free)
-/*suite study_tests = [] {
+suite study_tests = [] {
    "study"_test = [] {
       glz::study::design design;
       design.params = {{.ptr = "/x", .distribution = "linspace", .range = {"0", "1", "10"}}};
@@ -2568,10 +2567,9 @@ struct glz::meta<study_obj>
 
       expect(results == results2);
    };
-};*/
+};
 
-// TODO: Is Clang right to complain about: AddressSanitizer: alloc-dealloc-mismatch (operator new vs free)
-/*suite thread_pool = [] {
+suite thread_pool = [] {
    "thread pool"_test = [] {
       glz::pool pool(2);
 
@@ -2624,7 +2622,7 @@ struct glz::meta<study_obj>
 
       expect(numbers.size() == 1000);
    };
-};*/
+};
 
 suite progress_bar_tests = [] {
    "progress bar 30%"_test = [] {
