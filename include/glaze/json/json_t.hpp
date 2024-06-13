@@ -198,13 +198,13 @@ namespace glz
       // otherwise returns false
       [[nodiscard]] bool empty() const noexcept
       {
-         if (auto* v = get_if<object_t>(); v) {
+         if (auto* v = get_if<object_t>()) {
             return v->empty();
          }
-         else if (auto* v = get_if<array_t>(); v) {
+         else if (auto* v = get_if<array_t>()) {
             return v->empty();
          }
-         else if (auto* v = get_if<std::string>(); v) {
+         else if (auto* v = get_if<std::string>()) {
             return v->empty();
          }
          else if (is_null()) {
@@ -218,13 +218,13 @@ namespace glz
       // returns the count of items in an object or an array, or the size of a string, otherwise returns zero
       [[nodiscard]] size_t size() const noexcept
       {
-         if (auto* v = get_if<object_t>(); v) {
+         if (auto* v = get_if<object_t>()) {
             return v->size();
          }
-         else if (auto* v = get_if<array_t>(); v) {
+         else if (auto* v = get_if<array_t>()) {
             return v->size();
          }
-         else if (auto* v = get_if<std::string>(); v) {
+         else if (auto* v = get_if<std::string>()) {
             return v->size();
          }
          else {
