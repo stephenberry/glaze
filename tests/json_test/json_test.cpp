@@ -7803,6 +7803,11 @@ struct struct_c_arrays
 {
    uint16_t ints[2]{1, 2};
    float floats[1]{3.14f};
+   
+   struct glaze {
+      using T = struct_c_arrays;
+      static constexpr auto value = glz::object(&T::ints, &T::floats);
+   };
 };
 
 struct struct_c_arrays_meta
@@ -8248,6 +8253,13 @@ struct Trade
 {
    int64_t T{};
    char s[16];
+};
+
+template <>
+struct glz::meta<Trade>
+{
+   using T = Trade;
+   static constexpr auto value = object(&T::T, &T::s);
 };
 
 suite raw_char_buffer_tests = [] {
