@@ -8389,9 +8389,8 @@ suite threading_tests = [] {
          buf.push_back('\0');
          return buf;
       };
-      
-      auto deserialize = [](std::vector<uint8_t>&& stream) -> std::optional<thread_msg>
-      {
+
+      auto deserialize = [](std::vector<uint8_t>&& stream) -> std::optional<thread_msg> {
          thread_msg msg{};
          auto err = glz::read_json(msg, stream);
 
@@ -8400,7 +8399,7 @@ suite threading_tests = [] {
          }
          return {msg};
       };
-      
+
       std::array<std::future<void>, 8> threads{};
       for (uint_fast32_t i = 0; i < threads.size(); i++) {
          threads[i] = std::async([&] {
