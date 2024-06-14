@@ -693,21 +693,20 @@ namespace glz::detail
       {
          int32_t sec_count{};
          read<json>::op<Opts>(sec_count, ctx, args...);
-         if (glz::error_code::none == ctx.error)
-            value = std::chrono::seconds{ sec_count };
+         if (glz::error_code::none == ctx.error) value = std::chrono::seconds{sec_count};
       }
    };
 }
 
 struct chrono_data
 {
-   std::string  message{};
+   std::string message{};
    std::chrono::seconds seconds_duration{};
 };
 
 suite custom_chrono_tests = [] {
    "custom_chrono"_test = [] {
-      constexpr std::string_view json =  R"(
+      constexpr std::string_view json = R"(
          {
             "message": "Hello",
             "seconds_duration": 5458
@@ -724,10 +723,10 @@ suite custom_chrono_tests = [] {
 
 struct S1
 {
-   int    a{};
-   int    b{};
-   std::filesystem::path   fn{};
+   int a{};
+   int b{};
+   std::filesystem::path fn{};
 };
-static_assert( glz::detail::count_members<S1> == 3 );
+static_assert(glz::detail::count_members<S1> == 3);
 
 int main() { return 0; }
