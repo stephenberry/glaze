@@ -272,7 +272,7 @@ struct my_struct
 
 ## Custom Key Names or Unnamed Types
 
-When you define Glaze metadata, objects will automatically reflect the names of your member object pointers. However, if you want custom names or you register lambda functions or wrappers that do not provide names for your fields, you can optionally add field names in your metadata.
+When you define Glaze metadata, objects will automatically reflect the non-static names of your member object pointers. However, if you want custom names or you register lambda functions or wrappers that do not provide names for your fields, you can optionally add field names in your metadata.
 
 Example of custom names:
 
@@ -294,6 +294,7 @@ struct glz::meta<my_struct> {
 >
 > Names are required for:
 >
+> - static constexpr member variables
 > - Wrappers
 > - Lambda functions
 
