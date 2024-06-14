@@ -683,7 +683,7 @@ suite large_struct_tests = [] {
    };
 };
 
-/*namespace glz::detail
+namespace glz::detail
 {
    template <>
    struct from_json<std::chrono::seconds>
@@ -697,12 +697,12 @@ suite large_struct_tests = [] {
             value = std::chrono::seconds{ sec_count };
       }
    };
-} // namespace glz::detail
+}
 
 struct chrono_data
 {
    std::string  message{};
-   std::chrono::seconds seconds_duration;
+   std::chrono::seconds seconds_duration{};
 };
 
 suite custom_chrono_tests = [] {
@@ -720,6 +720,14 @@ suite custom_chrono_tests = [] {
       expect(obj.message == "Hello");
       expect(obj.seconds_duration.count() == 5458);
    };
-};*/
+};
+
+struct S1
+{
+   int    a{};
+   int    b{};
+   std::filesystem::path   fn{};
+};
+static_assert( glz::detail::count_members<S1> == 3 );
 
 int main() { return 0; }
