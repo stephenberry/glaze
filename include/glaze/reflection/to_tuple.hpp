@@ -28,13 +28,6 @@ namespace glz
          template <class T>
             requires(!std::same_as<T, const char*> && !std::same_as<T, std::nullptr_t>)
          [[maybe_unused]] constexpr operator T() const;
-
-         template <class T>
-            requires(is_specialization_v<T, std::optional>)
-         [[maybe_unused]] constexpr operator T() const
-         {
-            return std::nullopt;
-         }
 #else
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmissing-declarations"
@@ -51,11 +44,11 @@ namespace glz
          requires(std::is_aggregate_v<std::remove_cvref_t<T>>)
       inline constexpr auto count_members = [] {
          using V = std::remove_cvref_t<T>;
-         if constexpr (requires { V{Args{}..., any_t{}}; } == false) {
-            return sizeof...(Args);
+         if constexpr (requires { V{Args{}..., any_t{}}; }) {
+            return count_members<V, Args..., any_t>;
          }
          else {
-            return count_members<V, Args..., any_t>;
+            return sizeof...(Args);
          }
       }();
 
