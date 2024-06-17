@@ -55,7 +55,7 @@ namespace glz
       });
    }
 
-   enum ip_error { none = 0, socket_connect_failed = 1001, server_bind_failed = 1002 };
+   enum ip_error { none = 0, socket_connect_failed = 1001, socket_bind_failed = 1002 };
 
    struct ip_error_category : public std::error_category
    {
@@ -73,8 +73,8 @@ namespace glz
          switch (static_cast<ip_error>(ec)) {
          case socket_connect_failed:
             return "socket_connect_failed";
-         case server_bind_failed:
-            return "server_bind_failed";
+         case socket_bind_failed:
+            return "socket_bind_failed";
          default:
             return "unknown_error";
          }
@@ -144,11 +144,11 @@ namespace glz
          return result == 0;
       }
 
-      bool bind_and_listen(int port)
+      std::error_code bind_and_listen(int port)
       {
          socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
          if (socket_fd == -1) {
-            return false;
+            return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
 
          sockaddr_in server_addr;
@@ -157,17 +157,17 @@ namespace glz
          server_addr.sin_port = htons(port);
 
          if (::bind(socket_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
-            return false;
+            return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
 
          if (::listen(socket_fd, SOMAXCONN) == -1) {
-            return false;
+            return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
 
          set_non_blocking(socket_fd);
          no_delay();
 
-         return true;
+         return {};
       }
 
       void read(Callback callback)
@@ -242,7 +242,11 @@ namespace glz
       {
          std::unique_ptr<glz::socket> accept_socket = std::make_unique<glz::socket>();
 
-         if (accept_socket->bind_and_listen(port)) {
+         const auto ec = accept_socket->bind_and_listen(port);
+         if (ec) {
+            return {ip_error::socket_bind_failed, ip_error_category::instance()};
+         }
+         else {
             std::thread([this, accept_socket = std::move(accept_socket),
                          callback = std::forward<AcceptCallback>(callback)]() {
                while (active) {
@@ -261,9 +265,6 @@ namespace glz
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
                }
             }).detach();
-         }
-         else {
-            return {ip_error::server_bind_failed, ip_error_category::instance()};
          }
 
          return {};
