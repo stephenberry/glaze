@@ -283,7 +283,12 @@ namespace glz
       std::vector<std::future<void>> threads{}; // TODO: Remove dead clients
       std::future<void> acceptor_thread{};
 
-      destructor on_destruct{[] { active = false; }};
+      destructor on_destruct{[this] {
+         active = false;
+         // connect to self to trigger accept return -1 so that we can close
+         glz::socket local{};
+         local.connect("127.0.0.1", port);
+      }};
 
       using AcceptCallback = std::function<void(socket&&)>;
 
@@ -304,7 +309,7 @@ namespace glz
                   sockaddr_in client_addr;
                   socklen_t client_len = sizeof(client_addr);
                   // As long as we're not calling accept on the same port we are safe
-                  SOCKET client_fd = ::accept(accept_socket->socket_fd, (sockaddr*)&client_addr, &client_len);
+                  auto client_fd = ::accept(accept_socket->socket_fd, (sockaddr*)&client_addr, &client_len);
                   if (client_fd != -1) {
                      threads.emplace_back(std::async([callback = std::move(callback), client_fd] {
                         callback(socket{client_fd});
