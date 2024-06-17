@@ -226,12 +226,13 @@ namespace glz
       
       using AcceptCallback = std::function<void(socket&&)>;
       
-      std::error_code async_accept(AcceptCallback callback) {
+      template <class AcceptCallback>
+      std::error_code async_accept(AcceptCallback&& callback) {
          std::unique_ptr<glz::socket> accept_socket = std::make_unique<glz::socket>();
          
          if (accept_socket->bind_and_listen(port))
          {
-            std::thread([this, accept_socket = std::move(accept_socket), callback = std::move(callback)]() {
+            std::thread([this, accept_socket = std::move(accept_socket), callback = std::forward<AcceptCallback>(callback)]() {
                std::cout << std::format("Server started on port {}\n", port);
                
                while (active) {
