@@ -80,11 +80,12 @@ namespace glz
          }
       }
    };
+   
+   template <class Function>
+   concept is_callback = std::invocable<Function, std::string&> || std::invocable<Function, const std::string&>;
 
    struct socket
    {
-      using Callback = std::function<void(const std::string&, ssize_t)>;
-
       SOCKET socket_fd{-1};
 
       void set_non_blocking(SOCKET fd)
@@ -170,13 +171,14 @@ namespace glz
          return {};
       }
 
-      void read(Callback callback)
+      template <is_callback Callback>
+      void read(Callback&& callback)
       {
          std::string buffer('\0', 1024);
          while (true) {
             ssize_t bytes_read = ::recv(int(socket_fd), buffer.data(), buffer.size(), 0);
             if (bytes_read > 0) {
-               callback(buffer, bytes_read);
+               continue;
             }
             else if (bytes_read == 0) {
                break; // connection has been closed
@@ -186,11 +188,12 @@ namespace glz
                   break;
                }
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
          }
+         callback(buffer);
       }
 
-      void write(const std::string& data, Callback callback)
+      void write(const std::string& data)
       {
          size_t total_bytes_sent = 0;
          while (total_bytes_sent < data.size()) {
@@ -206,7 +209,6 @@ namespace glz
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
          }
-         callback(data, total_bytes_sent);
       }
    };
 
