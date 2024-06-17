@@ -70,7 +70,7 @@ suite socket_test = [] {
             
             std::string received{};
             socket.read_value(received);
-            std::cout << "Received: " << received << std::endl;
+            std::cout << std::format("Received: {}\n", received);
 
             size_t tick{};
             while (glz::active) {

@@ -34,6 +34,7 @@
 #include <system_error>
 #include <thread>
 #include <vector>
+#include <future>
 
 #include "glaze/rpc/repe.hpp"
 
@@ -278,9 +279,7 @@ namespace glz
    struct server final
    {
       int port{};
-      std::vector<std::thread> threads{}; // TODO: Remove dead clients
-      
-      std::mutex mtx{};
+      std::vector<std::future<void>> threads{}; // TODO: Remove dead clients
 
       destructor on_destruct{[] { active = false; }};
 
@@ -302,12 +301,11 @@ namespace glz
                   sockaddr_in client_addr;
                   socklen_t client_len = sizeof(client_addr);
                   // As long as we're not calling accept on the same port we are safe
-                  std::unique_lock lock{mtx};
                   SOCKET client_fd = ::accept(accept_socket->socket_fd, (sockaddr*)&client_addr, &client_len);
                   if (client_fd != -1) {
-                     threads.emplace_back([callback = std::move(callback), client_fd] {
+                     threads.emplace_back(std::async([callback = std::move(callback), client_fd] {
                         callback(socket{client_fd});
-                     });
+                     }));
                   }
                   else {
                      if (SOCKET_ERROR_CODE != EWOULDBLOCK && SOCKET_ERROR_CODE != EAGAIN) {
@@ -315,9 +313,8 @@ namespace glz
                      }
                   }
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                  threads.erase(std::partition(threads.begin(), threads.end(), [](auto& thread) {
-                     if (thread.joinable()) {
-                        thread.join();
+                  threads.erase(std::partition(threads.begin(), threads.end(), [](auto& future) {
+                     if (auto status = future.wait_for(std::chrono::milliseconds(0)); status == std::future_status::ready) {
                         return false;
                      }
                      return true;
