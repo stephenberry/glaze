@@ -291,37 +291,36 @@ namespace glz
       template <class AcceptCallback>
       std::error_code accept(AcceptCallback&& callback)
       {
-         std::unique_ptr<glz::socket> accept_socket = std::make_unique<glz::socket>();
+         glz::socket accept_socket{};
 
-         const auto ec = accept_socket->bind_and_listen(port);
+         const auto ec = accept_socket.bind_and_listen(port);
          if (ec) {
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
-         else {
-            //accept_socket->set_non_blocking();
-            while (active) {
-               sockaddr_in client_addr;
-               socklen_t client_len = sizeof(client_addr);
-               // As long as we're not calling accept on the same port we are safe
-               auto client_fd = ::accept(accept_socket->socket_fd, (sockaddr*)&client_addr, &client_len);
-               if (client_fd != -1) {
-                  threads.emplace_back(std::async([callback = std::move(callback), client_fd] {
-                     callback(socket{client_fd});
-                  }));
-               }
-               else {
-                  if (SOCKET_ERROR_CODE != EWOULDBLOCK && SOCKET_ERROR_CODE != EAGAIN) {
-                     break;
-                  }
-               }
-               std::this_thread::sleep_for(std::chrono::milliseconds(10));
-               threads.erase(std::partition(threads.begin(), threads.end(), [](auto& future) {
-                  if (auto status = future.wait_for(std::chrono::milliseconds(0)); status == std::future_status::ready) {
-                     return false;
-                  }
-                  return true;
-               }), threads.end());
+         
+         //accept_socket->set_non_blocking();
+         while (active) {
+            sockaddr_in client_addr;
+            socklen_t client_len = sizeof(client_addr);
+            // As long as we're not calling accept on the same port we are safe
+            auto client_fd = ::accept(accept_socket.socket_fd, (sockaddr*)&client_addr, &client_len);
+            if (client_fd != -1) {
+               threads.emplace_back(std::async([callback = std::move(callback), client_fd] {
+                  callback(socket{client_fd});
+               }));
             }
+            else {
+               if (SOCKET_ERROR_CODE != EWOULDBLOCK && SOCKET_ERROR_CODE != EAGAIN) {
+                  break;
+               }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            threads.erase(std::partition(threads.begin(), threads.end(), [](auto& future) {
+               if (auto status = future.wait_for(std::chrono::milliseconds(0)); status == std::future_status::ready) {
+                  return false;
+               }
+               return true;
+            }), threads.end());
          }
 
          return {};
