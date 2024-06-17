@@ -69,11 +69,9 @@ suite socket_test = [] {
             std::cerr << "Failed to connect to server.\n";
          }
          else {
-            std::cout << "Connected to server!\n";
-            
             std::string received{};
             socket.read_value(received);
-            std::cout << std::format("Received: {}\n", received);
+            std::cout << std::format("Received from server: {}\n", received);
 
             size_t tick{};
             while (glz::active && tick < 3) {

@@ -96,22 +96,22 @@ namespace glz
    {
       SOCKET socket_fd{-1};
 
-      void set_non_blocking(SOCKET /*fd*/)
+      void set_non_blocking()
       {
-/*#ifdef _WIN32
+#ifdef _WIN32
          u_long mode = 1;
-         ioctlsocket(fd, FIONBIO, &mode);
+         ioctlsocket(socket_fd, FIONBIO, &mode);
 #else
-         int flags = fcntl(fd, F_GETFL, 0);
-         fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-#endif*/
+         int flags = fcntl(socket_fd, F_GETFL, 0);
+         fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK);
+#endif
       }
 
       socket() = default;
 
       socket(SOCKET fd) : socket_fd(fd)
       {
-         set_non_blocking(socket_fd);
+         //set_non_blocking();
       }
 
       ~socket()
@@ -138,7 +138,7 @@ namespace glz
             return {ip_error::socket_connect_failed, ip_error_category::instance()};
          }
 
-         set_non_blocking(socket_fd);
+         //set_non_blocking();
 
          return {};
       }
@@ -170,7 +170,7 @@ namespace glz
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
 
-         set_non_blocking(socket_fd);
+         //set_non_blocking();
          no_delay();
 
          return {};
@@ -281,6 +281,7 @@ namespace glz
    {
       int port{};
       std::vector<std::future<void>> threads{}; // TODO: Remove dead clients
+      std::future<void> acceptor_thread{};
 
       destructor on_destruct{[] { active = false; }};
 
@@ -296,8 +297,9 @@ namespace glz
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
          else {
-            std::thread([this, accept_socket = std::move(accept_socket),
-                         callback = std::forward<AcceptCallback>(callback)]() {
+            acceptor_thread = std::async([this, accept_socket = std::move(accept_socket),
+                         callback = std::forward<AcceptCallback>(callback)] {
+               //accept_socket->set_non_blocking();
                while (active) {
                   sockaddr_in client_addr;
                   socklen_t client_len = sizeof(client_addr);
@@ -321,7 +323,7 @@ namespace glz
                      return true;
                   }), threads.end());
                }
-            }).detach();
+            });
          }
 
          return {};
