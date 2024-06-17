@@ -175,32 +175,58 @@ namespace glz
       void read(Callback&& callback)
       {
          std::string buffer('\0', 1024);
-         while (true) {
-            ssize_t bytes_read = ::recv(int(socket_fd), buffer.data(), buffer.size(), 0);
-            if (bytes_read > 0) {
+         
+         uint64_t size{};
+         ssize_t size_bytes{};
+         while (size_bytes < 8) {
+            size_bytes += ::recv(int(socket_fd), (char*)(&size) + size_bytes, sizeof(uint64_t) - size_bytes, 0);
+         }
+         
+         if (size_bytes > 8) {
+            return; // error
+         }
+         
+         size_t total_bytes{};
+         while (total_bytes < size) {
+            const ssize_t bytes = ::recv(int(socket_fd), buffer.data() + total_bytes, buffer.size() - total_bytes, 0);
+            if (bytes > 0) {
+               total_bytes += bytes;
                continue;
             }
-            else if (bytes_read == 0) {
+            else if (bytes == 0) {
                return; // connection has been closed
             }
             else {
-               if (SOCKET_ERROR_CODE != EWOULDBLOCK && SOCKET_ERROR_CODE != EAGAIN) {
-                  return;
+               if (SOCKET_ERROR_CODE == EWOULDBLOCK || SOCKET_ERROR_CODE == EAGAIN) {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+               }
+               else {
+                  return; // error
                }
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
          }
          callback(buffer);
       }
 
       void write(const std::string& data)
       {
-         size_t total_bytes_sent = 0;
-         while (total_bytes_sent < data.size()) {
-            ssize_t bytes_sent =
-               ::send(int(socket_fd), data.data() + total_bytes_sent, data.size() - total_bytes_sent, 0);
-            if (bytes_sent > 0) {
-               total_bytes_sent += bytes_sent;
+         const uint64_t size = data.size();
+         
+         ssize_t size_bytes{};
+         while (size_bytes < 8) {
+            size_bytes += ::send(int(socket_fd), (char*)(&size) + size_bytes, sizeof(uint64_t) - size_bytes, 0);
+         }
+         
+         if (size_bytes > 8) {
+            return; // error
+         }
+         
+         size_t total_bytes = 0;
+         while (total_bytes < size) {
+            const ssize_t bytes =
+               ::send(int(socket_fd), data.data() + total_bytes, data.size() - total_bytes, 0);
+            if (bytes > 0) {
+               total_bytes += bytes;
             }
             else {
                if (SOCKET_ERROR_CODE != EWOULDBLOCK && SOCKET_ERROR_CODE != EAGAIN) {
@@ -208,6 +234,10 @@ namespace glz
                }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
+         }
+         
+         if (total_bytes != size) {
+            // error
          }
       }
    };
