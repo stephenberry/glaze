@@ -23,13 +23,13 @@ suite make_server = [] {
      const auto ec = server.async_accept([](glz::socket&& client) {
           std::cout << "New client connected!\n";
 
-          client.async_read([](const std::string& data, int bytes_read) {
+          client.read([](const std::string& data, int bytes_read) {
               std::string received(data.begin(), data.begin() + bytes_read);
               std::cout << "Received from client: " << received << std::endl;
           });
 
          std::string message = "Welcome!";
-          client.async_write(message, [](const std::string& data, int /*bytes_sent*/) {
+          client.write(message, [](const std::string& data, int /*bytes_sent*/) {
              std::cout << std::format("Sent to client: {}\n", data);
           });
       });
@@ -57,13 +57,13 @@ suite socket_test = [] {
     } else {
        std::cout << "Connected to server!\n";
 
-       socket.async_read([](const std::string& data, int bytes_read) {
+       socket.read([](const std::string& data, int bytes_read) {
            std::string received(data.begin(), data.begin() + bytes_read);
            std::cout << "Received: " << received << std::endl;
        });
 
       std::string message = "Hello World";
-       socket.async_write(message, [](const std::string& data, int bytes_sent) {
+       socket.write(message, [](const std::string& data, int bytes_sent) {
            std::cout << "Sent from client: " << std::string(data.begin(), data.begin() + bytes_sent) << std::endl;
        });
     }

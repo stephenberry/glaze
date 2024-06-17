@@ -15,6 +15,7 @@
 #if __has_include(<netinet/in.h>)
     #include <netinet/in.h>
 #endif
+#include <netinet/tcp.h>
     #include <arpa/inet.h>
     #include <unistd.h>
     #include <fcntl.h>
@@ -138,6 +139,12 @@ namespace glz
           return {};
        }
       
+      bool no_delay() {
+           int flag = 1;
+           int result = setsockopt(socket_fd, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
+           return result == 0;
+       }
+      
       bool bind_and_listen(int port) {
            socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
            if (socket_fd == -1) {
@@ -158,45 +165,42 @@ namespace glz
            }
 
            set_non_blocking(socket_fd);
+          no_delay();
 
            return true;
        }
 
-       void async_read(Callback callback) {
-           std::thread([this, callback]() {
-               std::string buffer('\0', 1024);
-               while (true) {
-                   ssize_t bytes_read = ::recv(int(socket_fd), buffer.data(), buffer.size(), 0);
-                   if (bytes_read > 0) {
-                       callback(buffer, bytes_read);
-                   } else if (bytes_read == 0) {
-                       break;
-                   } else {
-                       if (SOCKET_ERROR_CODE != EWOULDBLOCK && SOCKET_ERROR_CODE != EAGAIN) {
-                           break;
-                       }
-                   }
-                   std::this_thread::sleep_for(std::chrono::milliseconds(100));
-               }
-           }).detach();
+       void read(Callback callback) {
+          std::string buffer('\0', 1024);
+          while (true) {
+              ssize_t bytes_read = ::recv(int(socket_fd), buffer.data(), buffer.size(), 0);
+              if (bytes_read > 0) {
+                  callback(buffer, bytes_read);
+              } else if (bytes_read == 0) {
+                  break; // connection has been closed
+              } else {
+                  if (SOCKET_ERROR_CODE != EWOULDBLOCK && SOCKET_ERROR_CODE != EAGAIN) {
+                      break;
+                  }
+              }
+              std::this_thread::sleep_for(std::chrono::milliseconds(100));
+          }
        }
 
-       void async_write(const std::string& data, Callback callback) {
-           std::thread([this, data, callback]() {
-               size_t total_bytes_sent = 0;
-               while (total_bytes_sent < data.size()) {
-                   ssize_t bytes_sent = ::send(int(socket_fd), data.data() + total_bytes_sent, data.size() - total_bytes_sent, 0);
-                   if (bytes_sent > 0) {
-                       total_bytes_sent += bytes_sent;
-                   } else {
-                       if (SOCKET_ERROR_CODE != EWOULDBLOCK && SOCKET_ERROR_CODE != EAGAIN) {
-                           break;
-                       }
-                   }
-                   std::this_thread::sleep_for(std::chrono::milliseconds(100));
-               }
-               callback(data, total_bytes_sent);
-           }).detach();
+       void write(const std::string& data, Callback callback) {
+          size_t total_bytes_sent = 0;
+          while (total_bytes_sent < data.size()) {
+              ssize_t bytes_sent = ::send(int(socket_fd), data.data() + total_bytes_sent, data.size() - total_bytes_sent, 0);
+              if (bytes_sent > 0) {
+                  total_bytes_sent += bytes_sent;
+              } else {
+                  if (SOCKET_ERROR_CODE != EWOULDBLOCK && SOCKET_ERROR_CODE != EAGAIN) {
+                      break;
+                  }
+              }
+              std::this_thread::sleep_for(std::chrono::milliseconds(100));
+          }
+          callback(data, total_bytes_sent);
        }
    };
    
