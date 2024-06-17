@@ -35,7 +35,7 @@ suite make_server = [] {
       });
       
       if (ec) {
-         std::cout << ec.message() << '\n';
+         std::cerr << ec.message() << '\n';
       }
       
        // Keep thread alive
@@ -50,19 +50,19 @@ suite socket_test = [] {
    glz::socket socket{};
 
     if (socket.connect("127.0.0.1", 8080)) {
-        std::cout << "Connected to server!" << std::endl;
-
-        socket.async_read([](const std::string& data, int bytes_read) {
-            std::string received(data.begin(), data.begin() + bytes_read);
-            std::cout << "Received: " << received << std::endl;
-        });
-
-       std::string message = "Hello World";
-        socket.async_write(message, [](const std::string& data, int bytes_sent) {
-            std::cout << "Sent: " << std::string(data.begin(), data.begin() + bytes_sent) << std::endl;
-        });
+       std::cerr << "Failed to connect to server.\n";
     } else {
-        std::cerr << "Failed to connect to server." << std::endl;
+       std::cout << "Connected to server!\n";
+
+       socket.async_read([](const std::string& data, int bytes_read) {
+           std::string received(data.begin(), data.begin() + bytes_read);
+           std::cout << "Received: " << received << std::endl;
+       });
+
+      std::string message = "Hello World";
+       socket.async_write(message, [](const std::string& data, int bytes_sent) {
+           std::cout << "Sent: " << std::string(data.begin(), data.begin() + bytes_sent) << std::endl;
+       });
     }
 
     std::this_thread::sleep_for(std::chrono::seconds(10));

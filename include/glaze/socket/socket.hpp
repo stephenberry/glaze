@@ -57,6 +57,7 @@ namespace glz
    
    enum ip_error
    {
+      none = 0,
       socket_connect_failed = 1001,
       server_bind_failed = 1002
    };
@@ -134,7 +135,7 @@ namespace glz
 
            set_non_blocking(socket_fd);
 
-           return {};
+          return {};
        }
       
       bool bind_and_listen(int port) {
