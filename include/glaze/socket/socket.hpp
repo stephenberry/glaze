@@ -279,6 +279,8 @@ namespace glz
    {
       int port{};
       std::vector<std::thread> threads{}; // TODO: Remove dead clients
+      
+      std::mutex mtx{};
 
       destructor on_destruct{[] { active = false; }};
 
@@ -300,6 +302,7 @@ namespace glz
                   sockaddr_in client_addr;
                   socklen_t client_len = sizeof(client_addr);
                   // As long as we're not calling accept on the same port we are safe
+                  std::unique_lock lock{mtx};
                   SOCKET client_fd = ::accept(accept_socket->socket_fd, (sockaddr*)&client_addr, &client_len);
                   if (client_fd != -1) {
                      threads.emplace_back([callback = std::move(callback), client_fd] {

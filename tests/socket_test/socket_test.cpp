@@ -22,8 +22,7 @@ suite make_server = [] {
       const auto ec = server.async_accept([&](glz::socket&& client) {
          std::cout << "New client connected!\n";
 
-         std::string message = "Welcome!";
-         client.write_value(message);
+         client.write_value("Welcome!");
          
          // TODO: Change this to a std::condition_variable
          while (glz::active) {
@@ -53,24 +52,34 @@ suite make_server = [] {
 };
 
 suite socket_test = [] {
-   glz::socket socket{};
+   
+   constexpr auto n_clients = 10;
+   std::vector<glz::socket> sockets(n_clients);
+   std::vector<std::future<void>> threads(n_clients);
+   
+   for (size_t id{}; id < n_clients; ++id)
+   {
+      threads.emplace_back(std::async([id, &sockets]{
+         glz::socket& socket = sockets[id];
 
-   if (socket.connect("127.0.0.1", 8080)) {
-      std::cerr << "Failed to connect to server.\n";
-   }
-   else {
-      std::cout << "Connected to server!\n";
+         if (socket.connect("127.0.0.1", 8080)) {
+            std::cerr << "Failed to connect to server.\n";
+         }
+         else {
+            std::cout << "Connected to server!\n";
+            
+            std::string received{};
+            socket.read_value(received);
+            std::cout << "Received: " << received << std::endl;
 
-      /*socket.read([](const std::string& received) {
-         std::cout << "Received: " << received << std::endl;
-      });*/
-      
-      std::string received{};
-      socket.read_value(received);
-      std::cout << "Received: " << received << std::endl;
-
-      std::string message = "Hello World";
-      socket.write_value(message);
+            size_t tick{};
+            while (glz::active) {
+               socket.write_value(std::format("Client {}, {}", id, tick));
+               std::this_thread::sleep_for(std::chrono::seconds(2));
+               ++tick;
+            }
+         }
+      }));
    }
 
    std::cin.get();
