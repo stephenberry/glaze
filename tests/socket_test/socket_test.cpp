@@ -19,7 +19,7 @@ suite make_server = [] {
    server_thread = std::async([] {
       glz::server server{8080};
 
-      const auto ec = server.async_accept([](glz::socket&& client) {
+      const auto ec = server.async_accept([&](glz::socket&& client) {
          std::cout << "New client connected!\n";
 
          std::string message = "Welcome!";
@@ -28,6 +28,11 @@ suite make_server = [] {
          /*client.read([](const std::string& received) {
             std::cout << "Received from client: " << received << std::endl;
          });*/
+         
+         // Change this to a std::condition_variable
+         while (server.active) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+         }
       });
 
       if (ec) {
@@ -62,7 +67,7 @@ suite socket_test = [] {
       //socket.write(message);
    }
 
-   std::this_thread::sleep_for(std::chrono::seconds(10));
+   std::this_thread::sleep_for(std::chrono::seconds(60));
 };
 
 int main() { return 0; }

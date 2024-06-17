@@ -257,7 +257,9 @@ namespace glz
                   // As long as we're not calling accept on the same port we are safe
                   SOCKET client_fd = ::accept(accept_socket->socket_fd, (sockaddr*)&client_addr, &client_len);
                   if (client_fd != -1) {
-                     threads.emplace_back([callback = std::move(callback), client_fd] { callback(socket(client_fd)); });
+                     threads.emplace_back([callback = std::move(callback), client_fd] {
+                        callback(socket{client_fd});
+                     });
                   }
                   else {
                      if (SOCKET_ERROR_CODE != EWOULDBLOCK && SOCKET_ERROR_CODE != EAGAIN) {
