@@ -233,8 +233,6 @@ namespace glz
          if (accept_socket->bind_and_listen(port))
          {
             std::thread([this, accept_socket = std::move(accept_socket), callback = std::forward<AcceptCallback>(callback)]() {
-               std::cout << std::format("Server started on port {}\n", port);
-               
                while (active) {
                    sockaddr_in client_addr;
                    socklen_t client_len = sizeof(client_addr);

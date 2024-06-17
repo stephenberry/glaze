@@ -37,6 +37,9 @@ suite make_server = [] {
       if (ec) {
          std::cerr << ec.message() << '\n';
       }
+      else {
+         std::cout << std::format("Server started on port: {}\n", server.port);
+      }
       
        // Keep thread alive
        std::this_thread::sleep_for(std::chrono::hours(1));
