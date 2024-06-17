@@ -46,6 +46,8 @@ suite make_server = [] {
          std::cerr << ec.message() << '\n';
       }
    });
+   
+   std::this_thread::sleep_for(std::chrono::milliseconds(100));
 };
 
 suite socket_test = [] {

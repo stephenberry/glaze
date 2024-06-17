@@ -279,11 +279,8 @@ namespace glz
       int port{};
       std::vector<std::future<void>> threads{}; // TODO: Remove dead clients
 
-      destructor on_destruct{[this] {
+      destructor on_destruct{[] {
          active = false;
-         // connect to self to trigger accept return -1 so that we can close
-         glz::socket local{};
-         local.connect("127.0.0.1", port);
       }};
 
       template <class AcceptCallback>
@@ -302,13 +299,16 @@ namespace glz
             // As long as we're not calling accept on the same port we are safe
             auto client_fd = ::accept(accept_socket.socket_fd, (sockaddr*)&client_addr, &client_len);
             if (client_fd != -1) {
-               threads.emplace_back(std::async([callback = std::move(callback), client_fd] {
+               threads.emplace_back(std::async([callback, client_fd] {
                   callback(socket{client_fd});
                }));
             }
             else {
-               if (SOCKET_ERROR_CODE != EWOULDBLOCK && SOCKET_ERROR_CODE != EAGAIN) {
-                  break;
+               if (SOCKET_ERROR_CODE == EWOULDBLOCK || SOCKET_ERROR_CODE == EAGAIN) {
+                  // keep polling
+               }
+               else {
+                  break; // error
                }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
