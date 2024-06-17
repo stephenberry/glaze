@@ -68,6 +68,7 @@ add_subdirectory(lib_test)
 add_subdirectory(mock_json_test)
 add_subdirectory(reflection_test)
 add_subdirectory(repe_test)
+add_subdirectory(socket_test)
 
 # We don't run find_package_test or glaze-install_test with MSVC/Windows, because the Github action runner often chokes
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
