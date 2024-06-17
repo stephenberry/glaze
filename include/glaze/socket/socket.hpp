@@ -36,7 +36,7 @@
 
 namespace glz
 {
-   namespace net
+   namespace ip
    {
       struct opts
       {
@@ -54,6 +54,35 @@ namespace glz
 #endif
       });
    }
+   
+   enum ip_error
+   {
+      socket_connect_failed = 1001,
+      server_bind_failed = 1002
+   };
+   
+   struct ip_error_category : public std::error_category {
+       static const ip_error_category& instance() {
+          static ip_error_category instance{};
+           return instance;
+       }
+
+       const char* name() const noexcept override {
+           return "ip_error_category";
+       }
+
+       std::string message(int ec) const override {
+          using enum ip_error;
+           switch (static_cast<ip_error>(ec)) {
+               case socket_connect_failed:
+                   return "socket_connect_failed";
+              case server_bind_failed:
+                  return "server_bind_failed";
+               default:
+                   return "unknown_error";
+           }
+       }
+   };
    
    struct socket {
        using Callback = std::function<void(const std::string&, ssize_t)>;
@@ -88,10 +117,10 @@ namespace glz
            #endif
        }
 
-       bool connect(const std::string& address, int port) {
+       std::error_code connect(const std::string& address, int port) {
            socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
            if (socket_fd == -1) {
-               return false;
+              return {ip_error::socket_connect_failed, ip_error_category::instance()};
            }
 
            sockaddr_in server_addr;
@@ -100,12 +129,12 @@ namespace glz
            inet_pton(AF_INET, address.c_str(), &server_addr.sin_addr);
 
            if (::connect(socket_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
-               return false;
+              return {ip_error::socket_connect_failed, ip_error_category::instance()};
            }
 
            set_non_blocking(socket_fd);
 
-           return true;
+           return {};
        }
       
       bool bind_and_listen(int port) {
@@ -196,35 +225,37 @@ namespace glz
       
       using AcceptCallback = std::function<void(socket&&)>;
       
-      void async_accept(AcceptCallback callback) {
-           std::thread([this, callback = std::move(callback)]() {
-              glz::socket accept_socket{};
-              
-              if (accept_socket.bind_and_listen(port))
-              {
-                 std::cout << std::format("Server started on port {}\n", port);
-                 
-                 while (active) {
-                     sockaddr_in client_addr;
-                     socklen_t client_len = sizeof(client_addr);
-                    // As long as we're not calling accept on the same port we are safe
-                     SOCKET client_fd = ::accept(accept_socket.socket_fd, (sockaddr*)&client_addr, &client_len);
-                     if (client_fd != -1) {
-                        threads.emplace_back([callback = std::move(callback), client_fd]{
-                           callback(socket(client_fd));
-                        });
-                     } else {
-                         if (SOCKET_ERROR_CODE != EWOULDBLOCK && SOCKET_ERROR_CODE != EAGAIN) {
-                             break;
-                         }
-                     }
-                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                 }
-              }
-              else {
-                 std::cerr << "Failed to start server.\n";
-              }
-           }).detach();
+      std::error_code async_accept(AcceptCallback callback) {
+         std::unique_ptr<glz::socket> accept_socket = std::make_unique<glz::socket>();
+         
+         if (accept_socket->bind_and_listen(port))
+         {
+            std::thread([this, accept_socket = std::move(accept_socket), callback = std::move(callback)]() {
+               std::cout << std::format("Server started on port {}\n", port);
+               
+               while (active) {
+                   sockaddr_in client_addr;
+                   socklen_t client_len = sizeof(client_addr);
+                  // As long as we're not calling accept on the same port we are safe
+                   SOCKET client_fd = ::accept(accept_socket->socket_fd, (sockaddr*)&client_addr, &client_len);
+                   if (client_fd != -1) {
+                      threads.emplace_back([callback = std::move(callback), client_fd]{
+                         callback(socket(client_fd));
+                      });
+                   } else {
+                       if (SOCKET_ERROR_CODE != EWOULDBLOCK && SOCKET_ERROR_CODE != EAGAIN) {
+                           break;
+                       }
+                   }
+                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
+               }
+            }).detach();
+         }
+         else {
+            return {ip_error::server_bind_failed, ip_error_category::instance()};
+         }
+         
+         return {};
        }
    };
 }
