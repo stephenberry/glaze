@@ -181,11 +181,11 @@ namespace glz
                continue;
             }
             else if (bytes_read == 0) {
-               break; // connection has been closed
+               return; // connection has been closed
             }
             else {
                if (SOCKET_ERROR_CODE != EWOULDBLOCK && SOCKET_ERROR_CODE != EAGAIN) {
-                  break;
+                  return;
                }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
