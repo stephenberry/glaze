@@ -35,7 +35,6 @@
 #include <thread>
 #include <vector>
 
-#include "glaze/thread/threadpool.hpp"
 #include "glaze/rpc/repe.hpp"
 
 namespace glz
@@ -279,7 +278,7 @@ namespace glz
    struct server final
    {
       int port{};
-      glz::pool threads{1};
+      std::vector<std::thread> threads{}; // TODO: Remove dead clients
 
       destructor on_destruct{[] { active = false; }};
 
@@ -313,6 +312,13 @@ namespace glz
                      }
                   }
                   std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                  threads.erase(std::partition(threads.begin(), threads.end(), [](auto& thread) {
+                     if (thread.joinable()) {
+                        thread.join();
+                        return false;
+                     }
+                     return true;
+                  }), threads.end());
                }
             }).detach();
          }

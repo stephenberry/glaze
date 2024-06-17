@@ -25,11 +25,11 @@ suite make_server = [] {
          std::string message = "Welcome!";
          client.write_value(message);
          
-         // Change this to a std::condition_variable
+         // TODO: Change this to a std::condition_variable
          while (glz::active) {
             std::string received{};
             client.read_value(received);
-            std::cout << "Received from client: " << received << std::endl;
+            std::cout << std::format("Received from client: {}\n", received);
             
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
          }
