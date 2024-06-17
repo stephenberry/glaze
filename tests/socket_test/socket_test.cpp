@@ -22,12 +22,12 @@ suite make_server = [] {
       const auto ec = server.async_accept([](glz::socket&& client) {
          std::cout << "New client connected!\n";
 
-         client.read([](const std::string& received) {
-            std::cout << "Received from client: " << received << std::endl;
-         });
-
          std::string message = "Welcome!";
          client.write(message);
+         
+         /*client.read([](const std::string& received) {
+            std::cout << "Received from client: " << received << std::endl;
+         });*/
       });
 
       if (ec) {
@@ -58,8 +58,8 @@ suite socket_test = [] {
          std::cout << "Received: " << received << std::endl;
       });
 
-      std::string message = "Hello World";
-      socket.write(message);
+      //std::string message = "Hello World";
+      //socket.write(message);
    }
 
    std::this_thread::sleep_for(std::chrono::seconds(10));
