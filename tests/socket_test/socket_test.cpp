@@ -26,11 +26,7 @@ suite make_server = [] {
          client.write(message);
          
          // Change this to a std::condition_variable
-         while (server.active) {
-            /*client.read([](const std::string& received) {
-               std::cout << "Received from client: " << received << std::endl;
-            });*/
-            
+         while (glz::active) {
             std::string received{};
             client.read(received);
             std::cout << "Received from client: " << received << std::endl;
@@ -78,4 +74,10 @@ suite socket_test = [] {
    std::this_thread::sleep_for(std::chrono::seconds(60));
 };
 
-int main() { return 0; }
+int main() {
+   std::signal(SIGINT, [](int){
+      glz::active = false;
+      std::exit(0);
+   });
+   return 0;
+}

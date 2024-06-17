@@ -26,6 +26,7 @@
 #define SOCKET int
 #endif
 
+#include <csignal>
 #include <format>
 #include <functional>
 #include <iostream>
@@ -44,7 +45,7 @@ namespace glz
       {};
    }
 
-   inline void wsa_startup()
+   inline void windows_startup()
    {
       static std::once_flag flag{};
       std::call_once(flag, [] {
@@ -53,6 +54,12 @@ namespace glz
          WSAStartup(MAKEWORD(2, 2), &wsaData);
 #endif
       });
+   }
+   
+   inline void windows_cleanup() {
+#ifdef _WIN32
+         WSACleanup();
+#endif
    }
 
    enum ip_error { none = 0, socket_connect_failed = 1001, socket_bind_failed = 1002 };
@@ -99,11 +106,10 @@ namespace glz
 #endif*/
       }
 
-      socket() { wsa_startup(); }
+      socket() = default;
 
       socket(SOCKET fd) : socket_fd(fd)
       {
-         wsa_startup();
          set_non_blocking(socket_fd);
       }
 
@@ -112,9 +118,6 @@ namespace glz
          if (socket_fd != -1) {
             CLOSESOCKET(socket_fd);
          }
-#ifdef _WIN32
-         WSACleanup();
-#endif
       }
 
       std::error_code connect(const std::string& address, int port)
@@ -242,15 +245,15 @@ namespace glz
       destructor(Func&& f) : destroy(std::forward<Func>(f))
       {}
    };
+   
+   inline static std::atomic<bool> active = true;
 
    struct server final
    {
       int port{};
       glz::pool threads{1};
 
-      std::atomic<bool> active = true;
-
-      destructor on_destruct{[this] { active = false; }};
+      destructor on_destruct{[] { active = false; }};
 
       using AcceptCallback = std::function<void(socket&&)>;
 
