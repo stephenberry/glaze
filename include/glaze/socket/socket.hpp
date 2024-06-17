@@ -189,9 +189,6 @@ namespace glz
             }
             
             if (total_bytes > 17 && not size_obtained) {
-               //std::string json{};
-               //std::ignore = glz::beve_to_json(std::string_view{buffer.data(), 34}, json);
-               //std::cout << std::format("JSON: {}\n", json);
                std::tuple<std::tuple<uint8_t, uint8_t, int64_t>> header{};
                const auto ec = glz::read<glz::opts{.format = glz::binary, .partial_read = true}>(header, buffer);
                if (ec) {
