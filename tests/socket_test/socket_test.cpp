@@ -73,9 +73,8 @@ suite socket_test = [] {
       socket.write(message);
    }
 
-   while (glz::active) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-   }
+   std::cin.get();
+   glz::active = false;
 };
 
 int main() {
