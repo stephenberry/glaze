@@ -286,8 +286,6 @@ namespace glz
          local.connect("127.0.0.1", port);
       }};
 
-      using AcceptCallback = std::function<void(socket&&)>;
-
       template <class AcceptCallback>
       std::error_code accept(AcceptCallback&& callback)
       {
@@ -298,7 +296,6 @@ namespace glz
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
          
-         //accept_socket->set_non_blocking();
          while (active) {
             sockaddr_in client_addr;
             socklen_t client_len = sizeof(client_addr);
