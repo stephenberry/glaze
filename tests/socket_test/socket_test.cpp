@@ -28,6 +28,12 @@ suite make_server = [] {
          while (glz::active) {
             std::string received{};
             client.read_value(received);
+            
+            if (received == "disconnect") {
+               std::cout << std::format("Client Disconnecting\n");
+               break;
+            }
+            
             std::cout << std::format("Server: {}\n", received);
             
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -70,7 +76,7 @@ suite socket_test = [] {
             std::cout << std::format("Received: {}\n", received);
 
             size_t tick{};
-            while (glz::active) {
+            while (glz::active && tick < 3) {
                socket.write_value(std::format("Client {}, {}", id, tick));
                std::this_thread::sleep_for(std::chrono::seconds(2));
                ++tick;

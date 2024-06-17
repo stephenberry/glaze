@@ -117,6 +117,7 @@ namespace glz
       ~socket()
       {
          if (socket_fd != -1) {
+            write_value("disconnect");
             CLOSESOCKET(socket_fd);
          }
       }
