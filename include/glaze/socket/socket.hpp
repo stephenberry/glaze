@@ -88,9 +88,6 @@ namespace glz
          }
       }
    };
-   
-   template <class Function>
-   concept is_callback = std::invocable<Function, std::string&> || std::invocable<Function, const std::string&>;
 
    struct socket
    {
