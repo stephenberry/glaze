@@ -29,8 +29,8 @@ suite make_server = [] {
           });
 
          std::string message = "Welcome!";
-          client.async_write(message, [](const std::string& data, int bytes_sent) {
-              std::cout << "Sent to client: " << std::string(data.begin(), data.begin() + bytes_sent) << std::endl;
+          client.async_write(message, [](const std::string& data, int /*bytes_sent*/) {
+             std::cout << std::format("Sent to client: {}\n", data);
           });
       });
       
@@ -61,7 +61,7 @@ suite socket_test = [] {
 
       std::string message = "Hello World";
        socket.async_write(message, [](const std::string& data, int bytes_sent) {
-           std::cout << "Sent: " << std::string(data.begin(), data.begin() + bytes_sent) << std::endl;
+           std::cout << "Sent from client: " << std::string(data.begin(), data.begin() + bytes_sent) << std::endl;
        });
     }
 
