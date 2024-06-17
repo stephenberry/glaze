@@ -43,7 +43,9 @@ suite make_server = [] {
       }
 
       // Keep thread alive
-      std::this_thread::sleep_for(std::chrono::hours(1));
+      while (glz::active) {
+         std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      }
    });
 
    // Allow the socket to get started
@@ -71,7 +73,9 @@ suite socket_test = [] {
       socket.write(message);
    }
 
-   std::this_thread::sleep_for(std::chrono::seconds(60));
+   while (glz::active) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+   }
 };
 
 int main() {
