@@ -19,12 +19,14 @@ suite make_server = [] {
    server_thread = std::async([] {
       glz::server server{8080};
 
-      const auto ec = server.async_accept([](glz::socket&& client) {
+      std::cout << std::format("Server started on port: {}\n", server.port);
+      
+      const auto ec = server.accept([](glz::socket&& client) {
          std::cout << "New client connected!\n";
 
          client.write_value("Welcome!");
          
-         // TODO: Change this to a std::condition_variable
+         // TODO: Change this to a std::condition_variable???
          while (glz::active) {
             std::string received{};
             client.read_value(received);
@@ -42,14 +44,6 @@ suite make_server = [] {
 
       if (ec) {
          std::cerr << ec.message() << '\n';
-      }
-      else {
-         std::cout << std::format("Server started on port: {}\n", server.port);
-      }
-
-      // Keep thread alive
-      while (glz::active) {
-         std::this_thread::sleep_for(std::chrono::milliseconds(10));
       }
    });
 };
