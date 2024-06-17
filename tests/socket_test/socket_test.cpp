@@ -23,12 +23,12 @@ suite make_server = [] {
          std::cout << "New client connected!\n";
 
          std::string message = "Welcome!";
-         client.write(message);
+         client.write_value(message);
          
          // Change this to a std::condition_variable
          while (glz::active) {
             std::string received{};
-            client.read(received);
+            client.read_value(received);
             std::cout << "Received from client: " << received << std::endl;
             
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -66,11 +66,11 @@ suite socket_test = [] {
       });*/
       
       std::string received{};
-      socket.read(received);
+      socket.read_value(received);
       std::cout << "Received: " << received << std::endl;
 
       std::string message = "Hello World";
-      socket.write(message);
+      socket.write_value(message);
    }
 
    std::cin.get();

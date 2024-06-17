@@ -36,6 +36,7 @@
 #include <vector>
 
 #include "glaze/thread/threadpool.hpp"
+#include "glaze/rpc/repe.hpp"
 
 namespace glz
 {
@@ -176,21 +177,10 @@ namespace glz
 
       ssize_t read(std::string& buffer)
       {
-         uint64_t size{};
-         size_t size_bytes{};
-         while (size_bytes < 8) {
-            ssize_t bytes = ::recv(socket_fd, (char*)(&size) + size_bytes, sizeof(uint64_t) - size_bytes, 0);
-            if (bytes == -1) {
-               buffer.clear();
-               return bytes;
-            }
-            else {
-               size_bytes += bytes;
-            }
-         }
-         
-         buffer.resize(size);
+         buffer.resize(4096); // allocate enough bytes for reading size from header
+         uint64_t size = (std::numeric_limits<uint64_t>::max)();
          size_t total_bytes{};
+         bool size_obtained = false;
          while (total_bytes < size) {
             ssize_t bytes = ::recv(socket_fd, buffer.data() + total_bytes, buffer.size() - total_bytes, 0);
             if (bytes == -1) {
@@ -199,33 +189,71 @@ namespace glz
             } else {
                total_bytes += bytes;
             }
+            
+            if (total_bytes > 17 && not size_obtained) {
+               //std::string json{};
+               //std::ignore = glz::beve_to_json(std::string_view{buffer.data(), 34}, json);
+               //std::cout << std::format("JSON: {}\n", json);
+               std::tuple<std::tuple<uint8_t, uint8_t, int64_t>> header{};
+               const auto ec = glz::read<glz::opts{.format = glz::binary, .partial_read = true}>(header, buffer);
+               if (ec) {
+                  // error
+               }
+               size = std::get<2>(std::get<0>(header)); // reading size from header
+               buffer.resize(size);
+               size_obtained = true;
+            }
          }
          return buffer.size();
       }
 
       ssize_t write(const std::string& buffer)
       {
-         uint64_t size = buffer.size();
-         size_t size_bytes{};
-         while (size_bytes < 8) {
-            ssize_t bytes = ::send(socket_fd, (char*)(&size) + size_bytes, sizeof(uint64_t) - size_bytes, 0);
+         const size_t size = buffer.size();
+         size_t total_bytes{};
+         while (total_bytes < size) {
+            ssize_t bytes = ::send(socket_fd, buffer.data() + total_bytes, buffer.size() - total_bytes, 0);
             if (bytes == -1) {
                return bytes;
             }
             else {
-               size_bytes += bytes;
-            }
-         }
-         
-         size_t total_bytes{};
-         while (total_bytes < size) {
-            ssize_t bytes = ::send(socket_fd, buffer.c_str() + total_bytes, buffer.size() - total_bytes, 0);
-            if (bytes == -1) {
-               return bytes;
-            } else {
                total_bytes += bytes;
             }
          }
+         return buffer.size();
+      }
+      
+      template <class T>
+      ssize_t read_value(T&& value)
+      {
+         static thread_local std::string buffer{}; // TODO: use a buffer pool
+         
+         read(buffer);
+        
+         const auto ec = glz::read_binary(std::forward_as_tuple(repe::header{}, std::forward<T>(value)), buffer);
+         if (ec) {
+            // error
+         }
+         
+         return buffer.size();
+      }
+      
+      template <class T>
+      ssize_t write_value(T&& value)
+      {
+         static thread_local std::string buffer{}; // TODO: use a buffer pool
+        
+         const auto ec = glz::write_binary(std::forward_as_tuple(repe::header{}, std::forward<T>(value)), buffer);
+         if (ec) {
+            // error
+         }
+         
+         // write into location of size
+         const uint64_t size = buffer.size();
+         std::memcpy(buffer.data() + 9, &size, sizeof(uint64_t));
+         
+         write(buffer);
+         
          return buffer.size();
       }
    };
