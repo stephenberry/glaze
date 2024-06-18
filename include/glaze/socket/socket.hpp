@@ -44,6 +44,96 @@ using ssize_t = int64_t;
 
 namespace glz
 {
+   inline std::string get_ip_port(const sockaddr_in& server_addr)
+   {
+      char ip_str[INET_ADDRSTRLEN]{};
+
+#ifdef _WIN32
+      inet_ntop(AF_INET, &(server_addr.sin_addr), ip_str, INET_ADDRSTRLEN);
+#else
+      inet_ntop(AF_INET, &(server_addr.sin_addr), ip_str, sizeof(ip_str));
+#endif
+
+      return {std::format("{}:{}", ip_str, ntohs(server_addr.sin_port))};
+   }
+
+   inline std::string get_socket_error_message(int err)
+   {
+#ifdef _WIN32
+
+      char* msg = nullptr;
+      FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL,
+                     err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&msg, 0, NULL);
+      std::string message(msg);
+      LocalFree(msg);
+      return {message};
+
+#else
+      return strerror(err);
+#endif
+   }
+
+   struct socket_api_error_category_t final : public std::error_category
+   {
+      std::string what{};
+      const char* name() const noexcept override { return "socket error"; }
+      std::string message(int ev) const override
+      {
+         if (what.empty()) {
+            return {get_socket_error_message(ev)};
+         }
+         else {
+            return {std::format("{}\nDetails: {}", what, get_socket_error_message(ev))};
+         }
+      }
+      void operator()(int ev, const std::string_view w)
+      {
+         what = w;
+         this->message(ev);
+      }
+   };
+
+   inline const socket_api_error_category_t& socket_api_error_category(const std::string_view what)
+   {
+      static socket_api_error_category_t singleton;
+      singleton.what = what;
+      return singleton;
+   }
+
+   inline std::error_code get_socket_error(const std::string_view what = "")
+   {
+#ifdef _WIN32
+      int err = WSAGetLastError();
+#else
+      int err = errno;
+#endif
+
+      if (what.empty())
+         return {std::error_code(err, socket_api_error_category(what))};
+      else
+         return {std::error_code(err, socket_api_error_category(what))};
+   }
+
+   inline std::error_code check_status(int ec = -1 /*assume error*/, const std::string_view what = "")
+   {
+      if (ec >= 0) {
+         return {std::error_code{}};
+      }
+
+      return {get_socket_error(what)};
+   }
+
+   // Example:
+   // 
+   // std::error_code ec = check_status(result, "connect failed");
+   // 
+   // if (ec) {
+   //    std::cerr << get_socket_error(std::format("Failed to connect to socket at address: {}.\nIs the server running?", ip_port)).message();
+   // }
+   // else {
+   //    std::cout << "Connected successfully!";
+   // }
+
    namespace ip
    {
       struct opts
