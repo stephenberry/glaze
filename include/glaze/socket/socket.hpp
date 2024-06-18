@@ -4,11 +4,14 @@
 #pragma once
 
 #ifdef _WIN32
+#define NOMINMAX
+#include <cstdint>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "Ws2_32.lib")
 #define CLOSESOCKET closesocket
 #define SOCKET_ERROR_CODE WSAGetLastError()
+using ssize_t = int64_t;
 #else
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -24,6 +27,7 @@
 #define CLOSESOCKET close
 #define SOCKET_ERROR_CODE errno
 #define SOCKET int
+#define SOCKET_ERROR (-1)
 #endif
 
 #include <csignal>
@@ -91,7 +95,7 @@ namespace glz
 
    struct socket
    {
-      SOCKET socket_fd{-1};
+      SOCKET socket_fd{INVALID_SOCKET};
 
       void set_non_blocking()
       {
@@ -128,7 +132,7 @@ namespace glz
 
          sockaddr_in server_addr;
          server_addr.sin_family = AF_INET;
-         server_addr.sin_port = htons(port);
+         server_addr.sin_port = htons(uint16_t(port));
          inet_pton(AF_INET, address.c_str(), &server_addr.sin_addr);
 
          if (::connect(socket_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
@@ -157,7 +161,7 @@ namespace glz
          sockaddr_in server_addr;
          server_addr.sin_family = AF_INET;
          server_addr.sin_addr.s_addr = INADDR_ANY;
-         server_addr.sin_port = htons(port);
+         server_addr.sin_port = htons(uint16_t(port));
 
          if (::bind(socket_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
@@ -180,7 +184,7 @@ namespace glz
          size_t total_bytes{};
          bool size_obtained = false;
          while (total_bytes < size) {
-            ssize_t bytes = ::recv(socket_fd, buffer.data() + total_bytes, buffer.size() - total_bytes, 0);
+            ssize_t bytes = ::recv(socket_fd, buffer.data() + total_bytes, uint16_t(buffer.size() - total_bytes), 0);
             if (bytes == -1) {
                buffer.clear();
                return bytes;
@@ -207,7 +211,7 @@ namespace glz
          const size_t size = buffer.size();
          size_t total_bytes{};
          while (total_bytes < size) {
-            ssize_t bytes = ::send(socket_fd, buffer.data() + total_bytes, buffer.size() - total_bytes, 0);
+            ssize_t bytes = ::send(socket_fd, buffer.data() + total_bytes, uint16_t(buffer.size() - total_bytes), 0);
             if (bytes == -1) {
                return bytes;
             }
