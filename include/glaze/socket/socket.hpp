@@ -5,9 +5,10 @@
 
 #ifdef _WIN32
 #define NOMINMAX
-#include <cstdint>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+
+#include <cstdint>
 #pragma comment(lib, "Ws2_32.lib")
 #define CLOSESOCKET closesocket
 #define SOCKET_ERROR_CODE WSAGetLastError()
@@ -33,12 +34,12 @@ using ssize_t = int64_t;
 #include <csignal>
 #include <format>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <mutex>
 #include <system_error>
 #include <thread>
 #include <vector>
-#include <future>
 
 #include "glaze/rpc/repe.hpp"
 
@@ -124,11 +125,12 @@ namespace glz
    }
 
    // Example:
-   // 
+   //
    // std::error_code ec = check_status(result, "connect failed");
-   // 
+   //
    // if (ec) {
-   //    std::cerr << get_socket_error(std::format("Failed to connect to socket at address: {}.\nIs the server running?", ip_port)).message();
+   //    std::cerr << get_socket_error(std::format("Failed to connect to socket at address: {}.\nIs the server
+   //    running?", ip_port)).message();
    // }
    // else {
    //    std::cout << "Connected successfully!";
@@ -140,22 +142,32 @@ namespace glz
       {};
    }
 
-   inline void windows_startup()
+   // Note: WSAStartup and WSACleanup must be run from same thread.
+   //
+   struct windows_socket_startup_t final
    {
-      static std::once_flag flag{};
-      std::call_once(flag, [] {
-#ifdef _WIN32
-         WSADATA wsaData;
-         WSAStartup(MAKEWORD(2, 2), &wsaData);
+#ifdef _WIN64
+      WSADATA wsa_data_{};
+
+      inline std::error_code windows_startup()
+      {
+         static std::once_flag flag{};
+         std::error_code startup_error{};
+         std::call_once(flag, [this, &startup_error]() {
+            constexpr auto win_sock_version = MAKEWORD(2, 2); // Request Winsock version 2.2
+            int result = WSAStartup(win_sock_version, &wsa_data_);
+            if (result != 0) {
+               startup_error = get_socket_error("Unable initialize win socket library.");
+            }
+         });
+         return startup_error;
+      }
+
+      ~windows_socket_startup_t() { WSACleanup(); }
+#else
+      inline std::error_code windows_startup() { return std::error_code{}; }
 #endif
-      });
-   }
-   
-   inline void windows_cleanup() {
-#ifdef _WIN32
-         WSACleanup();
-#endif
-   }
+   };
 
    enum ip_error { none = 0, socket_connect_failed = 1001, socket_bind_failed = 1002 };
 
@@ -202,7 +214,7 @@ namespace glz
 
       socket(SOCKET fd) : socket_fd(fd)
       {
-         //set_non_blocking();
+         // set_non_blocking();
       }
 
       ~socket()
@@ -229,7 +241,7 @@ namespace glz
             return {ip_error::socket_connect_failed, ip_error_category::instance()};
          }
 
-         //set_non_blocking();
+         // set_non_blocking();
 
          return {};
       }
@@ -261,7 +273,7 @@ namespace glz
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
 
-         //set_non_blocking();
+         // set_non_blocking();
          no_delay();
 
          return {};
@@ -278,10 +290,11 @@ namespace glz
             if (bytes == -1) {
                buffer.clear();
                return bytes;
-            } else {
+            }
+            else {
                total_bytes += bytes;
             }
-            
+
             if (total_bytes > 17 && not size_obtained) {
                std::tuple<std::tuple<uint8_t, uint8_t, int64_t>> header{};
                const auto ec = glz::read<glz::opts{.format = glz::binary, .partial_read = true}>(header, buffer);
@@ -311,38 +324,38 @@ namespace glz
          }
          return buffer.size();
       }
-      
+
       template <class T>
       ssize_t read_value(T&& value)
       {
          static thread_local std::string buffer{}; // TODO: use a buffer pool
-         
+
          read(buffer);
-        
+
          const auto ec = glz::read_binary(std::forward_as_tuple(repe::header{}, std::forward<T>(value)), buffer);
          if (ec) {
             // error
          }
-         
+
          return buffer.size();
       }
-      
+
       template <class T>
       ssize_t write_value(T&& value)
       {
          static thread_local std::string buffer{}; // TODO: use a buffer pool
-        
+
          const auto ec = glz::write_binary(std::forward_as_tuple(repe::header{}, std::forward<T>(value)), buffer);
          if (ec) {
             // error
          }
-         
+
          // write into location of size
          const uint64_t size = buffer.size();
          std::memcpy(buffer.data() + 9, &size, sizeof(uint64_t));
-         
+
          write(buffer);
-         
+
          return buffer.size();
       }
    };
@@ -362,7 +375,7 @@ namespace glz
       destructor(Func&& f) : destroy(std::forward<Func>(f))
       {}
    };
-   
+
    inline static std::atomic<bool> active = true;
 
    struct server final
@@ -370,9 +383,7 @@ namespace glz
       int port{};
       std::vector<std::future<void>> threads{}; // TODO: Remove dead clients
 
-      destructor on_destruct{[] {
-         active = false;
-      }};
+      destructor on_destruct{[] { active = false; }};
 
       template <class AcceptCallback>
       std::error_code accept(AcceptCallback&& callback)
@@ -383,16 +394,14 @@ namespace glz
          if (ec) {
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
-         
+
          while (active) {
             sockaddr_in client_addr;
             socklen_t client_len = sizeof(client_addr);
             // As long as we're not calling accept on the same port we are safe
             auto client_fd = ::accept(accept_socket.socket_fd, (sockaddr*)&client_addr, &client_len);
             if (client_fd != -1) {
-               threads.emplace_back(std::async([callback, client_fd] {
-                  callback(socket{client_fd});
-               }));
+               threads.emplace_back(std::async([callback, client_fd] { callback(socket{client_fd}); }));
             }
             else {
                if (SOCKET_ERROR_CODE == EWOULDBLOCK || SOCKET_ERROR_CODE == EAGAIN) {
@@ -403,12 +412,15 @@ namespace glz
                }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            threads.erase(std::partition(threads.begin(), threads.end(), [](auto& future) {
-               if (auto status = future.wait_for(std::chrono::milliseconds(0)); status == std::future_status::ready) {
-                  return false;
-               }
-               return true;
-            }), threads.end());
+            threads.erase(std::partition(threads.begin(), threads.end(),
+                                         [](auto& future) {
+                                            if (auto status = future.wait_for(std::chrono::milliseconds(0));
+                                                status == std::future_status::ready) {
+                                               return false;
+                                            }
+                                            return true;
+                                         }),
+                          threads.end());
          }
 
          return {};
