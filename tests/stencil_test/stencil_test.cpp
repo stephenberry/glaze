@@ -15,14 +15,25 @@ struct person
    std::string first_name{};
    std::string last_name{};
    uint32_t age{};
+   bool hungry{};
 };
 
 suite mustache_tests = [] {
-   std::string_view layout = R"({{first_name}} {{last_name}} {{age}})";
+   "person"_test = [] {
+      std::string_view layout = R"({{first_name}} {{last_name}} {{age}})";
+      
+      person p{"Henry", "Foster", 34};
+      auto result = glz::mustache(p, layout).value_or("error");
+      expect(result == "Henry Foster 34") << result;
+   };
    
-   person p{"Henry", "Foster", 34};
-   auto result = glz::mustache(p, layout).value_or("error");
-   expect(result == R"(Henry Foster 34)") << result;
+   "person"_test = [] {
+      std::string_view layout = R"({{first_name}} {{last_name}}, age: {{age}})";
+      
+      person p{"Henry", "Foster", 34};
+      auto result = glz::mustache(p, layout).value_or("error");
+      expect(result == "Henry Foster, age: 34") << result;
+   };
 };
 
 suite stencilcount_tests = [] {
