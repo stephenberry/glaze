@@ -13,9 +13,9 @@ namespace glz
    expected<std::string, error_ctx> mustache(T&& value, Template&& tmp) noexcept
    {
       std::string result{};
-      
+
       context ctx{};
-      
+
       if (tmp.empty()) [[unlikely]] {
          ctx.error = error_code::no_read_input;
          return unexpected(error_ctx{ctx.error, 0, ctx.includer_error});
@@ -29,95 +29,94 @@ namespace glz
                ++it;
             }
          };
-         
-         while (it < end)
-         {
+
+         while (it < end) {
             switch (*it) {
-               case '{': {
+            case '{': {
+               ++it;
+               if (*it == '{') {
                   ++it;
-                  if (*it == '{') {
+                  skip_whitespace();
+
+                  auto s = it;
+                  while (it != end && *it != '}') {
                      ++it;
-                     skip_whitespace();
-                     
-                     auto s = it;
-                     while (it != end && *it != '}') {
-                        ++it;
+                  }
+
+                  sv key{s, size_t(it - s)};
+
+                  static constexpr auto num_members = reflection_count<T>;
+
+                  decltype(auto) frozen_map = [&]() -> decltype(auto) {
+                     using V = decay_keep_volatile_t<decltype(value)>;
+                     if constexpr (detail::reflectable<T> && num_members > 0) {
+#if ((defined _MSC_VER) && (!defined __clang__))
+                        static thread_local auto cmap = detail::make_map<V, Opts.use_hash_comparison>();
+#else
+                        static thread_local constinit auto cmap = detail::make_map<V, Opts.use_hash_comparison>();
+#endif
+                        // We want to run this populate outside of the while loop
+                        populate_map(value, cmap); // Function required for MSVC to build
+                        return cmap;
                      }
-                     
-                     sv key{s, size_t(it - s)};
-                     
-                     static constexpr auto num_members = reflection_count<T>;
-                     
-                     decltype(auto) frozen_map = [&]() -> decltype(auto) {
-                        using V = decay_keep_volatile_t<decltype(value)>;
-                        if constexpr (detail::reflectable<T> && num_members > 0) {
-      #if ((defined _MSC_VER) && (!defined __clang__))
-                           static thread_local auto cmap = detail::make_map<V, Opts.use_hash_comparison>();
-      #else
-                           static thread_local constinit auto cmap = detail::make_map<V, Opts.use_hash_comparison>();
-      #endif
-                           // We want to run this populate outside of the while loop
-                           populate_map(value, cmap); // Function required for MSVC to build
-                           return cmap;
-                        }
-                        else if constexpr (detail::glaze_object_t<T> && num_members > 0) {
-                           static constexpr auto cmap = detail::make_map<T, Opts.use_hash_comparison>();
-                           return cmap;
-                        }
-                        else {
-                           return nullptr;
-                        }
-                     }();
-                     
-                     if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
-                        std::visit(
-                           [&](auto&& member_ptr) {
-                              static thread_local std::string temp{};
-                              std::ignore = write<opt_true<Opts, &opts::raw>>(detail::get_member(value, member_ptr), temp, ctx);
-                              result.append(temp);
-                           },
-                           member_it->second);
-                        if (bool(ctx.error)) [[unlikely]]
-                           return unexpected(error_ctx{ctx.error, size_t(it - start), ctx.includer_error});
+                     else if constexpr (detail::glaze_object_t<T> && num_members > 0) {
+                        static constexpr auto cmap = detail::make_map<T, Opts.use_hash_comparison>();
+                        return cmap;
                      }
                      else {
-                        ctx.error = error_code::unknown_key;
+                        return nullptr;
+                     }
+                  }();
+
+                  if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
+                     std::visit(
+                        [&](auto&& member_ptr) {
+                           static thread_local std::string temp{};
+                           std::ignore =
+                              write<opt_true<Opts, &opts::raw>>(detail::get_member(value, member_ptr), temp, ctx);
+                           result.append(temp);
+                        },
+                        member_it->second);
+                     if (bool(ctx.error)) [[unlikely]]
                         return unexpected(error_ctx{ctx.error, size_t(it - start), ctx.includer_error});
-                     }
-                     
-                     skip_whitespace();
-                     
-                     if (*it == '}')
-                     {
-                        ++it;
-                        if (*it == '}') {
-                           ++it;
-                           break;
-                        }
-                        else {
-                           result.append("}");
-                        }
-                        break;
-                     }
                   }
                   else {
-                     result.push_back('{');
+                     ctx.error = error_code::unknown_key;
+                     return unexpected(error_ctx{ctx.error, size_t(it - start), ctx.includer_error});
                   }
-                  
-                  break;
+
+                  skip_whitespace();
+
+                  if (*it == '}') {
+                     ++it;
+                     if (*it == '}') {
+                        ++it;
+                        break;
+                     }
+                     else {
+                        result.append("}");
+                     }
+                     break;
+                  }
                }
-               default: {
-                  result.push_back(*it);
-                  ++it;
+               else {
+                  result.push_back('{');
                }
+
+               break;
+            }
+            default: {
+               result.push_back(*it);
+               ++it;
+            }
             }
          }
       }
-      
+
       if (bool(ctx.error)) [[unlikely]] {
          return unexpected(error_ctx{ctx.error, size_t(it - start), ctx.includer_error});
       }
-      
+
       return {result};
    }
 }

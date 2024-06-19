@@ -3,9 +3,9 @@
 
 #define UT_RUN_TIME_ONLY
 
-#include "glaze/mustache/stencilcount.hpp"
-#include "glaze/mustache/mustache.hpp"
 #include "glaze/glaze.hpp"
+#include "glaze/mustache/mustache.hpp"
+#include "glaze/mustache/stencilcount.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -21,23 +21,23 @@ struct person
 suite mustache_tests = [] {
    "person"_test = [] {
       std::string_view layout = R"({{first_name}} {{last_name}} {{age}})";
-      
+
       person p{"Henry", "Foster", 34};
       auto result = glz::mustache(p, layout).value_or("error");
       expect(result == "Henry Foster 34") << result;
    };
-   
+
    "person"_test = [] {
       std::string_view layout = R"({{first_name}} {{last_name}}, age: {{age}})";
-      
+
       person p{"Henry", "Foster", 34};
       auto result = glz::mustache(p, layout).value_or("error");
       expect(result == "Henry Foster, age: 34") << result;
    };
-   
+
    "person"_test = [] {
       std::string_view layout = R"({{first_name}} {{last}}, age: {{age}})";
-      
+
       person p{"Henry", "Foster", 34};
       auto result = glz::mustache(p, layout);
       expect(not result.has_value());
@@ -65,7 +65,7 @@ suite stencilcount_tests = [] {
 {{+++}} Math
 {{+++}} English
 )";
-      
+
       person p{"Henry", "Foster", 34};
       auto result = glz::stencilcount(p, layout).value_or("error");
       expect(result == R"(# About
