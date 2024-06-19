@@ -119,9 +119,9 @@ namespace glz
 
       return {result};
    }
-   
+
    template <opts Opts = opts{}, class T>
-      requires(requires {std::decay_t<T>::glaze_mustache;})
+      requires(requires { std::decay_t<T>::glaze_mustache; })
    expected<std::string, error_ctx> mustache(T&& value) noexcept
    {
       return mustache(std::forward<T>(value), sv{std::decay_t<T>::glaze_mustache});

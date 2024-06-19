@@ -52,7 +52,7 @@ suite mustache_tests = [] {
       expect(not result.has_value());
       expect(result.error() == glz::error_code::unknown_key);
    };
-   
+
    "person_template"_test = [] {
       person_template p{"Henry", "Foster", 34};
       auto result = glz::mustache(p).value_or("error");
