@@ -34,6 +34,15 @@ suite mustache_tests = [] {
       auto result = glz::mustache(p, layout).value_or("error");
       expect(result == "Henry Foster, age: 34") << result;
    };
+   
+   "person"_test = [] {
+      std::string_view layout = R"({{first_name}} {{last}}, age: {{age}})";
+      
+      person p{"Henry", "Foster", 34};
+      auto result = glz::mustache(p, layout);
+      expect(not result.has_value());
+      expect(result.error() == glz::error_code::unknown_key);
+   };
 };
 
 suite stencilcount_tests = [] {

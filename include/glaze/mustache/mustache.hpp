@@ -81,7 +81,8 @@ namespace glz
                            return unexpected(error_ctx{ctx.error, size_t(it - start), ctx.includer_error});
                      }
                      else {
-                        // TODO: Is this an error?
+                        ctx.error = error_code::unknown_key;
+                        return unexpected(error_ctx{ctx.error, size_t(it - start), ctx.includer_error});
                      }
                      
                      skip_whitespace();
