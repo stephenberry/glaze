@@ -3,8 +3,8 @@
 
 #define UT_RUN_TIME_ONLY
 
-#include "glaze/stencil/stencilcount.hpp"
-#include "glaze/stencil/mustache.hpp"
+#include "glaze/mustache/stencilcount.hpp"
+#include "glaze/mustache/mustache.hpp"
 #include "glaze/glaze.hpp"
 #include "ut/ut.hpp"
 
