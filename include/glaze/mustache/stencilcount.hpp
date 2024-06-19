@@ -44,7 +44,7 @@ namespace glz
                      skip_whitespace();
                      
                      size_t count{};
-                     while (*it == '#') {
+                     while (*it == '+') {
                         ++it;
                         ++count;
                      }

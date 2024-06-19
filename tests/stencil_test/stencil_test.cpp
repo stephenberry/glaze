@@ -28,22 +28,22 @@ suite mustache_tests = [] {
 suite stencilcount_tests = [] {
    "basic docstencil"_test = [] {
       std::string_view layout = R"(# About
-## {{#}} {{first_name}} {{last_name}}
-{{##}} {{first_name}} is {{age}} years old.
+## {{+}} {{first_name}} {{last_name}}
+{{++}} {{first_name}} is {{age}} years old.
 
-## {{#}} Hobbies
-{{##}} Outdoor
-{{###}} Running
-{{###}} Hiking
-{{###}} Camping
-{{##}} Indoor
-{{###}} Board Games
-{{###}} Cooking
+## {{+}} Hobbies
+{{++}} Outdoor
+{{+++}} Running
+{{+++}} Hiking
+{{+++}} Camping
+{{++}} Indoor
+{{+++}} Board Games
+{{+++}} Cooking
 
-## {{#}} Education
-{{##}} College
-{{###}} Math
-{{###}} English
+## {{+}} Education
+{{++}} College
+{{+++}} Math
+{{+++}} English
 )";
       
       person p{"Henry", "Foster", 34};
