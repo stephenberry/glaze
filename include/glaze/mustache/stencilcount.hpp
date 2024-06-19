@@ -102,7 +102,7 @@ namespace glz
                         using V = decay_keep_volatile_t<decltype(value)>;
                         if constexpr (detail::reflectable<T> && num_members > 0) {
       #if ((defined _MSC_VER) && (!defined __clang__))
-                           static thread_local auto cmap = make_map<V, Opts.use_hash_comparison>();
+                           static thread_local auto cmap = detail::make_map<V, Opts.use_hash_comparison>();
       #else
                            static thread_local constinit auto cmap = detail::make_map<V, Opts.use_hash_comparison>();
       #endif
