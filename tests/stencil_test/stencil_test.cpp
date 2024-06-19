@@ -18,6 +18,15 @@ struct person
    bool hungry{};
 };
 
+struct person_template
+{
+   static constexpr auto glaze_mustache = R"({{first_name}} | {{last_name}} | {{age}})";
+   std::string first_name{};
+   std::string last_name{};
+   uint32_t age{};
+   bool hungry{};
+};
+
 suite mustache_tests = [] {
    "person"_test = [] {
       std::string_view layout = R"({{first_name}} {{last_name}} {{age}})";
@@ -42,6 +51,12 @@ suite mustache_tests = [] {
       auto result = glz::mustache(p, layout);
       expect(not result.has_value());
       expect(result.error() == glz::error_code::unknown_key);
+   };
+   
+   "person_template"_test = [] {
+      person_template p{"Henry", "Foster", 34};
+      auto result = glz::mustache(p).value_or("error");
+      expect(result == "Henry | Foster | 34") << result;
    };
 };
 
