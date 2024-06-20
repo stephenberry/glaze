@@ -6,6 +6,9 @@
 #ifdef _WIN32
 #define GLZ_INVALID_SOCKET INVALID_SOCKET
 #define GLZ_SOCKET SOCKET
+#define GLZ_INVALID_EVENT WSA_INVALID_EVENT
+#define GLZ_WAIT_RESULT_TYPE DWORD
+#define GLZ_WAIT_FAILED WSA_WAIT_FAILED
 #define NOMINMAX
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -13,6 +16,7 @@
 #include <cstdint>
 #pragma comment(lib, "Ws2_32.lib")
 #define GLZ_CLOSESOCKET closesocket
+#define GLZ_EVENT_CLOSE WSACloseEvent
 #define SOCKET_ERROR_CODE WSAGetLastError()
 using ssize_t = int64_t;
 #else
@@ -28,6 +32,10 @@ using ssize_t = int64_t;
 
 #include <cerrno>
 #define GLZ_CLOSESOCKET close
+#define GLZ_EVENT_CLOSE close
+#define GLZ_WAIT_RESULT_TYPE int
+#define GLZ_WAIT_FAILED (-1)
+#define GLZ_INVALID_EVENT (-1)
 #define SOCKET_ERROR_CODE errno
 #define GLZ_SOCKET int
 #define SOCKET_ERROR (-1)
@@ -472,14 +480,16 @@ namespace glz
          if (ec) {
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
-
+         
 #if defined(__APPLE__)
          int event_fd = ::kqueue();
 #elif defined(__linux__)
          int event_fd = ::epoll_create1(0);
+#elif defined(_WIN32)
+         HANDLE event_fd = WSACreateEvent();
 #endif
 
-         if (event_fd == -1) {
+         if (event_fd == GLZ_INVALID_EVENT) {
             return {ip_error::queue_create_failed, ip_error_category::instance()};
          }
          
@@ -500,6 +510,11 @@ namespace glz
             close(event_fd);
             return {ip_error::event_ctl_failed, ip_error_category::instance()};
          }
+#elif defined(_WIN32)
+         if (WSAEventSelect(accept_socket, event_fd, FD_ACCEPT) == SOCKET_ERROR) {
+            WSACloseEvent(event_fd);
+            return {ip_error::event_ctl_failed, ip_error_category::instance()};
+         }
 #endif
 
 #if defined(__APPLE__)
@@ -509,7 +524,7 @@ namespace glz
 #endif
 
          while (active) {
-            int n{};
+            GLZ_WAIT_RESULT_TYPE n{};
 
 #if defined(__APPLE__)
             struct timespec timeout
@@ -519,16 +534,23 @@ namespace glz
             n = ::kevent(event_fd, nullptr, 0, events.data(), static_cast<int>(events.size()), &timeout);
 #elif defined(__linux__)
             n = ::epoll_wait(event_fd, epoll_events.data(), static_cast<int>(epoll_events.size()), 10);
+#elif defined(_WIN32)
+            n = WSAWaitForMultipleEvents(1, &event_fd, FALSE, 10, FALSE);
 #endif
 
-            if (n == -1) {
+            if (n == GLZ_WAIT_FAILED) {
+#if defined(__APPLE__) || defined(__linux__)
                if (errno == EINTR) continue;
-               close(event_fd);
+#else
+               if (n == WSA_WAIT_TIMEOUT) continue;
+#endif
+               GLZ_EVENT_CLOSE(event_fd);
                return {ip_error::event_wait_failed, ip_error_category::instance()};
             }
 
+#if defined(__APPLE__) || defined(__linux__)
             for (int i = 0; i < n; ++i) {
-#if defined(__APPLE__) || defined(__MACH__)
+#if defined(__APPLE__)
                if (events[i].ident == uintptr_t(accept_socket.socket_fd) && events[i].filter == EVFILT_READ) {
 #elif defined(__linux__)
                if (epoll_events[i].data.fd == accept_socket.socket_fd && epoll_events[i].events & EPOLLIN) {
@@ -536,11 +558,30 @@ namespace glz
                   sockaddr_in client_addr;
                   socklen_t client_len = sizeof(client_addr);
                   auto client_fd = ::accept(accept_socket.socket_fd, (sockaddr*)&client_addr, &client_len);
-                  if (client_fd != -1) {
+                  if (client_fd != GLZ_INVALID_SOCKET) {
                      threads.emplace_back(std::async([callback, client_fd] { callback(socket{client_fd}); }));
                   }
                }
             }
+               
+#else // Windows
+            WSANETWORKEVENTS events;
+            if (WSAEnumNetworkEvents(accept_socket, event_fd, &events) == SOCKET_ERROR) {
+               WSACloseEvent(event_fd);
+               return {ip_error::event_enum_failed, ip_error_category::instance()};
+            }
+
+            if (events.lNetworkEvents & FD_ACCEPT) {
+               if (events.iErrorCode[FD_ACCEPT_BIT] == 0) {
+                  sockaddr_in client_addr;
+                  int client_len = sizeof(client_addr);
+                  SOCKET client_socket = ::accept(accept_socket, (sockaddr*)&client_addr, &client_len);
+                  if (client_socket != GLZ_INVALID_SOCKET) {
+                     threads.emplace_back(std::async([callback, client_socket] { callback(socket{client_socket}); }));
+                  }
+               }
+            }
+#endif
 
             threads.erase(std::partition(threads.begin(), threads.end(),
                                          [](auto& future) {
@@ -553,7 +594,7 @@ namespace glz
                           threads.end());
          }
 
-         GLZ_CLOSESOCKET(event_fd);
+         GLZ_EVENT_CLOSE(event_fd);
          return {};
       }
    };
