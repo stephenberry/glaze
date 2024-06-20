@@ -54,6 +54,7 @@ using ssize_t = int64_t;
 #include <future>
 #include <iostream>
 #include <mutex>
+#include <stop_token>
 #include <system_error>
 #include <thread>
 #include <vector>
@@ -449,12 +450,11 @@ namespace glz
       }
    };
 
-   inline static std::atomic<bool> active = true;
-
    struct server final
    {
       int port{};
       std::vector<std::future<void>> threads{}; // TODO: Remove dead clients
+      std::atomic<bool> active = true;
 
       ~server() {
          active = false;
@@ -537,7 +537,7 @@ namespace glz
                socklen_t client_len = sizeof(client_addr);
                auto client_fd = ::accept(accept_socket.socket_fd, (sockaddr*)&client_addr, &client_len);
                if (client_fd != GLZ_INVALID_SOCKET) {
-                  threads.emplace_back(std::async([callback, client_fd] { callback(socket{client_fd}); }));
+                  threads.emplace_back(std::async([this, callback, client_fd] { callback(socket{client_fd}, active); }));
                }
             };
 

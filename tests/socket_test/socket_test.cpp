@@ -27,19 +27,19 @@ static std::atomic_int working_clients{n_clients};
 
 glz::windows_socket_startup_t<> wsa; // wsa_startup (ignored on macOS and Linux)
 
-suite make_server = [] {
-   server_thread = std::async([] {
-      glz::server server{service_0_port};
+glz::server server{service_0_port};
 
+suite make_server = [] {
+   server_thread = std::async([&] {
       std::cout << std::format("Server started on port: {}\n", server.port);
       
-      const auto ec = server.accept([](glz::socket&& client) {
+      const auto ec = server.accept([](glz::socket&& client, auto& active) {
          std::cout << "New client connected!\n";
 
          client.write_value("Welcome!");
          
          // TODO: Change this to a std::condition_variable???
-         while (glz::active) {
+         while (active) {
             std::string received{};
             client.read_value(received);
             
@@ -79,7 +79,7 @@ suite socket_test = [] {
             std::cout << std::format("Received from server: {}\n", received);
 
             size_t tick{};
-            while (glz::active && tick < 3) {
+            while (tick < 3) {
                socket.write_value(std::format("Client {}, {}", id, tick));
                std::this_thread::sleep_for(std::chrono::seconds(2));
                ++tick;
@@ -99,12 +99,12 @@ suite socket_test = [] {
       std::cin.get();
    }
 
-   glz::active = false;
+   server.active = false;
 };
 
 int main() {
    std::signal(SIGINT, [](int){
-      glz::active = false;
+      server.active = false;
       std::exit(0);
    });
    return 0;
