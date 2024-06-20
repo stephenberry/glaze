@@ -19,7 +19,7 @@ inline constexpr auto n_clients = 10;
 inline constexpr auto service_0_port{8080};
 inline constexpr auto service_0_ip{"127.0.0.1"};
 
-static std::atomic_int working_clients = n_clients;
+static std::latch working_clients{n_clients};
 
 suite make_server = [] {
    server_thread = std::async([] {
@@ -81,12 +81,12 @@ suite socket_test = [] {
                std::this_thread::sleep_for(std::chrono::seconds(2));
                ++tick;
             }
-            --working_clients;
+            working_clients.count_down();
          }
       }));
    }
 
-   while (working_clients > 0) std::this_thread::yield();
+   working_clients.arrive_and_wait();
 
    std::cout << "\nFinished! Press any key to exit.";
    std::cin.get();
