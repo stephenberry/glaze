@@ -568,7 +568,7 @@ namespace glz
 
 #else // Windows
             WSANETWORKEVENTS events;
-            if (WSAEnumNetworkEvents(accept_socket, event_fd, &events) == SOCKET_ERROR) {
+            if (WSAEnumNetworkEvents(accept_socket.socket_fd, event_fd, &events) == SOCKET_ERROR) {
                WSACloseEvent(event_fd);
                return {ip_error::event_enum_failed, ip_error_category::instance()};
             }
