@@ -23,6 +23,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Set up Xcode 15.4
+      run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
