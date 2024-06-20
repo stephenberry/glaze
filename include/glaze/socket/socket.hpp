@@ -456,9 +456,7 @@ namespace glz
       std::vector<std::future<void>> threads{}; // TODO: Remove dead clients
       std::atomic<bool> active = true;
 
-      ~server() {
-         active = false;
-      }
+      ~server() { active = false; }
 
       template <class AcceptCallback>
       std::error_code accept(AcceptCallback&& callback)
@@ -495,7 +493,7 @@ namespace glz
 #elif defined(_WIN32)
          event_setup_failed = WSAEventSelect(accept_socket.socket_fd, event_fd, FD_ACCEPT) == SOCKET_ERROR;
 #endif
-         
+
          if (event_setup_failed) {
             GLZ_EVENT_CLOSE(event_fd);
             return {ip_error::event_ctl_failed, ip_error_category::instance()};
@@ -531,13 +529,14 @@ namespace glz
                GLZ_EVENT_CLOSE(event_fd);
                return {ip_error::event_wait_failed, ip_error_category::instance()};
             }
-            
+
             auto spawn_socket = [&] {
                sockaddr_in client_addr;
                socklen_t client_len = sizeof(client_addr);
                auto client_fd = ::accept(accept_socket.socket_fd, (sockaddr*)&client_addr, &client_len);
                if (client_fd != GLZ_INVALID_SOCKET) {
-                  threads.emplace_back(std::async([this, callback, client_fd] { callback(socket{client_fd}, active); }));
+                  threads.emplace_back(
+                     std::async([this, callback, client_fd] { callback(socket{client_fd}, active); }));
                }
             };
 
