@@ -496,29 +496,24 @@ namespace glz
             return {ip_error::queue_create_failed, ip_error_category::instance()};
          }
 
+         bool event_setup_failed = false;
 #if defined(__APPLE__)
          struct kevent change;
          EV_SET(&change, accept_socket.socket_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, nullptr);
-
-         if (::kevent(event_fd, &change, 1, nullptr, 0, nullptr) == -1) {
-            close(event_fd);
-            return {ip_error::event_ctl_failed, ip_error_category::instance()};
-         }
+         event_setup_failed = ::kevent(event_fd, &change, 1, nullptr, 0, nullptr) == -1;
 #elif defined(__linux__)
          struct epoll_event ev;
          ev.events = EPOLLIN;
          ev.data.fd = accept_socket.socket_fd;
-
-         if (epoll_ctl(event_fd, EPOLL_CTL_ADD, accept_socket.socket_fd, &ev) == -1) {
-            close(event_fd);
-            return {ip_error::event_ctl_failed, ip_error_category::instance()};
-         }
+         event_setup_failed = epoll_ctl(event_fd, EPOLL_CTL_ADD, accept_socket.socket_fd, &ev) == -1;
 #elif defined(_WIN32)
-         if (WSAEventSelect(accept_socket.socket_fd, event_fd, FD_ACCEPT) == SOCKET_ERROR) {
-            WSACloseEvent(event_fd);
+         event_setup_failed = WSAEventSelect(accept_socket.socket_fd, event_fd, FD_ACCEPT) == SOCKET_ERROR;
+#endif
+         
+         if (event_setup_failed) {
+            GLZ_EVENT_CLOSE(event_fd);
             return {ip_error::event_ctl_failed, ip_error_category::instance()};
          }
-#endif
 
 #if defined(__APPLE__)
          std::vector<struct kevent> events(16);
