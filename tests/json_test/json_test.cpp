@@ -8429,6 +8429,16 @@ suite threading_tests = [] {
    };
 };
 
+// JSON concepts
+static_assert(glz::json_string<std::string>);
+static_assert(glz::json_string<std::string_view>);
+static_assert(glz::json_object<my_struct>);
+static_assert(glz::json_array<std::array<float, 3>>);
+static_assert(glz::json_boolean<bool>);
+static_assert(glz::json_number<float>);
+static_assert(glz::json_integer<uint64_t>);
+static_assert(glz::json_null<std::nullptr_t>);
+
 int main()
 {
    trace.begin("json_test", "Full test suite duration.");
