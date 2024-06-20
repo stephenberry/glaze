@@ -34,6 +34,12 @@ using ssize_t = int64_t;
 #define GLZ_INVALID_SOCKET (-1)
 #endif
 
+#if defined(__APPLE__)
+#include <sys/event.h> // for kqueue on macOS
+#elif defined(__linux__)
+#include <sys/epoll.h> // for epoll on Linux
+#endif
+
 #include <csignal>
 #include <format>
 #include <functional>
@@ -209,16 +215,21 @@ namespace glz
          }
       }
 
-      ~windows_socket_startup_t() {
-         WSACleanup();
-      }
+      ~windows_socket_startup_t() { WSACleanup(); }
 
 #else
       std::error_code start() { return std::error_code{}; }
 #endif
    };
 
-   enum ip_error { none = 0, socket_connect_failed = 1001, socket_bind_failed = 1002 };
+   enum ip_error {
+      none = 0,
+      queue_create_failed,
+      event_ctl_failed,
+      event_wait_failed,
+      socket_connect_failed = 1001,
+      socket_bind_failed = 1002
+   };
 
    struct ip_error_category : public std::error_category
    {
@@ -234,6 +245,12 @@ namespace glz
       {
          using enum ip_error;
          switch (static_cast<ip_error>(ec)) {
+         case queue_create_failed:
+            return "queue_create_failed";
+         case event_ctl_failed:
+            return "event_ctl_failed";
+         case event_wait_failed:
+            return "event_wait_failed";
          case socket_connect_failed:
             return "socket_connect_failed";
          case socket_bind_failed:
@@ -261,10 +278,7 @@ namespace glz
 
       socket() = default;
 
-      socket(GLZ_SOCKET fd) : socket_fd(fd)
-      {
-         // set_non_blocking();
-      }
+      socket(GLZ_SOCKET fd) : socket_fd(fd) { set_non_blocking(); }
 
       ~socket()
       {
@@ -290,7 +304,7 @@ namespace glz
             return {ip_error::socket_connect_failed, ip_error_category::instance()};
          }
 
-         // set_non_blocking();
+         set_non_blocking();
 
          return {};
       }
@@ -322,7 +336,7 @@ namespace glz
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
 
-         // set_non_blocking();
+         set_non_blocking();
          no_delay();
 
          return {};
@@ -337,8 +351,15 @@ namespace glz
          while (total_bytes < size) {
             ssize_t bytes = ::recv(socket_fd, buffer.data() + total_bytes, uint16_t(buffer.size() - total_bytes), 0);
             if (bytes == -1) {
-               buffer.clear();
-               return bytes;
+               if (SOCKET_ERROR_CODE == EWOULDBLOCK || SOCKET_ERROR_CODE == EAGAIN) {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                  continue;
+               }
+               else {
+                  // error
+                  buffer.clear();
+                  return 0;
+               }
             }
             else {
                total_bytes += bytes;
@@ -365,7 +386,14 @@ namespace glz
          while (total_bytes < size) {
             ssize_t bytes = ::send(socket_fd, buffer.data() + total_bytes, uint16_t(buffer.size() - total_bytes), 0);
             if (bytes == -1) {
-               return bytes;
+               if (SOCKET_ERROR_CODE == EWOULDBLOCK || SOCKET_ERROR_CODE == EAGAIN) {
+                  std::this_thread::yield();
+                  continue;
+               }
+               else {
+                  // error
+                  return bytes;
+               }
             }
             else {
                total_bytes += bytes;
@@ -444,26 +472,75 @@ namespace glz
          if (ec) {
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
-         
-         accept_socket.set_non_blocking();
+
+#if defined(__APPLE__)
+         int event_fd = ::kqueue();
+#elif defined(__linux__)
+         int event_fd = ::epoll_create1(0);
+#endif
+
+         if (event_fd == -1) {
+            return {ip_error::queue_create_failed, ip_error_category::instance()};
+         }
+
+         struct kevent change;
+#if defined(__APPLE__)
+         EV_SET(&change, accept_socket.socket_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, nullptr);
+
+         if (::kevent(event_fd, &change, 1, nullptr, 0, nullptr) == -1) {
+            close(event_fd);
+            return {ip_error::event_ctl_failed, ip_error_category::instance()};
+         }
+#elif defined(__linux__)
+         ev.events = EPOLLIN;
+         ev.data.fd = accept_socket.socket_fd;
+
+         if (epoll_ctl(event_fd, EPOLL_CTL_ADD, accept_socket.socket_fd, &ev) == -1) {
+            close(event_fd);
+            return {ip_error::event_ctl_failed, ip_error_category::instance()};
+         }
+#endif
+
+#if defined(__APPLE__)
+         std::vector<struct kevent> events(16);
+#elif defined(__linux__)
+         std::vector<struct epoll_event> epoll_events(16);
+#endif
 
          while (active) {
-            sockaddr_in client_addr;
-            socklen_t client_len = sizeof(client_addr);
-            // As long as we're not calling accept on the same port we are safe
-            auto client_fd = ::accept(accept_socket.socket_fd, (sockaddr*)&client_addr, &client_len);
-            if (client_fd != -1) {
-               threads.emplace_back(std::async([callback, client_fd] { callback(socket{client_fd}); }));
+            int n{};
+
+#if defined(__APPLE__) || defined(__MACH__)
+            struct timespec timeout
+            {
+               0, 10000000
+            }; // 10ms
+            n = ::kevent(event_fd, nullptr, 0, events.data(), static_cast<int>(events.size()), &timeout);
+#elif defined(__linux__)
+            n = ::epoll_wait(event_fd, epoll_events.data(), static_cast<int>(epoll_events.size()), 10);
+#endif
+
+            if (n == -1) {
+               if (errno == EINTR) continue;
+               close(event_fd);
+               return {ip_error::event_wait_failed, ip_error_category::instance()};
             }
-            else {
-               if (SOCKET_ERROR_CODE == EWOULDBLOCK || SOCKET_ERROR_CODE == EAGAIN) {
-                  // keep polling
-               }
-               else {
-                  break; // error
+
+            for (int i = 0; i < n; ++i) {
+#if defined(__APPLE__) || defined(__MACH__)
+               if (events[i].ident == uintptr_t(accept_socket.socket_fd) && events[i].filter == EVFILT_READ) {
+#elif defined(__linux__)
+               if (epoll_events[i].data.fd == accept_socket.socket_fd && epoll_events[i].events & EPOLLIN) {
+#endif
+                  sockaddr_in client_addr;
+                  socklen_t client_len = sizeof(client_addr);
+                  auto client_fd = ::accept(accept_socket.socket_fd, (sockaddr*)&client_addr, &client_len);
+                  if (client_fd != -1) {
+                     threads.emplace_back(std::async([callback, client_fd] { callback(socket{client_fd}); }));
+                  }
                }
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
             threads.erase(std::partition(threads.begin(), threads.end(),
                                          [](auto& future) {
                                             if (auto status = future.wait_for(std::chrono::milliseconds(0));
@@ -475,6 +552,7 @@ namespace glz
                           threads.end());
          }
 
+         GLZ_CLOSESOCKET(event_fd);
          return {};
       }
    };

@@ -92,7 +92,7 @@ suite socket_test = [] {
    }
 
    //working_clients.arrive_and_wait();
-   while (working_clients) std::this_thread::yield();
+   while (working_clients) std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
    if constexpr (user_input) {
       std::cout << "\nFinished! Press any key to exit.";
