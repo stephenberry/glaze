@@ -40,19 +40,16 @@ suite make_server = [] {
          
          // TODO: Change this to a std::condition_variable???
          while (glz::active) {
-
             std::string received{};
-
             client.read_value(received);
             
             if (received == "disconnect") {
                std::cout << std::format("Client Disconnecting\n");
                break;
             }
-            
-            std::cout << std::format("Server: {}\n", received);
-            
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            else if (received.size()) {
+               std::cout << std::format("Server: {}\n", received);
+            }
          }
       });
 

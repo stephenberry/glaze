@@ -384,6 +384,7 @@ namespace glz
          const auto ec = glz::read_binary(std::forward_as_tuple(repe::header{}, std::forward<T>(value)), buffer);
          if (ec) {
             // error
+            return 0;
          }
 
          return buffer.size();
@@ -443,6 +444,8 @@ namespace glz
          if (ec) {
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
+         
+         accept_socket.set_non_blocking();
 
          while (active) {
             sockaddr_in client_addr;
