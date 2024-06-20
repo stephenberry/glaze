@@ -10,10 +10,11 @@
 namespace glz
 {
    template <detail::num_t T>
-   void format_to(std::string& buffer, T&& value) noexcept {
+   void format_to(std::string& buffer, T&& value) noexcept
+   {
       auto ix = buffer.size();
       buffer.resize((std::max)(buffer.size() * 2, ix + 64));
-      
+
       const auto start = buffer.data() + ix;
       const auto end = glz::to_chars(start, std::forward<T>(value));
       ix += size_t(end - start);
