@@ -21,7 +21,9 @@ constexpr auto n_clients = 10;
 constexpr auto service_0_port{8080};
 constexpr auto service_0_ip{"127.0.0.1"};
 
-static std::latch working_clients{n_clients};
+// std::latch is broken on MSVC:
+//std::latch working_clients{n_clients};
+static std::atomic_int working_clients{n_clients};
 
 glz::windows_socket_startup_t<> wsa; // wsa_startup (ignored on macOS and Linux)
 
@@ -85,17 +87,21 @@ suite socket_test = [] {
                std::this_thread::sleep_for(std::chrono::seconds(2));
                ++tick;
             }
-            working_clients.count_down();
+            //working_clients.count_down();
+            --working_clients;
+           
          }
       }));
    }
 
-   working_clients.arrive_and_wait();
+   //working_clients.arrive_and_wait();
+   while (working_clients) std::this_thread::yield();
 
    if constexpr (user_input) {
       std::cout << "\nFinished! Press any key to exit.";
       std::cin.get();
    }
+
    glz::active = false;
 };
 

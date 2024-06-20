@@ -202,14 +202,14 @@ namespace glz
          return {error_code};
       }
 
-      wsa_startup_t()
+      windows_socket_startup_t()
       {
          if constexpr (run_wsa_startup) {
             error_code = start();
          }
       }
 
-      ~wsa_startup_t() {
+      ~windows_socket_startup_t() {
          WSACleanup();
       }
 
