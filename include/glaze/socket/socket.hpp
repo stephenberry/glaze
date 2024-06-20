@@ -5,7 +5,7 @@
 
 #ifdef _WIN32
 #define GLZ_INVALID_SOCKET INVALID_SOCKET
-#define GLZ_SOCKET GLZ_SOCKET
+#define GLZ_SOCKET SOCKET
 #define NOMINMAX
 #include <winsock2.h>
 #include <ws2tcpip.h>
