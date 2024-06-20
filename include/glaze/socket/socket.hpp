@@ -296,6 +296,7 @@ namespace glz
       {
          if (socket_fd != -1) {
             write_value("disconnect");
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
             GLZ_CLOSESOCKET(socket_fd);
          }
       }
