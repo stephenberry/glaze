@@ -578,9 +578,9 @@ namespace glz
                if (events.iErrorCode[FD_ACCEPT_BIT] == 0) {
                   sockaddr_in client_addr;
                   int client_len = sizeof(client_addr);
-                  SOCKET client_socket = ::accept(accept_socket, (sockaddr*)&client_addr, &client_len);
-                  if (client_socket != GLZ_INVALID_SOCKET) {
-                     threads.emplace_back(std::async([callback, client_socket] { callback(socket{client_socket}); }));
+                  auto client_fd = ::accept(accept_socket, (sockaddr*)&client_addr, &client_len);
+                  if (client_fd != GLZ_INVALID_SOCKET) {
+                     threads.emplace_back(std::async([callback, client_fd] { callback(socket{client_fd}); }));
                   }
                }
             }
