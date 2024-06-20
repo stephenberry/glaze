@@ -550,6 +550,15 @@ namespace glz
                GLZ_EVENT_CLOSE(event_fd);
                return {ip_error::event_wait_failed, ip_error_category::instance()};
             }
+            
+            auto spawn_socket = [&] {
+               sockaddr_in client_addr;
+               socklen_t client_len = sizeof(client_addr);
+               auto client_fd = ::accept(accept_socket.socket_fd, (sockaddr*)&client_addr, &client_len);
+               if (client_fd != GLZ_INVALID_SOCKET) {
+                  threads.emplace_back(std::async([callback, client_fd] { callback(socket{client_fd}); }));
+               }
+            };
 
 #if defined(__APPLE__) || defined(__linux__)
             for (int i = 0; i < n; ++i) {
@@ -558,12 +567,7 @@ namespace glz
 #elif defined(__linux__)
                if (epoll_events[i].data.fd == accept_socket.socket_fd && epoll_events[i].events & EPOLLIN) {
 #endif
-                  sockaddr_in client_addr;
-                  socklen_t client_len = sizeof(client_addr);
-                  auto client_fd = ::accept(accept_socket.socket_fd, (sockaddr*)&client_addr, &client_len);
-                  if (client_fd != GLZ_INVALID_SOCKET) {
-                     threads.emplace_back(std::async([callback, client_fd] { callback(socket{client_fd}); }));
-                  }
+                  spawn_socket();
                }
             }
 
@@ -576,12 +580,7 @@ namespace glz
 
             if (events.lNetworkEvents & FD_ACCEPT) {
                if (events.iErrorCode[FD_ACCEPT_BIT] == 0) {
-                  sockaddr_in client_addr;
-                  int client_len = sizeof(client_addr);
-                  auto client_fd = ::accept(accept_socket, (sockaddr*)&client_addr, &client_len);
-                  if (client_fd != GLZ_INVALID_SOCKET) {
-                     threads.emplace_back(std::async([callback, client_fd] { callback(socket{client_fd}); }));
-                  }
+                  spawn_socket();
                }
             }
 #endif
