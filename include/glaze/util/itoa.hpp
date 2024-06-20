@@ -49,8 +49,8 @@ namespace glz
       '9', '2', '9', '3', '9', '4', '9', '5', '9', '6', '9', '7', '9', '8', '9', '9'};
 
    template <class T>
-      requires std::same_as<T, std::remove_cvref_t<uint32_t>>
-   inline auto* to_chars(auto* buf, T val) noexcept
+      requires std::same_as<std::remove_cvref_t<T>, uint32_t>
+   auto* to_chars(auto* buf, T val) noexcept
    {
       /* The maximum value of uint32_t is 4294967295 (10 digits), */
       /* these digits are named as 'aabbccddee' here.             */
@@ -132,7 +132,7 @@ namespace glz
 
    template <class T>
       requires std::same_as<T, std::remove_cvref_t<int32_t>>
-   inline auto* to_chars(auto* buf, T x) noexcept
+   auto* to_chars(auto* buf, T x) noexcept
    {
       *buf = '-';
       // shifts are necessary to have the numeric_limits<int32_t>::min case
@@ -222,7 +222,7 @@ namespace glz
 
    template <class T>
       requires(std::same_as<std::remove_cvref_t<T>, uint32_t>)
-   inline auto* to_chars_u64_len_5_8(auto* buf, T val) noexcept
+   auto* to_chars_u64_len_5_8(auto* buf, T val) noexcept
    {
       if (val < 1000000) { /* 5-6 digits: aabbcc */
          const uint32_t aa = uint32_t((uint64_t(val) * 429497) >> 32); /* (val / 10000) */
@@ -256,7 +256,7 @@ namespace glz
 
    template <class T>
       requires(std::same_as<std::remove_cvref_t<T>, uint64_t>)
-   inline auto* to_chars(auto* buf, T val) noexcept
+   auto* to_chars(auto* buf, T val) noexcept
    {
       if (val < 100000000) { /* 1-8 digits */
          buf = to_chars_u64_len_1_8(buf, uint32_t(val));
@@ -282,8 +282,8 @@ namespace glz
    }
 
    template <class T>
-      requires std::same_as<T, std::remove_cvref_t<int64_t>>
-   inline auto* to_chars(auto* buf, T x) noexcept
+      requires std::same_as<std::remove_cvref_t<T>, int64_t>
+   auto* to_chars(auto* buf, T x) noexcept
    {
       *buf = '-';
       // shifts are necessary to have the numeric_limits<int64_t>::min case
