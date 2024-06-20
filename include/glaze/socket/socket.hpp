@@ -492,6 +492,7 @@ namespace glz
             return {ip_error::event_ctl_failed, ip_error_category::instance()};
          }
 #elif defined(__linux__)
+         struct epoll_event ev;
          ev.events = EPOLLIN;
          ev.data.fd = accept_socket.socket_fd;
 
@@ -510,7 +511,7 @@ namespace glz
          while (active) {
             int n{};
 
-#if defined(__APPLE__) || defined(__MACH__)
+#if defined(__APPLE__)
             struct timespec timeout
             {
                0, 10000000
