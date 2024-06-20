@@ -6,6 +6,7 @@
 #include "glaze/core/read.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/reflection/reflect.hpp"
+#include "glaze/format/format_to.hpp"
 
 namespace glz
 {
@@ -30,9 +31,9 @@ namespace glz
             }
          };
 
-         std::unordered_map<size_t, size_t> numbering{};
-         size_t major_count{};
-         size_t prev_count{};
+         std::unordered_map<uint64_t, uint64_t> numbering{};
+         uint64_t major_count{};
+         uint64_t prev_count{};
 
          while (it < end) {
             switch (*it) {
@@ -42,7 +43,7 @@ namespace glz
                   ++it;
                   skip_whitespace();
 
-                  size_t count{};
+                  uint64_t count{};
                   while (*it == '+') {
                      ++it;
                      ++count;
@@ -52,14 +53,13 @@ namespace glz
                      numbering.clear();
                   }
 
-                  // TODO: replace std::to_string
                   if (count == 1) {
                      ++major_count;
-                     result.append(std::to_string(major_count));
+                     format_to(result, major_count);
                      result.append(".");
                   }
                   else if (count > 1) {
-                     result.append(std::to_string(major_count));
+                     format_to(result, major_count);
 
                      for (size_t i = 1; i < count; ++i) {
                         result.append(".");
@@ -67,7 +67,7 @@ namespace glz
                         if (i == (count - 1)) {
                            ++x;
                         }
-                        result.append(std::to_string(x));
+                        format_to(result, x);
                      }
                   }
 
