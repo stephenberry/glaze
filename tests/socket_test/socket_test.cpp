@@ -15,9 +15,15 @@ using namespace ut;
 
 std::future<void> server_thread{};
 
+inline constexpr auto n_clients = 10;
+inline constexpr auto service_0_port{8080};
+inline constexpr auto service_0_ip{"127.0.0.1"};
+
+static std::atomic_int working_clients = n_clients;
+
 suite make_server = [] {
    server_thread = std::async([] {
-      glz::server server{8080};
+      glz::server server{service_0_port};
 
       std::cout << std::format("Server started on port: {}\n", server.port);
       
@@ -28,7 +34,9 @@ suite make_server = [] {
          
          // TODO: Change this to a std::condition_variable???
          while (glz::active) {
+
             std::string received{};
+
             client.read_value(received);
             
             if (received == "disconnect") {
@@ -52,17 +60,15 @@ suite make_server = [] {
 
 suite socket_test = [] {
    
-   constexpr auto n_clients = 10;
    std::vector<glz::socket> sockets(n_clients);
    std::vector<std::future<void>> threads(n_clients);
-   
    for (size_t id{}; id < n_clients; ++id)
    {
       threads.emplace_back(std::async([id, &sockets]{
          glz::socket& socket = sockets[id];
 
-         if (socket.connect("127.0.0.1", 8080)) {
-            std::cerr << "Failed to connect to server.\n";
+         if (socket.connect(service_0_ip, service_0_port)) {
+            std::cerr << std::format("Failed to connect to server.\nDetails: {}", glz::get_socket_error().message());
          }
          else {
             std::string received{};
@@ -75,10 +81,14 @@ suite socket_test = [] {
                std::this_thread::sleep_for(std::chrono::seconds(2));
                ++tick;
             }
+            --working_clients;
          }
       }));
    }
 
+   while (working_clients > 0) std::this_thread::yield();
+
+   std::cout << "\nFinished! Press any key to exit.";
    std::cin.get();
    glz::active = false;
 };
