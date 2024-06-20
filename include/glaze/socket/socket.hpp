@@ -45,6 +45,12 @@ using ssize_t = int64_t;
 
 namespace glz
 {
+   namespace ip
+   {
+      struct opts
+      {};
+   }
+
    inline std::string get_ip_port(const sockaddr_in& server_addr)
    {
       char ip_str[INET_ADDRSTRLEN]{};
@@ -109,13 +115,10 @@ namespace glz
       int err = errno;
 #endif
 
-      if (what.empty())
-         return {std::error_code(err, socket_api_error_category(what))};
-      else
-         return {std::error_code(err, socket_api_error_category(what))};
+      return {std::error_code(err, socket_api_error_category(what))};
    }
 
-   inline std::error_code check_status(int ec = -1 /*assume error*/, const std::string_view what = "")
+   inline std::error_code check_status(int ec, const std::string_view what = "")
    {
       if (ec >= 0) {
          return {std::error_code{}};
@@ -136,36 +139,78 @@ namespace glz
    //    std::cout << "Connected successfully!";
    // }
 
-   namespace ip
+   // For Windows WSASocket Compatability
+
+   inline constexpr uint16_t make_version(uint8_t low_byte, uint8_t high_byte)
    {
-      struct opts
-      {};
+      return static_cast<uint16_t>(low_byte) | (static_cast<uint16_t>(high_byte) << 8);
    }
 
-   // Note: WSAStartup and WSACleanup must be run from same thread.
+   inline constexpr uint8_t major_version(uint16_t version)
+   {
+      return static_cast<uint8_t>(version & 0xFF); // Extract the low byte
+   }
+
+   inline constexpr uint8_t minor_version(uint16_t version)
+   {
+      return static_cast<uint8_t>((version >> 8) & 0xFF); // Shift right by 8 bits and extract the low byte
+   }
+
+   // Function to get Winsock version string on Windows, return "na" otherwise
+   inline std::string get_winsock_version_string(uint32_t version = make_version(2, 2))
+   {
+#if _WIN32
+      BYTE major = major_version(uint16_t(version));
+      BYTE minor = minor_version(uint16_t(version));
+      return std::format("{}.{}", static_cast<int>(major), static_cast<int>(minor));
+#else
+      return "na"; // Default behavior for non-Windows platforms
+#endif
+   }
+
+   // The 'wsa_startup_t' calls the windows WSAStartup function. This must be the first Windows
+   // Sockets function called by an application or DLL. It allows an application or DLL to
+   // specify the version of Windows Sockets required and retrieve details of the specific
+   // Windows Sockets implementation.The application or DLL can only issue further Windows Sockets
+   // functions after successfully calling WSAStartup.
    //
-   struct windows_socket_startup_t final
+   // Important: WSAStartup and its corresponding WSACleanup must be called on the same thread.
+   //
+   template <bool run_wsa_startup = true>
+   struct wsa_startup_t final
    {
 #ifdef _WIN64
-      WSADATA wsa_data_{};
+      WSADATA wsa_data{};
 
-      inline std::error_code windows_startup()
+      std::error_code error_code{};
+
+      inline std::error_code start(const WORD win_sock_version = make_version(2, 2)) // Request latest Winsock version 2.2
       {
          static std::once_flag flag{};
          std::error_code startup_error{};
-         std::call_once(flag, [this, &startup_error]() {
-            constexpr auto win_sock_version = MAKEWORD(2, 2); // Request Winsock version 2.2
-            int result = WSAStartup(win_sock_version, &wsa_data_);
+         std::call_once(flag, [this, win_sock_version, &startup_error]() {
+            int result = WSAStartup(win_sock_version, &wsa_data);
             if (result != 0) {
-               startup_error = get_socket_error("Unable initialize win socket library.");
+               error_code = get_socket_error(
+                  std::format("Unable to initialize Winsock library version {}.", get_winsock_version_string()));
             }
          });
-         return startup_error;
+         return {error_code};
       }
 
-      ~windows_socket_startup_t() { WSACleanup(); }
+      wsa_startup_t()
+      {
+         if constexpr (run_wsa_startup) {
+            error_code = start();
+         }
+      }
+
+      ~wsa_startup_t() {
+         WSACleanup();
+      }
+
 #else
-      inline std::error_code windows_startup() { return std::error_code{}; }
+      inline std::error_code startup() { return {std::error_code{}}; }
 #endif
    };
 
@@ -197,6 +242,8 @@ namespace glz
 
    struct socket
    {
+      wsa_startup_t<> wsa; // wsa_startup (ignored on macOS and Linux)
+
       SOCKET socket_fd{INVALID_SOCKET};
 
       void set_non_blocking()
