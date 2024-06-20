@@ -235,6 +235,7 @@ namespace glz
       queue_create_failed,
       event_ctl_failed,
       event_wait_failed,
+      event_enum_failed,
       socket_connect_failed = 1001,
       socket_bind_failed = 1002
    };
@@ -259,6 +260,8 @@ namespace glz
             return "event_ctl_failed";
          case event_wait_failed:
             return "event_wait_failed";
+         case event_enum_failed:
+            return "event_enum_failed";
          case socket_connect_failed:
             return "socket_connect_failed";
          case socket_bind_failed:
@@ -511,7 +514,7 @@ namespace glz
             return {ip_error::event_ctl_failed, ip_error_category::instance()};
          }
 #elif defined(_WIN32)
-         if (WSAEventSelect(accept_socket, event_fd, FD_ACCEPT) == SOCKET_ERROR) {
+         if (WSAEventSelect(accept_socket.socket_fd, event_fd, FD_ACCEPT) == SOCKET_ERROR) {
             WSACloseEvent(event_fd);
             return {ip_error::event_ctl_failed, ip_error_category::instance()};
          }
