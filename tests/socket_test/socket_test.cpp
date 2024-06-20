@@ -38,7 +38,6 @@ suite make_server = [] {
 
          client.write_value("Welcome!");
          
-         // TODO: Change this to a std::condition_variable???
          while (active) {
             std::string received{};
             client.read_value(received);

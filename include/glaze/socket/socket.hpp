@@ -139,7 +139,7 @@ namespace glz
    inline std::error_code check_status(int ec, const std::string_view what = "")
    {
       if (ec >= 0) {
-         return {std::error_code{}};
+         return {};
       }
 
       return {get_socket_error(what)};
@@ -159,17 +159,17 @@ namespace glz
 
    // For Windows WSASocket Compatability
 
-   inline constexpr uint16_t make_version(uint8_t low_byte, uint8_t high_byte)
+   inline constexpr uint16_t make_version(uint8_t low_byte, uint8_t high_byte) noexcept
    {
       return uint16_t(low_byte) | (uint16_t(high_byte) << 8);
    }
 
-   inline constexpr uint8_t major_version(uint16_t version)
+   inline constexpr uint8_t major_version(uint16_t version) noexcept
    {
       return uint8_t(version & 0xFF); // Extract the low byte
    }
 
-   inline constexpr uint8_t minor_version(uint16_t version)
+   inline constexpr uint8_t minor_version(uint16_t version) noexcept
    {
       return uint8_t((version >> 8) & 0xFF); // Shift right by 8 bits and extract the low byte
    }
@@ -296,7 +296,6 @@ namespace glz
       {
          if (socket_fd != -1) {
             write_value("disconnect");
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
             GLZ_CLOSESOCKET(socket_fd);
          }
       }
