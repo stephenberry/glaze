@@ -26,6 +26,12 @@ jobs:
     - name: Set up Xcode 15.4
       run: sudo xcode-select -s /Applications/Xcode_15.4.app
 
+    - name: Set up Clang from Xcode
+      run: |
+        export PATH="/Applications/Xcode_15.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:$PATH"
+        export CC=clang
+        export CXX=clang++
+
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
