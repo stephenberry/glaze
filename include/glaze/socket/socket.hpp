@@ -146,17 +146,17 @@ namespace glz
 
    inline constexpr uint16_t make_version(uint8_t low_byte, uint8_t high_byte)
    {
-      return static_cast<uint16_t>(low_byte) | (static_cast<uint16_t>(high_byte) << 8);
+      return uint16_t(low_byte) | (uint16_t(high_byte) << 8);
    }
 
    inline constexpr uint8_t major_version(uint16_t version)
    {
-      return static_cast<uint8_t>(version & 0xFF); // Extract the low byte
+      return uint8_t(version & 0xFF); // Extract the low byte
    }
 
    inline constexpr uint8_t minor_version(uint16_t version)
    {
-      return static_cast<uint8_t>((version >> 8) & 0xFF); // Shift right by 8 bits and extract the low byte
+      return uint8_t((version >> 8) & 0xFF); // Shift right by 8 bits and extract the low byte
    }
 
    // Function to get Winsock version string on Windows, return "na" otherwise
