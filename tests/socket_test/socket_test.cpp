@@ -67,7 +67,7 @@ suite socket_test = [] {
       threads.emplace_back(std::async([id, &sockets]{
          glz::socket& socket = sockets[id];
 
-         if (socket.connect(service_0_ip, 90)) {
+         if (socket.connect(service_0_ip, service_0_port)) {
             std::cerr << std::format("Failed to connect to server.\nDetails: {}\n", glz::get_socket_error().message());
          }
          else {
