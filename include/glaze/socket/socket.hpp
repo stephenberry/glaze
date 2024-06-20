@@ -480,7 +480,7 @@ namespace glz
          if (ec) {
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
-         
+
 #if defined(__APPLE__)
          int event_fd = ::kqueue();
 #elif defined(__linux__)
@@ -492,7 +492,7 @@ namespace glz
          if (event_fd == GLZ_INVALID_EVENT) {
             return {ip_error::queue_create_failed, ip_error_category::instance()};
          }
-         
+
 #if defined(__APPLE__)
          struct kevent change;
          EV_SET(&change, accept_socket.socket_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, nullptr);
@@ -563,7 +563,7 @@ namespace glz
                   }
                }
             }
-               
+
 #else // Windows
             WSANETWORKEVENTS events;
             if (WSAEnumNetworkEvents(accept_socket, event_fd, &events) == SOCKET_ERROR) {
