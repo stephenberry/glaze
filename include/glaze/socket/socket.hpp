@@ -449,22 +449,6 @@ namespace glz
       }
    };
 
-   struct destructor final
-   {
-      std::function<void()> destroy{};
-
-      ~destructor()
-      {
-         if (destroy) {
-            destroy();
-         }
-      }
-
-      template <class Func>
-      destructor(Func&& f) : destroy(std::forward<Func>(f))
-      {}
-   };
-
    inline static std::atomic<bool> active = true;
 
    struct server final
@@ -472,7 +456,9 @@ namespace glz
       int port{};
       std::vector<std::future<void>> threads{}; // TODO: Remove dead clients
 
-      destructor on_destruct{[] { active = false; }};
+      ~server() {
+         active = false;
+      }
 
       template <class AcceptCallback>
       std::error_code accept(AcceptCallback&& callback)
