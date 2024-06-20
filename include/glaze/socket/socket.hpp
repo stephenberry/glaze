@@ -4,13 +4,15 @@
 #pragma once
 
 #ifdef _WIN32
+#define GLZ_INVALID_SOCKET INVALID_SOCKET
+#define GLZ_SOCKET GLZ_SOCKET
 #define NOMINMAX
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
 #include <cstdint>
 #pragma comment(lib, "Ws2_32.lib")
-#define CLOSESOCKET closesocket
+#define GLZ_CLOSESOCKET closesocket
 #define SOCKET_ERROR_CODE WSAGetLastError()
 using ssize_t = int64_t;
 #else
@@ -25,10 +27,11 @@ using ssize_t = int64_t;
 #include <unistd.h>
 
 #include <cerrno>
-#define CLOSESOCKET close
+#define GLZ_CLOSESOCKET close
 #define SOCKET_ERROR_CODE errno
-#define SOCKET int
+#define GLZ_SOCKET int
 #define SOCKET_ERROR (-1)
+#define GLZ_INVALID_SOCKET (-1)
 #endif
 
 #include <csignal>
@@ -164,7 +167,8 @@ namespace glz
       BYTE minor = minor_version(uint16_t(version));
       return std::format("{}.{}", static_cast<int>(major), static_cast<int>(minor));
 #else
-      return "na"; // Default behavior for non-Windows platforms
+      (void)version;
+      return ""; // Default behavior for non-Windows platforms
 #endif
    }
 
@@ -244,7 +248,7 @@ namespace glz
    {
       wsa_startup_t<> wsa; // wsa_startup (ignored on macOS and Linux)
 
-      SOCKET socket_fd{INVALID_SOCKET};
+      GLZ_SOCKET socket_fd{GLZ_INVALID_SOCKET};
 
       void set_non_blocking()
       {
@@ -259,7 +263,7 @@ namespace glz
 
       socket() = default;
 
-      socket(SOCKET fd) : socket_fd(fd)
+      socket(GLZ_SOCKET fd) : socket_fd(fd)
       {
          // set_non_blocking();
       }
@@ -268,7 +272,7 @@ namespace glz
       {
          if (socket_fd != -1) {
             write_value("disconnect");
-            CLOSESOCKET(socket_fd);
+            GLZ_CLOSESOCKET(socket_fd);
          }
       }
 
