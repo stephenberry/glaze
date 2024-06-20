@@ -13,13 +13,17 @@
 
 using namespace ut;
 
+constexpr bool user_input = false;
+
 std::future<void> server_thread{};
 
-inline constexpr auto n_clients = 10;
-inline constexpr auto service_0_port{8080};
-inline constexpr auto service_0_ip{"127.0.0.1"};
+constexpr auto n_clients = 10;
+constexpr auto service_0_port{8080};
+constexpr auto service_0_ip{"127.0.0.1"};
 
 static std::latch working_clients{n_clients};
+
+glz::windows_socket_startup_t<> wsa; // wsa_startup (ignored on macOS and Linux)
 
 suite make_server = [] {
    server_thread = std::async([] {
@@ -88,8 +92,10 @@ suite socket_test = [] {
 
    working_clients.arrive_and_wait();
 
-   std::cout << "\nFinished! Press any key to exit.";
-   std::cin.get();
+   if constexpr (user_input) {
+      std::cout << "\nFinished! Press any key to exit.";
+      std::cin.get();
+   }
    glz::active = false;
 };
 

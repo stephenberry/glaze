@@ -181,14 +181,14 @@ namespace glz
    // Important: WSAStartup and its corresponding WSACleanup must be called on the same thread.
    //
    template <bool run_wsa_startup = true>
-   struct wsa_startup_t final
+   struct windows_socket_startup_t final
    {
 #ifdef _WIN64
       WSADATA wsa_data{};
 
       std::error_code error_code{};
 
-      inline std::error_code start(const WORD win_sock_version = make_version(2, 2)) // Request latest Winsock version 2.2
+      std::error_code start(const WORD win_sock_version = make_version(2, 2)) // Request latest Winsock version 2.2
       {
          static std::once_flag flag{};
          std::error_code startup_error{};
@@ -214,7 +214,7 @@ namespace glz
       }
 
 #else
-      inline std::error_code startup() { return {std::error_code{}}; }
+      std::error_code start() { return std::error_code{}; }
 #endif
    };
 
@@ -246,8 +246,6 @@ namespace glz
 
    struct socket
    {
-      wsa_startup_t<> wsa; // wsa_startup (ignored on macOS and Linux)
-
       GLZ_SOCKET socket_fd{GLZ_INVALID_SOCKET};
 
       void set_non_blocking()
