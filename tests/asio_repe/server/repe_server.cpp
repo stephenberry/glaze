@@ -8,7 +8,7 @@ struct api
    std::function<int(std::vector<int>& vec)> sum = [](std::vector<int>& vec) {
       return std::reduce(vec.begin(), vec.end());
    };
-   std::function<double(std::vector<double>& vec)> max = [](std::vector<double>& vec) { return std::ranges::max(vec); };
+   std::function<double(std::vector<double>& vec)> maximum = [](std::vector<double>& vec) { return (std::ranges::max)(vec); };
 };
 
 #include <iostream>
