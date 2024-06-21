@@ -12,6 +12,7 @@ namespace glz
    struct repe_server
    {
       uint16_t port{};
+      bool print_errors = false;
       glz::server server{};
 
       struct glaze
@@ -44,7 +45,9 @@ namespace glz
             try {
                while (active) {
                   if (auto ec = receive(socket, buffer)) {
-                     std::fprintf(stderr, "%s\n", ec.message().c_str());
+                     if (print_errors) {
+                        std::fprintf(stderr, "%s\n", ec.message().c_str());
+                     }
                      if (ec.value() == ip_error::client_disconnected) {
                         return;
                      }
@@ -53,7 +56,9 @@ namespace glz
                      auto response = registry.call(buffer);
                      if (response) {
                         if (auto ec = send(socket, response->value())) {
-                           std::fprintf(stderr, "%s\n", ec.message().c_str());
+                           if (print_errors) {
+                              std::fprintf(stderr, "%s\n", ec.message().c_str());
+                           }
                         }
                      }
                   }

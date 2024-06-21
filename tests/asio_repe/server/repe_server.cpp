@@ -18,7 +18,7 @@ void run_server()
    std::cout << "Server active...\n";
 
    try {
-      glz::repe_server<> server{.port = 8080};
+      glz::repe_server<> server{.port = 8080, .print_errors = true};
       api methods{};
       server.on(methods);
       server.run();
