@@ -5,6 +5,7 @@
 
 #include "glaze/network/server.hpp"
 
+#include <iostream>
 #include <future>
 #include <latch>
 #include <thread>

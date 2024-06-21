@@ -16,10 +16,6 @@
 #define GLZ_SOCKET_ERROR_CODE WSAGetLastError()
 #define GLZ_WAIT_FAILED WSA_WAIT_FAILED
 #define GLZ_WAIT_RESULT_TYPE DWORD
-#define NOMINMAX
-
-#include <cstdint>
-using ssize_t = int64_t;
 #else
 #include <sys/socket.h>
 #include <sys/types.h>

@@ -4,26 +4,19 @@
 #pragma once
 
 #include "glaze/glaze.hpp"
-#include "glaze/glaze.hpp"
 
 #ifdef _WIN32
 #define GLZ_CLOSE_SOCKET closesocket
-#define GLZ_EVENT_CLOSE WSACloseEvent
 #define GLZ_EWOULDBLOCK WSAEWOULDBLOCK
-#define GLZ_INVALID_EVENT WSA_INVALID_EVENT
 #define GLZ_INVALID_SOCKET INVALID_SOCKET
 #define GLZ_SOCKET SOCKET
 #define GLZ_SOCKET_ERROR SOCKET_ERROR
 #define GLZ_SOCKET_ERROR_CODE WSAGetLastError()
-#define GLZ_WAIT_FAILED WSA_WAIT_FAILED
-#define GLZ_WAIT_RESULT_TYPE DWORD
-#define NOMINMAX
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
 #include <cstdint>
 #pragma comment(lib, "Ws2_32.lib")
-using ssize_t = int64_t;
 #else
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -37,15 +30,11 @@ using ssize_t = int64_t;
 
 #include <cerrno>
 #define GLZ_CLOSE_SOCKET ::close
-#define GLZ_EVENT_CLOSE ::close
 #define GLZ_EWOULDBLOCK EWOULDBLOCK
-#define GLZ_INVALID_EVENT (-1)
 #define GLZ_INVALID_SOCKET (-1)
 #define GLZ_SOCKET int
 #define GLZ_SOCKET_ERROR (-1)
 #define GLZ_SOCKET_ERROR_CODE errno
-#define GLZ_WAIT_FAILED (-1)
-#define GLZ_WAIT_RESULT_TYPE int
 #endif
 
 #if defined(__APPLE__)
@@ -58,9 +47,7 @@ using ssize_t = int64_t;
 #include <format>
 #include <functional>
 #include <future>
-#include <iostream>
 #include <mutex>
-#include <stop_token>
 #include <system_error>
 #include <thread>
 #include <vector>
@@ -378,7 +365,7 @@ namespace glz
          // first receive the header
          size_t total_bytes{};
          while (total_bytes < sizeof(Header)) {
-            ssize_t bytes = ::recv(socket_fd, reinterpret_cast<char*>(&header) + total_bytes,
+            auto bytes = ::recv(socket_fd, reinterpret_cast<char*>(&header) + total_bytes,
                                    size_t(sizeof(Header) - total_bytes), 0);
             if (bytes == -1) {
                if (GLZ_SOCKET_ERROR_CODE == GLZ_EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
@@ -410,7 +397,7 @@ namespace glz
 
          total_bytes = 0;
          while (total_bytes < size) {
-            ssize_t bytes = ::recv(socket_fd, buffer.data() + total_bytes, size_t(buffer.size() - total_bytes), 0);
+            auto bytes = ::recv(socket_fd, buffer.data() + total_bytes, size_t(buffer.size() - total_bytes), 0);
             if (bytes == -1) {
                if (GLZ_SOCKET_ERROR_CODE == GLZ_EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
                   std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -435,7 +422,7 @@ namespace glz
          const size_t size = buffer.size();
          size_t total_bytes{};
          while (total_bytes < size) {
-            ssize_t bytes = ::send(socket_fd, buffer.data() + total_bytes, size_t(buffer.size() - total_bytes), 0);
+            auto bytes = ::send(socket_fd, buffer.data() + total_bytes, size_t(buffer.size() - total_bytes), 0);
             if (bytes == -1) {
                if (GLZ_SOCKET_ERROR_CODE == GLZ_EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
                   std::this_thread::yield();
@@ -493,12 +480,8 @@ namespace glz
 }
 
 #undef GLZ_CLOSE_SOCKET
-#undef GLZ_EVENT_CLOSE
 #undef GLZ_EWOULDBLOCK
-#undef GLZ_INVALID_EVENT
 #undef GLZ_INVALID_SOCKET
 #undef GLZ_SOCKET
 #undef GLZ_SOCKET_ERROR
 #undef GLZ_SOCKET_ERROR_CODE
-#undef GLZ_WAIT_FAILED
-#undef GLZ_WAIT_RESULT_TYPE
