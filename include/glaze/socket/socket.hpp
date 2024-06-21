@@ -491,6 +491,20 @@ namespace glz
          return {};
       }
    };
+   
+   namespace detail {
+      inline void server_thread_cleanup(std::vector<std::future<void>>& threads) {
+         threads.erase(std::partition(threads.begin(), threads.end(),
+                                      [](auto& future) {
+                                         if (auto status = future.wait_for(std::chrono::milliseconds(0));
+                                             status == std::future_status::ready) {
+                                            return false;
+                                         }
+                                         return true;
+                                      }),
+                       threads.end());
+      }
+   }
 
    struct server final
    {
@@ -607,15 +621,7 @@ namespace glz
             }
 #endif
 
-            threads.erase(std::partition(threads.begin(), threads.end(),
-                                         [](auto& future) {
-                                            if (auto status = future.wait_for(std::chrono::milliseconds(0));
-                                                status == std::future_status::ready) {
-                                               return false;
-                                            }
-                                            return true;
-                                         }),
-                          threads.end());
+               detail::server_thread_cleanup(threads);
          }
 
          GLZ_EVENT_CLOSE(event_fd);
