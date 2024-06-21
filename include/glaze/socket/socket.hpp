@@ -495,7 +495,7 @@ namespace glz
    struct server final
    {
       int port{};
-      std::vector<std::future<void>> threads{}; // TODO: Remove dead clients
+      std::vector<std::future<void>> threads{};
       std::atomic<bool> active = true;
 
       ~server() { active = false; }
