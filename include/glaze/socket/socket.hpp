@@ -519,7 +519,7 @@ namespace glz
    
    namespace detail
    {
-      inline void server_thread_cleanup(std::vector<std::future<void>>& threads)
+      inline void server_thread_cleanup(auto& threads)
       {
          threads.erase(std::partition(threads.begin(), threads.end(),
                                                [](auto& future) {
@@ -536,7 +536,7 @@ namespace glz
    struct server final
    {
       int port{};
-      std::vector<std::future<void>> threads{};
+      std::vector<std::shared_future<void>> threads{};
       std::atomic<bool> active = true;
       std::shared_future<std::error_code> async_accept_thread{};
 
