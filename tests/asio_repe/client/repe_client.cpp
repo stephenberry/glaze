@@ -3,22 +3,20 @@
 
 #include <iostream>
 
-#include "glaze/ext/glaze_asio.hpp"
-#include "glaze/glaze.hpp"
-#include "glaze/rpc/repe.hpp"
+#include "glaze/network/repe_client.hpp"
 
 void asio_client_test()
 {
    try {
-      constexpr auto N = 100;
-      std::vector<glz::asio_client<>> clients;
+      constexpr auto N = 1;
+      std::vector<glz::repe_client<>> clients;
       clients.reserve(N);
 
       std::vector<std::future<void>> threads;
       threads.reserve(N);
 
       for (size_t i = 0; i < N; ++i) {
-         clients.emplace_back(glz::asio_client<>{"localhost", "8080"});
+         clients.emplace_back(glz::repe_client<>{"127.0.0.1", 8080});
       }
 
       for (size_t i = 0; i < N; ++i) {

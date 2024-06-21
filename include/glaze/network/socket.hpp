@@ -228,8 +228,8 @@ namespace glz
       event_ctl_failed,
       event_wait_failed,
       event_enum_failed,
-      socket_connect_failed = 1001,
-      socket_bind_failed = 1002,
+      socket_connect_failed,
+      socket_bind_failed,
       send_failed,
       receive_failed,
       client_disconnected
@@ -241,7 +241,10 @@ namespace glz
    struct ip_error_category : public std::error_category
    {
       // MSVC deadlocks if this returns a static instance
-      static ip_error_category instance() { return {}; }
+      static const ip_error_category& instance() {
+         static ip_error_category instance{};
+         return instance;
+      }
 
       const char* name() const noexcept override { return "ip_error_category"; }
 

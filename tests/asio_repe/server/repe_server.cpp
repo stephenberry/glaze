@@ -1,9 +1,7 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-#include "glaze/ext/glaze_asio.hpp"
-#include "glaze/glaze.hpp"
-#include "glaze/rpc/repe.hpp"
+#include "glaze/network/repe_server.hpp"
 
 struct api
 {
@@ -20,7 +18,7 @@ void run_server()
    std::cout << "Server active...\n";
 
    try {
-      glz::asio_server<> server{.port = 8080};
+      glz::repe_server<> server{.port = 8080};
       api methods{};
       server.on(methods);
       server.run();
