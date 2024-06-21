@@ -17,7 +17,7 @@
 #pragma comment(lib, "Ws2_32.lib")
 #define GLZ_CLOSESOCKET closesocket
 #define GLZ_EVENT_CLOSE WSACloseEvent
-#define SOCKET_ERROR_CODE WSAGetLastError()
+#define GLZ_SOCKET_ERROR_CODE WSAGetLastError()
 using ssize_t = int64_t;
 #else
 #include <sys/socket.h>
@@ -36,7 +36,7 @@ using ssize_t = int64_t;
 #define GLZ_WAIT_RESULT_TYPE int
 #define GLZ_WAIT_FAILED (-1)
 #define GLZ_INVALID_EVENT (-1)
-#define SOCKET_ERROR_CODE errno
+#define GLZ_SOCKET_ERROR_CODE errno
 #define GLZ_SOCKET int
 #define SOCKET_ERROR (-1)
 #define GLZ_INVALID_SOCKET (-1)
@@ -363,7 +363,7 @@ namespace glz
          while (total_bytes < size) {
             ssize_t bytes = ::recv(socket_fd, buffer.data() + total_bytes, uint16_t(buffer.size() - total_bytes), 0);
             if (bytes == -1) {
-               if (SOCKET_ERROR_CODE == EWOULDBLOCK || SOCKET_ERROR_CODE == EAGAIN) {
+               if (GLZ_SOCKET_ERROR_CODE == EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
                   std::this_thread::sleep_for(std::chrono::milliseconds(1));
                   continue;
                }
@@ -398,7 +398,7 @@ namespace glz
          while (total_bytes < size) {
             ssize_t bytes = ::send(socket_fd, buffer.data() + total_bytes, uint16_t(buffer.size() - total_bytes), 0);
             if (bytes == -1) {
-               if (SOCKET_ERROR_CODE == EWOULDBLOCK || SOCKET_ERROR_CODE == EAGAIN) {
+               if (GLZ_SOCKET_ERROR_CODE == EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
                   std::this_thread::yield();
                   continue;
                }
