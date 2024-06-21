@@ -3,6 +3,9 @@
 
 #pragma once
 
+#include "glaze/glaze.hpp"
+#include "glaze/glaze.hpp"
+
 #ifdef _WIN32
 #define GLZ_CLOSE_SOCKET closesocket
 #define GLZ_EVENT_CLOSE WSACloseEvent
@@ -61,8 +64,6 @@ using ssize_t = int64_t;
 #include <system_error>
 #include <thread>
 #include <vector>
-
-#include "glaze/rpc/repe.hpp"
 
 namespace glz
 {
@@ -489,154 +490,6 @@ namespace glz
 
       return {};
    }
-
-   namespace detail
-   {
-      inline void server_thread_cleanup(auto& threads)
-      {
-         threads.erase(std::partition(threads.begin(), threads.end(),
-                                      [](auto& future) {
-                                         if (auto status = future.wait_for(std::chrono::milliseconds(0));
-                                             status == std::future_status::ready) {
-                                            return false;
-                                         }
-                                         return true;
-                                      }),
-                       threads.end());
-      }
-   }
-
-   struct server final
-   {
-      int port{};
-      std::atomic<bool> active = true;
-      std::shared_future<std::error_code> async_accept_thread{};
-      std::vector<std::future<void>> threads{};
-
-      ~server() { active = false; }
-
-      template <class AcceptCallback>
-      std::shared_future<std::error_code> async_accept(AcceptCallback&& callback)
-      {
-         async_accept_thread = {
-            std::async([this, callback = std::forward<AcceptCallback>(callback)] { return accept(callback); })};
-         return async_accept_thread;
-      }
-
-      template <class AcceptCallback>
-      [[nodiscard]] std::error_code accept(AcceptCallback&& callback)
-      {
-         glz::socket accept_socket{};
-
-         const auto ec = accept_socket.bind_and_listen(port);
-         if (ec) {
-            return {ip_error::socket_bind_failed, ip_error_category::instance()};
-         }
-
-#if defined(__APPLE__)
-         int event_fd = ::kqueue();
-#elif defined(__linux__)
-         int event_fd = ::epoll_create1(0);
-#elif defined(_WIN32)
-         HANDLE event_fd = WSACreateEvent();
-#endif
-
-         if (event_fd == GLZ_INVALID_EVENT) {
-            return {ip_error::queue_create_failed, ip_error_category::instance()};
-         }
-
-         bool event_setup_failed = false;
-#if defined(__APPLE__)
-         struct kevent change;
-         EV_SET(&change, accept_socket.socket_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, nullptr);
-         event_setup_failed = ::kevent(event_fd, &change, 1, nullptr, 0, nullptr) == -1;
-#elif defined(__linux__)
-         struct epoll_event ev;
-         ev.events = EPOLLIN;
-         ev.data.fd = accept_socket.socket_fd;
-         event_setup_failed = epoll_ctl(event_fd, EPOLL_CTL_ADD, accept_socket.socket_fd, &ev) == -1;
-#elif defined(_WIN32)
-         event_setup_failed = WSAEventSelect(accept_socket.socket_fd, event_fd, FD_ACCEPT) == GLZ_SOCKET_ERROR;
-#endif
-
-         if (event_setup_failed) {
-            GLZ_EVENT_CLOSE(event_fd);
-            return {ip_error::event_ctl_failed, ip_error_category::instance()};
-         }
-
-#if defined(__APPLE__)
-         std::vector<struct kevent> events(16);
-#elif defined(__linux__)
-         std::vector<struct epoll_event> epoll_events(16);
-#endif
-
-         while (active) {
-            GLZ_WAIT_RESULT_TYPE n{};
-
-#if defined(__APPLE__)
-            struct timespec timeout
-            {
-               0, 10000000
-            }; // 10ms
-            n = ::kevent(event_fd, nullptr, 0, events.data(), static_cast<int>(events.size()), &timeout);
-#elif defined(__linux__)
-            n = ::epoll_wait(event_fd, epoll_events.data(), static_cast<int>(epoll_events.size()), 10);
-#elif defined(_WIN32)
-            n = WSAWaitForMultipleEvents(1, &event_fd, FALSE, 10, FALSE);
-#endif
-
-            if (n == GLZ_WAIT_FAILED) {
-#if defined(__APPLE__) || defined(__linux__)
-               if (errno == EINTR) continue;
-#else
-               if (n == WSA_WAIT_TIMEOUT) continue;
-#endif
-               GLZ_EVENT_CLOSE(event_fd);
-               return {ip_error::event_wait_failed, ip_error_category::instance()};
-            }
-
-            auto spawn_socket = [&] {
-               sockaddr_in client_addr;
-               socklen_t client_len = sizeof(client_addr);
-               auto client_fd = ::accept(accept_socket.socket_fd, (sockaddr*)&client_addr, &client_len);
-               if (client_fd != GLZ_INVALID_SOCKET) {
-                  threads.emplace_back(
-                     std::async([this, callback, client_fd] { callback(socket{client_fd}, active); }));
-               }
-            };
-
-#if defined(__APPLE__) || defined(__linux__)
-            for (int i = 0; i < n; ++i) {
-#if defined(__APPLE__)
-               if (events[i].ident == uintptr_t(accept_socket.socket_fd) && events[i].filter == EVFILT_READ) {
-#elif defined(__linux__)
-               if (epoll_events[i].data.fd == accept_socket.socket_fd && epoll_events[i].events & EPOLLIN) {
-#endif
-                  spawn_socket();
-               }
-            }
-
-#else // Windows
-            WSANETWORKEVENTS events;
-            if (WSAEnumNetworkEvents(accept_socket.socket_fd, event_fd, &events) == GLZ_SOCKET_ERROR) {
-               WSACloseEvent(event_fd);
-               return {ip_error::event_enum_failed, ip_error_category::instance()};
-            }
-
-            if (events.lNetworkEvents & FD_ACCEPT) {
-               if (events.iErrorCode[FD_ACCEPT_BIT] == 0) {
-                  spawn_socket();
-               }
-            }
-#endif
-
-            detail::server_thread_cleanup(threads);
-         }
-
-         GLZ_EVENT_CLOSE(event_fd);
-         return {};
-      }
-   };
 }
 
 #undef GLZ_CLOSE_SOCKET

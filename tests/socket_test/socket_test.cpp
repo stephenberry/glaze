@@ -3,7 +3,7 @@
 
 #define UT_RUN_TIME_ONLY
 
-#include "glaze/network/socket.hpp"
+#include "glaze/network/server.hpp"
 
 #include <future>
 #include <latch>
