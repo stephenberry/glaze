@@ -107,5 +107,8 @@ int main() {
       std::exit(0);
    });
    
+   // GCC needs this sleep
+   std::this_thread::sleep_for(std::chrono::milliseconds(100));
+   
    return 0;
 }
