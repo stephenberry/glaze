@@ -539,11 +539,16 @@ namespace glz
    struct server final
    {
       int port{};
+      std::shared_future<std::error_code> async_accept_thread{};
       std::vector<std::shared_future<void>> threads{};
       std::atomic<bool> active = true;
-      std::shared_future<std::error_code> async_accept_thread{};
-
-      ~server() { active = false; }
+      
+      ~server() {
+         active = false;
+         for (auto& f : threads) {
+            f.get();
+         }
+      }
 
       template <class AcceptCallback>
       std::shared_future<std::error_code> async_accept(AcceptCallback&& callback)
