@@ -299,7 +299,7 @@ namespace glz
 
       void close()
       {
-         if (socket_fd != -1) {
+         if (socket_fd != GLZ_INVALID_SOCKET) {
             GLZ_CLOSE_SOCKET(socket_fd);
          }
       }
