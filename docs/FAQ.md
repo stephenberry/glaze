@@ -2,7 +2,7 @@
 
 ### What happens when the JSON input is missing objects? 
 
-The input JSON can partial. It could just include a single value. Only what is included in the JSON will be changed. JSON pointers are also supported, which can be used to change a single element in an array (not possible with normal JSON).
+The input JSON can be partial. It could include a single value. Only what is included in the JSON will be changed. JSON pointer syntax is also supported, which can be used to change a single element in an array (not possible with normal JSON).
 
 ### How are unknown keys handled?
 
@@ -21,14 +21,14 @@ struct my_struct {
 
 ### Do I need to specify the complete structure of the parsed JSON or just the parts I‘m interested in?
 
-You only need to specify the portion that you want to be serialized. You can have whatever else in your class and choose to not expose it.
+You only need to specify the portion that you want to be serialized. You can have whatever else in your struct and choose to not expose it (using `glz::meta`).
 
 ### Is the write/read API deterministic?
 
 *If I parse and serialize the same JSON string multiple times, is the output guaranteed to be the same every time?*
 
-For the most part, yes, glaze is deterministic. Structs are compile time known, so they're deterministic. The unordered map behavior just means that the input layout doesn't have to be in sequence, conforming to the JSON specification.
+Yes, Glaze is deterministic and can be round tripped, but in some cases C++ containers do not guarantee identical roundtrip behavior. Structs are compile time known, so they're deterministic.
 
 You can use std::map and std::unordered_map containers with the library. If you choose the former the sequence is deterministic, but not the latter.
 
-The library is also deterministic from a round-trippable standpoint. Floating point numbers use round-trippable algorithms.
+Floating point numbers use round-trippable algorithms.
