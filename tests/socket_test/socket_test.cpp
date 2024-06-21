@@ -26,37 +26,32 @@ static std::atomic_int working_clients{n_clients};
 glz::windows_socket_startup_t<> wsa; // wsa_startup (ignored on macOS and Linux)
 
 glz::server server{service_0_port};
-std::future<void> server_thread{};
 
 suite make_server = [] {
-   server_thread = std::async([&] {
-      std::cout << std::format("Server started on port: {}\n", server.port);
-      
-      const auto ec = server.accept([](glz::socket&& client, auto& active) {
-         std::cout << "New client connected!\n";
+   std::cout << std::format("Server started on port: {}\n", server.port);
+   
+   const auto future = server.async_accept([](glz::socket&& client, auto& active) {
+      std::cout << "New client connected!\n";
 
-         if (auto ec = glz::send(client, "Welcome!")) {
+      if (auto ec = glz::send(client, "Welcome!")) {
+         std::cerr << ec.message() << '\n';
+         return;
+      }
+      
+      while (active) {
+         std::string received{};
+         if (auto ec = glz::receive(client, received)) {
             std::cerr << ec.message() << '\n';
             return;
          }
          
-         while (active) {
-            std::string received{};
-            if (auto ec = glz::receive(client, received)) {
-               std::cerr << ec.message() << '\n';
-               return;
-            }
-            
-            std::cout << std::format("Server: {}\n", received);
-         }
-      });
-
-      if (ec) {
-         std::cerr << ec.message() << '\n';
+         std::cout << std::format("Server: {}\n", received);
       }
    });
-   
-   std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+   if (future.wait_for(std::chrono::milliseconds(10)) == std::future_status::ready) {
+      std::cerr << future.get().message() << '\n';
+   }
 };
 
 suite socket_test = [] {
