@@ -278,6 +278,7 @@ namespace glz
 
    struct ip_error_category : public std::error_category
    {
+      // MSVC deadlocks if this returns a static instance
       static ip_error_category instance()
       {
          return {};
