@@ -64,32 +64,6 @@ using ssize_t = int64_t;
 
 #include "glaze/rpc/repe.hpp"
 
-// New REPE header
-// TOD0: update the REPE code
-namespace glz
-{
-   struct Header
-   {
-      static constexpr size_t max_method_size = 256;
-
-      uint8_t version = 1; // the REPE version
-      bool error{}; // whether an error has occurred
-      bool notify{}; // whether this message does not require a response
-      bool has_body{}; // whether a body is provided
-      uint32_t reserved1{};
-      // ---
-      uint64_t id{}; // identifier
-      int64_t body_size = -1; // the total size of the body
-      uint32_t reserved2{};
-      uint16_t reserved3{};
-      // ---
-      uint16_t method_size{}; // the size of the method string
-      char method[max_method_size]{}; // the method name
-   };
-
-   static_assert((sizeof(Header) - Header::max_method_size) == 32);
-}
-
 namespace glz
 {
    namespace ip
