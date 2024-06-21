@@ -300,7 +300,7 @@ namespace glz
          }
       }
 
-      std::error_code connect(const std::string& address, int port)
+      [[nodiscard]] std::error_code connect(const std::string& address, const int port)
       {
          socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
          if (socket_fd == -1) {
@@ -321,14 +321,14 @@ namespace glz
          return {};
       }
 
-      bool no_delay()
+      [[nodiscard]] bool no_delay()
       {
          int flag = 1;
          int result = setsockopt(socket_fd, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
          return result == 0;
       }
 
-      std::error_code bind_and_listen(int port)
+      [[nodiscard]] std::error_code bind_and_listen(int port)
       {
          socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
          if (socket_fd == -1) {
@@ -349,7 +349,9 @@ namespace glz
          }
 
          set_non_blocking();
-         no_delay();
+         if (not no_delay()) {
+            return {ip_error::socket_bind_failed, ip_error_category::instance()};
+         }
 
          return {};
       }
@@ -459,7 +461,7 @@ namespace glz
       ~server() { active = false; }
 
       template <class AcceptCallback>
-      std::error_code accept(AcceptCallback&& callback)
+      [[nodiscard]] std::error_code accept(AcceptCallback&& callback)
       {
          glz::socket accept_socket{};
 
