@@ -97,6 +97,8 @@ suite socket_test = [] {
       std::cout << "\nFinished! Press any key to exit.";
       std::cin.get();
    }
+   
+   server.active = false;
 };
 
 int main() {
@@ -104,8 +106,6 @@ int main() {
       server.active = false;
       std::exit(0);
    });
-   
-   server.active = false;
    
    return 0;
 }
