@@ -31,8 +31,8 @@ using ssize_t = int64_t;
 #include <unistd.h>
 
 #include <cerrno>
-#define GLZ_CLOSESOCKET close
-#define GLZ_EVENT_CLOSE close
+#define GLZ_CLOSESOCKET ::close
+#define GLZ_EVENT_CLOSE ::close
 #define GLZ_WAIT_RESULT_TYPE int
 #define GLZ_WAIT_FAILED (-1)
 #define GLZ_INVALID_EVENT (-1)
@@ -322,13 +322,18 @@ namespace glz
       socket() = default;
 
       socket(GLZ_SOCKET fd) : socket_fd(fd) { set_non_blocking(); }
-
-      ~socket()
-      {
+      
+      void close() {
          if (socket_fd != -1) {
             std::ignore = write_value("disconnect");
             GLZ_CLOSESOCKET(socket_fd);
+            socket_fd = -1;
          }
+      }
+
+      ~socket()
+      {
+         close();
       }
 
       [[nodiscard]] std::error_code connect(const std::string& address, const int port)
