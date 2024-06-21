@@ -48,13 +48,7 @@ suite make_server = [] {
                return;
             }
             
-            if (received == "disconnect") {
-               std::cout << std::format("Client Disconnecting\n");
-               break;
-            }
-            else if (received.size()) {
-               std::cout << std::format("Server: {}\n", received);
-            }
+            std::cout << std::format("Server: {}\n", received);
          }
       });
 

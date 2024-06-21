@@ -265,7 +265,8 @@ namespace glz
       socket_connect_failed = 1001,
       socket_bind_failed = 1002,
       send_failed,
-      receive_failed
+      receive_failed,
+      client_disconnected
    };
 
    struct ip_error_category : public std::error_category
@@ -298,6 +299,8 @@ namespace glz
                return "send_failed";
             case receive_failed:
                return "receive_failed";
+            case client_disconnected:
+               return "client_disconnected";
          default:
             return "unknown_error";
          }
@@ -325,7 +328,6 @@ namespace glz
       
       void close() {
          if (socket_fd != -1) {
-            std::ignore = write_value("disconnect");
             GLZ_CLOSESOCKET(socket_fd);
          }
       }
@@ -410,6 +412,9 @@ namespace glz
                   return {ip_error::receive_failed, ip_error_category::instance()};
                }
             }
+            else if (bytes == 0) {
+               return {ip_error::client_disconnected, ip_error_category::instance()};
+            }
             
             total_bytes += bytes;
          }
@@ -429,6 +434,9 @@ namespace glz
                   buffer.clear();
                   return {ip_error::receive_failed, ip_error_category::instance()};
                }
+            }
+            else if (bytes == 0) {
+               return {ip_error::client_disconnected, ip_error_category::instance()};
             }
             
             total_bytes += bytes;
@@ -463,7 +471,7 @@ namespace glz
          static thread_local std::string buffer{}; // TODO: use a buffer pool
 
          if (auto ec = receive(buffer)) {
-            return {ip_error::receive_failed, ip_error_category::instance()};
+            return ec;
          }
 
          if (auto ec = glz::read_binary(std::forward<T>(value), buffer)) {
