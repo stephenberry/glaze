@@ -481,13 +481,15 @@ namespace glz
          for (auto rit = threads.rbegin(); rit < threads.rend();)
          {
             auto& future = *rit;
-            if (auto status = future.wait_for(std::chrono::milliseconds(0));
-                status == std::future_status::ready) {
-               rit = std::reverse_iterator(threads.erase(std::next(rit).base()));
+            if (future.valid()) {
+               if (auto status = future.wait_for(std::chrono::milliseconds(0));
+                   status == std::future_status::ready) {
+                  rit = std::reverse_iterator(threads.erase(std::next(rit).base()));
+               }
+               continue;
             }
-            else {
-               ++rit;
-            }
+            
+            ++rit;
          }
       }
    }
