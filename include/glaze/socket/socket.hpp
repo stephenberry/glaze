@@ -495,7 +495,7 @@ namespace glz
    template <opts Opts = opts{.format = binary}, class T>
    [[nodiscard]] std::error_code receive(socket& sckt, T&& value)
    {
-      static thread_local std::string buffer{}; // TODO: use a buffer pool
+      static thread_local std::string buffer{};
 
       Header header{};
       if (auto ec = sckt.receive(header, buffer)) {
@@ -512,7 +512,7 @@ namespace glz
    template <opts Opts = opts{.format = binary}, class T>
    [[nodiscard]] std::error_code send(socket& sckt, T&& value)
    {
-      static thread_local std::string buffer{}; // TODO: use a buffer pool
+      static thread_local std::string buffer{};
 
       if (auto ec = glz::write<Opts>(std::forward<T>(value), buffer)) {
          return {ip_error::send_failed, ip_error_category::instance()};
