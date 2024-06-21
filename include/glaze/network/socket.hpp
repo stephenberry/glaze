@@ -337,7 +337,7 @@ namespace glz
       [[nodiscard]] std::error_code bind_and_listen(int port)
       {
          socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
-         if (socket_fd == -1) {
+         if (socket_fd == GLZ_INVALID_SOCKET) {
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
 
