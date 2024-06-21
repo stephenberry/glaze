@@ -65,24 +65,25 @@ using ssize_t = int64_t;
 // TOD0: update the REPE code
 namespace glz
 {
-   struct Header {
+   struct Header
+   {
       static constexpr size_t max_method_size = 256;
-      
-     uint8_t version = 1; // the REPE version
-     bool error{}; // whether an error has occurred
-     bool notify{}; // whether this message does not require a response
-     bool has_body{}; // whether a body is provided
-     uint32_t reserved1{};
-     // ---
-     uint64_t id{}; // identifier
-     int64_t body_size = -1; // the total size of the body
-     uint32_t reserved2{};
-     uint16_t reserved3{};
+
+      uint8_t version = 1; // the REPE version
+      bool error{}; // whether an error has occurred
+      bool notify{}; // whether this message does not require a response
+      bool has_body{}; // whether a body is provided
+      uint32_t reserved1{};
       // ---
-     uint16_t method_size{}; // the size of the method string
-     char method[max_method_size]; // the method name
+      uint64_t id{}; // identifier
+      int64_t body_size = -1; // the total size of the body
+      uint32_t reserved2{};
+      uint16_t reserved3{};
+      // ---
+      uint16_t method_size{}; // the size of the method string
+      char method[max_method_size]{}; // the method name
    };
-   
+
    static_assert((sizeof(Header) - Header::max_method_size) == 32);
 }
 
@@ -295,12 +296,12 @@ namespace glz
             return "socket_connect_failed";
          case socket_bind_failed:
             return "socket_bind_failed";
-            case send_failed:
-               return "send_failed";
-            case receive_failed:
-               return "receive_failed";
-            case client_disconnected:
-               return "client_disconnected";
+         case send_failed:
+            return "send_failed";
+         case receive_failed:
+            return "receive_failed";
+         case client_disconnected:
+            return "client_disconnected";
          default:
             return "unknown_error";
          }
@@ -325,17 +326,15 @@ namespace glz
       socket() = default;
 
       socket(GLZ_SOCKET fd) : socket_fd(fd) { set_non_blocking(); }
-      
-      void close() {
+
+      void close()
+      {
          if (socket_fd != -1) {
             GLZ_CLOSESOCKET(socket_fd);
          }
       }
 
-      ~socket()
-      {
-         close();
-      }
+      ~socket() { close(); }
 
       [[nodiscard]] std::error_code connect(const std::string& address, const int port)
       {
@@ -398,8 +397,7 @@ namespace glz
          // first receive the header
          Header header{};
          size_t total_bytes{};
-         while (total_bytes < sizeof(Header))
-         {
+         while (total_bytes < sizeof(Header)) {
             ssize_t bytes = ::recv(socket_fd, &header + total_bytes, size_t(sizeof(Header) - total_bytes), 0);
             if (bytes == -1) {
                if (GLZ_SOCKET_ERROR_CODE == EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
@@ -415,10 +413,10 @@ namespace glz
             else if (bytes == 0) {
                return {ip_error::client_disconnected, ip_error_category::instance()};
             }
-            
+
             total_bytes += bytes;
          }
-         
+
          buffer.resize(header.body_size);
          total_bytes = 0;
          const auto n = size_t(header.body_size);
@@ -438,7 +436,7 @@ namespace glz
             else if (bytes == 0) {
                return {ip_error::client_disconnected, ip_error_category::instance()};
             }
-            
+
             total_bytes += bytes;
          }
          return {};
@@ -459,7 +457,7 @@ namespace glz
                   return {ip_error::send_failed, ip_error_category::instance()};
                }
             }
-            
+
             total_bytes += bytes;
          }
          return {};
@@ -489,13 +487,13 @@ namespace glz
          if (auto ec = glz::write_binary(std::forward<T>(value), buffer)) {
             return {ip_error::send_failed, ip_error_category::instance()};
          }
-         
+
          Header header{.body_size = int64_t(buffer.size())};
 
          if (auto ec = send(sv{(char*)(&header), sizeof(Header)})) {
             return ec;
          }
-         
+
          if (auto ec = send(buffer)) {
             return ec;
          }
@@ -503,9 +501,11 @@ namespace glz
          return {};
       }
    };
-   
-   namespace detail {
-      inline void server_thread_cleanup(std::vector<std::future<void>>& threads) {
+
+   namespace detail
+   {
+      inline void server_thread_cleanup(std::vector<std::future<void>>& threads)
+      {
          threads.erase(std::partition(threads.begin(), threads.end(),
                                       [](auto& future) {
                                          if (auto status = future.wait_for(std::chrono::milliseconds(0));
@@ -633,7 +633,7 @@ namespace glz
             }
 #endif
 
-               detail::server_thread_cleanup(threads);
+            detail::server_thread_cleanup(threads);
          }
 
          GLZ_EVENT_CLOSE(event_fd);
