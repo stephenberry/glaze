@@ -4,20 +4,21 @@
 #pragma once
 
 #ifdef _WIN32
+#define GLZ_CLOSE_SOCKET closesocket
+#define GLZ_EVENT_CLOSE WSACloseEvent
+#define GLZ_INVALID_EVENT WSA_INVALID_EVENT
 #define GLZ_INVALID_SOCKET INVALID_SOCKET
 #define GLZ_SOCKET SOCKET
-#define GLZ_INVALID_EVENT WSA_INVALID_EVENT
-#define GLZ_WAIT_RESULT_TYPE DWORD
+#define GLZ_SOCKET_ERROR GLZ_SOCKET_ERROR
+#define GLZ_SOCKET_ERROR_CODE WSAGetLastError()
 #define GLZ_WAIT_FAILED WSA_WAIT_FAILED
+#define GLZ_WAIT_RESULT_TYPE DWORD
 #define NOMINMAX
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
 #include <cstdint>
 #pragma comment(lib, "Ws2_32.lib")
-#define GLZ_CLOSESOCKET closesocket
-#define GLZ_EVENT_CLOSE WSACloseEvent
-#define GLZ_SOCKET_ERROR_CODE WSAGetLastError()
 using ssize_t = int64_t;
 #else
 #include <sys/socket.h>
@@ -31,15 +32,15 @@ using ssize_t = int64_t;
 #include <unistd.h>
 
 #include <cerrno>
-#define GLZ_CLOSESOCKET ::close
+#define GLZ_CLOSE_SOCKET ::close
 #define GLZ_EVENT_CLOSE ::close
-#define GLZ_WAIT_RESULT_TYPE int
-#define GLZ_WAIT_FAILED (-1)
 #define GLZ_INVALID_EVENT (-1)
-#define GLZ_SOCKET_ERROR_CODE errno
-#define GLZ_SOCKET int
-#define SOCKET_ERROR (-1)
 #define GLZ_INVALID_SOCKET (-1)
+#define GLZ_SOCKET int
+#define GLZ_SOCKET_ERROR (-1)
+#define GLZ_SOCKET_ERROR_CODE errno
+#define GLZ_WAIT_FAILED (-1)
+#define GLZ_WAIT_RESULT_TYPE int
 #endif
 
 #if defined(__APPLE__)
@@ -333,7 +334,7 @@ namespace glz
       void close()
       {
          if (socket_fd != -1) {
-            GLZ_CLOSESOCKET(socket_fd);
+            GLZ_CLOSE_SOCKET(socket_fd);
          }
       }
       
@@ -569,7 +570,7 @@ namespace glz
          ev.data.fd = accept_socket.socket_fd;
          event_setup_failed = epoll_ctl(event_fd, EPOLL_CTL_ADD, accept_socket.socket_fd, &ev) == -1;
 #elif defined(_WIN32)
-         event_setup_failed = WSAEventSelect(accept_socket.socket_fd, event_fd, FD_ACCEPT) == SOCKET_ERROR;
+         event_setup_failed = WSAEventSelect(accept_socket.socket_fd, event_fd, FD_ACCEPT) == GLZ_SOCKET_ERROR;
 #endif
 
          if (event_setup_failed) {
@@ -631,7 +632,7 @@ namespace glz
 
 #else // Windows
             WSANETWORKEVENTS events;
-            if (WSAEnumNetworkEvents(accept_socket.socket_fd, event_fd, &events) == SOCKET_ERROR) {
+            if (WSAEnumNetworkEvents(accept_socket.socket_fd, event_fd, &events) == GLZ_SOCKET_ERROR) {
                WSACloseEvent(event_fd);
                return {ip_error::event_enum_failed, ip_error_category::instance()};
             }
@@ -651,3 +652,13 @@ namespace glz
       }
    };
 }
+
+#undef GLZ_CLOSE_SOCKET
+#undef GLZ_EVENT_CLOSE
+#undef GLZ_INVALID_EVENT
+#undef GLZ_INVALID_SOCKET
+#undef GLZ_SOCKET
+#undef GLZ_SOCKET_ERROR
+#undef GLZ_SOCKET_ERROR_CODE
+#undef GLZ_WAIT_FAILED
+#undef GLZ_WAIT_RESULT_TYPE
