@@ -238,7 +238,9 @@ namespace glz
       event_wait_failed,
       event_enum_failed,
       socket_connect_failed = 1001,
-      socket_bind_failed = 1002
+      socket_bind_failed = 1002,
+      send_failed,
+      receive_failed
    };
 
    struct ip_error_category : public std::error_category
@@ -267,6 +269,10 @@ namespace glz
             return "socket_connect_failed";
          case socket_bind_failed:
             return "socket_bind_failed";
+            case send_failed:
+               return "send_failed";
+            case receive_failed:
+               return "receive_failed";
          default:
             return "unknown_error";
          }
@@ -356,7 +362,7 @@ namespace glz
          return {};
       }
 
-      ssize_t read(std::string& buffer)
+      std::error_code receive(std::string& buffer)
       {
          buffer.resize(4096); // allocate enough bytes for reading size from header
          uint64_t size = (std::numeric_limits<uint64_t>::max)();
@@ -372,28 +378,28 @@ namespace glz
                else {
                   // error
                   buffer.clear();
-                  return 0;
+                  return {ip_error::receive_failed, ip_error_category::instance()};
                }
             }
             else {
                total_bytes += bytes;
             }
 
-            if (total_bytes > 17 && not size_obtained) {
+            if (not size_obtained && total_bytes > 17) {
                std::tuple<std::tuple<uint8_t, uint8_t, int64_t>> header{};
                const auto ec = glz::read<glz::opts{.format = glz::binary, .partial_read = true}>(header, buffer);
                if (ec) {
-                  // error
+                  return {ip_error::receive_failed, ip_error_category::instance()};
                }
                size = std::get<2>(std::get<0>(header)); // reading size from header
                buffer.resize(size);
                size_obtained = true;
             }
          }
-         return buffer.size();
+         return {};
       }
 
-      ssize_t write(const std::string& buffer)
+      std::error_code send(const std::string& buffer)
       {
          const size_t size = buffer.size();
          size_t total_bytes{};
@@ -405,15 +411,14 @@ namespace glz
                   continue;
                }
                else {
-                  // error
-                  return bytes;
+                  return {ip_error::send_failed, ip_error_category::instance()};
                }
             }
             else {
                total_bytes += bytes;
             }
          }
-         return buffer.size();
+         return {};
       }
 
       template <class T>
@@ -421,7 +426,7 @@ namespace glz
       {
          static thread_local std::string buffer{}; // TODO: use a buffer pool
 
-         read(buffer);
+         receive(buffer);
 
          const auto ec = glz::read_binary(std::forward_as_tuple(repe::header{}, std::forward<T>(value)), buffer);
          if (ec) {
@@ -446,7 +451,7 @@ namespace glz
          const uint64_t size = buffer.size();
          std::memcpy(buffer.data() + 9, &size, sizeof(uint64_t));
 
-         write(buffer);
+         send(buffer);
 
          return buffer.size();
       }
