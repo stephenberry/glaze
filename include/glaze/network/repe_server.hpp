@@ -45,6 +45,9 @@ namespace glz
                while (active) {
                   if (auto ec = receive(socket, buffer)) {
                      std::fprintf(stderr, "%s\n", ec.message().c_str());
+                     if (ec.value() == ip_error::client_disconnected) {
+                        return;
+                     }
                   }
                   else {
                      auto response = registry.call(buffer);
