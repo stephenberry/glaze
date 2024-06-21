@@ -402,7 +402,7 @@ namespace glz
          // first receive the header
          size_t total_bytes{};
          while (total_bytes < sizeof(Header)) {
-            ssize_t bytes = ::recv(socket_fd, &header + total_bytes, size_t(sizeof(Header) - total_bytes), 0);
+            ssize_t bytes = ::recv(socket_fd, reinterpret_cast<char*>(&header) + total_bytes, size_t(sizeof(Header) - total_bytes), 0);
             if (bytes == -1) {
                if (GLZ_SOCKET_ERROR_CODE == EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
                   std::this_thread::sleep_for(std::chrono::milliseconds(1));
