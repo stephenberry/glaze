@@ -269,6 +269,9 @@ namespace glz
       receive_failed,
       client_disconnected
    };
+   
+   template <class T>
+   concept ip_header = std::same_as<T, uint64_t> || requires { T::body_size; };
 
    struct ip_error_category : public std::error_category
    {
@@ -311,7 +314,7 @@ namespace glz
    struct socket
    {
       GLZ_SOCKET socket_fd{GLZ_INVALID_SOCKET};
-
+      
       void set_non_blocking()
       {
 #ifdef _WIN32
@@ -322,80 +325,80 @@ namespace glz
          fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK);
 #endif
       }
-
+      
       socket() = default;
-
+      
       socket(GLZ_SOCKET fd) : socket_fd(fd) { set_non_blocking(); }
-
+      
       void close()
       {
          if (socket_fd != -1) {
             GLZ_CLOSESOCKET(socket_fd);
          }
       }
-
+      
       ~socket() { close(); }
-
+      
       [[nodiscard]] std::error_code connect(const std::string& address, const int port)
       {
          socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
          if (socket_fd == -1) {
             return {ip_error::socket_connect_failed, ip_error_category::instance()};
          }
-
+         
          sockaddr_in server_addr;
          server_addr.sin_family = AF_INET;
          server_addr.sin_port = htons(uint16_t(port));
          inet_pton(AF_INET, address.c_str(), &server_addr.sin_addr);
-
+         
          if (::connect(socket_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
             return {ip_error::socket_connect_failed, ip_error_category::instance()};
          }
-
+         
          set_non_blocking();
-
+         
          return {};
       }
-
+      
       [[nodiscard]] bool no_delay()
       {
          int flag = 1;
          int result = setsockopt(socket_fd, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
          return result == 0;
       }
-
+      
       [[nodiscard]] std::error_code bind_and_listen(int port)
       {
          socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
          if (socket_fd == -1) {
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
-
+         
          sockaddr_in server_addr;
          server_addr.sin_family = AF_INET;
          server_addr.sin_addr.s_addr = INADDR_ANY;
          server_addr.sin_port = htons(uint16_t(port));
-
+         
          if (::bind(socket_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
-
+         
          if (::listen(socket_fd, SOMAXCONN) == -1) {
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
-
+         
          set_non_blocking();
          if (not no_delay()) {
             return {ip_error::socket_bind_failed, ip_error_category::instance()};
          }
-
+         
          return {};
       }
-
-      [[nodiscard]] std::error_code receive(std::string& buffer)
+      
+      template <ip_header Header>
+      [[nodiscard]] std::error_code receive(Header& header, std::string& buffer)
       {
          // first receive the header
-         Header header{};
          size_t total_bytes{};
          while (total_bytes < sizeof(Header)) {
             ssize_t bytes = ::recv(socket_fd, &header + total_bytes, size_t(sizeof(Header) - total_bytes), 0);
@@ -413,11 +416,17 @@ namespace glz
             else if (bytes == 0) {
                return {ip_error::client_disconnected, ip_error_category::instance()};
             }
-
+            
             total_bytes += bytes;
          }
-
-         buffer.resize(header.body_size);
+         
+         if constexpr (std::same_as<Header, uint64_t>) {
+            buffer.resize(header);
+         }
+         else {
+            buffer.resize(header.body_size);
+         }
+         
          total_bytes = 0;
          const auto n = size_t(header.body_size);
          while (total_bytes < n) {
@@ -436,12 +445,12 @@ namespace glz
             else if (bytes == 0) {
                return {ip_error::client_disconnected, ip_error_category::instance()};
             }
-
+            
             total_bytes += bytes;
          }
          return {};
       }
-
+      
       [[nodiscard]] std::error_code send(const std::string_view buffer)
       {
          const size_t size = buffer.size();
@@ -457,47 +466,9 @@ namespace glz
                   return {ip_error::send_failed, ip_error_category::instance()};
                }
             }
-
+            
             total_bytes += bytes;
          }
-         return {};
-      }
-
-      template <class T>
-      [[nodiscard]] std::error_code read_value(T&& value)
-      {
-         static thread_local std::string buffer{}; // TODO: use a buffer pool
-
-         if (auto ec = receive(buffer)) {
-            return ec;
-         }
-
-         if (auto ec = glz::read_binary(std::forward<T>(value), buffer)) {
-            return {ip_error::receive_failed, ip_error_category::instance()};
-         }
-
-         return {};
-      }
-
-      template <class T>
-      [[nodiscard]] std::error_code write_value(T&& value)
-      {
-         static thread_local std::string buffer{}; // TODO: use a buffer pool
-
-         if (auto ec = glz::write_binary(std::forward<T>(value), buffer)) {
-            return {ip_error::send_failed, ip_error_category::instance()};
-         }
-
-         Header header{.body_size = int64_t(buffer.size())};
-
-         if (auto ec = send(sv{(char*)(&header), sizeof(Header)})) {
-            return ec;
-         }
-
-         if (auto ec = send(buffer)) {
-            return ec;
-         }
-
          return {};
       }
    };
@@ -516,6 +487,45 @@ namespace glz
                                       }),
                        threads.end());
       }
+   }
+      
+   template <opts Opts = opts{.format = binary}, class T>
+   [[nodiscard]] std::error_code receive(socket& sckt, T&& value)
+   {
+      static thread_local std::string buffer{}; // TODO: use a buffer pool
+
+      Header header{};
+      if (auto ec = sckt.receive(header, buffer)) {
+         return ec;
+      }
+
+      if (auto ec = glz::read<Opts>(std::forward<T>(value), buffer)) {
+         return {ip_error::receive_failed, ip_error_category::instance()};
+      }
+
+      return {};
+   }
+
+   template <opts Opts = opts{.format = binary}, class T>
+   [[nodiscard]] std::error_code send(socket& sckt, T&& value)
+   {
+      static thread_local std::string buffer{}; // TODO: use a buffer pool
+
+      if (auto ec = glz::write<Opts>(std::forward<T>(value), buffer)) {
+         return {ip_error::send_failed, ip_error_category::instance()};
+      }
+
+      Header header{.body_size = int64_t(buffer.size())};
+
+      if (auto ec = sckt.send(sv{reinterpret_cast<char*>(&header), sizeof(Header)})) {
+         return ec;
+      }
+
+      if (auto ec = sckt.send(buffer)) {
+         return ec;
+      }
+
+      return {};
    }
 
    struct server final
