@@ -52,7 +52,7 @@ namespace glz
                   else {
                      auto response = registry.call(buffer);
                      if (response) {
-                        if (auto ec = send(socket, buffer)) {
+                        if (auto ec = send(socket, response->value())) {
                            std::fprintf(stderr, "%s\n", ec.message().c_str());
                         }
                      }
