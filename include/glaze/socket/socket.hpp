@@ -426,18 +426,18 @@ namespace glz
             total_bytes += bytes;
          }
 
-         size_t n{};
+         size_t size{};
          if constexpr (std::same_as<Header, uint64_t>) {
-            n = header;
+            size = header;
          }
          else {
-            n = size_t(header.body_size);
+            size = size_t(header.body_size);
          }
 
-         buffer.resize(n);
+         buffer.resize(size);
 
          total_bytes = 0;
-         while (total_bytes < n) {
+         while (total_bytes < size) {
             ssize_t bytes = ::recv(socket_fd, buffer.data() + total_bytes, size_t(buffer.size() - total_bytes), 0);
             if (bytes == -1) {
                if (GLZ_SOCKET_ERROR_CODE == GLZ_EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
@@ -445,7 +445,6 @@ namespace glz
                   continue;
                }
                else {
-                  // error
                   buffer.clear();
                   return {ip_error::receive_failed, ip_error_category::instance()};
                }
