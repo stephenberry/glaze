@@ -22,7 +22,6 @@ namespace glz::repe
       std::variant<std::monostate, uint64_t, std::string_view> id{}; // an identifier
       static constexpr uint8_t version = 0; // the REPE version
       uint8_t error = 0; // 0 denotes no error (boolean: 0 or 1)
-      int64_t size = -1; // -1 denotes no size provided
 
       // Action: These booleans are packed into the a uint8_t action in the REPE header
       bool notify{}; // no response returned
@@ -49,7 +48,7 @@ struct glz::meta<glz::repe::header>
       return action;
    };
    static constexpr auto value =
-      glz::array(&T::version, &T::error, &T::size, custom<read_action, write_action>, &T::method, &T::id);
+      glz::array(&T::version, &T::error, custom<read_action, write_action>, &T::method, &T::id);
 };
 
 namespace glz::repe
