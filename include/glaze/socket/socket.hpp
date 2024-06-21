@@ -541,13 +541,10 @@ namespace glz
       int port{};
       std::atomic<bool> active = true;
       std::shared_future<std::error_code> async_accept_thread{};
-      std::vector<std::shared_future<void>> threads{};
+      std::vector<std::future<void>> threads{};
       
       ~server() {
          active = false;
-         for (auto& f : threads) {
-            f.get();
-         }
       }
 
       template <class AcceptCallback>
