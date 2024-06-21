@@ -327,7 +327,6 @@ namespace glz
          if (socket_fd != -1) {
             std::ignore = write_value("disconnect");
             GLZ_CLOSESOCKET(socket_fd);
-            socket_fd = -1;
          }
       }
 
