@@ -8,7 +8,7 @@
 void asio_client_test()
 {
    try {
-      constexpr auto N = 1;
+      constexpr auto N = 100;
       std::vector<glz::repe_client<>> clients;
       clients.reserve(N);
 
