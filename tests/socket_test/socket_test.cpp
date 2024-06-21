@@ -36,11 +36,17 @@ suite make_server = [] {
       const auto ec = server.accept([](glz::socket&& client, auto& active) {
          std::cout << "New client connected!\n";
 
-         client.write_value("Welcome!");
+         if (auto ec = client.write_value("Welcome!")) {
+            std::cerr << ec.message() << '\n';
+            return;
+         }
          
          while (active) {
             std::string received{};
-            client.read_value(received);
+            if (auto ec = client.read_value(received)) {
+               std::cerr << ec.message() << '\n';
+               return;
+            }
             
             if (received == "disconnect") {
                std::cout << std::format("Client Disconnecting\n");
@@ -74,12 +80,18 @@ suite socket_test = [] {
          }
          else {
             std::string received{};
-            socket.read_value(received);
+            if (auto ec = socket.read_value(received)) {
+               std::cerr << ec.message() << '\n';
+               return;
+            }
             std::cout << std::format("Received from server: {}\n", received);
 
             size_t tick{};
             while (tick < 3) {
-               socket.write_value(std::format("Client {}, {}", id, tick));
+               if (auto ec = socket.write_value(std::format("Client {}, {}", id, tick))) {
+                  std::cerr << ec.message() << '\n';
+                  return;
+               }
                std::this_thread::sleep_for(std::chrono::seconds(2));
                ++tick;
             }

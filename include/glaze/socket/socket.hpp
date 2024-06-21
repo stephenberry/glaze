@@ -326,7 +326,7 @@ namespace glz
       ~socket()
       {
          if (socket_fd != -1) {
-            write_value("disconnect");
+            std::ignore = write_value("disconnect");
             GLZ_CLOSESOCKET(socket_fd);
          }
       }
@@ -454,7 +454,7 @@ namespace glz
       }
 
       template <class T>
-      std::error_code read_value(T&& value)
+      [[nodiscard]] std::error_code read_value(T&& value)
       {
          static thread_local std::string buffer{}; // TODO: use a buffer pool
 
@@ -470,7 +470,7 @@ namespace glz
       }
 
       template <class T>
-      std::error_code write_value(T&& value)
+      [[nodiscard]] std::error_code write_value(T&& value)
       {
          static thread_local std::string buffer{}; // TODO: use a buffer pool
 
