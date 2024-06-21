@@ -423,15 +423,17 @@ namespace glz
             total_bytes += bytes;
          }
          
+         size_t n{};
          if constexpr (std::same_as<Header, uint64_t>) {
-            buffer.resize(header);
+            n = header;
          }
          else {
-            buffer.resize(header.body_size);
+            n = size_t(header.body_size);
          }
          
+         buffer.resize(n);
+         
          total_bytes = 0;
-         const auto n = size_t(header.body_size);
          while (total_bytes < n) {
             ssize_t bytes = ::recv(socket_fd, buffer.data() + total_bytes, size_t(buffer.size() - total_bytes), 0);
             if (bytes == -1) {
@@ -481,7 +483,7 @@ namespace glz
    {
       static thread_local std::string buffer{};
 
-      Header header{};
+      uint64_t header{};
       if (auto ec = sckt.receive(header, buffer)) {
          return ec;
       }
@@ -502,9 +504,9 @@ namespace glz
          return {ip_error::send_failed, ip_error_category::instance()};
       }
 
-      Header header{.body_size = int64_t(buffer.size())};
+      uint64_t header = uint64_t(buffer.size());
 
-      if (auto ec = sckt.send(sv{reinterpret_cast<char*>(&header), sizeof(Header)})) {
+      if (auto ec = sckt.send(sv{reinterpret_cast<char*>(&header), sizeof(header)})) {
          return ec;
       }
 
