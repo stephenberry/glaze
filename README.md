@@ -1,10 +1,6 @@
 # Glaze
 One of the fastest JSON libraries in the world. Glaze reads and writes from object memory, simplifying interfaces and offering incredible performance.
 
-> [!IMPORTANT]
->
-> Version 2.8.0 adds write error handling which matches the read API. [See v2.8.0 Release notes](https://github.com/stephenberry/glaze/releases/tag/v2.8.0)
-
 Glaze also supports:
 
 - [BEVE](https://github.com/beve-org/beve) (binary efficient versatile encoding)
