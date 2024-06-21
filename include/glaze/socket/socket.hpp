@@ -6,6 +6,7 @@
 #ifdef _WIN32
 #define GLZ_CLOSE_SOCKET closesocket
 #define GLZ_EVENT_CLOSE WSACloseEvent
+#define GLZ_EWOULDBLOCK WSAEWOULDBLOCK
 #define GLZ_INVALID_EVENT WSA_INVALID_EVENT
 #define GLZ_INVALID_SOCKET INVALID_SOCKET
 #define GLZ_SOCKET SOCKET
@@ -34,6 +35,7 @@ using ssize_t = int64_t;
 #include <cerrno>
 #define GLZ_CLOSE_SOCKET ::close
 #define GLZ_EVENT_CLOSE ::close
+#define GLZ_EWOULDBLOCK EWOULDBLOCK
 #define GLZ_INVALID_EVENT (-1)
 #define GLZ_INVALID_SOCKET (-1)
 #define GLZ_SOCKET int
@@ -404,7 +406,7 @@ namespace glz
          while (total_bytes < sizeof(Header)) {
             ssize_t bytes = ::recv(socket_fd, reinterpret_cast<char*>(&header) + total_bytes, size_t(sizeof(Header) - total_bytes), 0);
             if (bytes == -1) {
-               if (GLZ_SOCKET_ERROR_CODE == EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
+               if (GLZ_SOCKET_ERROR_CODE == GLZ_EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
                   std::this_thread::sleep_for(std::chrono::milliseconds(1));
                   continue;
                }
@@ -433,7 +435,7 @@ namespace glz
          while (total_bytes < n) {
             ssize_t bytes = ::recv(socket_fd, buffer.data() + total_bytes, size_t(buffer.size() - total_bytes), 0);
             if (bytes == -1) {
-               if (GLZ_SOCKET_ERROR_CODE == EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
+               if (GLZ_SOCKET_ERROR_CODE == GLZ_EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
                   std::this_thread::sleep_for(std::chrono::milliseconds(1));
                   continue;
                }
@@ -459,7 +461,7 @@ namespace glz
          while (total_bytes < size) {
             ssize_t bytes = ::send(socket_fd, buffer.data() + total_bytes, size_t(buffer.size() - total_bytes), 0);
             if (bytes == -1) {
-               if (GLZ_SOCKET_ERROR_CODE == EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
+               if (GLZ_SOCKET_ERROR_CODE == GLZ_EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
                   std::this_thread::yield();
                   continue;
                }
@@ -473,22 +475,6 @@ namespace glz
          return {};
       }
    };
-
-   namespace detail
-   {
-      inline void server_thread_cleanup(std::vector<std::future<void>>& threads)
-      {
-         threads.erase(std::partition(threads.begin(), threads.end(),
-                                               [](auto& future) {
-                                                  if (auto status = future.wait_for(std::chrono::milliseconds(0));
-                                                      status == std::future_status::ready) {
-                                                     return false;
-                                                  }
-                                                  return true;
-                                               }),
-                                threads.end());
-      }
-   }
       
    template <opts Opts = opts{.format = binary}, class T>
    [[nodiscard]] std::error_code receive(socket& sckt, T&& value)
@@ -527,6 +513,22 @@ namespace glz
       }
 
       return {};
+   }
+   
+   namespace detail
+   {
+      inline void server_thread_cleanup(std::vector<std::future<void>>& threads)
+      {
+         threads.erase(std::partition(threads.begin(), threads.end(),
+                                               [](auto& future) {
+                                                  if (auto status = future.wait_for(std::chrono::milliseconds(0));
+                                                      status == std::future_status::ready) {
+                                                     return false;
+                                                  }
+                                                  return true;
+                                               }),
+                                threads.end());
+      }
    }
 
    struct server final
@@ -664,6 +666,7 @@ namespace glz
 
 #undef GLZ_CLOSE_SOCKET
 #undef GLZ_EVENT_CLOSE
+#undef GLZ_EWOULDBLOCK
 #undef GLZ_INVALID_EVENT
 #undef GLZ_INVALID_SOCKET
 #undef GLZ_SOCKET
