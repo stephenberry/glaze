@@ -61,6 +61,31 @@ using ssize_t = int64_t;
 
 #include "glaze/rpc/repe.hpp"
 
+// New REPE header
+// TOD0: update the REPE code
+namespace glz
+{
+   struct Header {
+      static constexpr size_t max_method_size = 256;
+      
+     uint8_t version = 1; // the REPE version
+     bool error{}; // whether an error has occurred
+     bool notify{}; // whether this message does not require a response
+     bool has_body{}; // whether a body is provided
+     uint32_t reserved1{};
+     // ---
+     uint64_t id{}; // identifier
+     int64_t body_size = -1; // the total size of the body
+     uint32_t reserved2{};
+     uint16_t reserved3{};
+      // ---
+     uint16_t method_size{}; // the size of the method string
+     char method[max_method_size]; // the method name
+   };
+   
+   static_assert((sizeof(Header) - Header::max_method_size) == 32);
+}
+
 namespace glz
 {
    namespace ip
@@ -362,14 +387,14 @@ namespace glz
          return {};
       }
 
-      std::error_code receive(std::string& buffer)
+      [[nodiscard]] std::error_code receive(std::string& buffer)
       {
-         buffer.resize(4096); // allocate enough bytes for reading size from header
-         uint64_t size = (std::numeric_limits<uint64_t>::max)();
+         // first receive the header
+         Header header{};
          size_t total_bytes{};
-         bool size_obtained = false;
-         while (total_bytes < size) {
-            ssize_t bytes = ::recv(socket_fd, buffer.data() + total_bytes, uint16_t(buffer.size() - total_bytes), 0);
+         while (total_bytes < sizeof(Header))
+         {
+            ssize_t bytes = ::recv(socket_fd, &header + total_bytes, size_t(sizeof(Header) - total_bytes), 0);
             if (bytes == -1) {
                if (GLZ_SOCKET_ERROR_CODE == EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
                   std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -381,30 +406,38 @@ namespace glz
                   return {ip_error::receive_failed, ip_error_category::instance()};
                }
             }
-            else {
-               total_bytes += bytes;
-            }
-
-            if (not size_obtained && total_bytes > 17) {
-               std::tuple<std::tuple<uint8_t, uint8_t, int64_t>> header{};
-               const auto ec = glz::read<glz::opts{.format = glz::binary, .partial_read = true}>(header, buffer);
-               if (ec) {
+            
+            total_bytes += bytes;
+         }
+         
+         buffer.resize(header.body_size);
+         total_bytes = 0;
+         const auto n = size_t(header.body_size);
+         while (total_bytes < n) {
+            ssize_t bytes = ::recv(socket_fd, buffer.data() + total_bytes, size_t(buffer.size() - total_bytes), 0);
+            if (bytes == -1) {
+               if (GLZ_SOCKET_ERROR_CODE == EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                  continue;
+               }
+               else {
+                  // error
+                  buffer.clear();
                   return {ip_error::receive_failed, ip_error_category::instance()};
                }
-               size = std::get<2>(std::get<0>(header)); // reading size from header
-               buffer.resize(size);
-               size_obtained = true;
             }
+            
+            total_bytes += bytes;
          }
          return {};
       }
 
-      std::error_code send(const std::string& buffer)
+      [[nodiscard]] std::error_code send(const std::string_view buffer)
       {
          const size_t size = buffer.size();
          size_t total_bytes{};
          while (total_bytes < size) {
-            ssize_t bytes = ::send(socket_fd, buffer.data() + total_bytes, uint16_t(buffer.size() - total_bytes), 0);
+            ssize_t bytes = ::send(socket_fd, buffer.data() + total_bytes, size_t(buffer.size() - total_bytes), 0);
             if (bytes == -1) {
                if (GLZ_SOCKET_ERROR_CODE == EWOULDBLOCK || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
                   std::this_thread::yield();
@@ -414,46 +447,48 @@ namespace glz
                   return {ip_error::send_failed, ip_error_category::instance()};
                }
             }
-            else {
-               total_bytes += bytes;
-            }
+            
+            total_bytes += bytes;
          }
          return {};
       }
 
       template <class T>
-      ssize_t read_value(T&& value)
+      std::error_code read_value(T&& value)
       {
          static thread_local std::string buffer{}; // TODO: use a buffer pool
 
-         receive(buffer);
-
-         const auto ec = glz::read_binary(std::forward_as_tuple(repe::header{}, std::forward<T>(value)), buffer);
-         if (ec) {
-            // error
-            return 0;
+         if (auto ec = receive(buffer)) {
+            return {ip_error::receive_failed, ip_error_category::instance()};
          }
 
-         return buffer.size();
+         if (auto ec = glz::read_binary(std::forward<T>(value), buffer)) {
+            return {ip_error::receive_failed, ip_error_category::instance()};
+         }
+
+         return {};
       }
 
       template <class T>
-      ssize_t write_value(T&& value)
+      std::error_code write_value(T&& value)
       {
          static thread_local std::string buffer{}; // TODO: use a buffer pool
 
-         const auto ec = glz::write_binary(std::forward_as_tuple(repe::header{}, std::forward<T>(value)), buffer);
-         if (ec) {
-            // error
+         if (auto ec = glz::write_binary(std::forward<T>(value), buffer)) {
+            return {ip_error::send_failed, ip_error_category::instance()};
+         }
+         
+         Header header{.body_size = int64_t(buffer.size())};
+
+         if (auto ec = send(sv{(char*)(&header), sizeof(Header)})) {
+            return ec;
+         }
+         
+         if (auto ec = send(buffer)) {
+            return ec;
          }
 
-         // write into location of size
-         const uint64_t size = buffer.size();
-         std::memcpy(buffer.data() + 9, &size, sizeof(uint64_t));
-
-         send(buffer);
-
-         return buffer.size();
+         return {};
       }
    };
 
