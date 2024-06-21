@@ -478,15 +478,17 @@ namespace glz
    {
       inline void server_thread_cleanup(std::vector<std::future<void>>& threads)
       {
-         threads.erase(std::partition(threads.begin(), threads.end(),
-                                      [](auto& future) {
-                                         if (auto status = future.wait_for(std::chrono::milliseconds(0));
-                                             status == std::future_status::ready) {
-                                            return false;
-                                         }
-                                         return true;
-                                      }),
-                       threads.end());
+         for (auto rit = threads.rbegin(); rit < threads.rend();)
+         {
+            auto& future = *rit;
+            if (auto status = future.wait_for(std::chrono::milliseconds(0));
+                status == std::future_status::ready) {
+               rit = std::reverse_iterator(threads.erase(std::next(rit).base()));
+            }
+            else {
+               ++rit;
+            }
+         }
       }
    }
       
