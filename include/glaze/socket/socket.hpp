@@ -476,19 +476,17 @@ namespace glz
 
    namespace detail
    {
-      inline void server_thread_cleanup(std::deque<std::shared_future<void>>& threads)
+      inline void server_thread_cleanup(std::vector<std::future<void>>& threads)
       {
-         for (auto rit = threads.rbegin(); rit < threads.rend();)
-         {
-            auto& future = *rit;
-            if (auto status = future.wait_for(std::chrono::milliseconds(0));
-                status == std::future_status::ready) {
-               rit = std::reverse_iterator(threads.erase(std::next(rit).base()));
-            }
-            else {
-               ++rit;
-            }
-         }
+         threads.erase(std::partition(threads.begin(), threads.end(),
+                                               [](auto& future) {
+                                                  if (auto status = future.wait_for(std::chrono::milliseconds(0));
+                                                      status == std::future_status::ready) {
+                                                     return false;
+                                                  }
+                                                  return true;
+                                               }),
+                                threads.end());
       }
    }
       
@@ -534,7 +532,7 @@ namespace glz
    struct server final
    {
       int port{};
-      std::deque<std::shared_future<void>> threads{};
+      std::vector<std::future<void>> threads{};
       std::atomic<bool> active = true;
 
       ~server() { active = false; }

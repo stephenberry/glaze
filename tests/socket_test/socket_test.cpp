@@ -15,8 +15,6 @@ using namespace ut;
 
 constexpr bool user_input = false;
 
-std::future<void> server_thread{};
-
 constexpr auto n_clients = 10;
 constexpr auto service_0_port{8080};
 constexpr auto service_0_ip{"127.0.0.1"};
@@ -28,6 +26,7 @@ static std::atomic_int working_clients{n_clients};
 glz::windows_socket_startup_t<> wsa; // wsa_startup (ignored on macOS and Linux)
 
 glz::server server{service_0_port};
+std::future<void> server_thread{};
 
 suite make_server = [] {
    server_thread = std::async([&] {
