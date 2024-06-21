@@ -18,6 +18,9 @@ void asio_client_test()
       for (size_t i = 0; i < N; ++i) {
          clients.emplace_back(glz::repe_client<>{"127.0.0.1", 8080});
       }
+      
+      std::mutex mtx{};
+      std::vector<int> results{};
 
       for (size_t i = 0; i < N; ++i) {
          threads.emplace_back(std::async([&, i] {
@@ -40,13 +43,21 @@ void asio_client_test()
                std::cerr << glz::write_json(e_call).value_or("error") << '\n';
             }
             else {
+               std::unique_lock lock{mtx};
                std::cout << "i: " << i << ", " << sum << '\n';
+               results.emplace_back(sum);
             }
          }));
       }
 
       for (auto& t : threads) {
          t.get();
+      }
+      
+      for (auto v : results) {
+         if (v != 4950) {
+            std::abort();
+         }
       }
    }
    catch (const std::exception& e) {
