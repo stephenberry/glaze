@@ -278,10 +278,9 @@ namespace glz
 
    struct ip_error_category : public std::error_category
    {
-      static const ip_error_category& instance()
+      static ip_error_category instance()
       {
-         static ip_error_category instance{};
-         return instance;
+         return {};
       }
 
       const char* name() const noexcept override { return "ip_error_category"; }
