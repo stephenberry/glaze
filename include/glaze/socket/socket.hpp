@@ -290,6 +290,8 @@ namespace glz
       {
          using enum ip_error;
          switch (static_cast<ip_error>(ec)) {
+            case none:
+               return "none";
          case queue_create_failed:
             return "queue_create_failed";
          case event_ctl_failed:
