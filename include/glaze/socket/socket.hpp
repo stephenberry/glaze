@@ -279,10 +279,7 @@ namespace glz
    struct ip_error_category : public std::error_category
    {
       // MSVC deadlocks if this returns a static instance
-      static ip_error_category instance()
-      {
-         return {};
-      }
+      static ip_error_category instance() { return {}; }
 
       const char* name() const noexcept override { return "ip_error_category"; }
 
@@ -541,10 +538,8 @@ namespace glz
       std::atomic<bool> active = true;
       std::shared_future<std::error_code> async_accept_thread{};
       std::vector<std::future<void>> threads{};
-      
-      ~server() {
-         active = false;
-      }
+
+      ~server() { active = false; }
 
       template <class AcceptCallback>
       std::shared_future<std::error_code> async_accept(AcceptCallback&& callback)
