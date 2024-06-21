@@ -37,8 +37,10 @@ namespace glz
          server.port = port;
          
          auto ec = server.accept([this](socket&& socket, auto& active) {
-            // TODO: handle potential error
-            std::ignore = socket.no_delay();
+            if (not socket.no_delay()) {
+               std::printf("%s", "no_delay failed");
+               return;
+            }
             
             std::string buffer{};
 
