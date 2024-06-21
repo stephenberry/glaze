@@ -13,7 +13,7 @@ struct api
 
 #include <iostream>
 
-void run_server()
+int main()
 {
    std::cout << "Server active...\n";
 
@@ -28,11 +28,6 @@ void run_server()
    }
 
    std::cout << "Server closed...\n";
-}
-
-int main()
-{
-   run_server();
 
    return 0;
 }
