@@ -26,6 +26,8 @@
 #include "glaze/api/impl.hpp"
 #include "glaze/file/hostname_include.hpp"
 #include "glaze/file/raw_or_file.hpp"
+#include "glaze/file/read_directory.hpp"
+#include "glaze/file/write_directory.hpp"
 #include "glaze/hardware/volatile_array.hpp"
 #include "glaze/json.hpp"
 #include "glaze/json/study.hpp"
@@ -38,6 +40,9 @@
 using namespace ut;
 
 glz::trace trace{};
+suite start_trace = []{
+   trace.begin("json_test", "Full test suite duration.");
+};
 
 struct my_struct
 {
@@ -8439,12 +8444,21 @@ static_assert(glz::json_number<float>);
 static_assert(glz::json_integer<uint64_t>);
 static_assert(glz::json_null<std::nullptr_t>);
 
+suite directory_tests = [] {
+   "directory"_test = [] {
+      std::map<std::filesystem::path, my_struct> files{{"./dir/alpha.json", {}}, {"./dir/beta.json", {.i = 0}}};
+      expect(not glz::write_directory(files, "./dir"));
+      
+      std::map<std::filesystem::path, my_struct> input{};
+      expect(not glz::read_directory(input, "./dir"));
+      expect(input.size() == 2);
+      expect(input.contains("./dir/alpha.json"));
+      expect(input.contains("./dir/beta.json"));
+   };
+};
+
 int main()
 {
-   trace.begin("json_test", "Full test suite duration.");
-   // Explicitly run registered test suites and report errors
-   // This prevents potential issues with thread local variables
-
    trace.end("json_test");
    const auto ec = glz::write_file_json(trace, "json_test.trace.json", std::string{});
    if (ec) {
