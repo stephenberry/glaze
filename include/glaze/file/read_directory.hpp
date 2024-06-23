@@ -25,8 +25,8 @@ namespace glz
       requires detail::readable_map_t<std::decay_t<T>>
    [[nodiscard]] error_ctx read_directory(T& value, const sv directory_path) {
       std::unordered_map<std::filesystem::path, std::string> files{};
-      if (auto ec = directory_to_buffers(files, directory_path); bool(ec)) {
-         return {ec};
+      if (auto ec = directory_to_buffers(files, directory_path)) {
+         return ec;
       }
       
       for (auto&[path, content] : files) {
