@@ -8454,6 +8454,7 @@ suite directory_tests = [] {
       expect(input.size() == 2);
       expect(input.contains("./dir/alpha.json"));
       expect(input.contains("./dir/beta.json"));
+      expect(input["./dir/beta.json"].i == 0);
    };
 };
 
