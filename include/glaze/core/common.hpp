@@ -239,7 +239,7 @@ namespace glz
 
       template <class T>
       concept readable_map_t = !custom_read<T> && !meta_value_t<T> && !str_t<T> && range<T> &&
-                               pair_t<range_value_t<T>> && map_subscriptable<T>;
+                               pair_t<range_value_t<T>> && map_subscriptable<std::decay_t<T>>;
 
       template <class T>
       concept writable_map_t =
