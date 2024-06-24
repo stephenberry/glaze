@@ -79,6 +79,13 @@ struct fixed_object_t
    std::vector<double> double_array;
 };
 
+template <>
+struct glz::meta<fixed_object_t>
+{
+   using T = fixed_object_t;
+   static constexpr auto value = object(&T::int_array, &T::float_array, &T::double_array);
+};
+
 struct fixed_name_object_t
 {
    std::string name0{};
@@ -88,10 +95,24 @@ struct fixed_name_object_t
    std::string name4{};
 };
 
+template <>
+struct glz::meta<fixed_name_object_t>
+{
+   using T = fixed_name_object_t;
+   static constexpr auto value = object(&T::name0, &T::name1, &T::name2, &T::name3, &T::name4);
+};
+
 struct nested_object_t
 {
    std::vector<std::array<double, 3>> v3s{};
    std::string id{};
+};
+
+template <>
+struct glz::meta<nested_object_t>
+{
+   using T = nested_object_t;
+   static constexpr auto value = object(&T::v3s, &T::id);
 };
 
 struct another_object_t
@@ -101,6 +122,14 @@ struct another_object_t
    std::string escaped_text{};
    bool boolean{};
    nested_object_t nested_object{};
+};
+
+template <>
+struct glz::meta<another_object_t>
+{
+   using T = another_object_t;
+   static constexpr auto value =
+      object(&T::string, &T::another_string, &T::escaped_text, &T::boolean, &T::nested_object);
 };
 
 struct obj_t
@@ -113,35 +142,6 @@ struct obj_t
    double number{};
    bool boolean{};
    bool another_bool{};
-};
-
-template <>
-struct glz::meta<fixed_object_t>
-{
-   using T = fixed_object_t;
-   static constexpr auto value = object(&T::int_array, &T::float_array, &T::double_array);
-};
-
-template <>
-struct glz::meta<fixed_name_object_t>
-{
-   using T = fixed_name_object_t;
-   static constexpr auto value = object(&T::name0, &T::name1, &T::name2, &T::name3, &T::name4);
-};
-
-template <>
-struct glz::meta<nested_object_t>
-{
-   using T = nested_object_t;
-   static constexpr auto value = object(&T::v3s, &T::id);
-};
-
-template <>
-struct glz::meta<another_object_t>
-{
-   using T = another_object_t;
-   static constexpr auto value =
-      object(&T::string, &T::another_string, &T::escaped_text, &T::boolean, &T::nested_object);
 };
 
 template <>
