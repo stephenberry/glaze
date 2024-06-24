@@ -10,7 +10,7 @@
 
 namespace glz
 {
-   [[nodiscard]] error_ctx buffers_to_directory(const std::unordered_map<std::filesystem::path, std::string>& buffers,
+   [[nodiscard]] inline error_ctx buffers_to_directory(const std::unordered_map<std::filesystem::path, std::string>& buffers,
                                                 const sv directory)
    {
       namespace fs = std::filesystem;
