@@ -1676,7 +1676,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options, string_literal tag = "">
-         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             static constexpr auto num_members = reflection_count<T>;
             if constexpr (num_members == 0 && is_partial_read<T>) {
