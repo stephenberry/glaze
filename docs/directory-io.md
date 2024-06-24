@@ -2,6 +2,8 @@
 
 Glaze supports reading and writing from an entire directory of files into a map like object.
 
+`#include "glaze/glaze.hpp"` or specifically include: 
+
 - `#include "glaze/file/read_directory.hpp"` for read support
 - `#include "glaze/file/write_directory.hpp"` for write support
 

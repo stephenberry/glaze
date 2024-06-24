@@ -26,8 +26,6 @@
 #include "glaze/api/impl.hpp"
 #include "glaze/file/hostname_include.hpp"
 #include "glaze/file/raw_or_file.hpp"
-#include "glaze/file/read_directory.hpp"
-#include "glaze/file/write_directory.hpp"
 #include "glaze/hardware/volatile_array.hpp"
 #include "glaze/json.hpp"
 #include "glaze/json/study.hpp"
