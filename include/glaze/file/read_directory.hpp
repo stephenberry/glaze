@@ -11,7 +11,7 @@
 namespace glz
 {
    [[nodiscard]] inline error_ctx directory_to_buffers(std::unordered_map<std::filesystem::path, std::string>& files,
-                                                const sv directory_path)
+                                                       const sv directory_path)
    {
       for (const auto& entry : std::filesystem::directory_iterator(directory_path)) {
          if (entry.is_regular_file()) {
