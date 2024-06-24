@@ -1670,6 +1670,27 @@ namespace glz
             match<'}'>(ctx, it);
          }
       };
+      
+      template <opts Opts>
+      GLZ_ALWAYS_INLINE void read_json_visitor(auto&& value, auto&& variant, auto&& ctx, auto&& it, auto&& end) noexcept {
+         constexpr auto variant_size = std::variant_size_v<std::decay_t<decltype(variant)>>;
+         if constexpr (variant_size < 8) {
+            for_each_short_circuit<variant_size>([&](auto I) {
+               if (I == variant.index()) {
+                  read<json>::op<ws_handled<Opts>()>(get_member(value, std::get<I>(variant)), ctx, it, end);
+                  return true;
+               }
+               return false;
+            });
+         }
+         else {
+            std::visit(
+               [&](auto&& active) {
+                  read<json>::op<ws_handled<Opts>()>(get_member(value, active), ctx, it, end);
+               },
+               variant);
+         }
+      }
 
       template <class T>
          requires readable_map_t<T> || glaze_object_t<T> || reflectable<T>
@@ -1841,11 +1862,8 @@ namespace glz
                               auto index = member_it - frozen_map.begin();
                               fields[index] = true;
                            }
-                           std::visit(
-                              [&](auto&& member_ptr) {
-                                 read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
-                              },
-                              member_it->second);
+                           
+                           read_json_visitor<Opts>(value, member_it->second, ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                         }
@@ -1908,11 +1926,8 @@ namespace glz
                                  auto index = member_it - frozen_map.begin();
                                  fields[index] = true;
                               }
-                              std::visit(
-                                 [&](auto&& member_ptr) {
-                                    read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
-                                 },
-                                 member_it->second);
+
+                              read_json_visitor<ws_handled<Opts>()>(value, member_it->second, ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
                            }
