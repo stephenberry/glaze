@@ -150,7 +150,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Opts.ws_handled) {
                GLZ_SKIP_WS;
@@ -164,7 +164,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             GLZ_MATCH_QUOTE;
 
@@ -231,7 +231,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         GLZ_ALWAYS_INLINE static void op(auto&& v, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& v, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (!Options.ws_handled) {
@@ -338,7 +338,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts, class It>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
             if constexpr (Opts.quoted_num) {
                GLZ_SKIP_WS;
@@ -1676,7 +1676,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options, string_literal tag = "">
-         GLZ_FLATTEN static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
             static constexpr auto num_members = reflection_count<T>;
             if constexpr (num_members == 0 && is_partial_read<T>) {
