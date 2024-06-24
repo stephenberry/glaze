@@ -1675,20 +1675,13 @@ namespace glz
       GLZ_ALWAYS_INLINE void read_json_visitor(auto&& value, auto&& variant, auto&& ctx, auto&& it, auto&& end) noexcept
       {
          constexpr auto variant_size = std::variant_size_v<std::decay_t<decltype(variant)>>;
-         if constexpr (variant_size < 8) {
-            for_each_short_circuit<variant_size>([&](auto I) {
-               if (I == variant.index()) {
-                  read<json>::op<ws_handled<Opts>()>(get_member(value, std::get<I>(variant)), ctx, it, end);
-                  return true;
-               }
-               return false;
-            });
-         }
-         else {
-            std::visit(
-               [&](auto&& active) { read<json>::op<ws_handled<Opts>()>(get_member(value, active), ctx, it, end); },
-               variant);
-         }
+         for_each_short_circuit<variant_size>([&](auto I) {
+            if (I == variant.index()) {
+               read<json>::op<ws_handled<Opts>()>(get_member(value, std::get<I>(variant)), ctx, it, end);
+               return true;
+            }
+            return false;
+         });
       }
 
       template <class T>
