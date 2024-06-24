@@ -38,6 +38,9 @@
 using namespace ut;
 
 glz::trace trace{};
+suite start_trace = []{
+   trace.begin("json_test", "Full test suite duration.");
+};
 
 struct my_struct
 {
@@ -53,7 +56,7 @@ struct glz::meta<my_struct>
    static constexpr std::string_view name = "my_struct";
    using T = my_struct;
    static constexpr auto value = object(
-      "i", [](auto&& v) { return v.i; }, //
+      "i", [](auto&& v) -> auto& { return v.i; }, //
       "d", &T::d, //
       "hello", &T::hello, //
       "arr", &T::arr //
@@ -8439,12 +8442,22 @@ static_assert(glz::json_number<float>);
 static_assert(glz::json_integer<uint64_t>);
 static_assert(glz::json_null<std::nullptr_t>);
 
+suite directory_tests = [] {
+   "directory"_test = [] {
+      std::map<std::filesystem::path, my_struct> files{{"./dir/alpha.json", {}}, {"./dir/beta.json", {.i = 0}}};
+      expect(not glz::write_directory(files, "./dir"));
+      
+      std::map<std::filesystem::path, my_struct> input{};
+      expect(not glz::read_directory(input, "./dir"));
+      expect(input.size() == 2);
+      expect(input.contains("./dir/alpha.json"));
+      expect(input.contains("./dir/beta.json"));
+      expect(input["./dir/beta.json"].i == 0);
+   };
+};
+
 int main()
 {
-   trace.begin("json_test", "Full test suite duration.");
-   // Explicitly run registered test suites and report errors
-   // This prevents potential issues with thread local variables
-
    trace.end("json_test");
    const auto ec = glz::write_file_json(trace, "json_test.trace.json", std::string{});
    if (ec) {

@@ -25,7 +25,7 @@ namespace glz::detail
    bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept;
 
    template <class F, class T>
-      requires readable_map_t<std::decay_t<T>> || glaze_object_t<T> || reflectable<T>
+      requires readable_map_t<T> || glaze_object_t<T> || reflectable<T>
    bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept;
 
    template <class F, class T>
@@ -40,7 +40,7 @@ namespace glz::detail
 
    // TODO: compile time search for `~` and optimize if escape does not exist
    template <class F, class T>
-      requires readable_map_t<std::decay_t<T>> || glaze_object_t<T> || reflectable<T>
+      requires readable_map_t<T> || glaze_object_t<T> || reflectable<T>
    bool seek_impl(F&& func, T&& value, sv json_ptr) noexcept
    {
       if (json_ptr.empty()) {
