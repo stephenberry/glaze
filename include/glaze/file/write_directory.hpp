@@ -9,28 +9,31 @@
 #include "glaze/file/file_ops.hpp"
 
 namespace glz
-{   
-   [[nodiscard]] error_ctx buffers_to_directory(const std::unordered_map<std::filesystem::path, std::string>& buffers, const sv directory) {
+{
+   [[nodiscard]] error_ctx buffers_to_directory(const std::unordered_map<std::filesystem::path, std::string>& buffers,
+                                                const sv directory)
+   {
       namespace fs = std::filesystem;
-       if (not fs::exists(directory)) {
-           fs::create_directory(directory);
-       }
-      
-      for (auto&[path, content] : buffers) {
+      if (not fs::exists(directory)) {
+         fs::create_directory(directory);
+      }
+
+      for (auto& [path, content] : buffers) {
          return {buffer_to_file(content, path.string())};
       }
-      
+
       return {};
    }
-   
+
    template <opts Opts = opts{}, detail::writable_map_t T>
-   [[nodiscard]] error_ctx write_directory(T&& value, const sv directory_path) {
+   [[nodiscard]] error_ctx write_directory(T&& value, const sv directory_path)
+   {
       namespace fs = std::filesystem;
       if (not fs::exists(directory_path)) {
-          fs::create_directory(directory_path);
+         fs::create_directory(directory_path);
       }
-      
-      for (auto&[path, content] : value) {
+
+      for (auto& [path, content] : value) {
          using Path = std::decay_t<decltype(path)>;
          std::string buffer{};
          if constexpr (std::same_as<std::filesystem::path, Path>) {
@@ -47,7 +50,7 @@ namespace glz
             }
          }
       }
-      
+
       return {};
    }
 }

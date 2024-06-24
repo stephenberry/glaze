@@ -38,9 +38,7 @@
 using namespace ut;
 
 glz::trace trace{};
-suite start_trace = []{
-   trace.begin("json_test", "Full test suite duration.");
-};
+suite start_trace = [] { trace.begin("json_test", "Full test suite duration."); };
 
 struct my_struct
 {
@@ -8446,7 +8444,7 @@ suite directory_tests = [] {
    "directory"_test = [] {
       std::map<std::filesystem::path, my_struct> files{{"./dir/alpha.json", {}}, {"./dir/beta.json", {.i = 0}}};
       expect(not glz::write_directory(files, "./dir"));
-      
+
       std::map<std::filesystem::path, my_struct> input{};
       expect(not glz::read_directory(input, "./dir"));
       expect(input.size() == 2);
