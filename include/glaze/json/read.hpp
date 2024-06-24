@@ -1747,8 +1747,11 @@ namespace glz
                decltype(auto) frozen_map = [&]() -> decltype(auto) {
                   using V = decay_keep_volatile_t<decltype(value)>;
                   if constexpr (reflectable<T> && num_members > 0) {
+#if ((defined _MSC_VER) && (!defined __clang__))
+                     static thread_local auto cmap = make_map<V, Opts.use_hash_comparison>();
+#else
                      static thread_local constinit auto cmap = make_map<V, Opts.use_hash_comparison>();
-
+#endif
                      // We want to run this populate outside of the while loop
                      populate_map(value, cmap); // Function required for MSVC to build
                      return cmap;
