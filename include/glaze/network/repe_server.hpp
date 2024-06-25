@@ -4,6 +4,7 @@
 #pragma once
 
 #include "glaze/network/server.hpp"
+#include "glaze/network/socket_io.hpp"
 #include "glaze/rpc/repe.hpp"
 
 namespace glz
