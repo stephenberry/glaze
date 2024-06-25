@@ -5,11 +5,6 @@
 
 #include "glaze/network/socket.hpp"
 
-#if __has_include(<libfork/core.hpp>)
-#else
-static_assert("libfork is required for using glaze network code. The library must be included by the developer.");
-#endif
-
 #ifdef _WIN32
 #define GLZ_CLOSE_SOCKET closesocket
 #define GLZ_EVENT_CLOSE WSACloseEvent
