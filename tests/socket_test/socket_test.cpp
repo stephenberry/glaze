@@ -10,6 +10,7 @@
 #include <future>
 #include <latch>
 #include <thread>
+#include <atomic>
 
 #include "ut/ut.hpp"
 
