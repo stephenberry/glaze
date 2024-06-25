@@ -4,6 +4,7 @@
 #define UT_RUN_TIME_ONLY
 
 #include "glaze/network/server.hpp"
+#include "glaze/network/socket_io.hpp"
 
 #include <iostream>
 #include <future>
