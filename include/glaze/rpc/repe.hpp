@@ -740,7 +740,7 @@ namespace glz::repe
          static constexpr auto N = reflection_count<T>;
 
          [[maybe_unused]] decltype(auto) t = [&] {
-            if constexpr (reflectable<T>) {
+            if constexpr (reflectable<T> && requires { to_tuple(value); }) {
                return to_tuple(value);
             }
             else {
@@ -748,7 +748,8 @@ namespace glz::repe
             }
          }();
 
-         if constexpr (parent == root && (glaze_object_t<T> || reflectable<T>)) {
+         if constexpr (parent == root && (glaze_object_t<T> ||
+                                          reflectable<T>)&&!std::same_as<std::decay_t<decltype(t)>, std::nullptr_t>) {
             // build read/write calls to the top level object
             methods[root] = [&value, chain = get_chain(root)](repe::state&& state) mutable {
                if (not state.header.empty) {

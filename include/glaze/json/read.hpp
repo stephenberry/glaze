@@ -150,7 +150,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts, class... Args>
-         GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (!Opts.ws_handled) {
                GLZ_SKIP_WS;
@@ -164,7 +164,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             GLZ_MATCH_QUOTE;
 
@@ -231,7 +231,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Options>
-         GLZ_ALWAYS_INLINE static void op(auto&& v, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(auto&& v, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr auto Opts = ws_handled_off<Options>();
             if constexpr (!Options.ws_handled) {
@@ -275,7 +275,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts>
-         GLZ_ALWAYS_INLINE static void op(bool_t auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
+         static void op(bool_t auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             if constexpr (Opts.quoted_num) {
                GLZ_SKIP_WS;
@@ -338,7 +338,7 @@ namespace glz
       struct from_json<T>
       {
          template <auto Opts, class It>
-         GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
+         static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end) noexcept
          {
             if constexpr (Opts.quoted_num) {
                GLZ_SKIP_WS;
@@ -1671,6 +1671,19 @@ namespace glz
          }
       };
 
+      template <opts Opts>
+      GLZ_ALWAYS_INLINE void read_json_visitor(auto&& value, auto&& variant, auto&& ctx, auto&& it, auto&& end) noexcept
+      {
+         constexpr auto variant_size = std::variant_size_v<std::decay_t<decltype(variant)>>;
+         for_each_short_circuit<variant_size>([&](auto I) {
+            if (I == variant.index()) {
+               read<json>::op<ws_handled<Opts>()>(get_member(value, std::get<I>(variant)), ctx, it, end);
+               return true;
+            }
+            return false;
+         });
+      }
+
       template <class T>
          requires readable_map_t<T> || glaze_object_t<T> || reflectable<T>
       struct from_json<T>
@@ -1841,11 +1854,8 @@ namespace glz
                               auto index = member_it - frozen_map.begin();
                               fields[index] = true;
                            }
-                           std::visit(
-                              [&](auto&& member_ptr) {
-                                 read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
-                              },
-                              member_it->second);
+
+                           read_json_visitor<Opts>(value, member_it->second, ctx, it, end);
                            if (bool(ctx.error)) [[unlikely]]
                               return;
                         }
@@ -1908,11 +1918,8 @@ namespace glz
                                  auto index = member_it - frozen_map.begin();
                                  fields[index] = true;
                               }
-                              std::visit(
-                                 [&](auto&& member_ptr) {
-                                    read<json>::op<ws_handled<Opts>()>(get_member(value, member_ptr), ctx, it, end);
-                                 },
-                                 member_it->second);
+
+                              read_json_visitor<ws_handled<Opts>()>(value, member_it->second, ctx, it, end);
                               if (bool(ctx.error)) [[unlikely]]
                                  return;
                            }

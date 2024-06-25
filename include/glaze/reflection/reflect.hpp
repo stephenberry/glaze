@@ -107,7 +107,7 @@ namespace glz
       }
 
       template <reflectable T>
-      constexpr void populate_map(T&& value, auto& cmap) noexcept
+      GLZ_ALWAYS_INLINE constexpr void populate_map(T&& value, auto& cmap) noexcept
       {
          // we have to populate the pointers in the reflection map from the structured binding
          auto t = to_tuple(std::forward<T>(value));
