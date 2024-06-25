@@ -5,6 +5,7 @@
 
 #include "glaze/glaze.hpp"
 #include "glaze/network/socket.hpp"
+#include "glaze/core/error.hpp"
 
 namespace glz
 {
@@ -45,8 +46,7 @@ namespace glz
       }
 
       if (auto ec = glz::read<Opts>(std::forward<T>(value), buffer)) {
-         std::fprintf(stderr, "%s\n", glz::format_error(ec, buffer).c_str());
-         return {ip_error::receive_failed, ip_error_category::instance()};
+         return {int(ec.ec), error_category::instance()};
       }
 
       return {};
@@ -58,8 +58,7 @@ namespace glz
       static thread_local std::string buffer{};
 
       if (auto ec = glz::write<Opts>(std::forward<T>(value), buffer)) {
-         std::fprintf(stderr, "%s\n", glz::format_error(ec, buffer).c_str());
-         return {ip_error::send_failed, ip_error_category::instance()};
+         return {int(ec.ec), error_category::instance()};
       }
 
       uint64_t header = uint64_t(buffer.size());
