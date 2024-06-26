@@ -785,7 +785,7 @@ namespace glz
             size_t seconds{};
             size_t nanoseconds{1};
             if (tp > now) {
-               const auto time_left_ns = tp - now;
+               const auto time_left = tp - now;
                const auto s = std::chrono::duration_cast<std::chrono::seconds>(time_left);
                seconds = s.count();
                nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(time_left - s).count();
