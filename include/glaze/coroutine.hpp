@@ -8,3 +8,4 @@
 #include "glaze/coroutine/sync_wait.hpp"
 #include "glaze/coroutine/task.hpp"
 #include "glaze/coroutine/thread_pool.hpp"
+#include "glaze/coroutine/when_all.hpp"

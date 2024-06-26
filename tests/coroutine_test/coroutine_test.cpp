@@ -24,7 +24,7 @@ suite generator = [] {
 
       // Generate the next number until its greater than count to.
       for (auto val : gen()) {
-         //std::cout << val << ", ";
+         // std::cout << val << ", ";
          result += val;
 
          if (val >= count_to) {
@@ -49,7 +49,7 @@ suite thread_pool = [] {
    // it will execute directly on the calling thread.
    auto result = glz::sync_wait(make_task_inline(5));
    expect(result == 10);
-   //std::cout << "Inline Result = " << result << "\n";
+   // std::cout << "Inline Result = " << result << "\n";
 
    // We'll make a 1 thread glz::thread_pool to demonstrate offloading the task's
    // execution to another thread.  We'll capture the thread pool in the lambda,
@@ -65,7 +65,47 @@ suite thread_pool = [] {
    // glz::thread_pool since the coroutine task is immediately scheduled.
    result = glz::sync_wait(make_task_offload(10));
    expect(result == 20);
-   //std::cout << "Offload Result = " << result << "\n";
+   // std::cout << "Offload Result = " << result << "\n";
+};
+
+suite when_all = [] {
+   // Create a thread pool to execute all the tasks in parallel.
+   glz::thread_pool tp{glz::thread_pool::options{.thread_count = 4}};
+   // Create the task we want to invoke multiple times and execute in parallel on the thread pool.
+   auto twice = [&](uint64_t x) -> glz::task<uint64_t> {
+      co_await tp.schedule(); // Schedule onto the thread pool.
+      co_return x + x; // Executed on the thread pool.
+   };
+
+   // Make our tasks to execute, tasks can be passed in via a std::ranges::range type or var args.
+   std::vector<glz::task<uint64_t>> tasks{};
+   for (std::size_t i = 0; i < 5; ++i) {
+      tasks.emplace_back(twice(i + 1));
+   }
+
+   // Synchronously wait on this thread for the thread pool to finish executing all the tasks in parallel.
+   auto results = glz::sync_wait(glz::when_all(std::move(tasks)));
+   expect(results[0].return_value() == 2);
+   expect(results[1].return_value() == 4);
+   expect(results[2].return_value() == 6);
+   expect(results[3].return_value() == 8);
+   expect(results[4].return_value() == 10);
+
+   // Use var args instead of a container as input to glz::when_all.
+   auto square = [&](uint8_t x) -> glz::task<uint8_t> {
+      co_await tp.schedule();
+      co_return x * x;
+   };
+
+   // Var args allows you to pass in tasks with different return types and returns
+   // the result as a std::tuple.
+   auto tuple_results = glz::sync_wait(glz::when_all(square(2), twice(10)));
+
+   auto first = std::get<0>(tuple_results).return_value();
+   auto second = std::get<1>(tuple_results).return_value();
+
+   expect(first == 4);
+   expect(second == 20);
 };
 
 int main() { return 0; }
