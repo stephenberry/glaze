@@ -73,16 +73,6 @@ namespace glz::net
 #endif
    }
    
-   inline auto poll_wait(auto&&... args) {
-#if defined(__APPLE__)
-      return ::kevent(args...);
-#elif defined(__linux__)
-      return ::epoll_wait(args...);
-#elif defined(_WIN32)
-      return 0;
-#endif
-   }
-   
    inline file_handle_t create_event_poll() {
 #if defined(__APPLE__)
          return ::kqueue();

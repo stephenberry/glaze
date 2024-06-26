@@ -118,14 +118,17 @@ namespace glz
          e.filter = EVFILT_READ;
          e.flags = EV_ADD;
 
-         EV_SET(&e, shutdown_fd, EVFILT_READ, EV_ADD, 0, 0, const_cast<void*>(m_shutdown_ptr));
-         kevent(event_fd, &e, 1, NULL, 0, NULL);
+         e.data = intptr_t(m_shutdown_ptr);
+         EV_SET(&e, shutdown_fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
+         ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
 
-         EV_SET(&e, timer_fd, EVFILT_TIMER, EV_ADD, 0, 0, const_cast<void*>(m_timer_ptr));
-         kevent(event_fd, &e, 1, NULL, 0, NULL);
+         e.data = intptr_t(m_timer_ptr);
+         EV_SET(&e, timer_fd, EVFILT_TIMER, EV_ADD, 0, 0, nullptr);
+         ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
 
-         EV_SET(&e, schedule_fd, EVFILT_READ, EV_ADD, 0, 0, const_cast<void*>(m_schedule_ptr));
-         kevent(event_fd, &e, 1, NULL, 0, NULL);
+         e.data = intptr_t(m_schedule_ptr);
+         EV_SET(&e, schedule_fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
+         ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
 #endif
 
          if (m_opts.thread_strategy == thread_strategy_t::spawn) {
@@ -556,7 +559,7 @@ namespace glz
          };
          auto event_count = ::kevent(event_fd, nullptr, 0, m_events.data(), int(m_events.size()), &tlimit);
 #elif defined(__linux__)
-         auto event_count = poll_wait(event_fd, m_events.data(), m_max_events, timeout.count());
+         auto event_count = ::epoll_wait(event_fd, m_events.data(), m_max_events, timeout.count());
 #elif defined(_WIN32)
 #endif
 
@@ -566,7 +569,7 @@ namespace glz
 #if defined(__linux__)
                void* handle_ptr = event.data.ptr;
 #elif defined(__APPLE__)
-               void* handle_ptr = (void*)event.data;
+               void* handle_ptr = reinterpret_cast<void*>(event.data);
 #endif
 
                if (handle_ptr == m_timer_ptr) {
@@ -660,23 +663,23 @@ namespace glz
 
       /// Tasks that have their ownership passed into the scheduler.  This is a bit strange for now
       /// but the concept doesn't pass since io_scheduler isn't fully defined yet.
-      /// The type is coro::task_container<coro::io_scheduler>*
+      /// The type is coro::task_container<glz::io_scheduler>*
       /// Do not inline any functions that use this in the io_scheduler header, it can cause the linker
       /// to complain about "defined in discarded section" because it gets defined multiple times
       void* m_owned_tasks{nullptr};
 
-      static constexpr const int m_shutdown_object{0};
+      static constexpr int m_shutdown_object{0};
       static constexpr const void* m_shutdown_ptr = &m_shutdown_object;
 
-      static constexpr const int m_timer_object{0};
+      static constexpr int m_timer_object{0};
       static constexpr const void* m_timer_ptr = &m_timer_object;
 
-      static constexpr const int m_schedule_object{0};
+      static constexpr int m_schedule_object{0};
       static constexpr const void* m_schedule_ptr = &m_schedule_object;
 
-      static const constexpr std::chrono::milliseconds m_default_timeout{1000};
-      static const constexpr std::chrono::milliseconds m_no_timeout{0};
-      static const constexpr size_t m_max_events = 16;
+      static constexpr std::chrono::milliseconds m_default_timeout{1000};
+      static constexpr std::chrono::milliseconds m_no_timeout{0};
+      static constexpr size_t m_max_events = 16;
       std::array<net::poll_event_t, m_max_events> m_events{};
       std::vector<std::coroutine_handle<>> m_handles_to_resume{};
 
