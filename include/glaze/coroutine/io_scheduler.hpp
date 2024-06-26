@@ -65,9 +65,9 @@ namespace glz
          /// Should the io scheduler spawn a dedicated event processor?
          thread_strategy_t thread_strategy{thread_strategy_t::spawn};
          /// If spawning a dedicated event processor a functor to call upon that thread starting.
-         std::function<void()> on_io_thread_start_functor{nullptr};
+         std::function<void()> on_io_thread_start_functor{};
          /// If spawning a dedicated event processor a functor to call upon that thread stopping.
-         std::function<void()> on_io_thread_stop_functor{nullptr};
+         std::function<void()> on_io_thread_stop_functor{};
          /// Thread pool options for the task processor threads.  See thread pool for more details.
          thread_pool::options pool{
             .thread_count = ((std::thread::hardware_concurrency() > 1) ? (std::thread::hardware_concurrency() - 1) : 1),
@@ -423,7 +423,7 @@ namespace glz
       /**
        * @return The number of tasks waiting in the task queue + the executing tasks.
        */
-      auto size() const noexcept -> std::size_t
+      size_t size() const noexcept
       {
          if (m_opts.execution_strategy == execution_strategy_t::process_tasks_inline) {
             return n_active_tasks.load(std::memory_order::acquire);
@@ -436,7 +436,7 @@ namespace glz
       /**
        * @return True if the task queue is empty and zero tasks are currently executing.
        */
-      auto empty() const noexcept -> bool { return size() == 0; }
+      bool empty() const noexcept { return size() == 0; }
 
       /**
        * Starts the shutdown of the io scheduler.  All currently executing and pending tasks will complete
@@ -446,7 +446,7 @@ namespace glz
       {
          // Only allow shutdown to occur once.
          if (m_shutdown_requested.exchange(true, std::memory_order::acq_rel) == false) {
-            if (m_thread_pool != nullptr) {
+            if (m_thread_pool) {
                m_thread_pool->shutdown();
             }
 
