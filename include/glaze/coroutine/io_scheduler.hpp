@@ -5,11 +5,11 @@
 
 #pragma once
 
-#include "glaze/coroutine/file_descriptor.hpp"
 #include "glaze/coroutine/poll.hpp"
 #include "glaze/coroutine/poll_info.hpp"
 #include "glaze/coroutine/task_container.hpp"
 #include "glaze/coroutine/thread_pool.hpp"
+#include "glaze/network/core.hpp"
 
 #ifdef GLZ_FEATURE_NETWORKING
 #include "coro/net/socket.hpp"
@@ -25,17 +25,6 @@
 
 namespace glz
 {
-   // TODO: implement
-   using event_handle_t = int;
-   using poll_event_t = int;
-
-   // Linux
-   // using poll_event_t = struct epoll_event;
-   // using event_handle_t = eventfd_t;
-
-   // TODO: implement
-   int event_write(auto, auto) { return 0; }
-
    struct io_scheduler final
    {
       using timed_events = poll_info::timed_events;
@@ -92,24 +81,24 @@ namespace glz
                                          .on_thread_stop_functor = nullptr},
                                 .execution_strategy = execution_strategy_t::process_tasks_on_thread_pool})
          : m_opts(std::move(opts)),
-           m_epoll_fd(epoll_create1(EPOLL_CLOEXEC)),
-           m_shutdown_fd(eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)),
-           m_timer_fd(timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC)),
-           m_schedule_fd(eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK)),
-           m_owned_tasks(new coro::task_container<coro::io_scheduler>(*this))
+           event_fd(net::create_event_poll()),
+           shutdown_fd(net::create_shutdown_handle()),
+           timer_fd(net::create_timer_handle()),
+           schedule_fd(net::create_schedule_handle()),
+           m_owned_tasks(new glz::task_container<glz::io_scheduler>(*this))
       {
          if (opts.execution_strategy == execution_strategy_t::process_tasks_on_thread_pool) {
             m_thread_pool = std::make_unique<thread_pool>(std::move(m_opts.pool));
          }
 
-         epoll_event e{};
+         net::poll_event_t e{};
          e.events = EPOLLIN;
 
          e.data.ptr = const_cast<void*>(m_shutdown_ptr);
-         epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, m_shutdown_fd, &e);
+         epoll_ctl(event_fd, EPOLL_CTL_ADD, shutdown_fd, &e);
 
          e.data.ptr = const_cast<void*>(m_timer_ptr);
-         epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, m_timer_fd, &e);
+         epoll_ctl(event_fd, EPOLL_CTL_ADD, timer_fd, &e);
 
          e.data.ptr = const_cast<void*>(m_schedule_ptr);
          epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, m_schedule_fd, &e);
@@ -133,17 +122,17 @@ namespace glz
             m_io_thread.join();
          }
 
-         if (m_epoll_fd != -1) {
-            close(m_epoll_fd);
-            m_epoll_fd = -1;
+         if (event_fd != -1) {
+            close(event_fd);
+            event_fd = -1;
          }
-         if (m_timer_fd != -1) {
-            close(m_timer_fd);
-            m_timer_fd = -1;
+         if (timer_fd != -1) {
+            close(timer_fd);
+            timer_fd = -1;
          }
-         if (m_schedule_fd != -1) {
-            close(m_schedule_fd);
-            m_schedule_fd = -1;
+         if (schedule_fd != -1) {
+            close(schedule_fd);
+            schedule_fd = -1;
          }
 
          if (m_owned_tasks != nullptr) {
@@ -196,7 +185,7 @@ namespace glz
                if (m_scheduler.m_schedule_fd_triggered.compare_exchange_strong(
                       expected, true, std::memory_order::release, std::memory_order::relaxed)) {
                   event_handle_t value{1};
-                  event_write(m_scheduler.m_schedule_fd, value);
+                  event_write(m_scheduler.schedule_fd, value);
                }
             }
             else {
@@ -395,7 +384,7 @@ namespace glz
             if (m_schedule_fd_triggered.compare_exchange_strong(expected, true, std::memory_order::release,
                                                                 std::memory_order::relaxed)) {
                event_handle_t value{1};
-               event_write(m_schedule_fd, value);
+               event_write(schedule_fd, value);
             }
 
             return true;
@@ -462,13 +451,13 @@ namespace glz
       options m_opts;
 
       /// The event loop epoll file descriptor.
-      fd_t m_epoll_fd{-1};
+      fd_t event_fd{-1};
       /// The event loop fd to trigger a shutdown.
-      fd_t m_shutdown_fd{-1};
+      fd_t shutdown_fd{-1};
       /// The event loop timer fd for timed events, e.g. yield_for() or scheduler_after().
-      fd_t m_timer_fd{-1};
+      fd_t timer_fd{-1};
       /// The schedule file descriptor if the scheduler is in inline processing mode.
-      fd_t m_schedule_fd{-1};
+      fd_t schedule_fd{-1};
       std::atomic<bool> m_schedule_fd_triggered{false};
 
       /// The number of tasks executing or awaiting events in this io scheduler.
@@ -518,7 +507,7 @@ namespace glz
 
       void process_events_execute(std::chrono::milliseconds timeout)
       {
-         auto event_count = epoll_wait(m_epoll_fd, m_events.data(), m_max_events, timeout.count());
+         auto event_count = epoll_wait(event_fd, m_events.data(), m_max_events, timeout.count());
          if (event_count > 0) {
             for (std::size_t i = 0; i < static_cast<std::size_t>(event_count); ++i) {
                epoll_event& event = m_events[i];
@@ -588,7 +577,7 @@ namespace glz
 
             // Clear the schedule eventfd if this is a scheduled task.
             eventfd_t value{0};
-            eventfd_read(m_schedule_fd, &value);
+            eventfd_read(schedule_fd, &value);
 
             // Clear the in memory flag to reduce eventfd_* calls on scheduling.
             m_schedule_fd_triggered.exchange(false, std::memory_order::release);
@@ -757,7 +746,7 @@ namespace glz
             ts.it_value.tv_sec = seconds.count();
             ts.it_value.tv_nsec = nanoseconds.count();
 
-            if (timerfd_settime(m_timer_fd, 0, &ts, nullptr) == -1) {
+            if (timerfd_settime(timer_fd, 0, &ts, nullptr) == -1) {
                std::cerr << "Failed to set timerfd errorno=[" << std::string{strerror(errno)} << "].";
             }
          }
@@ -766,7 +755,7 @@ namespace glz
             itimerspec ts{};
             ts.it_value.tv_sec = 0;
             ts.it_value.tv_nsec = 0;
-            if (timerfd_settime(m_timer_fd, 0, &ts, nullptr) == -1) {
+            if (timerfd_settime(timer_fd, 0, &ts, nullptr) == -1) {
                std::cerr << "Failed to set timerfd errorno=[" << std::string{strerror(errno)} << "].";
             }
          }

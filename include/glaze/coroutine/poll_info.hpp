@@ -12,9 +12,9 @@
 #include <map>
 #include <optional>
 
-#include "glaze/coroutine/file_descriptor.hpp"
 #include "glaze/coroutine/poll.hpp"
 #include "glaze/coroutine/time.hpp"
+#include "glaze/network/core.hpp"
 
 namespace glz
 {
