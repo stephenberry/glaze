@@ -530,7 +530,7 @@ namespace glz
          };
          auto event_count = ::kevent(event_fd, nullptr, 0, m_events.data(), int(m_events.size()), &tlimit);
 #elif defined(__linux__)
-         auto event_count = ::epoll_wait(event_fd, m_events.data(), m_max_events, timeout.count());
+         auto event_count = ::epoll_wait(event_fd, m_events.data(), max_events, timeout.count());
 #elif defined(_WIN32)
 #endif
 
@@ -569,7 +569,7 @@ namespace glz
          // and an event for the same handle happen in the same epoll_wait() call then inline processing
          // will destruct the poll_info object before the second event is handled.  This is also possible
          // with thread pool processing, but probably has an extremely low chance of occuring due to
-         // the thread switch required.  If m_max_events == 1 this would be unnecessary.
+         // the thread switch required. If max_events == 1 this would be unnecessary.
 
          if (!m_handles_to_resume.empty()) {
             if (m_opts.execution_strategy == execution_strategy_t::process_tasks_inline) {
