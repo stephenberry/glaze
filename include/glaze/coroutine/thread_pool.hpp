@@ -68,12 +68,12 @@ namespace glz
           */
          void await_suspend(std::coroutine_handle<> awaiting_coroutine) noexcept
          {
-             m_awaiting_coroutine = awaiting_coroutine;
-             m_thread_pool.schedule_impl(m_awaiting_coroutine);
+            m_awaiting_coroutine = awaiting_coroutine;
+            m_thread_pool.schedule_impl(m_awaiting_coroutine);
 
-             // void return on await_suspend suspends the _this_ coroutine, which is now scheduled on the
-             // thread pool and returns control to the caller.  They could be sync_wait'ing or go do
-             // something else while this coroutine gets picked up by the thread pool.
+            // void return on await_suspend suspends the _this_ coroutine, which is now scheduled on the
+            // thread pool and returns control to the caller.  They could be sync_wait'ing or go do
+            // something else while this coroutine gets picked up by the thread pool.
          }
 
          /**
@@ -106,13 +106,13 @@ namespace glz
        */
       explicit thread_pool(options opts = options{.thread_count = std::thread::hardware_concurrency(),
                                                   .on_thread_start_functor = nullptr,
-                                                  .on_thread_stop_functor = nullptr}) : m_opts(std::move(opts))
+                                                  .on_thread_stop_functor = nullptr})
+         : m_opts(std::move(opts))
       {
          m_threads.reserve(m_opts.thread_count);
 
-         for (uint32_t i = 0; i < m_opts.thread_count; ++i)
-         {
-             m_threads.emplace_back([this, i]() { executor(i); });
+         for (uint32_t i = 0; i < m_opts.thread_count; ++i) {
+            m_threads.emplace_back([this, i]() { executor(i); });
          }
       }
 
@@ -121,9 +121,7 @@ namespace glz
       auto operator=(const thread_pool&) -> thread_pool& = delete;
       auto operator=(thread_pool&&) -> thread_pool& = delete;
 
-      virtual ~thread_pool() {
-         shutdown();
-      }
+      virtual ~thread_pool() { shutdown(); }
 
       /**
        * @return The number of executor threads for processing tasks.
@@ -139,11 +137,10 @@ namespace glz
        */
       [[nodiscard]] auto schedule() -> operation
       {
-          if (!m_shutdown_requested.load(std::memory_order::acquire))
-          {
-              m_size.fetch_add(1, std::memory_order::release);
-              return operation{*this};
-          }
+         if (!m_shutdown_requested.load(std::memory_order::acquire)) {
+            m_size.fetch_add(1, std::memory_order::release);
+            return operation{*this};
+         }
 
          GLZ_THROW_OR_ABORT(std::runtime_error("glz::thread_pool is shutting down, unable to schedule new tasks."));
       }
@@ -171,24 +168,30 @@ namespace glz
       /**
        * Schedules any coroutine handle that is ready to be resumed.
        * @param handle The coroutine handle to schedule.
+       * @return True if the coroutine is resumed, false if its a nullptr.
        */
-      void resume(std::coroutine_handle<> handle) noexcept
+      bool resume(std::coroutine_handle<> handle) noexcept
       {
-          if (handle == nullptr)
-          {
-              return;
-          }
+         if (handle == nullptr) {
+            return false;
+         }
 
-          m_size.fetch_add(1, std::memory_order::release);
-          schedule_impl(handle);
+         if (m_shutdown_requested.load(std::memory_order::acquire)) {
+            return false;
+         }
+
+         m_size.fetch_add(1, std::memory_order::release);
+         schedule_impl(handle);
+         return true;
       }
 
       /**
        * Schedules the set of coroutine handles that are ready to be resumed.
        * @param handles The coroutine handles to schedule.
+       * @param uint64_t The number of tasks resumed, if any where null they are discarded.
        */
       template <range_of<std::coroutine_handle<>> range_type>
-      auto resume(const range_type& handles) noexcept -> void
+      uint64_t resume(const range_type& handles) noexcept
       {
          m_size.fetch_add(std::size(handles), std::memory_order::release);
 
@@ -210,7 +213,17 @@ namespace glz
             m_size.fetch_sub(null_handles, std::memory_order::release);
          }
 
-         m_wait_cv.notify_one();
+         uint64_t total = std::size(handles) - null_handles;
+         if (total >= m_threads.size()) {
+            m_wait_cv.notify_all();
+         }
+         else {
+            for (uint64_t i = 0; i < total; ++i) {
+               m_wait_cv.notify_one();
+            }
+         }
+
+         return total;
       }
 
       /**
@@ -228,24 +241,21 @@ namespace glz
        */
       void shutdown() noexcept
       {
-          // Only allow shutdown to occur once.
-          if (m_shutdown_requested.exchange(true, std::memory_order::acq_rel) == false)
-          {
-              {
-                  // There is a race condition if we are not holding the lock with the executors
-                  // to always receive this.  std::jthread stop token works without this properly.
-                  std::unique_lock<std::mutex> lk{m_wait_mutex};
-                  m_wait_cv.notify_all();
-              }
+         // Only allow shutdown to occur once.
+         if (m_shutdown_requested.exchange(true, std::memory_order::acq_rel) == false) {
+            {
+               // There is a race condition if we are not holding the lock with the executors
+               // to always receive this.  std::jthread stop token works without this properly.
+               std::unique_lock<std::mutex> lk{m_wait_mutex};
+               m_wait_cv.notify_all();
+            }
 
-              for (auto& thread : m_threads)
-              {
-                  if (thread.joinable())
-                  {
-                      thread.join();
-                  }
-              }
-          }
+            for (auto& thread : m_threads) {
+               if (thread.joinable()) {
+                  thread.join();
+               }
+            }
+         }
       }
 
       /**
@@ -289,57 +299,65 @@ namespace glz
        */
       void executor(std::size_t idx)
       {
-          if (m_opts.on_thread_start_functor != nullptr)
-          {
-              m_opts.on_thread_start_functor(idx);
-          }
+         if (m_opts.on_thread_start_functor != nullptr) {
+            m_opts.on_thread_start_functor(idx);
+         }
 
-          // Process until shutdown is requested and the total number of tasks reaches zero.
-          while (!m_shutdown_requested.load(std::memory_order::acquire) || m_size.load(std::memory_order::acquire) > 0)
-          {
-              std::unique_lock<std::mutex> lk{m_wait_mutex};
-              m_wait_cv.wait(
-                  lk,
-                  [&] {
-                      return m_size.load(std::memory_order::acquire) > 0 ||
-                             m_shutdown_requested.load(std::memory_order::acquire);
-                  });
-              // Process this batch until the queue is empty.
-              while (!m_queue.empty())
-              {
-                  auto handle = m_queue.front();
-                  m_queue.pop_front();
+         // Process until shutdown is requested.
+         while (!m_shutdown_requested.load(std::memory_order::acquire)) {
+            std::unique_lock<std::mutex> lk{m_wait_mutex};
+            m_wait_cv.wait(lk,
+                           [&]() { return !m_queue.empty() || m_shutdown_requested.load(std::memory_order::acquire); });
 
-                  // Release the lock while executing the coroutine.
-                  lk.unlock();
-                  handle.resume();
+            if (m_queue.empty()) {
+               continue;
+            }
 
-                  m_size.fetch_sub(1, std::memory_order::release);
-                  lk.lock();
-              }
-          }
+            auto handle = m_queue.front();
+            m_queue.pop_front();
+            lk.unlock();
 
-          if (m_opts.on_thread_stop_functor != nullptr)
-          {
-              m_opts.on_thread_stop_functor(idx);
-          }
+            // Release the lock while executing the coroutine.
+            handle.resume();
+            m_size.fetch_sub(1, std::memory_order::release);
+         }
+
+         // Process until there are no ready tasks left.
+         while (m_size.load(std::memory_order::acquire) > 0) {
+            std::unique_lock<std::mutex> lk{m_wait_mutex};
+            // m_size will only drop to zero once all executing coroutines are finished
+            // but the queue could be empty for threads that finished early.
+            if (m_queue.empty()) {
+               break;
+            }
+
+            auto handle = m_queue.front();
+            m_queue.pop_front();
+            lk.unlock();
+
+            // Release the lock while executing the coroutine.
+            handle.resume();
+            m_size.fetch_sub(1, std::memory_order::release);
+         }
+
+         if (m_opts.on_thread_stop_functor != nullptr) {
+            m_opts.on_thread_stop_functor(idx);
+         }
       }
       /**
        * @param handle Schedules the given coroutine to be executed upon the first available thread.
        */
       void schedule_impl(std::coroutine_handle<> handle) noexcept
       {
-          if (handle == nullptr)
-          {
-              return;
-          }
+         if (handle == nullptr) {
+            return;
+         }
 
-          {
-              std::scoped_lock lk{m_wait_mutex};
-              m_queue.emplace_back(handle);
-          }
-
-          m_wait_cv.notify_one();
+         {
+            std::scoped_lock lk{m_wait_mutex};
+            m_queue.emplace_back(handle);
+            m_wait_cv.notify_one();
+         }
       }
 
       /// The number of tasks in the queue + currently executing.

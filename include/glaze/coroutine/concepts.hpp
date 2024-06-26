@@ -34,7 +34,7 @@ namespace glz
                          } -> awaiter;
                          {
                             t.resume(c)
-                         } -> std::same_as<void>;
+                         } -> std::same_as<bool>;
                       };
 
    template <class T>
