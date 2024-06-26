@@ -8,6 +8,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <coroutine>
 #include <map>
 #include <optional>
