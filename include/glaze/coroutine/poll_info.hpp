@@ -59,7 +59,7 @@ namespace glz
 
       /// The file descriptor being polled on.  This is needed so that if the timeout occurs first then
       /// the event loop can immediately disable the event within epoll.
-      net::file_handle_t m_fd{-1};
+      net::file_handle_t m_fd{net::invalid_file_handle};
       /// The timeout's position in the timeout map.  A poll() with no timeout or yield() this is empty.
       /// This is needed so that if the event occurs first then the event loop can immediately disable
       /// the timeout within epoll.

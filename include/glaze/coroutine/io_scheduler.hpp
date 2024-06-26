@@ -466,13 +466,13 @@ namespace glz
       options m_opts;
 
       /// The event loop epoll file descriptor.
-      net::file_handle_t event_fd{-1};
+      net::file_handle_t event_fd{net::invalid_file_handle};
       /// The event loop fd to trigger a shutdown.
-      net::file_handle_t shutdown_fd{-1};
+      net::file_handle_t shutdown_fd{net::invalid_file_handle};
       /// The event loop timer fd for timed events, e.g. yield_for() or scheduler_after().
-      net::file_handle_t timer_fd{-1};
+      net::file_handle_t timer_fd{net::invalid_file_handle};
       /// The schedule file descriptor if the scheduler is in inline processing mode.
-      net::file_handle_t schedule_fd{-1};
+      net::file_handle_t schedule_fd{net::invalid_file_handle};
       std::atomic<bool> m_schedule_fd_triggered{false};
 
       /// The number of tasks executing or awaiting events in this io scheduler.

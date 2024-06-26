@@ -33,9 +33,11 @@ namespace glz::net
 {
 #ifdef _WIN32
    using file_handle_t = unsigned int;
+   constexpr unsigned int invalid_file_handle = 0;
    using ssize_t = int64_t;
 #else
    using file_handle_t = int;
+   constexpr int invalid_file_handle = -1;
 #endif
    
 #if defined(__APPLE__)

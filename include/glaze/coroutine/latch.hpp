@@ -28,7 +28,7 @@ namespace glz
        * @param count The number of tasks to wait to complete, if this is zero or negative then the
        *              latch starts 'completed' immediately and execution is resumed with no suspension.
        */
-      latch(std::int64_t count) noexcept : m_count(count), m_event(count <= 0) {}
+      latch(int64_t count) noexcept : m_count(count), m_event(count <= 0) {}
 
       latch(const latch&) = delete;
       latch(latch&&) = delete;
