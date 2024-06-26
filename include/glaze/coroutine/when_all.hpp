@@ -18,9 +18,8 @@ namespace glz
 {
    namespace detail
    {
-      class when_all_latch
+      struct when_all_latch
       {
-        public:
          when_all_latch(std::size_t count) noexcept : m_count(count + 1) {}
 
          when_all_latch(const when_all_latch&) = delete;
@@ -66,16 +65,15 @@ namespace glz
       };
 
       template <typename task_container_type>
-      class when_all_ready_awaitable;
+      struct when_all_ready_awaitable;
 
       template <typename return_type>
-      class when_all_task;
+      struct when_all_task;
 
       /// Empty tuple<> implementation.
       template <>
-      class when_all_ready_awaitable<std::tuple<>>
+      struct when_all_ready_awaitable<std::tuple<>>
       {
-        public:
          constexpr when_all_ready_awaitable() noexcept {}
          explicit constexpr when_all_ready_awaitable(std::tuple<>) noexcept {}
 
@@ -85,9 +83,8 @@ namespace glz
       };
 
       template <typename... task_types>
-      class when_all_ready_awaitable<std::tuple<task_types...>>
+      struct when_all_ready_awaitable<std::tuple<task_types...>>
       {
-        public:
          explicit when_all_ready_awaitable(task_types&&... tasks) noexcept(
             std::conjunction<std::is_nothrow_move_constructible<task_types>...>::value)
             : m_latch(sizeof...(task_types)), m_tasks(std::move(tasks)...)
@@ -164,9 +161,8 @@ namespace glz
       };
 
       template <typename task_container_type>
-      class when_all_ready_awaitable
+      struct when_all_ready_awaitable
       {
-        public:
          explicit when_all_ready_awaitable(task_container_type&& tasks) noexcept
             : m_latch(std::size(tasks)), m_tasks(std::forward<task_container_type>(tasks))
          {}
@@ -241,9 +237,8 @@ namespace glz
       };
 
       template <typename return_type>
-      class when_all_task_promise
+      struct when_all_task_promise
       {
-        public:
          using coroutine_handle_type = std::coroutine_handle<when_all_task_promise<return_type>>;
 
          when_all_task_promise() noexcept {}
@@ -312,9 +307,8 @@ namespace glz
       };
 
       template <>
-      class when_all_task_promise<void>
+      struct when_all_task_promise<void>
       {
-        public:
          using coroutine_handle_type = std::coroutine_handle<when_all_task_promise<void>>;
 
          when_all_task_promise() noexcept {}
@@ -361,12 +355,11 @@ namespace glz
       };
 
       template <typename return_type>
-      class when_all_task
+      struct when_all_task
       {
-        public:
          // To be able to call start().
          template <typename task_container_type>
-         friend class when_all_ready_awaitable;
+         friend struct when_all_ready_awaitable;
 
          using promise_type = when_all_task_promise<return_type>;
          using coroutine_handle_type = typename promise_type::coroutine_handle_type;

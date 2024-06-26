@@ -40,16 +40,15 @@ namespace glz
     * the thread pool will stop accepting new tasks but will complete all tasks that were scheduled
     * prior to the shutdown request.
     */
-   class thread_pool
+   struct thread_pool
    {
-     public:
       /**
        * An operation is an awaitable type with a coroutine to resume the task scheduled on one of
        * the executor threads.
        */
       class operation
       {
-         friend class thread_pool;
+         friend struct thread_pool;
          /**
           * Only thread_pools can create operations when a task is being scheduled.
           * @param tp The thread pool that created this operation.
