@@ -11,15 +11,11 @@
 
 namespace glz
 {   
-   enum struct poll_op : uint64_t {
-      read = net::poll_in,
-      write = net::poll_out,
-      read_write = net::poll_in | net::poll_out
+   enum struct poll_op : uint32_t {
+      read,
+      write,
+      read_write
    };
-
-   inline bool poll_op_readable(poll_op op) { return (uint64_t(op) & net::poll_in); }
-
-   inline bool poll_op_writeable(poll_op op) { return (uint64_t(op) & net::poll_out); }
 
    std::string to_string(poll_op op)
    {

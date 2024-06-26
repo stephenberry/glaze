@@ -590,7 +590,7 @@ namespace glz
          if (events & net::poll_in || events & net::poll_out) {
             return poll_status::event;
          }
-         else if (events & net::poll_error) {
+         else if (net::poll_error(events)) {
             return poll_status::error;
          }
          else if (net::event_closed(events)) {
