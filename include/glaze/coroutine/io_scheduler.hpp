@@ -183,13 +183,13 @@ namespace glz
 
       struct schedule_operation
       {
-         friend struct io_scheduler;
-         explicit schedule_operation(io_scheduler& scheduler) noexcept : m_scheduler(scheduler) {}
+         /// The thread pool that this operation will execute on.
+         io_scheduler& m_scheduler;
 
          /**
           * Operations always pause so the executing thread can be switched.
           */
-         auto await_ready() noexcept -> bool { return false; }
+         bool await_ready() noexcept { return false; }
 
          /**
           * Suspending always returns to the caller (using void return of await_suspend()) and
@@ -226,10 +226,6 @@ namespace glz
           * no-op as this is the function called first by the thread pool's executing thread.
           */
          auto await_resume() noexcept -> void {}
-
-        private:
-         /// The thread pool that this operation will execute on.
-         io_scheduler& m_scheduler;
       };
 
       /**
