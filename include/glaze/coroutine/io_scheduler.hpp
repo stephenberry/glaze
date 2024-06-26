@@ -529,9 +529,9 @@ namespace glz
          {
             0, timeout.count() * 1'000'000
          };
-         auto event_count = ::kevent(event_fd, nullptr, 0, m_events.data(), int(m_events.size()), &tlimit);
+         const auto event_count = ::kevent(event_fd, nullptr, 0, m_events.data(), int(m_events.size()), &tlimit);
 #elif defined(__linux__)
-         auto event_count = ::epoll_wait(event_fd, m_events.data(), max_events, timeout.count());
+         const auto event_count = ::epoll_wait(event_fd, m_events.data(), max_events, timeout.count());
 #elif defined(_WIN32)
 #endif
 
