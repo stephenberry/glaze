@@ -389,7 +389,7 @@ namespace glz
        */
       auto resume(std::coroutine_handle<> handle) -> bool
       {
-         if (handle == nullptr) {
+         if (not handle) {
             return false;
          }
 
@@ -811,7 +811,7 @@ namespace glz
             {};
             EV_SET(&e, 1, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, milliseconds, nullptr);
             if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
-               perror("kevent (update timer)");
+               std::cerr << "kevent (update timer)\n";
             }
 #endif
          }
@@ -829,7 +829,7 @@ namespace glz
             {};
             EV_SET(&e, 1, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, 0, nullptr);
             if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
-               perror("kevent (update timer)");
+               std::cerr << "kevent (update timer)\n";
             }
 #endif
          }
