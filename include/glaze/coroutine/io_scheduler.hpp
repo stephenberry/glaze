@@ -26,7 +26,6 @@
 
 #include <chrono>
 #include <functional>
-#include <map>
 #include <memory>
 #include <optional>
 #include <thread>
@@ -648,7 +647,7 @@ namespace glz
 
       void process_event_execute(poll_info* pi, poll_status status)
       {
-         if (!pi->m_processed) {
+         if (not pi->m_processed) {
             std::atomic_thread_fence(std::memory_order::acquire);
             // Its possible the event and the timeout occurred in the same epoll, make sure only one
             // is ever processed, the other is discarded.
