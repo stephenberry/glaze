@@ -43,7 +43,7 @@ namespace glz
       /**
        * @return The number of tasks this latch is still waiting to complete.
        */
-      auto remaining() const noexcept -> std::size_t { return m_count.load(std::memory_order::acquire); }
+      size_t remaining() const noexcept { return m_count.load(std::memory_order::acquire); }
 
       /**
        * If the latch counter goes to zero then the task awaiting the latch is resumed.

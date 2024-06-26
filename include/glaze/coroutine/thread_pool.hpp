@@ -94,10 +94,10 @@ namespace glz
          uint32_t thread_count = std::thread::hardware_concurrency();
          /// Functor to call on each executor thread upon starting execution.  The parameter is the
          /// thread's ID assigned to it by the thread pool.
-         std::function<void(std::size_t)> on_thread_start_functor = nullptr;
+         std::function<void(size_t)> on_thread_start_functor = nullptr;
          /// Functor to call on each executor thread upon stopping execution.  The parameter is the
          /// thread's ID assigned to it by the thread pool.
-         std::function<void(std::size_t)> on_thread_stop_functor = nullptr;
+         std::function<void(size_t)> on_thread_stop_functor = nullptr;
       };
 
       /**
@@ -260,7 +260,7 @@ namespace glz
       /**
        * @return The number of tasks waiting in the task queue + the executing tasks.
        */
-      auto size() const noexcept -> std::size_t { return m_size.load(std::memory_order::acquire); }
+      auto size() const noexcept -> size_t { return m_size.load(std::memory_order::acquire); }
 
       /**
        * @return True if the task queue is empty and zero tasks are currently executing.
@@ -270,7 +270,7 @@ namespace glz
       /**
        * @return The number of tasks waiting in the task queue to be executed.
        */
-      auto queue_size() const noexcept -> std::size_t
+      auto queue_size() const noexcept -> size_t
       {
          std::atomic_thread_fence(std::memory_order::acquire);
          return m_queue.size();
@@ -296,7 +296,7 @@ namespace glz
        * Each background thread runs from this function.
        * @param idx The executor's idx for internal data structure accesses.
        */
-      void executor(std::size_t idx)
+      void executor(size_t idx)
       {
          if (m_opts.on_thread_start_functor != nullptr) {
             m_opts.on_thread_start_functor(idx);
@@ -360,7 +360,7 @@ namespace glz
       }
 
       /// The number of tasks in the queue + currently executing.
-      std::atomic<std::size_t> m_size{0};
+      std::atomic<size_t> m_size{0};
       /// Has the thread pool been requested to shut down?
       std::atomic<bool> m_shutdown_requested{false};
    };

@@ -174,7 +174,7 @@ namespace glz
        *                indefinitely until an event happens.
        * @param return The number of tasks currently executing or waiting to execute.
        */
-      std::size_t process_events(std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
+      size_t process_events(std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
       {
          process_events_manual(timeout);
          return size();

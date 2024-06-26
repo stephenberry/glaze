@@ -20,7 +20,7 @@ namespace glz
    {
       struct when_all_latch
       {
-         when_all_latch(std::size_t count) noexcept : m_count(count + 1) {}
+         when_all_latch(size_t count) noexcept : m_count(count + 1) {}
 
          when_all_latch(const when_all_latch&) = delete;
          when_all_latch(when_all_latch&& other)
@@ -59,7 +59,7 @@ namespace glz
 
         private:
          /// The number of tasks that are being waited on.
-         std::atomic<std::size_t> m_count;
+         std::atomic<size_t> m_count;
          /// The when_all_task awaiting to be resumed upon all task completions.
          std::coroutine_handle<> m_awaiting_coroutine{nullptr};
       };

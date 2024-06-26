@@ -35,7 +35,7 @@ namespace glz
       struct options
       {
          /// The number of task spots to reserve space for upon creating the container.
-         std::size_t reserve_size{8};
+         size_t reserve_size{8};
          /// The growth factor for task space in the container when capacity is full.
          double growth_factor{2};
       };
@@ -97,7 +97,7 @@ namespace glz
          }
 
          // Reserve a free task index
-         std::size_t index = m_free_task_indices.front();
+         size_t index = m_free_task_indices.front();
          m_free_task_indices.pop();
 
          // We've reserved the slot, we can release the lock.
@@ -115,7 +115,7 @@ namespace glz
        * the task container for newly stored tasks.
        * @return The number of tasks that were deleted.
        */
-      auto garbage_collect() -> std::size_t
+      auto garbage_collect() -> size_t
       {
          std::scoped_lock lk{m_mutex};
          return gc_internal();
@@ -124,7 +124,7 @@ namespace glz
       /**
        * @return The number of active tasks in the container.
        */
-      auto size() const -> std::size_t { return m_size.load(std::memory_order::relaxed); }
+      auto size() const -> size_t { return m_size.load(std::memory_order::relaxed); }
 
       /**
        * @return True if there are no active tasks in the container.
@@ -134,7 +134,7 @@ namespace glz
       /**
        * @return The capacity of this task manager before it will need to grow in size.
        */
-      auto capacity() const -> std::size_t
+      auto capacity() const -> size_t
       {
          std::atomic_thread_fence(std::memory_order::acquire);
          return m_tasks.size();
@@ -163,8 +163,8 @@ namespace glz
       auto grow() -> void
       {
          // Save an index at the current last item.
-         std::size_t new_size = m_tasks.size() * m_growth_factor;
-         for (std::size_t i = m_tasks.size(); i < new_size; ++i) {
+         size_t new_size = m_tasks.size() * m_growth_factor;
+         for (size_t i = m_tasks.size(); i < new_size; ++i) {
             m_free_task_indices.emplace(i);
          }
          m_tasks.resize(new_size);
@@ -173,9 +173,9 @@ namespace glz
       /**
        * Internal GC call, expects the public function to lock.
        */
-      auto gc_internal() -> std::size_t
+      auto gc_internal() -> size_t
       {
-         std::size_t deleted{0};
+         size_t deleted{0};
          auto pos = std::begin(m_tasks_to_delete);
          while (pos != std::end(m_tasks_to_delete)) {
             // Skip tasks that are still running or have yet to start.
@@ -208,7 +208,7 @@ namespace glz
        * @param index The index where the task data will be stored in the task manager.
        * @return The user's task wrapped in a self cleanup task.
        */
-      auto make_cleanup_task(task<void> user_task, std::size_t index) -> glz::task<void>
+      auto make_cleanup_task(task<void> user_task, size_t index) -> glz::task<void>
       {
          // Immediately move the task onto the executor.
          co_await m_executor_ptr->schedule();
@@ -247,13 +247,13 @@ namespace glz
       /// thread pools for indeterminate lifetime requests.
       std::mutex m_mutex{};
       /// The number of alive tasks.
-      std::atomic<std::size_t> m_size{};
+      std::atomic<size_t> m_size{};
       /// Maintains the lifetime of the tasks until they are completed.
       std::vector<task<void>> m_tasks{};
       /// The full set of free indicies into `m_tasks`.
-      std::queue<std::size_t> m_free_task_indices{};
+      std::queue<size_t> m_free_task_indices{};
       /// The set of tasks that have completed and need to be deleted.
-      std::list<std::size_t> m_tasks_to_delete{};
+      std::list<size_t> m_tasks_to_delete{};
       /// The amount to grow the containers by when all spaces are taken.
       double m_growth_factor{};
       /// The executor to schedule tasks that have just started.
@@ -272,10 +272,10 @@ namespace glz
          init(opts.reserve_size);
       }
 
-      auto init(std::size_t reserve_size) -> void
+      auto init(size_t reserve_size) -> void
       {
          m_tasks.resize(reserve_size);
-         for (std::size_t i = 0; i < reserve_size; ++i) {
+         for (size_t i = 0; i < reserve_size; ++i) {
             m_free_task_indices.emplace(i);
          }
       }
