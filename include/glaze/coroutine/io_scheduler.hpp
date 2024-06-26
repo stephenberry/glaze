@@ -196,7 +196,7 @@ namespace glz
          auto await_suspend(std::coroutine_handle<> awaiting_coroutine) noexcept -> void
          {
             if (m_scheduler.m_opts.execution_strategy == execution_strategy_t::process_tasks_inline) {
-               m_scheduler.m_size.fetch_add(1, std::memory_order::release);
+               m_scheduler.n_active_tasks.fetch_add(1, std::memory_order::release);
                {
                   std::scoped_lock lk{m_scheduler.m_scheduled_tasks_mutex};
                   m_scheduler.m_scheduled_tasks.emplace_back(awaiting_coroutine);
@@ -271,7 +271,7 @@ namespace glz
             // Yield/timeout tasks are considered live in the scheduler and must be accounted for. Note
             // that if the user gives an invalid amount and schedule() is directly called it will account
             // for the scheduled task there.
-            m_size.fetch_add(1, std::memory_order::release);
+            n_active_tasks.fetch_add(1, std::memory_order::release);
 
             // Yielding does not requiring setting the timer position on the poll info since
             // it doesn't have a corresponding 'event' that can trigger, it always waits for
@@ -281,7 +281,7 @@ namespace glz
             add_timer_token(clock::now() + amount, pi);
             co_await pi;
 
-            m_size.fetch_sub(1, std::memory_order::release);
+            n_active_tasks.fetch_sub(1, std::memory_order::release);
          }
          co_return;
       }
@@ -300,7 +300,7 @@ namespace glz
             co_await schedule();
          }
          else {
-            m_size.fetch_add(1, std::memory_order::release);
+            n_active_tasks.fetch_add(1, std::memory_order::release);
 
             auto amount = std::chrono::duration_cast<std::chrono::milliseconds>(time - now);
 
@@ -308,7 +308,7 @@ namespace glz
             add_timer_token(now + amount, pi);
             co_await pi;
 
-            m_size.fetch_sub(1, std::memory_order::release);
+            n_active_tasks.fetch_sub(1, std::memory_order::release);
          }
          co_return;
       }
@@ -327,7 +327,7 @@ namespace glz
       {
          // Because the size will drop when this coroutine suspends every poll needs to undo the subtraction
          // on the number of active tasks in the scheduler.  When this task is resumed by the event loop.
-         m_size.fetch_add(1, std::memory_order::release);
+         n_active_tasks.fetch_add(1, std::memory_order::release);
 
          // Setup two events, a timeout event and the actual poll for op event.
          // Whichever triggers first will delete the other to guarantee only one wins.
@@ -360,7 +360,7 @@ namespace glz
          // onto the thread poll its possible the other type of event could trigger while its waiting
          // to execute again, thus restarting the coroutine twice, that would be quite bad.
          auto result = co_await pi;
-         m_size.fetch_sub(1, std::memory_order::release);
+         n_active_tasks.fetch_sub(1, std::memory_order::release);
          co_return result;
       }
 
@@ -426,10 +426,10 @@ namespace glz
       auto size() const noexcept -> std::size_t
       {
          if (m_opts.execution_strategy == execution_strategy_t::process_tasks_inline) {
-            return m_size.load(std::memory_order::acquire);
+            return n_active_tasks.load(std::memory_order::acquire);
          }
          else {
-            return m_size.load(std::memory_order::acquire) + m_thread_pool->size();
+            return n_active_tasks.load(std::memory_order::acquire) + m_thread_pool->size();
          }
       }
 
@@ -476,7 +476,7 @@ namespace glz
       std::atomic<bool> m_schedule_fd_triggered{false};
 
       /// The number of tasks executing or awaiting events in this io scheduler.
-      std::atomic<std::size_t> m_size{0};
+      std::atomic<size_t> n_active_tasks{0};
 
       /// The background io worker threads.
       std::thread m_io_thread;
@@ -625,7 +625,7 @@ namespace glz
          for (auto& task : tasks) {
             task.resume();
          }
-         m_size.fetch_sub(tasks.size(), std::memory_order::release);
+         n_active_tasks.fetch_sub(tasks.size(), std::memory_order::release);
       }
 
       std::mutex m_scheduled_tasks_mutex{};
