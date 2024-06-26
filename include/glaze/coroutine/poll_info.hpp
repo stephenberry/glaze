@@ -31,7 +31,7 @@ namespace glz
     * first one processed sets m_processed to true and any subsequent events in the same epoll batch
     * are effectively discarded.
     */
-   struct poll_info
+   struct poll_info final
    {
       using timed_events = std::multimap<time_point, poll_info*>;
 
@@ -43,19 +43,17 @@ namespace glz
       auto operator=(const poll_info&) -> poll_info& = delete;
       auto operator=(poll_info&&) -> poll_info& = delete;
 
-      struct poll_awaiter
+      struct poll_awaiter final
       {
-         explicit poll_awaiter(poll_info& pi) noexcept : m_pi(pi) {}
+         poll_info& m_pi;
 
-         auto await_ready() const noexcept -> bool { return false; }
-         auto await_suspend(std::coroutine_handle<> awaiting_coroutine) noexcept -> void
+         bool await_ready() const noexcept { return false; }
+         void await_suspend(std::coroutine_handle<> awaiting_coroutine) noexcept
          {
             m_pi.m_awaiting_coroutine = awaiting_coroutine;
             std::atomic_thread_fence(std::memory_order::release);
          }
-         auto await_resume() noexcept -> poll_status { return m_pi.m_poll_status; }
-
-         poll_info& m_pi;
+         poll_status await_resume() noexcept { return m_pi.m_poll_status; }
       };
 
       auto operator co_await() noexcept -> poll_awaiter { return poll_awaiter{*this}; }
@@ -66,9 +64,9 @@ namespace glz
       /// The timeout's position in the timeout map.  A poll() with no timeout or yield() this is empty.
       /// This is needed so that if the event occurs first then the event loop can immediately disable
       /// the timeout within epoll.
-      std::optional<timed_events::iterator> m_timer_pos{std::nullopt};
+      std::optional<timed_events::iterator> m_timer_pos{};
       /// The awaiting coroutine for this poll info to resume upon event or timeout.
-      std::coroutine_handle<> m_awaiting_coroutine;
+      std::coroutine_handle<> m_awaiting_coroutine{};
       /// The status of the poll operation.
       poll_status m_poll_status{glz::poll_status::error};
       /// Did the timeout and event trigger at the same time on the same epoll_wait call?
