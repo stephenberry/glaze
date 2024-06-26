@@ -35,6 +35,8 @@ namespace glz
 {
    struct io_scheduler final
    {
+      using clock = std::chrono::steady_clock;
+      using time_point = clock::time_point;
       using timed_events = poll_info::timed_events;
 
       struct schedule_operation;

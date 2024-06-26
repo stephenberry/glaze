@@ -13,7 +13,6 @@
 #include <optional>
 
 #include "glaze/coroutine/poll.hpp"
-#include "glaze/coroutine/time.hpp"
 #include "glaze/network/core.hpp"
 
 namespace glz
@@ -33,7 +32,7 @@ namespace glz
     */
    struct poll_info final
    {
-      using timed_events = std::multimap<time_point, poll_info*>;
+      using timed_events = std::multimap<std::chrono::steady_clock::time_point, poll_info*>;
 
       poll_info() = default;
       ~poll_info() = default;
