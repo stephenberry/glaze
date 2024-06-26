@@ -5,6 +5,15 @@
 
 #pragma once
 
+#ifndef GLZ_THROW_OR_ABORT
+#if __cpp_exceptions
+#define GLZ_THROW_OR_ABORT(EXC) (throw(EXC))
+#include <exception>
+#else
+#define GLZ_THROW_OR_ABORT(EXC) (std::abort())
+#endif
+#endif
+
 #include "glaze/coroutine/poll.hpp"
 #include "glaze/coroutine/poll_info.hpp"
 #include "glaze/coroutine/task_container.hpp"
@@ -102,7 +111,7 @@ namespace glz
          epoll_ctl(event_fd, EPOLL_CTL_ADD, timer_fd, &e);
 
          e.data.ptr = const_cast<void*>(m_schedule_ptr);
-         epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, m_schedule_fd, &e);
+         epoll_ctl(event_fd, EPOLL_CTL_ADD, m_schedule_fd, &e);
 #endif
 
          if (m_opts.thread_strategy == thread_strategy_t::spawn) {
@@ -221,7 +230,7 @@ namespace glz
        */
       void schedule(glz::task<void>&& task)
       {
-         auto* ptr = static_cast<coro::task_container<coro::io_scheduler>*>(m_owned_tasks);
+         auto* ptr = static_cast<glz::task_container<glz::io_scheduler>*>(m_owned_tasks);
          ptr->start(std::move(task));
       }
 
@@ -254,7 +263,7 @@ namespace glz
        */
       [[nodiscard]] auto yield_for(std::chrono::milliseconds amount) -> glz::task<void>
       {
-         if (amount <= 0ms) {
+         if (amount <= std::chrono::milliseconds(0)) {
             co_await schedule();
          }
          else {
@@ -267,7 +276,7 @@ namespace glz
             // it doesn't have a corresponding 'event' that can trigger, it always waits for
             // the timeout to occur before resuming.
 
-            detail::poll_info pi{};
+            poll_info pi{};
             add_timer_token(clock::now() + amount, pi);
             co_await pi;
 
@@ -294,7 +303,7 @@ namespace glz
 
             auto amount = std::chrono::duration_cast<std::chrono::milliseconds>(time - now);
 
-            detail::poll_info pi{};
+            poll_info pi{};
             add_timer_token(now + amount, pi);
             co_await pi;
 
@@ -323,21 +332,23 @@ namespace glz
          // Whichever triggers first will delete the other to guarantee only one wins.
          // The resume token will be set by the scheduler to what the event turned out to be.
 
-         bool timeout_requested = (timeout > 0ms);
+         bool timeout_requested = (timeout > std::chrono::milliseconds(0));
 
-         detail::poll_info pi{};
+         poll_info pi{};
          pi.m_fd = fd;
 
          if (timeout_requested) {
             pi.m_timer_pos = add_timer_token(clock::now() + timeout, pi);
          }
 
-         epoll_event e{};
-         e.events = static_cast<uint32_t>(op) | EPOLLONESHOT | EPOLLRDHUP;
+         [[maybe_unused]] net::poll_event_t e{};
+#if defined(__linux__)
+         e.events = uint32_t(op) | EPOLLONESHOT | EPOLLRDHUP;
          e.data.ptr = &pi;
-         if (epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, fd, &e) == -1) {
+         if (epoll_ctl(event_fd, EPOLL_CTL_ADD, fd, &e) == -1) {
             std::cerr << "epoll ctl error on fd " << fd << "\n";
          }
+#endif
 
          // The event loop will 'clean-up' whichever event didn't win since the coroutine is scheduled
          // onto the thread poll its possible the other type of event could trigger while its waiting
@@ -513,11 +524,25 @@ namespace glz
 
       void process_events_execute(std::chrono::milliseconds timeout)
       {
-         auto event_count = epoll_wait(event_fd, m_events.data(), m_max_events, timeout.count());
+#if defined(__APPLE__)
+         struct timespec tlimit
+         {
+            0, timeout.count() * 1'000'000
+         };
+         auto event_count = ::kevent(event_fd, nullptr, 0, m_events.data(), int(m_events.size()), &tlimit);
+#elif defined(__linux__)
+      auto event_count = poll_wait(event_fd, m_events.data(), m_max_events, timeout.count());
+#elif defined(_WIN32)
+#endif
+         
          if (event_count > 0) {
-            for (std::size_t i = 0; i < static_cast<std::size_t>(event_count); ++i) {
-               epoll_event& event = m_events[i];
+            for (size_t i = 0; i < size_t(event_count); ++i) {
+               auto& event = m_events[i];
+#if defined(__linux__)
                void* handle_ptr = event.data.ptr;
+#elif defined(__APPLE__)
+               void* handle_ptr = (void*)event.data;
+#endif
 
                if (handle_ptr == m_timer_ptr) {
                   // Process all events that have timed out.
@@ -532,8 +557,10 @@ namespace glz
                }
                else {
                   // Individual poll task wake-up.
-                  process_event_execute(static_cast<detail::poll_info*>(handle_ptr),
+#if defined(__linux__)
+                  process_event_execute(static_cast<poll_info*>(handle_ptr),
                                         event_to_poll_status(event.events));
+#endif
                }
             }
          }
@@ -560,17 +587,17 @@ namespace glz
 
       static poll_status event_to_poll_status(uint32_t events)
       {
-         if (events & EPOLLIN || events & EPOLLOUT) {
+         if (events & net::poll_in || events & net::poll_out) {
             return poll_status::event;
          }
-         else if (events & EPOLLERR) {
+         else if (events & net::poll_error) {
             return poll_status::error;
          }
-         else if (events & EPOLLRDHUP || events & EPOLLHUP) {
+         else if (net::event_closed(events)) {
             return poll_status::closed;
          }
 
-         throw std::runtime_error{"invalid epoll state"};
+         GLZ_THROW_OR_ABORT(std::runtime_error{"invalid epoll state"});
       }
 
       void process_scheduled_execute_inline()
@@ -582,8 +609,10 @@ namespace glz
             tasks.swap(m_scheduled_tasks);
 
             // Clear the schedule eventfd if this is a scheduled task.
+#if defined(__linux__)
             eventfd_t value{0};
             eventfd_read(schedule_fd, &value);
+#endif
 
             // Clear the in memory flag to reduce eventfd_* calls on scheduling.
             m_schedule_fd_triggered.exchange(false, std::memory_order::release);
@@ -617,8 +646,8 @@ namespace glz
 
       static const constexpr std::chrono::milliseconds m_default_timeout{1000};
       static const constexpr std::chrono::milliseconds m_no_timeout{0};
-      static const constexpr std::size_t m_max_events = 16;
-      std::array<poll_event_t, m_max_events> m_events{};
+      static const constexpr size_t m_max_events = 16;
+      std::array<net::poll_event_t, m_max_events> m_events{};
       std::vector<std::coroutine_handle<>> m_handles_to_resume{};
 
       void process_event_execute(poll_info* pi, poll_status status)
@@ -631,7 +660,9 @@ namespace glz
 
             // Given a valid fd always remove it from epoll so the next poll can blindly EPOLL_CTL_ADD.
             if (pi->m_fd != -1) {
-               epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
+#if defined(__linux__)
+               epoll_ctl(event_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
+#endif
             }
 
             // Since this event triggered, remove its corresponding timeout if it has one.
@@ -651,7 +682,7 @@ namespace glz
 
       void process_timeout_execute()
       {
-         std::vector<detail::poll_info*> poll_infos{};
+         std::vector<poll_info*> poll_infos{};
          auto now = clock::now();
 
          {
@@ -678,7 +709,9 @@ namespace glz
 
                // Since this timed out, remove its corresponding event if it has one.
                if (pi->m_fd != -1) {
-                  epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
+#if defined(__linux__)
+                  epoll_ctl(event_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
+#endif
                }
 
                while (pi->m_awaiting_coroutine == nullptr) {
@@ -687,7 +720,7 @@ namespace glz
                }
 
                m_handles_to_resume.emplace_back(pi->m_awaiting_coroutine);
-               pi->m_poll_status = coro::poll_status::timeout;
+               pi->m_poll_status = poll_status::timeout;
             }
          }
 
@@ -736,6 +769,8 @@ namespace glz
             auto seconds = std::chrono::duration_cast<std::chrono::seconds>(amount);
             amount -= seconds;
             auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(amount);
+            
+            using namespace std::chrono_literals;
 
             // As a safeguard if both values end up as zero (or negative) then trigger the timeout
             // immediately as zero disarms timerfd according to the man pages and negative values
@@ -748,6 +783,7 @@ namespace glz
                }
             }
 
+#if defined(__linux__)
             itimerspec ts{};
             ts.it_value.tv_sec = seconds.count();
             ts.it_value.tv_nsec = nanoseconds.count();
@@ -755,8 +791,10 @@ namespace glz
             if (timerfd_settime(timer_fd, 0, &ts, nullptr) == -1) {
                std::cerr << "Failed to set timerfd errorno=[" << std::string{strerror(errno)} << "].";
             }
+#endif
          }
          else {
+#if defined(__linux__)
             // Setting these values to zero disables the timer.
             itimerspec ts{};
             ts.it_value.tv_sec = 0;
@@ -764,6 +802,7 @@ namespace glz
             if (timerfd_settime(timer_fd, 0, &ts, nullptr) == -1) {
                std::cerr << "Failed to set timerfd errorno=[" << std::string{strerror(errno)} << "].";
             }
+#endif
          }
       }
    };

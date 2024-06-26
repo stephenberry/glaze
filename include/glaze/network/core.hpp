@@ -45,9 +45,11 @@ namespace glz::net
 #if defined(__APPLE__)
    constexpr auto poll_in = 0b00000001;
    constexpr auto poll_out = 0b00000010;
+   constexpr auto poll_error = 0b00000100;
 #elif defined(__linux__)
    constexpr auto poll_in = EPOLLIN;
    constexpr auto poll_out = EPOLLOUT;
+   constexpr auto poll_error = EPOLLERR;
 #elif defined(_WIN32)
 #endif
 
@@ -67,6 +69,16 @@ namespace glz::net
       WSACloseEvent(fd);
 #else
       ::close(fd);
+#endif
+   }
+   
+   inline auto poll_wait(auto&&... args) {
+#if defined(__APPLE__)
+      return ::kevent(args...);
+#elif defined(__linux__)
+      return ::epoll_wait(args...);
+#elif defined(_WIN32)
+      return 0;
 #endif
    }
    
@@ -107,6 +119,16 @@ namespace glz::net
       return ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)
       return 0;
+#endif
+   }
+   
+   inline bool event_closed([[maybe_unused]] uint32_t events) {
+#if defined(__APPLE__)
+      return true;
+#elif defined(__linux__)
+      return events & EPOLLRDHUP || events & EPOLLHUP;
+#elif defined(_WIN32)
+      return true;
 #endif
    }
 }
