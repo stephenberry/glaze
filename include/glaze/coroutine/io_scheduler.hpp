@@ -345,7 +345,7 @@ namespace glz
          [[maybe_unused]] net::poll_event_t e{};
 #if defined(__linux__)
          e.events = uint32_t(op) | EPOLLONESHOT | EPOLLRDHUP;
-         e.data.ptr = &pi;
+         e.data.ptr = &poll_info;
          if (epoll_ctl(event_fd, EPOLL_CTL_ADD, fd, &e) == -1) {
             std::cerr << "epoll ctl error on fd " << fd << "\n";
          }
