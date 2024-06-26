@@ -27,6 +27,7 @@
 #include <sys/event.h> // for kqueue on macOS
 #elif defined(__linux__)
 #include <sys/epoll.h> // for epoll on Linux
+#include <sys/eventfd.h>
 #endif
 
 namespace glz::net
