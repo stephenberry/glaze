@@ -9,15 +9,19 @@
 
 namespace glz
 {
-   /*enum struct poll_op : uint64_t {
-      read = EPOLLIN,
-      write = EPOLLOUT,
-      read_write = EPOLLIN | EPOLLOUT
+   // TODO: handle poll flags
+   constexpr auto poll_in = 0b00000001;
+   constexpr auto poll_out = 0b00000010;
+   
+   enum struct poll_op : uint64_t {
+      read = poll_in,
+      write = poll_out,
+      read_write = poll_in | poll_out
    };
 
-   inline bool poll_op_readable(poll_op op) { return (uint64_t(op) & EPOLLIN); }
+   inline bool poll_op_readable(poll_op op) { return (uint64_t(op) & poll_in); }
 
-   inline bool poll_op_writeable(poll_op op) { return (uint64_t(op) & EPOLLOUT); }
+   inline bool poll_op_writeable(poll_op op) { return (uint64_t(op) & poll_out); }
 
    std::string to_string(poll_op op)
    {
@@ -58,5 +62,5 @@ namespace glz
       default:
          return "unknown";
       }
-   }*/
+   }
 }

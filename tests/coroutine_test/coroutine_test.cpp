@@ -169,7 +169,7 @@ suite latch = [] {
 
    const int64_t num_tasks{5};
    glz::latch l{num_tasks};
-   std::vector<coro::task<void>> tasks{};
+   std::vector<glz::task<void>> tasks{};
 
    // Make the latch task first so it correctly waits for all worker tasks to count down.
    tasks.emplace_back(make_latch_task(l));

@@ -33,7 +33,7 @@ namespace glz
     */
    struct poll_info
    {
-      using timed_events = std::multimap<time_point, detail::poll_info*>;
+      using timed_events = std::multimap<time_point, poll_info*>;
 
       poll_info() = default;
       ~poll_info() = default;
@@ -70,7 +70,7 @@ namespace glz
       /// The awaiting coroutine for this poll info to resume upon event or timeout.
       std::coroutine_handle<> m_awaiting_coroutine;
       /// The status of the poll operation.
-      poll_status m_poll_status{coro::poll_status::error};
+      poll_status m_poll_status{glz::poll_status::error};
       /// Did the timeout and event trigger at the same time on the same epoll_wait call?
       /// Once this is set to true all future events on this poll info are null and void.
       bool m_processed{false};

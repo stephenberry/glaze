@@ -5,6 +5,15 @@
 
 #pragma once
 
+#ifndef GLZ_THROW_OR_ABORT
+#if __cpp_exceptions
+#define GLZ_THROW_OR_ABORT(EXC) (throw(EXC))
+#include <exception>
+#else
+#define GLZ_THROW_OR_ABORT(EXC) (std::abort())
+#endif
+#endif
+
 #include <atomic>
 #include <iostream>
 #include <list>
@@ -41,7 +50,7 @@ namespace glz
          : m_growth_factor(opts.growth_factor), m_executor(std::move(e)), m_executor_ptr(m_executor.get())
       {
          if (m_executor == nullptr) {
-            throw std::runtime_error{"task_container cannot have a nullptr executor"};
+            GLZ_THROW_OR_ABORT(std::runtime_error{"task_container cannot have a nullptr executor"});
          }
 
          init(opts.reserve_size);
@@ -72,7 +81,7 @@ namespace glz
        *                call?  Calling at regular intervals will reduce memory usage of completed
        *                tasks and allow for the task container to re-use allocated space.
        */
-      auto start(coro::task<void>&& user_task, garbage_collect_t cleanup = garbage_collect_t::yes) -> void
+      auto start(glz::task<void>&& user_task, garbage_collect_t cleanup = garbage_collect_t::yes) -> void
       {
          m_size.fetch_add(1, std::memory_order::relaxed);
 
@@ -106,7 +115,7 @@ namespace glz
        * the task container for newly stored tasks.
        * @return The number of tasks that were deleted.
        */
-      auto garbage_collect() -> std::size_t __ATTRIBUTE__(used)
+      auto garbage_collect() -> std::size_t
       {
          std::scoped_lock lk{m_mutex};
          return gc_internal();
@@ -138,7 +147,7 @@ namespace glz
        * This does not shut down the task container, but can be used when shutting down, or if your
        * logic requires all the tasks contained within to complete, it is similar to coro::latch.
        */
-      auto garbage_collect_and_yield_until_empty() -> coro::task<void>
+      auto garbage_collect_and_yield_until_empty() -> glz::task<void>
       {
          while (!empty()) {
             garbage_collect();
@@ -199,11 +208,12 @@ namespace glz
        * @param index The index where the task data will be stored in the task manager.
        * @return The user's task wrapped in a self cleanup task.
        */
-      auto make_cleanup_task(task<void> user_task, std::size_t index) -> coro::task<void>
+      auto make_cleanup_task(task<void> user_task, std::size_t index) -> glz::task<void>
       {
          // Immediately move the task onto the executor.
          co_await m_executor_ptr->schedule();
 
+#if __cpp_exceptions
          try {
             // Await the users task to complete.
             co_await user_task;
@@ -219,6 +229,9 @@ namespace glz
             // don't crash if they throw something that isn't derived from std::exception
             std::cerr << "coro::task_container user_task had unhandle exception, not derived from std::exception.\n";
          }
+#else
+         co_await user_task;
+#endif
 
          {
             // This scope is required around this lock otherwise if this task on destruction schedules a new task it

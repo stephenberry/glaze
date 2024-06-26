@@ -15,8 +15,6 @@
 #include "coro/net/socket.hpp"
 #endif
 
-#include <sys/eventfd.h>
-
 #include <chrono>
 #include <functional>
 #include <map>
@@ -27,12 +25,25 @@
 
 namespace glz
 {
-   class io_scheduler
+   // TODO: implement
+   using event_handle_t = int;
+   using poll_event_t = int;
+   
+   // Linux
+   //using poll_event_t = struct epoll_event;
+   //using event_handle_t = eventfd_t;
+   
+   // TODO: implement
+   int event_write(auto, auto)
    {
-      using timed_events = detail::poll_info::timed_events;
+      return 0;
+   }
+   
+   struct io_scheduler
+   {
+      using timed_events = poll_info::timed_events;
 
-     public:
-      class schedule_operation;
+      struct schedule_operation;
       friend schedule_operation;
 
       enum class thread_strategy_t {
@@ -103,12 +114,11 @@ namespace glz
        */
       auto process_events(std::chrono::milliseconds timeout = std::chrono::milliseconds{0}) -> std::size_t;
 
-      class schedule_operation
+      struct schedule_operation
       {
-         friend class io_scheduler;
+         friend struct io_scheduler;
          explicit schedule_operation(io_scheduler& scheduler) noexcept : m_scheduler(scheduler) {}
 
-        public:
          /**
           * Operations always pause so the executing thread can be switched.
           */
@@ -131,8 +141,8 @@ namespace glz
                bool expected{false};
                if (m_scheduler.m_schedule_fd_triggered.compare_exchange_strong(
                       expected, true, std::memory_order::release, std::memory_order::relaxed)) {
-                  eventfd_t value{1};
-                  eventfd_write(m_scheduler.m_schedule_fd, value);
+                  event_handle_t value{1};
+                  event_write(m_scheduler.m_schedule_fd, value);
                }
             }
             else {
@@ -162,21 +172,21 @@ namespace glz
        * @param task The task to execute on this io_scheduler.  It's lifetime ownership will be transferred
        *             to this io_scheduler.
        */
-      auto schedule(coro::task<void>&& task) -> void;
+      auto schedule(glz::task<void>&& task) -> void;
 
       /**
        * Schedules the current task to run after the given amount of time has elapsed.
        * @param amount The amount of time to wait before resuming execution of this task.
        *               Given zero or negative amount of time this behaves identical to schedule().
        */
-      [[nodiscard]] auto schedule_after(std::chrono::milliseconds amount) -> coro::task<void>;
+      [[nodiscard]] auto schedule_after(std::chrono::milliseconds amount) -> glz::task<void>;
 
       /**
        * Schedules the current task to run at a given time point in the future.
        * @param time The time point to resume execution of this task.  Given 'now' or a time point
        *             in the past this behaves identical to schedule().
        */
-      [[nodiscard]] auto schedule_at(time_point time) -> coro::task<void>;
+      [[nodiscard]] auto schedule_at(time_point time) -> glz::task<void>;
 
       /**
        * Yields the current task to the end of the queue of waiting tasks.
@@ -188,14 +198,14 @@ namespace glz
        * @param amount The amount of time to yield for before resuming executino of this task.
        *               Given zero or negative amount of time this behaves identical to yield().
        */
-      [[nodiscard]] auto yield_for(std::chrono::milliseconds amount) -> coro::task<void>;
+      [[nodiscard]] auto yield_for(std::chrono::milliseconds amount) -> glz::task<void>;
 
       /**
        * Yields the current task until the given time point in the future.
        * @param time The time point to resume execution of this task.  Given 'now' or a time point in the
        *             in the past this behaves identical to yield().
        */
-      [[nodiscard]] auto yield_until(time_point time) -> coro::task<void>;
+      [[nodiscard]] auto yield_until(time_point time) -> glz::task<void>;
 
       /**
        * Polls the given file descriptor for the given operations.
@@ -205,9 +215,9 @@ namespace glz
        *                block indefinitely until the event triggers.
        * @return The result of the poll operation.
        */
-      [[nodiscard]] auto poll(fd_t fd, coro::poll_op op,
+      [[nodiscard]] auto poll(fd_t fd, glz::poll_op op,
                               std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
-         -> coro::task<poll_status>;
+         -> glz::task<poll_status>;
 
 #ifdef GLZ_FEATURE_NETWORKING
       /**
@@ -249,8 +259,8 @@ namespace glz
             bool expected{false};
             if (m_schedule_fd_triggered.compare_exchange_strong(expected, true, std::memory_order::release,
                                                                 std::memory_order::relaxed)) {
-               eventfd_t value{1};
-               eventfd_write(m_schedule_fd, value);
+               event_handle_t value{1};
+               event_write(m_schedule_fd, value);
             }
 
             return true;
@@ -350,13 +360,13 @@ namespace glz
       static const constexpr std::chrono::milliseconds m_default_timeout{1000};
       static const constexpr std::chrono::milliseconds m_no_timeout{0};
       static const constexpr std::size_t m_max_events = 16;
-      std::array<struct epoll_event, m_max_events> m_events{};
+      std::array<poll_event_t, m_max_events> m_events{};
       std::vector<std::coroutine_handle<>> m_handles_to_resume{};
 
-      auto process_event_execute(detail::poll_info* pi, poll_status status) -> void;
+      auto process_event_execute(poll_info* pi, poll_status status) -> void;
       auto process_timeout_execute() -> void;
 
-      auto add_timer_token(time_point tp, detail::poll_info& pi) -> timed_events::iterator;
+      auto add_timer_token(time_point tp, poll_info& pi) -> timed_events::iterator;
       auto remove_timer_token(timed_events::iterator pos) -> void;
       auto update_timeout(time_point now) -> void;
    };
