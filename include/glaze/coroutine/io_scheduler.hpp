@@ -93,8 +93,7 @@ namespace glz
            event_fd(net::create_event_poll()),
            shutdown_fd(net::create_shutdown_handle()),
            timer_fd(net::create_timer_handle()),
-           schedule_fd(net::create_schedule_handle()),
-           m_owned_tasks(new glz::task_container<glz::io_scheduler>(*this))
+           schedule_fd(net::create_schedule_handle())
       {
          if (opts.execution_strategy == execution_strategy_t::process_tasks_on_thread_pool) {
             m_thread_pool = std::make_unique<thread_pool>(std::move(m_opts.pool));
@@ -161,11 +160,6 @@ namespace glz
          if (schedule_fd != -1) {
             close(schedule_fd);
             schedule_fd = -1;
-         }
-
-         if (m_owned_tasks != nullptr) {
-            delete static_cast<glz::task_container<glz::io_scheduler>*>(m_owned_tasks);
-            m_owned_tasks = nullptr;
          }
       }
 
@@ -240,19 +234,6 @@ namespace glz
        * Schedules the current task onto this io_scheduler for execution.
        */
       auto schedule() -> schedule_operation { return schedule_operation{*this}; }
-
-      /**
-       * Schedules a task onto the io_scheduler and moves ownership of the task to the io_scheduler.
-       * Only void return type tasks can be scheduled in this manner since the task submitter will no
-       * longer have control over the scheduled task.
-       * @param task The task to execute on this io_scheduler.  It's lifetime ownership will be transferred
-       *             to this io_scheduler.
-       */
-      void schedule(glz::task<void>&& task)
-      {
-         auto* ptr = static_cast<glz::task_container<glz::io_scheduler>*>(m_owned_tasks);
-         ptr->start(std::move(task));
-      }
 
       /**
        * Schedules the current task to run after the given amount of time has elapsed.
@@ -480,17 +461,6 @@ namespace glz
          }
       }
 
-      /**
-       * Scans for completed coroutines and destroys them freeing up resources.  This is also done on starting
-       * new tasks but this allows the user to cleanup resources manually.  One usage might be making sure fds
-       * are cleaned up as soon as possible.
-       */
-      void garbage_collect() noexcept
-      {
-         auto* ptr = static_cast<glz::task_container<glz::io_scheduler>*>(m_owned_tasks);
-         ptr->garbage_collect();
-      }
-
      private:
       /// The configuration options.
       options m_opts;
@@ -660,13 +630,6 @@ namespace glz
 
       std::mutex m_scheduled_tasks_mutex{};
       std::vector<std::coroutine_handle<>> m_scheduled_tasks{};
-
-      /// Tasks that have their ownership passed into the scheduler.  This is a bit strange for now
-      /// but the concept doesn't pass since io_scheduler isn't fully defined yet.
-      /// The type is coro::task_container<glz::io_scheduler>*
-      /// Do not inline any functions that use this in the io_scheduler header, it can cause the linker
-      /// to complain about "defined in discarded section" because it gets defined multiple times
-      void* m_owned_tasks{nullptr};
 
       static constexpr int m_shutdown_object{0};
       static constexpr const void* m_shutdown_ptr = &m_shutdown_object;
