@@ -212,8 +212,8 @@ namespace glz
                   eventfd_t value{1};
                   eventfd_write(m_scheduler.schedule_fd, value);
 #elif defined(__APPLE__)
-                   struct kevent e;
-                   ::kevent(m_scheduler.schedule_fd, NULL, 0, &e, 1, NULL);
+                  struct kevent e;
+                  ::kevent(m_scheduler.schedule_fd, NULL, 0, &e, 1, NULL);
 #endif
                }
             }
@@ -324,7 +324,7 @@ namespace glz
        * @return The result of the poll operation.
        */
       [[nodiscard]] glz::task<poll_status> poll(net::file_handle_t fd, glz::poll_op op,
-                              std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
+                                                std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
       {
          // Because the size will drop when this coroutine suspends every poll needs to undo the subtraction
          // on the number of active tasks in the scheduler.  When this task is resumed by the event loop.
@@ -656,7 +656,7 @@ namespace glz
          if (not pi) {
             GLZ_THROW_OR_ABORT(std::runtime_error{"invalid poll_info"});
          }
-         
+
          if (not pi->m_processed) {
             std::atomic_thread_fence(std::memory_order::acquire);
             // Its possible the event and the timeout occurred in the same epoll, make sure only one
@@ -668,7 +668,8 @@ namespace glz
 #if defined(__linux__)
                epoll_ctl(event_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
 #elif defined(__APPLE__)
-               struct kevent e;
+               struct kevent e
+               {};
                EV_SET(&e, pi->m_fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
                if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                   std::cerr << "Failed to remove fd " << pi->m_fd << " from kqueue\n";
@@ -723,15 +724,16 @@ namespace glz
 #if defined(__linux__)
                   epoll_ctl(event_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
 #elif defined(__APPLE__)
-               struct kevent e;
+                  struct kevent e
+                  {};
 
-               // Initialize the kevent structure for deletion
-               EV_SET(&e, pi->m_fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
+                  // Initialize the kevent structure for deletion
+                  EV_SET(&e, pi->m_fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
 
-               // Remove the event from the kqueue
-               if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
-                  std::cerr << "Failed to remove fd " << pi->m_fd << " from kqueue\n";
-               }
+                  // Remove the event from the kqueue
+                  if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
+                     std::cerr << "Failed to remove fd " << pi->m_fd << " from kqueue\n";
+                  }
 #endif
                }
 
@@ -794,7 +796,7 @@ namespace glz
                seconds = s.count();
                nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(time_left - s).count();
             }
-            
+
             itimerspec ts{};
             ts.it_value.tv_sec = seconds;
             ts.it_value.tv_nsec = nanoseconds;
