@@ -28,6 +28,7 @@
 #elif defined(__linux__)
 #include <sys/epoll.h> // for epoll on Linux
 #include <sys/eventfd.h>
+#include <sys/timerfd.h>
 #endif
 
 namespace glz::net
