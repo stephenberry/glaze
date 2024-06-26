@@ -86,7 +86,10 @@ namespace glz::net
    
    inline file_handle_t create_shutdown_handle() {
 #if defined(__APPLE__)
-      return 0;
+      file_handle_t fd{};
+      struct kevent e;
+      EV_SET(&e, fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
+      return fd;
 #elif defined(__linux__)
       return ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)
@@ -96,7 +99,10 @@ namespace glz::net
    
    inline file_handle_t create_timer_handle() {
 #if defined(__APPLE__)
-      return 0;
+      file_handle_t fd{};
+      struct kevent e;
+      EV_SET(&e, fd, EVFILT_TIMER, EV_ADD | EV_ENABLE, NOTE_SECONDS, 1, nullptr);
+      return fd;
 #elif defined(__linux__)
       return ::timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
 #elif defined(_WIN32)
@@ -106,7 +112,10 @@ namespace glz::net
    
    inline file_handle_t create_schedule_handle() {
 #if defined(__APPLE__)
-      return 0;
+      file_handle_t fd{};
+      struct kevent e;
+      EV_SET(&e, fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
+      return fd;
 #elif defined(__linux__)
       return ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)
