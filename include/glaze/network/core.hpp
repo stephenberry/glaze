@@ -125,7 +125,7 @@ namespace glz::net
    
    inline bool poll_error([[maybe_unused]] uint32_t events) {
 #if defined(__APPLE__)
-      return true;
+      return events & EV_ERROR;
 #elif defined(__linux__)
       return events & EPOLLERR;
 #elif defined(_WIN32)
@@ -135,7 +135,7 @@ namespace glz::net
    
    inline bool event_closed([[maybe_unused]] uint32_t events) {
 #if defined(__APPLE__)
-      return true;
+      return events & EV_EOF;
 #elif defined(__linux__)
       return events & EPOLLRDHUP || events & EPOLLHUP;
 #elif defined(_WIN32)
