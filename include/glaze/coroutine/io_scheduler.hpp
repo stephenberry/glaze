@@ -649,6 +649,10 @@ namespace glz
 
       void process_event_execute(poll_info* pi, poll_status status)
       {
+         if (not pi) {
+            GLZ_THROW_OR_ABORT(std::runtime_error{"invalid poll_info"});
+         }
+         
          if (not pi->m_processed) {
             std::atomic_thread_fence(std::memory_order::acquire);
             // Its possible the event and the timeout occurred in the same epoll, make sure only one
