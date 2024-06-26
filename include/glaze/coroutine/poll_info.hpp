@@ -45,18 +45,18 @@ namespace glz
 
       struct poll_awaiter final
       {
-         poll_info& m_pi;
+         glz::poll_info& poll_info;
 
          bool await_ready() const noexcept { return false; }
          void await_suspend(std::coroutine_handle<> awaiting_coroutine) noexcept
          {
-            m_pi.m_awaiting_coroutine = awaiting_coroutine;
+            poll_info.m_awaiting_coroutine = awaiting_coroutine;
             std::atomic_thread_fence(std::memory_order::release);
          }
-         poll_status await_resume() noexcept { return m_pi.m_poll_status; }
+         poll_status await_resume() noexcept { return poll_info.m_poll_status; }
       };
 
-      auto operator co_await() noexcept -> poll_awaiter { return poll_awaiter{*this}; }
+      poll_awaiter operator co_await() noexcept { return {*this}; }
 
       /// The file descriptor being polled on.  This is needed so that if the timeout occurs first then
       /// the event loop can immediately disable the event within epoll.
