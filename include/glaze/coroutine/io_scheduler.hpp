@@ -784,7 +784,7 @@ namespace glz
       {
          if (!m_timed_events.empty()) {
             auto& [tp, pi] = *m_timed_events.begin();
-            
+
 #if defined(__linux__)
             size_t seconds{};
             size_t nanoseconds{1};
@@ -794,11 +794,11 @@ namespace glz
                seconds = s.count();
                nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(time_left - s).count();
             }
-            
+
             itimerspec ts{};
             ts.it_value.tv_sec = seconds;
             ts.it_value.tv_nsec = nanoseconds;
-            
+
             if (timerfd_settime(timer_fd, 0, &ts, nullptr) == -1) {
                std::cerr << "Failed to set timerfd errorno=[" << std::string{std::strerror(errno)} << "].";
             }
@@ -807,7 +807,8 @@ namespace glz
             if (tp > now) {
                milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(tp - now).count();
             }
-            struct kevent e{};
+            struct kevent e
+            {};
             EV_SET(&e, 1, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, milliseconds, nullptr);
             if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                perror("kevent (update timer)");
@@ -824,7 +825,8 @@ namespace glz
                std::cerr << "Failed to set timerfd errorno=[" << std::string{strerror(errno)} << "].";
             }
 #elif defined(__APPLE__)
-            struct kevent e{};
+            struct kevent e
+            {};
             EV_SET(&e, 1, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, 0, nullptr);
             if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
                perror("kevent (update timer)");
