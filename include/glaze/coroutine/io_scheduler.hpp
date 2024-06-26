@@ -407,7 +407,7 @@ namespace glz
                                                                 std::memory_order::relaxed)) {
 #if defined(__linux__)
                eventfd_t value{1};
-               event_write(schedule_fd, value);
+               eventfd_write(schedule_fd, value);
 #elif defined(__APPLE__)
                struct kevent e;
                ::kevent(schedule_fd, NULL, 0, &e, 1, NULL);

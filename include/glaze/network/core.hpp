@@ -57,9 +57,6 @@ namespace glz::net
    constexpr auto poll_out = EPOLLOUT;
 #elif defined(_WIN32)
 #endif
-
-   // TODO: implement
-   int event_write(auto, auto) { return 0; }
    
    inline auto close_socket(file_handle_t fd) {
 #ifdef _WIN32
