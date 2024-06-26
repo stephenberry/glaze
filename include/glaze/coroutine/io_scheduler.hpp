@@ -101,6 +101,8 @@ namespace glz
          }
 
          [[maybe_unused]] net::poll_event_t e{};
+         
+         [[maybe_unused]] bool event_setup_failed{};
 #if defined(__linux__)
          e.events = EPOLLIN;
 
@@ -111,7 +113,19 @@ namespace glz
          epoll_ctl(event_fd, EPOLL_CTL_ADD, timer_fd, &e);
 
          e.data.ptr = const_cast<void*>(m_schedule_ptr);
-         epoll_ctl(event_fd, EPOLL_CTL_ADD, m_schedule_fd, &e);
+         epoll_ctl(event_fd, EPOLL_CTL_ADD, schedule_fd, &e);
+#elif defined(__APPLE__)
+         e.filter = EVFILT_READ;
+         e.flags = EV_ADD;
+
+         EV_SET(&e, shutdown_fd, EVFILT_READ, EV_ADD, 0, 0, const_cast<void*>(m_shutdown_ptr));
+         kevent(event_fd, &e, 1, NULL, 0, NULL);
+
+         EV_SET(&e, timer_fd, EVFILT_TIMER, EV_ADD, 0, 0, const_cast<void*>(m_timer_ptr));
+         kevent(event_fd, &e, 1, NULL, 0, NULL);
+
+         EV_SET(&e, schedule_fd, EVFILT_READ, EV_ADD, 0, 0, const_cast<void*>(m_schedule_ptr));
+         kevent(event_fd, &e, 1, NULL, 0, NULL);
 #endif
 
          if (m_opts.thread_strategy == thread_strategy_t::spawn) {
@@ -197,7 +211,11 @@ namespace glz
                       expected, true, std::memory_order::release, std::memory_order::relaxed)) {
 #if defined(__linux__)
                   eventfd_t value{1};
-                  event_write(m_scheduler.schedule_fd, value);
+                  eventfd_write(m_scheduler.schedule_fd, value);
+#elif defined(__APPLE__)
+                  net::file_handle_t fd = m_scheduler.schedule_fd;
+                  uint64_t value = 1;
+                  ::write(fd, &value, sizeof(value));
 #endif
                }
             }
