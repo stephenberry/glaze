@@ -543,6 +543,9 @@ namespace glz
 #elif defined(__APPLE__)
                void* handle_ptr = event.udata;
 #endif
+               if (not handle_ptr) {
+                  GLZ_THROW_OR_ABORT(std::runtime_error{"handle_ptr is null"});
+               }
 
                if (handle_ptr == m_timer_ptr) {
                   // Process all events that have timed out.
