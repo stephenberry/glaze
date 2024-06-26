@@ -38,7 +38,7 @@ namespace glz
                       };
 
    template <class T>
-   concept io_exceutor = executor<T>;/* and requires(T t, std::coroutine_handle<> c, fd_t fd, glz::poll_op op,
+   concept io_exceutor = executor<T>;/* and requires(T t, std::coroutine_handle<> c, net::file_handle_t fd, glz::poll_op op,
                                                      std::chrono::milliseconds timeout) {
                                                {
                                                   t.poll(fd, op, timeout)

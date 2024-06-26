@@ -91,7 +91,8 @@ namespace glz
             m_thread_pool = std::make_unique<thread_pool>(std::move(m_opts.pool));
          }
 
-         net::poll_event_t e{};
+         [[maybe_unused]] net::poll_event_t e{};
+#if defined(__linux__)
          e.events = EPOLLIN;
 
          e.data.ptr = const_cast<void*>(m_shutdown_ptr);
@@ -102,6 +103,7 @@ namespace glz
 
          e.data.ptr = const_cast<void*>(m_schedule_ptr);
          epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, m_schedule_fd, &e);
+#endif
 
          if (m_opts.thread_strategy == thread_strategy_t::spawn) {
             m_io_thread = std::thread([this]() { process_events_dedicated_thread(); });
@@ -136,7 +138,7 @@ namespace glz
          }
 
          if (m_owned_tasks != nullptr) {
-            delete static_cast<coro::task_container<coro::io_scheduler>*>(m_owned_tasks);
+            delete static_cast<glz::task_container<glz::io_scheduler>*>(m_owned_tasks);
             m_owned_tasks = nullptr;
          }
       }
@@ -184,8 +186,10 @@ namespace glz
                bool expected{false};
                if (m_scheduler.m_schedule_fd_triggered.compare_exchange_strong(
                       expected, true, std::memory_order::release, std::memory_order::relaxed)) {
-                  event_handle_t value{1};
+#if defined(__linux__)
+                  eventfd_t value{1};
                   event_write(m_scheduler.schedule_fd, value);
+#endif
                }
             }
             else {
@@ -307,7 +311,7 @@ namespace glz
        *                block indefinitely until the event triggers.
        * @return The result of the poll operation.
        */
-      [[nodiscard]] auto poll(fd_t fd, glz::poll_op op,
+      [[nodiscard]] auto poll(net::file_handle_t fd, glz::poll_op op,
                               std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
          -> glz::task<poll_status>
       {
@@ -383,8 +387,10 @@ namespace glz
             bool expected{false};
             if (m_schedule_fd_triggered.compare_exchange_strong(expected, true, std::memory_order::release,
                                                                 std::memory_order::relaxed)) {
-               event_handle_t value{1};
+#if defined(__linux__)
+               eventfd_t value{1};
                event_write(schedule_fd, value);
+#endif
             }
 
             return true;
@@ -426,7 +432,7 @@ namespace glz
 
             // Signal the event loop to stop asap, triggering the event fd is safe.
             uint64_t value{1};
-            auto written = ::write(m_shutdown_fd, &value, sizeof(value));
+            auto written = ::write(shutdown_fd, &value, sizeof(value));
             (void)written;
 
             if (m_io_thread.joinable()) {
@@ -442,7 +448,7 @@ namespace glz
        */
       void garbage_collect() noexcept
       {
-         auto* ptr = static_cast<coro::task_container<coro::io_scheduler>*>(m_owned_tasks);
+         auto* ptr = static_cast<glz::task_container<glz::io_scheduler>*>(m_owned_tasks);
          ptr->garbage_collect();
       }
 
@@ -451,13 +457,13 @@ namespace glz
       options m_opts;
 
       /// The event loop epoll file descriptor.
-      fd_t event_fd{-1};
+      net::file_handle_t event_fd{-1};
       /// The event loop fd to trigger a shutdown.
-      fd_t shutdown_fd{-1};
+      net::file_handle_t shutdown_fd{-1};
       /// The event loop timer fd for timed events, e.g. yield_for() or scheduler_after().
-      fd_t timer_fd{-1};
+      net::file_handle_t timer_fd{-1};
       /// The schedule file descriptor if the scheduler is in inline processing mode.
-      fd_t schedule_fd{-1};
+      net::file_handle_t schedule_fd{-1};
       std::atomic<bool> m_schedule_fd_triggered{false};
 
       /// The number of tasks executing or awaiting events in this io scheduler.

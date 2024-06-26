@@ -39,7 +39,15 @@ namespace glz::net
    using poll_event_t = struct kevent;
 #elif defined(__linux__)
    using poll_event_t = struct epoll_event;
-   using event_handle_t = eventfd_t;
+#elif defined(_WIN32)
+#endif
+   
+#if defined(__APPLE__)
+   constexpr auto poll_in = 0b00000001;
+   constexpr auto poll_out = 0b00000010;
+#elif defined(__linux__)
+   constexpr auto poll_in = EPOLLIN;
+   constexpr auto poll_out = EPOLLOUT;
 #elif defined(_WIN32)
 #endif
 
