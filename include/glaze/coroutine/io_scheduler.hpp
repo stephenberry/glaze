@@ -320,9 +320,8 @@ namespace glz
        *                block indefinitely until the event triggers.
        * @return The result of the poll operation.
        */
-      [[nodiscard]] auto poll(net::file_handle_t fd, glz::poll_op op,
+      [[nodiscard]] glz::task<poll_status> poll(net::file_handle_t fd, glz::poll_op op,
                               std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
-         -> glz::task<poll_status>
       {
          // Because the size will drop when this coroutine suspends every poll needs to undo the subtraction
          // on the number of active tasks in the scheduler.  When this task is resumed by the event loop.
