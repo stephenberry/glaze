@@ -38,9 +38,8 @@ namespace glz
    t2: resume()
     * \endcode
     */
-   class event
+   struct event
    {
-     public:
       struct awaiter
       {
          /**
@@ -59,7 +58,28 @@ namespace glz
           * to resume execution immediately.
           * @return False if the event is already set, otherwise true to suspend this coroutine.
           */
-         auto await_suspend(std::coroutine_handle<> awaiting_coroutine) noexcept -> bool;
+         bool await_suspend(std::coroutine_handle<> awaiting_coroutine) noexcept
+         {
+             const void* const set_state = &m_event;
+
+             m_awaiting_coroutine = awaiting_coroutine;
+
+             // This value will update if other threads write to it via acquire.
+             void* old_value = m_event.m_state.load(std::memory_order::acquire);
+             do
+             {
+                 // Resume immediately if already in the set state.
+                 if (old_value == set_state)
+                 {
+                     return false;
+                 }
+
+                 m_next = static_cast<awaiter*>(old_value);
+             } while (!m_event.m_state.compare_exchange_weak(
+                 old_value, this, std::memory_order::release, std::memory_order::acquire));
+
+             return true;
+         }
 
          /**
           * Nothing to do on resume.
@@ -79,7 +99,10 @@ namespace glz
        * @param initially_set By default all events start as not set, but if needed this parameter can
        *                      set the event to already be triggered.
        */
-      explicit event(bool initially_set = false) noexcept;
+      explicit event(bool initially_set = false) noexcept
+         : m_state((initially_set) ? static_cast<void*>(this) : nullptr)
+      {}
+
       ~event() = default;
 
       event(const event&) = delete;
@@ -98,7 +121,29 @@ namespace glz
        * @param policy The order in which the waiters should be resumed, defaults to LIFO since it
        *               is more efficient, FIFO requires reversing the order of the waiters first.
        */
-      auto set(resume_order_policy policy = resume_order_policy::lifo) noexcept -> void;
+      void set(resume_order_policy policy = resume_order_policy::lifo) noexcept
+      {
+          // Exchange the state to this, if the state was previously not this, then traverse the list
+          // of awaiters and resume their coroutines.
+          void* old_value = m_state.exchange(this, std::memory_order::acq_rel);
+          if (old_value != this)
+          {
+              // If FIFO has been requsted then reverse the order upon resuming.
+              if (policy == resume_order_policy::fifo)
+              {
+                  old_value = reverse(static_cast<awaiter*>(old_value));
+              }
+              // else lifo nothing to do
+
+              auto* waiters = static_cast<awaiter*>(old_value);
+              while (waiters != nullptr)
+              {
+                  auto* next = waiters->m_next;
+                  waiters->m_awaiting_coroutine.resume();
+                  waiters = next;
+              }
+          }
+      }
 
       /**
        * Sets this event and resumes all awaiters onto the given executor.  This will distribute
@@ -133,7 +178,11 @@ namespace glz
        * Resets the event from set to not set so it can be re-used.  If the event is not currently
        * set then this function has no effect.
        */
-      auto reset() noexcept -> void;
+      void reset() noexcept
+      {
+          void* old_value = this;
+          m_state.compare_exchange_strong(old_value, nullptr, std::memory_order::acquire);
+      }
 
      protected:
       /// For access to m_state.
@@ -149,7 +198,24 @@ namespace glz
       /**
        * Reverses the set of waiters from LIFO->FIFO and returns the new head.
        */
-      auto reverse(awaiter* head) -> awaiter*;
-   };
+      auto reverse(awaiter* curr) -> awaiter*
+      {
+          if (curr == nullptr || curr->m_next == nullptr)
+          {
+              return curr;
+          }
 
+          awaiter* prev = nullptr;
+          awaiter* next = nullptr;
+          while (curr != nullptr)
+          {
+              next         = curr->m_next;
+              curr->m_next = prev;
+              prev         = curr;
+              curr         = next;
+          }
+
+          return prev;
+      }
+   };
 }

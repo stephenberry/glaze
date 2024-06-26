@@ -94,7 +94,7 @@ suite when_all = [] {
    // Use var args instead of a container as input to glz::when_all.
    auto square = [&](uint8_t x) -> glz::task<uint8_t> {
       co_await tp.schedule();
-      co_return x * x;
+      co_return x* x;
    };
 
    // Var args allows you to pass in tasks with different return types and returns
@@ -106,6 +106,29 @@ suite when_all = [] {
 
    expect(first == 4);
    expect(second == 20);
+};
+
+suite event = [] {
+   glz::event e;
+
+   // These tasks will wait until the given event has been set before advancing.
+   auto make_wait_task = [](const glz::event& e, uint64_t i) -> glz::task<void> {
+      std::cout << "task " << i << " is waiting on the event...\n";
+      co_await e;
+      std::cout << "task " << i << " event triggered, now resuming.\n";
+      co_return;
+   };
+
+   // This task will trigger the event allowing all waiting tasks to proceed.
+   auto make_set_task = [](glz::event& e) -> glz::task<void> {
+      std::cout << "set task is triggering the event\n";
+      e.set();
+      co_return;
+   };
+
+   // Given more than a single task to synchronously wait on, use when_all() to execute all the
+   // tasks concurrently on this thread and then sync_wait() for them all to complete.
+   glz::sync_wait(glz::when_all(make_wait_task(e, 1), make_wait_task(e, 2), make_wait_task(e, 3), make_set_task(e)));
 };
 
 int main() { return 0; }
