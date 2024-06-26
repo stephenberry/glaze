@@ -530,6 +530,11 @@ namespace glz
          const auto event_count = ::epoll_wait(event_fd, m_events.data(), max_events, timeout.count());
 #elif defined(_WIN32)
 #endif
+         
+         if (event_count == -1) {
+            net::event_close(event_fd);
+            GLZ_THROW_OR_ABORT(std::runtime_error{"wait for event failed"});
+         }
 
          if (event_count > 0) {
             for (size_t i = 0; i < size_t(event_count); ++i) {

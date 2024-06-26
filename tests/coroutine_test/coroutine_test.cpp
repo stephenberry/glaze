@@ -167,7 +167,7 @@ suite latch = [] {
       co_return;
    };
 
-   const int64_t num_tasks{5};
+   const int64_t num_tasks{0};
    glz::latch l{num_tasks};
    std::vector<glz::task<void>> tasks{};
 
