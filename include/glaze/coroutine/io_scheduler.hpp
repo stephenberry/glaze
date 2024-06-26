@@ -767,18 +767,16 @@ namespace glz
 
       void remove_timer_token(timed_events::iterator pos)
       {
-         {
-            std::scoped_lock lk{m_timed_events_mutex};
-            auto is_first = (m_timed_events.begin() == pos);
+         std::scoped_lock lk{m_timed_events_mutex};
+         auto is_first = (m_timed_events.begin() == pos);
 
-            m_timed_events.erase(pos);
+         m_timed_events.erase(pos);
 
-            // If this was the first item, update the timeout.  It would be acceptable to just let it
-            // also fire the timeout as the event loop will ignore it since nothing will have timed
-            // out but it feels like the right thing to do to update it to the correct timeout value.
-            if (is_first) {
-               update_timeout(clock::now());
-            }
+         // If this was the first item, update the timeout.  It would be acceptable to just let it
+         // also fire the timeout as the event loop will ignore it since nothing will have timed
+         // out but it feels like the right thing to do to update it to the correct timeout value.
+         if (is_first) {
+            update_timeout(clock::now());
          }
       }
 
