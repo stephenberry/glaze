@@ -199,7 +199,7 @@ namespace glz
          {
             std::scoped_lock lk{m_wait_mutex};
             for (const auto& handle : handles) {
-               if (handle != nullptr) [[likely]] {
+               if (handle) [[likely]] {
                   m_queue.emplace_back(handle);
                }
                else {
@@ -298,7 +298,7 @@ namespace glz
        */
       void executor(size_t idx)
       {
-         if (m_opts.on_thread_start_functor != nullptr) {
+         if (m_opts.on_thread_start_functor) {
             m_opts.on_thread_start_functor(idx);
          }
 
@@ -339,7 +339,7 @@ namespace glz
             m_size.fetch_sub(1, std::memory_order::release);
          }
 
-         if (m_opts.on_thread_stop_functor != nullptr) {
+         if (m_opts.on_thread_stop_functor) {
             m_opts.on_thread_stop_functor(idx);
          }
       }

@@ -136,7 +136,7 @@ namespace glz
               // else lifo nothing to do
 
               auto* waiters = static_cast<awaiter*>(old_value);
-              while (waiters != nullptr)
+              while (waiters)
               {
                   auto* next = waiters->m_next;
                   waiters->m_awaiting_coroutine.resume();
@@ -161,7 +161,7 @@ namespace glz
             // else lifo nothing to do
 
             auto* waiters = static_cast<awaiter*>(old_value);
-            while (waiters != nullptr) {
+            while (waiters) {
                auto* next = waiters->m_next;
                e.resume(waiters->m_awaiting_coroutine);
                waiters = next;
@@ -207,7 +207,7 @@ namespace glz
 
           awaiter* prev = nullptr;
           awaiter* next = nullptr;
-          while (curr != nullptr)
+          while (curr)
           {
               next         = curr->m_next;
               curr->m_next = prev;

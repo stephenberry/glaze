@@ -153,7 +153,7 @@ namespace glz
 
       auto begin() -> iterator
       {
-         if (m_coroutine != nullptr) {
+         if (m_coroutine) {
             m_coroutine.resume();
             if (m_coroutine.done()) {
                m_coroutine.promise().rethrow_if_exception();

@@ -41,7 +41,7 @@ namespace glz
 
          auto is_ready() const noexcept -> bool
          {
-            return m_awaiting_coroutine != nullptr && m_awaiting_coroutine.done();
+            return m_awaiting_coroutine && m_awaiting_coroutine.done();
          }
 
          auto try_await(std::coroutine_handle<> awaiting_coroutine) noexcept -> bool
@@ -376,7 +376,7 @@ namespace glz
 
          ~when_all_task()
          {
-            if (m_coroutine != nullptr) {
+            if (m_coroutine) {
                m_coroutine.destroy();
             }
          }

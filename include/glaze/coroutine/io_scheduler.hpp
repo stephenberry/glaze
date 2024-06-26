@@ -506,7 +506,7 @@ namespace glz
 
       void process_events_dedicated_thread()
       {
-         if (m_opts.on_io_thread_start_functor != nullptr) {
+         if (m_opts.on_io_thread_start_functor) {
             m_opts.on_io_thread_start_functor();
          }
 
@@ -517,7 +517,7 @@ namespace glz
          }
          m_io_processing.exchange(false, std::memory_order::release);
 
-         if (m_opts.on_io_thread_stop_functor != nullptr) {
+         if (m_opts.on_io_thread_stop_functor) {
             m_opts.on_io_thread_stop_functor();
          }
       }

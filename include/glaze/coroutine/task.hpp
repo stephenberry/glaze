@@ -37,7 +37,7 @@ namespace glz
             {
                // If there is a continuation call it, otherwise this is the end of the line.
                auto& promise = coroutine.promise();
-               if (promise.m_continuation != nullptr) {
+               if (promise.m_continuation) {
                   return promise.m_continuation;
                }
                else {
@@ -244,7 +244,7 @@ namespace glz
 
       ~task()
       {
-         if (m_coroutine != nullptr) {
+         if (m_coroutine) {
             m_coroutine.destroy();
          }
       }
@@ -254,7 +254,7 @@ namespace glz
       auto operator=(task&& other) noexcept -> task&
       {
          if (std::addressof(other) != this) {
-            if (m_coroutine != nullptr) {
+            if (m_coroutine) {
                m_coroutine.destroy();
             }
 
@@ -279,7 +279,7 @@ namespace glz
 
       auto destroy() -> bool
       {
-         if (m_coroutine != nullptr) {
+         if (m_coroutine) {
             m_coroutine.destroy();
             m_coroutine = nullptr;
             return true;
