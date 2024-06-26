@@ -434,7 +434,8 @@ namespace glz
          {
             using V = std::decay_t<decltype(*std::declval<std::decay_t<T>>())>;
             to_json_schema<V>::template op<Opts>(s, defs);
-            auto& type = *s.type;
+            // to_json_schema above should populate the correct type, let's throw it wasn't set
+            auto& type = s.type.value();
             auto it = std::find_if(type.begin(), type.end(), [&](const auto& str) { return str == "null"; });
             if (it == type.end()) {
                type.emplace_back("null");
