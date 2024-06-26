@@ -335,11 +335,11 @@ namespace glz
 
          bool timeout_requested = (timeout > std::chrono::milliseconds(0));
 
-         poll_info pi{};
-         pi.m_fd = fd;
+         glz::poll_info poll_info{};
+         poll_info.m_fd = fd;
 
          if (timeout_requested) {
-            pi.m_timer_pos = add_timer_token(clock::now() + timeout, pi);
+            poll_info.m_timer_pos = add_timer_token(clock::now() + timeout, poll_info);
          }
 
          [[maybe_unused]] net::poll_event_t e{};
@@ -350,7 +350,8 @@ namespace glz
             std::cerr << "epoll ctl error on fd " << fd << "\n";
          }
 #elif defined(__APPLE__)
-         EV_SET(&e, event_fd, EVFILT_READ, EV_ADD | EV_ONESHOT | EV_EOF, 0, 0, &pi);
+         e.data = intptr_t(&poll_info);
+         EV_SET(&e, event_fd, EVFILT_READ, EV_ADD | EV_ONESHOT | EV_EOF, 0, 0, nullptr);
          if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
             std::cerr << "kqueue ctl error on fd " << fd << "\n";
          }
@@ -359,7 +360,7 @@ namespace glz
          // The event loop will 'clean-up' whichever event didn't win since the coroutine is scheduled
          // onto the thread poll its possible the other type of event could trigger while its waiting
          // to execute again, thus restarting the coroutine twice, that would be quite bad.
-         auto result = co_await pi;
+         auto result = co_await poll_info;
          n_active_tasks.fetch_sub(1, std::memory_order::release);
          co_return result;
       }
@@ -613,8 +614,8 @@ namespace glz
             eventfd_read(schedule_fd, &value);
 #elif defined(__APPLE__)
             struct kevent change;
-            EV_SET(&change, schedule_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
-            kevent(schedule_fd, &change, 1, NULL, 0, NULL);
+            EV_SET(&change, schedule_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, nullptr);
+            kevent(schedule_fd, &change, 1, nullptr, 0, nullptr);
 #endif
 
             // Clear the in memory flag to reduce eventfd_* calls on scheduling.
@@ -660,8 +661,8 @@ namespace glz
                epoll_ctl(event_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
 #elif defined(__APPLE__)
                struct kevent e;
-               EV_SET(&e, pi->m_fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
-               if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+               EV_SET(&e, pi->m_fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
+               if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                   std::cerr << "Failed to remove fd " << pi->m_fd << " from kqueue\n";
                }
 #endif
@@ -717,10 +718,10 @@ namespace glz
                struct kevent e;
 
                // Initialize the kevent structure for deletion
-               EV_SET(&e, pi->m_fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+               EV_SET(&e, pi->m_fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
 
                // Remove the event from the kqueue
-               if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+               if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                   std::cerr << "Failed to remove fd " << pi->m_fd << " from kqueue\n";
                }
 #endif
@@ -799,8 +800,8 @@ namespace glz
                milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(tp - now).count();
             }
             struct kevent e;
-            EV_SET(&e, 1, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, milliseconds, NULL);
-            if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+            EV_SET(&e, 1, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, milliseconds, nullptr);
+            if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                perror("kevent (update timer)");
             }
 #endif
@@ -816,7 +817,7 @@ namespace glz
             }
 #elif defined(__APPLE__)
             struct kevent e;
-            EV_SET(&e, 1, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, 0, NULL);
+            EV_SET(&e, 1, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, 0, nullptr);
             if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
                perror("kevent (update timer)");
             }
