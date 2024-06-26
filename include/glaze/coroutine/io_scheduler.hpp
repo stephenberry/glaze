@@ -213,8 +213,8 @@ namespace glz
                   eventfd_t value{1};
                   eventfd_write(m_scheduler.schedule_fd, value);
 #elif defined(__APPLE__)
-                  uint64_t value = 1;
-                  ::write(m_scheduler.schedule_fd, &value, sizeof(value));
+                   struct kevent e;
+                   ::kevent(m_scheduler.schedule_fd, NULL, 0, &e, 1, NULL);
 #endif
                }
             }
@@ -424,8 +424,8 @@ namespace glz
                eventfd_t value{1};
                event_write(schedule_fd, value);
 #elif defined(__APPLE__)
-               uint64_t value = 1;
-               ::write(schedule_fd, &value, sizeof(value));
+               struct kevent e;
+               ::kevent(schedule_fd, NULL, 0, &e, 1, NULL);
 #endif
             }
 
@@ -639,8 +639,9 @@ namespace glz
             eventfd_t value{0};
             eventfd_read(schedule_fd, &value);
 #elif defined(__APPLE__)
-            uint64_t value = 1;
-            ::read(schedule_fd, &value, sizeof(value));
+            struct kevent change;
+            EV_SET(&change, schedule_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, NULL);
+            kevent(schedule_fd, &change, 1, NULL, 0, NULL);
 #endif
 
             // Clear the in memory flag to reduce eventfd_* calls on scheduling.
