@@ -543,6 +543,10 @@ namespace glz
                void* handle_ptr = event.data.ptr;
 #elif defined(__APPLE__)
                void* handle_ptr = event.udata;
+               
+               if (event.flags & EV_ERROR) {
+                  GLZ_THROW_OR_ABORT(std::runtime_error{"event error"});
+               }
 #endif
                if (not handle_ptr) {
                   GLZ_THROW_OR_ABORT(std::runtime_error{"handle_ptr is null"});
