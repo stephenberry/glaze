@@ -118,15 +118,15 @@ namespace glz
          e.filter = EVFILT_READ;
          e.flags = EV_ADD;
 
-         e.data = intptr_t(m_shutdown_ptr);
+         e.udata = const_cast<void*>(m_shutdown_ptr);
          EV_SET(&e, shutdown_fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
          ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
 
-         e.data = intptr_t(m_timer_ptr);
+         e.udata = const_cast<void*>(m_timer_ptr);
          EV_SET(&e, timer_fd, EVFILT_TIMER, EV_ADD, 0, 0, nullptr);
          ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
 
-         e.data = intptr_t(m_schedule_ptr);
+         e.udata = const_cast<void*>(m_schedule_ptr);
          EV_SET(&e, schedule_fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
          ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
 #endif
@@ -350,8 +350,8 @@ namespace glz
             std::cerr << "epoll ctl error on fd " << fd << "\n";
          }
 #elif defined(__APPLE__)
-         e.data = intptr_t(&poll_info);
-         EV_SET(&e, event_fd, EVFILT_READ, EV_ADD | EV_ONESHOT | EV_EOF, 0, 0, nullptr);
+         e.udata = &poll_info;
+         EV_SET(&e, fd, EVFILT_READ, EV_ADD | EV_ONESHOT | EV_EOF, 0, 0, nullptr);
          if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
             std::cerr << "kqueue ctl error on fd " << fd << "\n";
          }
@@ -540,7 +540,7 @@ namespace glz
 #if defined(__linux__)
                void* handle_ptr = event.data.ptr;
 #elif defined(__APPLE__)
-               void* handle_ptr = reinterpret_cast<void*>(event.data);
+               void* handle_ptr = event.udata;
 #endif
 
                if (handle_ptr == m_timer_ptr) {
