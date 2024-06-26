@@ -25,6 +25,7 @@
 #endif
 
 #include <chrono>
+#include <cstring>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -796,7 +797,7 @@ namespace glz
             ts.it_value.tv_nsec = nanoseconds;
 
             if (timerfd_settime(timer_fd, 0, &ts, nullptr) == -1) {
-               std::cerr << "Failed to set timerfd errorno=[" << std::string{strerror(errno)} << "].";
+               std::cerr << "Failed to set timerfd errorno=[" << std::string{std::strerror(errno)} << "].";
             }
 #elif defined(__APPLE__)
             size_t milliseconds{};
