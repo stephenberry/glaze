@@ -14,6 +14,9 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <signal.h>
+#include <ctime>
+#include <time.h>
 #endif
 
 #if __has_include(<netinet/in.h>)

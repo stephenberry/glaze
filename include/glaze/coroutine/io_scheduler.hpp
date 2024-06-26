@@ -101,7 +101,7 @@ namespace glz
          }
 
          [[maybe_unused]] net::poll_event_t e{};
-         
+
          [[maybe_unused]] bool event_setup_failed{};
 #if defined(__linux__)
          e.events = EPOLLIN;
@@ -213,9 +213,8 @@ namespace glz
                   eventfd_t value{1};
                   eventfd_write(m_scheduler.schedule_fd, value);
 #elif defined(__APPLE__)
-                  net::file_handle_t fd = m_scheduler.schedule_fd;
                   uint64_t value = 1;
-                  ::write(fd, &value, sizeof(value));
+                  ::write(m_scheduler.schedule_fd, &value, sizeof(value));
 #endif
                }
             }
@@ -366,6 +365,11 @@ namespace glz
          if (epoll_ctl(event_fd, EPOLL_CTL_ADD, fd, &e) == -1) {
             std::cerr << "epoll ctl error on fd " << fd << "\n";
          }
+#elif defined(__APPLE__)
+         EV_SET(&e, event_fd, EVFILT_READ, EV_ADD | EV_ONESHOT | EV_EOF, 0, 0, &pi);
+         if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+            std::cerr << "kqueue ctl error on fd " << fd << "\n";
+         }
 #endif
 
          // The event loop will 'clean-up' whichever event didn't win since the coroutine is scheduled
@@ -419,6 +423,9 @@ namespace glz
 #if defined(__linux__)
                eventfd_t value{1};
                event_write(schedule_fd, value);
+#elif defined(__APPLE__)
+               uint64_t value = 1;
+               ::write(schedule_fd, &value, sizeof(value));
 #endif
             }
 
@@ -549,10 +556,10 @@ namespace glz
          };
          auto event_count = ::kevent(event_fd, nullptr, 0, m_events.data(), int(m_events.size()), &tlimit);
 #elif defined(__linux__)
-      auto event_count = poll_wait(event_fd, m_events.data(), m_max_events, timeout.count());
+         auto event_count = poll_wait(event_fd, m_events.data(), m_max_events, timeout.count());
 #elif defined(_WIN32)
 #endif
-         
+
          if (event_count > 0) {
             for (size_t i = 0; i < size_t(event_count); ++i) {
                auto& event = m_events[i];
@@ -576,8 +583,9 @@ namespace glz
                else {
                   // Individual poll task wake-up.
 #if defined(__linux__)
-                  process_event_execute(static_cast<poll_info*>(handle_ptr),
-                                        event_to_poll_status(event.events));
+                  process_event_execute(static_cast<poll_info*>(handle_ptr), event_to_poll_status(event.events));
+#elif defined(__APPLE__)
+                  process_event_execute(static_cast<poll_info*>(handle_ptr), event_to_poll_status(event.flags));
 #endif
                }
             }
@@ -630,6 +638,9 @@ namespace glz
 #if defined(__linux__)
             eventfd_t value{0};
             eventfd_read(schedule_fd, &value);
+#elif defined(__APPLE__)
+            uint64_t value = 1;
+            ::read(schedule_fd, &value, sizeof(value));
 #endif
 
             // Clear the in memory flag to reduce eventfd_* calls on scheduling.
@@ -680,6 +691,12 @@ namespace glz
             if (pi->m_fd != -1) {
 #if defined(__linux__)
                epoll_ctl(event_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
+#elif defined(__APPLE__)
+               struct kevent e;
+               EV_SET(&e, pi->m_fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+               if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+                  std::cerr << "Failed to remove fd " << pi->m_fd << " from kqueue\n";
+               }
 #endif
             }
 
@@ -729,6 +746,16 @@ namespace glz
                if (pi->m_fd != -1) {
 #if defined(__linux__)
                   epoll_ctl(event_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
+#elif defined(__APPLE__)
+               struct kevent e;
+
+               // Initialize the kevent structure for deletion
+               EV_SET(&e, pi->m_fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+
+               // Remove the event from the kqueue
+               if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+                  std::cerr << "Failed to remove fd " << pi->m_fd << " from kqueue\n";
+               }
 #endif
                }
 
@@ -782,32 +809,32 @@ namespace glz
          if (!m_timed_events.empty()) {
             auto& [tp, pi] = *m_timed_events.begin();
 
-            auto amount = tp - now;
-
-            auto seconds = std::chrono::duration_cast<std::chrono::seconds>(amount);
-            amount -= seconds;
-            auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(amount);
-            
-            using namespace std::chrono_literals;
-
-            // As a safeguard if both values end up as zero (or negative) then trigger the timeout
-            // immediately as zero disarms timerfd according to the man pages and negative values
-            // will result in an error return value.
-            if (seconds <= 0s) {
-               seconds = 0s;
-               if (nanoseconds <= 0ns) {
-                  // just trigger "immediately"!
-                  nanoseconds = 1ns;
-               }
-            }
-
 #if defined(__linux__)
+            size_t seconds{};
+            size_t nanoseconds{1};
+            if (tp > now) {
+               const auto time_left_ns = tp - now;
+               const auto s = std::chrono::duration_cast<std::chrono::seconds>(time_left);
+               seconds = s.count();
+               nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(time_left - s).count();
+            }
+            
             itimerspec ts{};
-            ts.it_value.tv_sec = seconds.count();
-            ts.it_value.tv_nsec = nanoseconds.count();
+            ts.it_value.tv_sec = seconds;
+            ts.it_value.tv_nsec = nanoseconds;
 
             if (timerfd_settime(timer_fd, 0, &ts, nullptr) == -1) {
                std::cerr << "Failed to set timerfd errorno=[" << std::string{strerror(errno)} << "].";
+            }
+#elif defined(__APPLE__)
+            size_t milliseconds{};
+            if (tp > now) {
+               milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(tp - now).count();
+            }
+            struct kevent e;
+            EV_SET(&e, 1, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, milliseconds, NULL);
+            if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+               perror("kevent (update timer)");
             }
 #endif
          }
@@ -819,6 +846,12 @@ namespace glz
             ts.it_value.tv_nsec = 0;
             if (timerfd_settime(timer_fd, 0, &ts, nullptr) == -1) {
                std::cerr << "Failed to set timerfd errorno=[" << std::string{strerror(errno)} << "].";
+            }
+#elif defined(__APPLE__)
+            struct kevent e;
+            EV_SET(&e, 1, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, 0, NULL);
+            if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+               perror("kevent (update timer)");
             }
 #endif
          }
