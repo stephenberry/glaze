@@ -373,9 +373,9 @@ namespace glz
        *                block indefinitely until the event triggers.
        * @return THe result of the poll operation.
        */
-      [[nodiscard]] auto poll(const net::socket& sock, coro::poll_op op,
+      [[nodiscard]] auto poll(const net::socket& sock, glz::poll_op op,
                               std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
-         -> coro::task<poll_status>
+         -> glz::task<poll_status>
       {
          return poll(sock.native_handle(), op, timeout);
       }
@@ -642,8 +642,8 @@ namespace glz
 
       static constexpr std::chrono::milliseconds m_default_timeout{1000};
       static constexpr std::chrono::milliseconds m_no_timeout{0};
-      static constexpr size_t m_max_events = 16;
-      std::array<net::poll_event_t, m_max_events> m_events{};
+      static constexpr size_t max_events = 16;
+      std::array<net::poll_event_t, max_events> m_events{};
       std::vector<std::coroutine_handle<>> m_handles_to_resume{};
 
       void process_event_execute(poll_info* pi, poll_status status)
