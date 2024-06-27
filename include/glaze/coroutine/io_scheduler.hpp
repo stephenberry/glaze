@@ -337,19 +337,18 @@ namespace glz
             poll_info.m_timer_pos = add_timer_token(clock::now() + timeout, poll_info);
          }
 
-         [[maybe_unused]] net::poll_event_t e{};
 #if defined(__linux__)
+         net::poll_event_t e{};
          e.events = uint32_t(op) | EPOLLONESHOT | EPOLLRDHUP;
          e.data.ptr = &poll_info;
          if (epoll_ctl(event_fd, EPOLL_CTL_ADD, fd, &e) == -1) {
             std::cerr << "epoll ctl error on fd " << fd << "\n";
          }
 #elif defined(__APPLE__)
-         e.udata = &poll_info;
-         EV_SET(&e, fd, EVFILT_READ, EV_ADD | EV_ONESHOT | EV_EOF, 0, 0, &poll_info);
-         if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
-            std::cerr << "kqueue ctl error on fd " << fd << "\n";
-         }
+         net::poll_event_t e{.ident = uintptr_t(fd), .filter = EVFILT_READ, .flags = EV_ADD | EV_EOF, .udata = &poll_info};
+        if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+           std::cerr << "kqueue failed to register for fd: " << fd << "\n";
+        }
 #endif
 
          // The event loop will 'clean-up' whichever event didn't win since the coroutine is scheduled
@@ -406,7 +405,7 @@ namespace glz
 #elif defined(__APPLE__)
                net::poll_event_t e{.filter = EVFILT_USER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_schedule_ptr)};
               if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
-                  GLZ_THROW_OR_ABORT(std::runtime_error("Failed to trigger wke up"));
+                  GLZ_THROW_OR_ABORT(std::runtime_error("Failed to trigger wake up"));
               }
 #endif
             }
@@ -676,14 +675,8 @@ namespace glz
             // Given a valid fd always remove it from epoll so the next poll can blindly EPOLL_CTL_ADD.
             if (poll_info->m_fd != net::invalid_file_handle) {
 #if defined(__linux__)
-               epoll_ctl(event_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
+               epoll_ctl(event_fd, EPOLL_CTL_DEL, poll_info->m_fd, nullptr);
 #elif defined(__APPLE__)
-               struct kevent e
-               {};
-               EV_SET(&e, poll_info->m_fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
-               if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
-                  std::cerr << "Failed to remove fd " << poll_info->m_fd << " from kqueue\n";
-               }
 #endif
             }
 
