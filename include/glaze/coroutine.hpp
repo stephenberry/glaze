@@ -11,6 +11,7 @@
 #include "glaze/coroutine/ring_buffer.hpp"
 #include "glaze/coroutine/semaphore.hpp"
 #include "glaze/coroutine/shared_mutex.hpp"
+#include "glaze/coroutine/socket.hpp"
 #include "glaze/coroutine/sync_wait.hpp"
 #include "glaze/coroutine/task.hpp"
 #include "glaze/coroutine/thread_pool.hpp"
