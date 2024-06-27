@@ -47,7 +47,7 @@ namespace glz
          manual
       };
 
-      enum class execution_strategy_t {
+      enum struct execution_strategy_t {
          /// Tasks will be FIFO queued to be executed on a thread pool.  This is better for tasks that
          /// are long lived and will use lots of CPU because long lived tasks will block other i/o
          /// operations while they complete.  This strategy is generally better for lower latency
@@ -88,11 +88,7 @@ namespace glz
                                          .on_thread_start_functor = nullptr,
                                          .on_thread_stop_functor = nullptr},
                                 .execution_strategy = execution_strategy_t::process_tasks_on_thread_pool})
-         : m_opts(std::move(opts)),
-           event_fd(net::create_event_poll()),
-           shutdown_fd(net::create_shutdown_handle()),
-           timer_fd(net::create_timer_handle()),
-           schedule_fd(net::create_schedule_handle())
+         : m_opts(std::move(opts))
       {
          if (opts.execution_strategy == execution_strategy_t::process_tasks_on_thread_pool) {
             m_thread_pool = std::make_unique<thread_pool>(std::move(m_opts.pool));
@@ -476,13 +472,13 @@ namespace glz
       options m_opts;
 
       /// The event loop epoll file descriptor.
-      net::file_handle_t event_fd{net::invalid_file_handle};
+      net::file_handle_t event_fd{net::create_event_poll()};
       /// The event loop fd to trigger a shutdown.
-      net::ident_t shutdown_fd{net::invalid_ident};
+      net::ident_t shutdown_fd{net::create_shutdown_handle()};
       /// The event loop timer fd for timed events, e.g. yield_for() or scheduler_after().
-      net::ident_t timer_fd{net::invalid_ident};
+      net::ident_t timer_fd{net::create_timer_handle()};
       /// The schedule file descriptor if the scheduler is in inline processing mode.
-      net::ident_t schedule_fd{net::invalid_ident};
+      net::ident_t schedule_fd{net::create_schedule_handle()};
       std::atomic<bool> m_schedule_fd_triggered{false};
 
       /// The number of tasks executing or awaiting events in this io scheduler.
