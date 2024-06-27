@@ -663,7 +663,6 @@ namespace glz
             if (poll_info->m_fd != net::invalid_file_handle) {
 #if defined(__linux__)
                epoll_ctl(event_fd, EPOLL_CTL_DEL, poll_info->m_fd, nullptr);
-#elif defined(__APPLE__)
 #endif
             }
 
@@ -674,7 +673,7 @@ namespace glz
 
             poll_info->m_poll_status = status;
 
-            while (poll_info->m_awaiting_coroutine == nullptr) {
+            while (not poll_info->m_awaiting_coroutine) {
                std::atomic_thread_fence(std::memory_order::acquire);
             }
 
