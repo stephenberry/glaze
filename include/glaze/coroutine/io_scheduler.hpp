@@ -727,17 +727,12 @@ namespace glz
 #if defined(__linux__)
                   epoll_ctl(event_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
 #elif defined(__APPLE__)
-                  GLZ_THROW_OR_ABORT(std::runtime_error("TODO: Implement"));
-                  /*net::poll_event_t e{.filter = EVFILT_READ, .flags = EV_DELETE};
-                  if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
-                     std::cerr << "Failed to remove fd " << pi->m_fd << " from kqueue\n";
-                  }*/
 #endif
                }
 
-               while (pi->m_awaiting_coroutine == nullptr) {
+               while (not pi->m_awaiting_coroutine) {
                   std::atomic_thread_fence(std::memory_order::acquire);
-                  // std::cerr << "process_event_execute() has a nullptr event\n";
+                  std::cerr << "process_event_execute() has a null event\n";
                }
 
                m_handles_to_resume.emplace_back(pi->m_awaiting_coroutine);
