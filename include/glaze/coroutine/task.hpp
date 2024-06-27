@@ -110,7 +110,7 @@ namespace glz
 
          void unhandled_exception() noexcept { new (&m_storage) variant_type(std::current_exception()); }
 
-         auto result() & -> decltype(auto)
+         decltype(auto) result() &
          {
             if (std::holds_alternative<stored_type>(m_storage)) {
                if constexpr (return_type_is_reference) {
@@ -128,7 +128,7 @@ namespace glz
             }
          }
 
-         auto result() const& -> decltype(auto)
+         decltype(auto) result() const&
          {
             if (std::holds_alternative<stored_type>(m_storage)) {
                if constexpr (return_type_is_reference) {
@@ -146,7 +146,7 @@ namespace glz
             }
          }
 
-         auto result() && -> decltype(auto)
+         decltype(auto) result() &&
          {
             if (std::holds_alternative<stored_type>(m_storage)) {
                if constexpr (return_type_is_reference) {
