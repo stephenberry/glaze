@@ -78,18 +78,18 @@ namespace glz
          const execution_strategy_t execution_strategy{execution_strategy_t::process_tasks_on_thread_pool};
       };
       
-      explicit io_scheduler() {
+      io_scheduler() {
          init();
       }
 
-      explicit io_scheduler(options opts) : m_opts(std::move(opts)) {
+      io_scheduler(options opts) : m_opts(std::move(opts)) {
          init();
       }
 
       io_scheduler(const io_scheduler&) = delete;
       io_scheduler(io_scheduler&&) = delete;
-      auto operator=(const io_scheduler&) -> io_scheduler& = delete;
-      auto operator=(io_scheduler&&) -> io_scheduler& = delete;
+      io_scheduler& operator=(const io_scheduler&)  = delete;
+      io_scheduler& operator=(io_scheduler&&) = delete;
 
       ~io_scheduler()
       {
@@ -98,25 +98,12 @@ namespace glz
          if (m_io_thread.joinable()) {
             m_io_thread.join();
          }
-
-         if (event_fd != net::invalid_file_handle) {
+         
 #if defined(__linux__)
-            close(event_fd);
+         close_file_handle(event_fd);
+         close_file_handle(timer_fd);
+         close_file_handle(schedule_fd);
 #endif
-            event_fd = net::invalid_file_handle;
-         }
-         if (timer_fd != net::invalid_ident) {
-#if defined(__linux__)
-            close(timer_fd);
-#endif
-            timer_fd = net::invalid_ident;
-         }
-         if (schedule_fd != net::invalid_ident) {
-#if defined(__linux__)
-            close(schedule_fd);
-#endif
-            schedule_fd = net::invalid_ident;
-         }
       }
 
       /**
@@ -434,11 +421,11 @@ namespace glz
       /// The event loop epoll file descriptor.
       net::file_handle_t event_fd{net::create_event_poll()};
       /// The event loop fd to trigger a shutdown.
-      net::ident_t shutdown_fd{net::create_shutdown_handle()};
+      net::file_handle_t shutdown_fd{net::create_shutdown_handle()};
       /// The event loop timer fd for timed events, e.g. yield_for() or scheduler_after().
-      net::ident_t timer_fd{net::create_timer_handle()};
+      net::file_handle_t timer_fd{net::create_timer_handle()};
       /// The schedule file descriptor if the scheduler is in inline processing mode.
-      net::ident_t schedule_fd{net::create_schedule_handle()};
+      net::file_handle_t schedule_fd{net::create_schedule_handle()};
       std::atomic<bool> m_schedule_fd_triggered{false};
 
       /// The number of tasks executing or awaiting events in this io scheduler.

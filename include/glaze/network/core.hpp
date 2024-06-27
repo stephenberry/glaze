@@ -72,12 +72,15 @@ namespace glz::net
 #elif defined(_WIN32)
 #endif
    
-   inline auto close_socket(file_handle_t fd) {
+   inline auto close_file_handle(file_handle_t& fd) {
+      if (fd != invalid_file_handle) {
 #ifdef _WIN32
       ::closesocket(fd);
 #else
       ::close(fd);
 #endif
+      }
+      fd = invalid_file_handle;
    }
    
    inline auto event_close(file_handle_t fd) {
@@ -98,9 +101,9 @@ namespace glz::net
 #endif
    }
    
-   inline ident_t create_shutdown_handle() {
+   inline file_handle_t create_shutdown_handle() {
 #if defined(__APPLE__)
-      return invalid_ident;
+      return invalid_file_handle;
 #elif defined(__linux__)
       return ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)
@@ -108,9 +111,9 @@ namespace glz::net
 #endif
    }
    
-   inline ident_t create_timer_handle() {
+   inline file_handle_t create_timer_handle() {
 #if defined(__APPLE__)
-      return invalid_ident;
+      return invalid_file_handle;
 #elif defined(__linux__)
       return ::timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
 #elif defined(_WIN32)
@@ -118,9 +121,9 @@ namespace glz::net
 #endif
    }
    
-   inline ident_t create_schedule_handle() {
+   inline file_handle_t create_schedule_handle() {
 #if defined(__APPLE__)
-      return invalid_ident;
+      return invalid_file_handle;
 #elif defined(__linux__)
       return ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)
