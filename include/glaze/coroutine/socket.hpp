@@ -13,27 +13,23 @@ namespace glz
    struct socket
    {
       enum struct type {
-         /// udp datagram socket
          udp,
-         /// tcp streaming socket
          tcp
       };
 
       enum struct blocking {
-         /// This socket should block on system calls.
          yes,
-         /// This socket should not block on system calls.
          no
       };
 
       struct options
       {
          /// The domain for the socket.
-         ip_version domain;
+         ip_version domain{};
          /// The type of socket.
-         socket::type type;
+         socket::type type{};
          /// If the socket should be blocking or non-blocking.
-         socket::blocking blocking;
+         socket::blocking blocking{};
       };
 
       static int type_to_os(socket::type type)
