@@ -77,53 +77,13 @@ namespace glz
          /// rather than scheduling them to be picked up by the thread pool.
          const execution_strategy_t execution_strategy{execution_strategy_t::process_tasks_on_thread_pool};
       };
+      
+      explicit io_scheduler() {
+         init();
+      }
 
-      explicit io_scheduler(
-         options opts = options{.thread_strategy = thread_strategy_t::spawn,
-                                .on_io_thread_start_functor = nullptr,
-                                .on_io_thread_stop_functor = nullptr,
-                                .pool = {.thread_count = ((std::thread::hardware_concurrency() > 1)
-                                                             ? (std::thread::hardware_concurrency() - 1)
-                                                             : 1),
-                                         .on_thread_start_functor = nullptr,
-                                         .on_thread_stop_functor = nullptr},
-                                .execution_strategy = execution_strategy_t::process_tasks_on_thread_pool})
-         : m_opts(std::move(opts))
-      {
-         if (opts.execution_strategy == execution_strategy_t::process_tasks_on_thread_pool) {
-            m_thread_pool = std::make_unique<thread_pool>(std::move(m_opts.pool));
-         }
-
-         [[maybe_unused]] net::poll_event_t e{};
-
-         [[maybe_unused]] bool event_setup_failed{};
-#if defined(__linux__)
-         e.events = EPOLLIN;
-
-         e.data.ptr = const_cast<void*>(m_shutdown_ptr);
-         epoll_ctl(event_fd, EPOLL_CTL_ADD, shutdown_fd, &e);
-
-         e.data.ptr = const_cast<void*>(m_timer_ptr);
-         epoll_ctl(event_fd, EPOLL_CTL_ADD, timer_fd, &e);
-
-         e.data.ptr = const_cast<void*>(m_schedule_ptr);
-         epoll_ctl(event_fd, EPOLL_CTL_ADD, schedule_fd, &e);
-#elif defined(__APPLE__)
-         net::poll_event_t e_timer{.filter = EVFILT_TIMER, .flags = EV_ADD, .udata = const_cast<void*>(m_timer_ptr)};
-         net::poll_event_t e_shutdown{
-            .filter = EVFILT_USER, .flags = EV_ADD | EV_CLEAR, .udata = const_cast<void*>(m_shutdown_ptr)};
-         net::poll_event_t e_schedule{
-            .filter = EVFILT_USER, .flags = EV_ADD, .udata = const_cast<void*>(m_schedule_ptr)};
-
-         ::kevent(event_fd, &e_schedule, 1, nullptr, 0, nullptr);
-         ::kevent(event_fd, &e_shutdown, 1, nullptr, 0, nullptr);
-         ::kevent(event_fd, &e_timer, 1, nullptr, 0, nullptr);
-#endif
-
-         if (m_opts.thread_strategy == thread_strategy_t::spawn) {
-            m_io_thread = std::thread([this]() { process_events_dedicated_thread(); });
-         }
-         // else manual mode, the user must call process_events.
+      explicit io_scheduler(options opts) : m_opts(std::move(opts)) {
+         init();
       }
 
       io_scheduler(const io_scheduler&) = delete;
@@ -469,7 +429,7 @@ namespace glz
 
      private:
       /// The configuration options.
-      options m_opts;
+      options m_opts{};
 
       /// The event loop epoll file descriptor.
       net::file_handle_t event_fd{net::create_event_poll()};
@@ -506,6 +466,44 @@ namespace glz
             process_events_execute(timeout);
             m_io_processing.exchange(false, std::memory_order::release);
          }
+      }
+      
+      void init()
+      {
+         if (m_opts.execution_strategy == execution_strategy_t::process_tasks_on_thread_pool) {
+            m_thread_pool = std::make_unique<thread_pool>(std::move(m_opts.pool));
+         }
+
+         [[maybe_unused]] net::poll_event_t e{};
+
+         [[maybe_unused]] bool event_setup_failed{};
+#if defined(__linux__)
+         e.events = EPOLLIN;
+
+         e.data.ptr = const_cast<void*>(m_shutdown_ptr);
+         epoll_ctl(event_fd, EPOLL_CTL_ADD, shutdown_fd, &e);
+
+         e.data.ptr = const_cast<void*>(m_timer_ptr);
+         epoll_ctl(event_fd, EPOLL_CTL_ADD, timer_fd, &e);
+
+         e.data.ptr = const_cast<void*>(m_schedule_ptr);
+         epoll_ctl(event_fd, EPOLL_CTL_ADD, schedule_fd, &e);
+#elif defined(__APPLE__)
+         net::poll_event_t e_timer{.filter = EVFILT_TIMER, .flags = EV_ADD, .udata = const_cast<void*>(m_timer_ptr)};
+         net::poll_event_t e_shutdown{
+            .filter = EVFILT_USER, .flags = EV_ADD | EV_CLEAR, .udata = const_cast<void*>(m_shutdown_ptr)};
+         net::poll_event_t e_schedule{
+            .filter = EVFILT_USER, .flags = EV_ADD, .udata = const_cast<void*>(m_schedule_ptr)};
+
+         ::kevent(event_fd, &e_schedule, 1, nullptr, 0, nullptr);
+         ::kevent(event_fd, &e_shutdown, 1, nullptr, 0, nullptr);
+         ::kevent(event_fd, &e_timer, 1, nullptr, 0, nullptr);
+#endif
+
+         if (m_opts.thread_strategy == thread_strategy_t::spawn) {
+            m_io_thread = std::thread([this]() { process_events_dedicated_thread(); });
+         }
+         // else manual mode, the user must call process_events.
       }
 
       void process_events_dedicated_thread()
