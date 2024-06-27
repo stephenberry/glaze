@@ -40,10 +40,7 @@ namespace glz
       using time_point = clock::time_point;
       using timed_events = poll_info::timed_events;
 
-      struct schedule_operation;
-      friend schedule_operation;
-
-      enum class thread_strategy_t {
+      enum struct thread_strategy_t {
          /// Spawns a dedicated background thread for the scheduler to run on.
          spawn,
          /// Requires the user to call process_events() to drive the scheduler.
