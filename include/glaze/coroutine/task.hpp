@@ -20,7 +20,7 @@
 
 namespace glz
 {
-   template <class return_type = void>
+   template <class Return = void>
    struct task;
 
    namespace detail
@@ -30,9 +30,9 @@ namespace glz
          friend struct final_awaitable;
          struct final_awaitable
          {
-            auto await_ready() const noexcept -> bool { return false; }
+            bool await_ready() const noexcept { return false; }
 
-            template <typename promise_type>
+            template <class promise_type>
             auto await_suspend(std::coroutine_handle<promise_type> coroutine) noexcept -> std::coroutine_handle<>
             {
                // If there is a continuation call it, otherwise this is the end of the line.
@@ -45,7 +45,7 @@ namespace glz
                }
             }
 
-            auto await_resume() noexcept -> void
+            void await_resume() noexcept
             {
                // no-op
             }
@@ -61,10 +61,10 @@ namespace glz
          auto continuation(std::coroutine_handle<> continuation) noexcept -> void { m_continuation = continuation; }
 
         protected:
-         std::coroutine_handle<> m_continuation{nullptr};
+         std::coroutine_handle<> m_continuation{};
       };
 
-      template <typename return_type>
+      template <class Return>
       struct promise final : public promise_base
       {
         private:
@@ -78,11 +78,11 @@ namespace glz
          };
 
         public:
-         using task_type = task<return_type>;
-         using coroutine_handle = std::coroutine_handle<promise<return_type>>;
-         static constexpr bool return_type_is_reference = std::is_reference_v<return_type>;
-         using stored_type = std::conditional_t<return_type_is_reference, std::remove_reference_t<return_type>*,
-                                                std::remove_const_t<return_type>>;
+         using task_type = task<Return>;
+         using coroutine_handle = std::coroutine_handle<promise<Return>>;
+         static constexpr bool return_type_is_reference = std::is_reference_v<Return>;
+         using stored_type = std::conditional_t<return_type_is_reference, std::remove_reference_t<Return>*,
+                                                std::remove_const_t<Return>>;
          using variant_type = std::variant<unset_return_value, stored_type, std::exception_ptr>;
 
          promise() noexcept {}
@@ -94,21 +94,21 @@ namespace glz
 
          auto get_return_object() noexcept -> task_type;
 
-         template <typename value_type>
-            requires(return_type_is_reference and std::is_constructible_v<return_type, value_type &&>) or
-                    (not return_type_is_reference and std::is_constructible_v<stored_type, value_type &&>)
-         auto return_value(value_type&& value) -> void
+         template <class T>
+            requires(return_type_is_reference and std::is_constructible_v<Return, T&&>) or
+                    (not return_type_is_reference and std::is_constructible_v<stored_type, T&&>)
+         void return_value(T&& value)
          {
             if constexpr (return_type_is_reference) {
-               return_type ref = static_cast<value_type&&>(value);
+               Return ref = static_cast<T&&>(value);
                m_storage.template emplace<stored_type>(std::addressof(ref));
             }
             else {
-               m_storage.template emplace<stored_type>(std::forward<value_type>(value));
+               m_storage.template emplace<stored_type>(std::forward<T>(value));
             }
          }
 
-         auto return_value(stored_type value) -> void
+         void return_value(stored_type value)
             requires(not return_type_is_reference)
          {
             if constexpr (std::is_move_constructible_v<stored_type>) {
@@ -119,16 +119,16 @@ namespace glz
             }
          }
 
-         auto unhandled_exception() noexcept -> void { new (&m_storage) variant_type(std::current_exception()); }
+         void unhandled_exception() noexcept { new (&m_storage) variant_type(std::current_exception()); }
 
          auto result() & -> decltype(auto)
          {
             if (std::holds_alternative<stored_type>(m_storage)) {
                if constexpr (return_type_is_reference) {
-                  return static_cast<return_type>(*std::get<stored_type>(m_storage));
+                  return static_cast<Return>(*std::get<stored_type>(m_storage));
                }
                else {
-                  return static_cast<const return_type&>(std::get<stored_type>(m_storage));
+                  return static_cast<const Return&>(std::get<stored_type>(m_storage));
                }
             }
             else if (std::holds_alternative<std::exception_ptr>(m_storage)) {
@@ -143,10 +143,10 @@ namespace glz
          {
             if (std::holds_alternative<stored_type>(m_storage)) {
                if constexpr (return_type_is_reference) {
-                  return static_cast<std::add_const_t<return_type>>(*std::get<stored_type>(m_storage));
+                  return static_cast<std::add_const_t<Return>>(*std::get<stored_type>(m_storage));
                }
                else {
-                  return static_cast<const return_type&>(std::get<stored_type>(m_storage));
+                  return static_cast<const Return&>(std::get<stored_type>(m_storage));
                }
             }
             else if (std::holds_alternative<std::exception_ptr>(m_storage)) {
@@ -161,13 +161,13 @@ namespace glz
          {
             if (std::holds_alternative<stored_type>(m_storage)) {
                if constexpr (return_type_is_reference) {
-                  return static_cast<return_type>(*std::get<stored_type>(m_storage));
+                  return static_cast<Return>(*std::get<stored_type>(m_storage));
                }
-               else if constexpr (std::is_move_constructible_v<return_type>) {
-                  return static_cast<return_type&&>(std::get<stored_type>(m_storage));
+               else if constexpr (std::is_move_constructible_v<Return>) {
+                  return static_cast<Return&&>(std::get<stored_type>(m_storage));
                }
                else {
-                  return static_cast<const return_type&&>(std::get<stored_type>(m_storage));
+                  return static_cast<const Return&&>(std::get<stored_type>(m_storage));
                }
             }
             else if (std::holds_alternative<std::exception_ptr>(m_storage)) {
@@ -209,23 +209,23 @@ namespace glz
          }
 
         private:
-         std::exception_ptr m_exception_ptr{nullptr};
+         std::exception_ptr m_exception_ptr{};
       };
 
    } // namespace detail
 
-   template <class return_type>
+   template <class Return>
    struct [[nodiscard]] task
    {
-      using task_type = task<return_type>;
-      using promise_type = detail::promise<return_type>;
+      using task_type = task<Return>;
+      using promise_type = detail::promise<Return>;
       using coroutine_handle = std::coroutine_handle<promise_type>;
 
       struct awaitable_base
       {
          awaitable_base(coroutine_handle coroutine) noexcept : m_coroutine(coroutine) {}
 
-         auto await_ready() const noexcept -> bool { return !m_coroutine || m_coroutine.done(); }
+         bool await_ready() const noexcept { return !m_coroutine || m_coroutine.done(); }
 
          auto await_suspend(std::coroutine_handle<> awaiting_coroutine) noexcept -> std::coroutine_handle<>
          {
@@ -233,7 +233,7 @@ namespace glz
             return m_coroutine;
          }
 
-         std::coroutine_handle<promise_type> m_coroutine{nullptr};
+         std::coroutine_handle<promise_type> m_coroutine{};
       };
 
       task() noexcept : m_coroutine(nullptr) {}
@@ -267,7 +267,7 @@ namespace glz
       /**
        * @return True if the task is in its final suspend or if the task has been destroyed.
        */
-      auto is_ready() const noexcept -> bool { return m_coroutine == nullptr || m_coroutine.done(); }
+      bool is_ready() const noexcept { return m_coroutine == nullptr || m_coroutine.done(); }
 
       auto resume() -> bool
       {
@@ -315,18 +315,18 @@ namespace glz
       auto handle() -> coroutine_handle { return m_coroutine; }
 
      private:
-      coroutine_handle m_coroutine{nullptr};
+      coroutine_handle m_coroutine{};
    };
 
    namespace detail
    {
-      template <class return_type>
-      inline auto promise<return_type>::get_return_object() noexcept -> task<return_type>
+      template <class Return>
+      task<Return> promise<Return>::get_return_object() noexcept
       {
-         return task<return_type>{coroutine_handle::from_promise(*this)};
+         return task<Return>{coroutine_handle::from_promise(*this)};
       }
 
-      inline auto promise<void>::get_return_object() noexcept -> task<>
+      inline task<> promise<void>::get_return_object() noexcept
       {
          return task<>{coroutine_handle::from_promise(*this)};
       }
