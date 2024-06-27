@@ -3,6 +3,15 @@
 
 #pragma once
 
+#ifndef GLZ_THROW_OR_ABORT
+#if __cpp_exceptions
+#define GLZ_THROW_OR_ABORT(EXC) (throw(EXC))
+#include <exception>
+#else
+#define GLZ_THROW_OR_ABORT(EXC) (std::abort())
+#endif
+#endif
+
 #if defined(_WIN32)
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -84,12 +93,38 @@ namespace glz::net
 #endif
    }
    
+#if defined(__APPLE__)
+   inline file_handle_t create_user_kqueue_handle() {
+      int kq = kqueue();
+       if (kq == -1) {
+          GLZ_THROW_OR_ABORT(std::runtime_error("Failed to create kqueue"));
+       }
+
+       struct kevent kev;
+       EV_SET(&kev, 1, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, NULL);
+
+       if (kevent(kq, &kev, 1, NULL, 0, NULL) == -1) {
+           close(kq);
+          GLZ_THROW_OR_ABORT( std::runtime_error("Failed to add EVFILT_USER event to kqueue"));
+       }
+
+       return kq;
+   }
+   
+   inline void trigger_user_kqueue(file_handle_t fd)
+   {
+      struct kevent kev;
+       EV_SET(&kev, 1, EVFILT_USER, 0, NOTE_TRIGGER, 0, NULL);
+
+       if (kevent(fd, &kev, 1, NULL, 0, NULL) == -1) {
+          GLZ_THROW_OR_ABORT(std::runtime_error("Failed to signal shutdown event"));
+       }
+   }
+#endif
+   
    inline file_handle_t create_shutdown_handle() {
 #if defined(__APPLE__)
-      file_handle_t fd{};
-      struct kevent e{};
-      EV_SET(&e, fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
-      return fd;
+      return create_user_kqueue_handle();
 #elif defined(__linux__)
       return ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)
@@ -99,10 +134,7 @@ namespace glz::net
    
    inline file_handle_t create_timer_handle() {
 #if defined(__APPLE__)
-      file_handle_t fd{};
-      struct kevent e{};
-      EV_SET(&e, fd, EVFILT_TIMER, EV_ADD | EV_ENABLE, NOTE_SECONDS, 1, nullptr);
-      return fd;
+      return create_user_kqueue_handle();
 #elif defined(__linux__)
       return ::timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
 #elif defined(_WIN32)
@@ -112,10 +144,7 @@ namespace glz::net
    
    inline file_handle_t create_schedule_handle() {
 #if defined(__APPLE__)
-      file_handle_t fd{};
-      struct kevent e{};
-      EV_SET(&e, fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
-      return fd;
+      return create_user_kqueue_handle();
 #elif defined(__linux__)
       return ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)

@@ -455,9 +455,13 @@ namespace glz
             }
 
             // Signal the event loop to stop asap, triggering the event fd is safe.
+#if defined(__linux__)
             uint64_t value{1};
             auto written = ::write(shutdown_fd, &value, sizeof(value));
             (void)written;
+#elif defined(__APPLE__)
+            net::trigger_user_kqueue(shutdown_fd);
+#endif
 
             if (m_io_thread.joinable()) {
                m_io_thread.join();
