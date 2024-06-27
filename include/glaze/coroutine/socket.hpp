@@ -6,7 +6,7 @@
 #pragma once
 
 #include "glaze/coroutine/poll.hpp"
-#include "glaze/network/ip_address.hpp"
+#include "glaze/network/ip.hpp"
 
 namespace glz
 {
@@ -75,7 +75,7 @@ namespace glz
        * not imply if the socket is still usable.
        * @return True if the socket file descriptor is > 0.
        */
-      bool is_valid() const { return m_fd != -1; }
+      bool valid() const { return m_fd != -1; }
 
       /**
        * @param block Sets the socket to the given blocking mode.
@@ -154,15 +154,15 @@ namespace glz
     */
    socket make_socket(const socket::options& opts)
    {
-       socket s{::socket(static_cast<int>(opts.domain), socket::type_to_os(opts.type), 0)};
-       if (s.native_handle() < 0)
+       socket s{::socket(int(opts.domain), socket::type_to_os(opts.type), 0)};
+       if (not s.valid())
        {
           GLZ_THROW_OR_ABORT(std::runtime_error{"Failed to create socket."});
        }
 
        if (opts.blocking == socket::blocking::no)
        {
-           if (s.blocking(socket::blocking::no) == false)
+           if (not s.blocking(socket::blocking::no))
            {
               GLZ_THROW_OR_ABORT(std::runtime_error{"Failed to set socket to non-blocking mode."});
            }
@@ -193,7 +193,7 @@ namespace glz
        }
 
        sockaddr_in server{};
-       server.sin_family = static_cast<int>(opts.domain);
+       server.sin_family = int(opts.domain);
        server.sin_port   = htons(port);
        server.sin_addr   = *reinterpret_cast<const in_addr*>(address.data());
 
