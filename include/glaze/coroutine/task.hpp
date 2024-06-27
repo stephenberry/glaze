@@ -258,7 +258,7 @@ namespace glz
        */
       bool is_ready() const noexcept { return m_coroutine == nullptr || m_coroutine.done(); }
 
-      auto resume() -> bool
+      bool resume()
       {
          if (!m_coroutine.done()) {
             m_coroutine.resume();
@@ -266,7 +266,7 @@ namespace glz
          return !m_coroutine.done();
       }
 
-      auto destroy() -> bool
+      bool destroy()
       {
          if (m_coroutine) {
             m_coroutine.destroy();
