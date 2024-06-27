@@ -43,7 +43,7 @@ namespace glz
      enum struct io_events : int16_t {
        on_timed_out = 3000,
        on_shutdown,
-       on_work_complete,
+       on_wake_up,
      };
 
       enum struct thread_strategy_t {
@@ -119,9 +119,9 @@ namespace glz
          e.data.ptr = const_cast<void*>(m_schedule_ptr);
          epoll_ctl(event_fd, EPOLL_CTL_ADD, schedule_fd, &e);
 #elif defined(__APPLE__)
-        net::poll_event_t e_timer{.ident = uintptr_t(io_events::on_timed_out), .filter = EVFILT_TIMER, .flags = EV_ADD | EV_ENABLE, .udata = const_cast<void*>(m_timer_ptr)};
+        net::poll_event_t e_timer{.ident = uintptr_t(io_events::on_timed_out), .filter = EVFILT_TIMER, .flags = EV_ADD, .udata = const_cast<void*>(m_timer_ptr)};
         net::poll_event_t e_shutdown{.ident = uintptr_t(io_events::on_shutdown), .filter = EVFILT_USER, .flags = EV_ADD | EV_CLEAR, .udata = const_cast<void*>(m_shutdown_ptr)};
-        net::poll_event_t e_schedule{.ident = uintptr_t(io_events::on_work_complete), .filter =  EVFILT_READ, .flags = EV_ADD, .udata = const_cast<void*>(m_schedule_ptr)};
+        net::poll_event_t e_schedule{.ident = uintptr_t(io_events::on_wake_up), .filter = EVFILT_USER, .flags = EV_ADD, .udata = const_cast<void*>(m_schedule_ptr)};
         
         ::kevent(event_fd, &e_schedule, 1, nullptr, 0, nullptr);
         ::kevent(event_fd, &e_shutdown, 1, nullptr, 0, nullptr);
@@ -147,17 +147,17 @@ namespace glz
             m_io_thread.join();
          }
 
-         if (event_fd != net::invalid_ident) {
+         if (event_fd != net::invalid_file_handle) {
 #if defined(__linux__)
             close(event_fd);
 #endif
-            event_fd = net::invalid_ident;
+            event_fd = net::invalid_file_handle;
          }
          if (timer_fd != net::invalid_ident) {
 #if defined(__linux__)
             close(timer_fd);
 #endif
-            timer_fd = -1;
+            timer_fd = net::invalid_ident;
          }
          if (schedule_fd != net::invalid_ident) {
 #if defined(__linux__)
@@ -214,8 +214,10 @@ namespace glz
                   eventfd_t value{1};
                   eventfd_write(m_scheduler.schedule_fd, value);
 #elif defined(__APPLE__)
-                  struct kevent e;
-                  ::kevent(m_scheduler.schedule_fd, NULL, 0, &e, 1, NULL);
+                  net::poll_event_t e{.ident = uintptr_t(io_events::on_wake_up), .filter = EVFILT_USER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_schedule_ptr)};
+                 if (::kevent(m_scheduler.event_fd, &e, 1, NULL, 0, NULL) == -1) {
+                     GLZ_THROW_OR_ABORT(std::runtime_error("Failed to trigger wke up"));
+                 }
 #endif
                }
             }
@@ -408,8 +410,10 @@ namespace glz
                eventfd_t value{1};
                eventfd_write(schedule_fd, value);
 #elif defined(__APPLE__)
-               struct kevent e;
-               ::kevent(schedule_fd, NULL, 0, &e, 1, NULL);
+               net::poll_event_t e{.ident = uintptr_t(io_events::on_wake_up), .filter = EVFILT_USER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_schedule_ptr)};
+              if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+                  GLZ_THROW_OR_ABORT(std::runtime_error("Failed to trigger wke up"));
+              }
 #endif
             }
 
@@ -475,11 +479,11 @@ namespace glz
       /// The event loop epoll file descriptor.
       net::file_handle_t event_fd{net::invalid_file_handle};
       /// The event loop fd to trigger a shutdown.
-      net::ident_t shutdown_fd{net::invalid_file_handle};
+      net::ident_t shutdown_fd{net::invalid_ident};
       /// The event loop timer fd for timed events, e.g. yield_for() or scheduler_after().
-      net::ident_t timer_fd{net::invalid_file_handle};
+      net::ident_t timer_fd{net::invalid_ident};
       /// The schedule file descriptor if the scheduler is in inline processing mode.
-      net::ident_t schedule_fd{net::invalid_file_handle};
+      net::ident_t schedule_fd{net::invalid_ident};
       std::atomic<bool> m_schedule_fd_triggered{false};
 
       /// The number of tasks executing or awaiting events in this io scheduler.
@@ -632,9 +636,6 @@ namespace glz
             eventfd_t value{0};
             eventfd_read(schedule_fd, &value);
 #elif defined(__APPLE__)
-            struct kevent change;
-            EV_SET(&change, schedule_fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, nullptr);
-            kevent(schedule_fd, &change, 1, nullptr, 0, nullptr);
 #endif
 
             // Clear the in memory flag to reduce eventfd_* calls on scheduling.
@@ -679,7 +680,7 @@ namespace glz
             poll_info->m_processed = true;
 
             // Given a valid fd always remove it from epoll so the next poll can blindly EPOLL_CTL_ADD.
-            if (poll_info->m_fd != -1) {
+            if (poll_info->m_fd != net::invalid_file_handle) {
 #if defined(__linux__)
                epoll_ctl(event_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
 #elif defined(__APPLE__)
@@ -735,20 +736,15 @@ namespace glz
                pi->m_processed = true;
 
                // Since this timed out, remove its corresponding event if it has one.
-               if (pi->m_fd != -1) {
+               if (pi->m_fd != net::invalid_file_handle) {
 #if defined(__linux__)
                   epoll_ctl(event_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
 #elif defined(__APPLE__)
-                  struct kevent e
-                  {};
-
-                  // Initialize the kevent structure for deletion
-                  EV_SET(&e, pi->m_fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
-
-                  // Remove the event from the kqueue
+                  GLZ_THROW_OR_ABORT(std::runtime_error("TODO: Implement"));
+                  /*net::poll_event_t e{.filter = EVFILT_READ, .flags = EV_DELETE};
                   if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                      std::cerr << "Failed to remove fd " << pi->m_fd << " from kqueue\n";
-                  }
+                  }*/
 #endif
                }
 

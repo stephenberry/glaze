@@ -109,6 +109,7 @@ suite when_all = [] {
 };
 
 suite event = [] {
+   std::cout << "\nEvent test:\n";
    glz::event e;
 
    // These tasks will wait until the given event has been set before advancing.
@@ -132,6 +133,7 @@ suite event = [] {
 };
 
 suite latch = [] {
+   std::cout << "\nLatch test:\n";
    // Complete worker tasks faster on a thread pool, using the io_scheduler version so the worker
    // tasks can yield for a specific amount of time to mimic difficult work.  The pool is only
    // setup with a single thread to showcase yield_for().
