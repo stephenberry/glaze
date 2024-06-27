@@ -100,9 +100,9 @@ namespace glz
          }
          
 #if defined(__linux__)
-         close_file_handle(event_fd);
-         close_file_handle(timer_fd);
-         close_file_handle(schedule_fd);
+         net::close_file_handle(event_fd);
+         net::close_file_handle(timer_fd);
+         net::close_file_handle(schedule_fd);
 #endif
       }
 
