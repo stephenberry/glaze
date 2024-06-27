@@ -67,23 +67,12 @@ namespace glz
       template <class Return>
       struct promise final : public promise_base
       {
-        private:
-         struct unset_return_value
-         {
-            unset_return_value() {}
-            unset_return_value(unset_return_value&&) = delete;
-            unset_return_value(const unset_return_value&) = delete;
-            auto operator=(unset_return_value&&) = delete;
-            auto operator=(const unset_return_value&) = delete;
-         };
-
-        public:
          using task_type = task<Return>;
          using coroutine_handle = std::coroutine_handle<promise<Return>>;
          static constexpr bool return_type_is_reference = std::is_reference_v<Return>;
          using stored_type = std::conditional_t<return_type_is_reference, std::remove_reference_t<Return>*,
                                                 std::remove_const_t<Return>>;
-         using variant_type = std::variant<unset_return_value, stored_type, std::exception_ptr>;
+         using variant_type = std::variant<std::monostate, stored_type, std::exception_ptr>;
 
          promise() noexcept {}
          promise(const promise&) = delete;

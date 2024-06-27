@@ -25,15 +25,6 @@ namespace glz
 {
    namespace detail
    {
-      struct unset_return_value
-      {
-         unset_return_value() {}
-         unset_return_value(unset_return_value&&) = delete;
-         unset_return_value(const unset_return_value&) = delete;
-         auto operator=(unset_return_value&&) = delete;
-         auto operator=(const unset_return_value&) = delete;
-      };
-
       struct sync_wait_event
       {
          sync_wait_event(bool initially_set = false) : m_set(initially_set) {}
@@ -86,7 +77,7 @@ namespace glz
          static constexpr bool return_type_is_reference = std::is_reference_v<return_type>;
          using stored_type = std::conditional_t<return_type_is_reference, std::remove_reference_t<return_type>*,
                                                 std::remove_const_t<return_type>>;
-         using variant_type = std::variant<unset_return_value, stored_type, std::exception_ptr>;
+         using variant_type = std::variant<std::monostate, stored_type, std::exception_ptr>;
 
          sync_wait_task_promise() noexcept = default;
          sync_wait_task_promise(const sync_wait_task_promise&) = delete;
