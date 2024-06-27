@@ -183,4 +183,39 @@ suite latch = [] {
    glz::sync_wait(glz::when_all(std::move(tasks)));
 };
 
+suite mutex_test = [] {
+   std::cout << "\nMutex test:\n";
+
+   glz::thread_pool tp{glz::thread_pool::options{.thread_count = 4}};
+   std::vector<uint64_t> output{};
+   glz::mutex mutex;
+
+   auto make_critical_section_task = [&](uint64_t i) -> glz::task<void> {
+      co_await tp.schedule();
+      // To acquire a mutex lock co_await its lock() function.  Upon acquiring the lock the
+      // lock() function returns a coro::scoped_lock that holds the mutex and automatically
+      // unlocks the mutex upon destruction.  This behaves just like std::scoped_lock.
+      {
+         auto scoped_lock = co_await mutex.lock();
+         output.emplace_back(i);
+      } // <-- scoped lock unlocks the mutex here.
+      co_return;
+   };
+
+   const size_t num_tasks{100};
+   std::vector<glz::task<void>> tasks{};
+   tasks.reserve(num_tasks);
+   for (size_t i = 1; i <= num_tasks; ++i) {
+      tasks.emplace_back(make_critical_section_task(i));
+   }
+
+   glz::sync_wait(glz::when_all(std::move(tasks)));
+
+   // The output will be variable per run depending on how the tasks are picked up on the
+   // thread pool workers.
+   for (const auto& value : output) {
+      std::cout << value << ", ";
+   }
+};
+
 int main() { return 0; }
