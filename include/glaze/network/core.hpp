@@ -53,8 +53,12 @@ namespace glz::net
    
 #if defined(__APPLE__)
    using poll_event_t = struct kevent;
+   using ident_t = uintptr_t;
+   constexpr uintptr_t invalid_ident = 0;
 #elif defined(__linux__)
    using poll_event_t = struct epoll_event;
+   using ident_t = int;
+   constexpr int invalid_ident_handle = -1;
 #elif defined(_WIN32)
 #endif
    
@@ -66,6 +70,11 @@ namespace glz::net
    constexpr auto poll_out = EPOLLOUT;
 #elif defined(_WIN32)
 #endif
+   
+   inline uintptr_t unique_identifier() noexcept {
+       static std::atomic<uintptr_t> value{1};
+       return value.fetch_add(1, std::memory_order_relaxed);
+   }
    
    inline auto close_socket(file_handle_t fd) {
 #ifdef _WIN32
@@ -93,38 +102,9 @@ namespace glz::net
 #endif
    }
    
+   inline ident_t create_shutdown_handle() {
 #if defined(__APPLE__)
-   inline file_handle_t create_user_kqueue_handle() {
-      int kq = kqueue();
-       if (kq == -1) {
-          GLZ_THROW_OR_ABORT(std::runtime_error("Failed to create kqueue"));
-       }
-
-       struct kevent kev;
-       EV_SET(&kev, 1, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, NULL);
-
-       if (kevent(kq, &kev, 1, NULL, 0, NULL) == -1) {
-           close(kq);
-          GLZ_THROW_OR_ABORT( std::runtime_error("Failed to add EVFILT_USER event to kqueue"));
-       }
-
-       return kq;
-   }
-   
-   inline void trigger_user_kqueue(file_handle_t fd)
-   {
-      struct kevent kev;
-       EV_SET(&kev, 1, EVFILT_USER, 0, NOTE_TRIGGER, 0, NULL);
-
-       if (kevent(fd, &kev, 1, NULL, 0, NULL) == -1) {
-          GLZ_THROW_OR_ABORT(std::runtime_error("Failed to signal shutdown event"));
-       }
-   }
-#endif
-   
-   inline file_handle_t create_shutdown_handle() {
-#if defined(__APPLE__)
-      return create_user_kqueue_handle();
+      return unique_identifier();
 #elif defined(__linux__)
       return ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)
@@ -132,9 +112,9 @@ namespace glz::net
 #endif
    }
    
-   inline file_handle_t create_timer_handle() {
+   inline ident_t create_timer_handle() {
 #if defined(__APPLE__)
-      return create_user_kqueue_handle();
+      return unique_identifier();
 #elif defined(__linux__)
       return ::timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
 #elif defined(_WIN32)
@@ -142,9 +122,9 @@ namespace glz::net
 #endif
    }
    
-   inline file_handle_t create_schedule_handle() {
+   inline ident_t create_schedule_handle() {
 #if defined(__APPLE__)
-      return create_user_kqueue_handle();
+      return unique_identifier();
 #elif defined(__linux__)
       return ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)

@@ -113,29 +113,13 @@ namespace glz
          e.data.ptr = const_cast<void*>(m_schedule_ptr);
          epoll_ctl(event_fd, EPOLL_CTL_ADD, schedule_fd, &e);
 #elif defined(__APPLE__)
-        // e.filter = EVFILT_READ;
-        // e.flags = EV_ADD;
-
-        // e.udata = const_cast<void*>(m_shutdown_ptr);
-        // EV_SET(&e, shutdown_fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
-        // ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
-
-        // e.udata = const_cast<void*>(m_timer_ptr);
-        // EV_SET(&e, timer_fd, EVFILT_TIMER, EV_ADD, 0, 0, nullptr);
-        // ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
-
-        // e.udata = const_cast<void*>(m_schedule_ptr);
-        // EV_SET(&e, schedule_fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
-        // ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
-        
-        net::poll_event_t e_timer{.filter = EVFILT_TIMER, .flags = EV_ADD, .udata = const_cast<void*>(m_timer_ptr)};
-        net::poll_event_t e_shutdown{.filter = EVFILT_READ, .flags = EV_ADD, .udata = const_cast<void*>(m_shutdown_ptr)};
+        net::poll_event_t e_timer{.filter = EVFILT_TIMER, .flags = EV_ADD | EV_ENABLE, .udata = const_cast<void*>(m_timer_ptr)};
+        net::poll_event_t e_shutdown{.filter = EVFILT_USER, .flags = EV_ADD | EV_CLEAR, .udata = const_cast<void*>(m_shutdown_ptr)};
         net::poll_event_t e_schedule{.filter = EVFILT_READ, .flags = EV_ADD, .udata = const_cast<void*>(m_schedule_ptr)};
         
         ::kevent(event_fd, &e_schedule, 1, nullptr, 0, nullptr);
         ::kevent(event_fd, &e_shutdown, 1, nullptr, 0, nullptr);
         ::kevent(event_fd, &e_timer, 1, nullptr, 0, nullptr);
-       
 #endif
 
          if (m_opts.thread_strategy == thread_strategy_t::spawn) {
@@ -157,17 +141,23 @@ namespace glz
             m_io_thread.join();
          }
 
-         if (event_fd != -1) {
+         if (event_fd != net::invalid_ident) {
+#if defined(__linux__)
             close(event_fd);
-            event_fd = -1;
+#endif
+            event_fd = net::invalid_ident;
          }
-         if (timer_fd != -1) {
+         if (timer_fd != net::invalid_ident) {
+#if defined(__linux__)
             close(timer_fd);
+#endif
             timer_fd = -1;
          }
-         if (schedule_fd != -1) {
+         if (schedule_fd != net::invalid_ident) {
+#if defined(__linux__)
             close(schedule_fd);
-            schedule_fd = -1;
+#endif
+            schedule_fd = net::invalid_ident;
          }
       }
 
@@ -460,7 +450,10 @@ namespace glz
             auto written = ::write(shutdown_fd, &value, sizeof(value));
             (void)written;
 #elif defined(__APPLE__)
-            net::trigger_user_kqueue(shutdown_fd);
+            net::poll_event_t e{.filter = EVFILT_USER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_shutdown_ptr)};
+             if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+                 GLZ_THROW_OR_ABORT(std::runtime_error("Failed to signal shutdown event"));
+             }
 #endif
 
             if (m_io_thread.joinable()) {
@@ -476,11 +469,11 @@ namespace glz
       /// The event loop epoll file descriptor.
       net::file_handle_t event_fd{net::invalid_file_handle};
       /// The event loop fd to trigger a shutdown.
-      net::file_handle_t shutdown_fd{net::invalid_file_handle};
+      ident_t shutdown_fd{net::invalid_file_handle};
       /// The event loop timer fd for timed events, e.g. yield_for() or scheduler_after().
-      net::file_handle_t timer_fd{net::invalid_file_handle};
+      ident_t timer_fd{net::invalid_file_handle};
       /// The schedule file descriptor if the scheduler is in inline processing mode.
-      net::file_handle_t schedule_fd{net::invalid_file_handle};
+      ident_t schedule_fd{net::invalid_file_handle};
       std::atomic<bool> m_schedule_fd_triggered{false};
 
       /// The number of tasks executing or awaiting events in this io scheduler.
@@ -559,8 +552,7 @@ namespace glz
                }
 #endif
                if (not handle_ptr) {
-                 continue;
-                  //GLZ_THROW_OR_ABORT(std::runtime_error{"handle_ptr is null"});
+                  GLZ_THROW_OR_ABORT(std::runtime_error{"handle_ptr is null"});
                }
 
                if (handle_ptr == m_timer_ptr) {
@@ -824,9 +816,8 @@ namespace glz
             if (tp > now) {
                milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(tp - now).count();
             }
-            struct kevent e
-            {};
-            EV_SET(&e, 1, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, milliseconds, nullptr);
+            
+            net::poll_event_t e{.filter = EVFILT_TIMER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_timer_ptr)};
             if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                std::cerr << "kevent (update timer)\n";
             }
@@ -844,8 +835,8 @@ namespace glz
 #elif defined(__APPLE__)
             struct kevent e
             {};
-            EV_SET(&e, 1, EVFILT_TIMER, EV_ADD | EV_ENABLE, 0, 0, nullptr);
-            if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+            EV_SET(&e, 1, EVFILT_TIMER, NOTE_TRIGGER, 0, 0, nullptr);
+            if (::kevent(timer_fd, &e, 1, NULL, 0, NULL) == -1) {
                std::cerr << "kevent (update timer)\n";
             }
 #endif
