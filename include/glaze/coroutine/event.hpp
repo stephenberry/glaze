@@ -12,7 +12,7 @@
 
 namespace glz
 {
-   enum class resume_order_policy {
+   enum struct resume_order_policy {
       /// Last in first out, this is the default policy and will execute the fastest
       /// if you do not need the first waiter to execute first upon the event being set.
       lifo,

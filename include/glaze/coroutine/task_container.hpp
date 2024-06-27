@@ -67,7 +67,7 @@ namespace glz
          }
       }
 
-      enum class garbage_collect_t {
+      enum struct garbage_collect_t {
          /// Execute garbage collection.
          yes,
          /// Do not execute garbage collection.

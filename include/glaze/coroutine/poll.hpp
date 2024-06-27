@@ -31,7 +31,7 @@ namespace glz
       }
    }
 
-   enum class poll_status {
+   enum struct poll_status {
       /// The poll operation was was successful.
       event,
       /// The poll operation timed out.

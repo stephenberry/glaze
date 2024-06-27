@@ -244,7 +244,7 @@ namespace glz
      private:
       friend struct lock_operation;
 
-      enum class state { unlocked, locked_shared, locked_exclusive };
+      enum struct state { unlocked, locked_shared, locked_exclusive };
 
       /// This executor is for resuming multiple shared waiters.
       std::shared_ptr<executor_type> m_executor{nullptr};

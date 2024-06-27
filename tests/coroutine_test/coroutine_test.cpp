@@ -219,6 +219,7 @@ suite mutex_test = [] {
 };
 
 suite shared_mutex_test = [] {
+   std::cout << "\nShared Mutex test:\n";
    // Shared mutexes require an excutor type to be able to wake up multiple shared waiters when
    // there is an exclusive lock holder releasing the lock.  This example uses a single thread
    // to also show the interleaving of coroutines acquiring the shared lock in shared and
@@ -263,6 +264,37 @@ suite shared_mutex_test = [] {
    // Create 3 more shared tasks that will be blocked until the exclusive task completes.
    for (size_t i = num_tasks + 1; i <= num_tasks * 2; ++i) {
       tasks.emplace_back(make_shared_task(i));
+   }
+
+   glz::sync_wait(glz::when_all(std::move(tasks)));
+};
+
+suite semaphore_test = [] {
+   std::cout << "\nSemaphore test:\n";
+   // Have more threads/tasks than the semaphore will allow for at any given point in time.
+   glz::thread_pool tp{glz::thread_pool::options{.thread_count = 8}};
+   glz::semaphore semaphore{1};
+
+   auto make_rate_limited_task = [&](uint64_t task_num) -> glz::task<void> {
+      co_await tp.schedule();
+
+      // This will only allow 1 task through at any given point in time, all other tasks will
+      // await the resource to be available before proceeding.
+      auto result = co_await semaphore.acquire();
+      if (result == glz::semaphore::acquire_result::acquired) {
+         std::cout << task_num << ", ";
+         semaphore.release();
+      }
+      else {
+         std::cout << task_num << " failed to acquire semaphore [" << glz::semaphore::to_string(result) << "],";
+      }
+      co_return;
+   };
+
+   const size_t num_tasks{100};
+   std::vector<glz::task<void>> tasks{};
+   for (size_t i = 1; i <= num_tasks; ++i) {
+      tasks.emplace_back(make_rate_limited_task(i));
    }
 
    glz::sync_wait(glz::when_all(std::move(tasks)));
