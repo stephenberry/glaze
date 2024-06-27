@@ -8,6 +8,7 @@
 #include "glaze/coroutine/io_scheduler.hpp"
 #include "glaze/coroutine/latch.hpp"
 #include "glaze/coroutine/mutex.hpp"
+#include "glaze/coroutine/ring_buffer.hpp"
 #include "glaze/coroutine/semaphore.hpp"
 #include "glaze/coroutine/shared_mutex.hpp"
 #include "glaze/coroutine/sync_wait.hpp"
