@@ -39,6 +39,12 @@ namespace glz
       using clock = std::chrono::steady_clock;
       using time_point = clock::time_point;
       using timed_events = poll_info::timed_events;
+     
+     enum struct io_events : int16_t {
+       on_timed_out = 3000,
+       on_shutdown,
+       on_work_complete,
+     };
 
       enum struct thread_strategy_t {
          /// Spawns a dedicated background thread for the scheduler to run on.
@@ -113,9 +119,9 @@ namespace glz
          e.data.ptr = const_cast<void*>(m_schedule_ptr);
          epoll_ctl(event_fd, EPOLL_CTL_ADD, schedule_fd, &e);
 #elif defined(__APPLE__)
-        net::poll_event_t e_timer{.filter = EVFILT_TIMER, .flags = EV_ADD | EV_ENABLE, .udata = const_cast<void*>(m_timer_ptr)};
-        net::poll_event_t e_shutdown{.filter = EVFILT_USER, .flags = EV_ADD | EV_CLEAR, .udata = const_cast<void*>(m_shutdown_ptr)};
-        net::poll_event_t e_schedule{.filter = EVFILT_READ, .flags = EV_ADD, .udata = const_cast<void*>(m_schedule_ptr)};
+        net::poll_event_t e_timer{.filter = int16_t(io_events::on_timed_out), .flags = EV_ADD | EV_ENABLE, .udata = const_cast<void*>(m_timer_ptr)};
+        net::poll_event_t e_shutdown{.filter =  int16_t(io_events::on_timed_out), .flags = EV_ADD | EV_CLEAR, .udata = const_cast<void*>(m_shutdown_ptr)};
+        net::poll_event_t e_schedule{.filter =  int16_t(io_events::on_work_complete), .flags = EV_ADD, .udata = const_cast<void*>(m_schedule_ptr)};
         
         ::kevent(event_fd, &e_schedule, 1, nullptr, 0, nullptr);
         ::kevent(event_fd, &e_shutdown, 1, nullptr, 0, nullptr);
@@ -469,11 +475,11 @@ namespace glz
       /// The event loop epoll file descriptor.
       net::file_handle_t event_fd{net::invalid_file_handle};
       /// The event loop fd to trigger a shutdown.
-      ident_t shutdown_fd{net::invalid_file_handle};
+      net::ident_t shutdown_fd{net::invalid_file_handle};
       /// The event loop timer fd for timed events, e.g. yield_for() or scheduler_after().
-      ident_t timer_fd{net::invalid_file_handle};
+      net::ident_t timer_fd{net::invalid_file_handle};
       /// The schedule file descriptor if the scheduler is in inline processing mode.
-      ident_t schedule_fd{net::invalid_file_handle};
+      net::ident_t schedule_fd{net::invalid_file_handle};
       std::atomic<bool> m_schedule_fd_triggered{false};
 
       /// The number of tasks executing or awaiting events in this io scheduler.
@@ -812,7 +818,7 @@ namespace glz
                std::cerr << "Failed to set timerfd errorno=[" << std::string{std::strerror(errno)} << "].";
             }
 #elif defined(__APPLE__)
-            size_t milliseconds{};
+           [[maybe_unused]] size_t milliseconds{};
             if (tp > now) {
                milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(tp - now).count();
             }

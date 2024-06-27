@@ -48,17 +48,18 @@ namespace glz::net
    using ssize_t = int64_t;
 #else
    using file_handle_t = int;
-   constexpr int invalid_file_handle = -1;
 #endif
    
 #if defined(__APPLE__)
    using poll_event_t = struct kevent;
-   using ident_t = uintptr_t;
+   using ident_t = uint16_t;
+   constexpr ident_t invalid_file_handle = ~1; // set all bits
    constexpr uintptr_t invalid_ident = 0;
 #elif defined(__linux__)
    using poll_event_t = struct epoll_event;
    using ident_t = int;
    constexpr int invalid_ident_handle = -1;
+   constexpr int invalid_file_handle = -1;
 #elif defined(_WIN32)
 #endif
    
