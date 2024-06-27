@@ -113,13 +113,15 @@ namespace glz
          e.data.ptr = const_cast<void*>(m_schedule_ptr);
          epoll_ctl(event_fd, EPOLL_CTL_ADD, schedule_fd, &e);
 #elif defined(__APPLE__)
-        net::poll_event_t e_timer{.filter = EVFILT_TIMER, .flags = EV_ADD, .udata = const_cast<void*>(m_timer_ptr)};
-        net::poll_event_t e_shutdown{.filter = EVFILT_USER, .flags = EV_ADD | EV_CLEAR, .udata = const_cast<void*>(m_shutdown_ptr)};
-        net::poll_event_t e_schedule{.filter = EVFILT_USER, .flags = EV_ADD, .udata = const_cast<void*>(m_schedule_ptr)};
-        
-        ::kevent(event_fd, &e_schedule, 1, nullptr, 0, nullptr);
-        ::kevent(event_fd, &e_shutdown, 1, nullptr, 0, nullptr);
-        ::kevent(event_fd, &e_timer, 1, nullptr, 0, nullptr);
+         net::poll_event_t e_timer{.filter = EVFILT_TIMER, .flags = EV_ADD, .udata = const_cast<void*>(m_timer_ptr)};
+         net::poll_event_t e_shutdown{
+            .filter = EVFILT_USER, .flags = EV_ADD | EV_CLEAR, .udata = const_cast<void*>(m_shutdown_ptr)};
+         net::poll_event_t e_schedule{
+            .filter = EVFILT_USER, .flags = EV_ADD, .udata = const_cast<void*>(m_schedule_ptr)};
+
+         ::kevent(event_fd, &e_schedule, 1, nullptr, 0, nullptr);
+         ::kevent(event_fd, &e_shutdown, 1, nullptr, 0, nullptr);
+         ::kevent(event_fd, &e_timer, 1, nullptr, 0, nullptr);
 #endif
 
          if (m_opts.thread_strategy == thread_strategy_t::spawn) {
@@ -208,10 +210,11 @@ namespace glz
                   eventfd_t value{1};
                   eventfd_write(m_scheduler.schedule_fd, value);
 #elif defined(__APPLE__)
-                  net::poll_event_t e{.filter = EVFILT_USER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_schedule_ptr)};
-                 if (::kevent(m_scheduler.event_fd, &e, 1, NULL, 0, NULL) == -1) {
+                  net::poll_event_t e{
+                     .filter = EVFILT_USER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_schedule_ptr)};
+                  if (::kevent(m_scheduler.event_fd, &e, 1, NULL, 0, NULL) == -1) {
                      GLZ_THROW_OR_ABORT(std::runtime_error("Failed to trigger wke up"));
-                 }
+                  }
 #endif
                }
             }
@@ -223,7 +226,7 @@ namespace glz
          /**
           * no-op as this is the function called first by the thread pool's executing thread.
           */
-         auto await_resume() noexcept -> void {}
+         void await_resume() noexcept {}
       };
 
       /**
@@ -345,10 +348,11 @@ namespace glz
             std::cerr << "epoll ctl error on fd " << fd << "\n";
          }
 #elif defined(__APPLE__)
-         net::poll_event_t e{.ident = uintptr_t(fd), .filter = EVFILT_READ, .flags = EV_ADD | EV_EOF, .udata = &poll_info};
-        if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
-           std::cerr << "kqueue failed to register for fd: " << fd << "\n";
-        }
+         net::poll_event_t e{
+            .ident = uintptr_t(fd), .filter = EVFILT_READ, .flags = EV_ADD | EV_EOF, .udata = &poll_info};
+         if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+            std::cerr << "kqueue failed to register for fd: " << fd << "\n";
+         }
 #endif
 
          // The event loop will 'clean-up' whichever event didn't win since the coroutine is scheduled
@@ -403,10 +407,11 @@ namespace glz
                eventfd_t value{1};
                eventfd_write(schedule_fd, value);
 #elif defined(__APPLE__)
-               net::poll_event_t e{.filter = EVFILT_USER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_schedule_ptr)};
-              if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+               net::poll_event_t e{
+                  .filter = EVFILT_USER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_schedule_ptr)};
+               if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
                   GLZ_THROW_OR_ABORT(std::runtime_error("Failed to trigger wake up"));
-              }
+               }
 #endif
             }
 
@@ -453,10 +458,11 @@ namespace glz
             auto written = ::write(shutdown_fd, &value, sizeof(value));
             (void)written;
 #elif defined(__APPLE__)
-            net::poll_event_t e{.filter = EVFILT_USER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_shutdown_ptr)};
-             if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
-                 GLZ_THROW_OR_ABORT(std::runtime_error("Failed to signal shutdown event"));
-             }
+            net::poll_event_t e{
+               .filter = EVFILT_USER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_shutdown_ptr)};
+            if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+               GLZ_THROW_OR_ABORT(std::runtime_error("Failed to signal shutdown event"));
+            }
 #endif
 
             if (m_io_thread.joinable()) {
@@ -536,7 +542,7 @@ namespace glz
          const auto event_count = ::epoll_wait(event_fd, m_events.data(), max_events, timeout.count());
 #elif defined(_WIN32)
 #endif
-         
+
          if (event_count == -1) {
             net::event_close(event_fd);
             GLZ_THROW_OR_ABORT(std::runtime_error{"wait for event failed"});
@@ -549,7 +555,7 @@ namespace glz
                void* handle_ptr = event.data.ptr;
 #elif defined(__APPLE__)
                void* handle_ptr = event.udata;
-               
+
                if (event.flags & EV_ERROR) {
                   GLZ_THROW_OR_ABORT(std::runtime_error{"event error"});
                }
@@ -568,7 +574,7 @@ namespace glz
                }
                else if (handle_ptr == m_shutdown_ptr) [[unlikely]] {
                   // Nothing to do , just needed to wake-up and smell the flowers
-                 std::cout << "Waking up and smelling flowers...\n";
+                  std::cout << "Waking up and smelling flowers...\n";
                }
                else {
                   // Individual poll task wake-up.
@@ -796,12 +802,15 @@ namespace glz
                std::cerr << "Failed to set timerfd errorno=[" << std::string{std::strerror(errno)} << "].";
             }
 #elif defined(__APPLE__)
-           size_t milliseconds{};
+            size_t milliseconds{};
             if (tp > now) {
                milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(tp - now).count();
             }
-            
-            net::poll_event_t e{.filter = EVFILT_TIMER, .fflags = NOTE_TRIGGER, .data = int64_t(milliseconds), .udata = const_cast<void*>(m_timer_ptr)};
+
+            net::poll_event_t e{.filter = EVFILT_TIMER,
+                                .fflags = NOTE_TRIGGER,
+                                .data = int64_t(milliseconds),
+                                .udata = const_cast<void*>(m_timer_ptr)};
             if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                std::cerr << "Error: kevent (update timer).\n";
             }
@@ -817,7 +826,8 @@ namespace glz
                std::cerr << "Failed to set timerfd errorno=[" << std::string{strerror(errno)} << "].";
             }
 #elif defined(__APPLE__)
-            net::poll_event_t e{.filter = EVFILT_TIMER, .fflags = NOTE_TRIGGER, .data = 0, .udata = const_cast<void*>(m_timer_ptr)};
+            net::poll_event_t e{
+               .filter = EVFILT_TIMER, .fflags = NOTE_TRIGGER, .data = 0, .udata = const_cast<void*>(m_timer_ptr)};
             if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                std::cerr << "Error: kevent (update timer).\n";
             }
