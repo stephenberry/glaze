@@ -666,44 +666,44 @@ namespace glz
       std::array<net::poll_event_t, max_events> m_events{};
       std::vector<std::coroutine_handle<>> m_handles_to_resume{};
 
-      void process_event_execute(poll_info* pi, poll_status status)
+      void process_event_execute(glz::poll_info* poll_info, poll_status status)
       {
-         if (not pi) {
+         if (not poll_info) {
             GLZ_THROW_OR_ABORT(std::runtime_error{"invalid poll_info"});
          }
 
-         if (not pi->m_processed) {
+         if (not poll_info->m_processed) {
             std::atomic_thread_fence(std::memory_order::acquire);
             // Its possible the event and the timeout occurred in the same epoll, make sure only one
             // is ever processed, the other is discarded.
-            pi->m_processed = true;
+            poll_info->m_processed = true;
 
             // Given a valid fd always remove it from epoll so the next poll can blindly EPOLL_CTL_ADD.
-            if (pi->m_fd != -1) {
+            if (poll_info->m_fd != -1) {
 #if defined(__linux__)
                epoll_ctl(event_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
 #elif defined(__APPLE__)
                struct kevent e
                {};
-               EV_SET(&e, pi->m_fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
+               EV_SET(&e, poll_info->m_fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
                if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
-                  std::cerr << "Failed to remove fd " << pi->m_fd << " from kqueue\n";
+                  std::cerr << "Failed to remove fd " << poll_info->m_fd << " from kqueue\n";
                }
 #endif
             }
 
             // Since this event triggered, remove its corresponding timeout if it has one.
-            if (pi->m_timer_pos.has_value()) {
-               remove_timer_token(pi->m_timer_pos.value());
+            if (poll_info->m_timer_pos.has_value()) {
+               remove_timer_token(poll_info->m_timer_pos.value());
             }
 
-            pi->m_poll_status = status;
+            poll_info->m_poll_status = status;
 
-            while (pi->m_awaiting_coroutine == nullptr) {
+            while (poll_info->m_awaiting_coroutine == nullptr) {
                std::atomic_thread_fence(std::memory_order::acquire);
             }
 
-            m_handles_to_resume.emplace_back(pi->m_awaiting_coroutine);
+            m_handles_to_resume.emplace_back(poll_info->m_awaiting_coroutine);
          }
       }
 
