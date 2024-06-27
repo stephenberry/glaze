@@ -113,20 +113,29 @@ namespace glz
          e.data.ptr = const_cast<void*>(m_schedule_ptr);
          epoll_ctl(event_fd, EPOLL_CTL_ADD, schedule_fd, &e);
 #elif defined(__APPLE__)
-         e.filter = EVFILT_READ;
-         e.flags = EV_ADD;
+        // e.filter = EVFILT_READ;
+        // e.flags = EV_ADD;
 
-         e.udata = const_cast<void*>(m_shutdown_ptr);
-         EV_SET(&e, shutdown_fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
-         ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
+        // e.udata = const_cast<void*>(m_shutdown_ptr);
+        // EV_SET(&e, shutdown_fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
+        // ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
 
-         e.udata = const_cast<void*>(m_timer_ptr);
-         EV_SET(&e, timer_fd, EVFILT_TIMER, EV_ADD, 0, 0, nullptr);
-         ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
+        // e.udata = const_cast<void*>(m_timer_ptr);
+        // EV_SET(&e, timer_fd, EVFILT_TIMER, EV_ADD, 0, 0, nullptr);
+        // ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
 
-         e.udata = const_cast<void*>(m_schedule_ptr);
-         EV_SET(&e, schedule_fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
-         ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
+        // e.udata = const_cast<void*>(m_schedule_ptr);
+        // EV_SET(&e, schedule_fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
+        // ::kevent(event_fd, &e, 1, nullptr, 0, nullptr);
+        
+        net::poll_event_t e_timer{.filter = EVFILT_TIMER, .flags = EV_ADD, .udata = const_cast<void*>(m_timer_ptr)};
+        net::poll_event_t e_shutdown{.filter = EVFILT_READ, .flags = EV_ADD, .udata = const_cast<void*>(m_shutdown_ptr)};
+        net::poll_event_t e_schedule{.filter = EVFILT_READ, .flags = EV_ADD, .udata = const_cast<void*>(m_schedule_ptr)};
+        
+        ::kevent(event_fd, &e_schedule, 1, nullptr, 0, nullptr);
+        ::kevent(event_fd, &e_shutdown, 1, nullptr, 0, nullptr);
+        ::kevent(event_fd, &e_timer, 1, nullptr, 0, nullptr);
+       
 #endif
 
          if (m_opts.thread_strategy == thread_strategy_t::spawn) {
@@ -344,8 +353,8 @@ namespace glz
             std::cerr << "epoll ctl error on fd " << fd << "\n";
          }
 #elif defined(__APPLE__)
-         e.udata = &poll_info;
-         EV_SET(&e, fd, EVFILT_READ, EV_ADD | EV_ONESHOT | EV_EOF, 0, 0, nullptr);
+         //e.udata = &poll_info;
+         EV_SET(&e, fd, EVFILT_READ, EV_ADD | EV_ONESHOT | EV_EOF, 0, 0, &poll_info);
          if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
             std::cerr << "kqueue ctl error on fd " << fd << "\n";
          }
@@ -546,7 +555,8 @@ namespace glz
                }
 #endif
                if (not handle_ptr) {
-                  GLZ_THROW_OR_ABORT(std::runtime_error{"handle_ptr is null"});
+                 continue;
+                  //GLZ_THROW_OR_ABORT(std::runtime_error{"handle_ptr is null"});
                }
 
                if (handle_ptr == m_timer_ptr) {
@@ -559,6 +569,7 @@ namespace glz
                }
                else if (handle_ptr == m_shutdown_ptr) [[unlikely]] {
                   // Nothing to do , just needed to wake-up and smell the flowers
+                 std::cout << "Waking up and smelling flowers...\n";
                }
                else {
                   // Individual poll task wake-up.
