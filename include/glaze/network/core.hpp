@@ -12,8 +12,6 @@
 #endif
 #endif
 
-#include <atomic>
-
 #if defined(_WIN32)
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -74,11 +72,6 @@ namespace glz::net
 #elif defined(_WIN32)
 #endif
    
-   inline uintptr_t unique_identifier() noexcept {
-       static std::atomic<uintptr_t> value{1};
-       return value.fetch_add(1, std::memory_order_relaxed);
-   }
-   
    inline auto close_socket(file_handle_t fd) {
 #ifdef _WIN32
       ::closesocket(fd);
@@ -107,7 +100,7 @@ namespace glz::net
    
    inline ident_t create_shutdown_handle() {
 #if defined(__APPLE__)
-      return unique_identifier();
+      return invalid_ident;
 #elif defined(__linux__)
       return ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)
@@ -117,7 +110,7 @@ namespace glz::net
    
    inline ident_t create_timer_handle() {
 #if defined(__APPLE__)
-      return unique_identifier();
+      return invalid_ident;
 #elif defined(__linux__)
       return ::timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
 #elif defined(_WIN32)
@@ -127,7 +120,7 @@ namespace glz::net
    
    inline ident_t create_schedule_handle() {
 #if defined(__APPLE__)
-      return unique_identifier();
+      return invalid_ident;
 #elif defined(__linux__)
       return ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)
