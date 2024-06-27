@@ -823,9 +823,9 @@ namespace glz
                milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(tp - now).count();
             }
             
-            net::poll_event_t e{.filter = EVFILT_TIMER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_timer_ptr)};
+            net::poll_event_t e{.filter = uint16_t(io_events::on_timed_out), .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_timer_ptr)};
             if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
-               std::cerr << "kevent (update timer)\n";
+               std::cerr << "Error: kevent (update timer).\n";
             }
 #endif
          }
