@@ -554,7 +554,8 @@ namespace glz
             break;
 
          default:
-            GLZ_THROW_OR_ABORT(std::runtime_error{"Unhandled event id!"});
+            break;
+           // GLZ_THROW_OR_ABORT(std::runtime_error{"Unhandled event id!"});
          }
 #endif
 
@@ -862,7 +863,7 @@ namespace glz
             }
 #elif defined(_WIN32)
             LARGE_INTEGER signal_time{};
-            if (!SetWaitableTimer(timer_fd, nullptr, 0, nullptr, nullptr, FALSE)) {
+            if (!SetWaitableTimer(timer_fd, &signal_time, 0, nullptr, nullptr, FALSE)) {
                std::cerr << "Error: SetWaitableTimer (disable timer) failed (" << GetLastError() << ")\n";
             }
 #endif
