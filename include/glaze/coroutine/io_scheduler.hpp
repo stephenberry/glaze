@@ -97,9 +97,9 @@ namespace glz
          }
 
 #if defined(__linux__)
-         close_socket(event_fd);
-         close_socket(timer_fd);
-         close_socket(schedule_fd);
+         glz::net::close_socket(event_fd);
+         glz::net::close_socket(timer_fd);
+         glz::net::close_socket(schedule_fd);
 #endif
       }
 
