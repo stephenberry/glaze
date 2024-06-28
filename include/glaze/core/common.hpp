@@ -362,6 +362,11 @@ namespace glz
 
       template <class T>
       concept glaze_enum_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Enum>;
+      
+      template <class T>
+      concept has_nameof = requires(T t) {
+          { glz::nameof(t) } -> std::convertible_to<std::string_view>;
+      };
 
       template <class T>
       concept glaze_flags_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Flags>;

@@ -175,6 +175,22 @@ suite get_enum_name_tests = [] {
    };
 };
 
+namespace glz
+{
+   GLZ_ENUM(Vehicle, Car, Truck, Plane);
+}
+
+static_assert(glz::detail::has_nameof<glz::Vehicle>);
+
+suite glz_enum_test = [] {
+   "glz_enum"_test = [] {
+      expect(glz::nameof(glz::Vehicle::Plane) == "Plane");
+      
+      auto name = glz::write_json(glz::Vehicle::Plane).value();
+      expect(name == R"("Plane")") << name;
+   };
+};
+
 struct var1_t
 {
    double x{};
