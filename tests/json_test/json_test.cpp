@@ -190,6 +190,10 @@ suite glz_enum_test = [] {
       
       auto name = glz::write_json(glz::Vehicle::Plane).value();
       expect(name == R"("Plane")") << name;
+      
+      glz::Vehicle vehicle{};
+      expect(not glz::read_json(vehicle, name));
+      expect(vehicle == glz::Vehicle::Plane);
    };
    
    "glz_enum_map"_test = [] {
@@ -197,6 +201,10 @@ suite glz_enum_test = [] {
       
       auto name = glz::write_json(glz::Shapes::sq).value();
       expect(name == R"("Square")") << name;
+      
+      glz::Shapes shape{};
+      expect(not glz::read_json(shape, name));
+      expect(shape == glz::Shapes::sq);
    };
 };
 
