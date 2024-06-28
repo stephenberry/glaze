@@ -178,9 +178,11 @@ suite get_enum_name_tests = [] {
 namespace glz
 {
    GLZ_ENUM(Vehicle, Car, Truck, Plane);
+   
+   GLZ_ENUM_MAP(Shapes, "Circle", circ, "Square", sq, "Triangle", triangle);
 }
-
-static_assert(glz::detail::has_nameof<glz::Vehicle>);
+static_assert(glz::nameof(glz::Vehicle::Truck) == "Truck");
+static_assert(glz::has_nameof<glz::Vehicle>);
 
 suite glz_enum_test = [] {
    "glz_enum"_test = [] {
@@ -188,6 +190,13 @@ suite glz_enum_test = [] {
       
       auto name = glz::write_json(glz::Vehicle::Plane).value();
       expect(name == R"("Plane")") << name;
+   };
+   
+   "glz_enum_map"_test = [] {
+      expect(glz::nameof(glz::Shapes::circ) == "Circle");
+      
+      auto name = glz::write_json(glz::Shapes::sq).value();
+      expect(name == R"("Square")") << name;
    };
 };
 

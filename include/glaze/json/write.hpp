@@ -465,7 +465,7 @@ namespace glz
          {
             if constexpr (has_nameof<T>)
             {
-               write<json>::op<Opts>(glz::nameof(value), ctx,
+               write<json>::op<Opts>(nameof(value), ctx,
                                      std::forward<Args>(args)...);
             }
             else {

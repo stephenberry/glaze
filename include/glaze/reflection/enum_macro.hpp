@@ -6,6 +6,14 @@
 #include <array>
 #include <string_view>
 
+namespace glz
+{
+   template <class T>
+   concept has_nameof = requires {
+      { nameof(T{}) } -> std::convertible_to<std::string_view>;
+   };
+}
+
 // Macros for GLZ_ENUM
 #define GLZ_PARENS ()
 
