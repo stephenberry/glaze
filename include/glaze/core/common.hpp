@@ -247,22 +247,22 @@ namespace glz
 
       template <class Map>
       concept heterogeneous_map = requires {
-                                     typename Map::key_compare;
-                                     requires(std::same_as<typename Map::key_compare, std::less<>> ||
-                                              std::same_as<typename Map::key_compare, std::greater<>> ||
-                                              requires { typename Map::key_compare::is_transparent; });
-                                  };
+         typename Map::key_compare;
+         requires(std::same_as<typename Map::key_compare, std::less<>> ||
+                  std::same_as<typename Map::key_compare, std::greater<>> ||
+                  requires { typename Map::key_compare::is_transparent; });
+      };
 
       template <class T>
-      concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
+      concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>)&&range<T>);
 
       template <class T>
-      concept readable_array_t = (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> &&
-                                  !filesystem_path<T>);
+      concept readable_array_t =
+         (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> && !filesystem_path<T>);
 
       template <class T>
-      concept writable_array_t = (range<T> && !custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> &&
-                                  !filesystem_path<T>);
+      concept writable_array_t =
+         (range<T> && !custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> && !filesystem_path<T>);
 
       template <class T>
       concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> &&
@@ -277,17 +277,17 @@ namespace glz
 
       /// \brief check if container has fixed size and its subsequent T::value_type
       template <class T>
-      concept has_static_size = (is_span<T> && !is_dynamic_span<T>) ||
-                                (
-                                   requires(T container) {
-                                      {
-                                         std::bool_constant<(std::decay_t<T>{}.size(), true)>()
-                                      } -> std::same_as<std::true_type>;
-                                   } && std::decay_t<T>{}.size() > 0 &&
-                                   requires {
-                                      typename T::value_type;
-                                      requires std::is_trivially_copyable_v<typename T::value_type>;
-                                   });
+      concept has_static_size =
+         (is_span<T> && !is_dynamic_span<T>) || (
+                                                   requires(T container) {
+                                                      {
+                                                         std::bool_constant<(std::decay_t<T>{}.size(), true)>()
+                                                      } -> std::same_as<std::true_type>;
+                                                   } && std::decay_t<T>{}.size() > 0 &&
+                                                   requires {
+                                                      typename T::value_type;
+                                                      requires std::is_trivially_copyable_v<typename T::value_type>;
+                                                   });
       static_assert(has_static_size<std::array<int, 2>>);
       static_assert(!has_static_size<std::array<std::string, 2>>);
 
@@ -323,9 +323,9 @@ namespace glz
 
       template <class T>
       concept tuple_t = requires(T t) {
-                           glz::tuple_size<T>::value;
-                           glz::get<0>(t);
-                        } && !meta_value_t<T> && !range<T>;
+         glz::tuple_size<T>::value;
+         glz::get<0>(t);
+      } && !meta_value_t<T> && !range<T>;
 
       template <class T>
       concept glaze_wrapper = requires { requires T::glaze_wrapper == true; };
@@ -336,11 +336,11 @@ namespace glz
 
       template <class T>
       concept nullable_t = !meta_value_t<T> && !str_t<T> && requires(T t) {
-                                                               bool(t);
-                                                               {
-                                                                  *t
-                                                               };
-                                                            };
+         bool(t);
+         {
+            *t
+         };
+      };
 
       template <class T>
       concept nullable_wrapper = glaze_wrapper<T> && nullable_t<typename T::value_type>;
@@ -350,9 +350,9 @@ namespace glz
 
       template <class T>
       concept func_t = requires(T t) {
-                          typename T::result_type;
-                          std::function(t);
-                       } && !glaze_t<T>;
+         typename T::result_type;
+         std::function(t);
+      } && !glaze_t<T>;
 
       template <class T>
       concept glaze_array_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Array>;
@@ -382,12 +382,12 @@ namespace glz
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to) {
 #if __GNUC__
-                                             // TODO: guard gcc against narrowing conversions when fixed
-                                             to = from;
+         // TODO: guard gcc against narrowing conversions when fixed
+         to = from;
 #else
-                                             To{from};
+         To{from};
 #endif
-                                          };
+      };
 
       // from
       // https://stackoverflow.com/questions/55941964/how-to-filter-duplicate-types-from-tuple-c

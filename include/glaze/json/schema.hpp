@@ -208,24 +208,24 @@ struct glz::meta<glz::detail::defined_formats>
    using enum detail::defined_formats;
    static constexpr std::string_view name = "defined_formats";
    static constexpr auto value = enumerate_no_reflect("date-time", datetime, //
-                                           "date", date, //
-                                           "time", time, //
-                                           "duration", duration, //
-                                           "email", email, //
-                                           "idn-email", idn_email, //
-                                           "hostname", hostname, //
-                                           "idn-hostname", idn_hostname, //
-                                           "ipv4", ipv4, //
-                                           "ipv6", ipv6, //
-                                           "uri", uri, //
-                                           "uri-reference", uri_reference, //
-                                           "iri", iri, //
-                                           "iri-reference", iri_reference, //
-                                           "uuid", uuid, //
-                                           "uri-template", uri_template, //
-                                           "json-pointer", json_pointer, //
-                                           "relative-json-pointer", relative_json_pointer, //
-                                           "regex", regex);
+                                                      "date", date, //
+                                                      "time", time, //
+                                                      "duration", duration, //
+                                                      "email", email, //
+                                                      "idn-email", idn_email, //
+                                                      "hostname", hostname, //
+                                                      "idn-hostname", idn_hostname, //
+                                                      "ipv4", ipv4, //
+                                                      "ipv6", ipv6, //
+                                                      "uri", uri, //
+                                                      "uri-reference", uri_reference, //
+                                                      "iri", iri, //
+                                                      "iri-reference", iri_reference, //
+                                                      "uuid", uuid, //
+                                                      "uri-template", uri_template, //
+                                                      "json-pointer", json_pointer, //
+                                                      "relative-json-pointer", relative_json_pointer, //
+                                                      "regex", regex);
 };
 
 namespace glz
