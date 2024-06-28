@@ -131,7 +131,7 @@ namespace glz
    }
 
    template <class T>
-      requires std::same_as<T, std::remove_cvref_t<int32_t>>
+      requires std::same_as<std::remove_cvref_t<T>, int32_t>
    auto* to_chars(auto* buf, T x) noexcept
    {
       *buf = '-';
