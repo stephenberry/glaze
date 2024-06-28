@@ -118,9 +118,9 @@ namespace glz
                   }();
 
                   if (const auto& member_it = frozen_map.find(key); member_it != frozen_map.end()) [[likely]] {
+                     static thread_local std::string temp{};
                      std::visit(
                         [&](auto&& member_ptr) {
-                           static thread_local std::string temp{};
                            std::ignore =
                               write<opt_true<Opts, &opts::raw>>(detail::get_member(value, member_ptr), temp, ctx);
                            result.append(temp);
