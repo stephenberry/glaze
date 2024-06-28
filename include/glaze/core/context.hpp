@@ -8,7 +8,7 @@
 #include <string>
 #include <string_view>
 
-#include "glaze/reflection/get_name.hpp"
+#include "glaze/reflection/enum_macro.hpp"
 
 namespace glz
 {
