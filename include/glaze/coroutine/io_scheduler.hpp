@@ -100,6 +100,11 @@ namespace glz
          glz::net::close_socket(event_fd);
          glz::net::close_socket(timer_fd);
          glz::net::close_socket(schedule_fd);
+
+#elif defined(_WIN32)
+         glz::net::close_event(event_fd);
+         glz::net::close_event(timer_fd);
+         glz::net::close_event(schedule_fd);
 #endif
       }
 
