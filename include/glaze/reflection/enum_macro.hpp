@@ -29,7 +29,7 @@
 #define GLZ_STRINGIFY(a) #a
 
 #define GLZ_ENUM(EnumType, ...)                                  \
-    enum struct EnumType { __VA_ARGS__ };                        \
+    enum struct EnumType : uint32_t { __VA_ARGS__ };                        \
     constexpr std::string_view EnumType_names[] = {              \
         GLZ_FOR_EACH(GLZ_STRINGIFY, __VA_ARGS__)};               \
     constexpr std::string_view nameof(EnumType value) noexcept { \
