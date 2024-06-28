@@ -904,11 +904,34 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            // read<json>::op<Opts>(*reinterpret_cast<std::underlying_type_t<std::decay_t<decltype(value)>>*>(&value),
-            // ctx, it, end);
-            std::underlying_type_t<std::decay_t<T>> x{};
-            read<json>::op<Opts>(x, ctx, it, end);
-            value = static_cast<std::decay_t<T>>(x);
+            if constexpr (has_nameof<T>)
+            {
+               if constexpr (!Opts.ws_handled) {
+                  GLZ_SKIP_WS;
+               }
+
+               const auto key = parse_key(ctx, it, end); // TODO: Use more optimal enum key parsing
+               if (bool(ctx.error)) [[unlikely]]
+                  return;
+               
+               // TODO: use a compile time hash map
+               constexpr auto& names = enum_names(T{});
+               for (size_t i = 0; i < names.size(); ++i) {
+                  if (key == names[i]) {
+                     value = static_cast<std::decay_t<T>>(i);
+                     return;
+                  }
+               }
+               
+               ctx.error = error_code::unexpected_enum;
+               return;
+            }
+            else {
+               // TODO: use std::bit_cast???
+               std::underlying_type_t<std::decay_t<T>> x{};
+               read<json>::op<Opts>(x, ctx, it, end);
+               value = static_cast<std::decay_t<T>>(x);
+            }
          }
       };
 
