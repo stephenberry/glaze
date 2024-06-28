@@ -33,7 +33,7 @@ namespace glz
    macro(a) __VA_OPT__(, ) __VA_OPT__(GLZ_FOR_EACH_AGAIN GLZ_PARENS(macro, __VA_ARGS__))
 #define GLZ_FOR_EACH_AGAIN() GLZ_FOR_EACH_HELPER
 
-#define GLZ_STRINGIFY(a) #a
+#define GLZ_STRINGIFY(a) std::string_view{#a}
 
 // For pairs of arguments
 #define GLZ_FOR_EACH2(macro, ...)                                    \
@@ -54,7 +54,7 @@ namespace glz
 constexpr auto (EnumType ## _names) = std::array{GLZ_FOR_EACH(GLZ_STRINGIFY, __VA_ARGS__)}; \
    constexpr std::string_view nameof(EnumType value) noexcept { return (EnumType ## _names)[size_t(value)]; }; \
 template <class T> requires (std::same_as<std::decay_t<T>, EnumType>) \
-constexpr decltype(auto) enum_names() noexcept { \
+constexpr decltype(auto) enum_names(T&&) noexcept { \
    return (EnumType ## _names); \
 }
 
@@ -69,6 +69,6 @@ constexpr decltype(auto) enum_names() noexcept { \
         return (EnumType ## _names)[size_t(value)];                    \
     }; \
 template <class T> requires (std::same_as<std::decay_t<T>, EnumType>) \
-constexpr decltype(auto) enum_names() noexcept { \
+constexpr decltype(auto) enum_names(T&&) noexcept { \
    return (EnumType ## _names); \
 }

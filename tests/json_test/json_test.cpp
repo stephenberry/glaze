@@ -192,7 +192,8 @@ suite glz_enum_test = [] {
       expect(name == R"("Plane")") << name;
       
       glz::Vehicle vehicle{};
-      expect(not glz::read_json(vehicle, name));
+      auto ec = glz::read_json(vehicle, name);
+      expect(not ec) << glz::format_error(ec, name);
       expect(vehicle == glz::Vehicle::Plane);
    };
    
