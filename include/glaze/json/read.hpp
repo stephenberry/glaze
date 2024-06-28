@@ -904,8 +904,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if constexpr (has_nameof<T>)
-            {
+            if constexpr (has_nameof<T>) {
                if constexpr (!Opts.ws_handled) {
                   GLZ_SKIP_WS;
                }
@@ -913,7 +912,7 @@ namespace glz
                const auto key = parse_key(ctx, it, end); // TODO: Use more optimal enum key parsing
                if (bool(ctx.error)) [[unlikely]]
                   return;
-               
+
                // TODO: use a compile time hash map
                constexpr auto& names = enum_names(T{});
                for (size_t i = 0; i < names.size(); ++i) {
@@ -922,7 +921,7 @@ namespace glz
                      return;
                   }
                }
-               
+
                ctx.error = error_code::unexpected_enum;
                return;
             }

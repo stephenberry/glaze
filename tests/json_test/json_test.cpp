@@ -178,7 +178,7 @@ suite get_enum_name_tests = [] {
 namespace glz
 {
    GLZ_ENUM(Vehicle, Car, Truck, Plane);
-   
+
    GLZ_ENUM_MAP(Shapes, "Circle", circ, "Square", sq, "Triangle", triangle);
 }
 static_assert(glz::nameof(glz::Vehicle::Truck) == "Truck");
@@ -187,22 +187,22 @@ static_assert(glz::has_nameof<glz::Vehicle>);
 suite glz_enum_test = [] {
    "glz_enum"_test = [] {
       expect(glz::nameof(glz::Vehicle::Plane) == "Plane");
-      
+
       auto name = glz::write_json(glz::Vehicle::Plane).value();
       expect(name == R"("Plane")") << name;
-      
+
       glz::Vehicle vehicle{};
       auto ec = glz::read_json(vehicle, name);
       expect(not ec) << glz::format_error(ec, name);
       expect(vehicle == glz::Vehicle::Plane);
    };
-   
+
    "glz_enum_map"_test = [] {
       expect(glz::nameof(glz::Shapes::circ) == "Circle");
-      
+
       auto name = glz::write_json(glz::Shapes::sq).value();
       expect(name == R"("Square")") << name;
-      
+
       glz::Shapes shape{};
       expect(not glz::read_json(shape, name));
       expect(shape == glz::Shapes::sq);

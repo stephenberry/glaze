@@ -463,10 +463,8 @@ namespace glz
          template <auto Opts, class... Args>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
-            if constexpr (has_nameof<T>)
-            {
-               write<json>::op<Opts>(nameof(value), ctx,
-                                     std::forward<Args>(args)...);
+            if constexpr (has_nameof<T>) {
+               write<json>::op<Opts>(nameof(value), ctx, std::forward<Args>(args)...);
             }
             else {
                // serialize as underlying number

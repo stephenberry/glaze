@@ -135,27 +135,27 @@ namespace glz
          std::optional<std::vector<std::string_view>> examples{};
          schema attributes{};
       };
-      
+
       GLZ_ENUM_MAP(defined_formats, //
                    "date-time", datetime, //
-                  "date", date, //
-                  "time", time, //
-                  "duration", duration, //
-                  "email", email, //
-                  "idn-email", idn_email, //
-                  "hostname", hostname, //
-                  "idn-hostname", idn_hostname, //
-                  "ipv4", ipv4, //
-                  "ipv6", ipv6, //
-                  "uri", uri, //
-                  "uri-reference", uri_reference, //
-                  "iri", iri, //
-                  "iri-reference", iri_reference, //
-                  "uuid", uuid, //
-                  "uri-template", uri_template, //
-                  "json-pointer", json_pointer, //
-                  "relative-json-pointer", relative_json_pointer, //
-                  "regex", regex);
+                   "date", date, //
+                   "time", time, //
+                   "duration", duration, //
+                   "email", email, //
+                   "idn-email", idn_email, //
+                   "hostname", hostname, //
+                   "idn-hostname", idn_hostname, //
+                   "ipv4", ipv4, //
+                   "ipv6", ipv6, //
+                   "uri", uri, //
+                   "uri-reference", uri_reference, //
+                   "iri", iri, //
+                   "iri-reference", iri_reference, //
+                   "uuid", uuid, //
+                   "uri-template", uri_template, //
+                   "json-pointer", json_pointer, //
+                   "relative-json-pointer", relative_json_pointer, //
+                   "regex", regex);
    }
 }
 
