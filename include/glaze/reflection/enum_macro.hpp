@@ -62,7 +62,7 @@ constexpr decltype(auto) enum_names(T&&) noexcept { \
 // Example: GLZ_ENUM_MAP(color, "Red", red, "Green", green, "Blue", blue);
 // nameof(color::red) == "Red"
 #define GLZ_ENUM_MAP(EnumType, ...)                                  \
-    enum struct EnumType { GLZ_FOR_EACH2(GLZ_EXTRACT_SECOND, __VA_ARGS__) };                        \
+    enum struct EnumType : uint32_t { GLZ_FOR_EACH2(GLZ_EXTRACT_SECOND, __VA_ARGS__) };                        \
     constexpr auto (EnumType ## _names) = std::array{              \
         GLZ_FOR_EACH2(GLZ_EXTRACT_FIRST, __VA_ARGS__)};               \
     constexpr std::string_view nameof(EnumType value) noexcept { \
