@@ -247,22 +247,22 @@ namespace glz
 
       template <class Map>
       concept heterogeneous_map = requires {
-         typename Map::key_compare;
-         requires(std::same_as<typename Map::key_compare, std::less<>> ||
-                  std::same_as<typename Map::key_compare, std::greater<>> ||
-                  requires { typename Map::key_compare::is_transparent; });
-      };
+                                     typename Map::key_compare;
+                                     requires(std::same_as<typename Map::key_compare, std::less<>> ||
+                                              std::same_as<typename Map::key_compare, std::greater<>> ||
+                                              requires { typename Map::key_compare::is_transparent; });
+                                  };
 
       template <class T>
-      concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>)&&range<T>);
+      concept array_t = (!meta_value_t<T> && !str_t<T> && !(readable_map_t<T> || writable_map_t<T>) && range<T>);
 
       template <class T>
-      concept readable_array_t =
-         (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> && !filesystem_path<T>);
+      concept readable_array_t = (range<T> && !custom_read<T> && !meta_value_t<T> && !str_t<T> && !readable_map_t<T> &&
+                                  !filesystem_path<T>);
 
       template <class T>
-      concept writable_array_t =
-         (range<T> && !custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> && !filesystem_path<T>);
+      concept writable_array_t = (range<T> && !custom_write<T> && !meta_value_t<T> && !str_t<T> && !writable_map_t<T> &&
+                                  !filesystem_path<T>);
 
       template <class T>
       concept fixed_array_value_t = array_t<std::decay_t<decltype(std::declval<T>()[0])>> &&
@@ -277,17 +277,17 @@ namespace glz
 
       /// \brief check if container has fixed size and its subsequent T::value_type
       template <class T>
-      concept has_static_size =
-         (is_span<T> && !is_dynamic_span<T>) || (
-                                                   requires(T container) {
-                                                      {
-                                                         std::bool_constant<(std::decay_t<T>{}.size(), true)>()
-                                                      } -> std::same_as<std::true_type>;
-                                                   } && std::decay_t<T>{}.size() > 0 &&
-                                                   requires {
-                                                      typename T::value_type;
-                                                      requires std::is_trivially_copyable_v<typename T::value_type>;
-                                                   });
+      concept has_static_size = (is_span<T> && !is_dynamic_span<T>) ||
+                                (
+                                   requires(T container) {
+                                      {
+                                         std::bool_constant<(std::decay_t<T>{}.size(), true)>()
+                                      } -> std::same_as<std::true_type>;
+                                   } && std::decay_t<T>{}.size() > 0 &&
+                                   requires {
+                                      typename T::value_type;
+                                      requires std::is_trivially_copyable_v<typename T::value_type>;
+                                   });
       static_assert(has_static_size<std::array<int, 2>>);
       static_assert(!has_static_size<std::array<std::string, 2>>);
 
@@ -323,9 +323,9 @@ namespace glz
 
       template <class T>
       concept tuple_t = requires(T t) {
-         glz::tuple_size<T>::value;
-         glz::get<0>(t);
-      } && !meta_value_t<T> && !range<T>;
+                           glz::tuple_size<T>::value;
+                           glz::get<0>(t);
+                        } && !meta_value_t<T> && !range<T>;
 
       template <class T>
       concept glaze_wrapper = requires { requires T::glaze_wrapper == true; };
@@ -336,11 +336,11 @@ namespace glz
 
       template <class T>
       concept nullable_t = !meta_value_t<T> && !str_t<T> && requires(T t) {
-         bool(t);
-         {
-            *t
-         };
-      };
+                                                               bool(t);
+                                                               {
+                                                                  *t
+                                                               };
+                                                            };
 
       template <class T>
       concept nullable_wrapper = glaze_wrapper<T> && nullable_t<typename T::value_type>;
@@ -350,9 +350,9 @@ namespace glz
 
       template <class T>
       concept func_t = requires(T t) {
-         typename T::result_type;
-         std::function(t);
-      } && !glaze_t<T>;
+                          typename T::result_type;
+                          std::function(t);
+                       } && !glaze_t<T>;
 
       template <class T>
       concept glaze_array_t = glaze_t<T> && is_specialization_v<meta_wrapper_t<T>, Array>;
@@ -382,12 +382,12 @@ namespace glz
       template <class From, class To>
       concept non_narrowing_convertable = requires(From from, To to) {
 #if __GNUC__
-         // TODO: guard gcc against narrowing conversions when fixed
-         to = from;
+                                             // TODO: guard gcc against narrowing conversions when fixed
+                                             to = from;
 #else
-         To{from};
+                                             To{from};
 #endif
-      };
+                                          };
 
       // from
       // https://stackoverflow.com/questions/55941964/how-to-filter-duplicate-types-from-tuple-c
@@ -919,60 +919,6 @@ template <>
 struct glz::meta<glz::error_code>
 {
    static constexpr sv name = "glz::error_code";
-   using enum glz::error_code;
-   static constexpr auto value =
-      enumerate_no_reflect("none", none, //
-                           "no_read_input", no_read_input, //
-                           "data_must_be_null_terminated", data_must_be_null_terminated, //
-                           "parse_number_failure", parse_number_failure, //
-                           "expected_brace", expected_brace, //
-                           "expected_bracket", expected_bracket, //
-                           "expected_quote", expected_quote, //
-                           "expected_comma", expected_comma, //
-                           "expected_colon", expected_colon, //
-                           "exceeded_static_array_size", exceeded_static_array_size, //
-                           "unexpected_end", unexpected_end, //
-                           "expected_end_comment", expected_end_comment, //
-                           "syntax_error", syntax_error, //
-                           "key_not_found", key_not_found, //
-                           "unexpected_enum", unexpected_enum, //
-                           "attempt_const_read", attempt_const_read, //
-                           "attempt_member_func_read", attempt_member_func_read, //
-                           "attempt_read_hidden", attempt_read_hidden, //
-                           "invalid_nullable_read", invalid_nullable_read, //
-                           "invalid_variant_object", invalid_variant_object, //
-                           "invalid_variant_array", invalid_variant_array, //
-                           "invalid_variant_string", invalid_variant_string, //
-                           "no_matching_variant_type", no_matching_variant_type, //
-                           "expected_true_or_false", expected_true_or_false, //
-                           "unknown_key", unknown_key, //
-                           "invalid_flag_input", invalid_flag_input, //
-                           "invalid_escape", invalid_escape, //
-                           "u_requires_hex_digits", u_requires_hex_digits, //
-                           "file_extension_not_supported", file_extension_not_supported, //
-                           "could_not_determine_extension", could_not_determine_extension, //
-                           "seek_failure", seek_failure, //
-                           "unicode_escape_conversion_failure", unicode_escape_conversion_failure, //
-                           "file_open_failure", file_open_failure, //
-                           "file_close_failure", file_close_failure, //
-                           "file_include_error", file_include_error, //
-                           "dump_int_error", dump_int_error, //
-                           "get_nonexistent_json_ptr", get_nonexistent_json_ptr, //
-                           "get_wrong_type", get_wrong_type, //
-                           "cannot_be_referenced", cannot_be_referenced, //
-                           "invalid_get", invalid_get, //
-                           "invalid_get_fn", invalid_get_fn, //
-                           "invalid_call", invalid_call, //
-                           "invalid_partial_key", invalid_partial_key, //
-                           "name_mismatch", name_mismatch, //
-                           "array_element_not_found", array_element_not_found, //
-                           "elements_not_convertible_to_design", elements_not_convertible_to_design, //
-                           "unknown_distribution", unknown_distribution, //
-                           "invalid_distribution_elements", invalid_distribution_elements, //
-                           "missing_key", missing_key, //
-                           "hostname_failure", hostname_failure, //
-                           "includer_error", includer_error //
-      );
 };
 
 namespace glz
@@ -1013,8 +959,7 @@ namespace glz
 
    [[nodiscard]] inline std::string format_error(const error_ctx& pe, const auto& buffer)
    {
-      static constexpr auto arr = detail::make_enum_to_string_array<error_code>();
-      const auto error_type_str = arr[uint32_t(pe.ec)];
+      const auto error_type_str = nameof(pe.ec);
 
       const auto info = detail::get_source_info(buffer, pe.location);
       auto error_str = detail::generate_error_string(error_type_str, info);

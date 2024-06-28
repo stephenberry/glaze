@@ -5,6 +5,7 @@
 
 // TODO: Use std::source_location when deprecating clang 14
 // #include <source_location>
+#include <array>
 #include <string_view>
 
 #include "glaze/reflection/to_tuple.hpp"
@@ -78,7 +79,7 @@ namespace glz::detail
 namespace glz
 {
    template <auto N, class T>
-   struct nameof_impl
+   struct member_nameof_impl
    {
       static constexpr auto name = detail::get_name_impl<N, T>;
       static constexpr auto begin = name.find(detail::reflect_field::end);
@@ -89,7 +90,7 @@ namespace glz
    };
 
    template <auto N, class T>
-   constexpr auto nameof = []() constexpr { return nameof_impl<N, T>::stripped_literal; }();
+   constexpr auto member_nameof = []() constexpr { return member_nameof_impl<N, T>::stripped_literal; }();
 
    template <class T>
    constexpr auto type_name = [] {
@@ -108,7 +109,7 @@ namespace glz
    template <class T, size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
-      return std::array{nameof<I, T>...};
+      return std::array{member_nameof<I, T>...};
    }
 
    template <class T>
@@ -200,3 +201,33 @@ namespace glz
 #endif
    }
 }
+
+// Macros for GLZ_ENUM
+#define GLZ_PARENS ()
+
+#define GLZ_EXPAND(...) \
+    GLZ_EXPAND4(GLZ_EXPAND4(GLZ_EXPAND4(GLZ_EXPAND4(__VA_ARGS__))))
+#define GLZ_EXPAND4(...) \
+    GLZ_EXPAND3(GLZ_EXPAND3(GLZ_EXPAND3(GLZ_EXPAND3(__VA_ARGS__))))
+#define GLZ_EXPAND3(...) \
+    GLZ_EXPAND2(GLZ_EXPAND2(GLZ_EXPAND2(GLZ_EXPAND2(__VA_ARGS__))))
+#define GLZ_EXPAND2(...) \
+    GLZ_EXPAND1(GLZ_EXPAND1(GLZ_EXPAND1(GLZ_EXPAND1(__VA_ARGS__))))
+#define GLZ_EXPAND1(...) __VA_ARGS__
+
+#define GLZ_FOR_EACH(macro, ...) \
+    __VA_OPT__(GLZ_EXPAND(GLZ_FOR_EACH_HELPER(macro, __VA_ARGS__)))
+#define GLZ_FOR_EACH_HELPER(macro, a, ...) \
+    macro(a) __VA_OPT__(, )                \
+        __VA_OPT__(GLZ_FOR_EACH_AGAIN GLZ_PARENS(macro, __VA_ARGS__))
+#define GLZ_FOR_EACH_AGAIN() GLZ_FOR_EACH_HELPER
+
+#define GLZ_STRINGIFY(a) #a
+
+#define GLZ_ENUM(EnumType, ...)                                  \
+    enum struct EnumType { __VA_ARGS__ };                        \
+    constexpr std::string_view EnumType_names[] = {              \
+        GLZ_FOR_EACH(GLZ_STRINGIFY, __VA_ARGS__)};               \
+    constexpr std::string_view nameof(EnumType value) noexcept { \
+        return EnumType_names[size_t(value)];                    \
+    };
