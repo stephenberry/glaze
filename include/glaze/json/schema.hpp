@@ -207,7 +207,7 @@ struct glz::meta<glz::detail::defined_formats>
 {
    using enum detail::defined_formats;
    static constexpr std::string_view name = "defined_formats";
-   static constexpr auto value = enumerate("date-time", datetime, //
+   static constexpr auto value = enumerate_no_reflect("date-time", datetime, //
                                            "date", date, //
                                            "time", time, //
                                            "duration", duration, //
