@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <bit>
 #include <cstdint>
 
 #include "glaze/util/type_traits.hpp"
@@ -27,8 +28,10 @@ namespace glz
 
    // Write padding bytes simplifies our dump calculations by making sure we have significant excess
    constexpr uint32_t write_padding_bytes = 256;
+   
+   struct alignas(64) opts_packed {};
 
-   struct opts
+   struct alignas(opts_packed) opts
    {
       // USER CONFIGURABLE
       uint32_t format = json;
@@ -87,7 +90,13 @@ namespace glz
       // sufficient space is only applicable to writing certain types and based on the write_padding_bytes
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
+      
+      opts_packed pack() const {
+         return std::bit_cast<opts_packed>(*this);
+      }
    };
+   
+   static_assert(sizeof(opts) == sizeof(opts_packed));
 
    template <opts Opts>
    constexpr auto opening_handled()
