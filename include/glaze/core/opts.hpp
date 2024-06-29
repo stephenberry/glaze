@@ -29,11 +29,7 @@ namespace glz
    // Write padding bytes simplifies our dump calculations by making sure we have significant excess
    constexpr uint32_t write_padding_bytes = 256;
    
-   struct opts;
-   
-   struct alignas(64) opts_packed {
-      opts unpack() const;
-   };
+   struct alignas(64) opts_packed {};
 
    struct alignas(opts_packed) opts
    {
@@ -99,10 +95,6 @@ namespace glz
          return std::bit_cast<opts_packed>(*this);
       }
    };
-   
-   inline opts opts_packed::unpack() const {
-      return std::bit_cast<opts>(*this);
-   }
    
    static_assert(sizeof(opts) == sizeof(opts_packed));
 
