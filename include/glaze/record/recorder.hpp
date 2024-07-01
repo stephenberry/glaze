@@ -123,7 +123,7 @@ namespace glz
 
             constexpr auto Opts = opening_handled_off<ws_handled_off<Options>()>();
 
-            if constexpr (!Options.opening_handled) {
+            if constexpr (!has_opening_handled(Options)) {
                GLZ_SKIP_WS;
                GLZ_MATCH_OPEN_BRACE;
             }
