@@ -8498,7 +8498,6 @@ struct WorkshopModConfig
 };
 
 suite msvc_ice_tests = [] {
-
    "WorkshopModConfig"_test = [] {
       std::string buffer;
 
@@ -8509,7 +8508,6 @@ suite msvc_ice_tests = [] {
                                                                                                          buffer);
       expect(not ec) << glz::format_error(ec, buffer);
    };
-
 };
 
 int main()

@@ -1260,8 +1260,7 @@ namespace glz
                         write<json>::op<Opts>(get_member(value, member), ctx, b, ix);
                      }
 
-                     if constexpr (glaze_object_t<T>)
-                     {
+                     if constexpr (glaze_object_t<T>) {
                         // Writing comments only applies to glaze object types
                         // MSVC ICE bugs cause this code to be duplicated
                         static constexpr size_t comment_index = member_index + 1;
