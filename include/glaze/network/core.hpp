@@ -52,16 +52,19 @@ namespace glz::net
 #endif
    
 #if defined(__APPLE__)
+   constexpr auto invalid_socket = -1;
    using poll_event_t = struct kevent;
    constexpr int invalid_event_handle = -1;
    using ident_t = uintptr_t;
    constexpr uintptr_t invalid_ident = ~uintptr_t(0); // set all bits
 #elif defined(__linux__)
+   constexpr auto invalid_socket = -1;
    using poll_event_t = struct epoll_event;
    constexpr int invalid_event_handle = -1;
    using ident_t = int;
    constexpr int invalid_ident = -1;
 #elif defined(_WIN32)
+   constexpr auto invalid_socket = INVALID_SOCKET;
    using ident_t = HANDLE;
    using poll_event_t = HANDLE;
    inline const HANDLE invalid_event_handle = INVALID_HANDLE_VALUE;
@@ -81,14 +84,14 @@ namespace glz::net
 
 
    inline auto close_socket(auto& fd) {
-      if (fd != invalid_event_handle) {
+      if (fd != invalid_socket) {
 #ifdef _WIN32
       ::closesocket(fd);
 #else
       ::close(fd);
 #endif
       }
-      fd = invalid_event_handle;
+      fd = invalid_socket;
    }
    
    inline auto close_event(auto fd) {

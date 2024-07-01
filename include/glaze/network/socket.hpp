@@ -14,12 +14,10 @@ namespace glz
 {
 #ifdef _WIN32
    constexpr auto e_would_block = WSAEWOULDBLOCK;
-   constexpr auto invalid_socket = INVALID_SOCKET;
    using socket_t = SOCKET;
    constexpr auto socket_error = SOCKET_ERROR;
 #else
    constexpr auto e_would_block = EWOULDBLOCK;
-   constexpr auto invalid_socket = -1;
    using socket_t = int;
    constexpr auto socket_error = -1;
 #endif
@@ -36,7 +34,7 @@ namespace glz
 {
    struct socket
    {
-      socket_t socket_fd{invalid_socket};
+      socket_t socket_fd{net::invalid_socket};
 
       void set_non_blocking()
       {
@@ -55,7 +53,7 @@ namespace glz
 
       void close()
       {
-         if (socket_fd != invalid_socket) {
+         if (socket_fd != net::invalid_socket) {
             net::close_socket(socket_fd);
          }
       }
@@ -94,7 +92,7 @@ namespace glz
    [[nodiscard]] inline std::error_code bind_and_listen(socket& sckt, int port)
    {
       sckt.socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
-      if (sckt.socket_fd == invalid_socket) {
+      if (sckt.socket_fd == net::invalid_socket) {
          return {int(ip_error::socket_bind_failed), ip_error_category::instance()};
       }
 
