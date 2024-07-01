@@ -4,6 +4,7 @@
 #define UT_RUN_TIME_ONLY
 
 #include "glaze/coroutine.hpp"
+#include "glaze/network/socket.hpp"
 
 #include "ut/ut.hpp"
 
