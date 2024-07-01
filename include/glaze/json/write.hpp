@@ -643,7 +643,7 @@ namespace glz
          }
 
          template <glz::opts Opts, class... Args>
-            requires(Opts.concatenate)
+            requires(bool(Opts.concatenate))
          static void op(auto&& value, is_context auto&& ctx, Args&&... args) noexcept
          {
             if constexpr (!has_opening_handled(Opts)) {

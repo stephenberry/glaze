@@ -30,24 +30,28 @@ namespace glz
 
    struct opts
    {
+      // We use a alias to a uint8_t for booleans so that compiler errors will print "0" or "1" rather than "true" or "false"
+      // This shortens compiler error printouts significantly
+      using bool_t = uint8_t;
+      
       // USER CONFIGURABLE
       uint32_t format = json;
-      bool comments = false; // Write out or support reading in JSONC style comments
-      bool error_on_unknown_keys = true; // Error when an unknown key is encountered
-      bool skip_null_members = true; // Skip writing out params in an object if the value is null
-      bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
-      bool prettify = false; // Write out prettified JSON
-      bool minified = false; // Require minified input for JSON, which results in faster read performance
+      bool_t comments = false; // Write out or support reading in JSONC style comments
+      bool_t error_on_unknown_keys = true; // Error when an unknown key is encountered
+      bool_t skip_null_members = true; // Skip writing out params in an object if the value is null
+      bool_t use_hash_comparison = true; // Will replace some string equality checks with hash checks
+      bool_t prettify = false; // Write out prettified JSON
+      bool_t minified = false; // Require minified input for JSON, which results in faster read performance
       char indentation_char = ' '; // Prettified JSON indentation char
       uint8_t indentation_width = 3; // Prettified JSON indentation size
-      bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
-      bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
-      bool write_type_info = true; // Write type info for meta objects in variants
-      bool force_conformance = false; // Do not allow invalid json normally accepted such as nan, inf.
-      bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
+      bool_t new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
+      bool_t shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
+      bool_t write_type_info = true; // Write type info for meta objects in variants
+      bool_t force_conformance = false; // Do not allow invalid json normally accepted such as nan, inf.
+      bool_t error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
                                           // skip_null_members = false to require nullable members
 
-      bool error_on_const_read =
+      bool_t error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
 
       uint8_t layout = rowwise; // CSV row wise output/input
@@ -55,24 +59,24 @@ namespace glz
       // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
       float_precision float_max_write_precision{};
 
-      bool bools_as_numbers = false; // Read and write booleans with 1's and 0's
+      bool_t bools_as_numbers = false; // Read and write booleans with 1's and 0's
 
-      bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
-      bool number = false; // read numbers as strings and write these string as numbers
-      bool raw = false; // write out string like values without quotes
-      bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
-      bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
-      bool allow_conversions = true; // Whether conversions between convertible types are
+      bool_t quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
+      bool_t number = false; // read numbers as strings and write these string as numbers
+      bool_t raw = false; // write out string like values without quotes
+      bool_t raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
+      bool_t structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
+      bool_t allow_conversions = true; // Whether conversions between convertible types are
       // allowed in binary, e.g. double -> float
 
-      bool partial_read =
+      bool_t partial_read =
          false; // Reads into only existing fields and elements and then exits without parsing the rest of the input
 
       // glaze_object_t concepts
-      bool partial_read_nested = false; // Advance the partially read struct to the end of the struct
-      bool concatenate = true; // Concatenates ranges of std::pair into single objects when writing
+      bool_t partial_read_nested = false; // Advance the partially read struct to the end of the struct
+      bool_t concatenate = true; // Concatenates ranges of std::pair into single objects when writing
 
-      bool hide_non_invocable =
+      bool_t hide_non_invocable =
          true; // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
 
       enum struct internal : uint32_t {
