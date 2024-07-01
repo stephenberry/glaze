@@ -19,7 +19,7 @@ namespace glz
       struct read<binary>
       {
          template <auto Opts, class T, class Tag, is_context Ctx, class It0, class It1>
-            requires(Opts.no_header)
+            requires(has_no_header(Opts))
          GLZ_ALWAYS_INLINE static void op(T&& value, Tag&& tag, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
             if constexpr (std::is_const_v<std::remove_reference_t<T>>) {
@@ -39,7 +39,7 @@ namespace glz
          }
 
          template <auto Opts, class T, is_context Ctx, class It0, class It1>
-            requires(not Opts.no_header)
+            requires(not has_no_header(Opts))
          GLZ_ALWAYS_INLINE static void op(T&& value, Ctx&& ctx, It0&& it, It1&& end) noexcept
          {
             if constexpr (std::is_const_v<std::remove_reference_t<T>>) {
@@ -175,7 +175,7 @@ namespace glz
          static constexpr uint8_t header = tag::number | type | (byte_count<T> << 5);
 
          template <auto Opts>
-            requires(Opts.no_header)
+            requires(has_no_header(Opts))
          GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t tag, is_context auto&& ctx, auto&& it,
                                           auto&&) noexcept
          {
@@ -267,12 +267,12 @@ namespace glz
          }
 
          template <auto Opts>
-            requires(not Opts.no_header)
+            requires(not has_no_header(Opts))
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             const auto tag = uint8_t(*it);
             ++it;
-            op<opt_true<Opts, &opts::no_header>>(value, tag, ctx, it, end);
+            op<no_header_on<Opts>()>(value, tag, ctx, it, end);
          }
       };
 
@@ -285,7 +285,7 @@ namespace glz
          {
             using V = std::underlying_type_t<std::decay_t<T>>;
 
-            if constexpr (Opts.no_header) {
+            if constexpr (has_no_header(Opts)) {
                std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
             }
@@ -315,7 +315,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&&) noexcept
          {
-            if constexpr (Opts.no_header) {
+            if constexpr (has_no_header(Opts)) {
                using V = std::decay_t<T>;
                std::memcpy(&value, it, sizeof(V));
                it += sizeof(V);
@@ -434,7 +434,7 @@ namespace glz
          static_assert(sizeof(V) == 1);
 
          template <auto Opts>
-            requires(Opts.no_header)
+            requires(has_no_header(Opts))
          GLZ_ALWAYS_INLINE static void op(auto&& value, const uint8_t, is_context auto&& ctx, auto&& it,
                                           auto&& end) noexcept
          {
@@ -449,7 +449,7 @@ namespace glz
          }
 
          template <auto Opts>
-            requires(not Opts.no_header)
+            requires(not has_no_header(Opts))
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
             constexpr uint8_t header = tag::string;
@@ -694,7 +694,7 @@ namespace glz
 
                            for (auto&& x : value) {
                               const uint8_t number_tag = tag::number | (tag & 0b11111000);
-                              read<binary>::op<opt_true<Opts, &opts::no_header>>(x, number_tag, ctx, it, end);
+                              read<binary>::op<no_header_on<Opts>()>(x, number_tag, ctx, it, end);
                            }
                            return;
                         }
@@ -897,7 +897,7 @@ namespace glz
             }
 
             constexpr uint8_t key_tag = type == 0 ? tag::string : (tag::number | (byte_cnt << 5));
-            read<binary>::op<opt_true<Opts, &opts::no_header>>(value.first, key_tag, ctx, it, end);
+            read<binary>::op<no_header_on<Opts>()>(value.first, key_tag, ctx, it, end);
             read<binary>::op<Opts>(value.second, ctx, it, end);
          }
       };
@@ -953,14 +953,14 @@ namespace glz
                Key key;
                for (size_t i = 0; i < n; ++i) {
                   if constexpr (Opts.partial_read) {
-                     read<binary>::op<opt_true<Opts, &opts::no_header>>(key, key_tag, ctx, it, end);
+                     read<binary>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
                      if (auto element = value.find(key); element != value.end()) {
                         read<binary>::op<Opts>(element->second, ctx, it, end);
                      }
                   }
                   else {
                      // convert the object tag to the key type tag
-                     read<binary>::op<opt_true<Opts, &opts::no_header>>(key, key_tag, ctx, it, end);
+                     read<binary>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
                      read<binary>::op<Opts>(value[key], ctx, it, end);
                   }
                }
@@ -970,13 +970,13 @@ namespace glz
                static thread_local Key key;
                for (size_t i = 0; i < n; ++i) {
                   if constexpr (Opts.partial_read) {
-                     read<binary>::op<opt_true<Opts, &opts::no_header>>(key, key_tag, ctx, it, end);
+                     read<binary>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
                      if (auto element = value.find(key); element != value.end()) {
                         read<binary>::op<Opts>(element->second, ctx, it, end);
                      }
                   }
                   else {
-                     read<binary>::op<opt_true<Opts, &opts::no_header>>(key, key_tag, ctx, it, end);
+                     read<binary>::op<no_header_on<Opts>()>(key, key_tag, ctx, it, end);
                      read<binary>::op<Opts>(value[key], ctx, it, end);
                   }
                }
@@ -1041,7 +1041,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&&, is_context auto&& ctx, auto&& it, auto&& end) noexcept
          {
-            if constexpr (Opts.no_header) {
+            if constexpr (has_no_header(Opts)) {
                skip_compressed_int(ctx, it, end);
             }
             else {

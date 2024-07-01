@@ -5,6 +5,7 @@
 
 // TODO: Use std::source_location when deprecating clang 14
 // #include <source_location>
+#include <array>
 #include <string_view>
 
 #include "glaze/reflection/to_tuple.hpp"
@@ -78,7 +79,7 @@ namespace glz::detail
 namespace glz
 {
    template <auto N, class T>
-   struct nameof_impl
+   struct member_nameof_impl
    {
       static constexpr auto name = detail::get_name_impl<N, T>;
       static constexpr auto begin = name.find(detail::reflect_field::end);
@@ -89,7 +90,7 @@ namespace glz
    };
 
    template <auto N, class T>
-   constexpr auto nameof = []() constexpr { return nameof_impl<N, T>::stripped_literal; }();
+   constexpr auto member_nameof = []() constexpr { return member_nameof_impl<N, T>::stripped_literal; }();
 
    template <class T>
    constexpr auto type_name = [] {
@@ -108,7 +109,7 @@ namespace glz
    template <class T, size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {
-      return std::array{nameof<I, T>...};
+      return std::array{member_nameof<I, T>...};
    }
 
    template <class T>

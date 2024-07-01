@@ -16,8 +16,8 @@ namespace glz
    constexpr uint32_t csv = 10000;
 
    // layout
-   constexpr uint32_t rowwise = 0;
-   constexpr uint32_t colwise = 1;
+   constexpr uint8_t rowwise = 0;
+   constexpr uint8_t colwise = 1;
 
    enum struct float_precision : uint8_t { full, float32 = 4, float64 = 8, float128 = 16 };
 
@@ -30,70 +30,100 @@ namespace glz
 
    struct opts
    {
+      // We use a alias to a uint8_t for booleans so that compiler errors will print "0" or "1" rather than "true" or
+      // "false" This shortens compiler error printouts significantly
+      using bool_t = uint8_t;
+
       // USER CONFIGURABLE
       uint32_t format = json;
-      bool comments = false; // Write out or support reading in JSONC style comments
-      bool error_on_unknown_keys = true; // Error when an unknown key is encountered
-      bool skip_null_members = true; // Skip writing out params in an object if the value is null
-      bool use_hash_comparison = true; // Will replace some string equality checks with hash checks
-      bool prettify = false; // Write out prettified JSON
-      bool minified = false; // Require minified input for JSON, which results in faster read performance
+      bool_t comments = false; // Write out or support reading in JSONC style comments
+      bool_t error_on_unknown_keys = true; // Error when an unknown key is encountered
+      bool_t skip_null_members = true; // Skip writing out params in an object if the value is null
+      bool_t use_hash_comparison = true; // Will replace some string equality checks with hash checks
+      bool_t prettify = false; // Write out prettified JSON
+      bool_t minified = false; // Require minified input for JSON, which results in faster read performance
       char indentation_char = ' '; // Prettified JSON indentation char
       uint8_t indentation_width = 3; // Prettified JSON indentation size
-      bool new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
-      bool shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
-      bool write_type_info = true; // Write type info for meta objects in variants
-      bool force_conformance = false; // Do not allow invalid json normally accepted such as nan, inf.
-      bool error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
-                                          // skip_null_members = false to require nullable members
+      bool_t new_lines_in_arrays = true; // Whether prettified arrays should have new lines for each element
+      bool_t shrink_to_fit = false; // Shrinks dynamic containers to new size to save memory
+      bool_t write_type_info = true; // Write type info for meta objects in variants
+      bool_t force_conformance = false; // Do not allow invalid json normally accepted such as nan, inf.
+      bool_t error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
+                                            // skip_null_members = false to require nullable members
 
-      bool error_on_const_read =
+      bool_t error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
 
-      uint32_t layout = rowwise; // CSV row wise output/input
+      uint8_t layout = rowwise; // CSV row wise output/input
 
       // The maximum precision type used for writing floats, higher precision floats will be cast down to this precision
       float_precision float_max_write_precision{};
 
-      bool bools_as_numbers = false; // Read and write booleans with 1's and 0's
+      bool_t bools_as_numbers = false; // Read and write booleans with 1's and 0's
 
-      bool quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
-      bool number = false; // read numbers as strings and write these string as numbers
-      bool raw = false; // write out string like values without quotes
-      bool raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
-      bool structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
-      bool allow_conversions = true; // Whether conversions between convertible types are
+      bool_t quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
+      bool_t number = false; // read numbers as strings and write these string as numbers
+      bool_t raw = false; // write out string like values without quotes
+      bool_t raw_string =
+         false; // do not decode/encode escaped characters for strings (improves read/write performance)
+      bool_t structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
+      bool_t allow_conversions = true; // Whether conversions between convertible types are
       // allowed in binary, e.g. double -> float
 
-      bool partial_read =
+      bool_t partial_read =
          false; // Reads into only existing fields and elements and then exits without parsing the rest of the input
 
       // glaze_object_t concepts
-      bool partial_read_nested = false; // Advance the partially read struct to the end of the struct
-      bool concatenate = true; // Concatenates ranges of std::pair into single objects when writing
+      bool_t partial_read_nested = false; // Advance the partially read struct to the end of the struct
+      bool_t concatenate = true; // Concatenates ranges of std::pair into single objects when writing
 
-      bool hide_non_invocable =
+      bool_t hide_non_invocable =
          true; // Hides non-invocable members from the cli_menu (may be applied elsewhere in the future)
 
+      enum struct internal : uint32_t {
+         none = 0,
+         opening_handled = 1 << 0, // the opening character has been handled
+         closing_handled = 1 << 1, // the closing character has been handled
+         ws_handled = 1 << 2, // whitespace has already been parsed
+         no_header = 1 << 3, // whether or not a binary header is needed
+         disable_write_unknown =
+            1 << 4, // whether to turn off writing unknown fields for a glz::meta specialized for unknown writing
+         is_padded = 1 << 5, // whether or not the read buffer is padded
+         disable_padding = 1 << 6, // to explicitly disable padding for contexts like includers
+         write_unchecked = 1 << 7 // the write buffer has sufficient space and does not need to be checked
+      };
+      // Sufficient space is only applicable to writing certain types and based on the write_padding_bytes
+
       // INTERNAL USE
-      bool opening_handled = false; // the opening character has been handled
-      bool closing_handled = false; // the closing character has been handled
-      bool ws_handled = false; // whitespace has already been parsed
-      bool no_header = false; // whether or not a binary header is needed
-      bool write_unknown = true; // whether to write unkwown fields
-      bool is_padded = false; // whether or not the read buffer is padded
-      bool disable_padding = false; // to explicitly disable padding for contexts like includers
-      bool write_unchecked = false; // the write buffer has sufficient space and does not need to be checked
-      // sufficient space is only applicable to writing certain types and based on the write_padding_bytes
+      uint32_t internal{}; // default should be 0
 
       [[nodiscard]] constexpr bool operator==(const opts&) const noexcept = default;
    };
+
+   consteval bool has_opening_handled(opts o) { return o.internal & uint32_t(opts::internal::opening_handled); }
+
+   consteval bool has_closing_handled(opts o) { return o.internal & uint32_t(opts::internal::closing_handled); }
+
+   consteval bool has_ws_handled(opts o) { return o.internal & uint32_t(opts::internal::ws_handled); }
+
+   consteval bool has_no_header(opts o) { return o.internal & uint32_t(opts::internal::no_header); }
+
+   consteval bool has_disable_write_unknown(opts o)
+   {
+      return o.internal & uint32_t(opts::internal::disable_write_unknown);
+   }
+
+   consteval bool has_is_padded(opts o) { return o.internal & uint32_t(opts::internal::is_padded); }
+
+   consteval bool has_disable_padding(opts o) { return o.internal & uint32_t(opts::internal::disable_padding); }
+
+   consteval bool has_write_unchecked(opts o) { return o.internal & uint32_t(opts::internal::write_unchecked); }
 
    template <opts Opts>
    constexpr auto opening_handled()
    {
       opts ret = Opts;
-      ret.opening_handled = true;
+      ret.internal |= uint32_t(opts::internal::opening_handled);
       return ret;
    }
 
@@ -101,8 +131,7 @@ namespace glz
    constexpr auto opening_and_closing_handled()
    {
       opts ret = Opts;
-      ret.opening_handled = true;
-      ret.closing_handled = true;
+      ret.internal |= (uint32_t(opts::internal::opening_handled) | uint32_t(opts::internal::closing_handled));
       return ret;
    }
 
@@ -110,7 +139,7 @@ namespace glz
    constexpr auto opening_handled_off()
    {
       opts ret = Opts;
-      ret.opening_handled = false;
+      ret.internal &= ~uint32_t(opts::internal::opening_handled);
       return ret;
    }
 
@@ -118,8 +147,7 @@ namespace glz
    constexpr auto opening_and_closing_handled_off()
    {
       opts ret = Opts;
-      ret.opening_handled = false;
-      ret.closing_handled = false;
+      ret.internal &= ~(uint32_t(opts::internal::opening_handled) | uint32_t(opts::internal::closing_handled));
       return ret;
    }
 
@@ -127,7 +155,7 @@ namespace glz
    constexpr auto ws_handled()
    {
       opts ret = Opts;
-      ret.ws_handled = true;
+      ret.internal |= uint32_t(opts::internal::ws_handled);
       return ret;
    }
 
@@ -135,7 +163,71 @@ namespace glz
    constexpr auto ws_handled_off()
    {
       opts ret = Opts;
-      ret.ws_handled = false;
+      ret.internal &= ~uint32_t(opts::internal::ws_handled);
+      return ret;
+   }
+
+   template <opts Opts>
+   constexpr auto no_header_on()
+   {
+      opts ret = Opts;
+      ret.internal |= uint32_t(opts::internal::no_header);
+      return ret;
+   }
+
+   template <opts Opts>
+   constexpr auto no_header_off()
+   {
+      opts ret = Opts;
+      ret.internal &= ~uint32_t(opts::internal::no_header);
+      return ret;
+   }
+
+   template <opts Opts>
+   constexpr auto is_padded_on()
+   {
+      opts ret = Opts;
+      ret.internal |= uint32_t(opts::internal::is_padded);
+      return ret;
+   }
+
+   template <opts Opts>
+   constexpr auto is_padded_off()
+   {
+      opts ret = Opts;
+      ret.internal &= ~uint32_t(opts::internal::is_padded);
+      return ret;
+   }
+
+   template <opts Opts>
+   constexpr auto disable_padding_on()
+   {
+      opts ret = Opts;
+      ret.internal |= uint32_t(opts::internal::disable_padding);
+      return ret;
+   }
+
+   template <opts Opts>
+   constexpr auto disable_padding_off()
+   {
+      opts ret = Opts;
+      ret.internal &= ~uint32_t(opts::internal::disable_padding);
+      return ret;
+   }
+
+   template <opts Opts>
+   constexpr auto write_unchecked_on()
+   {
+      opts ret = Opts;
+      ret.internal |= uint32_t(opts::internal::write_unchecked);
+      return ret;
+   }
+
+   template <opts Opts>
+   constexpr auto write_unchecked_off()
+   {
+      opts ret = Opts;
+      ret.internal &= ~uint32_t(opts::internal::write_unchecked);
       return ret;
    }
 
@@ -170,18 +262,18 @@ namespace glz
    inline constexpr auto opt_false = opt_off<Opts, member_ptr>();
 
    template <opts Opts>
-   constexpr auto write_unknown_off()
+   constexpr auto disable_write_unknown_off()
    {
       opts ret = Opts;
-      ret.write_unknown = false;
+      ret.internal &= ~uint32_t(opts::internal::disable_write_unknown);
       return ret;
    }
 
    template <opts Opts>
-   constexpr auto write_unknown_on()
+   constexpr auto disable_write_unknown_on()
    {
       opts ret = Opts;
-      ret.write_unknown = true;
+      ret.internal |= uint32_t(opts::internal::disable_write_unknown);
       return ret;
    }
 
