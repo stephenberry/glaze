@@ -47,7 +47,7 @@ suite make_server = [] {
             return;
          }
          std::cout << std::format("Server: {}\n", received);
-         glz::send_value(client, std::format("Hello to {} from server.\n", received));
+         std::ignore = glz::send_value(client, std::format("Hello to {} from server.\n", received));
       }
    });
 

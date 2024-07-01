@@ -49,6 +49,7 @@ namespace glz::net
    using ssize_t = int32_t;
 #else
    using event_handle_t = int;
+   using ssize_t = ::ssize_t;
 #endif
    
 #if defined(__APPLE__)
