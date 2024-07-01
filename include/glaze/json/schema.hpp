@@ -25,7 +25,7 @@ namespace glz
 {
    namespace detail
    {
-      enum struct defined_formats : std::uint8_t;
+      enum struct defined_formats : uint32_t;
       struct ExtUnits final
       {
          std::optional<std::string_view> unitAscii{}; // ascii representation of the unit, e.g. "m^2" for square meters
@@ -135,27 +135,27 @@ namespace glz
          std::optional<std::vector<std::string_view>> examples{};
          schema attributes{};
       };
-      enum struct defined_formats : std::uint8_t {
-         datetime,
-         date,
-         time,
-         duration,
-         email,
-         idn_email,
-         hostname,
-         idn_hostname,
-         ipv4,
-         ipv6,
-         uri,
-         uri_reference,
-         iri,
-         iri_reference,
-         uuid,
-         uri_template,
-         json_pointer,
-         relative_json_pointer,
-         regex
-      };
+
+      GLZ_ENUM_MAP(defined_formats, //
+                   "date-time", datetime, //
+                   "date", date, //
+                   "time", time, //
+                   "duration", duration, //
+                   "email", email, //
+                   "idn-email", idn_email, //
+                   "hostname", hostname, //
+                   "idn-hostname", idn_hostname, //
+                   "ipv4", ipv4, //
+                   "ipv6", ipv6, //
+                   "uri", uri, //
+                   "uri-reference", uri_reference, //
+                   "iri", iri, //
+                   "iri-reference", iri_reference, //
+                   "uuid", uuid, //
+                   "uri-template", uri_template, //
+                   "json-pointer", json_pointer, //
+                   "relative-json-pointer", relative_json_pointer, //
+                   "regex", regex);
    }
 }
 
@@ -205,27 +205,7 @@ struct glz::meta<glz::detail::schematic>
 template <>
 struct glz::meta<glz::detail::defined_formats>
 {
-   using enum detail::defined_formats;
    static constexpr std::string_view name = "defined_formats";
-   static constexpr auto value = enumerate("date-time", datetime, //
-                                           "date", date, //
-                                           "time", time, //
-                                           "duration", duration, //
-                                           "email", email, //
-                                           "idn-email", idn_email, //
-                                           "hostname", hostname, //
-                                           "idn-hostname", idn_hostname, //
-                                           "ipv4", ipv4, //
-                                           "ipv6", ipv6, //
-                                           "uri", uri, //
-                                           "uri-reference", uri_reference, //
-                                           "iri", iri, //
-                                           "iri-reference", iri_reference, //
-                                           "uuid", uuid, //
-                                           "uri-template", uri_template, //
-                                           "json-pointer", json_pointer, //
-                                           "relative-json-pointer", relative_json_pointer, //
-                                           "regex", regex);
 };
 
 namespace glz
@@ -434,7 +414,8 @@ namespace glz
          {
             using V = std::decay_t<decltype(*std::declval<std::decay_t<T>>())>;
             to_json_schema<V>::template op<Opts>(s, defs);
-            auto& type = *s.type;
+            // to_json_schema above should populate the correct type, let's throw if it wasn't set
+            auto& type = s.type.value();
             auto it = std::find_if(type.begin(), type.end(), [&](const auto& str) { return str == "null"; });
             if (it == type.end()) {
                type.emplace_back("null");

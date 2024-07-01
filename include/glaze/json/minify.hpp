@@ -148,7 +148,7 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]] {
             return;
          }
-         minify_json<opt_true<Opts, &opts::is_padded>>(ctx, it, end, out, ix);
+         minify_json<is_padded_on<Opts>()>(ctx, it, end, out, ix);
          if constexpr (resizable<Out>) {
             out.resize(ix);
          }

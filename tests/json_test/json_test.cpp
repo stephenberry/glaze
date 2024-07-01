@@ -175,6 +175,40 @@ suite get_enum_name_tests = [] {
    };
 };
 
+namespace glz
+{
+   GLZ_ENUM(Vehicle, Car, Truck, Plane);
+
+   GLZ_ENUM_MAP(Shapes, "Circle", circ, "Square", sq, "Triangle", triangle);
+}
+static_assert(glz::nameof(glz::Vehicle::Truck) == "Truck");
+static_assert(glz::has_nameof<glz::Vehicle>);
+
+suite glz_enum_test = [] {
+   "glz_enum"_test = [] {
+      expect(glz::nameof(glz::Vehicle::Plane) == "Plane");
+
+      auto name = glz::write_json(glz::Vehicle::Plane).value();
+      expect(name == R"("Plane")") << name;
+
+      glz::Vehicle vehicle{};
+      auto ec = glz::read_json(vehicle, name);
+      expect(not ec) << glz::format_error(ec, name);
+      expect(vehicle == glz::Vehicle::Plane);
+   };
+
+   "glz_enum_map"_test = [] {
+      expect(glz::nameof(glz::Shapes::circ) == "Circle");
+
+      auto name = glz::write_json(glz::Shapes::sq).value();
+      expect(name == R"("Square")") << name;
+
+      glz::Shapes shape{};
+      expect(not glz::read_json(shape, name));
+      expect(shape == glz::Shapes::sq);
+   };
+};
+
 struct var1_t
 {
    double x{};
@@ -8451,6 +8485,28 @@ suite directory_tests = [] {
       expect(input.contains("./dir/alpha.json"));
       expect(input.contains("./dir/beta.json"));
       expect(input["./dir/beta.json"].i == 0);
+   };
+};
+
+struct WorkshopModConfig
+{
+   uint32_t type;
+
+   std::string title;
+   std::string version;
+   std::string author;
+};
+
+suite msvc_ice_tests = [] {
+   "WorkshopModConfig"_test = [] {
+      std::string buffer;
+
+      WorkshopModConfig settings{};
+
+      auto ec = glz::write<glz::opts{
+         .comments = true, .error_on_unknown_keys = true, .skip_null_members = true, .prettify = false}>(settings,
+                                                                                                         buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
    };
 };
 

@@ -60,7 +60,7 @@ namespace glz
          return {ctx.error, 0, ctx.includer_error};
       }
 
-      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !Opts.disable_padding;
+      constexpr bool use_padded = resizable<Buffer> && non_const_buffer<Buffer> && !has_disable_padding(Opts);
 
       if constexpr (use_padded) {
          // Pad the buffer for SWAR
@@ -74,10 +74,10 @@ namespace glz
       }
 
       if constexpr (use_padded) {
-         detail::read<Opts.format>::template op<opt_true<Opts, &opts::is_padded>>(value, ctx, it, end);
+         detail::read<Opts.format>::template op<is_padded_on<Opts>()>(value, ctx, it, end);
       }
       else {
-         detail::read<Opts.format>::template op<opt_false<Opts, &opts::is_padded>>(value, ctx, it, end);
+         detail::read<Opts.format>::template op<is_padded_off<Opts>()>(value, ctx, it, end);
       }
 
       if (bool(ctx.error)) [[unlikely]] {
