@@ -43,24 +43,27 @@
 namespace glz::net
 {
 #ifdef _WIN32
-   using file_handle_t = unsigned int;
+   using event_handle_t = HANDLE;
    using ssize_t = int64_t;
 #else
-   using file_handle_t = int;
+   using event_handle_t = int;
 #endif
    
 #if defined(__APPLE__)
    using poll_event_t = struct kevent;
-   constexpr int invalid_file_handle = -1;
+   constexpr int invalid_event_handle = -1;
    using ident_t = uintptr_t;
    constexpr uintptr_t invalid_ident = ~uintptr_t(0); // set all bits
 #elif defined(__linux__)
    using poll_event_t = struct epoll_event;
-   constexpr int invalid_file_handle = -1;
+   constexpr int invalid_event_handle = -1;
    using ident_t = int;
    constexpr int invalid_ident = -1;
 #elif defined(_WIN32)
-   constexpr unsigned int invalid_file_handle = 0;
+   using ident_t = HANDLE;
+   using poll_event_t = HANDLE;
+   inline const HANDLE invalid_event_handle = INVALID_HANDLE_VALUE;
+   inline const HANDLE invalid_ident = INVALID_HANDLE_VALUE;
 #endif
    
 #if defined(__APPLE__)
@@ -70,64 +73,67 @@ namespace glz::net
    constexpr auto poll_in = EPOLLIN;
    constexpr auto poll_out = EPOLLOUT;
 #elif defined(_WIN32)
+   constexpr auto poll_in = 0;
+   constexpr auto poll_out = 1;
 #endif
-   
-   inline auto close_file_handle(file_handle_t& fd) {
-      if (fd != invalid_file_handle) {
+
+
+   inline auto close_socket(auto& fd) {
+      if (fd != invalid_event_handle) {
 #ifdef _WIN32
       ::closesocket(fd);
 #else
       ::close(fd);
 #endif
       }
-      fd = invalid_file_handle;
+      fd = invalid_event_handle;
    }
    
-   inline auto event_close(file_handle_t fd) {
+   inline auto close_event(auto fd) {
 #ifdef _WIN32
-      WSACloseEvent(fd);
+      ::CloseHandle(fd);
 #else
       ::close(fd);
 #endif
    }
    
-   inline file_handle_t create_event_poll() {
+   inline event_handle_t create_event_poll() {
 #if defined(__APPLE__)
          return ::kqueue();
 #elif defined(__linux__)
          return ::epoll_create1(EPOLL_CLOEXEC);
 #elif defined(_WIN32)
-         return WSACreateEvent();
+      return INVALID_HANDLE_VALUE;
 #endif
    }
    
-   inline file_handle_t create_shutdown_handle() {
+   inline event_handle_t create_shutdown_handle() {
 #if defined(__APPLE__)
-      return invalid_file_handle;
+      return invalid_event_handle;
 #elif defined(__linux__)
       return ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)
-      return 0;
+      return CreateEventA(nullptr, TRUE, FALSE, "create_shutdown_handle");
 #endif
    }
    
-   inline file_handle_t create_timer_handle() {
+   inline event_handle_t create_timer_handle() {
 #if defined(__APPLE__)
-      return invalid_file_handle;
+      return invalid_event_handle;
 #elif defined(__linux__)
       return ::timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
 #elif defined(_WIN32)
-      return 0;
+      return CreateWaitableTimerA(nullptr, TRUE, "create_timer_handle");
 #endif
    }
    
-   inline file_handle_t create_schedule_handle() {
+   inline event_handle_t create_schedule_handle() {
 #if defined(__APPLE__)
-      return invalid_file_handle;
+      return invalid_event_handle;
 #elif defined(__linux__)
       return ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
 #elif defined(_WIN32)
-      return 0;
+      return CreateEventA(nullptr, TRUE, FALSE, "create_schedule_handle");
 #endif
    }
    

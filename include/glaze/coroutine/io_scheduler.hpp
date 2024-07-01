@@ -24,6 +24,7 @@
 #include "coro/net/socket.hpp"
 #endif
 
+#include <array>
 #include <chrono>
 #include <cstring>
 #include <functional>
@@ -77,18 +78,14 @@ namespace glz
          /// rather than scheduling them to be picked up by the thread pool.
          const execution_strategy_t execution_strategy{execution_strategy_t::process_tasks_on_thread_pool};
       };
-      
-      io_scheduler() {
-         init();
-      }
 
-      io_scheduler(options opts) : m_opts(std::move(opts)) {
-         init();
-      }
+      io_scheduler() { init(); }
+
+      io_scheduler(options opts) : m_opts(std::move(opts)) { init(); }
 
       io_scheduler(const io_scheduler&) = delete;
       io_scheduler(io_scheduler&&) = delete;
-      io_scheduler& operator=(const io_scheduler&)  = delete;
+      io_scheduler& operator=(const io_scheduler&) = delete;
       io_scheduler& operator=(io_scheduler&&) = delete;
 
       ~io_scheduler()
@@ -98,11 +95,16 @@ namespace glz
          if (m_io_thread.joinable()) {
             m_io_thread.join();
          }
-         
+
 #if defined(__linux__)
-         net::close_file_handle(event_fd);
-         net::close_file_handle(timer_fd);
-         net::close_file_handle(schedule_fd);
+         glz::net::close_socket(event_fd);
+         glz::net::close_socket(timer_fd);
+         glz::net::close_socket(schedule_fd);
+
+#elif defined(_WIN32)
+         glz::net::close_event(event_fd);
+         glz::net::close_event(timer_fd);
+         glz::net::close_event(schedule_fd);
 #endif
       }
 
@@ -155,7 +157,7 @@ namespace glz
 #elif defined(__APPLE__)
                   net::poll_event_t e{
                      .filter = EVFILT_USER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_schedule_ptr)};
-                  if (::kevent(m_scheduler.event_fd, &e, 1, NULL, 0, NULL) == -1) {
+                  if (::kevent(m_scheduler.event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                      GLZ_THROW_OR_ABORT(std::runtime_error("Failed to trigger wke up"));
                   }
 #endif
@@ -263,7 +265,7 @@ namespace glz
        *                block indefinitely until the event triggers.
        * @return The result of the poll operation.
        */
-      [[nodiscard]] glz::task<poll_status> poll(net::file_handle_t fd, glz::poll_op op,
+      [[nodiscard]] glz::task<poll_status> poll(net::event_handle_t fd, glz::poll_op op,
                                                 std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
       {
          // Because the size will drop when this coroutine suspends every poll needs to undo the subtraction
@@ -293,9 +295,11 @@ namespace glz
 #elif defined(__APPLE__)
          net::poll_event_t e{
             .ident = uintptr_t(fd), .filter = EVFILT_READ, .flags = EV_ADD | EV_EOF, .udata = &poll_info};
-         if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+         if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
             std::cerr << "kqueue failed to register for fd: " << fd << "\n";
          }
+#elf defined(_WIN32)
+
 #endif
 
          // The event loop will 'clean-up' whichever event didn't win since the coroutine is scheduled
@@ -352,7 +356,7 @@ namespace glz
 #elif defined(__APPLE__)
                net::poll_event_t e{
                   .filter = EVFILT_USER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_schedule_ptr)};
-               if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+               if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                   GLZ_THROW_OR_ABORT(std::runtime_error("Failed to trigger wake up"));
                }
 #endif
@@ -403,9 +407,11 @@ namespace glz
 #elif defined(__APPLE__)
             net::poll_event_t e{
                .filter = EVFILT_USER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_shutdown_ptr)};
-            if (::kevent(event_fd, &e, 1, NULL, 0, NULL) == -1) {
+            if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                GLZ_THROW_OR_ABORT(std::runtime_error("Failed to signal shutdown event"));
             }
+#elif defined(_WIN32)
+
 #endif
 
             if (m_io_thread.joinable()) {
@@ -419,13 +425,13 @@ namespace glz
       options m_opts{};
 
       /// The event loop epoll file descriptor.
-      net::file_handle_t event_fd{net::create_event_poll()};
+      net::event_handle_t event_fd{net::create_event_poll()};
       /// The event loop fd to trigger a shutdown.
-      net::file_handle_t shutdown_fd{net::create_shutdown_handle()};
+      net::event_handle_t shutdown_fd{net::create_shutdown_handle()};
       /// The event loop timer fd for timed events, e.g. yield_for() or scheduler_after().
-      net::file_handle_t timer_fd{net::create_timer_handle()};
+      net::event_handle_t timer_fd{net::create_timer_handle()};
       /// The schedule file descriptor if the scheduler is in inline processing mode.
-      net::file_handle_t schedule_fd{net::create_schedule_handle()};
+      net::event_handle_t schedule_fd{net::create_schedule_handle()};
       std::atomic<bool> m_schedule_fd_triggered{false};
 
       /// The number of tasks executing or awaiting events in this io scheduler.
@@ -454,7 +460,7 @@ namespace glz
             m_io_processing.exchange(false, std::memory_order::release);
          }
       }
-      
+
       void init()
       {
          if (m_opts.execution_strategy == execution_strategy_t::process_tasks_on_thread_pool) {
@@ -522,10 +528,46 @@ namespace glz
 #elif defined(__linux__)
          const auto event_count = ::epoll_wait(event_fd, m_events.data(), max_events, timeout.count());
 #elif defined(_WIN32)
+
+         m_events = {shutdown_fd, timer_fd, schedule_fd};
+
+         enum struct event_id : DWORD {
+               shutdown,
+               timer,
+               schedual
+         };
+
+         const auto event_obj =
+            WaitForMultipleObjects(3 /*number of object handles*/, m_events.data(), FALSE, DWORD(timeout.count()));
+
+         if (WAIT_FAILED == event_obj) {
+            GLZ_THROW_OR_ABORT(std::runtime_error{"WaitForMultipleObjects for event failed"});
+         }
+         using enum event_id;
+
+         switch (event_id(event_obj)) {
+         case shutdown:
+            // TODO:
+            break;
+
+         case timer:
+            process_timeout_execute();
+            break;
+
+         case schedual:
+            process_scheduled_execute_inline();
+            break;
+
+         default:
+            break;
+           // GLZ_THROW_OR_ABORT(std::runtime_error{"Unhandled event id!"});
+         }
 #endif
 
+#if defined(__linux__) || defined(__APPLE__)
+
          if (event_count == -1) {
-            net::event_close(event_fd);
+            net::close_event(event_fd);
             GLZ_THROW_OR_ABORT(std::runtime_error{"wait for event failed"});
          }
 
@@ -541,21 +583,19 @@ namespace glz
                   GLZ_THROW_OR_ABORT(std::runtime_error{"event error"});
                }
 #endif
+
                if (not handle_ptr) {
                   GLZ_THROW_OR_ABORT(std::runtime_error{"handle_ptr is null"});
                }
 
                if (handle_ptr == m_timer_ptr) {
-                  // Process all events that have timed out.
                   process_timeout_execute();
                }
                else if (handle_ptr == m_schedule_ptr) {
-                  // Process scheduled coroutines.
                   process_scheduled_execute_inline();
                }
                else if (handle_ptr == m_shutdown_ptr) [[unlikely]] {
-                  // Nothing to do , just needed to wake-up and smell the flowers
-                  std::cout << "Waking up and smelling flowers...\n";
+                  
                }
                else {
                   // Individual poll task wake-up.
@@ -567,7 +607,7 @@ namespace glz
                }
             }
          }
-
+#endif
          // Its important to not resume any handles until the full set is accounted for.  If a timeout
          // and an event for the same handle happen in the same epoll_wait() call then inline processing
          // will destruct the poll_info object before the second event is handled.  This is also possible
@@ -660,7 +700,7 @@ namespace glz
             poll_info->m_processed = true;
 
             // Given a valid fd always remove it from epoll so the next poll can blindly EPOLL_CTL_ADD.
-            if (poll_info->m_fd != net::invalid_file_handle) {
+            if (poll_info->m_fd != net::invalid_event_handle) {
 #if defined(__linux__)
                epoll_ctl(event_fd, EPOLL_CTL_DEL, poll_info->m_fd, nullptr);
 #endif
@@ -709,7 +749,7 @@ namespace glz
                pi->m_processed = true;
 
                // Since this timed out, remove its corresponding event if it has one.
-               if (pi->m_fd != net::invalid_file_handle) {
+               if (pi->m_fd != net::invalid_event_handle) {
 #if defined(__linux__)
                   epoll_ctl(event_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
 #elif defined(__APPLE__)
@@ -794,6 +834,21 @@ namespace glz
             if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                std::cerr << "Error: kevent (update timer).\n";
             }
+#elif defined(_WIN32)
+            size_t seconds{};
+            size_t nanoseconds{1};
+            if (tp > now) {
+               const auto time_left = tp - now;
+               const auto s = std::chrono::duration_cast<std::chrono::seconds>(time_left);
+               seconds = s.count();
+               nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(time_left - s).count();
+            }
+            LARGE_INTEGER signal_time{};
+            signal_time.QuadPart = -std::chrono::duration_cast<std::chrono::nanoseconds>(tp - now).count() / 100;
+
+            if (!SetWaitableTimer(timer_fd, &signal_time, 0, nullptr, nullptr, FALSE)) {
+               std::cerr << "SetWaitableTimer failed (" << GetLastError() << ")\n";
+            }
 #endif
          }
          else {
@@ -810,6 +865,11 @@ namespace glz
                .filter = EVFILT_TIMER, .fflags = NOTE_TRIGGER, .data = 0, .udata = const_cast<void*>(m_timer_ptr)};
             if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                std::cerr << "Error: kevent (update timer).\n";
+            }
+#elif defined(_WIN32)
+            LARGE_INTEGER signal_time{};
+            if (!SetWaitableTimer(timer_fd, &signal_time, 0, nullptr, nullptr, FALSE)) {
+               std::cerr << "Error: SetWaitableTimer (disable timer) failed (" << GetLastError() << ")\n";
             }
 #endif
          }
