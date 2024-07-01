@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
 #define GLZ_THROW_OR_ABORT(EXC) (throw(EXC))

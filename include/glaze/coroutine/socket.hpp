@@ -1,215 +1,408 @@
 // Glaze Library
 // For the license information refer to glaze.hpp
 
-// Modified from the awesome: https://github.com/jbaldwin/libcoro
+// Glaze Library
+// For the license information refer to glaze.hpp
 
 #pragma once
 
-#include "glaze/coroutine/poll.hpp"
+#include "glaze/network/core.hpp"
 #include "glaze/network/ip.hpp"
+
+#ifdef _WIN32
+#pragma comment(lib, "Ws2_32.lib")
+#define GLZ_SOCKET_ERROR_CODE WSAGetLastError()
+#else
+#define GLZ_SOCKET_ERROR_CODE errno
+#include <sys/socket.h>
+#include <sys/types.h>
+#if __has_include(<netinet/in.h>)
+#include <netinet/in.h>
+#endif
+#include <fcntl.h>
+#include <netinet/tcp.h>
+#include <unistd.h>
+#include <cerrno>
+#endif
 
 namespace glz
 {
+#ifdef _WIN32
+   constexpr auto e_would_block = WSAEWOULDBLOCK;
+   constexpr auto invalid_socket = INVALID_SOCKET;
+   using socket_t = SOCKET;
+   constexpr auto socket_error = SOCKET_ERROR;
+#else
+   constexpr auto e_would_block = EWOULDBLOCK;
+   constexpr auto invalid_socket = -1;
+   using socket_t = int;
+   constexpr auto socket_error = -1;
+#endif
+}
+
+#include <csignal>
+#include <format>
+#include <functional>
+#include <future>
+#include <mutex>
+#include <system_error>
+#include <thread>
+#include <vector>
+
+namespace glz
+{
+   inline std::string get_ip_port(const sockaddr_in& server_addr)
+   {
+      char ip_str[INET_ADDRSTRLEN]{};
+
+#ifdef _WIN32
+      inet_ntop(AF_INET, &(server_addr.sin_addr), ip_str, INET_ADDRSTRLEN);
+#else
+      inet_ntop(AF_INET, &(server_addr.sin_addr), ip_str, sizeof(ip_str));
+#endif
+
+      return {std::format("{}:{}", ip_str, ntohs(server_addr.sin_port))};
+   }
+
+   inline std::string get_socket_error_message(int err)
+   {
+#ifdef _WIN32
+
+      char* msg = nullptr;
+      FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL,
+                     err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&msg, 0, NULL);
+      std::string message(msg);
+      LocalFree(msg);
+      return {message};
+
+#else
+      return strerror(err);
+#endif
+   }
+
+   struct socket_api_error_category_t final : public std::error_category
+   {
+      std::string what{};
+      const char* name() const noexcept override { return "socket error"; }
+      std::string message(int ev) const override
+      {
+         if (what.empty()) {
+            return {get_socket_error_message(ev)};
+         }
+         else {
+            return {std::format("{}\nDetails: {}", what, get_socket_error_message(ev))};
+         }
+      }
+      void operator()(int ev, const std::string_view w)
+      {
+         what = w;
+         this->message(ev);
+      }
+   };
+
+   inline const socket_api_error_category_t& socket_api_error_category(const std::string_view what)
+   {
+      static socket_api_error_category_t singleton;
+      singleton.what = what;
+      return singleton;
+   }
+
+   inline std::error_code get_socket_error(const std::string_view what = "")
+   {
+#ifdef _WIN32
+      int err = WSAGetLastError();
+#else
+      int err = errno;
+#endif
+
+      return {std::error_code(err, socket_api_error_category(what))};
+   }
+
+   inline std::error_code check_status(int ec, const std::string_view what = "")
+   {
+      if (ec >= 0) {
+         return {};
+      }
+
+      return {get_socket_error(what)};
+   }
+
+   // Example:
+   //
+   // std::error_code ec = check_status(result, "connect failed");
+   //
+   // if (ec) {
+   //    std::cerr << get_socket_error(std::format("Failed to connect to socket at address: {}.\nIs the server
+   //    running?", ip_port)).message();
+   // }
+   // else {
+   //    std::cout << "Connected successfully!";
+   // }
+
+   // For Windows WSASocket Compatability
+
+   inline constexpr uint16_t make_version(uint8_t low_byte, uint8_t high_byte) noexcept
+   {
+      return uint16_t(low_byte) | (uint16_t(high_byte) << 8);
+   }
+
+   inline constexpr uint8_t major_version(uint16_t version) noexcept
+   {
+      return uint8_t(version & 0xFF); // Extract the low byte
+   }
+
+   inline constexpr uint8_t minor_version(uint16_t version) noexcept
+   {
+      return uint8_t((version >> 8) & 0xFF); // Shift right by 8 bits and extract the low byte
+   }
+
+   // Function to get Winsock version string on Windows, return "na" otherwise
+   inline std::string get_winsock_version_string(uint32_t version = make_version(2, 2))
+   {
+#if _WIN32
+      BYTE major = major_version(uint16_t(version));
+      BYTE minor = minor_version(uint16_t(version));
+      return std::format("{}.{}", static_cast<int>(major), static_cast<int>(minor));
+#else
+      (void)version;
+      return ""; // Default behavior for non-Windows platforms
+#endif
+   }
+
+   // The 'wsa_startup_t' calls the windows WSAStartup function. This must be the first Windows
+   // Sockets function called by an application or DLL. It allows an application or DLL to
+   // specify the version of Windows Sockets required and retrieve details of the specific
+   // Windows Sockets implementation.The application or DLL can only issue further Windows Sockets
+   // functions after successfully calling WSAStartup.
+   //
+   // Important: WSAStartup and its corresponding WSACleanup must be called on the same thread.
+   //
+   template <bool run_wsa_startup = true>
+   struct windows_socket_startup_t final
+   {
+#ifdef _WIN64
+      WSADATA wsa_data{};
+
+      std::error_code error_code{};
+
+      std::error_code start(const WORD win_sock_version = make_version(2, 2)) // Request latest Winsock version 2.2
+      {
+         static std::once_flag flag{};
+         std::error_code startup_error{};
+         std::call_once(flag, [this, win_sock_version, &startup_error]() {
+            int result = WSAStartup(win_sock_version, &wsa_data);
+            if (result != 0) {
+               error_code = get_socket_error(
+                  std::format("Unable to initialize Winsock library version {}.", get_winsock_version_string()));
+            }
+         });
+         return {error_code};
+      }
+
+      windows_socket_startup_t()
+      {
+         if constexpr (run_wsa_startup) {
+            error_code = start();
+         }
+      }
+
+      ~windows_socket_startup_t() { WSACleanup(); }
+
+#else
+      std::error_code start() { return std::error_code{}; }
+#endif
+   };
+   
+   GLZ_ENUM(ip_error, none,
+      queue_create_failed,
+      event_ctl_failed,
+      event_wait_failed,
+      event_enum_failed,
+      socket_connect_failed,
+      socket_bind_failed,
+      send_failed,
+      receive_failed,
+      client_disconnected);
+
+   template <class T>
+   concept ip_header = std::same_as<T, uint64_t> || requires { T::body_size; };
+
+   struct ip_error_category : std::error_category
+   {
+      static const ip_error_category& instance() {
+         static ip_error_category instance{};
+         return instance;
+      }
+
+      const char* name() const noexcept override { return "ip_error_category"; }
+
+      std::string message(int ec) const override
+      {
+         return std::string{nameof(static_cast<ip_error>(ec))};
+      }
+   };
+
    struct socket
    {
-      enum struct type {
-         udp,
-         tcp
-      };
+      socket_t socket_fd{invalid_socket};
 
-      enum struct blocking {
-         yes,
-         no
-      };
-
-      struct options
+      void set_non_blocking()
       {
-         /// The domain for the socket.
-         ip_version domain{};
-         /// The type of socket.
-         socket::type type{};
-         /// If the socket should be blocking or non-blocking.
-         socket::blocking blocking{};
-      };
-
-      static int type_to_os(socket::type type)
-      {
-          switch (type)
-          {
-              case type::udp:
-                  return SOCK_DGRAM;
-              case type::tcp:
-                  return SOCK_STREAM;
-              default:
-                  GLZ_THROW_OR_ABORT(std::runtime_error{"Unknown socket::type_t."});
-          }
+#ifdef _WIN32
+         u_long mode = 1;
+         ioctlsocket(socket_fd, FIONBIO, &mode);
+#else
+         int flags = fcntl(socket_fd, F_GETFL, 0);
+         fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK);
+#endif
       }
 
       socket() = default;
-      explicit socket(int fd) : m_fd(fd) {}
 
-      socket(const socket& other) : m_fd(dup(other.m_fd)) {}
-      socket(socket&& other) : m_fd(std::exchange(other.m_fd, -1)) {}
-      
-      socket& operator=(const socket& other) noexcept
-      {
-          this->close();
-          this->m_fd = dup(other.m_fd);
-          return *this;
-      }
-      
-      socket& operator=(socket&& other) noexcept
-      {
-          if (std::addressof(other) != this)
-          {
-              m_fd = std::exchange(other.m_fd, -1);
-          }
+      socket(socket_t fd) : socket_fd(fd) { set_non_blocking(); }
 
-          return *this;
+      void close()
+      {
+         if (socket_fd != invalid_socket) {
+            net::close_socket(socket_fd);
+         }
       }
 
       ~socket() { close(); }
 
-      /**
-       * This function returns true if the socket's file descriptor is a valid number, however it does
-       * not imply if the socket is still usable.
-       * @return True if the socket file descriptor is > 0.
-       */
-      bool valid() const { return m_fd != -1; }
-
-      /**
-       * @param block Sets the socket to the given blocking mode.
-       */
-      bool blocking(socket::blocking block)
+      [[nodiscard]] std::error_code connect(const std::string& address, const int port)
       {
-          if (m_fd < 0)
-          {
-              return false;
-          }
+         socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+         if (socket_fd == -1) {
+            return {int(ip_error::socket_connect_failed), ip_error_category::instance()};
+         }
 
-          int flags = fcntl(m_fd, F_GETFL, 0);
-          if (flags == -1)
-          {
-              return false;
-          }
+         sockaddr_in server_addr;
+         server_addr.sin_family = AF_INET;
+         server_addr.sin_port = htons(uint16_t(port));
+         inet_pton(AF_INET, address.c_str(), &server_addr.sin_addr);
 
-          // Add or subtract non-blocking flag.
-          flags = (block == blocking::yes) ? flags & ~O_NONBLOCK : (flags | O_NONBLOCK);
+         if (::connect(socket_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+            return {int(ip_error::socket_connect_failed), ip_error_category::instance()};
+         }
 
-          return (fcntl(m_fd, F_SETFL, flags) == 0);
+         set_non_blocking();
+
+         return {};
       }
 
-      /**
-       * @param how Shuts the socket down with the given operations.
-       * @param Returns true if the sockets given operations were shutdown.
-       */
-      bool shutdown(poll_op how = poll_op::read_write)
+      [[nodiscard]] bool no_delay()
       {
-          if (m_fd != -1)
-          {
-              int h{0};
-              switch (how)
-              {
-                  case poll_op::read:
-                      h = SHUT_RD;
-                      break;
-                  case poll_op::write:
-                      h = SHUT_WR;
-                      break;
-                  case poll_op::read_write:
-                      h = SHUT_RDWR;
-                      break;
-              }
-
-              return (::shutdown(m_fd, h) == 0);
-          }
-          return false;
+         int flag = 1;
+         int result = setsockopt(socket_fd, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int));
+         return result == 0;
       }
 
-      /**
-       * Closes the socket and sets this socket to an invalid state.
-       */
-      void close()
+      [[nodiscard]] std::error_code bind_and_listen(int port)
       {
-          if (m_fd != -1)
-          {
-              ::close(m_fd);
-              m_fd = -1;
-          }
+         socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+         if (socket_fd == invalid_socket) {
+            return {int(ip_error::socket_bind_failed), ip_error_category::instance()};
+         }
+
+         sockaddr_in server_addr;
+         server_addr.sin_family = AF_INET;
+         server_addr.sin_addr.s_addr = INADDR_ANY;
+         server_addr.sin_port = htons(uint16_t(port));
+
+         if (::bind(socket_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+            return {int(ip_error::socket_bind_failed), ip_error_category::instance()};
+         }
+
+         if (::listen(socket_fd, SOMAXCONN) == -1) {
+            return {int(ip_error::socket_bind_failed), ip_error_category::instance()};
+         }
+
+         set_non_blocking();
+         if (not no_delay()) {
+            return {int(ip_error::socket_bind_failed), ip_error_category::instance()};
+         }
+
+         return {};
       }
 
-      /**
-       * @return The native handle (file descriptor) for this socket.
-       */
-      int native_handle() const { return m_fd; }
+      template <ip_header Header>
+      [[nodiscard]] std::error_code receive(Header& header, std::string& buffer)
+      {
+         // first receive the header
+         size_t total_bytes{};
+         while (total_bytes < sizeof(Header)) {
+            auto bytes = ::recv(socket_fd, reinterpret_cast<char*>(&header) + total_bytes,
+                                   size_t(sizeof(Header) - total_bytes), 0);
+            if (bytes == -1) {
+               if (GLZ_SOCKET_ERROR_CODE == e_would_block || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                  continue;
+               }
+               else {
+                  // error
+                  buffer.clear();
+                  return {int(ip_error::receive_failed), ip_error_category::instance()};
+               }
+            }
+            else if (bytes == 0) {
+               return {int(ip_error::client_disconnected), ip_error_category::instance()};
+            }
 
-     private:
-      int m_fd{-1};
+            total_bytes += bytes;
+         }
+
+         size_t size{};
+         if constexpr (std::same_as<Header, uint64_t>) {
+            size = header;
+         }
+         else {
+            size = size_t(header.body_size);
+         }
+
+         buffer.resize(size);
+
+         total_bytes = 0;
+         while (total_bytes < size) {
+            auto bytes = ::recv(socket_fd, buffer.data() + total_bytes, size_t(buffer.size() - total_bytes), 0);
+            if (bytes == -1) {
+               if (GLZ_SOCKET_ERROR_CODE == e_would_block || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                  continue;
+               }
+               else {
+                  buffer.clear();
+                  return {int(ip_error::receive_failed), ip_error_category::instance()};
+               }
+            }
+            else if (bytes == 0) {
+               return {int(ip_error::client_disconnected), ip_error_category::instance()};
+            }
+
+            total_bytes += bytes;
+         }
+         return {};
+      }
+
+      [[nodiscard]] std::error_code send(const std::string_view buffer)
+      {
+         const size_t size = buffer.size();
+         size_t total_bytes{};
+         while (total_bytes < size) {
+            auto bytes = ::send(socket_fd, buffer.data() + total_bytes, size_t(buffer.size() - total_bytes), 0);
+            if (bytes == -1) {
+               if (GLZ_SOCKET_ERROR_CODE == e_would_block || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
+                  std::this_thread::yield();
+                  continue;
+               }
+               else {
+                  return {int(ip_error::send_failed), ip_error_category::instance()};
+               }
+            }
+
+            total_bytes += bytes;
+         }
+         return {};
+      }
    };
-
-   /**
-    * Creates a socket with the given socket options, this typically is used for creating sockets to
-    * use within client objects, e.g. tcp::client and udp::client.
-    * @param opts See socket::options for more details.
-    */
-   socket make_socket(const socket::options& opts)
-   {
-       socket s{::socket(int(opts.domain), socket::type_to_os(opts.type), 0)};
-       if (not s.valid())
-       {
-          GLZ_THROW_OR_ABORT(std::runtime_error{"Failed to create socket."});
-       }
-
-       if (opts.blocking == socket::blocking::no)
-       {
-           if (not s.blocking(socket::blocking::no))
-           {
-              GLZ_THROW_OR_ABORT(std::runtime_error{"Failed to set socket to non-blocking mode."});
-           }
-       }
-
-       return s;
-   }
-
-   /**
-    * Creates a socket that can accept connections or packets with the given socket options, address,
-    * port and backlog.  This is used for creating sockets to use within server objects, e.g.
-    * tcp::server and udp::server.
-    * @param opts See socket::options for more details
-    * @param address The ip address to bind to.  If the type of socket is tcp then it will also listen.
-    * @param port The port to bind to.
-    * @param backlog If the type of socket is tcp then the backlog of connections to allow.  Does nothing
-    *                for udp types.
-    */
-   socket make_accept_socket(const socket::options& opts, const std::string& address, uint16_t port,
-                           int32_t backlog = 128)
-   {
-       socket s = make_socket(opts);
-
-       int sock_opt{1};
-       if (setsockopt(s.native_handle(), SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &sock_opt, sizeof(sock_opt)) < 0)
-       {
-          GLZ_THROW_OR_ABORT(std::runtime_error{"Failed to setsockopt(SO_REUSEADDR | SO_REUSEPORT)"});
-       }
-
-       sockaddr_in server{};
-       server.sin_family = int(opts.domain);
-       server.sin_port   = htons(port);
-       server.sin_addr   = *reinterpret_cast<const in_addr*>(address.data());
-
-       if (bind(s.native_handle(), (struct sockaddr*)&server, sizeof(server)) < 0)
-       {
-          GLZ_THROW_OR_ABORT(std::runtime_error{"Failed to bind."});
-       }
-
-       if (opts.type == socket::type::tcp)
-       {
-           if (listen(s.native_handle(), backlog) < 0)
-           {
-              GLZ_THROW_OR_ABORT(std::runtime_error{"Failed to listen."});
-           }
-       }
-
-       return s;
-   }
 }
