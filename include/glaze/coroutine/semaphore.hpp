@@ -161,7 +161,7 @@ namespace glz
       /**
        * @return The maximum number of resources the semaphore can contain.
        */
-      std::ptrdiff_t max() const noexcept { return m_least_max_value; }
+      std::ptrdiff_t max_resources() const noexcept { return m_least_max_value; }
 
       /**
        * The current number of resources available in this semaphore.
