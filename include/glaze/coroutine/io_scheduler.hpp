@@ -298,7 +298,7 @@ namespace glz
          if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
             std::cerr << "kqueue failed to register for fd: " << fd << "\n";
          }
-#elf defined(_WIN32)
+#elif defined(_WIN32)
 
 #endif
 
