@@ -75,7 +75,7 @@ namespace glz::detail
    void skip_value(is_context auto&& ctx, auto&& it, auto&& end) noexcept
    {
       if constexpr (!Opts.force_conformance) {
-         if constexpr (!Opts.ws_handled) {
+         if constexpr (!has_ws_handled(Opts)) {
             GLZ_SKIP_WS;
          }
          while (true) {
@@ -119,7 +119,7 @@ namespace glz::detail
          }
       }
       else {
-         if constexpr (!Opts.ws_handled) {
+         if constexpr (!has_ws_handled(Opts)) {
             GLZ_SKIP_WS;
          }
          switch (*it) {
