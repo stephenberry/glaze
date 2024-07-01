@@ -51,17 +51,20 @@ namespace glz
 
 namespace glz
 {
-   inline std::string get_ip_port(const sockaddr_in& server_addr)
+   namespace detail
    {
-      char ip_str[INET_ADDRSTRLEN]{};
+      inline std::string format_ip_port(const sockaddr_in& server_addr)
+      {
+         char ip_str[INET_ADDRSTRLEN]{};
 
-#ifdef _WIN32
-      inet_ntop(AF_INET, &(server_addr.sin_addr), ip_str, INET_ADDRSTRLEN);
-#else
-      inet_ntop(AF_INET, &(server_addr.sin_addr), ip_str, sizeof(ip_str));
-#endif
+   #ifdef _WIN32
+         inet_ntop(AF_INET, &(server_addr.sin_addr), ip_str, INET_ADDRSTRLEN);
+   #else
+         inet_ntop(AF_INET, &(server_addr.sin_addr), ip_str, sizeof(ip_str));
+   #endif
 
-      return {std::format("{}:{}", ip_str, ntohs(server_addr.sin_port))};
+         return {std::format("{}:{}", ip_str, ntohs(server_addr.sin_port))};
+      }
    }
 
    inline std::string get_socket_error_message(int err)
@@ -80,7 +83,7 @@ namespace glz
 #endif
    }
 
-   struct socket_api_error_category_t final : public std::error_category
+   struct socket_api_error_category_t final : std::error_category
    {
       std::string what{};
       const char* name() const noexcept override { return "socket error"; }
@@ -93,6 +96,7 @@ namespace glz
             return {std::format("{}\nDetails: {}", what, get_socket_error_message(ev))};
          }
       }
+      
       void operator()(int ev, const std::string_view w)
       {
          what = w;
@@ -115,7 +119,7 @@ namespace glz
       int err = errno;
 #endif
 
-      return {std::error_code(err, socket_api_error_category(what))};
+      return {err, socket_api_error_category(what)};
    }
 
    inline std::error_code check_status(int ec, const std::string_view what = "")
@@ -162,7 +166,7 @@ namespace glz
 #if _WIN32
       BYTE major = major_version(uint16_t(version));
       BYTE minor = minor_version(uint16_t(version));
-      return std::format("{}.{}", static_cast<int>(major), static_cast<int>(minor));
+      return std::format("{}.{}", int(major), int(minor));
 #else
       (void)version;
       return ""; // Default behavior for non-Windows platforms
