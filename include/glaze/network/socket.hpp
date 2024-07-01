@@ -118,7 +118,7 @@ namespace glz
    }
    
    template <ip_header Header>
-   [[nodiscard]] std::error_code receive(socket& sckt, Header& header, std::string& buffer)
+   [[nodiscard]] std::error_code raw_receive(socket& sckt, Header& header, std::string& buffer)
    {
       // first receive the header
       size_t total_bytes{};
@@ -176,7 +176,7 @@ namespace glz
       return {};
    }
    
-   [[nodiscard]] inline std::error_code send(socket& sckt, const std::string_view buffer)
+   [[nodiscard]] inline std::error_code raw_send(socket& sckt, const std::string_view buffer)
    {
       const size_t size = buffer.size();
       size_t total_bytes{};

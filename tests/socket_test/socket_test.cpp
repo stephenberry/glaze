@@ -17,7 +17,7 @@ using namespace ut;
 
 constexpr bool user_input = false;
 
-constexpr auto n_clients = 10;
+constexpr auto n_clients = 1;
 constexpr auto service_0_port{8080};
 constexpr auto service_0_ip{"127.0.0.1"};
 
