@@ -30,10 +30,10 @@ namespace glz
 
    struct opts
    {
-      // We use a alias to a uint8_t for booleans so that compiler errors will print "0" or "1" rather than "true" or "false"
-      // This shortens compiler error printouts significantly
+      // We use a alias to a uint8_t for booleans so that compiler errors will print "0" or "1" rather than "true" or
+      // "false" This shortens compiler error printouts significantly
       using bool_t = uint8_t;
-      
+
       // USER CONFIGURABLE
       uint32_t format = json;
       bool_t comments = false; // Write out or support reading in JSONC style comments
@@ -49,7 +49,7 @@ namespace glz
       bool_t write_type_info = true; // Write type info for meta objects in variants
       bool_t force_conformance = false; // Do not allow invalid json normally accepted such as nan, inf.
       bool_t error_on_missing_keys = false; // Require all non nullable keys to be present in the object. Use
-                                          // skip_null_members = false to require nullable members
+                                            // skip_null_members = false to require nullable members
 
       bool_t error_on_const_read =
          false; // Error if attempt is made to read into a const value, by default the value is skipped without error
@@ -64,7 +64,8 @@ namespace glz
       bool_t quoted_num = false; // treat numbers as quoted or array-like types as having quoted numbers
       bool_t number = false; // read numbers as strings and write these string as numbers
       bool_t raw = false; // write out string like values without quotes
-      bool_t raw_string = false; // do not decode/encode escaped characters for strings (improves read/write performance)
+      bool_t raw_string =
+         false; // do not decode/encode escaped characters for strings (improves read/write performance)
       bool_t structs_as_arrays = false; // Handle structs (reading/writing) without keys, which applies
       bool_t allow_conversions = true; // Whether conversions between convertible types are
       // allowed in binary, e.g. double -> float
