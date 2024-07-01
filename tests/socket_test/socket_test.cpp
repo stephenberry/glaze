@@ -17,7 +17,7 @@ using namespace ut;
 
 constexpr bool user_input = false;
 
-constexpr auto n_clients = 1;
+constexpr auto n_clients = 10;
 constexpr auto service_0_port{8080};
 constexpr auto service_0_ip{"127.0.0.1"};
 
@@ -46,8 +46,8 @@ suite make_server = [] {
             std::cerr << ec.message() << '\n';
             return;
          }
-
          std::cout << std::format("Server: {}\n", received);
+         glz::send_value(client, std::format("Hello to {} from server.\n", received));
       }
    });
 
@@ -75,11 +75,22 @@ suite socket_test = [] {
             std::cout << std::format("Received from server: {}\n", received);
 
             size_t tick{};
+            std::string result;
             while (tick < 3) {
                if (auto ec = glz::send_value(socket, std::format("Client {}, {}", id, tick))) {
+
                   std::cerr << ec.message() << '\n';
                   return;
                }
+               if (auto ec = glz::receive_value(socket, result)) {
+                  continue;
+               }
+               else {
+                  expect(result.size() > 0);
+                  std::cout << result;
+               }
+
+
                std::this_thread::sleep_for(std::chrono::seconds(2));
                ++tick;
             }
