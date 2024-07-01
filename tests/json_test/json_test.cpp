@@ -8488,6 +8488,30 @@ suite directory_tests = [] {
    };
 };
 
+struct WorkshopModConfig
+{
+   uint32_t type;
+
+   std::string title;
+   std::string version;
+   std::string author;
+};
+
+suite msvc_ice_tests = [] {
+
+   "WorkshopModConfig"_test = [] {
+      std::string buffer;
+
+      WorkshopModConfig settings{};
+
+      auto ec = glz::write<glz::opts{
+         .comments = true, .error_on_unknown_keys = true, .skip_null_members = true, .prettify = false}>(settings,
+                                                                                                         buffer);
+      expect(not ec) << glz::format_error(ec, buffer);
+   };
+
+};
+
 int main()
 {
    trace.end("json_test");
