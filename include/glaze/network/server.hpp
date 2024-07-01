@@ -177,8 +177,14 @@ namespace glz
 #else // Windows
             WSANETWORKEVENTS events;
             if (WSAEnumNetworkEvents(accept_socket.socket_fd, event_fd, &events) == GLZ_SOCKET_ERROR) {
+
                WSACloseEvent(event_fd);
-               return {ip_error::event_enum_failed, ip_error_category::instance()};
+
+               // requires explicit 'std::error_code'...otherwise the following error with msvc...
+               // 
+               // error C2440: 'return': cannot convert from 'initializer list' to 'std::error_code'
+               // 
+               return {int(ip_error::event_enum_failed), ip_error_category::instance()};
             }
 
             if (events.lNetworkEvents & FD_ACCEPT) {

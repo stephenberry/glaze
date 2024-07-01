@@ -124,7 +124,7 @@ namespace glz
       size_t total_bytes{};
       while (total_bytes < sizeof(Header)) {
          auto bytes = ::recv(sckt.socket_fd, reinterpret_cast<char*>(&header) + total_bytes,
-                                size_t(sizeof(Header) - total_bytes), 0);
+                                glz::net::ssize_t(sizeof(Header) - total_bytes), 0);
          if (bytes == -1) {
             if (GLZ_SOCKET_ERROR_CODE == e_would_block || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
                std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -155,7 +155,8 @@ namespace glz
 
       total_bytes = 0;
       while (total_bytes < size) {
-         auto bytes = ::recv(sckt.socket_fd, buffer.data() + total_bytes, size_t(buffer.size() - total_bytes), 0);
+         auto bytes =
+            ::recv(sckt.socket_fd, buffer.data() + total_bytes, glz::net::ssize_t(buffer.size() - total_bytes), 0);
          if (bytes == -1) {
             if (GLZ_SOCKET_ERROR_CODE == e_would_block || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
                std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -180,7 +181,7 @@ namespace glz
       const size_t size = buffer.size();
       size_t total_bytes{};
       while (total_bytes < size) {
-         auto bytes = ::send(sckt.socket_fd, buffer.data() + total_bytes, size_t(buffer.size() - total_bytes), 0);
+         auto bytes = ::send(sckt.socket_fd, buffer.data() + total_bytes, glz::net::ssize_t(buffer.size() - total_bytes), 0);
          if (bytes == -1) {
             if (GLZ_SOCKET_ERROR_CODE == e_would_block || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
                std::this_thread::yield();
