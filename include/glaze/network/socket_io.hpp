@@ -13,7 +13,7 @@ namespace glz
    [[nodiscard]] std::error_code receive(socket& sckt, Buffer& buffer)
    {
       uint64_t header{};
-      if (auto ec = sckt.receive(header, buffer)) {
+      if (auto ec = receive(sckt, header, buffer)) {
          return ec;
       }
       return {};
@@ -24,11 +24,11 @@ namespace glz
    {
       uint64_t header = uint64_t(buffer.size());
 
-      if (auto ec = sckt.send(sv{reinterpret_cast<char*>(&header), sizeof(header)})) {
+      if (auto ec = send(sckt, sv{reinterpret_cast<char*>(&header), sizeof(header)})) {
          return ec;
       }
 
-      if (auto ec = sckt.send(buffer)) {
+      if (auto ec = send(sckt, buffer)) {
          return ec;
       }
 
@@ -41,7 +41,7 @@ namespace glz
       static thread_local std::string buffer{};
 
       uint64_t header{};
-      if (auto ec = sckt.receive(header, buffer)) {
+      if (auto ec = receive(sckt, header, buffer)) {
          return ec;
       }
 
@@ -63,11 +63,11 @@ namespace glz
 
       uint64_t header = uint64_t(buffer.size());
 
-      if (auto ec = sckt.send(sv{reinterpret_cast<char*>(&header), sizeof(header)})) {
+      if (auto ec = send(sckt, sv{reinterpret_cast<char*>(&header), sizeof(header)})) {
          return ec;
       }
 
-      if (auto ec = sckt.send(buffer)) {
+      if (auto ec = send(sckt, buffer)) {
          return ec;
       }
 

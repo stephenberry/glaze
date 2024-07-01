@@ -86,9 +86,9 @@ namespace glz
       {
          glz::socket accept_socket{};
 
-         const auto ec = accept_socket.bind_and_listen(port);
+         const auto ec = bind_and_listen(accept_socket, port);
          if (ec) {
-            return {ip_error::socket_bind_failed, ip_error_category::instance()};
+            return {int(ip_error::socket_bind_failed), ip_error_category::instance()};
          }
 
 #if defined(__APPLE__)
@@ -100,7 +100,7 @@ namespace glz
 #endif
 
          if (event_fd == GLZ_INVALID_EVENT) {
-            return {ip_error::queue_create_failed, ip_error_category::instance()};
+            return {int(ip_error::queue_create_failed), ip_error_category::instance()};
          }
 
          bool event_setup_failed = false;
@@ -119,7 +119,7 @@ namespace glz
 
          if (event_setup_failed) {
             GLZ_EVENT_CLOSE(event_fd);
-            return {ip_error::event_ctl_failed, ip_error_category::instance()};
+            return {int(ip_error::event_ctl_failed), ip_error_category::instance()};
          }
 
 #if defined(__APPLE__)
@@ -150,7 +150,7 @@ namespace glz
                if (n == WSA_WAIT_TIMEOUT) continue;
 #endif
                GLZ_EVENT_CLOSE(event_fd);
-               return {ip_error::event_wait_failed, ip_error_category::instance()};
+               return {int(ip_error::event_wait_failed), ip_error_category::instance()};
             }
 
             auto spawn_socket = [&] {
