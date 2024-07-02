@@ -22,7 +22,7 @@ namespace glz
       ip_version ipv{};
       glz::socket socket{};
       /// Cache the status of the connect in the event the user calls connect() again.
-      std::optional<glz::connect_status> connect_status{};
+      glz::connect_status connect_status{};
 
       /**
        * Connects to the address+port with the given timeout.  Once connected calling this function
@@ -34,8 +34,8 @@ namespace glz
       {
          // Only allow the user to connect per tcp client once, if they need to re-connect they should
          // make a new tcp::client.
-         if (connect_status.has_value()) {
-            co_return connect_status.value();
+         if (connect_status != glz::connect_status::unset) {
+            co_return connect_status;
          }
 
          // This enforces the connection status is aways set on the client object upon returning.
@@ -99,7 +99,7 @@ namespace glz
        *         bytes will be a subspan or full span of the given input buffer.
        */
       template <mutable_buffer Buffer>
-      auto recv(Buffer&& buffer) -> std::pair<recv_status, std::span<char>>
+      std::pair<recv_status, std::span<char>> recv(Buffer&& buffer)
       {
          // If the user requested zero bytes, just return.
          if (buffer.empty()) {
@@ -117,6 +117,7 @@ namespace glz
          }
          else {
             // Report the error to the user.
+            // TODO: add errno conversion
             return {static_cast<recv_status>(errno), std::span<char>{}};
          }
       }
@@ -131,7 +132,7 @@ namespace glz
        *         were successfully sent the status will be 'ok' and the remaining span will be empty.
        */
       template <const_buffer Buffer>
-      auto send(const Buffer& buffer) -> std::pair<send_status, std::span<const char>>
+      std::pair<send_status, std::span<const char>> send(const Buffer& buffer)
       {
          // If the user requested zero bytes, just return.
          if (buffer.empty()) {

@@ -36,7 +36,7 @@ namespace glz
       return {};
    }
 
-   GLZ_ENUM(connect_status, connected, invalid_ip_address, timeout, error);
+   GLZ_ENUM(connect_status, unset, connected, invalid_ip_address, timeout, error);
 
    GLZ_ENUM(recv_status, ok, closed, udp_not_bound, try_again, //
             would_block, bad_file_descriptor, connection_refused, //
