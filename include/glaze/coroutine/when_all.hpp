@@ -39,18 +39,18 @@ namespace glz
             return *this;
          }
 
-         auto is_ready() const noexcept -> bool
+         bool is_ready() const noexcept
          {
             return m_awaiting_coroutine && m_awaiting_coroutine.done();
          }
 
-         auto try_await(std::coroutine_handle<> awaiting_coroutine) noexcept -> bool
+         bool try_await(std::coroutine_handle<> awaiting_coroutine) noexcept
          {
             m_awaiting_coroutine = awaiting_coroutine;
             return m_count.fetch_sub(1, std::memory_order::acq_rel) > 1;
          }
 
-         auto notify_awaitable_completed() noexcept -> void
+         void notify_awaitable_completed() noexcept
          {
             if (m_count.fetch_sub(1, std::memory_order::acq_rel) == 1) {
                m_awaiting_coroutine.resume();
@@ -61,13 +61,13 @@ namespace glz
          /// The number of tasks that are being waited on.
          std::atomic<size_t> m_count;
          /// The when_all_task awaiting to be resumed upon all task completions.
-         std::coroutine_handle<> m_awaiting_coroutine{nullptr};
+         std::coroutine_handle<> m_awaiting_coroutine{};
       };
 
-      template <typename task_container_type>
+      template <class TaskContainer>
       struct when_all_ready_awaitable;
 
-      template <typename return_type>
+      template <class Return>
       struct when_all_task;
 
       /// Empty tuple<> implementation.
@@ -82,17 +82,17 @@ namespace glz
          auto await_resume() const noexcept -> std::tuple<> { return {}; }
       };
 
-      template <typename... task_types>
-      struct when_all_ready_awaitable<std::tuple<task_types...>>
+      template <class... Tasks>
+      struct when_all_ready_awaitable<std::tuple<Tasks...>>
       {
-         explicit when_all_ready_awaitable(task_types&&... tasks) noexcept(
-            std::conjunction<std::is_nothrow_move_constructible<task_types>...>::value)
-            : m_latch(sizeof...(task_types)), m_tasks(std::move(tasks)...)
+         explicit when_all_ready_awaitable(Tasks&&... tasks) noexcept(
+            std::conjunction<std::is_nothrow_move_constructible<Tasks>...>::value)
+            : m_latch(sizeof...(Tasks)), m_tasks(std::move(tasks)...)
          {}
 
-         explicit when_all_ready_awaitable(std::tuple<task_types...>&& tasks) noexcept(
-            std::is_nothrow_move_constructible_v<std::tuple<task_types...>>)
-            : m_latch(sizeof...(task_types)), m_tasks(std::move(tasks))
+         explicit when_all_ready_awaitable(std::tuple<Tasks...>&& tasks) noexcept(
+            std::is_nothrow_move_constructible_v<std::tuple<Tasks...>>)
+            : m_latch(sizeof...(Tasks)), m_tasks(std::move(tasks))
          {}
 
          when_all_ready_awaitable(const when_all_ready_awaitable&) = delete;
@@ -116,7 +116,7 @@ namespace glz
                   return m_awaitable.try_await(awaiting_coroutine);
                }
 
-               auto await_resume() noexcept -> std::tuple<task_types...>& { return m_awaitable.m_tasks; }
+               auto await_resume() noexcept -> std::tuple<Tasks...>& { return m_awaitable.m_tasks; }
 
               private:
                when_all_ready_awaitable& m_awaitable;
@@ -131,14 +131,14 @@ namespace glz
             {
                explicit awaiter(when_all_ready_awaitable& awaitable) noexcept : m_awaitable(awaitable) {}
 
-               auto await_ready() const noexcept -> bool { return m_awaitable.is_ready(); }
+               bool await_ready() const noexcept { return m_awaitable.is_ready(); }
 
                auto await_suspend(std::coroutine_handle<> awaiting_coroutine) noexcept -> bool
                {
                   return m_awaitable.try_await(awaiting_coroutine);
                }
 
-               auto await_resume() noexcept -> std::tuple<task_types...>&& { return std::move(m_awaitable.m_tasks); }
+               auto await_resume() noexcept -> std::tuple<Tasks...>&& { return std::move(m_awaitable.m_tasks); }
 
               private:
                when_all_ready_awaitable& m_awaitable;
@@ -148,28 +148,28 @@ namespace glz
          }
 
         private:
-         auto is_ready() const noexcept -> bool { return m_latch.is_ready(); }
+         bool is_ready() const noexcept { return m_latch.is_ready(); }
 
-         auto try_await(std::coroutine_handle<> awaiting_coroutine) noexcept -> bool
+         bool try_await(std::coroutine_handle<> awaiting_coroutine) noexcept
          {
             std::apply([this](auto&&... tasks) { ((tasks.start(m_latch)), ...); }, m_tasks);
             return m_latch.try_await(awaiting_coroutine);
          }
 
          when_all_latch m_latch;
-         std::tuple<task_types...> m_tasks;
+         std::tuple<Tasks...> m_tasks;
       };
 
-      template <typename task_container_type>
+      template <class TaskContainer>
       struct when_all_ready_awaitable
       {
-         explicit when_all_ready_awaitable(task_container_type&& tasks) noexcept
-            : m_latch(std::size(tasks)), m_tasks(std::forward<task_container_type>(tasks))
+         explicit when_all_ready_awaitable(TaskContainer&& tasks) noexcept
+            : m_latch(std::size(tasks)), m_tasks(std::forward<TaskContainer>(tasks))
          {}
 
          when_all_ready_awaitable(const when_all_ready_awaitable&) = delete;
          when_all_ready_awaitable(when_all_ready_awaitable&& other) noexcept(
-            std::is_nothrow_move_constructible_v<task_container_type>)
+            std::is_nothrow_move_constructible_v<TaskContainer>)
             : m_latch(std::move(other.m_latch)), m_tasks(std::move(m_tasks))
          {}
 
@@ -189,7 +189,7 @@ namespace glz
                   return m_awaitable.try_await(awaiting_coroutine);
                }
 
-               auto await_resume() noexcept -> task_container_type& { return m_awaitable.m_tasks; }
+               auto await_resume() noexcept -> TaskContainer& { return m_awaitable.m_tasks; }
 
               private:
                when_all_ready_awaitable& m_awaitable;
@@ -211,7 +211,7 @@ namespace glz
                   return m_awaitable.try_await(awaiting_coroutine);
                }
 
-               auto await_resume() noexcept -> task_container_type&& { return std::move(m_awaitable.m_tasks); }
+               auto await_resume() noexcept -> TaskContainer&& { return std::move(m_awaitable.m_tasks); }
 
               private:
                when_all_ready_awaitable& m_awaitable;
@@ -233,7 +233,7 @@ namespace glz
          }
 
          when_all_latch m_latch;
-         task_container_type m_tasks;
+         TaskContainer m_tasks;
       };
 
       template <typename return_type>
@@ -358,7 +358,7 @@ namespace glz
       struct when_all_task
       {
          // To be able to call start().
-         template <typename task_container_type>
+         template <typename TaskContainer>
          friend struct when_all_ready_awaitable;
 
          using promise_type = when_all_task_promise<return_type>;

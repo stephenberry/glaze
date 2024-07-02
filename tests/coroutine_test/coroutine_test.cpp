@@ -383,7 +383,7 @@ suite io_scheduler_test = [] {
       // directly process the tasks, this might be desirable for small tasks vs a thread pool for large tasks.
       .pool =
       glz::thread_pool::options{
-            .thread_count = 2,
+            .thread_count = 1,
             .on_thread_start_functor =
                [](size_t i) { std::cout << "scheduler::thread_pool worker " << i << " starting\n"; },
             .on_thread_stop_functor =
