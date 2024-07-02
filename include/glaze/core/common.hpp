@@ -980,10 +980,7 @@ namespace glz
       }
    }
 
-   [[nodiscard]] inline std::string format_error(const error_ctx& pe)
-   {
-      return std::string{nameof(pe.ec)};
-   }
+   [[nodiscard]] inline std::string format_error(const error_ctx& pe) { return std::string{nameof(pe.ec)}; }
 
    template <class T>
    [[nodiscard]] std::string format_error(const expected<T, error_ctx>& pe)
