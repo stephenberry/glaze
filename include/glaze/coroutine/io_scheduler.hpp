@@ -262,7 +262,7 @@ namespace glz
        *                block indefinitely until the event triggers.
        * @return The result of the poll operation.
        */
-      [[nodiscard]] glz::task<poll_status> poll(net::event_handle_t fd, glz::poll_op op,
+      [[nodiscard]] task<poll_status> poll(net::event_handle_t fd, glz::poll_op op,
                                                 std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
       {
          // Because the size will drop when this coroutine suspends every poll needs to undo the subtraction
@@ -293,7 +293,7 @@ namespace glz
          net::poll_event_t e{
             .ident = uintptr_t(fd), .filter = EVFILT_READ, .flags = EV_ADD | EV_EOF, .udata = &poll_info};
          if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
-            std::cerr << "kqueue failed to register for fd: " << fd << "\n";
+            std::cerr << "kqueue failed to register for file_descriptor: " << fd << "\n";
          }
 #elif defined(_WIN32)
 
