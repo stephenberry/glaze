@@ -118,7 +118,7 @@ namespace glz
          else {
             // Report the error to the user.
             // TODO: add errno conversion
-            return {static_cast<ip_status>(errno), std::span<char>{}};
+            return {errno_to_ip_status(), std::span<char>{}};
          }
       }
 
@@ -132,22 +132,22 @@ namespace glz
        *         were successfully sent the status will be 'ok' and the remaining span will be empty.
        */
       template <const_buffer Buffer>
-      std::pair<ip_status, std::span<const char>> send(const Buffer& buffer)
+      std::pair<ip_status, std::string_view> send(const Buffer& buffer)
       {
          // If the user requested zero bytes, just return.
          if (buffer.empty()) {
-            return {ip_status::ok, std::span<const char>{buffer.data(), buffer.size()}};
+            return {ip_status::ok, std::string_view{buffer.data(), buffer.size()}};
          }
 
          auto bytes_sent = ::send(socket.socket_fd, buffer.data(), buffer.size(), 0);
          if (bytes_sent >= 0) {
             // Some or all of the bytes were written.
-            return {ip_status::ok, std::span<const char>{buffer.data() + bytes_sent, buffer.size() - bytes_sent}};
+            return {ip_status::ok, std::string_view{buffer.data() + bytes_sent, buffer.size() - bytes_sent}};
          }
          else {
             // Due to the error none of the bytes were written.
             // TODO: add errno conversion
-            return {static_cast<ip_status>(errno), std::span<const char>{buffer.data(), buffer.size()}};
+            return {errno_to_ip_status(), std::string_view{buffer.data(), buffer.size()}};
          }
       }
    };

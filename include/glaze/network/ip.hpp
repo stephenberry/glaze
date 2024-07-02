@@ -41,14 +41,39 @@ namespace glz
             ok, //
             closed, //
             connected, //
+            connection_refused, //
             invalid_ip_address, //
             timeout, //
             error, //
             try_again, //
             would_block, //
-            bad_file_descriptor, //
-            connection_refused, //
+            bad_file_descriptor //
    );
+   
+   inline ip_status errno_to_ip_status() noexcept
+   {
+#if defined(__linux__) || defined(__APPLE__)
+      const auto err = errno;
+      using enum ip_status;
+      switch (err) {
+         case 0: {
+            return ok;
+         }
+         case -1: {
+            return closed;
+         }
+         case EWOULDBLOCK: {
+            return would_block;
+         }
+         case ECONNREFUSED: {
+            return connection_refused;
+         }
+         default: {
+            return error;
+         }
+      }
+#endif
+   }
 
    /*
     // ip_status
