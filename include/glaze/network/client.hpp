@@ -1,46 +1,27 @@
+// Glaze Library
+// For the license information refer to glaze.hpp
+
 #pragma once
 
-#include "server.hpp"
+#include "glaze/coroutine/io_scheduler.hpp"
+#include "glaze/network/socket.hpp"
 
 namespace glz
 {
-
-   class client
+   /**
+    * By default the socket
+    * created will be in non-blocking mode, meaning that any sending or receiving of data should
+    * poll for event readiness prior.
+    */
+   struct client
    {
-     public:
-      struct options
-      {
-         /// The  ip address to connect to.  Use a dns_resolver to turn hostnames into ip addresses.
-         glz::net::ip_address address{net::ip_address::from_string("127.0.0.1")};
-         /// The port to connect to.
-         uint16_t port{8080};
-      };
-
-      /**
-       * Creates a new tcp client that can connect to an ip address + port.  By default the socket
-       * created will be in non-blocking mode, meaning that any sending or receiving of data should
-       * poll for event readiness prior.
-       * @param scheduler The io scheduler to drive the tcp client.
-       * @param opts See client::options for more information.
-       */
-      explicit client(std::shared_ptr<io_scheduler> scheduler,
-                      options opts = options{
-                         .address = {net::ip_address::from_string("127.0.0.1")},
-                         .port = 8080,
-                      });
-      client(const client& other);
-      client(client&& other);
-      auto operator=(const client& other) noexcept -> client&;
-      auto operator=(client&& other) noexcept -> client&;
-      ~client();
-
-      /**
-       * @return The tcp socket this client is using.
-       * @{
-       **/
-      auto socket() -> net::socket& { return m_socket; }
-      auto socket() const -> const net::socket& { return m_socket; }
-      /** @} */
+      std::string address{"127.0.0.1"};
+      uint16_t port{8080};
+      std::shared_ptr<glz::io_scheduler> scheduler{};
+      ip_version ipv{};
+      glz::socket socket{};
+      /// Cache the status of the connect in the event the user calls connect() again.
+      std::optional<net::connect_status> m_connect_status{};
 
       /**
        * Connects to the address+port with the given timeout.  Once connected calling this function
@@ -48,7 +29,53 @@ namespace glz
        * @param timeout How long to wait for the connection to establish? Timeout of zero is indefinite.
        * @return The result status of trying to connect.
        */
-      auto connect(std::chrono::milliseconds timeout = std::chrono::milliseconds{0}) -> coro::task<net::connect_status>;
+      coro::task<std::error_code> connect(std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
+      {
+         // Only allow the user to connect per tcp client once, if they need to re-connect they should
+         // make a new tcp::client.
+         if (m_connect_status.has_value()) {
+            co_return m_connect_status.value();
+         }
+
+         // This enforces the connection status is aways set on the client object upon returning.
+         auto return_value = [this](connect_status s) -> connect_status {
+            m_connect_status = s;
+            return s;
+         };
+
+         sockaddr_in server_addr;
+         server_addr.sin_family = int(ipv);
+         server_addr.sin_port = htons(port);
+         ::inet_pton(int(ipv), address.c_str(), &server_addr.sin_addr);
+
+         auto result = ::connect(socket.socket_fd, (sockaddr*)&server_addr, sizeof(server_addr));
+         if (result == 0) {
+            co_return return_value(connect_status::connected);
+         }
+         else if (result == -1) {
+            // If the connect is happening in the background poll for write on the socket to trigger
+            // when the connection is established.
+            if (errno == EAGAIN || errno == EINPROGRESS) {
+               auto pstatus = co_await io_scheduler->poll(m_socket, poll_op::write, timeout);
+               if (pstatus == poll_status::event) {
+                  int result{0};
+                  socklen_t result_length{sizeof(result)};
+                  if (getsockopt(m_socket.native_handle(), SOL_SOCKET, SO_ERROR, &result, &result_length) < 0) {
+                     std::cerr << "connect failed to getsockopt after write poll event\n";
+                  }
+
+                  if (result == 0) {
+                     co_return return_value(connect_status::connected);
+                  }
+               }
+               else if (pstatus == poll_status::timeout) {
+                  co_return return_value(connect_status::timeout);
+               }
+            }
+         }
+
+         co_return return_value(connect_status::error);
+      }
 
       /**
        * Polls for the given operation on this client's tcp socket.  This should be done prior to
@@ -121,20 +148,5 @@ namespace glz
             return {static_cast<send_status>(errno), std::span<const char>{buffer.data(), buffer.size()}};
          }
       }
-
-     private:
-      /// The tcp::server creates already connected clients and provides a tcp socket pre-built.
-      friend server;
-      client(std::shared_ptr<io_scheduler> scheduler, net::socket socket, options opts);
-
-      /// The scheduler that will drive this tcp client.
-      std::shared_ptr<io_scheduler> m_io_scheduler{nullptr};
-      /// Options for what server to connect to.
-      options m_options{};
-      /// The tcp socket.
-      net::socket m_socket{-1};
-      /// Cache the status of the connect in the event the user calls connect() again.
-      std::optional<net::connect_status> m_connect_status{std::nullopt};
    };
-
-} // namespace glz
+}

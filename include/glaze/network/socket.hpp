@@ -73,14 +73,14 @@ namespace glz
    [[nodiscard]] inline std::error_code connect(socket& sckt, const std::string& address, const int port)
    {
       sckt.socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
-      if (sckt.socket_fd == -1) {
+      if (sckt.socket_fd == net::invalid_socket) {
          return {int(ip_error::socket_connect_failed), ip_error_category::instance()};
       }
 
       sockaddr_in server_addr;
       server_addr.sin_family = AF_INET;
       server_addr.sin_port = htons(uint16_t(port));
-      inet_pton(AF_INET, address.c_str(), &server_addr.sin_addr);
+      ::inet_pton(AF_INET, address.c_str(), &server_addr.sin_addr);
 
       if (::connect(sckt.socket_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
          return {int(ip_error::socket_connect_failed), ip_error_category::instance()};
@@ -100,7 +100,7 @@ namespace glz
 
       sockaddr_in server_addr;
       server_addr.sin_family = AF_INET;
-      server_addr.sin_addr.s_addr = INADDR_ANY;
+      server_addr.sin_addr.s_addr = INADDR_ANY; // TODO: Make this support a specific address
       server_addr.sin_port = htons(uint16_t(port));
 
       if (::bind(sckt.socket_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
