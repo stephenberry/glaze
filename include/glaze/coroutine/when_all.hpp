@@ -438,23 +438,23 @@ namespace glz
 
    } // namespace detail
 
-   template <awaitable... awaitables_type>
-   [[nodiscard]] auto when_all(awaitables_type... awaitables)
+   template <awaitable... Awaitables>
+   [[nodiscard]] auto when_all(Awaitables... awaitables)
    {
       return detail::when_all_ready_awaitable<std::tuple<
-         detail::when_all_task<typename awaitable_traits<awaitables_type>::awaiter_return_type>...>>(
+         detail::when_all_task<typename awaitable_traits<Awaitables>::awaiter_return_type>...>>(
          std::make_tuple(detail::make_when_all_task(std::move(awaitables))...));
    }
 
-   template <std::ranges::range range_type, awaitable awaitable_type = std::ranges::range_value_t<range_type>,
+   template <std::ranges::range Range, awaitable awaitable_type = std::ranges::range_value_t<Range>,
              class return_type = typename awaitable_traits<awaitable_type>::awaiter_return_type>
-   [[nodiscard]] auto when_all(range_type awaitables)
+   [[nodiscard]] auto when_all(Range awaitables)
       -> detail::when_all_ready_awaitable<std::vector<detail::when_all_task<return_type>>>
    {
       std::vector<detail::when_all_task<return_type>> output_tasks;
 
       // If the size is known in constant time reserve the output tasks size.
-      if constexpr (std::ranges::sized_range<range_type>) {
+      if constexpr (std::ranges::sized_range<Range>) {
          output_tasks.reserve(std::size(awaitables));
       }
 
