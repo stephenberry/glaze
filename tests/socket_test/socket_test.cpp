@@ -35,19 +35,19 @@ suite make_server = [] {
    const auto future = server.async_accept([](glz::socket&& client, auto& active) {
       std::cout << "New client connected!\n";
 
-      if (auto ec = glz::send_value(client, "Welcome!")) {
+      if (auto ec = glz::send(client, "Welcome!", std::string{})) {
          std::cerr << ec.message() << '\n';
          return;
       }
 
       while (active) {
          std::string received{};
-         if (auto ec = glz::receive_value(client, received)) {
+         if (auto ec = glz::receive(client, received, std::string{})) {
             std::cerr << ec.message() << '\n';
             return;
          }
          std::cout << std::format("Server: {}\n", received);
-         std::ignore = glz::send_value(client, std::format("Hello to {} from server.\n", received));
+         std::ignore = glz::send(client, std::format("Hello to {} from server.\n", received), std::string{});
       }
    });
 
@@ -68,7 +68,7 @@ suite socket_test = [] {
          }
          else {
             std::string received{};
-            if (auto ec = glz::receive_value(socket, received)) {
+            if (auto ec = glz::receive(socket, received, std::string{})) {
                std::cerr << ec.message() << '\n';
                return;
             }
@@ -77,12 +77,12 @@ suite socket_test = [] {
             size_t tick{};
             std::string result;
             while (tick < 3) {
-               if (auto ec = glz::send_value(socket, std::format("Client {}, {}", id, tick))) {
+               if (auto ec = glz::send(socket, std::format("Client {}, {}", id, tick), std::string{})) {
 
                   std::cerr << ec.message() << '\n';
                   return;
                }
-               if (auto ec = glz::receive_value(socket, result)) {
+               if (auto ec = glz::receive(socket, result, std::string{})) {
                   continue;
                }
                else {
