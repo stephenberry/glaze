@@ -268,7 +268,7 @@ namespace glz
       };
 
       template <awaitable awaitable_type,
-                class return_type = awaitable_traits<awaitable_type>::awaiter_return_type>
+                class return_type = awaitable_traits<awaitable_type>::return_type>
       static auto make_sync_wait_task(awaitable_type&& a) -> sync_wait_task<return_type>;
 
       template <awaitable awaitable_type, class return_type>
@@ -285,7 +285,7 @@ namespace glz
    }
 
    template <awaitable awaitable_type,
-             class return_type = typename awaitable_traits<awaitable_type>::awaiter_return_type>
+             class return_type = typename awaitable_traits<awaitable_type>::return_type>
    auto sync_wait(awaitable_type&& a) -> decltype(auto)
    {
       detail::sync_wait_event e{};

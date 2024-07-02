@@ -100,7 +100,7 @@ namespace glz
    template <awaitable awaitable>
    struct awaitable_traits<awaitable>
    {
-      using awaiter_type = decltype(get_awaiter(std::declval<awaitable>()));
-      using awaiter_return_type = decltype(std::declval<awaiter_type>().await_resume());
+      using type = decltype(get_awaiter(std::declval<awaitable>()));
+      using return_type = decltype(std::declval<type>().await_resume());
    };
 }
