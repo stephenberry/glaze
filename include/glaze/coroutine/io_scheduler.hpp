@@ -32,18 +32,18 @@
 
 namespace glz
 {
+   enum struct thread_strategy {
+      /// Spawns a dedicated background thread for the scheduler to run on.
+      spawn,
+      /// Requires the user to call process_events() to drive the scheduler.
+      manual
+   };
+   
    struct io_scheduler final
    {
       using clock = std::chrono::steady_clock;
       using time_point = clock::time_point;
       using timed_events = poll_info::timed_events;
-
-      enum struct thread_strategy_t {
-         /// Spawns a dedicated background thread for the scheduler to run on.
-         spawn,
-         /// Requires the user to call process_events() to drive the scheduler.
-         manual
-      };
 
       enum struct execution_strategy_t {
          /// Tasks will be FIFO queued to be executed on a thread pool.  This is better for tasks that
@@ -60,7 +60,7 @@ namespace glz
       struct options
       {
          /// Should the io scheduler spawn a dedicated event processor?
-         thread_strategy_t thread_strategy{thread_strategy_t::spawn};
+         glz::thread_strategy thread_strategy{glz::thread_strategy::spawn};
          /// If spawning a dedicated event processor a functor to call upon that thread starting.
          std::function<void()> on_io_thread_start_functor{};
          /// If spawning a dedicated event processor a functor to call upon that thread stopping.
@@ -487,7 +487,7 @@ namespace glz
          ::kevent(event_fd, &e_timer, 1, nullptr, 0, nullptr);
 #endif
 
-         if (m_opts.thread_strategy == thread_strategy_t::spawn) {
+         if (m_opts.thread_strategy == glz::thread_strategy::spawn) {
             m_io_thread = std::thread([this]() { process_events_dedicated_thread(); });
          }
          // else manual mode, the user must call process_events.

@@ -371,7 +371,7 @@ suite io_scheduler_test = [] {
    auto scheduler = std::make_shared<glz::io_scheduler>(glz::io_scheduler::options{
       // The scheduler will spawn a dedicated event processing thread.  This is the default, but
       // it is possible to use 'manual' and call 'process_events()' to drive the scheduler yourself.
-      .thread_strategy = glz::io_scheduler::thread_strategy_t::spawn,
+      .thread_strategy = glz::thread_strategy::spawn,
       // If the scheduler is in spawn mode this functor is called upon starting the dedicated
       // event processor thread.
       .on_io_thread_start_functor = [] { std::cout << "io_scheduler::process event thread start\n"; },
