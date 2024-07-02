@@ -42,7 +42,7 @@ suite make_server = [] {
 
       while (active) {
          std::string received{};
-         if (auto ec = glz::receive(client, received, std::string{})) {
+         if (auto ec = glz::receive(client, received, std::string{}, 5000)) {
             std::cerr << ec.message() << '\n';
             return;
          }
@@ -68,7 +68,7 @@ suite socket_test = [] {
          }
          else {
             std::string received{};
-            if (auto ec = glz::receive(socket, received, std::string{})) {
+            if (auto ec = glz::receive(socket, received, std::string{}, 100)) {
                std::cerr << ec.message() << '\n';
                return;
             }
@@ -82,7 +82,7 @@ suite socket_test = [] {
                   std::cerr << ec.message() << '\n';
                   return;
                }
-               if (auto ec = glz::receive(socket, result, std::string{})) {
+               if (auto ec = glz::receive(socket, result, std::string{}, 100)) {
                   continue;
                }
                else {

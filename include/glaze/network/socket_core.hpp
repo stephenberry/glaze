@@ -205,6 +205,7 @@ namespace glz
       socket_bind_failed,
       send_failed,
       receive_failed,
+      receive_timeout,
       client_disconnected);
 
    template <class T>

@@ -10,6 +10,8 @@
 #include "glaze/network/ip.hpp"
 #include "glaze/network/socket_core.hpp"
 
+#include <iostream>
+
 namespace glz
 {
 #ifdef _WIN32
@@ -143,11 +145,17 @@ namespace glz
    }
    
    template <ip_header Header>
-   [[nodiscard]] std::error_code blocking_header_receive(socket& sckt, Header& header, std::string& buffer)
+   [[nodiscard]] std::error_code blocking_header_receive(socket& sckt, Header& header, std::string& buffer, size_t timeout_ms)
    {
       // first receive the header
+      auto t0 = std::chrono::steady_clock::now();
       size_t total_bytes{};
       while (total_bytes < sizeof(Header)) {
+         auto t1 = std::chrono::steady_clock::now();
+         if (size_t(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()) >= timeout_ms) {
+            std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << '\n';
+            return {int(ip_error::receive_timeout), ip_error_category::instance()};
+         }
          auto[bytes, event] = async_recv(sckt, reinterpret_cast<char*>(&header) + total_bytes, sizeof(Header) - total_bytes);
          using enum socket_event;
          switch (event)
@@ -183,8 +191,14 @@ namespace glz
 
       buffer.resize(size);
 
+      t0 = std::chrono::steady_clock::now();
       total_bytes = 0;
       while (total_bytes < size) {
+         auto t1 = std::chrono::steady_clock::now();
+         if (size_t(std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count()) >= timeout_ms) {
+            std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count() << '\n';
+            return {int(ip_error::receive_timeout), ip_error_category::instance()};
+         }
          auto[bytes, event] = async_recv(sckt, buffer.data() + total_bytes, buffer.size() - total_bytes);
          using enum socket_event;
          switch (event)

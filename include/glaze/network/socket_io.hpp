@@ -26,10 +26,10 @@ namespace glz
    }
 
    template <opts Opts = opts{.format = binary}, class T, class Buffer>
-   [[nodiscard]] std::error_code receive(socket& sckt, T&& value, Buffer&& buffer)
+   [[nodiscard]] std::error_code receive(socket& sckt, T&& value, Buffer&& buffer, size_t timeout_ms)
    {
       uint64_t header{};
-      if (auto ec = blocking_header_receive(sckt, header, buffer)) {
+      if (auto ec = blocking_header_receive(sckt, header, buffer, timeout_ms)) {
          return ec;
       }
 
