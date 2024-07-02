@@ -426,9 +426,9 @@ suite io_scheduler_test = [] {
       // as well as a span<char> that overlaps the given buffer for the bytes that were read.  This
       // can be used to resize the buffer or work with the bytes without modifying the buffer at all.
       std::string request(256, '\0');
-      auto [recv_status, recv_bytes] = client.recv(request);
-      if (recv_status != glz::recv_status::ok) {
-         co_return; // Handle error, see net::recv_status for detailed error states.
+      auto [ip_status, recv_bytes] = client.recv(request);
+      if (ip_status != glz::ip_status::ok) {
+         co_return; // Handle error, see net::ip_status for detailed error states.
       }
 
       request.resize(recv_bytes.size());
@@ -448,9 +448,9 @@ suite io_scheduler_test = [] {
       std::span<const char> remaining = response;
       do {
          // Optimistically send() prior to polling.
-         auto [send_status, r] = client.send(remaining);
-         if (send_status != glz::send_status::ok) {
-            co_return; // Handle error, see net::send_status for detailed error states.
+         auto [ip_status, r] = client.send(remaining);
+         if (ip_status != glz::ip_status::ok) {
+            co_return; // Handle error, see net::ip_status for detailed error states.
          }
 
          if (r.empty()) {
@@ -492,7 +492,7 @@ suite io_scheduler_test = [] {
       // Wait for the response and receive it.
       co_await client.poll(glz::poll_op::read);
       std::string response(256, '\0');
-      auto [recv_status, recv_bytes] = client.recv(response);
+      auto [ip_status, recv_bytes] = client.recv(response);
       response.resize(recv_bytes.size());
 
       std::cout << "client: " << response << "\n";

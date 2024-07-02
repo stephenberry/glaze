@@ -35,21 +35,23 @@ namespace glz
       }
       return {};
    }
-
-   GLZ_ENUM(connect_status, unset, connected, invalid_ip_address, timeout, error);
-
-   GLZ_ENUM(recv_status, ok, closed, udp_not_bound, try_again, //
-            would_block, bad_file_descriptor, connection_refused, //
-            memory_fault, interrupted, invalid_argument, no_memory, //
-            not_connected, not_a_socket);
-
-   GLZ_ENUM(send_status, ok, closed, permission_denied, try_again, would_block, already_in_progress,
-            bad_file_descriptor, connection_reset, no_peer_address, memory_fault, interrupted, is_connection,
-            message_size, output_queue_full, no_memory, not_connected, not_a_socket, operationg_not_supported,
-            pipe_closed);
+   
+   GLZ_ENUM(ip_status, //
+            unset, //
+            ok, //
+            closed, //
+            connected, //
+            invalid_ip_address, //
+            timeout, //
+            error, //
+            try_again, //
+            would_block, //
+            bad_file_descriptor, //
+            connection_refused, //
+   );
 
    /*
-    // recv_status
+    // ip_status
     ok = 0,
     /// The peer closed the socket.
     closed = -1,
@@ -69,7 +71,7 @@ namespace glz
     */
 
    /*
-    // send_status
+    // ip_status
     ok                       = 0,
         closed                   = -1,
         permission_denied        = EACCES,
