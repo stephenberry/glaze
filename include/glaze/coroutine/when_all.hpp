@@ -420,15 +420,15 @@ namespace glz
                 class return_type = typename awaitable_traits<Awaitable&&>::return_type>
       static auto make_when_all_task(Awaitable a) -> when_all_task<return_type>;
 
-      template <awaitable awaitable, class return_type>
-      static auto make_when_all_task(awaitable a) -> when_all_task<return_type>
+      template <awaitable Awaitable, class Return>
+      static auto make_when_all_task(Awaitable a) -> when_all_task<Return>
       {
-         if constexpr (std::is_void_v<return_type>) {
-            co_await static_cast<awaitable&&>(a);
+         if constexpr (std::is_void_v<Return>) {
+            co_await static_cast<Awaitable&&>(a);
             co_return;
          }
          else {
-            co_yield co_await static_cast<awaitable&&>(a);
+            co_yield co_await static_cast<Awaitable&&>(a);
          }
       }
 
