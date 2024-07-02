@@ -29,10 +29,8 @@
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
 #define GLZ_THROW_OR_ABORT(EXC) (throw(EXC))
-#define GLZ_NOEXCEPT noexcept(false)
 #else
 #define GLZ_THROW_OR_ABORT(EXC) (std::abort())
-#define GLZ_NOEXCEPT noexcept(true)
 #endif
 #endif
 
@@ -42,7 +40,7 @@
 
 namespace glz
 {
-   inline void glaze_error([[maybe_unused]] const char* msg) GLZ_NOEXCEPT
+   inline void glaze_error([[maybe_unused]] const char* msg)
    {
       GLZ_THROW_OR_ABORT(std::runtime_error(msg));
    }
