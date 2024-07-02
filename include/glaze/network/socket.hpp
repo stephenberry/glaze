@@ -143,7 +143,7 @@ namespace glz
    }
    
    template <ip_header Header>
-   [[nodiscard]] std::error_code raw_receive(socket& sckt, Header& header, std::string& buffer)
+   [[nodiscard]] std::error_code blocking_header_receive(socket& sckt, Header& header, std::string& buffer)
    {
       // first receive the header
       size_t total_bytes{};
@@ -185,23 +185,29 @@ namespace glz
 
       total_bytes = 0;
       while (total_bytes < size) {
-         auto bytes =
-            ::recv(sckt.socket_fd, buffer.data() + total_bytes, glz::net::ssize_t(buffer.size() - total_bytes), 0);
-         if (bytes == -1) {
-            if (GLZ_SOCKET_ERROR_CODE == e_would_block || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
+         auto[bytes, event] = async_recv(sckt, buffer.data() + total_bytes, buffer.size() - total_bytes);
+         using enum socket_event;
+         switch (event)
+         {
+            case bytes_read: {
+               total_bytes += bytes;
+               break;
+            }
+            case wait: {
                std::this_thread::sleep_for(std::chrono::milliseconds(1));
                continue;
             }
-            else {
+            case client_disconnected: {
+               return {int(ip_error::client_disconnected), ip_error_category::instance()};
+            }
+            case receive_failed: {
+               [[fallthrough]];
+            }
+            default: {
                buffer.clear();
                return {int(ip_error::receive_failed), ip_error_category::instance()};
             }
          }
-         else if (bytes == 0) {
-            return {int(ip_error::client_disconnected), ip_error_category::instance()};
-         }
-
-         total_bytes += bytes;
       }
       return {};
    }

@@ -29,7 +29,7 @@ namespace glz
    [[nodiscard]] std::error_code receive(socket& sckt, T&& value, Buffer&& buffer)
    {
       uint64_t header{};
-      if (auto ec = raw_receive(sckt, header, buffer)) {
+      if (auto ec = blocking_header_receive(sckt, header, buffer)) {
          return ec;
       }
 
