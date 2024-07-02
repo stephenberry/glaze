@@ -4,4 +4,5 @@
 #pragma once
 
 #include "glaze/network/client.hpp"
+#include "glaze/network/server.hpp"
 #include "glaze/network/socket.hpp"
