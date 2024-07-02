@@ -109,7 +109,7 @@ namespace glz
             {
                explicit awaiter(when_all_ready_awaitable& awaitable) noexcept : m_awaitable(awaitable) {}
 
-               auto await_ready() const noexcept -> bool { return m_awaitable.is_ready(); }
+               bool await_ready() const noexcept { return m_awaitable.is_ready(); }
 
                auto await_suspend(std::coroutine_handle<> awaiting_coroutine) noexcept -> bool
                {
@@ -354,14 +354,10 @@ namespace glz
          std::exception_ptr m_exception_ptr;
       };
 
-      template <typename return_type>
+      template <class Return>
       struct when_all_task
       {
-         // To be able to call start().
-         template <typename TaskContainer>
-         friend struct when_all_ready_awaitable;
-
-         using promise_type = when_all_task_promise<return_type>;
+         using promise_type = when_all_task_promise<Return>;
          using coroutine_handle_type = typename promise_type::coroutine_handle_type;
 
          when_all_task(coroutine_handle_type coroutine) noexcept : m_coroutine(coroutine) {}
@@ -381,9 +377,9 @@ namespace glz
             }
          }
 
-         auto return_value() & -> decltype(auto)
+         decltype(auto) return_value() &
          {
-            if constexpr (std::is_void_v<return_type>) {
+            if constexpr (std::is_void_v<Return>) {
                m_coroutine.promise().result();
                return std::nullptr_t{};
             }
@@ -392,9 +388,9 @@ namespace glz
             }
          }
 
-         auto return_value() const& -> decltype(auto)
+         decltype(auto) return_value() const&
          {
-            if constexpr (std::is_void_v<return_type>) {
+            if constexpr (std::is_void_v<Return>) {
                m_coroutine.promise().result();
                return std::nullptr_t{};
             }
@@ -403,9 +399,9 @@ namespace glz
             }
          }
 
-         auto return_value() && -> decltype(auto)
+         decltype(auto) return_value() &&
          {
-            if constexpr (std::is_void_v<return_type>) {
+            if constexpr (std::is_void_v<Return>) {
                m_coroutine.promise().result();
                return std::nullptr_t{};
             }
@@ -413,10 +409,10 @@ namespace glz
                return m_coroutine.promise().result();
             }
          }
+         
+         void start(when_all_latch& latch) noexcept { m_coroutine.promise().start(latch); }
 
         private:
-         auto start(when_all_latch& latch) noexcept -> void { m_coroutine.promise().start(latch); }
-
          coroutine_handle_type m_coroutine;
       };
 
