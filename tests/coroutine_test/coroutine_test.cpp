@@ -46,7 +46,7 @@ suite thread_pool = [] {
    auto make_task_inline = [](uint64_t x) -> glz::task<uint64_t> { co_return x + x; };
 
    // This will block the calling thread until the created task completes.
-   // Since this task isn't scheduled on any glz::thread_pool or glz::io_scheduler
+   // Since this task isn't scheduled on any glz::thread_pool or glz::scheduler
    // it will execute directly on the calling thread.
    auto result = glz::sync_wait(make_task_inline(5));
    expect(result == 10);
@@ -135,10 +135,10 @@ suite event = [] {
 
 suite latch = [] {
    std::cout << "\nLatch test:\n";
-   // Complete worker tasks faster on a thread pool, using the io_scheduler version so the worker
+   // Complete worker tasks faster on a thread pool, using the scheduler version so the worker
    // tasks can yield for a specific amount of time to mimic difficult work.  The pool is only
    // setup with a single thread to showcase yield_for().
-   glz::io_scheduler tp{glz::io_scheduler::options{.pool = glz::thread_pool::options{.thread_count = 1}}};
+   glz::scheduler tp{glz::scheduler::options{.pool = glz::thread_pool::options{.thread_count = 1}}};
 
    // This task will wait until the given latch setters have completed.
    auto make_latch_task = [](glz::latch& l) -> glz::task<void> {
@@ -157,7 +157,7 @@ suite latch = [] {
 
    // This task does 'work' and counts down on the latch when completed.  The final child task to
    // complete will end up resuming the latch task when the latch's count reaches zero.
-   auto make_worker_task = [](glz::io_scheduler& tp, glz::latch& l, int64_t i) -> glz::task<void> {
+   auto make_worker_task = [](glz::scheduler& tp, glz::latch& l, int64_t i) -> glz::task<void> {
       // Schedule the worker task onto the thread pool.
       co_await tp.schedule();
       std::cout << "worker task " << i << " is working...\n";
@@ -368,16 +368,16 @@ suite ring_buffer_test = [] {
 };
 
 suite io_scheduler_test = [] {
-   auto scheduler = std::make_shared<glz::io_scheduler>(glz::io_scheduler::options{
+   auto scheduler = std::make_shared<glz::scheduler>(glz::scheduler::options{
       // The scheduler will spawn a dedicated event processing thread.  This is the default, but
       // it is possible to use 'manual' and call 'process_events()' to drive the scheduler yourself.
       .thread_strategy = glz::thread_strategy::spawn,
       // If the scheduler is in spawn mode this functor is called upon starting the dedicated
       // event processor thread.
-      .on_io_thread_start_functor = [] { std::cout << "io_scheduler::process event thread start\n"; },
+      .on_io_thread_start_functor = [] { std::cout << "scheduler::process event thread start\n"; },
       // If the scheduler is in spawn mode this functor is called upon stopping the dedicated
       // event process thread.
-      .on_io_thread_stop_functor = [] { std::cout << "io_scheduler::process event thread stop\n"; },
+      .on_io_thread_stop_functor = [] { std::cout << "scheduler::process event thread stop\n"; },
       // The io scheduler can use a coro::thread_pool to process the events or tasks it is given.
       // You can use an execution strategy of `process_tasks_inline` to have the event loop thread
       // directly process the tasks, this might be desirable for small tasks vs a thread pool for large tasks.
@@ -385,11 +385,11 @@ suite io_scheduler_test = [] {
       glz::thread_pool::options{
             .thread_count = 2,
             .on_thread_start_functor =
-               [](size_t i) { std::cout << "io_scheduler::thread_pool worker " << i << " starting\n"; },
+               [](size_t i) { std::cout << "scheduler::thread_pool worker " << i << " starting\n"; },
             .on_thread_stop_functor =
-               [](size_t i) { std::cout << "io_scheduler::thread_pool worker " << i << " stopping\n"; },
+               [](size_t i) { std::cout << "scheduler::thread_pool worker " << i << " stopping\n"; },
          },
-      .execution_strategy = glz::io_scheduler::execution_strategy::process_tasks_on_thread_pool});
+      .execution_strategy = glz::scheduler::execution_strategy::process_tasks_on_thread_pool});
 
    auto make_server_task = [&]() -> glz::task<void> {
       // Start by creating a tcp server, we'll do this before putting it into the scheduler so

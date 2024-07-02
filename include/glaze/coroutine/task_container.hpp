@@ -27,7 +27,7 @@
 
 namespace glz
 {
-   struct io_scheduler;
+   struct scheduler;
 
    template <executor executor_type>
    struct task_container
@@ -42,7 +42,7 @@ namespace glz
 
       /**
        * @param e Tasks started in the container are scheduled onto this executor.  For tasks created
-       *           from a coro::io_scheduler, this would usually be that coro::io_scheduler instance.
+       *           from a coro::scheduler, this would usually be that coro::scheduler instance.
        * @param opts Task container options.
        */
       task_container(std::shared_ptr<executor_type> e,
@@ -258,14 +258,14 @@ namespace glz
       double m_growth_factor{};
       /// The executor to schedule tasks that have just started.
       std::shared_ptr<executor_type> m_executor{nullptr};
-      /// This is used internally since io_scheduler cannot pass itself in as a shared_ptr.
+      /// This is used internally since scheduler cannot pass itself in as a shared_ptr.
       executor_type* m_executor_ptr{nullptr};
 
       /**
        * Special constructor for internal types to create their embeded task containers.
        */
 
-      friend io_scheduler;
+      friend scheduler;
       task_container(executor_type& e, const options opts = options{.reserve_size = 8, .growth_factor = 2})
          : m_growth_factor(opts.growth_factor), m_executor_ptr(&e)
       {

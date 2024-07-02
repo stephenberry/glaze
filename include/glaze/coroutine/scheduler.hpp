@@ -39,7 +39,7 @@ namespace glz
       manual
    };
    
-   struct io_scheduler final
+   struct scheduler final
    {
       using clock = std::chrono::steady_clock;
       using time_point = clock::time_point;
@@ -76,16 +76,16 @@ namespace glz
          const execution_strategy execution_strategy{execution_strategy::process_tasks_on_thread_pool};
       };
 
-      io_scheduler() { init(); }
+      scheduler() { init(); }
 
-      io_scheduler(options opts) : m_opts(std::move(opts)) { init(); }
+      scheduler(options opts) : m_opts(std::move(opts)) { init(); }
 
-      io_scheduler(const io_scheduler&) = delete;
-      io_scheduler(io_scheduler&&) = delete;
-      io_scheduler& operator=(const io_scheduler&) = delete;
-      io_scheduler& operator=(io_scheduler&&) = delete;
+      scheduler(const scheduler&) = delete;
+      scheduler(scheduler&&) = delete;
+      scheduler& operator=(const scheduler&) = delete;
+      scheduler& operator=(scheduler&&) = delete;
 
-      ~io_scheduler()
+      ~scheduler()
       {
          shutdown();
 
@@ -124,7 +124,7 @@ namespace glz
       struct schedule_operation
       {
          /// The thread pool that this operation will execute on.
-         io_scheduler& m_scheduler;
+         scheduler& m_scheduler;
 
          /**
           * Operations always pause so the executing thread can be switched.
@@ -172,7 +172,7 @@ namespace glz
       };
 
       /**
-       * Schedules the current task onto this io_scheduler for execution.
+       * Schedules the current task onto this scheduler for execution.
        */
       auto schedule() -> schedule_operation { return schedule_operation{*this}; }
 
@@ -441,7 +441,7 @@ namespace glz
       /// or for tasks that are polling with timeouts.
       timed_events m_timed_events{};
 
-      /// Has the io_scheduler been requested to shut down?
+      /// Has the scheduler been requested to shut down?
       std::atomic<bool> m_shutdown_requested{false};
 
       std::atomic<bool> m_io_processing{false};

@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "glaze/coroutine/io_scheduler.hpp"
+#include "glaze/coroutine/scheduler.hpp"
 #include "glaze/network/ip.hpp"
 #include "glaze/network/socket.hpp"
 
@@ -16,7 +16,7 @@ namespace glz
     */
    struct client
    {
-      std::shared_ptr<glz::io_scheduler> scheduler{};
+      std::shared_ptr<glz::scheduler> scheduler{};
       std::string address{"127.0.0.1"};
       uint16_t port{8080};
       ip_version ipv{};
