@@ -18,11 +18,11 @@ namespace glz
 
       uint64_t header = uint64_t(buffer.size());
 
-      if (auto ec = raw_send(sckt, sv{reinterpret_cast<char*>(&header), sizeof(header)})) {
+      if (auto ec = blocking_send(sckt, sv{reinterpret_cast<char*>(&header), sizeof(header)})) {
          return ec;
       }
 
-      return raw_send(sckt, buffer);
+      return blocking_send(sckt, buffer);
    }
 
    template <opts Opts = opts{.format = binary}, class T, class Buffer>

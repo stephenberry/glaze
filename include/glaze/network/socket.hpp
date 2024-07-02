@@ -212,7 +212,7 @@ namespace glz
       return {};
    }
    
-   [[nodiscard]] inline std::error_code raw_send(socket& sckt, const std::string_view buffer)
+   [[nodiscard]] inline std::error_code blocking_send(socket& sckt, const std::string_view buffer)
    {
       const size_t size = buffer.size();
       size_t total_bytes{};
