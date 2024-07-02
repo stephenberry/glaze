@@ -45,7 +45,7 @@ namespace glz
       using time_point = clock::time_point;
       using timed_events = poll_info::timed_events;
 
-      enum struct execution_strategy_t {
+      enum struct execution_strategy {
          /// Tasks will be FIFO queued to be executed on a thread pool.  This is better for tasks that
          /// are long lived and will use lots of CPU because long lived tasks will block other i/o
          /// operations while they complete.  This strategy is generally better for lower latency
@@ -73,7 +73,7 @@ namespace glz
 
          /// If inline task processing is enabled then the io worker will resume tasks on its thread
          /// rather than scheduling them to be picked up by the thread pool.
-         const execution_strategy_t execution_strategy{execution_strategy_t::process_tasks_on_thread_pool};
+         const execution_strategy execution_strategy{execution_strategy::process_tasks_on_thread_pool};
       };
 
       io_scheduler() { init(); }
@@ -137,7 +137,7 @@ namespace glz
           */
          auto await_suspend(std::coroutine_handle<> awaiting_coroutine) noexcept -> void
          {
-            if (m_scheduler.m_opts.execution_strategy == execution_strategy_t::process_tasks_inline) {
+            if (m_scheduler.m_opts.execution_strategy == execution_strategy::process_tasks_inline) {
                m_scheduler.n_active_tasks.fetch_add(1, std::memory_order::release);
                {
                   std::scoped_lock lk{m_scheduler.m_scheduled_tasks_mutex};
@@ -335,7 +335,7 @@ namespace glz
             return false;
          }
 
-         if (m_opts.execution_strategy == execution_strategy_t::process_tasks_inline) {
+         if (m_opts.execution_strategy == execution_strategy::process_tasks_inline) {
             {
                std::scoped_lock lk{m_scheduled_tasks_mutex};
                m_scheduled_tasks.emplace_back(handle);
@@ -368,7 +368,7 @@ namespace glz
        */
       size_t size() const noexcept
       {
-         if (m_opts.execution_strategy == execution_strategy_t::process_tasks_inline) {
+         if (m_opts.execution_strategy == execution_strategy::process_tasks_inline) {
             return n_active_tasks.load(std::memory_order::acquire);
          }
          else {
@@ -457,7 +457,7 @@ namespace glz
 
       void init()
       {
-         if (m_opts.execution_strategy == execution_strategy_t::process_tasks_on_thread_pool) {
+         if (m_opts.execution_strategy == execution_strategy::process_tasks_on_thread_pool) {
             m_thread_pool = std::make_unique<thread_pool>(std::move(m_opts.pool));
          }
 
@@ -609,7 +609,7 @@ namespace glz
          // the thread switch required. If max_events == 1 this would be unnecessary.
 
          if (!m_handles_to_resume.empty()) {
-            if (m_opts.execution_strategy == execution_strategy_t::process_tasks_inline) {
+            if (m_opts.execution_strategy == execution_strategy::process_tasks_inline) {
                for (auto& handle : m_handles_to_resume) {
                   handle.resume();
                }

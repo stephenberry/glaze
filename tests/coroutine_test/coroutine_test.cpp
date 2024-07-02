@@ -389,7 +389,7 @@ suite io_scheduler_test = [] {
             .on_thread_stop_functor =
                [](size_t i) { std::cout << "io_scheduler::thread_pool worker " << i << " stopping\n"; },
          },
-      .execution_strategy = glz::io_scheduler::execution_strategy_t::process_tasks_on_thread_pool});
+      .execution_strategy = glz::io_scheduler::execution_strategy::process_tasks_on_thread_pool});
 
    auto make_server_task = [&]() -> glz::task<void> {
       // Start by creating a tcp server, we'll do this before putting it into the scheduler so
