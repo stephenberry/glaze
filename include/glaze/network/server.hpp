@@ -12,10 +12,10 @@ namespace glz
 {
    struct server
    {
+      std::shared_ptr<io_scheduler> scheduler{};
       std::string address{"0.0.0.0"};
       uint16_t port{8080};
       int32_t backlog{128}; // The kernel backlog of connections to buffer.
-      std::shared_ptr<io_scheduler> scheduler{};
       /// The socket for accepting new tcp connections on.
       socket accept_socket{};
 
@@ -47,7 +47,7 @@ namespace glz
             sizeof(client.sin_addr.s_addr),
          };
          
-         return {binary_to_ip_string(ip_addr_view).value(), ntohs(client.sin_port), ip_version(client.sin_family), scheduler};
+         return {scheduler, binary_to_ip_string(ip_addr_view).value(), ntohs(client.sin_port), ip_version(client.sin_family)};
       }
    };
 }

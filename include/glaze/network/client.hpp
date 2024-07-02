@@ -16,10 +16,10 @@ namespace glz
     */
    struct client
    {
+      std::shared_ptr<glz::io_scheduler> scheduler{};
       std::string address{"127.0.0.1"};
       uint16_t port{8080};
       ip_version ipv{};
-      std::shared_ptr<glz::io_scheduler> scheduler{};
       glz::socket socket{};
       /// Cache the status of the connect in the event the user calls connect() again.
       std::optional<glz::connect_status> connect_status{};

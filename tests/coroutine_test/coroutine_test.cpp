@@ -367,7 +367,7 @@ suite ring_buffer_test = [] {
    glz::sync_wait(glz::when_all(std::move(tasks)));
 };
 
-/*suite io_scheduler_test = [] {
+suite io_scheduler_test = [] {
    auto scheduler = std::make_shared<glz::io_scheduler>(glz::io_scheduler::options{
       // The scheduler will spawn a dedicated event processing thread.  This is the default, but
       // it is possible to use 'manual' and call 'process_events()' to drive the scheduler yourself.
@@ -396,7 +396,7 @@ suite ring_buffer_test = [] {
       // it is immediately available for the client to connect since this will create a socket,
       // bind the socket and start listening on that socket.  See tcp::server for more details on
       // how to specify the local address and port to bind to as well as enabling SSL/TLS.
-      glz::net::tcp::server server{scheduler};
+      glz::server server{scheduler};
 
       // Now scheduler this task onto the scheduler.
       co_await scheduler->schedule();
@@ -411,7 +411,7 @@ suite ring_buffer_test = [] {
       auto client = server.accept();
 
       // Verify the incoming connection was accepted correctly.
-      if (!client.socket().is_valid()) {
+      if (!client.socket.valid()) {
          co_return; // Handle error.
       }
 
@@ -427,7 +427,7 @@ suite ring_buffer_test = [] {
       // can be used to resize the buffer or work with the bytes without modifying the buffer at all.
       std::string request(256, '\0');
       auto [recv_status, recv_bytes] = client.recv(request);
-      if (recv_status != glz::net::recv_status::ok) {
+      if (recv_status != glz::recv_status::ok) {
          co_return; // Handle error, see net::recv_status for detailed error states.
       }
 
@@ -449,7 +449,7 @@ suite ring_buffer_test = [] {
       do {
          // Optimistically send() prior to polling.
          auto [send_status, r] = client.send(remaining);
-         if (send_status != glz::net::send_status::ok) {
+         if (send_status != glz::send_status::ok) {
             co_return; // Handle error, see net::send_status for detailed error states.
          }
 
@@ -475,7 +475,7 @@ suite ring_buffer_test = [] {
 
       // Create the tcp::client with the default settings, see tcp::client for how to set the
       // ip address, port, and optionally enabling SSL/TLS.
-      glz::net::tcp::client client{scheduler};
+      glz::client client{scheduler};
 
       // Ommitting error checking code for the client, each step should check the status and
       // verify the number of bytes sent or received.
@@ -501,7 +501,7 @@ suite ring_buffer_test = [] {
 
    // Create and wait for the server and client tasks to complete.
    glz::sync_wait(glz::when_all(make_server_task(), make_client_task()));
-};*/
+};
 
 int main()
 {

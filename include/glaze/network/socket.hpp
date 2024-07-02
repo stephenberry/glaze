@@ -59,6 +59,10 @@ namespace glz
             net::close_socket(socket_fd);
          }
       }
+      
+      bool valid() const {
+         return socket_fd != net::invalid_socket;
+      }
 
       ~socket() { close(); }
 
