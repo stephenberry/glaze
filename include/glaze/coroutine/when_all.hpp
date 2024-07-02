@@ -446,12 +446,12 @@ namespace glz
          std::make_tuple(detail::make_when_all_task(std::move(awaitables))...));
    }
 
-   template <std::ranges::range Range, awaitable awaitable_type = std::ranges::range_value_t<Range>,
-             class return_type = typename awaitable_traits<awaitable_type>::return_type>
+   template <std::ranges::range Range, awaitable Awaitable = std::ranges::range_value_t<Range>,
+             class Return = typename awaitable_traits<Awaitable>::return_type>
    [[nodiscard]] auto when_all(Range awaitables)
-      -> detail::when_all_ready_awaitable<std::vector<detail::when_all_task<return_type>>>
+      -> detail::when_all_ready_awaitable<std::vector<detail::when_all_task<Return>>>
    {
-      std::vector<detail::when_all_task<return_type>> output_tasks;
+      std::vector<detail::when_all_task<Return>> output_tasks;
 
       // If the size is known in constant time reserve the output tasks size.
       if constexpr (std::ranges::sized_range<Range>) {
