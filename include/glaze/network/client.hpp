@@ -109,7 +109,7 @@ namespace glz
          auto bytes_recv = ::recv(socket.socket_fd, buffer.data(), buffer.size(), 0);
          if (bytes_recv > 0) {
             // Ok, we've recieved some data.
-            return {ip_status::ok, std::span<char>{buffer.data(), static_cast<size_t>(bytes_recv)}};
+            return {ip_status::ok, std::span<char>{buffer.data(), size_t(bytes_recv)}};
          }
          else if (bytes_recv == 0) {
             // On TCP stream sockets 0 indicates the connection has been closed by the peer.
@@ -117,7 +117,6 @@ namespace glz
          }
          else {
             // Report the error to the user.
-            // TODO: add errno conversion
             return {errno_to_ip_status(), std::span<char>{}};
          }
       }
@@ -146,7 +145,6 @@ namespace glz
          }
          else {
             // Due to the error none of the bytes were written.
-            // TODO: add errno conversion
             return {errno_to_ip_status(), std::string_view{buffer.data(), buffer.size()}};
          }
       }

@@ -19,10 +19,7 @@
 #include "glaze/coroutine/task_container.hpp"
 #include "glaze/coroutine/thread_pool.hpp"
 #include "glaze/network/core.hpp"
-
-#ifdef GLZ_FEATURE_NETWORKING
-#include "coro/net/socket.hpp"
-#endif
+#include "glaze/network/socket.hpp"
 
 #include <array>
 #include <chrono>
@@ -309,8 +306,7 @@ namespace glz
          n_active_tasks.fetch_sub(1, std::memory_order::release);
          co_return result;
       }
-
-#ifdef GLZ_FEATURE_NETWORKING
+      
       /**
        * Polls the given coro::net::socket for the given operations.
        * @param sock The socket to poll for events on.
@@ -319,13 +315,11 @@ namespace glz
        *                block indefinitely until the event triggers.
        * @return THe result of the poll operation.
        */
-      [[nodiscard]] auto poll(const net::socket& sock, glz::poll_op op,
+      [[nodiscard]] task<poll_status> poll(const socket& sock, poll_op op,
                               std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
-         -> glz::task<poll_status>
       {
-         return poll(sock.native_handle(), op, timeout);
+         return poll(sock.socket_fd, op, timeout);
       }
-#endif
 
       /**
        * Resumes execution of a direct coroutine handle on this io scheduler.
