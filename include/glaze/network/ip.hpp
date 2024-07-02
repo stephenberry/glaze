@@ -21,8 +21,10 @@
 namespace glz
 {
    enum struct ip_version : int { ipv4 = AF_INET, ipv6 = AF_INET6 };
-   
-   inline std::optional<std::string> binary_to_ip_string(const std::string_view binary_address, ip_version ipv = ip_version::ipv6) {
+
+   inline std::optional<std::string> binary_to_ip_string(const std::string_view binary_address,
+                                                         ip_version ipv = ip_version::ipv6)
+   {
       std::string output{};
       output.resize(16);
 
@@ -33,15 +35,21 @@ namespace glz
       }
       return {};
    }
-   
+
    GLZ_ENUM(connect_status, connected, invalid_ip_address, timeout, error);
-   
+
    GLZ_ENUM(recv_status, ok, closed, udp_not_bound, try_again, //
             would_block, bad_file_descriptor, connection_refused, //
             memory_fault, interrupted, invalid_argument, no_memory, //
             not_connected, not_a_socket);
-   
+
+   GLZ_ENUM(send_status, ok, closed, permission_denied, try_again, would_block, already_in_progress,
+            bad_file_descriptor, connection_reset, no_peer_address, memory_fault, interrupted, is_connection,
+            message_size, output_queue_full, no_memory, not_connected, not_a_socket, operationg_not_supported,
+            pipe_closed);
+
    /*
+    // recv_status
     ok = 0,
     /// The peer closed the socket.
     closed = -1,
@@ -58,5 +66,28 @@ namespace glz
     no_memory           = ENOMEM,
     not_connected       = ENOTCONN,
     not_a_socket        = ENOTSOCK,
+    */
+
+   /*
+    // send_status
+    ok                       = 0,
+        closed                   = -1,
+        permission_denied        = EACCES,
+        try_again                = EAGAIN,
+        would_block              = EWOULDBLOCK,
+        already_in_progress      = EALREADY,
+        bad_file_descriptor      = EBADF,
+        connection_reset         = ECONNRESET,
+        no_peer_address          = EDESTADDRREQ,
+        memory_fault             = EFAULT,
+        interrupted              = EINTR,
+        is_connection            = EISCONN,
+        message_size             = EMSGSIZE,
+        output_queue_full        = ENOBUFS,
+        no_memory                = ENOMEM,
+        not_connected            = ENOTCONN,
+        not_a_socket             = ENOTSOCK,
+        operationg_not_supported = EOPNOTSUPP,
+        pipe_closed              = EPIPE,
     */
 }

@@ -44,4 +44,20 @@ namespace glz
                                                   t.poll(fd, op, timeout)
                                                } -> std::same_as<glz::task<poll_status>>;
                                             };*/
+   
+   template <class T>
+   concept const_buffer = requires(const T t)
+   {
+       { t.empty() } -> std::same_as<bool>;
+       { t.data() } -> std::same_as<const char*>;
+       { t.size() } -> std::same_as<size_t>;
+   };
+
+   template <class T>
+   concept mutable_buffer = requires(T t)
+   {
+       { t.empty() } -> std::same_as<bool>;
+       { t.data() } -> std::same_as<char*>;
+       { t.size() } -> std::same_as<size_t>;
+   };
 }
