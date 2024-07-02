@@ -27,7 +27,7 @@ static std::atomic_int working_clients{n_clients};
 
 glz::windows_socket_startup_t<> wsa; // wsa_startup (ignored on macOS and Linux)
 
-glz::server server{service_0_port};
+glz::server server{.port = service_0_port};
 
 suite make_server = [] {
    std::cout << std::format("Server started on port: {}\n", server.port);

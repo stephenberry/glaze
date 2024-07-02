@@ -448,8 +448,8 @@ suite io_scheduler_test = [] {
       std::span<const char> remaining = response;
       do {
          // Optimistically send() prior to polling.
-         auto [ip_status, r] = client.send(remaining);
-         if (ip_status != glz::ip_status::ok) {
+         auto [ips, r] = client.send(remaining);
+         if (ips != glz::ip_status::ok) {
             co_return; // Handle error, see net::ip_status for detailed error states.
          }
 
@@ -460,8 +460,8 @@ suite io_scheduler_test = [] {
          // Re-assign remaining bytes for the next loop iteration and poll for the socket to be
          // able to be written to again.
          remaining = r;
-         auto pstatus = co_await client.poll(glz::poll_op::write);
-         if (pstatus != glz::poll_status::event) {
+         poll_status = co_await client.poll(glz::poll_op::write);
+         if (poll_status != glz::poll_status::event) {
             co_return; // Handle error.
          }
       } while (true);

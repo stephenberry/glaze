@@ -45,9 +45,9 @@ namespace glz
          };
 
          sockaddr_in server_addr;
-         server_addr.sin_family = int(ipv);
+         server_addr.sin_family = glz::net::asize_t(ipv);
          server_addr.sin_port = htons(port);
-         ::inet_pton(int(ipv), address.c_str(), &server_addr.sin_addr);
+         ::inet_pton(glz::net::asize_t(ipv), address.c_str(), &server_addr.sin_addr);
 
          auto result = ::connect(socket.socket_fd, (sockaddr*)&server_addr, sizeof(server_addr));
          if (result == 0) {
@@ -59,9 +59,16 @@ namespace glz
             if (errno == EAGAIN || errno == EINPROGRESS) {
                auto pstatus = co_await scheduler->poll(socket.socket_fd, poll_op::write, timeout);
                if (pstatus == poll_status::event) {
-                  int result{0};
+                  result = 0;
                   socklen_t result_length{sizeof(result)};
-                  if (getsockopt(socket.socket_fd, SOL_SOCKET, SO_ERROR, &result, &result_length) < 0) {
+
+                  #if defined(_WIN32)
+                  if (getsockopt(socket.socket_fd, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&result),
+                     #else
+                  if (getsockopt(socket.socket_fd, SOL_SOCKET, SO_ERROR, &result,
+                  #endif
+
+                                 &result_length) < 0) {
                      std::cerr << "connect failed to getsockopt after write poll event\n";
                   }
 
@@ -106,7 +113,7 @@ namespace glz
             return {ip_status::ok, std::span<char>{}};
          }
 
-         auto bytes_recv = ::recv(socket.socket_fd, buffer.data(), buffer.size(), 0);
+         auto bytes_recv = ::recv(socket.socket_fd, buffer.data(), glz::net::ssize_t(buffer.size()), 0);
          if (bytes_recv > 0) {
             // Ok, we've recieved some data.
             return {ip_status::ok, std::span<char>{buffer.data(), size_t(bytes_recv)}};
@@ -138,7 +145,7 @@ namespace glz
             return {ip_status::ok, std::string_view{buffer.data(), buffer.size()}};
          }
 
-         auto bytes_sent = ::send(socket.socket_fd, buffer.data(), buffer.size(), 0);
+         auto bytes_sent = ::send(socket.socket_fd, buffer.data(), glz::net::ssize_t(buffer.size()), 0);
          if (bytes_sent >= 0) {
             // Some or all of the bytes were written.
             return {ip_status::ok, std::string_view{buffer.data() + bytes_sent, buffer.size() - bytes_sent}};

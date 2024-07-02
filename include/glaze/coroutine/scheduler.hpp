@@ -318,6 +318,7 @@ namespace glz
       [[nodiscard]] task<poll_status> poll(const socket& sock, poll_op op,
                               std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
       {
+         static_assert(false, "Fix recursive poll call");
          return poll(sock.socket_fd, op, timeout);
       }
 

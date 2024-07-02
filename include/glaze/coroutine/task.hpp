@@ -5,18 +5,19 @@
 
 #pragma once
 
+#include <coroutine>
+#include <exception>
+#include <stdexcept>
+#include <utility>
+#include <variant>
+
 #ifndef GLZ_THROW_OR_ABORT
 #if __cpp_exceptions
 #define GLZ_THROW_OR_ABORT(EXC) (throw(EXC))
-#include <exception>
 #else
 #define GLZ_THROW_OR_ABORT(EXC) (std::abort())
 #endif
 #endif
-
-#include <coroutine>
-#include <utility>
-#include <variant>
 
 namespace glz
 {
