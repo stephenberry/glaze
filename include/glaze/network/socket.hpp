@@ -117,30 +117,60 @@ namespace glz
       return {};
    }
    
+   GLZ_ENUM(socket_event, bytes_read, wait, client_disconnected, receive_failed);
+   
+   struct socket_state
+   {
+      size_t bytes_read{};
+      socket_event event{};
+   };
+   
+   [[nodiscard]] inline socket_state async_recv(socket& sckt, char* buffer, size_t size)
+   {
+      auto bytes = ::recv(sckt.socket_fd, buffer, net::ssize_t(size), 0);
+      if (bytes == -1) {
+         if (GLZ_SOCKET_ERROR_CODE == e_would_block || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
+            return {0, socket_event::wait};
+         }
+         else {
+            return {0, socket_event::receive_failed};
+         }
+      }
+      else if (bytes == 0) {
+         return {0, socket_event::client_disconnected};
+      }
+      return {size_t(bytes), socket_event::bytes_read};
+   }
+   
    template <ip_header Header>
    [[nodiscard]] std::error_code raw_receive(socket& sckt, Header& header, std::string& buffer)
    {
       // first receive the header
       size_t total_bytes{};
       while (total_bytes < sizeof(Header)) {
-         auto bytes = ::recv(sckt.socket_fd, reinterpret_cast<char*>(&header) + total_bytes,
-                                glz::net::ssize_t(sizeof(Header) - total_bytes), 0);
-         if (bytes == -1) {
-            if (GLZ_SOCKET_ERROR_CODE == e_would_block || GLZ_SOCKET_ERROR_CODE == EAGAIN) {
+         auto[bytes, event] = async_recv(sckt, reinterpret_cast<char*>(&header) + total_bytes, sizeof(Header) - total_bytes);
+         using enum socket_event;
+         switch (event)
+         {
+            case bytes_read: {
+               total_bytes += bytes;
+               break;
+            }
+            case wait: {
                std::this_thread::sleep_for(std::chrono::milliseconds(1));
                continue;
             }
-            else {
-               // error
+            case client_disconnected: {
+               return {int(ip_error::client_disconnected), ip_error_category::instance()};
+            }
+            case receive_failed: {
+               [[fallthrough]];
+            }
+            default: {
                buffer.clear();
                return {int(ip_error::receive_failed), ip_error_category::instance()};
             }
          }
-         else if (bytes == 0) {
-            return {int(ip_error::client_disconnected), ip_error_category::instance()};
-         }
-
-         total_bytes += bytes;
       }
 
       size_t size{};
