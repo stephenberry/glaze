@@ -284,15 +284,62 @@ namespace glz
 
 #if defined(__linux__)
          net::poll_event_t e{};
-         e.events = uint32_t(op) | EPOLLONESHOT | EPOLLRDHUP;
+         
+         switch (op)
+         {
+            case poll_op::read: {
+               e.events = EPOLLIN | EPOLLONESHOT | EPOLLRDHUP;
+               break;
+            }
+            case poll_op::write: {
+               e.events = EPOLLOUT | EPOLLONESHOT | EPOLLRDHUP;
+               break;
+            }
+            case poll_op::read_write: {
+               e.events = EPOLLIN | EPOLLOUT | EPOLLONESHOT | EPOLLRDHUP;
+               break;
+            }
+            default {
+               break;
+            }
+         }
+         
          e.data.ptr = &poll_info;
          if (epoll_ctl(event_fd, EPOLL_CTL_ADD, fd, &e) == -1) {
             std::cerr << "epoll ctl error on fd " << fd << "\n";
          }
 #elif defined(__APPLE__)
-         net::poll_event_t e{.filter = EVFILT_READ, .flags = EV_ADD | EV_EOF, .udata = &poll_info};
-         if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
-            std::cerr << "kqueue failed to register for file_descriptor: " << fd << "\n";
+         if (op == poll_op::read_write) {
+            struct kevent events[2];
+
+            EV_SET(&events[0], fd, EVFILT_READ, EV_ADD | EV_EOF, 0, 0, &poll_info);
+            EV_SET(&events[1], fd, EVFILT_WRITE, EV_ADD | EV_EOF, 0, 0, &poll_info);
+
+            if (kevent(event_fd, events, 2, nullptr, 0, nullptr) == -1) {
+                std::cerr << "kqueue failed to register read/write for file_descriptor: " << fd << "\n";
+            }
+         }
+         else {
+            net::poll_event_t e{.flags = EV_ADD | EV_EOF, .udata = &poll_info};
+            
+            switch (op)
+            {
+               case poll_op::read: {
+                  e.filter = EVFILT_READ;
+                  break;
+               }
+               case poll_op::write: {
+                  e.filter = EVFILT_WRITE;
+                  break;
+               }
+               default: {
+                  break;
+               }
+            }
+            
+            if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
+               std::cerr << "kqueue failed to register for file_descriptor: " << fd << "\n";
+            }
          }
 #elif defined(_WIN32)
 
