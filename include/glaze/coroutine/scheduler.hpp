@@ -501,6 +501,7 @@ namespace glz
          m_io_processing.exchange(true, std::memory_order::release);
          // Execute tasks until stopped or there are no more tasks to complete.
          while (!m_shutdown_requested.load(std::memory_order::acquire) || size() > 0) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1)); // prevent pegging 100%
             process_events_execute(m_default_timeout);
          }
          m_io_processing.exchange(false, std::memory_order::release);

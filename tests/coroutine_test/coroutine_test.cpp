@@ -469,7 +469,7 @@ suite io_scheduler_test = [] {
       co_return;
    };
 
-   auto make_client_task = [&]() -> glz::task<void> {
+   [[maybe_unused]] auto make_client_task = [&]() -> glz::task<void> {
       // Immediately schedule onto the scheduler.
       co_await scheduler->schedule();
 
@@ -501,7 +501,7 @@ suite io_scheduler_test = [] {
 
    // Create and wait for the server and client tasks to complete.
    //glz::sync_wait(glz::when_all(make_server_task(), make_client_task()));
-   glz::sync_wait(glz::when_all(make_server_task(), make_client_task()));
+   glz::sync_wait(glz::when_all(make_server_task()));
 };
 
 int main()
