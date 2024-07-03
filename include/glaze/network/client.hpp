@@ -54,7 +54,7 @@ namespace glz
             co_return return_value(ip_status::connected);
          }
          else if (result == -1) {
-            // If the connect is happening in the background poll for write on the socket to trigger
+            // If the connect is happening in the background, poll for write on the socket to trigger
             // when the connection is established.
             if (errno == EAGAIN || errno == EINPROGRESS) {
                auto pstatus = co_await scheduler->poll(socket.socket_fd, poll_op::write, timeout);
