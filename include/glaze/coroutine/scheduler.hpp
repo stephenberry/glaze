@@ -779,6 +779,8 @@ namespace glz
                }
             }
          }
+#else
+         (void)poll_info;
 #endif
       }
 
