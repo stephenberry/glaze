@@ -728,6 +728,59 @@ namespace glz
       static constexpr size_t max_events = 16;
       std::array<net::poll_event_t, max_events> m_events{};
       std::vector<std::coroutine_handle<>> m_handles_to_resume{};
+      
+      void apple_delete_poll_event(glz::poll_info* poll_info)
+      {
+#if defined(__APPLE__)
+         if (poll_info->op == poll_op::read_write) {
+            struct kevent event;
+            EV_SET(&event, poll_info->m_fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
+            
+            if (kevent(event_fd, &event, 1, nullptr, 0, nullptr) == -1) {
+                // It's often okay if this fails, as the descriptor might not have been registered
+                // But you might want to log it for debugging purposes
+                // std::cerr << "kqueue failed to delete read event for fd: " << poll_info->m_fd << "\n";
+            }
+            
+            EV_SET(&event, poll_info->m_fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
+            
+            if (kevent(event_fd, &event, 1, nullptr, 0, nullptr) == -1) {
+                // Again, failure here is often okay
+                // std::cerr << "kqueue failed to delete write event for fd: " << poll_info->m_fd << "\n";
+            }
+         }
+         else {
+            switch (poll_info->op)
+            {
+               case poll_op::read: {
+                  struct kevent e;
+                  EV_SET(&e, poll_info->m_fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
+                  
+                  if (kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
+                      // It's often okay if this fails, as the descriptor might not have been registered
+                      // But you might want to log it for debugging purposes
+                      // std::cerr << "kqueue failed to delete read event for fd: " << poll_info->m_fd << "\n";
+                  }
+                  
+                  break;
+               }
+               case poll_op::write: {
+                  struct kevent e;
+                  EV_SET(&e, poll_info->m_fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
+                  
+                  if (kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
+                      // Failure here is often okay
+                      // std::cerr << "kqueue failed to delete write event for fd: " << poll_info->m_fd << "\n";
+                  }
+                  break;
+               }
+               default: {
+                  break;
+               }
+            }
+         }
+#endif
+      }
 
       void process_event_execute(glz::poll_info* poll_info, poll_status status)
       {
@@ -744,53 +797,7 @@ namespace glz
             // Given a valid fd always remove it from epoll so the next poll can blindly EPOLL_CTL_ADD.
             if (poll_info->m_fd != net::invalid_event_handle) {
 #if defined(__APPLE__)
-               if (poll_info->op == poll_op::read_write) {
-                  struct kevent event;
-                  EV_SET(&event, poll_info->m_fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
-                  
-                  if (kevent(event_fd, &event, 1, nullptr, 0, nullptr) == -1) {
-                      // It's often okay if this fails, as the descriptor might not have been registered
-                      // But you might want to log it for debugging purposes
-                      // std::cerr << "kqueue failed to delete read event for fd: " << poll_info->m_fd << "\n";
-                  }
-                  
-                  EV_SET(&event, poll_info->m_fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
-                  
-                  if (kevent(event_fd, &event, 1, nullptr, 0, nullptr) == -1) {
-                      // Again, failure here is often okay
-                      // std::cerr << "kqueue failed to delete write event for fd: " << poll_info->m_fd << "\n";
-                  }
-               }
-               else {
-                  switch (poll_info->op)
-                  {
-                     case poll_op::read: {
-                        struct kevent e;
-                        EV_SET(&e, poll_info->m_fd, EVFILT_READ, EV_DELETE, 0, 0, nullptr);
-                        
-                        if (kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
-                            // It's often okay if this fails, as the descriptor might not have been registered
-                            // But you might want to log it for debugging purposes
-                            // std::cerr << "kqueue failed to delete read event for fd: " << poll_info->m_fd << "\n";
-                        }
-                        
-                        break;
-                     }
-                     case poll_op::write: {
-                        struct kevent e;
-                        EV_SET(&e, poll_info->m_fd, EVFILT_WRITE, EV_DELETE, 0, 0, nullptr);
-                        
-                        if (kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
-                            // Failure here is often okay
-                            // std::cerr << "kqueue failed to delete write event for fd: " << poll_info->m_fd << "\n";
-                        }
-                        break;
-                     }
-                     default: {
-                        break;
-                     }
-                  }
-               }
+               apple_delete_poll_event(poll_info);
 #elif defined(__linux__)
                epoll_ctl(event_fd, EPOLL_CTL_DEL, poll_info->m_fd, nullptr);
 #endif
@@ -843,6 +850,7 @@ namespace glz
 #if defined(__linux__)
                   epoll_ctl(event_fd, EPOLL_CTL_DEL, pi->m_fd, nullptr);
 #elif defined(__APPLE__)
+                  apple_delete_poll_event(pi);
 #endif
                }
 
