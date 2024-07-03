@@ -313,15 +313,15 @@ namespace glz
          if (op == poll_op::read_write) {
             struct kevent events[2];
 
-            EV_SET(&events[0], fd, EVFILT_READ, EV_ADD | EV_EOF, 0, 0, &poll_info);
-            EV_SET(&events[1], fd, EVFILT_WRITE, EV_ADD | EV_EOF, 0, 0, &poll_info);
+            EV_SET(&events[0], fd, EVFILT_READ, EV_ADD | EV_EOF | EV_ONESHOT, 0, 0, &poll_info);
+            EV_SET(&events[1], fd, EVFILT_WRITE, EV_ADD | EV_EOF | EV_ONESHOT, 0, 0, &poll_info);
 
             if (kevent(event_fd, events, 2, nullptr, 0, nullptr) == -1) {
                 std::cerr << "kqueue failed to register read/write for file_descriptor: " << fd << "\n";
             }
          }
          else {
-            net::poll_event_t e{.flags = EV_ADD | EV_EOF, .udata = &poll_info};
+            net::poll_event_t e{.flags = EV_ADD | EV_EOF | EV_ONESHOT, .udata = &poll_info};
             
             switch (op)
             {
