@@ -8510,6 +8510,11 @@ suite msvc_ice_tests = [] {
    };
 };
 
+suite error_codes_test = [] {
+   expect(glz::format_error(glz::error_ctx{glz::error_code::none}) == "none");
+   expect(glz::format_error(glz::error_ctx{glz::error_code::expected_brace}) == "expected_brace");
+};
+
 int main()
 {
    trace.end("json_test");
