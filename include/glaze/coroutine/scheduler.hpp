@@ -290,8 +290,7 @@ namespace glz
             std::cerr << "epoll ctl error on fd " << fd << "\n";
          }
 #elif defined(__APPLE__)
-         net::poll_event_t e{
-            .ident = uintptr_t(fd), .filter = EVFILT_READ, .flags = EV_ADD | EV_EOF, .udata = &poll_info};
+         net::poll_event_t e{.filter = EVFILT_READ, .flags = EV_ADD | EV_EOF, .udata = &poll_info};
          if (::kevent(event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
             std::cerr << "kqueue failed to register for file_descriptor: " << fd << "\n";
          }
