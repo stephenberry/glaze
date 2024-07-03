@@ -231,7 +231,7 @@ namespace glz
        * FIFO task queue.  This function is useful to yielding long processing tasks to let other tasks
        * get processing time.
        */
-      [[nodiscard]] auto yield() -> operation { return schedule(); }
+      [[nodiscard]] operation yield() { return schedule(); }
 
       /**
        * Shutsdown the thread pool.  This will finish any tasks scheduled prior to calling this
@@ -260,17 +260,17 @@ namespace glz
       /**
        * @return The number of tasks waiting in the task queue + the executing tasks.
        */
-      auto size() const noexcept -> size_t { return m_size.load(std::memory_order::acquire); }
+      size_t size() const noexcept { return m_size.load(std::memory_order::acquire); }
 
       /**
        * @return True if the task queue is empty and zero tasks are currently executing.
        */
-      auto empty() const noexcept -> bool { return size() == 0; }
+      bool empty() const noexcept { return size() == 0; }
 
       /**
        * @return The number of tasks waiting in the task queue to be executed.
        */
-      auto queue_size() const noexcept -> size_t
+      size_t queue_size() const noexcept
       {
          std::atomic_thread_fence(std::memory_order::acquire);
          return m_queue.size();
@@ -279,7 +279,7 @@ namespace glz
       /**
        * @return True if the task queue is currently empty.
        */
-      auto queue_empty() const noexcept -> bool { return queue_size() == 0; }
+      bool queue_empty() const noexcept { return queue_size() == 0; }
 
      private:
       /// The configuration options.
