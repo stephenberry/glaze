@@ -51,7 +51,7 @@ namespace glz
 
       socket() = default;
 
-      socket(socket_t fd) : socket_fd(fd) { set_non_blocking(); }
+      explicit socket(socket_t fd) : socket_fd(fd) { set_non_blocking(); }
 
       void close()
       {
