@@ -535,7 +535,7 @@ namespace glz
 #endif
 
          if (opts.thread_strategy == glz::thread_strategy::spawn) {
-            m_io_thread = std::thread([this]() { process_events_dedicated_thread(); });
+            m_io_thread = std::thread([this] { process_events_dedicated_thread(); });
          }
          // else manual mode, the user must call process_events.
       }
