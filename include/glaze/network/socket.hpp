@@ -137,6 +137,13 @@ namespace glz
       return {};
    }
    
+   [[nodiscard]] inline std::shared_ptr<socket> make_socket()
+   {
+      auto sock = std::make_shared<socket>();
+      sock->socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+      return sock;
+   }
+   
    [[nodiscard]] inline std::shared_ptr<socket> make_accept_socket(const std::string& address, int port)
    {
       auto sock = std::make_shared<socket>();

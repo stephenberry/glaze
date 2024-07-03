@@ -413,7 +413,7 @@ suite server_client_test = [] {
       auto client = server.accept();
 
       // Verify the incoming connection was accepted correctly.
-      if (!client.socket.valid()) {
+      if (not client.socket->valid()) {
          co_return; // Handle error.
       }
 

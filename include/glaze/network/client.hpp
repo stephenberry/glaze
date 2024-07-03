@@ -20,7 +20,7 @@ namespace glz
       std::string address{"127.0.0.1"};
       uint16_t port{8080};
       ip_version ipv{};
-      glz::socket socket{};
+      std::shared_ptr<glz::socket> socket = make_socket();
       /// Cache the status of the connect in the event the user calls connect() again.
       glz::ip_status connect_status{};
 
@@ -49,11 +49,11 @@ namespace glz
          server_addr.sin_port = htons(port);
          ::inet_pton(glz::net::asize_t(ipv), address.c_str(), &server_addr.sin_addr);
          
-         if (socket.socket_fd == net::invalid_socket) {
+         if (socket->socket_fd == net::invalid_socket) {
             co_return return_value(ip_status::invalid_socket);
          }
 
-         auto result = ::connect(socket.socket_fd, (sockaddr*)&server_addr, sizeof(server_addr));
+         auto result = ::connect(socket->socket_fd, (sockaddr*)&server_addr, sizeof(server_addr));
          if (result == 0) {
             co_return return_value(ip_status::connected);
          }
@@ -61,7 +61,7 @@ namespace glz
             // If the connect is happening in the background, poll for write on the socket to trigger
             // when the connection is established.
             if (errno == EAGAIN || errno == EINPROGRESS) {
-               auto pstatus = co_await scheduler->poll(socket.socket_fd, poll_op::write, timeout);
+               auto pstatus = co_await scheduler->poll(socket->socket_fd, poll_op::write, timeout);
                if (pstatus == poll_status::event) {
                   result = 0;
                   socklen_t result_length{sizeof(result)};
@@ -69,7 +69,7 @@ namespace glz
                   #if defined(_WIN32)
                   if (getsockopt(socket.socket_fd, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&result),
                      #else
-                  if (getsockopt(socket.socket_fd, SOL_SOCKET, SO_ERROR, &result,
+                  if (getsockopt(socket->socket_fd, SOL_SOCKET, SO_ERROR, &result,
                   #endif
 
                                  &result_length) < 0) {
@@ -100,7 +100,7 @@ namespace glz
        */
       task<poll_status> poll(glz::poll_op op, std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
       {
-         return scheduler->poll(socket.socket_fd, op, timeout);
+         return scheduler->poll(socket->socket_fd, op, timeout);
       }
 
       /**
@@ -118,7 +118,7 @@ namespace glz
             return {ip_status::ok, std::span<char>{}};
          }
 
-         auto bytes_recv = ::recv(socket.socket_fd, buffer.data(), glz::net::ssize_t(buffer.size()), 0);
+         auto bytes_recv = ::recv(socket->socket_fd, buffer.data(), glz::net::ssize_t(buffer.size()), 0);
          if (bytes_recv > 0) {
             // Ok, we've recieved some data.
             return {ip_status::ok, std::span<char>{buffer.data(), size_t(bytes_recv)}};
@@ -150,7 +150,7 @@ namespace glz
             return {ip_status::ok, std::string_view{buffer.data(), buffer.size()}};
          }
 
-         auto bytes_sent = ::send(socket.socket_fd, buffer.data(), glz::net::ssize_t(buffer.size()), 0);
+         auto bytes_sent = ::send(socket->socket_fd, buffer.data(), glz::net::ssize_t(buffer.size()), 0);
          if (bytes_sent >= 0) {
             // Some or all of the bytes were written.
             return {ip_status::ok, std::string_view{buffer.data() + bytes_sent, buffer.size() - bytes_sent}};
