@@ -72,5 +72,8 @@ namespace glz
       /// Did the timeout and event trigger at the same time on the same epoll_wait call?
       /// Once this is set to true all future events on this poll info are null and void.
       bool m_processed{false};
+      
+      /// The operation for deleting on Mac
+      glz::poll_op op{};
    };
 }
