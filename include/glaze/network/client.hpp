@@ -20,7 +20,7 @@ namespace glz
       std::string address{"127.0.0.1"};
       uint16_t port{8080};
       ip_version ipv{};
-      std::shared_ptr<glz::socket> socket = make_aysync_socket();
+      std::shared_ptr<glz::socket> socket = make_async_socket();
       /// Cache the status of the connect in the event the user calls connect() again.
       glz::ip_status connect_status{};
 
