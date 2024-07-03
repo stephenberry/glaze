@@ -44,22 +44,31 @@ namespace glz
             return s;
          };
 
-         sockaddr_in server_addr;
-         server_addr.sin_family = glz::net::asize_t(ipv);
-         server_addr.sin_port = htons(port);
-         ::inet_pton(glz::net::asize_t(ipv), address.c_str(), &server_addr.sin_addr);
-         
          if (socket->socket_fd == net::invalid_socket) {
             co_return return_value(ip_status::invalid_socket);
          }
 
+         sockaddr_in server_addr{};
+         server_addr.sin_family = AF_INET;  // Use AF_INET for IPv4
+         server_addr.sin_port = htons(port);
+
+         if (::inet_pton(AF_INET, address.c_str(), &server_addr.sin_addr) <= 0) {
+            std::cerr << "Invalid address/ Address not supported: " << inet_ntoa(server_addr.sin_addr) << ":" << ntohs(server_addr.sin_port) << '\n';
+            co_return return_value(ip_status::invalid_ip_address);
+         }
+         
+         std::cout << "Attempting client connection to: " << inet_ntoa(server_addr.sin_addr) << ":" << ntohs(server_addr.sin_port) << '\n';
          auto result = ::connect(socket->socket_fd, (sockaddr*)&server_addr, sizeof(server_addr));
          if (result == 0) {
+            std::cout << "Client connected to: " << inet_ntoa(server_addr.sin_addr) << ":" << ntohs(server_addr.sin_port) << '\n';
             co_return return_value(ip_status::connected);
          }
          else if (result == -1) {
+            //
             // If the connect is happening in the background, poll for write on the socket to trigger
             // when the connection is established.
+            //
+            std::cout << "Connection failed, polling for connection: " << inet_ntoa(server_addr.sin_addr) << ":" << ntohs(server_addr.sin_port) << '\n';
             if (errno == EAGAIN || errno == EINPROGRESS) {
                auto pstatus = co_await scheduler->poll(socket->socket_fd, poll_op::write, timeout);
                if (pstatus == poll_status::event) {
@@ -158,7 +167,7 @@ namespace glz
         std::cerr << err;
          return {ip_status::invalid_socket, err};
       }
-
+      
          auto bytes_sent = ::send(socket->socket_fd, buffer.data(), glz::net::ssize_t(buffer.size()), 0);
          if (bytes_sent >= 0) {
             // Some or all of the bytes were written.

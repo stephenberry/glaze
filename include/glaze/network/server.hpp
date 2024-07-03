@@ -37,17 +37,40 @@ namespace glz
        */
       client accept()
       {
-         sockaddr_in client{};
+         sockaddr_in client_addr{};
+         client_addr.sin_family = AF_INET; // Use AF_INET for IPv4
+         client_addr.sin_port = htons(port);
+
+         if (::inet_pton(AF_INET, address.c_str(), &client_addr.sin_addr) <= 0) {
+            std::cerr << "Invalid address/ Address not supported: " << inet_ntoa(client_addr.sin_addr) << ":"
+                      << ntohs(client_addr.sin_port) << '\n';
+            return {};
+         }
+
+         std::ostringstream addr;
+         addr << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port) << '\n';
+         std::cout << "Accepting incoming client connection to: " << addr.str();
+
          constexpr int len = sizeof(struct sockaddr_in);
-         socket sock{::accept(accept_socket->socket_fd, (struct sockaddr*)(&client),
-                           const_cast<socklen_t*>((const socklen_t*)(&len)))};
-         
-         std::string_view ip_addr_view{
-            (char*)(&client.sin_addr.s_addr),
-            sizeof(client.sin_addr.s_addr),
-         };
-         
-         return {scheduler, binary_to_ip_string(ip_addr_view).value(), ntohs(client.sin_port), ip_version(client.sin_family)};
+
+         auto new_client_id = ::accept(accept_socket->socket_fd, (struct sockaddr*)(&client_addr),
+                                       const_cast<socklen_t*>((const socklen_t*)(&len)));
+
+         if (new_client_id < 0) {
+            std::cerr << "Client rejected from " << addr.str();
+            //
+            // TODO: Handle Error
+            //
+            return {};
+         }
+         socket sock{new_client_id};
+
+         std::cout << "Client Id, " <<  new_client_id << ", " << "accepted on " << addr.str();
+
+         std::string_view ip_addr_view{addr.str()};
+
+         return {scheduler, binary_to_ip_string(ip_addr_view).value(), ntohs(client_addr.sin_port),
+                 ip_version(client_addr.sin_family)};
       }
    };
 }
