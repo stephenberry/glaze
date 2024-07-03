@@ -137,10 +137,11 @@ namespace glz
       return {};
    }
    
-   [[nodiscard]] inline std::shared_ptr<socket> make_socket()
+   [[nodiscard]] inline std::shared_ptr<socket> make_aysync_socket()
    {
       auto sock = std::make_shared<socket>();
       sock->socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+      set_non_blocking(*sock);
       return sock;
    }
    
