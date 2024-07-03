@@ -17,7 +17,7 @@ namespace glz
       uint16_t port{8080};
       int32_t backlog{128}; // The kernel backlog of connections to buffer.
       /// The socket for accepting new tcp connections on.
-      socket accept_socket{};
+      std::shared_ptr<socket> accept_socket = make_accept_socket(address, port);
 
       /**
        * Polls for new incoming tcp connections.
@@ -27,7 +27,7 @@ namespace glz
        */
       task<poll_status> poll(std::chrono::milliseconds timeout = std::chrono::milliseconds{0})
       {
-         return scheduler->poll(accept_socket.socket_fd, poll_op::read, timeout);
+         return scheduler->poll(accept_socket->socket_fd, poll_op::read, timeout);
       }
 
       /**
@@ -39,7 +39,7 @@ namespace glz
       {
          sockaddr_in client{};
          constexpr int len = sizeof(struct sockaddr_in);
-         socket s{::accept(accept_socket.socket_fd, (struct sockaddr*)(&client),
+         socket sock{::accept(accept_socket->socket_fd, (struct sockaddr*)(&client),
                            const_cast<socklen_t*>((const socklen_t*)(&len)))};
          
          std::string_view ip_addr_view{

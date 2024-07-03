@@ -34,24 +34,9 @@ namespace glz
 
 namespace glz
 {
-   struct socket
+   struct socket final
    {
       socket_t socket_fd{net::invalid_socket};
-
-      void set_non_blocking()
-      {
-#ifdef _WIN32
-         u_long mode = 1;
-         ioctlsocket(socket_fd, FIONBIO, &mode);
-#else
-         int flags = fcntl(socket_fd, F_GETFL, 0);
-         fcntl(socket_fd, F_SETFL, flags | O_NONBLOCK);
-#endif
-      }
-
-      socket() = default;
-
-      explicit socket(socket_t fd) : socket_fd(fd) { set_non_blocking(); }
 
       void close()
       {
@@ -74,10 +59,23 @@ namespace glz
       }
    };
    
-   [[nodiscard]] inline std::error_code connect(socket& sckt, const std::string& address, const int port)
+   inline void set_non_blocking(socket& sock) noexcept
    {
-      sckt.socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
-      if (sckt.socket_fd == net::invalid_socket) {
+#ifdef _WIN32
+      u_long mode = 1;
+      ioctlsocket(socket_fd, FIONBIO, &mode);
+#else
+      int flags = fcntl(sock.socket_fd, F_GETFL, 0);
+      fcntl(sock.socket_fd, F_SETFL, flags | O_NONBLOCK);
+#endif
+   }
+   
+   [[nodiscard]] inline std::error_code connect(socket& sock, const std::string& address, const int port)
+   {
+      // TODO: Support ipv6
+      sock.socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+      set_non_blocking(sock);
+      if (sock.socket_fd == net::invalid_socket) {
          return {int(ip_error::socket_connect_failed), ip_error_category::instance()};
       }
 
@@ -86,41 +84,69 @@ namespace glz
       server_addr.sin_port = htons(uint16_t(port));
       ::inet_pton(AF_INET, address.c_str(), &server_addr.sin_addr);
 
-      if (::connect(sckt.socket_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+      if (::connect(sock.socket_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
          return {int(ip_error::socket_connect_failed), ip_error_category::instance()};
       }
 
-      sckt.set_non_blocking();
+      set_non_blocking(sock);
 
       return {};
    }
    
-   [[nodiscard]] inline std::error_code bind_and_listen(socket& sckt, int port)
+   [[nodiscard]] inline std::error_code bind_and_listen(socket& sock, const std::string& address, int port)
    {
-      sckt.socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
-      if (sckt.socket_fd == net::invalid_socket) {
+      sock.socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+      set_non_blocking(sock);
+      if (sock.socket_fd == net::invalid_socket) {
          return {int(ip_error::socket_bind_failed), ip_error_category::instance()};
       }
+      
+       int sock_opt{1};
+      if (setsockopt(sock.socket_fd, SOL_SOCKET, SO_REUSEADDR, &sock_opt, sizeof(sock_opt)) < 0)
+      {
+          std::cerr << "setsockopt SO_REUSEADDR: " << get_socket_error_message(errno) << '\n';
+          return {int(ip_error::socket_bind_failed), ip_error_category::instance()};
+      }
+
+      #ifdef SO_REUSEPORT
+      if (setsockopt(sock.socket_fd, SOL_SOCKET, SO_REUSEPORT, &sock_opt, sizeof(sock_opt)) < 0)
+      {
+          std::cerr << "setsockopt SO_REUSEPORT: " << get_socket_error_message(errno) << '\n';
+          // You might want to handle this error differently, as it's not critical
+      }
+      #endif
 
       sockaddr_in server_addr;
       server_addr.sin_family = AF_INET;
-      server_addr.sin_addr.s_addr = INADDR_ANY; // TODO: Make this support a specific address
       server_addr.sin_port = htons(uint16_t(port));
+      ::inet_pton(glz::net::asize_t(AF_INET), address.c_str(), &server_addr.sin_addr);
 
-      if (::bind(sckt.socket_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
+      if (::bind(sock.socket_fd, (sockaddr*)&server_addr, sizeof(server_addr)) == -1) {
          return {int(ip_error::socket_bind_failed), ip_error_category::instance()};
       }
 
-      if (::listen(sckt.socket_fd, SOMAXCONN) == -1) {
+      if (::listen(sock.socket_fd, SOMAXCONN) == -1) {
          return {int(ip_error::socket_bind_failed), ip_error_category::instance()};
       }
 
-      sckt.set_non_blocking();
-      if (not sckt.no_delay()) {
+      set_non_blocking(sock);
+      if (not sock.no_delay()) {
          return {int(ip_error::socket_bind_failed), ip_error_category::instance()};
       }
 
       return {};
+   }
+   
+   [[nodiscard]] inline std::shared_ptr<socket> make_accept_socket(const std::string& address, int port)
+   {
+      auto sock = std::make_shared<socket>();
+      sock->socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+      
+      if (auto ec = bind_and_listen(*sock, address, port)) {
+         return {};
+      }
+      
+      return sock;
    }
    
    GLZ_ENUM(socket_event, bytes_read, wait, client_disconnected, receive_failed);
