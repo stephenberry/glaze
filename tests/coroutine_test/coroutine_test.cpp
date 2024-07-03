@@ -483,10 +483,14 @@ suite server_client_test = [] {
       // verify the number of bytes sent or received.
 
       // Connect to the server.
-      co_await client.connect();
+      if (auto ip_status = co_await client.connect(std::chrono::milliseconds(100)); ip_status != glz::ip_status::ok) {
+         std::cerr << "ip_status: " << glz::nameof(ip_status) << '\n';
+      }
 
       // Make sure the client socket can be written to.
-      co_await client.poll(glz::poll_op::write);
+      if (auto status = co_await client.poll(glz::poll_op::write); bool(status)) {
+         std::cerr << "poll_status: " << glz::nameof(status) << '\n';
+      }
 
       // Send the request data.
       client.send(std::string_view{"Hello from client."});
