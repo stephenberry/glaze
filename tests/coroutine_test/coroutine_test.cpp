@@ -367,7 +367,9 @@ suite ring_buffer_test = [] {
    glz::sync_wait(glz::when_all(std::move(tasks)));
 };
 
-suite io_scheduler_test = [] {
+suite server_client_test = [] {
+   std::cout << "\n\nServer/Client test:\n";
+   
    auto scheduler = std::make_shared<glz::scheduler>(glz::scheduler::options{
       // The scheduler will spawn a dedicated event processing thread.  This is the default, but
       // it is possible to use 'manual' and call 'process_events()' to drive the scheduler yourself.
@@ -469,7 +471,7 @@ suite io_scheduler_test = [] {
       co_return;
    };
 
-   [[maybe_unused]] auto make_client_task = [&]() -> glz::task<void> {
+   auto make_client_task = [&]() -> glz::task<void> {
       // Immediately schedule onto the scheduler.
       co_await scheduler->schedule();
 
@@ -500,8 +502,7 @@ suite io_scheduler_test = [] {
    };
 
    // Create and wait for the server and client tasks to complete.
-   //glz::sync_wait(glz::when_all(make_server_task(), make_client_task()));
-   glz::sync_wait(glz::when_all(make_server_task()));
+   glz::sync_wait(glz::when_all(make_server_task(), make_client_task()));
 };
 
 int main()

@@ -78,7 +78,7 @@ namespace glz
 
       scheduler() { init(); }
 
-      scheduler(options opts) : m_opts(std::move(opts)) { init(); }
+      scheduler(options opts) : opts(std::move(opts)) { init(); }
 
       scheduler(const scheduler&) = delete;
       scheduler(scheduler&&) = delete;
@@ -124,7 +124,7 @@ namespace glz
       struct schedule_operation
       {
          /// The thread pool that this operation will execute on.
-         scheduler& m_scheduler;
+         glz::scheduler& scheduler;
 
          /**
           * Operations always pause so the executing thread can be switched.
@@ -135,33 +135,33 @@ namespace glz
           * Suspending always returns to the caller (using void return of await_suspend()) and
           * stores the coroutine internally for the executing thread to resume from.
           */
-         auto await_suspend(std::coroutine_handle<> awaiting_coroutine) noexcept -> void
+         void await_suspend(std::coroutine_handle<> awaiting_coroutine) noexcept
          {
-            if (m_scheduler.m_opts.execution_strategy == execution_strategy::process_tasks_inline) {
-               m_scheduler.n_active_tasks.fetch_add(1, std::memory_order::release);
+            if (scheduler.opts.execution_strategy == execution_strategy::process_tasks_inline) {
+               scheduler.n_active_tasks.fetch_add(1, std::memory_order::release);
                {
-                  std::scoped_lock lk{m_scheduler.m_scheduled_tasks_mutex};
-                  m_scheduler.m_scheduled_tasks.emplace_back(awaiting_coroutine);
+                  std::scoped_lock lk{scheduler.m_scheduled_tasks_mutex};
+                  scheduler.m_scheduled_tasks.emplace_back(awaiting_coroutine);
                }
 
                // Trigger the event to wake-up the scheduler if this event isn't currently triggered.
                bool expected{false};
-               if (m_scheduler.m_schedule_fd_triggered.compare_exchange_strong(
+               if (scheduler.m_schedule_fd_triggered.compare_exchange_strong(
                       expected, true, std::memory_order::release, std::memory_order::relaxed)) {
 #if defined(__linux__)
                   eventfd_t value{1};
-                  eventfd_write(m_scheduler.schedule_fd, value);
+                  eventfd_write(scheduler.schedule_fd, value);
 #elif defined(__APPLE__)
                   net::poll_event_t e{
                      .filter = EVFILT_USER, .fflags = NOTE_TRIGGER, .udata = const_cast<void*>(m_schedule_ptr)};
-                  if (::kevent(m_scheduler.event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
+                  if (::kevent(scheduler.event_fd, &e, 1, nullptr, 0, nullptr) == -1) {
                      GLZ_THROW_OR_ABORT(std::runtime_error("Failed to trigger wke up"));
                   }
 #endif
                }
             }
             else {
-               m_scheduler.m_thread_pool->resume(awaiting_coroutine);
+               scheduler.m_thread_pool->resume(awaiting_coroutine);
             }
          }
 
@@ -174,7 +174,7 @@ namespace glz
       /**
        * Schedules the current task onto this scheduler for execution.
        */
-      auto schedule() -> schedule_operation { return schedule_operation{*this}; }
+      schedule_operation schedule() { return {*this}; }
 
       /**
        * Schedules the current task to run after the given amount of time has elapsed.
@@ -334,7 +334,7 @@ namespace glz
             return false;
          }
 
-         if (m_opts.execution_strategy == execution_strategy::process_tasks_inline) {
+         if (opts.execution_strategy == execution_strategy::process_tasks_inline) {
             {
                std::scoped_lock lk{m_scheduled_tasks_mutex};
                m_scheduled_tasks.emplace_back(handle);
@@ -367,7 +367,7 @@ namespace glz
        */
       size_t size() const noexcept
       {
-         if (m_opts.execution_strategy == execution_strategy::process_tasks_inline) {
+         if (opts.execution_strategy == execution_strategy::process_tasks_inline) {
             return n_active_tasks.load(std::memory_order::acquire);
          }
          else {
@@ -415,7 +415,7 @@ namespace glz
 
      private:
       /// The configuration options.
-      options m_opts{};
+      options opts{};
 
       /// The event loop epoll file descriptor.
       net::event_handle_t event_fd{net::create_event_poll()};
@@ -456,8 +456,8 @@ namespace glz
 
       void init()
       {
-         if (m_opts.execution_strategy == execution_strategy::process_tasks_on_thread_pool) {
-            m_thread_pool = std::make_unique<thread_pool>(std::move(m_opts.pool));
+         if (opts.execution_strategy == execution_strategy::process_tasks_on_thread_pool) {
+            m_thread_pool = std::make_unique<thread_pool>(std::move(opts.pool));
          }
 
          [[maybe_unused]] net::poll_event_t e{};
@@ -486,7 +486,7 @@ namespace glz
          ::kevent(event_fd, &e_timer, 1, nullptr, 0, nullptr);
 #endif
 
-         if (m_opts.thread_strategy == glz::thread_strategy::spawn) {
+         if (opts.thread_strategy == glz::thread_strategy::spawn) {
             m_io_thread = std::thread([this]() { process_events_dedicated_thread(); });
          }
          // else manual mode, the user must call process_events.
@@ -494,8 +494,8 @@ namespace glz
 
       void process_events_dedicated_thread()
       {
-         if (m_opts.on_io_thread_start_functor) {
-            m_opts.on_io_thread_start_functor();
+         if (opts.on_io_thread_start_functor) {
+            opts.on_io_thread_start_functor();
          }
 
          m_io_processing.exchange(true, std::memory_order::release);
@@ -506,8 +506,8 @@ namespace glz
          }
          m_io_processing.exchange(false, std::memory_order::release);
 
-         if (m_opts.on_io_thread_stop_functor) {
-            m_opts.on_io_thread_stop_functor();
+         if (opts.on_io_thread_stop_functor) {
+            opts.on_io_thread_stop_functor();
          }
       }
 
@@ -609,7 +609,7 @@ namespace glz
          // the thread switch required. If max_events == 1 this would be unnecessary.
 
          if (!m_handles_to_resume.empty()) {
-            if (m_opts.execution_strategy == execution_strategy::process_tasks_inline) {
+            if (opts.execution_strategy == execution_strategy::process_tasks_inline) {
                for (auto& handle : m_handles_to_resume) {
                   handle.resume();
                }
