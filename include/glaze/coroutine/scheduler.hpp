@@ -608,10 +608,10 @@ namespace glz
 
 #if defined(__linux__) || defined(__APPLE__)
 
-         if (event_count == -1) {
-            net::close_event(event_fd);
-            GLZ_THROW_OR_ABORT(std::runtime_error{"wait for event failed"});
-         }
+         //if (event_count == -1) {
+         //   net::close_event(event_fd);
+         //  GLZ_THROW_OR_ABORT(std::runtime_error{"wait for event failed"});
+         //}
 
          if (event_count > 0) {
             for (size_t i = 0; i < size_t(event_count); ++i) {

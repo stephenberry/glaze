@@ -95,7 +95,6 @@ namespace glz
    
    [[nodiscard]] inline std::error_code bind_and_listen(socket& sock, const std::string& address, int port)
    {
-      sock.socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
       set_non_blocking(sock);
       if (sock.socket_fd == net::invalid_socket) {
          return {int(ip_error::socket_bind_failed), ip_error_category::instance()};
@@ -129,7 +128,6 @@ namespace glz
          return {int(ip_error::socket_bind_failed), ip_error_category::instance()};
       }
 
-      set_non_blocking(sock);
       if (not sock.no_delay()) {
          return {int(ip_error::socket_bind_failed), ip_error_category::instance()};
       }

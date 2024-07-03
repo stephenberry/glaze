@@ -150,6 +150,15 @@ namespace glz
             return {ip_status::ok, std::string_view{buffer.data(), buffer.size()}};
          }
 
+      int error = 0;
+      socklen_t len = sizeof(error);
+      int result = getsockopt(socket->socket_fd, SOL_SOCKET, SO_ERROR, (char*)&error, &len);
+      if (result == int(ip_status::error)) {
+        auto err =  get_socket_error_message(errno);
+        std::cerr << err;
+         return {ip_status::invalid_socket, err};
+      }
+
          auto bytes_sent = ::send(socket->socket_fd, buffer.data(), glz::net::ssize_t(buffer.size()), 0);
          if (bytes_sent >= 0) {
             // Some or all of the bytes were written.

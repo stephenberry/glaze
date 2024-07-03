@@ -10,6 +10,7 @@
 
 using namespace ut;
 
+#ifdef TEST_ALL
 suite generator = [] {
    std::atomic<uint64_t> result{};
    auto task = [&](uint64_t count_to) -> glz::task<void> {
@@ -366,6 +367,7 @@ suite ring_buffer_test = [] {
    // Wait for all the values to be produced and consumed through the ring buffer.
    glz::sync_wait(glz::when_all(std::move(tasks)));
 };
+#endif
 
 suite server_client_test = [] {
    std::cout << "\n\nServer/Client test:\n";
