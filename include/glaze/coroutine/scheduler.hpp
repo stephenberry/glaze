@@ -73,7 +73,7 @@ namespace glz
 
          /// If inline task processing is enabled then the io worker will resume tasks on its thread
          /// rather than scheduling them to be picked up by the thread pool.
-         const execution_strategy execution_strategy{execution_strategy::process_tasks_on_thread_pool};
+         const glz::scheduler::execution_strategy execution_strategy{glz::scheduler::execution_strategy::process_tasks_on_thread_pool};
       };
 
       scheduler() { init(); }
@@ -300,7 +300,7 @@ namespace glz
                e.events = EPOLLIN | EPOLLOUT | EPOLLONESHOT | EPOLLRDHUP;
                break;
             }
-            default {
+            default: {
                break;
             }
          }

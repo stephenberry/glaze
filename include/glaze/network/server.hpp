@@ -12,7 +12,7 @@ namespace glz
 {
    struct server
    {
-      std::shared_ptr<scheduler> scheduler{};
+      std::shared_ptr<glz::scheduler> scheduler{};
       std::string address{"127.0.0.1"};
       uint16_t port{8080};
       int32_t backlog{128}; // The kernel backlog of connections to buffer.
