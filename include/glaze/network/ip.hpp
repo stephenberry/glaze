@@ -47,7 +47,8 @@ namespace glz
             error, //
             try_again, //
             would_block, //
-            bad_file_descriptor //
+            bad_file_descriptor, //
+            invalid_socket, //
    );
    
    inline ip_status errno_to_ip_status() noexcept

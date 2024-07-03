@@ -48,6 +48,10 @@ namespace glz
          server_addr.sin_family = glz::net::asize_t(ipv);
          server_addr.sin_port = htons(port);
          ::inet_pton(glz::net::asize_t(ipv), address.c_str(), &server_addr.sin_addr);
+         
+         if (socket.socket_fd == net::invalid_socket) {
+            co_return return_value(ip_status::invalid_socket);
+         }
 
          auto result = ::connect(socket.socket_fd, (sockaddr*)&server_addr, sizeof(server_addr));
          if (result == 0) {
@@ -82,6 +86,7 @@ namespace glz
             }
          }
 
+         std::cerr << "connect: " << get_socket_error_message(errno) << '\n';
          co_return return_value(ip_status::error);
       }
 
