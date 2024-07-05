@@ -68,7 +68,9 @@ namespace glz
             // If the connect is happening in the background, poll for write on the socket to trigger
             // when the connection is established.
             //
-            std::cout << "Connection failed, polling for connection: " << inet_ntoa(server_addr.sin_addr) << ":" << ntohs(server_addr.sin_port) << '\n';
+            // TODO: Handle cross-platform...
+            //
+            std::cout << "Connection failed, polling for connection: " << inet_ntoa(server_addr.sin_addr) << ":" << ntohs(server_addr.sin_port) << "\nDetails: " << strerror(errno) << '\n';
             if (errno == EAGAIN || errno == EINPROGRESS) {
                auto pstatus = co_await scheduler->poll(socket->socket_fd, poll_op::write, timeout);
                if (pstatus == poll_status::event) {
