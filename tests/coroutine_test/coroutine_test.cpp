@@ -4,8 +4,8 @@
 #define UT_RUN_TIME_ONLY
 
 #include "glaze/coroutine.hpp"
-#include "glaze/network.hpp"
 
+#include "glaze/network.hpp"
 #include "ut/ut.hpp"
 
 using namespace ut;
@@ -371,7 +371,7 @@ suite ring_buffer_test = [] {
 
 suite server_client_test = [] {
    std::cout << "\n\nServer/Client test:\n";
-   
+
    auto scheduler = std::make_shared<glz::scheduler>(glz::scheduler::options{
       // The scheduler will spawn a dedicated event processing thread.  This is the default, but
       // it is possible to use 'manual' and call 'process_events()' to drive the scheduler yourself.
@@ -386,7 +386,7 @@ suite server_client_test = [] {
       // You can use an execution strategy of `process_tasks_inline` to have the event loop thread
       // directly process the tasks, this might be desirable for small tasks vs a thread pool for large tasks.
       .pool =
-      glz::thread_pool::options{
+         glz::thread_pool::options{
             .thread_count = 1,
             .on_thread_start_functor =
                [](size_t i) { std::cout << "scheduler::thread_pool worker " << i << " starting\n"; },
@@ -423,6 +423,12 @@ suite server_client_test = [] {
       // with a single recv() call.
       poll_status = co_await client.poll(glz::poll_op::read);
       if (poll_status != glz::poll_status::event) {
+         if (glz::poll_status::closed == glz::poll_status::event) {
+            std::cerr << "Error on: co_await client.poll(glz::poll_op::read): client Id, " << client.socket->socket_fd << ", socket closed) Disconnected.\n";
+         }
+         else {
+              std::cerr << "Error on: co_await client.poll(glz::poll_op::read): client Id, " << client.socket->socket_fd << ". Reason: " << glz::nameof(poll_status) << '\n';
+         }
          co_return; // Handle error.
       }
 
