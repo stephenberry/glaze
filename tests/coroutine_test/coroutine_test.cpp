@@ -408,14 +408,14 @@ suite server_client_test = [] {
       // Wait for an incoming connection and accept it.
       auto poll_status = co_await server.poll();
       if (poll_status != glz::poll_status::event) {
+         std::cerr << "Incoming client connection failed!\n" << "Poll Status Detail: " << glz::nameof(poll_status) << '\n';
          co_return; // Handle error, see poll_status for detailed error states.
       }
 
-      // Accept the incoming client connection.
       auto client = server.accept();
 
-      // Verify the incoming connection was accepted correctly.
       if (not client.socket->valid()) {
+         std::cerr << "Incoming client connection failed!\n";
          co_return; // Handle error.
       }
 
@@ -424,10 +424,10 @@ suite server_client_test = [] {
       poll_status = co_await client.poll(glz::poll_op::read);
       if (poll_status != glz::poll_status::event) {
          if (glz::poll_status::closed == glz::poll_status::event) {
-            std::cerr << "Error on: co_await client.poll(glz::poll_op::read): client Id, " << client.socket->socket_fd << ", socket closed) Disconnected.\n";
+            std::cerr << "Error on: co_await client.poll(glz::poll_op::read): client Id, " << client.socket->socket_fd << ", the socket is closed.\n";
          }
          else {
-              std::cerr << "Error on: co_await client.poll(glz::poll_op::read): client Id, " << client.socket->socket_fd << ". Reason: " << glz::nameof(poll_status) << '\n';
+              std::cerr << "Error on: co_await client.poll(glz::poll_op::read): client Id, " << client.socket->socket_fd << ".\nDetails: " << glz::nameof(poll_status) << '\n';
          }
          co_return; // Handle error.
       }
@@ -438,6 +438,7 @@ suite server_client_test = [] {
       std::string request(256, '\0');
       auto [ip_status, recv_bytes] = client.recv(request);
       if (ip_status != glz::ip_status::ok) {
+         std::cerr << "client::recv error:\n" << "Details: " << glz::nameof(poll_status) << '\n';
          co_return; // Handle error, see net::ip_status for detailed error states.
       }
 
@@ -447,6 +448,7 @@ suite server_client_test = [] {
       // Make sure the client socket can be written to.
       poll_status = co_await client.poll(glz::poll_op::write);
       if (poll_status != glz::poll_status::event) {
+           std::cerr << "Error on: co_await client.poll(glz::poll_op::write): client Id" << client.socket->socket_fd << ".\nDetails: " << glz::nameof(poll_status) << '\n';
          co_return; // Handle error.
       }
 
@@ -509,7 +511,7 @@ suite server_client_test = [] {
       auto [ip_status, recv_bytes] = client.recv(response);
       response.resize(recv_bytes.size());
 
-      std::cout << "client: " << response << "\n";
+      std::cout << "client id " << client.socket->socket_fd << ", recieved: " << response << '\n';
       co_return;
    };
 

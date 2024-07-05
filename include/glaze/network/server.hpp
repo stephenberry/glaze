@@ -57,7 +57,7 @@ namespace glz
                                        const_cast<socklen_t*>((const socklen_t*)(&len)));
 
          if (new_client_id < 0) {
-            std::cerr << "Client rejected from " << sockaddr.str();
+            std::cerr << "Unable to accept client on socket address " << sockaddr.str() << '\n';
             //
             // TODO: Handle Error
             //
