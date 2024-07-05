@@ -47,9 +47,9 @@ namespace glz
             return {};
          }
 
-         std::ostringstream addr;
-         addr << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port) << '\n';
-         std::cout << "Accepting incoming client connection to: " << addr.str();
+         std::ostringstream sockaddr;
+         sockaddr << inet_ntoa(client_addr.sin_addr) << ":" << ntohs(client_addr.sin_port) << '\n';
+         std::cout << "Accepting incoming client connection to: " << sockaddr.str();
 
          constexpr int len = sizeof(struct sockaddr_in);
 
@@ -57,7 +57,7 @@ namespace glz
                                        const_cast<socklen_t*>((const socklen_t*)(&len)));
 
          if (new_client_id < 0) {
-            std::cerr << "Client rejected from " << addr.str();
+            std::cerr << "Client rejected from " << sockaddr.str();
             //
             // TODO: Handle Error
             //
@@ -65,12 +65,16 @@ namespace glz
          }
          socket sock{new_client_id};
 
-         std::cout << "Client Id, " <<  new_client_id << ", " << "accepted on " << addr.str();
+         std::cout << "New Client Id, " << new_client_id << ", " << "Accepted On " << sockaddr.str();
 
-         std::string_view ip_addr_view{addr.str()};
+         std::string_view ip_addr_view{sockaddr.str()};
 
-         return {scheduler, binary_to_ip_string(ip_addr_view).value(), ntohs(client_addr.sin_port),
-                 ip_version(client_addr.sin_family)};
+         // clang-format off
+         return { .scheduler = scheduler, 
+                  .address = to_ip_string(ip_addr_view).value(), 
+                  .port = ntohs(client_addr.sin_port),
+                  .ipv = ip_version(client_addr.sin_family)};
+         // clang-format on
       }
    };
 }
