@@ -1180,7 +1180,7 @@ namespace glz
       using V = std::decay_t<T>;
       static constexpr auto value_indices = filter_indices<meta_t<V>, not_object_key_type>();
 
-      static constexpr auto info = [] {
+      /*static constexpr auto info = [] {
          reflection_info info{ //
             [&]<size_t... I>(std::index_sequence<I...>) { //
                return tuplet::tuple{ get<value_indices[I]>(meta_v<T>)... }; //
@@ -1192,15 +1192,26 @@ namespace glz
          }(std::make_index_sequence<value_indices.size()>{});
          
          return info;
+      }();*/
+      
+      static constexpr auto values = [] {
+         return [&]<size_t... I>(std::index_sequence<I...>) { //
+            return tuplet::tuple{ get<value_indices[I]>(meta_v<T>)... }; //
+         }(std::make_index_sequence<value_indices.size()>{}); //
       }();
       
-      static constexpr auto& keys = info.keys;
-      static constexpr auto& values = info.values;
+      static constexpr auto N = tuple_size_v<decltype(values)>;
+      
+      static constexpr auto keys = [] {
+         std::array<sv, N> res{};
+         [&]<size_t... I>(std::index_sequence<I...>) { //
+            ((res[I] = get_key_element<T, value_indices[I]>()), ...);
+         }(std::make_index_sequence<value_indices.size()>{});
+         return res;
+      }();
       
       template <size_t I>
-      using type = detail::member_t<V, decltype(get<I>(info.values))>;
-      
-      static constexpr auto N = info.N;
+      using type = detail::member_t<V, decltype(get<I>(values))>;
    };
    
    template <class T>
