@@ -483,11 +483,11 @@ namespace glz
 
       template <class T>
       inline constexpr auto glaze_names = []() {
-         constexpr auto N = reflection_count<T>;
+         static constexpr auto refl = obj_reflection<T>();
+         constexpr auto N = refl.N;
          std::array<sv, N> names{};
          for_each<N>([&](auto I) {
-            using Element = glaze_tuple_element<I, N, T>;
-            names[I] = key_name<I, T, Element::use_reflection>;
+            names[I] = get<I>(refl.keys);
          });
          return names;
       }();
@@ -558,7 +558,8 @@ namespace glz
                }
             }
 
-            static constexpr auto N = reflection_count<T>;
+            static constexpr auto refl = obj_reflection<T>();
+            static constexpr auto N = refl.N;
 
             static constexpr auto schema_map = make_reflection_schema_map<T>();
 
@@ -570,7 +571,7 @@ namespace glz
 
                auto& def = defs[name_v<val_t>];
 
-               constexpr sv key = key_name<I, T, Element::use_reflection>;
+               constexpr sv key = get<I>(refl.keys);
 
                schema ref_val{};
                if constexpr (schema_map.size()) {

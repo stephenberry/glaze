@@ -1164,14 +1164,13 @@ namespace glz
                }
             }
 
-            using Info = object_type_info<Options, T>;
-
-            static constexpr auto N = Info::N;
+            static constexpr auto refl = obj_reflection<T>;
+            static constexpr auto N = refl.N;
 
             [[maybe_unused]] decltype(auto) t = reflection_tuple<T>(value);
             [[maybe_unused]] bool first = true;
-            static constexpr auto first_is_written = Info::first_will_be_written;
-            static constexpr auto maybe_skipped = Info::maybe_skipped;
+            static constexpr auto first_is_written = object_info<Options, T>::first_will_be_written;
+            static constexpr auto maybe_skipped = object_info<Options, T>::maybe_skipped;
             for_each<N>([&](auto I) {
                constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
 
@@ -1185,12 +1184,12 @@ namespace glz
                      return std::get<I>(t);
                   }
                   else {
-                     return get<member_index>(get<I>(meta_v<std::decay_t<T>>));
+                     return get<I>(refl.values);
                   }
                }();
 
                auto write_key = [&] {
-                  static constexpr sv key = key_name<I, T, use_reflection>;
+                  static constexpr sv key = get<I>(refl.keys);
                   if constexpr (needs_escaping(key)) {
                      // TODO: do compile time escaping
                      write<json>::op<Opts>(key, ctx, b, ix);

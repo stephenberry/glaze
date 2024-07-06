@@ -13,15 +13,15 @@ struct glz::meta<my_struct>
 {
    static constexpr std::string_view name = "my_struct";
    using T = my_struct;
-   static constexpr auto value = glz::detail::Object{ glz::tuplet::tuple{
+   static constexpr auto value = object(
       "i", [](auto&& v) -> auto& { return v.i; }, //
       &T::d, //
       "hello", &T::hello, //
       &T::arr //
-   } };
+   );
 };
 
-static constexpr auto info = glz::make_reflection_info<my_struct>::op();
+static constexpr auto info = glz::obj_reflection<my_struct>;
 
 #include <iostream>
 
@@ -35,4 +35,7 @@ int main() {
    glz::for_each<info.N>([](auto I) {
       std::cout << glz::get<I>(info.keys) << '\n';
    });
+   
+   //my_struct obj{};
+   //std::cout << glz::write_json(obj).value() << '\n';
 }

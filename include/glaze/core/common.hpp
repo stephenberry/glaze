@@ -856,15 +856,10 @@ namespace glz
 
    constexpr auto array(auto&&... args) noexcept { return detail::Array{glz::tuplet::tuple{conv_sv(args)...}}; }
 
-   constexpr auto object(auto&&... args) noexcept
+   template <class... Args>
+   constexpr auto object(Args&&... args) noexcept
    {
-      if constexpr (sizeof...(args) == 0) {
-         return glz::detail::Object{glz::tuplet::tuple{}};
-      }
-      else {
-         using Tuple = std::decay_t<decltype(glz::tuplet::tuple{conv_sv(args)...})>;
-         return glz::detail::Object{group_builder<Tuple>::op(glz::tuplet::tuple{conv_sv(args)...})};
-      }
+      return glz::detail::Object{glz::tuplet::tuple{std::forward<Args>(args)...}};
    }
 
    constexpr auto enumerate(auto&&... args) noexcept
@@ -1091,22 +1086,6 @@ namespace glz::detail
       }();
    };
 
-   template <size_t I, class T, bool use_reflection>
-   constexpr auto key_name = [] {
-      if constexpr (reflectable<T>) {
-         return get<I>(member_names<T>);
-      }
-      else {
-         using V = std::decay_t<T>;
-         if constexpr (use_reflection) {
-            return get_name<get<0>(get<I>(meta_v<V>))>();
-         }
-         else {
-            return get<0>(get<I>(meta_v<V>));
-         }
-      }
-   }();
-
    template <size_t I, class T>
    constexpr auto key_name_v = [] {
       if constexpr (reflectable<T>) {
@@ -1199,21 +1178,87 @@ namespace glz
    struct make_reflection_info
    {
       using V = std::decay_t<T>;
-      static constexpr auto values = filter_indices<meta_t<V>, not_object_key_type>();
+      static constexpr auto value_indices = filter_indices<meta_t<V>, not_object_key_type>();
 
-      static constexpr auto op()
-      {
+      static constexpr auto info = [] {
          reflection_info info{ //
             [&]<size_t... I>(std::index_sequence<I...>) { //
-               return tuplet::tuple{ get<values[I]>(meta_v<T>)... }; //
-            }(std::make_index_sequence<values.size()>{}) //
+               return tuplet::tuple{ get<value_indices[I]>(meta_v<T>)... }; //
+            }(std::make_index_sequence<value_indices.size()>{}) //
          };
          
          [&]<size_t... I>(std::index_sequence<I...>) { //
-            ((info.keys[I] = get_key_element<T, values[I]>()), ...);
-         }(std::make_index_sequence<values.size()>{});
+            ((info.keys[I] = get_key_element<T, value_indices[I]>()), ...);
+         }(std::make_index_sequence<value_indices.size()>{});
          
          return info;
-      }
+      }();
+      
+      static constexpr auto& keys = info.keys;
+      static constexpr auto& values = info.values;
+      
+      template <size_t I>
+      using type = detail::member_t<V, decltype(get<I>(info.values))>;
+      
+      static constexpr auto N = info.N;
+   };
+   
+   template <class T>
+   inline constexpr auto obj_reflection = make_reflection_info<T>{};
+   
+   template <auto Opts, class T>
+   struct object_info
+   {
+      using V = std::decay_t<T>;
+      static constexpr auto info = make_reflection_info<T>();
+      static constexpr auto N = info.N;
+      
+      template <size_t I>
+      using type = detail::member_t<V, decltype(get<I>(info.values))>;
+      
+      // Allows us to remove a branch if the first item will always be written
+      static constexpr bool first_will_be_written = [] {
+         if constexpr (N > 0) {
+            using V = std::remove_cvref_t<type<0>>;
+
+            if constexpr (detail::null_t<V> && Opts.skip_null_members) {
+               return false;
+            }
+
+            if constexpr (is_includer<V> || std::same_as<V, hidden> || std::same_as<V, skip>) {
+               return false;
+            }
+            else {
+               return true;
+            }
+         }
+         else {
+            return false;
+         }
+      }();
+
+      static constexpr bool maybe_skipped = [] {
+         if constexpr (N > 0) {
+            bool found_maybe_skipped{};
+            for_each_short_circuit<N>([&](auto I) {
+               using V = std::remove_cvref_t<type<0>>;
+
+               if constexpr (Opts.skip_null_members && detail::null_t<V>) {
+                  found_maybe_skipped = true;
+                  return true; // early exit
+               }
+
+               if constexpr (is_includer<V> || std::same_as<V, hidden> || std::same_as<V, skip>) {
+                  found_maybe_skipped = true;
+                  return true; // early exit
+               }
+               return false; // continue
+            });
+            return found_maybe_skipped;
+         }
+         else {
+            return false;
+         }
+      }();
    };
 }

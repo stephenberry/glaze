@@ -713,6 +713,8 @@ namespace glz
                dump_compressed_int<count_to_write>(args...);
             }
             constexpr auto Opts = opening_handled_off<Options>();
+            
+            constexpr auto& reflection_info = obj_reflection<T>;
 
             decltype(auto) t = reflection_tuple<T>(value);
             for_each<N>([&](auto I) {
@@ -725,7 +727,7 @@ namespace glz
                   return;
                }
                else {
-                  static constexpr sv key = key_name<I, T, use_reflection>;
+                  static constexpr sv key = get<I>(reflection_info.keys);
                   write<binary>::no_header<Opts>(key, ctx, args...);
 
                   decltype(auto) member = [&]() -> decltype(auto) {
