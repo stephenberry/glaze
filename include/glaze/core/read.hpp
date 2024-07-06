@@ -85,7 +85,9 @@ namespace glz
       }
 
       if constexpr (Opts.force_conformance) {
-         // Trailing whitespace is not allowed
+         // Trailing whitespace is allowed:
+         // https://mailarchive.ietf.org/arch/msg/json/sQ7ujfTyvz6E0XaZFtVMcR8NiNE/
+         // However, we want to validate the rest of the input document
          if (it < end) {
             detail::skip_ws<Opts>(ctx, it, end);
             if (bool(ctx.error)) [[unlikely]] {
