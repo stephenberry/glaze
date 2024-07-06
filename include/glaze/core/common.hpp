@@ -15,7 +15,6 @@
 #include "glaze/core/context.hpp"
 #include "glaze/core/meta.hpp"
 #include "glaze/util/bit_array.hpp"
-#include "glaze/util/comment.hpp"
 #include "glaze/util/expected.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/hash_map.hpp"

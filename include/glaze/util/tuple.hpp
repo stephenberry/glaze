@@ -15,28 +15,6 @@ namespace glz
    template <class T>
    concept is_std_tuple = is_specialization_v<T, std::tuple>;
 
-   inline constexpr auto size_impl(auto&& t) { return glz::tuple_size_v<std::decay_t<decltype(t)>>; }
-
-   template <class T>
-   inline constexpr size_t size_v = glz::tuple_size_v<std::decay_t<T>>;
-
-   namespace detail
-   {
-      template <size_t Offset, class Tuple, std::size_t... Is>
-      auto tuple_split_impl(Tuple&& tuple, std::index_sequence<Is...>)
-      {
-         return std::make_tuple(std::get<Is * 2 + Offset>(tuple)...);
-      }
-   }
-
-   template <class Tuple, std::size_t... Is>
-   auto tuple_split(Tuple&& tuple)
-   {
-      static constexpr auto N = glz::tuple_size_v<Tuple>;
-      static constexpr auto is = std::make_index_sequence<N / 2>{};
-      return std::make_pair(detail::tuple_split_impl<0>(tuple, is), detail::tuple_split_impl<1>(tuple, is));
-   }
-
    // group builder code
    template <size_t N>
    constexpr auto shrink_index_array(auto&& arr)
@@ -55,7 +33,7 @@ namespace glz
    };
 
    template <class Tuple>
-   constexpr auto filter()
+   consteval auto filter()
    {
       constexpr auto N = glz::tuple_size_v<Tuple>;
       std::array<uint64_t, N> indices{};
@@ -74,8 +52,7 @@ namespace glz
                indices[i++] = I;
             }
          }
-         else if constexpr (!(std::convertible_to<V, std::string_view> || is_schema_class<V> ||
-                              std::same_as<V, comment>)) {
+         else if constexpr (not std::convertible_to<V, std::string_view>) {
             indices[i++] = I - 1;
          }
       });
@@ -116,12 +93,8 @@ namespace glz
       auto get_elem = [&](auto I) {
          constexpr auto Index = Start + I;
          using type = decltype(glz::get<Index>(t));
-         using T = std::decay_t<type>;
          if constexpr (std::convertible_to<type, std::string_view>) {
             return std::string_view(glz::get<Index>(t));
-         }
-         else if constexpr (std::same_as<T, comment>) {
-            return glz::get<Index>(t).value;
          }
          else {
             return glz::get<Index>(t);
