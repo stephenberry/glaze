@@ -1138,3 +1138,82 @@ namespace glz::detail
       return fields;
    }
 }
+
+namespace glz
+{
+   // Get indices of elements satisfying a predicate
+   template <class Tuple, template <class> class Predicate>
+   consteval auto filter_indices() {
+      return []<size_t... Is>(std::index_sequence<Is...>) constexpr {
+         constexpr bool matches[] = {
+            Predicate<glz::tuple_element_t<Is, Tuple>>::value...};
+         constexpr size_t count = (matches[Is] + ...);
+         
+         std::array<size_t, count> indices{};
+         size_t index = 0;
+         ((void)((matches[Is] ? (indices[index++] = Is, true) : false)), ...);
+         return indices;
+      }(std::make_index_sequence<glz::tuple_size_v<Tuple>>{});
+   }
+   
+   template <class T>
+   concept is_object_key_type = std::convertible_to<T, std::string_view>;
+   
+   template <class T>
+   using object_key_type = std::bool_constant<is_object_key_type<T>>;
+   
+   template <class T>
+   using not_object_key_type = std::bool_constant<not is_object_key_type<T>>;
+   
+   template <class Tuple>
+   struct reflection_info
+   {
+      static constexpr auto N = tuple_size_v<Tuple>;
+      Tuple values{};
+      std::array<sv, N> keys{};
+   };
+   
+   template <class Tuple>
+   reflection_info(Tuple&&) -> reflection_info<Tuple>;
+   
+   template <class T, size_t I>
+   consteval sv get_key_element() {
+      using V = std::decay_t<T>;
+      if constexpr (I == 0) {
+         if constexpr (is_object_key_type<decltype(get<0>(meta_v<V>))>) {
+            return get<0>(meta_v<V>);
+         }
+         else {
+            return get_name<get<0>(meta_v<V>)>();
+         }
+      }
+      else if constexpr (is_object_key_type<decltype(get<I - 1>(meta_v<V>))>) {
+         return get<I - 1>(meta_v<V>);
+      }
+      else {
+         return get_name<get<I>(meta_v<V>)>();
+      }
+   };
+   
+   template <class T>
+   struct make_reflection_info
+   {
+      using V = std::decay_t<T>;
+      static constexpr auto values = filter_indices<meta_t<V>, not_object_key_type>();
+
+      static constexpr auto op()
+      {
+         reflection_info info{ //
+            [&]<size_t... I>(std::index_sequence<I...>) { //
+               return tuplet::tuple{ get<values[I]>(meta_v<T>)... }; //
+            }(std::make_index_sequence<values.size()>{}) //
+         };
+         
+         [&]<size_t... I>(std::index_sequence<I...>) { //
+            ((info.keys[I] = get_key_element<T, values[I]>()), ...);
+         }(std::make_index_sequence<values.size()>{});
+         
+         return info;
+      }
+   };
+}
