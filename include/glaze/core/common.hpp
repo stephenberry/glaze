@@ -1193,6 +1193,9 @@ namespace glz
    template <class T>
    constexpr auto refl = make_reflection_info<T>{};
    
+   template <class T, size_t I>
+   using refl_t = make_reflection_info<T>::template type<I>;
+   
    template <auto Opts, class T>
    struct object_info
    {

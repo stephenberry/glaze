@@ -36,6 +36,6 @@ int main() {
       std::cout << glz::get<I>(info.keys) << '\n';
    });
    
-   //my_struct obj{};
-   //std::cout << glz::write_json(obj).value() << '\n';
+   my_struct obj{};
+   std::cout << glz::write_json(obj).value() << '\n';
 }
