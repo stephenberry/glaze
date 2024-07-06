@@ -4073,7 +4073,6 @@ suite unicode_tests = [] {
       std::string str = R"({"😀":"smile"})";
       unicode_keys_t obj{};
       expect(glz::read_json(obj, str) == glz::error_code::none);
-
       expect(obj.happy == "smile");
    };
 
@@ -4099,21 +4098,21 @@ suite unicode_tests = [] {
    };
 
    "surrogate pair"_test = [] {
-      const char* json = R"("\uD83C\uDF40")"; // 🍀
+      const char* json = R"("\uD83C\uDF40")";
       std::string val;
       expect(!glz::read_json(val, json));
       expect(val == "🍀");
    };
 
    "mixed unicode"_test = [] {
-      const char* json = R"("\u11FF\uD83C\uDF40ᇿ🍀\u11FF")"; // ᇿ🍀ᇿ🍀ᇿ
+      const char* json = R"("\u11FF\uD83C\uDF40ᇿ🍀\u11FF")";
       std::string val;
       expect(!glz::read_json(val, json));
       expect(val == "ᇿ🍀ᇿ🍀ᇿ");
    };
 
    "multi surrogate unicode"_test = [] {
-      const char* json = R"("\uD83D\uDE00\uD83C\uDF40😀🍀\uD83D\uDE00")"; // 😀🍀😀🍀😀
+      const char* json = R"("\uD83D\uDE00\uD83C\uDF40😀🍀\uD83D\uDE00")";
       std::string val;
       expect(!glz::read_json(val, json));
       expect(val == "😀🍀😀🍀😀");
