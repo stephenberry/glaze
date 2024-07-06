@@ -62,19 +62,7 @@ namespace glz
       size_t i = 0;
       for_each<N>([&](auto I) {
          using V = std::decay_t<glz::tuple_element_t<I, Tuple>>;
-         if constexpr (std::is_member_pointer_v<V>) {
-            if constexpr (I == 0) {
-               indices[i++] = 0;
-            }
-            else if constexpr (std::convertible_to<glz::tuple_element_t<I - 1, Tuple>, std::string_view>) {
-               // If the previous element in the tuple is convertible to a std::string_view, then we treat it as the key
-               indices[i++] = I - 1;
-            }
-            else {
-               indices[i++] = I;
-            }
-         }
-         else if constexpr (std::is_enum_v<V>) {
+         if constexpr (std::is_member_pointer_v<V> || std::is_enum_v<V>) {
             if constexpr (I == 0) {
                indices[i++] = 0;
             }
