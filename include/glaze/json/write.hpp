@@ -1164,8 +1164,7 @@ namespace glz
                }
             }
 
-            static constexpr auto refl = obj_reflection<T>;
-            static constexpr auto N = refl.N;
+            static constexpr auto N = refl<T>.N;
 
             [[maybe_unused]] decltype(auto) t = reflection_tuple<T>(value);
             [[maybe_unused]] bool first = true;
@@ -1184,12 +1183,12 @@ namespace glz
                      return std::get<I>(t);
                   }
                   else {
-                     return get<I>(refl.values);
+                     return get<I>(refl<T>.values);
                   }
                }();
 
                auto write_key = [&] {
-                  static constexpr sv key = get<I>(refl.keys);
+                  static constexpr sv key = get<I>(refl<T>.keys);
                   if constexpr (needs_escaping(key)) {
                      // TODO: do compile time escaping
                      write<json>::op<Opts>(key, ctx, b, ix);

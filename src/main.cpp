@@ -21,7 +21,7 @@ struct glz::meta<my_struct>
    );
 };
 
-static constexpr auto info = glz::obj_reflection<my_struct>;
+static constexpr auto& info = glz::refl<my_struct>;
 
 #include <iostream>
 

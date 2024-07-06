@@ -1190,7 +1190,7 @@ namespace glz
    };
    
    template <class T>
-   inline constexpr auto obj_reflection = make_reflection_info<T>{};
+   constexpr auto refl = make_reflection_info<T>{};
    
    template <auto Opts, class T>
    struct object_info

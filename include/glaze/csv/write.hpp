@@ -178,8 +178,7 @@ namespace glz
          {
             using V = std::decay_t<T>;
             
-            static constexpr auto refl = obj_reflection<T>;
-            static constexpr auto N = refl.N;
+            static constexpr auto N = refl<T>.N;
 
             [[maybe_unused]] decltype(auto) t = [&] {
                if constexpr (reflectable<T>) {
@@ -198,7 +197,7 @@ namespace glz
                   using item_type = typename std::decay<typename Element::type>::type;
                   using value_type = typename item_type::value_type;
 
-                  static constexpr sv key = get<I>(refl.keys);
+                  static constexpr sv key = get<I>(refl<T>.keys);
 
                   decltype(auto) mem = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
@@ -245,14 +244,14 @@ namespace glz
                for_each<N>([&](auto I) {
                   using X = typename make_reflection_info<T>::template type<I>;
 
-                  static constexpr sv key = get<I>(refl.keys);
+                  static constexpr sv key = get<I>(refl<T>.keys);
 
                   decltype(auto) member = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
                         return std::get<I>(t);
                      }
                      else {
-                        return get<I>(refl.values);
+                        return get<I>(refl<T>.values);
                      }
                   }();
 
