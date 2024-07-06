@@ -1112,6 +1112,32 @@ namespace glz
             dump<'}'>(b, ix);
          }
       };
+      
+      template <size_t N>
+      struct quoted_keys_info
+      {
+         std::array<sv, N> keys{};
+         size_t max_key_size{};
+      };
+      
+      template <auto Opts, class T, size_t... I>
+         requires glaze_object_t<T> || reflectable<T>
+      inline consteval auto make_quoted_keys_info(std::index_sequence<I...>)
+      {
+         constexpr auto N = sizeof...(I);
+         quoted_keys_info<N> info{
+            {join_v < chars<"\"">, key_name<I, T, glaze_tuple_element<I, N, T>::use_reflection>,
+               Opts.prettify ? chars<"\": "> : chars < "\":" >>...}
+         };
+         
+         for (size_t i = 0; i < N; ++i) {
+            if (info.keys[i].size() > info.max_key_size) {
+               info.max_key_size = info.keys[i].size();
+            }
+         }
+         
+         return info;
+      }
 
       template <class T>
          requires glaze_object_t<T> || reflectable<T>
@@ -1167,58 +1193,30 @@ namespace glz
             using Info = object_type_info<Options, T>;
 
             static constexpr auto N = Info::N;
+            
+            static constexpr auto quoted_keys = make_quoted_keys_info<Options, T>(std::make_index_sequence<N>());
 
             [[maybe_unused]] decltype(auto) t = reflection_tuple<T>(value);
             [[maybe_unused]] bool first = true;
             static constexpr auto first_is_written = Info::first_will_be_written;
             static constexpr auto maybe_skipped = Info::maybe_skipped;
-            for_each<N>([&](auto I) {
-               constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
+            if constexpr (maybe_skipped) {
+               for_each<N>([&](auto I) {
+                  constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
 
-               using Element = glaze_tuple_element<I, N, T>;
-               static constexpr size_t member_index = Element::member_index;
-               static constexpr bool use_reflection = Element::use_reflection;
-               using val_t = std::remove_cvref_t<typename Element::type>;
+                  using Element = glaze_tuple_element<I, N, T>;
+                  static constexpr size_t member_index = Element::member_index;
+                  using val_t = std::remove_cvref_t<typename Element::type>;
 
-               decltype(auto) member = [&]() -> decltype(auto) {
-                  if constexpr (reflectable<T>) {
-                     return std::get<I>(t);
-                  }
-                  else {
-                     return get<member_index>(get<I>(meta_v<std::decay_t<T>>));
-                  }
-               }();
-
-               auto write_key = [&] {
-                  static constexpr sv key = key_name<I, T, use_reflection>;
-                  if constexpr (needs_escaping(key)) {
-                     // TODO: do compile time escaping
-                     write<json>::op<Opts>(key, ctx, b, ix);
-                     maybe_pad<write_padding_bytes>(b, ix);
-                     if constexpr (Opts.prettify) {
-                        dump_unchecked<": ">(b, ix);
+                  decltype(auto) member = [&]() -> decltype(auto) {
+                     if constexpr (reflectable<T>) {
+                        return std::get<I>(t);
                      }
                      else {
-                        dump_unchecked<':'>(b, ix);
+                        return get<member_index>(get<I>(meta_v<std::decay_t<T>>));
                      }
-                  }
-                  else {
-                     static constexpr auto quoted_key = join_v < chars<"\"">, key,
-                                           Opts.prettify ? chars<"\": "> : chars < "\":" >>
-                        ;
-                     if constexpr (quoted_key.size() < 128) {
-                        // Using the same padding constant alows the compiler
-                        // to not need to load different lengths into the register
-                        maybe_pad<write_padding_bytes>(b, ix);
-                     }
-                     else {
-                        maybe_pad<quoted_key.size() + write_padding_bytes>(b);
-                     }
-                     dump_unchecked<quoted_key>(b, ix);
-                  }
-               };
+                  }();
 
-               if constexpr (maybe_skipped) {
                   if constexpr (null_t<val_t>) {
                      if constexpr (always_null_t<T>)
                         return;
@@ -1252,7 +1250,12 @@ namespace glz
                         }
                      }
 
-                     write_key();
+                     static constexpr sv key = quoted_keys.keys[I];
+                     // Using the same padding constant alows the compiler
+                     // to not need to load different lengths into the register
+                     maybe_pad<quoted_keys.max_key_size + write_padding_bytes>(b, ix);
+                     dump_unchecked<key>(b, ix);
+                     
                      if constexpr (supports_unchecked_write<val_t>) {
                         write<json>::op<write_unchecked_on<Opts>()>(get_member(value, member), ctx, b, ix);
                      }
@@ -1281,14 +1284,36 @@ namespace glz
                         }
                      }
                   }
-               }
-               else {
-                  // in this case we don't have values that maybe skipped
+               });
+            }
+            else {
+               // we don't have values that are maybe skipped
+               for_each<N>([&](auto I) {
+                  constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
+
+                  using Element = glaze_tuple_element<I, N, T>;
+                  static constexpr size_t member_index = Element::member_index;
+                  using val_t = std::remove_cvref_t<typename Element::type>;
+
+                  decltype(auto) member = [&]() -> decltype(auto) {
+                     if constexpr (reflectable<T>) {
+                        return std::get<I>(t);
+                     }
+                     else {
+                        return get<member_index>(get<I>(meta_v<std::decay_t<T>>));
+                     }
+                  }();
+                  
                   if constexpr (I > 0) {
                      write_entry_separator<Opts>(ctx, b, ix);
                   }
 
-                  write_key();
+                  static constexpr sv key = quoted_keys.keys[I];
+                  // Using the same padding constant alows the compiler
+                  // to not need to load different lengths into the register
+                  maybe_pad<quoted_keys.max_key_size + write_padding_bytes>(b, ix);
+                  dump_unchecked<key>(b, ix);
+                  
                   if constexpr (supports_unchecked_write<val_t>) {
                      write<json>::op<write_unchecked_on<Opts>()>(get_member(value, member), ctx, b, ix);
                   }
@@ -1316,9 +1341,10 @@ namespace glz
                         }
                      }
                   }
-               }
-            });
-            if constexpr (!has_closing_handled(Options)) {
+               });
+            }
+            
+            if constexpr (not has_closing_handled(Options)) {
                if constexpr (Options.prettify) {
                   ctx.indentation_level -= Options.indentation_width;
                   if constexpr (vector_like<B>) {

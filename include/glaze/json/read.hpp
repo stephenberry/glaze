@@ -1616,10 +1616,11 @@ namespace glz
          constexpr auto N = reflection_count<T>;
 
          if constexpr (keys_may_contain_escape<T>()) {
-            std::string& static_key = string_buffer();
-            read<json>::op<opening_handled<Opts>()>(static_key, ctx, it, end);
-            --it; // reveal the quote
-            return static_key;
+            auto start = it;
+            skip_string_view<Opts>(ctx, it, end);
+            if (bool(ctx.error)) [[unlikely]]
+               return {};
+            return {start, size_t(it - start)};
          }
          else if constexpr (N > 0) {
             static constexpr auto stats = key_stats<T, tag>();

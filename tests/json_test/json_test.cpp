@@ -302,8 +302,8 @@ struct glz::meta<Escaped>
 {
    static constexpr std::string_view name = "Escaped";
    using T = Escaped;
-   static constexpr auto value = object(R"(escaped"key)", &T::escaped_key, //
-                                        R"(escaped""key2)", &T::escaped_key2, R"(escape_chars)", &T::escape_chars);
+   static constexpr auto value = object(R"(escaped\"key)", &T::escaped_key, //
+                                        R"(escaped\"\"key2)", &T::escaped_key2, R"(escape_chars)", &T::escape_chars);
 };
 
 suite escaping_tests = [] {
@@ -4044,6 +4044,18 @@ struct glz::meta<question_t>
    static constexpr auto value = object("ᇿ", &T::text);
 };
 
+struct question_escaped_t
+{
+   std::string text{};
+};
+
+template <>
+struct glz::meta<question_escaped_t>
+{
+   using T = question_escaped_t;
+   static constexpr auto value = object(R"(\u11FF)", &T::text);
+};
+
 suite unicode_tests = [] {
    "unicode"_test = [] {
       std::string str = "😀😃😄🍌💐🌹🥀🌺🌷🌸💮🏵️🌻🌼";
@@ -4076,15 +4088,13 @@ suite unicode_tests = [] {
       std::string str = R"({"ᇿ":"ᇿ"})";
       question_t obj{};
       expect(glz::read_json(obj, str) == glz::error_code::none);
-
       expect(obj.text == "ᇿ");
    };
 
    "unicode_escaped"_test = [] {
       std::string str = R"({"\u11FF":"\u11FF"})";
-      question_t obj{};
+      question_escaped_t obj{};
       expect(glz::read_json(obj, str) == glz::error_code::none);
-
       expect(obj.text == "ᇿ");
    };
 
