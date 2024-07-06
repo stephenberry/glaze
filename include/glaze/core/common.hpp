@@ -1144,17 +1144,6 @@ namespace glz
    template <class T>
    using not_object_key_type = std::bool_constant<not is_object_key_type<T>>;
    
-   template <class Tuple>
-   struct reflection_info
-   {
-      static constexpr auto N = tuple_size_v<Tuple>;
-      Tuple values{};
-      std::array<sv, N> keys{};
-   };
-   
-   template <class Tuple>
-   reflection_info(Tuple&&) -> reflection_info<Tuple>;
-   
    template <class T, size_t I>
    consteval sv get_key_element() {
       using V = std::decay_t<T>;
@@ -1179,20 +1168,6 @@ namespace glz
    {
       using V = std::decay_t<T>;
       static constexpr auto value_indices = filter_indices<meta_t<V>, not_object_key_type>();
-
-      /*static constexpr auto info = [] {
-         reflection_info info{ //
-            [&]<size_t... I>(std::index_sequence<I...>) { //
-               return tuplet::tuple{ get<value_indices[I]>(meta_v<T>)... }; //
-            }(std::make_index_sequence<value_indices.size()>{}) //
-         };
-         
-         [&]<size_t... I>(std::index_sequence<I...>) { //
-            ((info.keys[I] = get_key_element<T, value_indices[I]>()), ...);
-         }(std::make_index_sequence<value_indices.size()>{});
-         
-         return info;
-      }();*/
       
       static constexpr auto values = [] {
          return [&]<size_t... I>(std::index_sequence<I...>) { //
