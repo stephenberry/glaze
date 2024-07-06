@@ -1164,6 +1164,7 @@ namespace glz
    };
    
    template <class T>
+      requires detail::glaze_object_t<T>
    struct make_reflection_info
    {
       using V = std::decay_t<T>;
