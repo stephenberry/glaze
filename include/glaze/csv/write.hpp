@@ -175,7 +175,7 @@ namespace glz
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
-         {            
+         {
             static constexpr auto N = refl<T>.N;
 
             [[maybe_unused]] decltype(auto) t = [&] {
@@ -237,7 +237,7 @@ namespace glz
             else {
                // write titles
                for_each<N>([&](auto I) {
-                  using X = typename refl_info<T>::template type<I>;
+                  using X = refl_t<T, I>;
 
                   static constexpr sv key = get<I>(refl<T>.keys);
 
