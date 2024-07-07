@@ -1164,8 +1164,11 @@ namespace glz
    };
    
    template <class T>
+   struct make_reflection_info;
+   
+   template <class T>
       requires detail::glaze_object_t<T>
-   struct make_reflection_info
+   struct make_reflection_info<T>
    {
       using V = std::decay_t<T>;
       static constexpr auto value_indices = filter_indices<meta_t<V>, not_object_key_type>();
@@ -1190,6 +1193,19 @@ namespace glz
       using type = detail::member_t<V, decltype(get<I>(values))>;
    };
    
+   /*template <class T>
+      requires detail::reflectable<T>
+   struct make_reflection_info<T>
+   {
+      using V = std::decay_t<T>;
+      
+      static constexpr auto keys = member_names<T>;
+      static constexpr auto N = keys.size();
+      
+      template <size_t I>
+      using type = detail::member_t<V, decltype(get<I>(detail::make_tuple_from_struct<T>()))>;
+   };*/
+   
    template <class T>
    constexpr auto refl = make_reflection_info<T>{};
    
@@ -1203,13 +1219,10 @@ namespace glz
       static constexpr auto info = make_reflection_info<T>();
       static constexpr auto N = info.N;
       
-      template <size_t I>
-      using type = detail::member_t<V, decltype(get<I>(info.values))>;
-      
       // Allows us to remove a branch if the first item will always be written
       static constexpr bool first_will_be_written = [] {
          if constexpr (N > 0) {
-            using V = std::remove_cvref_t<type<0>>;
+            using V = std::remove_cvref_t<refl_t<T, 0>>;
 
             if constexpr (detail::null_t<V> && Opts.skip_null_members) {
                return false;
@@ -1231,7 +1244,7 @@ namespace glz
          if constexpr (N > 0) {
             bool found_maybe_skipped{};
             for_each_short_circuit<N>([&](auto I) {
-               using V = std::remove_cvref_t<type<0>>;
+               using V = std::remove_cvref_t<refl_t<T, I>>;
 
                if constexpr (Opts.skip_null_members && detail::null_t<V>) {
                   found_maybe_skipped = true;

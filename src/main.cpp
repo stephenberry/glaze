@@ -37,5 +37,5 @@ int main() {
    });
    
    my_struct obj{};
-   std::cout << glz::write_json(obj).value() << '\n';
+   std::cout << '\n' << glz::write_json(obj).value() << '\n';
 }
