@@ -81,18 +81,21 @@ namespace glz
       using type = detail::member_t<V, decltype(get<I>(values))>;
    };
    
-   /*template <class T>
+   template <class T>
       requires detail::reflectable<T>
    struct make_reflection_info<T>
    {
       using V = std::decay_t<T>;
+      using Tuple = decay_keep_volatile_t<decltype(detail::to_tuple(std::declval<T>()))>;
+      
+      static constexpr auto values = typename detail::tuple_ptr<Tuple>::type{};
       
       static constexpr auto keys = member_names<T>;
       static constexpr auto N = keys.size();
       
       template <size_t I>
-      using type = detail::member_t<V, decltype(get<I>(detail::make_tuple_from_struct<T>()))>;
-   };*/
+      using type = detail::member_t<V, glz::tuple_element_t<I, Tuple>>;
+   };
    
    template <class T>
    constexpr auto refl = make_reflection_info<T>{};
