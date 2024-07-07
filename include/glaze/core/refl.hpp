@@ -330,11 +330,11 @@ namespace glz::detail
    template <class T, size_t... I>
    inline constexpr auto members_from_meta_impl()
    {
-      if constexpr (glaze_object_t<std::decay_t<T>>) {
-         return glz::tuplet::tuple<std::decay_t<member_t<T, refl_t<T, I>>>...>{};
+      if constexpr (glaze_object_t<T>) {
+         return tuplet::tuple<std::decay_t<member_t<T, refl_t<T, I>>>...>{};
       }
       else {
-         return glz::tuplet::tuple{};
+         return tuplet::tuple{};
       }
    }
 
