@@ -212,7 +212,7 @@ namespace glz
    template <auto Opts, class T>
    struct object_info
    {
-      using V = std::decay_t<T>;
+      using V = std::remove_cvref_t<T>;
       static constexpr auto info = refl_info<T>{};
       static constexpr auto N = info.N;
       
