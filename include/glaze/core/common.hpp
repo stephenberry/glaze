@@ -388,227 +388,6 @@ namespace glz
 #endif
       };
 
-      // from
-      // https://stackoverflow.com/questions/55941964/how-to-filter-duplicate-types-from-tuple-c
-      template <class T, class... Ts>
-      struct unique
-      {
-         using type = T;
-      };
-
-      template <template <class...> class T, class... Ts, class U, class... Us>
-      struct unique<T<Ts...>, U, Us...>
-         : std::conditional_t<(std::is_same_v<U, Ts> || ...), unique<T<Ts...>, Us...>, unique<T<Ts..., U>, Us...>>
-      {};
-
-      template <class T>
-      struct tuple_variant;
-
-      template <class... Ts>
-      struct tuple_variant<glz::tuplet::tuple<Ts...>> : unique<std::variant<>, Ts...>
-      {};
-
-      template <class T>
-      struct tuple_ptr_variant;
-
-      template <class... Ts>
-      struct tuple_ptr_variant<glz::tuplet::tuple<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
-      {};
-
-      template <class... Ts>
-      struct tuple_ptr_variant<std::tuple<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
-      {};
-
-      template <class... Ts>
-      struct tuple_ptr_variant<std::pair<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
-      {};
-
-      template <class Tuple, class = std::make_index_sequence<glz::tuple_size<Tuple>::value>>
-      struct value_tuple_variant;
-
-      template <class Tuple, size_t I>
-      struct member_type
-      {
-         using T0 = decay_keep_volatile_t<glz::tuple_element_t<0, glz::tuple_element_t<I, Tuple>>>;
-         using type = glz::tuple_element_t<std::is_member_pointer_v<T0> ? 0 : 1, glz::tuple_element_t<I, Tuple>>;
-      };
-
-      template <class Tuple, size_t... I>
-      struct value_tuple_variant<Tuple, std::index_sequence<I...>>
-      {
-         using type = typename tuple_variant<decltype(glz::tuplet::tuple_cat(
-            std::declval<tuplet::tuple<typename member_type<Tuple, I>::type>>()...))>::type;
-      };
-
-      template <class Tuple>
-      using value_tuple_variant_t = typename value_tuple_variant<Tuple>::type;
-
-      template <class T>
-      inline constexpr auto make_array()
-      {
-         return []<size_t... I>(std::index_sequence<I...>) {
-            using value_t = typename tuple_variant<meta_t<T>>::type;
-            return std::array<value_t, glz::tuple_size_v<meta_t<T>>>{glz::get<I>(meta_v<T>)...};
-         }(std::make_index_sequence<glz::tuple_size_v<meta_t<T>>>{});
-      }
-
-      template <class Tuple, std::size_t... Is>
-      inline constexpr auto tuple_runtime_getter(std::index_sequence<Is...>)
-      {
-         using value_t = typename tuple_ptr_variant<Tuple>::type;
-         using tuple_ref = std::add_lvalue_reference_t<Tuple>;
-         using getter_t = value_t (*)(tuple_ref);
-         return std::array<getter_t, glz::tuple_size_v<Tuple>>{+[](tuple_ref t) -> value_t {
-            if constexpr (is_std_tuple<Tuple>) {
-               return &std::get<Is>(t);
-            }
-            else {
-               return &glz::get<Is>(t);
-            }
-         }...};
-      }
-
-      template <class Tuple>
-      inline auto get_runtime(Tuple&& t, const size_t index)
-      {
-         using T = std::decay_t<Tuple>;
-         static constexpr auto indices = std::make_index_sequence<glz::tuple_size_v<T>>{};
-         static constexpr auto runtime_getter = tuple_runtime_getter<T>(indices);
-         return runtime_getter[index](t);
-      }
-
-      template <class T, size_t I>
-      constexpr auto key_value() noexcept
-      {
-         using value_t = value_tuple_variant_t<meta_t<T>>;
-         constexpr auto first = get<0>(get<I>(meta_v<T>));
-         using T0 = std::decay_t<decltype(first)>;
-         if constexpr (std::is_member_pointer_v<T0>) {
-            return pair<sv, value_t>{get_name<first>(), first};
-         }
-         else {
-            return pair<sv, value_t>{sv(first), get<1>(get<I>(meta_v<T>))};
-         }
-      }
-
-      template <class T, size_t I>
-      constexpr sv get_key() noexcept
-      {
-         constexpr auto first = get<0>(get<I>(meta_v<T>));
-         using T0 = std::decay_t<decltype(first)>;
-         if constexpr (std::is_member_pointer_v<T0>) {
-            return get_name<first>();
-         }
-         else {
-            return {first};
-         }
-      }
-
-      template <class T, size_t I>
-      constexpr sv get_enum_key() noexcept
-      {
-         constexpr auto first = get<0>(get<I>(meta_v<T>));
-         using T0 = std::decay_t<decltype(first)>;
-         if constexpr (std::is_enum_v<T0>) {
-            return get_name<first>();
-         }
-         else {
-            return {first};
-         }
-      }
-
-      template <class T, size_t I>
-      constexpr auto get_enum_value() noexcept
-      {
-         constexpr auto first = get<0>(get<I>(meta_v<T>));
-         using T0 = std::decay_t<decltype(first)>;
-         if constexpr (std::is_enum_v<T0>) {
-            return first;
-         }
-         else {
-            return get<1>(get<I>(meta_v<T>));
-         }
-      }
-
-      template <class T, size_t I>
-      struct meta_sv
-      {
-         static constexpr sv value = get_key<T, I>();
-      };
-
-      template <class T, bool use_hash_comparison, size_t... I>
-      constexpr auto make_map_impl(std::index_sequence<I...>)
-      {
-         using value_t = value_tuple_variant_t<meta_t<T>>;
-         constexpr auto n = glz::tuple_size_v<meta_t<T>>;
-
-         if constexpr (n == 0) {
-            return nullptr; // Hack to fix MSVC
-            // static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
-         }
-         else if constexpr (n == 1) {
-            return micro_map1<value_t, meta_sv<T, I>::value...>{key_value<T, I>()...};
-         }
-         else if constexpr (n == 2) {
-            return micro_map2<value_t, meta_sv<T, I>::value...>{key_value<T, I>()...};
-         }
-         else if constexpr (n < 64) // don't even attempt a first character hash if we have too many keys
-         {
-            constexpr std::array<sv, n> keys{get_key<T, I>()...};
-            constexpr auto front_desc = single_char_hash<n>(keys);
-
-            if constexpr (front_desc.valid) {
-               return make_single_char_map<value_t, front_desc>({key_value<T, I>()...});
-            }
-            else {
-               constexpr single_char_hash_opts rear_hash{.is_front_hash = false};
-               constexpr auto back_desc = single_char_hash<n, rear_hash>(keys);
-
-               if constexpr (back_desc.valid) {
-                  return make_single_char_map<value_t, back_desc>({key_value<T, I>()...});
-               }
-               else {
-                  constexpr single_char_hash_opts sum_hash{.is_front_hash = true, .is_sum_hash = true};
-                  constexpr auto sum_desc = single_char_hash<n, sum_hash>(keys);
-
-                  if constexpr (sum_desc.valid) {
-                     return make_single_char_map<value_t, sum_desc>({key_value<T, I>()...});
-                  }
-                  else {
-                     if constexpr (n <= naive_map_max_size) {
-                        constexpr auto naive_desc = naive_map_hash<use_hash_comparison, n>(keys);
-                        return glz::detail::make_naive_map<value_t, naive_desc>(std::array{key_value<T, I>()...});
-                     }
-                     else {
-                        return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
-                           std::array{key_value<T, I>()...});
-                     }
-                  }
-               }
-            }
-         }
-         else {
-            return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(std::array{key_value<T, I>()...});
-         }
-      }
-
-      template <class T, bool use_hash_comparison = false>
-         requires(!reflectable<T>)
-      constexpr auto make_map()
-      {
-         constexpr auto indices = std::make_index_sequence<glz::tuple_size_v<meta_t<T>>>{};
-         return make_map_impl<decay_keep_volatile_t<T>, use_hash_comparison>(indices);
-      }
-
-      template <class T>
-      constexpr auto make_key_int_map()
-      {
-         constexpr auto N = glz::tuple_size_v<meta_t<T>>;
-         return [&]<size_t... I>(std::index_sequence<I...>) {
-            return normal_map<sv, size_t, glz::tuple_size_v<meta_t<T>>>(pair<sv, size_t>{get_enum_key<T, I>(), I}...);
-         }(std::make_index_sequence<N>{});
-      }
-
       template <class T>
       constexpr auto make_enum_to_string_map()
       {
@@ -786,6 +565,9 @@ namespace glz
             return member_ptr;
          }
       }
+      
+      template <class T, class mptr_t>
+      using member_t = decltype(get_member(std::declval<T>(), std::declval<std::decay_t<mptr_t>&>()));
 
       // member_ptr and lambda wrapper helper
       template <template <class> class Wrapper, class Wrapped>
@@ -799,32 +581,6 @@ namespace glz
 
          constexpr decltype(auto) unwrap(auto&& value) const { return get_member(value, wrapped); }
       };
-
-      template <class T, class mptr_t>
-      using member_t = decltype(get_member(std::declval<T>(), std::declval<std::decay_t<mptr_t>&>()));
-
-      template <class T, class = std::make_index_sequence<glz::tuple_size<meta_t<T>>::value>>
-      struct members_from_meta;
-
-      template <class T, size_t... I>
-      inline constexpr auto members_from_meta_impl()
-      {
-         if constexpr (glaze_object_t<std::decay_t<T>>) {
-            return glz::tuplet::tuple<std::decay_t<member_t<T, typename member_type<meta_t<T>, I>::type>>...>{};
-         }
-         else {
-            return glz::tuplet::tuple{};
-         }
-      }
-
-      template <class T, size_t... I>
-      struct members_from_meta<T, std::index_sequence<I...>>
-      {
-         using type = decltype(members_from_meta_impl<T, I...>());
-      };
-
-      template <class T>
-      using member_tuple_t = typename members_from_meta<T>::type;
 
       // Output variants in the following format  ["variant_type", variant_json_data] with
       // glz::detail:array_variant(&T::var);
@@ -937,20 +693,6 @@ namespace glz
 
 namespace glz
 {
-   template <auto Enum>
-      requires(std::is_enum_v<decltype(Enum)>)
-   constexpr sv enum_name_v = []() -> std::string_view {
-      using T = std::decay_t<decltype(Enum)>;
-
-      if constexpr (detail::glaze_t<T>) {
-         using U = std::underlying_type_t<T>;
-         return detail::get_enum_key<T, static_cast<U>(Enum)>();
-      }
-      else {
-         static_assert(false_v<decltype(Enum)>, "Enum requires glaze metadata for name");
-      }
-   }();
-
    [[nodiscard]] inline std::string format_error(const error_ctx& pe, const auto& buffer)
    {
       const auto error_type_str = nameof(pe.ec);

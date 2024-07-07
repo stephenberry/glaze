@@ -1475,25 +1475,13 @@ namespace glz
          auto is_unicode = [](const auto c) { return (static_cast<uint8_t>(c) >> 7) > 0; };
 
          bool may_escape = false;
-         constexpr auto N = glz::tuple_size_v<meta_t<T>>;
+         constexpr auto N = refl<T>.N;
          for_each<N>([&](auto I) {
-            constexpr auto first = get<0>(get<I>(meta_v<T>));
-            using T0 = std::decay_t<decltype(first)>;
-            if constexpr (std::is_member_pointer_v<T0>) {
-               constexpr auto s = get_name<first>();
-               for (auto& c : s) {
-                  if (c == '\\' || c == '"' || is_unicode(c)) {
-                     may_escape = true;
-                     return;
-                  }
-               }
-            }
-            else {
-               for (auto& c : first) {
-                  if (c == '\\' || c == '"' || is_unicode(c)) {
-                     may_escape = true;
-                     return;
-                  }
+            constexpr auto key = get<I>(refl<T>.keys);
+            for (auto& c : key) {
+               if (c == '\\' || c == '"' || is_unicode(c)) {
+                  may_escape = true;
+                  return;
                }
             }
          });

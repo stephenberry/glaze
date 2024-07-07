@@ -239,7 +239,7 @@ namespace glz
             else {
                // write titles
                for_each<N>([&](auto I) {
-                  using X = typename make_reflection_info<T>::template type<I>;
+                  using X = typename refl_info<T>::template type<I>;
 
                   static constexpr sv key = get<I>(refl<T>.keys);
 

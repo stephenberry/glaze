@@ -8,7 +8,7 @@ struct my_struct
    std::array<uint64_t, 3> arr = {1, 2, 3};
 };
 
-/*template <>
+template <>
 struct glz::meta<my_struct>
 {
    static constexpr std::string_view name = "my_struct";
@@ -19,7 +19,7 @@ struct glz::meta<my_struct>
       "hello", &T::hello, //
       &T::arr //
    );
-};*/
+};
 
 static constexpr auto& info = glz::refl<my_struct>;
 

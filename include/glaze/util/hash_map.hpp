@@ -50,7 +50,7 @@ namespace glz
    };
 
    template <class T1, class T2>
-   pair(T1, T2) -> pair<T1, T2>;
+   pair(T1&&, T2&&) -> pair<T1, T2>;
 
    template <size_t I, detail::pair_t T>
    constexpr decltype(auto) get(T&& p) noexcept

@@ -8,6 +8,7 @@
 #include "glaze/core/common.hpp"
 #include "glaze/reflection/get_name.hpp"
 #include "glaze/reflection/to_tuple.hpp"
+#include "glaze/core/refl.hpp"
 
 namespace glz
 {
@@ -115,59 +116,6 @@ namespace glz
             ((std::get<std::add_pointer_t<decay_keep_volatile_t<decltype(std::get<I>(t))>>>(
                  std::get<I>(cmap.items).second) = &std::get<I>(t)),
              ...);
-         }(std::make_index_sequence<count_members<T>>{});
-      }
-
-      // We create const and not-const versions for when our reflected struct is const or non-const qualified
-      template <class Tuple>
-      struct tuple_ptr;
-
-      template <class... Ts>
-      struct tuple_ptr<std::tuple<Ts...>>
-      {
-         using type = std::tuple<std::add_pointer_t<Ts>...>;
-      };
-
-      template <class Tuple>
-      struct tuple_ptr_const;
-
-      template <class... Ts>
-      struct tuple_ptr_const<std::tuple<Ts...>>
-      {
-         using type = std::tuple<std::add_pointer_t<std::add_const_t<std::remove_reference_t<Ts>>>...>;
-      };
-
-      // This is needed to hack a fix for MSVC evaluating wrong `if constexpr` branches
-      template <class T>
-         requires(!reflectable<T>)
-      constexpr auto make_tuple_from_struct() noexcept
-      {
-         return glz::tuplet::tuple{};
-      }
-
-      // This needs to produce const qualified pointers so that we can write out const structs
-      template <reflectable T>
-      constexpr auto make_tuple_from_struct() noexcept
-      {
-         using V = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
-         return typename tuple_ptr<V>::type{};
-      }
-
-      template <reflectable T>
-      constexpr auto make_const_tuple_from_struct() noexcept
-      {
-         using V = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
-         return typename tuple_ptr_const<V>::type{};
-      }
-
-      template <reflectable T, class TuplePtrs>
-         requires(!std::is_const_v<TuplePtrs>)
-      constexpr void populate_tuple_ptr(T&& value, TuplePtrs& tuple_of_ptrs) noexcept
-      {
-         // we have to populate the pointers in the reflection tuple from the structured binding
-         auto t = to_tuple(std::forward<T>(value));
-         [&]<size_t... I>(std::index_sequence<I...>) {
-            ((std::get<I>(tuple_of_ptrs) = &std::get<I>(t)), ...);
          }(std::make_index_sequence<count_members<T>>{});
       }
    }

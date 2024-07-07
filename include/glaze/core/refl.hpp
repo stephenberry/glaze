@@ -6,6 +6,62 @@
 #include "glaze/core/common.hpp"
 #include "glaze/reflection/reflect.hpp"
 
+namespace glz::detail
+{
+   // We create const and not-const versions for when our reflected struct is const or non-const qualified
+   template <class Tuple>
+   struct tuple_ptr;
+
+   template <class... Ts>
+   struct tuple_ptr<std::tuple<Ts...>>
+   {
+      using type = std::tuple<std::add_pointer_t<Ts>...>;
+   };
+
+   template <class Tuple>
+   struct tuple_ptr_const;
+
+   template <class... Ts>
+   struct tuple_ptr_const<std::tuple<Ts...>>
+   {
+      using type = std::tuple<std::add_pointer_t<std::add_const_t<std::remove_reference_t<Ts>>>...>;
+   };
+
+   // This is needed to hack a fix for MSVC evaluating wrong `if constexpr` branches
+   template <class T>
+      requires(!reflectable<T>)
+   constexpr auto make_tuple_from_struct() noexcept
+   {
+      return glz::tuplet::tuple{};
+   }
+
+   // This needs to produce const qualified pointers so that we can write out const structs
+   template <reflectable T>
+   constexpr auto make_tuple_from_struct() noexcept
+   {
+      using V = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
+      return typename tuple_ptr<V>::type{};
+   }
+
+   template <reflectable T>
+   constexpr auto make_const_tuple_from_struct() noexcept
+   {
+      using V = decay_keep_volatile_t<decltype(to_tuple(std::declval<T>()))>;
+      return typename tuple_ptr_const<V>::type{};
+   }
+
+   template <reflectable T, class TuplePtrs>
+      requires(!std::is_const_v<TuplePtrs>)
+   constexpr void populate_tuple_ptr(T&& value, TuplePtrs& tuple_of_ptrs) noexcept
+   {
+      // we have to populate the pointers in the reflection tuple from the structured binding
+      auto t = to_tuple(std::forward<T>(value));
+      [&]<size_t... I>(std::index_sequence<I...>) {
+         ((std::get<I>(tuple_of_ptrs) = &std::get<I>(t)), ...);
+      }(std::make_index_sequence<count_members<T>>{});
+   }
+}
+
 namespace glz
 {
    // Get indices of elements satisfying a predicate
@@ -52,11 +108,11 @@ namespace glz
    };
    
    template <class T>
-   struct make_reflection_info;
+   struct refl_info;
    
    template <class T>
       requires detail::glaze_object_t<T>
-   struct make_reflection_info<T>
+   struct refl_info<T>
    {
       using V = std::decay_t<T>;
       static constexpr auto value_indices = filter_indices<meta_t<V>, not_object_key_type>();
@@ -66,6 +122,8 @@ namespace glz
             return tuplet::tuple{ get<value_indices[I]>(meta_v<T>)... }; //
          }(std::make_index_sequence<value_indices.size()>{}); //
       }();
+      
+      using tuple = decltype(values);
       
       static constexpr auto N = tuple_size_v<decltype(values)>;
       
@@ -78,36 +136,45 @@ namespace glz
       }();
       
       template <size_t I>
+      using elem = tuple_element_t<I, tuple>;
+      
+      template <size_t I>
       using type = detail::member_t<V, decltype(get<I>(values))>;
    };
    
    template <class T>
       requires detail::reflectable<T>
-   struct make_reflection_info<T>
+   struct refl_info<T>
    {
       using V = std::decay_t<T>;
-      using Tuple = decay_keep_volatile_t<decltype(detail::to_tuple(std::declval<T>()))>;
+      using tuple = decay_keep_volatile_t<decltype(detail::to_tuple(std::declval<T>()))>;
       
-      static constexpr auto values = typename detail::tuple_ptr<Tuple>::type{};
+      static constexpr auto values = typename detail::tuple_ptr<tuple>::type{};
       
       static constexpr auto keys = member_names<T>;
       static constexpr auto N = keys.size();
       
       template <size_t I>
-      using type = detail::member_t<V, glz::tuple_element_t<I, Tuple>>;
+      using elem = tuple_element_t<I, tuple>;
+      
+      template <size_t I>
+      using type = detail::member_t<V, tuple_element_t<I, tuple>>;
    };
    
    template <class T>
-   constexpr auto refl = make_reflection_info<T>{};
+   constexpr auto refl = refl_info<T>{};
    
    template <class T, size_t I>
-   using refl_t = make_reflection_info<T>::template type<I>;
+   using elem_t = refl_info<T>::template elem<I>;
+   
+   template <class T, size_t I>
+   using refl_t = refl_info<T>::template type<I>;
    
    template <auto Opts, class T>
    struct object_info
    {
       using V = std::decay_t<T>;
-      static constexpr auto info = make_reflection_info<T>();
+      static constexpr auto info = refl_info<T>();
       static constexpr auto N = info.N;
       
       // Allows us to remove a branch if the first item will always be written
@@ -182,4 +249,241 @@ namespace glz::detail
       }
       return fields;
    }
+}
+
+namespace glz::detail
+{
+   // from
+   // https://stackoverflow.com/questions/55941964/how-to-filter-duplicate-types-from-tuple-c
+   template <class T, class... Ts>
+   struct unique
+   {
+      using type = T;
+   };
+
+   template <template <class...> class T, class... Ts, class U, class... Us>
+   struct unique<T<Ts...>, U, Us...>
+      : std::conditional_t<(std::is_same_v<U, Ts> || ...), unique<T<Ts...>, Us...>, unique<T<Ts..., U>, Us...>>
+   {};
+
+   template <class... Ts>
+   struct unique_variant : unique<std::variant<>, Ts...>
+   {};
+
+   template <class T>
+   struct tuple_ptr_variant;
+
+   template <class... Ts>
+   struct tuple_ptr_variant<glz::tuplet::tuple<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
+   {};
+
+   template <class... Ts>
+   struct tuple_ptr_variant<std::tuple<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
+   {};
+
+   template <class... Ts>
+   struct tuple_ptr_variant<std::pair<Ts...>> : unique<std::variant<>, std::add_pointer_t<Ts>...>
+   {};
+
+   template <class T, class = std::make_index_sequence<glz::tuple_size<meta_t<T>>::value>>
+   struct members_from_meta;
+
+   template <class T, size_t... I>
+   inline constexpr auto members_from_meta_impl()
+   {
+      if constexpr (glaze_object_t<std::decay_t<T>>) {
+         return glz::tuplet::tuple<std::decay_t<member_t<T, refl_t<T, I>>>...>{};
+      }
+      else {
+         return glz::tuplet::tuple{};
+      }
+   }
+
+   template <class T, size_t... I>
+   struct members_from_meta<T, std::index_sequence<I...>>
+   {
+      using type = decltype(members_from_meta_impl<T, I...>());
+   };
+
+   template <class T>
+   using member_tuple_t = typename members_from_meta<T>::type;
+   
+   template <class T, class = std::make_index_sequence<refl<T>.N>>
+   struct value_variant;
+
+   template <class T, size_t... I>
+   struct value_variant<T, std::index_sequence<I...>>
+   {
+      using type = typename unique_variant<elem_t<T, I>...>::type;
+   };
+   
+   template <class T>
+   using value_variant_t = typename value_variant<T>::type;
+
+   template <class T>
+   inline constexpr auto make_array()
+   {
+      return []<size_t... I>(std::index_sequence<I...>) {
+         using value_t = value_variant_t<T>;
+         return std::array<value_t, refl<T>.N>{get<I>(refl<T>.values)...};
+      }(std::make_index_sequence<glz::tuple_size_v<meta_t<T>>>{});
+   }
+
+   template <class Tuple, std::size_t... Is>
+   inline constexpr auto tuple_runtime_getter(std::index_sequence<Is...>)
+   {
+      using value_t = typename tuple_ptr_variant<Tuple>::type;
+      using tuple_ref = std::add_lvalue_reference_t<Tuple>;
+      using getter_t = value_t (*)(tuple_ref);
+      return std::array<getter_t, glz::tuple_size_v<Tuple>>{+[](tuple_ref t) -> value_t {
+         if constexpr (is_std_tuple<Tuple>) {
+            return &std::get<Is>(t);
+         }
+         else {
+            return &glz::get<Is>(t);
+         }
+      }...};
+   }
+
+   template <class Tuple>
+   inline auto get_runtime(Tuple&& t, const size_t index)
+   {
+      using T = std::decay_t<Tuple>;
+      static constexpr auto indices = std::make_index_sequence<glz::tuple_size_v<T>>{};
+      static constexpr auto runtime_getter = tuple_runtime_getter<T>(indices);
+      return runtime_getter[index](t);
+   }
+}
+
+namespace glz::detail
+{
+   template <class T, size_t I>
+   constexpr auto key_value() noexcept
+   {
+      using value_t = value_variant_t<T>;
+      return pair<sv, value_t>{get<I>(refl<T>.keys), get<I>(refl<T>.values)};
+   }
+
+   template <class T, size_t I>
+   constexpr sv get_enum_key() noexcept
+   {
+      constexpr auto first = get<0>(get<I>(meta_v<T>));
+      using T0 = std::decay_t<decltype(first)>;
+      if constexpr (std::is_enum_v<T0>) {
+         return get_name<first>();
+      }
+      else {
+         return {first};
+      }
+   }
+
+   template <class T, size_t I>
+   constexpr auto get_enum_value() noexcept
+   {
+      constexpr auto first = get<0>(get<I>(meta_v<T>));
+      using T0 = std::decay_t<decltype(first)>;
+      if constexpr (std::is_enum_v<T0>) {
+         return first;
+      }
+      else {
+         return get<1>(get<I>(meta_v<T>));
+      }
+   }
+
+   template <class T, size_t I>
+   struct meta_sv
+   {
+      static constexpr sv value = get_key<T, I>();
+   };
+
+   template <class T, bool use_hash_comparison, size_t... I>
+   constexpr auto make_map_impl(std::index_sequence<I...>)
+   {
+      using value_t = value_variant_t<T>;
+      constexpr auto n = refl<T>.N;
+
+      if constexpr (n == 0) {
+         return nullptr; // Hack to fix MSVC
+         // static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
+      }
+      else if constexpr (n == 1) {
+         return micro_map1<value_t, meta_sv<T, I>::value...>{key_value<T, I>()...};
+      }
+      else if constexpr (n == 2) {
+         return micro_map2<value_t, meta_sv<T, I>::value...>{key_value<T, I>()...};
+      }
+      else if constexpr (n < 64) // don't even attempt a first character hash if we have too many keys
+      {
+         constexpr auto& keys = refl<T>.keys;
+         constexpr auto front_desc = single_char_hash<n>(keys);
+
+         if constexpr (front_desc.valid) {
+            return make_single_char_map<value_t, front_desc>({key_value<T, I>()...});
+         }
+         else {
+            constexpr single_char_hash_opts rear_hash{.is_front_hash = false};
+            constexpr auto back_desc = single_char_hash<n, rear_hash>(keys);
+
+            if constexpr (back_desc.valid) {
+               return make_single_char_map<value_t, back_desc>({key_value<T, I>()...});
+            }
+            else {
+               constexpr single_char_hash_opts sum_hash{.is_front_hash = true, .is_sum_hash = true};
+               constexpr auto sum_desc = single_char_hash<n, sum_hash>(keys);
+
+               if constexpr (sum_desc.valid) {
+                  return make_single_char_map<value_t, sum_desc>({key_value<T, I>()...});
+               }
+               else {
+                  if constexpr (n <= naive_map_max_size) {
+                     constexpr auto naive_desc = naive_map_hash<use_hash_comparison, n>(keys);
+                     return glz::detail::make_naive_map<value_t, naive_desc>(std::array{key_value<T, I>()...});
+                  }
+                  else {
+                     return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(
+                        std::array{key_value<T, I>()...});
+                  }
+               }
+            }
+         }
+      }
+      else {
+         return glz::detail::normal_map<sv, value_t, n, use_hash_comparison>(std::array{key_value<T, I>()...});
+      }
+   }
+
+   template <class T, bool use_hash_comparison = false>
+      requires(!reflectable<T>)
+   constexpr auto make_map()
+   {
+      constexpr auto indices = std::make_index_sequence<refl<T>.N>{};
+      return make_map_impl<decay_keep_volatile_t<T>, use_hash_comparison>(indices);
+   }
+
+   template <class T>
+   constexpr auto make_key_int_map()
+   {
+      constexpr auto N = glz::tuple_size_v<meta_t<T>>;
+      return [&]<size_t... I>(std::index_sequence<I...>) {
+         return normal_map<sv, size_t, glz::tuple_size_v<meta_t<T>>>(pair<sv, size_t>{get_enum_key<T, I>(), I}...);
+      }(std::make_index_sequence<N>{});
+   }
+}
+
+
+namespace glz
+{
+   template <auto Enum>
+   requires(std::is_enum_v<decltype(Enum)>)
+   constexpr sv enum_name_v = []() -> std::string_view {
+      using T = std::decay_t<decltype(Enum)>;
+      
+      if constexpr (detail::glaze_t<T>) {
+         using U = std::underlying_type_t<T>;
+         return detail::get_enum_key<T, static_cast<U>(Enum)>();
+      }
+      else {
+         static_assert(false_v<decltype(Enum)>, "Enum requires glaze metadata for name");
+      }
+   }();
 }
