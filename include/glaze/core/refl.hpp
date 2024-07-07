@@ -393,7 +393,7 @@ namespace glz::detail
    template <class T, size_t I>
    struct meta_sv
    {
-      static constexpr sv value = get_key<T, I>();
+      static constexpr sv value = get<I>(refl<T>.keys);
    };
 
    template <class T, bool use_hash_comparison, size_t... I>

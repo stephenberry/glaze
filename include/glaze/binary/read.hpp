@@ -1112,7 +1112,7 @@ namespace glz
 
             ++it;
 
-            static constexpr auto N = reflection_count<T>;
+            static constexpr auto N = refl<T>.N;
 
             static constexpr bit_array<N> all_fields = [] {
                bit_array<N> arr{};
@@ -1177,7 +1177,7 @@ namespace glz
                      }
 
                      std::visit(
-                        [&](auto&& member_ptr) { read<binary>::op<Opts>(get_member(value, member_ptr), ctx, it, end); },
+                        [&](auto&& element) { read<binary>::op<Opts>(get_member(value, element), ctx, it, end); },
                         p->second);
 
                      if (bool(ctx.error)) [[unlikely]] {

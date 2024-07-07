@@ -175,9 +175,7 @@ namespace glz
       {
          template <auto Opts, class B>
          static void op(auto&& value, is_context auto&& ctx, B&& b, auto&& ix) noexcept
-         {
-            using V = std::decay_t<T>;
-            
+         {            
             static constexpr auto N = refl<T>.N;
 
             [[maybe_unused]] decltype(auto) t = [&] {
