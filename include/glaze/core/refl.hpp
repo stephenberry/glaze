@@ -136,7 +136,7 @@ namespace glz
       }();
       
       template <size_t I>
-      using elem = tuple_element_t<I, tuple>;
+      using elem = decltype(get<I>(values));
       
       template <size_t I>
       using type = detail::member_t<V, decltype(get<I>(values))>;
@@ -314,7 +314,7 @@ namespace glz::detail
    template <class T, size_t... I>
    struct value_variant<T, std::index_sequence<I...>>
    {
-      using type = typename unique_variant<elem_t<T, I>...>::type;
+      using type = typename unique_variant<std::remove_cvref_t<elem_t<T, I>>...>::type;
    };
    
    template <class T>
