@@ -7,6 +7,7 @@
 
 #include "glaze/binary/header.hpp"
 #include "glaze/core/opts.hpp"
+#include "glaze/core/refl.hpp"
 #include "glaze/core/reflection_tuple.hpp"
 #include "glaze/core/seek.hpp"
 #include "glaze/core/write.hpp"

@@ -10,6 +10,7 @@
 
 #include "glaze/core/opts.hpp"
 #include "glaze/core/reflection_tuple.hpp"
+#include "glaze/core/refl.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/core/write_chars.hpp"
 #include "glaze/json/ptr.hpp"
