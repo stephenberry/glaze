@@ -162,6 +162,45 @@ namespace glz
    };
    
    template <class T>
+      requires detail::glaze_enum_t<T>
+   struct refl_info<T>
+   {
+      using V = std::decay_t<T>;
+      static constexpr auto value_indices = filter_indices<meta_t<V>, not_object_key_type>();
+      
+      static constexpr auto values = [] {
+         return [&]<size_t... I>(std::index_sequence<I...>) { //
+            return tuplet::tuple{ get<value_indices[I]>(meta_v<T>)... }; //
+         }(std::make_index_sequence<value_indices.size()>{}); //
+      }();
+      
+      using tuple = decltype(values);
+      
+      static constexpr auto N = tuple_size_v<decltype(values)>;
+      
+      static constexpr auto keys = [] {
+         std::array<sv, N> res{};
+         [&]<size_t... I>(std::index_sequence<I...>) { //
+            ((res[I] = get_key_element<T, value_indices[I]>()), ...);
+         }(std::make_index_sequence<value_indices.size()>{});
+         return res;
+      }();
+      
+      template <size_t I>
+      using elem = decltype(get<I>(values));
+      
+      template <size_t I>
+      using type = detail::member_t<V, decltype(get<I>(values))>;
+   };
+   
+   template <class T>
+      requires detail::readable_map_t<T>
+   struct refl_info<T>
+   {
+      static constexpr auto N = 0;
+   };
+   
+   template <class T>
    constexpr auto refl = refl_info<T>{};
    
    template <class T, size_t I>
@@ -174,7 +213,7 @@ namespace glz
    struct object_info
    {
       using V = std::decay_t<T>;
-      static constexpr auto info = refl_info<T>();
+      static constexpr auto info = refl_info<T>{};
       static constexpr auto N = info.N;
       
       // Allows us to remove a branch if the first item will always be written

@@ -106,6 +106,7 @@ namespace glz
 #endif
    }();
 
+   // TODO: eliminate this function by using a single lambda
    template <class T, size_t... I>
    [[nodiscard]] constexpr auto member_names_impl(std::index_sequence<I...>)
    {

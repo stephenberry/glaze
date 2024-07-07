@@ -225,7 +225,7 @@ namespace glz
             constexpr auto& names = member_names<json_schema_type<T>>;
             return [&]<size_t... I>(std::index_sequence<I...>) {
                return detail::normal_map<sv, schema, N>(
-                  std::array<pair<sv, schema>, N>{pair{names[I], std::get<I>(tuple)}...});
+                  std::array<pair<sv, schema>, N>{pair{names[I], get<I>(tuple)}...});
             }(std::make_index_sequence<N>{});
          }
          else {
@@ -334,21 +334,7 @@ namespace glz
             // });
             s.oneOf = std::vector<schematic>(N);
             for_each<N>([&](auto I) {
-               static constexpr auto item = get<I>(meta_v<V>);
-               using T0 = std::decay_t<decltype(get<0>(item))>;
                auto& enumeration = (*s.oneOf)[I];
-               static constexpr size_t member_index = std::is_enum_v<T0> ? 0 : 1;
-               static constexpr size_t comment_index = member_index + 1;
-               constexpr auto Size = glz::tuple_size_v<decltype(item)>;
-               if constexpr (Size > comment_index) {
-                  using additional_data_type = decltype(get<comment_index>(item));
-                  if constexpr (std::is_convertible_v<additional_data_type, std::string_view>) {
-                     enumeration.attributes.description = get<comment_index>(item);
-                  }
-                  else if constexpr (std::is_convertible_v<additional_data_type, schema>) {
-                     enumeration.attributes = get<comment_index>(item);
-                  }
-               }
                // Do not override if already set
                if (!enumeration.attributes.constant.has_value()) {
                   enumeration.attributes.constant = get_enum_key<V, I>();

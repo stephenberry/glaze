@@ -574,20 +574,19 @@ namespace glz
    template <class... Args>
    constexpr auto object(Args&&... args) noexcept
    {
-      return glz::detail::Object{glz::tuplet::tuple{std::forward<Args>(args)...}};
+      return detail::Object{tuplet::tuple{std::forward<Args>(args)...}};
    }
 
    constexpr auto enumerate(auto&&... args) noexcept
    {
-      using Tuple = std::decay_t<decltype(glz::tuplet::tuple{conv_sv(args)...})>;
-      return glz::detail::Enum{group_builder<Tuple>::op(glz::tuplet::tuple{conv_sv(args)...})};
+      return detail::Enum{tuplet::tuple{args...}};
    }
 
    // A faster compiling version of enumerate that does not support reflection
    constexpr auto enumerate_no_reflect(auto&&... args) noexcept
    {
       return [t = glz::tuplet::tuple{args...}]<size_t... I>(std::index_sequence<I...>) noexcept {
-         return glz::detail::Enum{std::array{pair{conv_sv(get<2 * I>(t)), get<2 * I + 1>(t)}...}};
+         return detail::Enum{std::array{pair{conv_sv(get<2 * I>(t)), get<2 * I + 1>(t)}...}};
       }(std::make_index_sequence<sizeof...(args) / 2>{});
    }
 
