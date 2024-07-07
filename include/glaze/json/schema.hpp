@@ -565,9 +565,7 @@ namespace glz
 
             s.properties = std::map<sv, schema, std::less<>>();
             for_each<N>([&](auto I) {
-               using Element = glaze_tuple_element<I, N, T>;
-               static constexpr size_t member_index = Element::member_index;
-               using val_t = std::decay_t<typename Element::type>;
+               using val_t = std::decay_t<refl_t<T, I>>;
 
                auto& def = defs[name_v<val_t>];
 
@@ -584,23 +582,7 @@ namespace glz
                   validate_ref<name_v<val_t>>();
                   ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
                }
-
-               static constexpr size_t comment_index = member_index + 1;
-               static constexpr auto Size = glz::tuple_size_v<typename Element::Item>;
-
-               if constexpr (Size > comment_index && glaze_object_t<T>) {
-                  static constexpr auto item = glz::get<I>(meta_v<V>);
-                  using additional_data_type = decltype(get<comment_index>(item));
-                  if constexpr (std::is_convertible_v<additional_data_type, sv>) {
-                     ref_val.description = get<comment_index>(item);
-                  }
-                  else if constexpr (std::is_convertible_v<additional_data_type, schema>) {
-                     ref_val = get<comment_index>(item);
-                     validate_ref<name_v<val_t>>();
-                     ref_val.ref = join_v<chars<"#/$defs/">, name_v<val_t>>;
-                  }
-               }
-
+               
                if (!def.type) {
                   to_json_schema<val_t>::template op<Opts>(def, defs);
                }

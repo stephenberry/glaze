@@ -1537,12 +1537,10 @@ namespace glz
             stats.min_length = tag_size;
          }
 
-         constexpr auto reflection_info = make_reflection_info<T>::op();
-         constexpr auto N = reflection_info.N;
+         constexpr auto N = refl<T>.N;
 
          for_each<N>([&](auto I) {
-            using Element = glaze_tuple_element<I, N, T>;
-            constexpr sv key = get<I>(reflection_info.keys);
+            constexpr sv key = get<I>(refl<T>.keys);
 
             const auto n = key.size();
             if (n < stats.min_length) {

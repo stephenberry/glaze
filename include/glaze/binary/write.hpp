@@ -659,8 +659,7 @@ namespace glz
          static constexpr size_t count_to_write = [] {
             size_t count{};
             for_each<N>([&](auto I) {
-               using Element = glaze_tuple_element<I, N, T>;
-               using V = std::remove_cvref_t<typename Element::type>;
+               using V = std::remove_cvref_t<refl_t<T, I>>;
 
                if constexpr (std::same_as<V, hidden> || std::same_as<V, skip>) {
                   // do not serialize
@@ -681,9 +680,7 @@ namespace glz
             dump_compressed_int<count_to_write>(args...);
             decltype(auto) t = reflection_tuple<T>(value);
             for_each<N>([&](auto I) {
-               using Element = glaze_tuple_element<I, N, T>;
-               static constexpr size_t member_index = Element::member_index;
-               using val_t = std::remove_cvref_t<typename Element::type>;
+               using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
                if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
                   return;
@@ -694,7 +691,7 @@ namespace glz
                         return std::get<I>(t);
                      }
                      else {
-                        return get<member_index>(get<I>(meta_v<std::decay_t<T>>));
+                        return get<I>(refl<T>.values);
                      }
                   }();
 
@@ -717,10 +714,7 @@ namespace glz
 
             decltype(auto) t = reflection_tuple<T>(value);
             for_each<N>([&](auto I) {
-               using Element = glaze_tuple_element<I, N, T>;
-               static constexpr size_t member_index = Element::member_index;
-               static constexpr bool use_reflection = Element::use_reflection;
-               using val_t = std::remove_cvref_t<typename Element::type>;
+               using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
                if constexpr (std::same_as<val_t, hidden> || std::same_as<val_t, skip>) {
                   return;
@@ -734,7 +728,7 @@ namespace glz
                         return std::get<I>(t);
                      }
                      else {
-                        return get<member_index>(get<I>(meta_v<std::decay_t<T>>));
+                        return get<I>(refl<T>.values);
                      }
                   }();
 

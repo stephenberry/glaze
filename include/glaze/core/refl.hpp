@@ -157,3 +157,29 @@ namespace glz
    };
 }
 
+namespace glz::detail
+{
+   template <size_t I, class T>
+   constexpr auto key_name_v = [] {
+      if constexpr (reflectable<T>) {
+         return get<I>(member_names<T>);
+      }
+      else {
+         return get<I>(refl<T>.keys);
+      }
+   }();
+
+   template <class T, auto Opts>
+   constexpr auto required_fields()
+   {
+      constexpr auto N = reflection_count<T>;
+
+      bit_array<N> fields{};
+      if constexpr (Opts.error_on_missing_keys) {
+         for_each<N>([&](auto I) constexpr {
+            fields[I] = !bool(Opts.skip_null_members) || !null_t<std::decay_t<refl_t<T, I>>>;
+         });
+      }
+      return fields;
+   }
+}
