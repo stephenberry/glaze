@@ -232,7 +232,7 @@ namespace glz::detail
          return get<I>(member_names<T>);
       }
       else {
-         return get<I>(refl<T>.keys);
+         return refl<T>.keys[I];
       }
    }();
 
@@ -361,7 +361,7 @@ namespace glz::detail
    constexpr auto key_value() noexcept
    {
       using value_t = value_variant_t<T>;
-      return pair<sv, value_t>{get<I>(refl<T>.keys), get<I>(refl<T>.values)};
+      return pair<sv, value_t>{refl<T>.keys[I], get<I>(refl<T>.values)};
    }
 
    template <class T, size_t I>
@@ -393,7 +393,7 @@ namespace glz::detail
    template <class T, size_t I>
    struct meta_sv
    {
-      static constexpr sv value = get<I>(refl<T>.keys);
+      static constexpr sv value = refl<T>.keys[I];
    };
 
    template <class T, bool use_hash_comparison, size_t... I>

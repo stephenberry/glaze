@@ -192,7 +192,7 @@ namespace glz
 
                   using value_type = refl_t<T, I>;
 
-                  static constexpr sv key = get<I>(refl<T>.keys);
+                  static constexpr sv key = refl<T>.keys[I];
 
                   decltype(auto) mem = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {
@@ -239,7 +239,7 @@ namespace glz
                for_each<N>([&](auto I) {
                   using X = refl_t<T, I>;
 
-                  static constexpr sv key = get<I>(refl<T>.keys);
+                  static constexpr sv key = refl<T>.keys[I];
 
                   decltype(auto) member = [&]() -> decltype(auto) {
                      if constexpr (reflectable<T>) {

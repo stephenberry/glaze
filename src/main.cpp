@@ -33,7 +33,7 @@ int main() {
    
    std::cout << "Field keys:\n";
    glz::for_each<info.N>([](auto I) {
-      std::cout << glz::get<I>(info.keys) << '\n';
+      std::cout << info.keys[I] << '\n';
    });
    
    my_struct obj{};

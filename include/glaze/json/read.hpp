@@ -1477,7 +1477,7 @@ namespace glz
          bool may_escape = false;
          constexpr auto N = refl<T>.N;
          for_each<N>([&](auto I) {
-            constexpr auto key = get<I>(refl<T>.keys);
+            constexpr auto key = refl<T>.keys[I];
             for (auto& c : key) {
                if (c == '\\' || c == '"' || is_unicode(c)) {
                   may_escape = true;
@@ -1528,7 +1528,7 @@ namespace glz
          constexpr auto N = refl<T>.N;
 
          for_each<N>([&](auto I) {
-            constexpr sv key = get<I>(refl<T>.keys);
+            constexpr sv key = refl<T>.keys[I];
 
             const auto n = key.size();
             if (n < stats.min_length) {

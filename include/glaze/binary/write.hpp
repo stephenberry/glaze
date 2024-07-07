@@ -720,7 +720,7 @@ namespace glz
                   return;
                }
                else {
-                  static constexpr sv key = get<I>(refl<T>.keys);
+                  static constexpr sv key = refl<T>.keys[I];
                   write<binary>::no_header<Opts>(key, ctx, args...);
 
                   decltype(auto) member = [&]() -> decltype(auto) {
