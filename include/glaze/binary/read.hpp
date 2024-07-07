@@ -150,7 +150,7 @@ namespace glz
          template <auto Opts, is_context Ctx, class It0, class It1>
          GLZ_ALWAYS_INLINE static void op(auto&& value, Ctx&&, It0&& it, It1&&)
          {
-            constexpr auto N = glz::tuple_size_v<meta_t<T>>;
+            constexpr auto N = refl<T>.N;
 
             constexpr auto Length = byte_length<T>();
             uint8_t data[Length];

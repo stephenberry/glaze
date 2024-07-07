@@ -239,7 +239,7 @@ namespace glz::detail
    template <class T, auto Opts>
    constexpr auto required_fields()
    {
-      constexpr auto N = reflection_count<T>;
+      constexpr auto N = refl<T>.N;
 
       bit_array<N> fields{};
       if constexpr (Opts.error_on_missing_keys) {
@@ -326,7 +326,7 @@ namespace glz::detail
       return []<size_t... I>(std::index_sequence<I...>) {
          using value_t = value_variant_t<T>;
          return std::array<value_t, refl<T>.N>{get<I>(refl<T>.values)...};
-      }(std::make_index_sequence<glz::tuple_size_v<meta_t<T>>>{});
+      }(std::make_index_sequence<refl<T>.N>{});
    }
 
    template <class Tuple, std::size_t... Is>
@@ -358,36 +358,22 @@ namespace glz::detail
 namespace glz::detail
 {
    template <class T, size_t I>
-   constexpr auto key_value() noexcept
+   consteval auto key_value() noexcept
    {
       using value_t = value_variant_t<T>;
       return pair<sv, value_t>{refl<T>.keys[I], get<I>(refl<T>.values)};
    }
 
    template <class T, size_t I>
-   constexpr sv get_enum_key() noexcept
+   consteval sv get_enum_key() noexcept
    {
-      constexpr auto first = get<0>(get<I>(meta_v<T>));
-      using T0 = std::decay_t<decltype(first)>;
-      if constexpr (std::is_enum_v<T0>) {
-         return get_name<first>();
-      }
-      else {
-         return {first};
-      }
+      return refl<T>.keys[I];
    }
 
    template <class T, size_t I>
    constexpr auto get_enum_value() noexcept
    {
-      constexpr auto first = get<0>(get<I>(meta_v<T>));
-      using T0 = std::decay_t<decltype(first)>;
-      if constexpr (std::is_enum_v<T0>) {
-         return first;
-      }
-      else {
-         return get<1>(get<I>(meta_v<T>));
-      }
+      return get<I>(refl<T>.values);
    }
 
    template <class T, size_t I>
@@ -463,9 +449,9 @@ namespace glz::detail
    template <class T>
    constexpr auto make_key_int_map()
    {
-      constexpr auto N = glz::tuple_size_v<meta_t<T>>;
+      constexpr auto N = refl<T>.N;
       return [&]<size_t... I>(std::index_sequence<I...>) {
-         return normal_map<sv, size_t, glz::tuple_size_v<meta_t<T>>>(pair<sv, size_t>{get_enum_key<T, I>(), I}...);
+         return normal_map<sv, size_t, refl<T>.N>(pair<sv, size_t>{get_enum_key<T, I>(), I}...);
       }(std::make_index_sequence<N>{});
    }
 }
@@ -486,4 +472,61 @@ namespace glz
          static_assert(false_v<decltype(Enum)>, "Enum requires glaze metadata for name");
       }
    }();
+}
+
+namespace glz::detail
+{
+   template <class T>
+   constexpr auto make_enum_to_string_map()
+   {
+      constexpr auto N = refl<T>.N;
+      return [&]<size_t... I>(std::index_sequence<I...>) {
+         using key_t = std::underlying_type_t<T>;
+         return normal_map<key_t, sv, N>(std::array<pair<key_t, sv>, N>{
+            pair<key_t, sv>{static_cast<key_t>(get_enum_value<T, I>()), get_enum_key<T, I>()}...});
+      }(std::make_index_sequence<N>{});
+   }
+
+   // TODO: This faster approach can be used if the enum has an integer type base and sequential numbering
+   template <class T>
+   constexpr auto make_enum_to_string_array() noexcept
+   {
+      return []<size_t... I>(std::index_sequence<I...>) {
+         return std::array<sv, sizeof...(I)>{get_enum_key<T, I>()...};
+      }(std::make_index_sequence<refl<T>.N>{});
+   }
+
+   template <class T>
+   constexpr auto make_string_to_enum_map() noexcept
+   {
+      constexpr auto N = refl<T>.N;
+      return [&]<size_t... I>(std::index_sequence<I...>) {
+         return normal_map<sv, T, N>(
+            std::array<pair<sv, T>, N>{pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
+      }(std::make_index_sequence<N>{});
+   }
+
+   // get a std::string_view from an enum value
+   template <class T>
+      requires(detail::glaze_t<T> && std::is_enum_v<std::decay_t<T>>)
+   constexpr auto get_enum_name(T&& enum_value)
+   {
+      using V = std::decay_t<T>;
+      using U = std::underlying_type_t<V>;
+      constexpr auto arr = glz::detail::make_enum_to_string_array<V>();
+      return arr[static_cast<U>(enum_value)];
+   }
+   
+   template <detail::glaze_flags_t T>
+   consteval auto byte_length() noexcept
+   {
+      constexpr auto N = refl<T>.N;
+
+      if constexpr (N % 8 == 0) {
+         return N / 8;
+      }
+      else {
+         return (N / 8) + 1;
+      }
+   }
 }

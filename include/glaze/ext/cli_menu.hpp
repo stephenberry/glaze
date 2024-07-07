@@ -60,7 +60,7 @@ namespace glz
    {
       using namespace detail;
 
-      static constexpr auto N = reflection_count<T>;
+      static constexpr auto N = refl<T>.N<T>;
 
       auto execute_menu_item = [&](const auto item_number) {
          if (item_number == N + 1) {

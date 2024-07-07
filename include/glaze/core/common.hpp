@@ -388,47 +388,6 @@ namespace glz
 #endif
       };
 
-      template <class T>
-      constexpr auto make_enum_to_string_map()
-      {
-         constexpr auto N = glz::tuple_size_v<meta_t<T>>;
-         return [&]<size_t... I>(std::index_sequence<I...>) {
-            using key_t = std::underlying_type_t<T>;
-            return normal_map<key_t, sv, N>(std::array<pair<key_t, sv>, N>{
-               pair<key_t, sv>{static_cast<key_t>(get_enum_value<T, I>()), get_enum_key<T, I>()}...});
-         }(std::make_index_sequence<N>{});
-      }
-
-      // TODO: This faster approach can be used if the enum has an integer type base and sequential numbering
-      template <class T>
-      constexpr auto make_enum_to_string_array() noexcept
-      {
-         return []<size_t... I>(std::index_sequence<I...>) {
-            return std::array<sv, sizeof...(I)>{get_enum_key<T, I>()...};
-         }(std::make_index_sequence<glz::tuple_size_v<meta_t<T>>>{});
-      }
-
-      template <class T>
-      constexpr auto make_string_to_enum_map() noexcept
-      {
-         constexpr auto N = glz::tuple_size_v<meta_t<T>>;
-         return [&]<size_t... I>(std::index_sequence<I...>) {
-            return normal_map<sv, T, N>(
-               std::array<pair<sv, T>, N>{pair<sv, T>{get_enum_key<T, I>(), T(get_enum_value<T, I>())}...});
-         }(std::make_index_sequence<N>{});
-      }
-
-      // get a std::string_view from an enum value
-      template <class T>
-         requires(detail::glaze_t<T> && std::is_enum_v<std::decay_t<T>>)
-      constexpr auto get_enum_name(T&& enum_value)
-      {
-         using V = std::decay_t<T>;
-         using U = std::underlying_type_t<V>;
-         constexpr auto arr = glz::detail::make_enum_to_string_array<V>();
-         return arr[static_cast<U>(enum_value)];
-      }
-
       template <class T, size_t N>
       constexpr size_t get_max_keys = [] {
          size_t res{};
@@ -637,32 +596,6 @@ namespace glz
       using Tuple = std::decay_t<decltype(glz::tuplet::tuple{conv_sv(args)...})>;
       return glz::detail::Flags{group_builder<Tuple>::op(glz::tuplet::tuple{conv_sv(args)...})};
    }
-
-   template <detail::glaze_flags_t T>
-   consteval auto byte_length() noexcept
-   {
-      constexpr auto N = glz::tuple_size_v<meta_t<T>>;
-
-      if constexpr (N % 8 == 0) {
-         return N / 8;
-      }
-      else {
-         return (N / 8) + 1;
-      }
-   }
-}
-
-namespace glz
-{
-   template <class T>
-   inline constexpr auto reflection_count = [] {
-      if constexpr (detail::reflectable<T>) {
-         return detail::count_members<T>;
-      }
-      else {
-         return glz::tuple_size_v<meta_t<T>>;
-      }
-   }();
 }
 
 template <>

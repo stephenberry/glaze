@@ -74,7 +74,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix) noexcept
          {
-            static constexpr auto N = glz::tuple_size_v<meta_t<T>>;
+            static constexpr auto N = refl<T>.N;
 
             dump<'['>(b, ix);
 
@@ -1341,7 +1341,7 @@ namespace glz
             static constexpr auto groups = glz::group_json_ptrs<sorted>();
             static constexpr auto N = glz::tuple_size_v<std::decay_t<decltype(groups)>>;
 
-            static constexpr auto num_members = reflection_count<T>;
+            static constexpr auto num_members = refl<T>.N;
 
             if constexpr ((num_members > 0) && (glaze_object_t<T> || reflectable<T>)) {
                if constexpr (glaze_object_t<T>) {

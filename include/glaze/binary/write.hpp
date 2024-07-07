@@ -170,7 +170,7 @@ namespace glz
          template <auto Opts>
          GLZ_ALWAYS_INLINE static void op(auto&& value, is_context auto&&, auto&& b, auto&& ix)
          {
-            static constexpr auto N = glz::tuple_size_v<meta_t<T>>;
+            static constexpr auto N = refl<T>.N;
 
             std::array<uint8_t, byte_length<T>()> data{};
 
@@ -624,7 +624,7 @@ namespace glz
                count += glz::tuple_size_v<decltype(std::declval<Value>().value)> / 2;
             }
             else {
-               count += reflection_count<Value>;
+               count += refl<Value>.N;
             }
          });
          return count;
@@ -655,7 +655,7 @@ namespace glz
          requires(glaze_object_t<T> || reflectable<T>)
       struct to_binary<T> final
       {
-         static constexpr auto N = reflection_count<T>;
+         static constexpr auto N = refl<T>.N;
          static constexpr size_t count_to_write = [] {
             size_t count{};
             for_each<N>([&](auto I) {
@@ -747,7 +747,7 @@ namespace glz
          {
             dump<tag::generic_array>(args...);
 
-            static constexpr auto N = glz::tuple_size_v<meta_t<T>>;
+            static constexpr auto N = refl<T>.N;
             dump_compressed_int<N>(args...);
 
             using V = std::decay_t<T>;

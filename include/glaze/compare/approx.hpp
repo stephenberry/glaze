@@ -13,7 +13,7 @@ namespace glz
       template <detail::glaze_object_t T>
       constexpr bool operator()(T&& lhs, T&& rhs) noexcept
       {
-         constexpr auto N = glz::tuple_size_v<meta_t<T>>;
+         constexpr auto N = refl<T>.N;
 
          bool equal = true;
          for_each_short_circuit<N>([&](auto I) {

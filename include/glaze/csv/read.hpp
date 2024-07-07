@@ -411,7 +411,7 @@ namespace glz
          template <auto Opts, class It>
          static void op(auto&& value, is_context auto&& ctx, It&& it, auto&& end)
          {
-            static constexpr auto num_members = reflection_count<T>;
+            static constexpr auto num_members = refl<T>.N;
 
             decltype(auto) frozen_map = [&]() -> decltype(auto) {
                if constexpr (reflectable<T> && num_members > 0) {

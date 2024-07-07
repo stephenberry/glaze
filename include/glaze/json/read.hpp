@@ -1335,7 +1335,7 @@ namespace glz
          {
             static constexpr auto N = []() constexpr {
                if constexpr (glaze_array_t<T>) {
-                  return glz::tuple_size_v<meta_t<T>>;
+                  return refl<T>.N;
                }
                else {
                   return glz::tuple_size_v<T>;
@@ -1600,7 +1600,7 @@ namespace glz
          if (bool(ctx.error)) [[unlikely]]
             return {};
 
-         constexpr auto N = reflection_count<T>;
+         constexpr auto N = refl<T>.N;
 
          if constexpr (keys_may_contain_escape<T>()) {
             std::string& static_key = string_buffer();
@@ -1700,7 +1700,7 @@ namespace glz
          template <auto Options, string_literal tag = "">
          static void op(auto&& value, is_context auto&& ctx, auto&& it, auto&& end)
          {
-            static constexpr auto num_members = reflection_count<T>;
+            static constexpr auto num_members = refl<T>.N;
             if constexpr (num_members == 0 && is_partial_read<T>) {
                static_assert(false_v<T>, "No members to read for partial read");
             }
