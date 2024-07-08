@@ -79,11 +79,9 @@ namespace glz
             dump<'['>(b, ix);
 
             for_each<N>([&](auto I) {
-               static constexpr auto item = glz::get<I>(meta_v<T>);
-
-               if (get_member(value, glz::get<1>(item))) {
+               if (get_member(value, get<I>(refl<T>.values))) {
                   dump<'"'>(b, ix);
-                  dump_maybe_empty(glz::get<0>(item), b, ix);
+                  dump_maybe_empty(refl<T>.keys[I], b, ix);
                   dump<"\",">(b, ix);
                }
             });
@@ -1171,7 +1169,7 @@ namespace glz
             for_each<N>([&](auto I) {
                constexpr auto Opts = opening_and_closing_handled_off<ws_handled_off<Options>()>();
 
-               using val_t = refl_t<T, I>;
+               using val_t = std::remove_cvref_t<refl_t<T, I>>;
 
                decltype(auto) member = [&]() -> decltype(auto) {
                   if constexpr (reflectable<T>) {

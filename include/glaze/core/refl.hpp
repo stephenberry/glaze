@@ -703,7 +703,7 @@ namespace glz::detail
       size_t res{};
       for_each<N>([&](auto I) {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
-         if constexpr (glaze_object_t<T> || reflectable<T>) {
+         if constexpr (glaze_object_t<V> || reflectable<V>) {
             res += refl<V>.N;
          }
       });
@@ -754,7 +754,7 @@ namespace glz::detail
       constexpr auto N = std::variant_size_v<T>;
       for_each<N>([&](auto I) {
          using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
-         if constexpr (glaze_object_t<V> || reflectable<T>) {
+         if constexpr (glaze_object_t<V> || reflectable<V>) {
             for_each<refl<V>.N>([&](auto J) {
                deduction_map.find(refl<V>.keys[J])->second[I] = true;
             });
