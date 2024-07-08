@@ -65,7 +65,14 @@ namespace glz
 
       static constexpr sv blank = ""; // to end possible macros
 
-      static constexpr sv members = glz::name_v<detail::member_tuple_t<T>>;
+      static constexpr sv members = []{
+         if constexpr(detail::glaze_object_t<T> || detail::reflectable<T>) {
+            return glz::name_v<detail::member_tuple_t<T>>;
+         }
+         else {
+            return "";
+         }
+      }();
 
       static constexpr sv to_hash =
          join_v<type_name_hash,
