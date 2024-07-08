@@ -31,7 +31,6 @@
 #include "glaze/json/study.hpp"
 #include "glaze/record/recorder.hpp"
 #include "glaze/trace/trace.hpp"
-#include "glaze/util/poly.hpp"
 #include "glaze/util/progress_bar.hpp"
 #include "ut/ut.hpp"
 
@@ -3766,38 +3765,6 @@ struct glz::meta<string_t>
    static constexpr std::string_view name = "string_t";
    using T = string_t;
    static constexpr auto value = object("string", &T::string);
-};
-
-suite poly_tests = [] {
-   "poly"_test = [] {
-      std::array<glz::poly<animal>, 2> a{dog{}, cat{}};
-
-      a[0].call<"eat">();
-      a[1].call<"eat">();
-
-      expect(a[0].get<"age">() == 1);
-   };
-
-   "poly person"_test = [] {
-      // std::array<glz::poly<animal>, 2> a{ dog{}, person{} };
-      //  This should static_assert
-   };
-
-   "poly pointer"_test = [] {
-      dog d{};
-      glz::poly<animal> a{&d};
-
-      a.call<"eat">();
-
-      expect(d.age == 1);
-      expect(&a.get<"age">() == &d.age);
-   };
-
-   "complex_function"_test = [] {
-      glz::poly<string_t> p{complex_function_call_t{}};
-
-      expect(p.call<"string">("x", 5) == "x:5");
-   };
 };
 
 suite any_tests = [] {
