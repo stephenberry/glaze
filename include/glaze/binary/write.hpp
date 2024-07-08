@@ -684,16 +684,12 @@ namespace glz
                   return;
                }
                else {
-                  decltype(auto) member = [&]() -> decltype(auto) {
-                     if constexpr (reflectable<T>) {
-                        return get<I>(t);
-                     }
-                     else {
-                        return get<I>(refl<T>.values);
-                     }
-                  }();
-
-                  write<binary>::op<Opts>(get_member(value, member), ctx, args...);
+                  if constexpr (reflectable<T>) {
+                     write<binary>::op<Opts>(get_member(value, get<I>(t)), ctx, args...);
+                  }
+                  else {
+                     write<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, args...);
+                  }
                }
             });
          }
