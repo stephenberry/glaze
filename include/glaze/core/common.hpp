@@ -582,14 +582,6 @@ namespace glz
       return detail::Enum{tuplet::tuple{args...}};
    }
 
-   // A faster compiling version of enumerate that does not support reflection
-   constexpr auto enumerate_no_reflect(auto&&... args) noexcept
-   {
-      return [t = glz::tuplet::tuple{args...}]<size_t... I>(std::index_sequence<I...>) noexcept {
-         return detail::Enum{std::array{pair{conv_sv(get<2 * I>(t)), get<2 * I + 1>(t)}...}};
-      }(std::make_index_sequence<sizeof...(args) / 2>{});
-   }
-
    constexpr auto flags(auto&&... args) noexcept
    {
       return detail::Flags{tuplet::tuple{args...}};
