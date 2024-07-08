@@ -146,8 +146,8 @@ namespace glz::detail
          static constexpr auto member_array = glz::detail::make_array<decay_keep_volatile_t<T>>();
          if (index >= member_array.size()) return false;
          return std::visit(
-            [&](auto&& member_ptr) {
-               return seek_impl(std::forward<F>(func), get_member(value, member_ptr), json_ptr);
+            [&](auto&& element) {
+               return seek_impl(std::forward<F>(func), get_member(value, element), json_ptr);
             },
             member_array[index]);
       }
