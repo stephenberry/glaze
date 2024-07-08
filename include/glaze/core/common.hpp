@@ -402,29 +402,29 @@ namespace glz
          return make_variant_id_map_impl<T>(indices, ids_v<T>);
       }
 
-      template <class Value, class MemPtr>
-      inline decltype(auto) get_member(Value&& value, MemPtr&& member_ptr)
+      template <class Value, class Element>
+      inline decltype(auto) get_member(Value&& value, Element&& element)
       {
-         using V = std::decay_t<decltype(member_ptr)>;
+         using V = std::decay_t<decltype(element)>;
          if constexpr (std::is_member_object_pointer_v<V>) {
-            return value.*member_ptr;
+            return value.*element;
          }
          else if constexpr (std::is_member_function_pointer_v<V>) {
-            return member_ptr;
+            return element;
          }
-         else if constexpr (std::invocable<MemPtr, Value>) {
-            return std::invoke(std::forward<MemPtr>(member_ptr), std::forward<Value>(value));
+         else if constexpr (std::invocable<Element, Value>) {
+            return std::invoke(std::forward<Element>(element), std::forward<Value>(value));
          }
          else if constexpr (std::is_pointer_v<V>) {
-            if constexpr (std::invocable<decltype(*member_ptr), Value>) {
-               return std::invoke(*member_ptr, std::forward<Value>(value));
+            if constexpr (std::invocable<decltype(*element), Value>) {
+               return std::invoke(*element, std::forward<Value>(value));
             }
             else {
-               return *member_ptr;
+               return *element;
             }
          }
          else {
-            return member_ptr;
+            return element;
          }
       }
       

@@ -113,8 +113,8 @@ namespace glz::detail
          const auto& member_it = frozen_map.find(key);
          if (member_it != frozen_map.end()) [[likely]] {
             return std::visit(
-               [&](auto&& member_ptr) {
-                  return seek_impl(std::forward<F>(func), get_member(value, member_ptr), json_ptr);
+               [&](auto&& element) {
+                  return seek_impl(std::forward<F>(func), get_member(value, element), json_ptr);
                },
                member_it->second);
          }
