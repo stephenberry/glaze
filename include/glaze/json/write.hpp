@@ -1181,7 +1181,8 @@ namespace glz
                }();
 
                auto write_key = [&] {
-                  static constexpr sv key = refl<T>.keys[I];
+                  // MSVC requires get<I> rather than keys[I]
+                  static constexpr sv key = get<I>(refl<T>.keys);
                   if constexpr (needs_escaping(key)) {
                      // TODO: do compile time escaping
                      write<json>::op<Opts>(key, ctx, b, ix);
