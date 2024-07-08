@@ -439,7 +439,7 @@ namespace glz
             // TODO: Could create a pre quoted map for better performance
             
             const auto index = static_cast<std::underlying_type_t<T>>(value);
-            if (index >= refl<T>.keys.size()) {
+            if (size_t(index) >= refl<T>.keys.size()) {
                ctx.error = error_code::array_element_not_found;
                return;
             }
@@ -825,7 +825,7 @@ namespace glz
                   using V = std::decay_t<decltype(val)>;
 
                   if constexpr (Opts.write_type_info && !tag_v<T>.empty() && glaze_object_t<V>) {
-                     constexpr auto num_members = glz::tuple_size_v<meta_t<V>>;
+                     constexpr auto num_members = refl<V>.N;
 
                      // must first write out type
                      if constexpr (Opts.prettify) {

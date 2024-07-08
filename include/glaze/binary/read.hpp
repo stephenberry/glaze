@@ -1079,7 +1079,7 @@ namespace glz
                ++it;
 
                using V = std::decay_t<T>;
-               constexpr auto N = glz::tuple_size_v<meta_t<V>>;
+               constexpr auto N = refl<V>.N;
                if (int_from_compressed(ctx, it, end) != N) {
                   ctx.error = error_code::syntax_error;
                   return;
@@ -1217,15 +1217,14 @@ namespace glz
             }
             ++it;
 
-            using V = std::decay_t<T>;
-            constexpr auto N = glz::tuple_size_v<meta_t<V>>;
+            constexpr auto N = refl<T>.N;
             if (int_from_compressed(ctx, it, end) != N) {
                ctx.error = error_code::syntax_error;
                return;
             }
 
             for_each<N>(
-               [&](auto I) { read<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, it, end); });
+               [&](auto I) { read<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, it, end); });
          }
       };
 

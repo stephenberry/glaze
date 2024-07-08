@@ -325,8 +325,7 @@ namespace glz
             s.type = {"string"};
 
             // TODO use oneOf instead of enum to handle doc comments
-            using V = std::decay_t<T>;
-            static constexpr auto N = glz::tuple_size_v<meta_t<V>>;
+            static constexpr auto N = refl<T>.N;
             // s.enumeration = std::vector<std::string_view>(N);
             // for_each<N>([&](auto I) {
             //    static constexpr auto item = std::get<I>(meta_v<V>);
@@ -337,10 +336,10 @@ namespace glz
                auto& enumeration = (*s.oneOf)[I];
                // Do not override if already set
                if (!enumeration.attributes.constant.has_value()) {
-                  enumeration.attributes.constant = refl<V>.keys[I];
+                  enumeration.attributes.constant = refl<T>.keys[I];
                }
                if (!enumeration.attributes.title.has_value()) {
-                  enumeration.attributes.title = refl<V>.keys[I];
+                  enumeration.attributes.title = refl<T>.keys[I];
                }
             });
          }

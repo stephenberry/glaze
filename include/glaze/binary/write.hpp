@@ -748,9 +748,8 @@ namespace glz
             static constexpr auto N = refl<T>.N;
             dump_compressed_int<N>(args...);
 
-            using V = std::decay_t<T>;
-            for_each<glz::tuple_size_v<meta_t<V>>>(
-               [&](auto I) { write<binary>::op<Opts>(get_member(value, glz::get<I>(meta_v<V>)), ctx, args...); });
+            for_each<refl<T>.N>(
+               [&](auto I) { write<binary>::op<Opts>(get_member(value, get<I>(refl<T>.values)), ctx, args...); });
          }
       };
 
