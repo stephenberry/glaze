@@ -1583,12 +1583,6 @@ namespace glz
          GLZ_MATCH_COLON;
          GLZ_SKIP_WS;
       }
-      
-      template <is_variant T>
-      constexpr size_t element_count = std::variant_size_v<T>;
-      
-      template <glaze_object_t T>
-      constexpr size_t element_count = refl<T>.N;
 
       // Key parsing for meta objects or variants of meta objects.
       // We do not check for an ending quote, we simply parse up to the quote
@@ -1613,7 +1607,14 @@ namespace glz
             return static_key;
          }
          else {
-            constexpr auto N = element_count<T>;
+            constexpr auto N = []{
+               if constexpr (is_variant<T>) {
+                  return std::variant_size_v<T>;
+               }
+               else {
+                  return refl<T>.N;
+               }
+            }();
             
             if constexpr (N > 0) {
                static constexpr auto stats = key_stats<T, tag>();

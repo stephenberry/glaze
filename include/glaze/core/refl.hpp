@@ -697,12 +697,15 @@ namespace glz
 
 namespace glz::detail
 {
+   // TODO: This is returning the total keys and not the max keys for a particular variant object
    template <class T, size_t N>
    constexpr size_t get_max_keys = [] {
       size_t res{};
       for_each<N>([&](auto I) {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
-         res += refl<V>.N;
+         if constexpr (glaze_object_t<T> || reflectable<T>) {
+            res += refl<V>.N;
+         }
       });
       return res;
    }();
@@ -718,9 +721,11 @@ namespace glz::detail
       size_t index = 0;
       for_each<N>([&](auto I) {
          using V = std::decay_t<std::variant_alternative_t<I, T>>;
-         for_each<refl<V>.N>([&](auto J) {
-            (*data_ptr)[index++] = refl<V>.keys[J];
-         });
+         if constexpr (glaze_object_t<V> || reflectable<V>) {
+            for_each<refl<V>.N>([&](auto J) {
+               (*data_ptr)[index++] = refl<V>.keys[J];
+            });
+         }
       });
 
       std::sort(keys.begin(), keys.end());
@@ -749,9 +754,11 @@ namespace glz::detail
       constexpr auto N = std::variant_size_v<T>;
       for_each<N>([&](auto I) {
          using V = decay_keep_volatile_t<std::variant_alternative_t<I, T>>;
-         for_each<refl<V>.N>([&](auto J) {
-            deduction_map.find(refl<V>.keys[J])->second[I] = true;
-         });
+         if constexpr (glaze_object_t<V> || reflectable<T>) {
+            for_each<refl<V>.N>([&](auto J) {
+               deduction_map.find(refl<V>.keys[J])->second[I] = true;
+            });
+         }
       });
 
       return deduction_map;
