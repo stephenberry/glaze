@@ -408,23 +408,13 @@ namespace glz::detail
 namespace glz::detail
 {
    template <class T, size_t I>
-   consteval auto key_value() noexcept
+   consteval auto key_value()
    {
-      using value_t = value_variant_t<T>;
-      return pair<sv, value_t>{refl<T>.keys[I], get<I>(refl<T>.values)};
-   }
-
-   template <class T, size_t I>
-   consteval sv get_enum_key() noexcept
-   {
-      return refl<T>.keys[I];
+      return pair<sv, value_variant_t<T>>{refl<T>.keys[I], get<I>(refl<T>.values)};
    }
    
    template <class T, size_t I>
-   struct meta_sv
-   {
-      static constexpr sv value = refl<T>.keys[I];
-   };
+   constexpr sv key_v = refl<T>.keys[I];
 
    template <class T, bool use_hash_comparison, size_t... I>
    constexpr auto make_map_impl(std::index_sequence<I...>)
@@ -437,10 +427,10 @@ namespace glz::detail
          // static_assert(false_v<T>, "Empty object map is illogical. Handle empty upstream.");
       }
       else if constexpr (n == 1) {
-         return micro_map1<value_t, meta_sv<T, I>::value...>{key_value<T, I>()...};
+         return micro_map1<value_t, key_v<T, I>...>{key_value<T, I>()...};
       }
       else if constexpr (n == 2) {
-         return micro_map2<value_t, meta_sv<T, I>::value...>{key_value<T, I>()...};
+         return micro_map2<value_t, key_v<T, I>...>{key_value<T, I>()...};
       }
       else if constexpr (n < 64) // don't even attempt a first character hash if we have too many keys
       {
