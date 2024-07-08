@@ -116,7 +116,7 @@ namespace glz
    struct refl_info;
    
    template <class T>
-      requires (detail::glaze_object_t<T> || detail::glaze_flags_t<T>)
+      requires (detail::glaze_object_t<T> || detail::glaze_flags_t<T> || detail::glaze_enum_t<T>)
    struct refl_info<T>
    {
       using V = std::remove_cvref_t<T>;
@@ -183,38 +183,6 @@ namespace glz
       
       template <size_t I>
       using type = detail::member_t<V, tuple_element_t<I, tuple>>;
-   };
-   
-   template <class T>
-      requires detail::glaze_enum_t<T>
-   struct refl_info<T>
-   {
-      using V = std::remove_cvref_t<T>;
-      static constexpr auto value_indices = filter_indices<meta_t<V>, not_object_key_type>();
-      
-      static constexpr auto values = [] {
-         return [&]<size_t... I>(std::index_sequence<I...>) { //
-            return tuplet::tuple{ get<value_indices[I]>(meta_v<T>)... }; //
-         }(std::make_index_sequence<value_indices.size()>{}); //
-      }();
-      
-      using tuple = decltype(values);
-      
-      static constexpr auto N = tuple_size_v<decltype(values)>;
-      
-      static constexpr auto keys = [] {
-         std::array<sv, N> res{};
-         [&]<size_t... I>(std::index_sequence<I...>) { //
-            ((res[I] = get_key_element<T, value_indices[I]>()), ...);
-         }(std::make_index_sequence<value_indices.size()>{});
-         return res;
-      }();
-      
-      template <size_t I>
-      using elem = decltype(get<I>(values));
-      
-      template <size_t I>
-      using type = detail::member_t<V, decltype(get<I>(values))>;
    };
    
    template <class T>
