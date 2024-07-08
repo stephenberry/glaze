@@ -60,7 +60,7 @@ namespace glz
    {
       using namespace detail;
 
-      static constexpr auto N = refl<T>.N<T>;
+      static constexpr auto N = refl<T>.N;
 
       auto execute_menu_item = [&](const auto item_number) {
          if (item_number == N + 1) {
@@ -80,18 +80,11 @@ namespace glz
          if (item_number > 0 && item_number <= long(N)) {
             for_each_short_circuit<N>([&](auto I) {
                if (I == item_number - 1) {
-                  using Element = glaze_tuple_element<I, N, T>;
-                  static constexpr size_t member_index = Element::member_index;
-                  using E = typename Element::type;
-
+                  using E = refl_t<T, I>;
+                  
                   // MSVC bug requires Index alias here
                   decltype(auto) func = [&](auto Index) -> decltype(auto) {
-                     if constexpr (reflectable<T>) {
-                        return std::get<Index>(t);
-                     }
-                     else {
-                        return get_member(value, get<member_index>(get<Index>(meta_v<T>)));
-                     }
+                     return get<Index>(refl<T>.values);
                   }(I);
 
                   using Func = decltype(func);
@@ -152,7 +145,7 @@ namespace glz
                         run_cli_menu<Opts>(std::get<I>(t), menu_boolean);
                      }
                      else {
-                        decltype(auto) v = get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
+                        decltype(auto) v = get_member(value, get<I>(refl<T>.values));
                         run_cli_menu<Opts>(v, menu_boolean);
                      }
                   }
@@ -174,10 +167,9 @@ namespace glz
       while (show_menu) {
          std::printf("================================\n");
          for_each<N>([&](auto I) {
-            using Element = glaze_tuple_element<I, N, T>;
-            constexpr sv key = key_name<I, T, Element::use_reflection>;
+            using E = refl_t<T, I>;
+            constexpr sv key = refl<T>.keys[I];
 
-            using E = typename Element::type;
             if constexpr (glaze_object_t<E> || reflectable<E>) {
                std::printf("  %d   %.*s\n", uint32_t(I + 1), int(key.size()), key.data());
             }
@@ -196,7 +188,7 @@ namespace glz
                      return std::get<I>(t);
                   }
                   else {
-                     return get_member(value, get<Element::member_index>(get<I>(meta_v<T>)));
+                     return get_member(value, get<I>(refl<T>.values));
                   }
                }();
 
