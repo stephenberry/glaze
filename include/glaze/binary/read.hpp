@@ -8,7 +8,7 @@
 #include "glaze/core/opts.hpp"
 #include "glaze/core/read.hpp"
 #include "glaze/file/file_ops.hpp"
-#include "glaze/reflection/reflect.hpp"
+#include "glaze/core/refl.hpp"
 #include "glaze/util/dump.hpp"
 
 namespace glz

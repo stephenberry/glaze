@@ -6,7 +6,7 @@
 #include "glaze/core/read.hpp"
 #include "glaze/core/write.hpp"
 #include "glaze/format/format_to.hpp"
-#include "glaze/reflection/reflect.hpp"
+#include "glaze/core/refl.hpp"
 
 namespace glz
 {

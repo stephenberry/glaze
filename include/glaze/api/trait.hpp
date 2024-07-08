@@ -8,6 +8,7 @@
 #include "glaze/api/hash.hpp"
 #include "glaze/core/common.hpp"
 #include "glaze/core/meta.hpp"
+#include "glaze/core/refl.hpp"
 #include "glaze/util/string_literal.hpp"
 
 namespace glz

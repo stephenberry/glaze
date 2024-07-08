@@ -17,7 +17,7 @@
 #include "glaze/file/file_ops.hpp"
 #include "glaze/json/json_t.hpp"
 #include "glaze/json/skip.hpp"
-#include "glaze/reflection/reflect.hpp"
+#include "glaze/core/refl.hpp"
 #include "glaze/util/for_each.hpp"
 #include "glaze/util/strod.hpp"
 #include "glaze/util/type_traits.hpp"
